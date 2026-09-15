@@ -4,21 +4,27 @@
 @testable import ImmersiveMap
 import XCTest
 
-/// The extrusion toggle (`StyleSettings.buildingExtrusionEnabled`): off, the
-/// parser raises no building and the footprint stays a flat ground fill. The
-/// flag is prepared-cache identity and a heavy settings change.
+/// The theme's extrusion switch (`ImmersiveMapTilesTheme.features.buildingExtrusion`):
+/// off, the built-in style answers a flat fill for every building, the
+/// parser raises nothing and the footprint stays a ground fill. The switch
+/// is part of the theme, so it is prepared-cache identity and a heavy
+/// settings change like any other theme change.
 @MainActor
 final class BuildingExtrusionToggleTests: XCTestCase {
     private static let tile = Tile(x: 9908, y: 5140, z: 14)
 
-    private func makeParser(extrusionEnabled: Bool) -> TileMvtParser {
-        var config = ImmersiveMapSettings.default
-        config.style.buildingExtrusionEnabled = extrusionEnabled
-        return TileMvtParser.forTests(settings: config,
-                                      mapStyle: ImmersiveMapTilesDefaultMapStyle())
+    private static func theme(extrusion: Bool) -> ImmersiveMapTilesTheme {
+        ImmersiveMapTilesTheme.default.apply { theme in
+            theme.features.buildingExtrusion = extrusion
+        }
     }
 
-    private func parseBuildingTile(extrusionEnabled: Bool) throws -> ParsedTile {
+    private func makeParser(extrusion: Bool) -> TileMvtParser {
+        TileMvtParser.forTests(settings: .default,
+                               mapStyle: ImmersiveMapTilesDefaultMapStyle(theme: Self.theme(extrusion: extrusion)))
+    }
+
+    private func parseBuildingTile(extrusion: Bool) throws -> ParsedTile {
         let data = VectorTileFixture.layerTile(
             layerName: "building",
             features: [
@@ -26,14 +32,14 @@ final class BuildingExtrusionToggleTests: XCTestCase {
                       geometry: .polygon(ring: [(1024, 1024), (2048, 1024), (2048, 2048), (1024, 2048)]),
                       properties: ["render_height": "40"])
             ])
-        return try makeParser(extrusionEnabled: extrusionEnabled).parse(tile: Self.tile, mvtData: data)
+        return try makeParser(extrusion: extrusion).parse(tile: Self.tile, mvtData: data)
     }
 
     func testDisabledExtrusionLeavesTheFlatFootprintFill() throws {
-        let raised = try parseBuildingTile(extrusionEnabled: true)
+        let raised = try parseBuildingTile(extrusion: true)
         XCTAssertGreaterThan(raised.drawingExtruded.indices.count, 0,
                              "Enabled extrusion raises the building")
-        let flat = try parseBuildingTile(extrusionEnabled: false)
+        let flat = try parseBuildingTile(extrusion: false)
         XCTAssertEqual(flat.drawingExtruded.indices.count, 0,
                        "Disabled extrusion raises no building")
         XCTAssertGreaterThan(flat.drawingPolygon.indices.count, 0,
@@ -42,39 +48,19 @@ final class BuildingExtrusionToggleTests: XCTestCase {
                        "The ground fill is the same with or without the extrusion")
     }
 
-    func testTheFlagIsPreparedCacheIdentity() {
-        func namespace(extrusionEnabled: Bool) -> String {
-            PreparedTileCacheIdentity(preparedFormatVersion: 88,
-                                      styleRevision: 1,
-                                      tileSourceRevision: 2,
-                                      flatSeparateRoadRenderingMinimumZoom: 8,
-                                      textRevision: 3,
-                                      labelLanguage: .english,
-                                      labelFallbackPolicy: .international,
-                                      houseNumbersEnabled: true,
-                                      houseNumbersMinimumZoom: 17,
-                                      capitalMaximumZoom: 10,
-                                      cityMaximumZoom: 12,
-                                      smallSettlementMaximumZoom: 14,
-                                      landmarkMinimumZoom: 15,
-                                      addTestBorders: false,
-                                      roofShapesEnabled: false,
-                                      buildingExtrusionEnabled: extrusionEnabled,
-                                      labelsEnabled: true).namespaceComponent
-        }
-        XCTAssertNotEqual(namespace(extrusionEnabled: true), namespace(extrusionEnabled: false),
+    func testTheSwitchIsPartOfTheThemeFingerprint() {
+        XCTAssertNotEqual(Self.theme(extrusion: true).cacheFingerprint,
+                          Self.theme(extrusion: false).cacheFingerprint,
                           "A tile prepared flat must not answer a map that wants its buildings raised")
     }
 
     func testExtrusionIsOnByDefault() {
-        XCTAssertTrue(ImmersiveMapSettings.default.style.buildingExtrusionEnabled, "Buildings rise unless asked not to")
-        XCTAssertFalse(ImmersiveMapView().buildingExtrusion(isEnabled: false).settings.style.buildingExtrusionEnabled)
+        XCTAssertTrue(ImmersiveMapTilesTheme.default.features.buildingExtrusion, "Buildings rise unless asked not to")
     }
 
-    func testTogglingTheFlagIsAHeavySettingsChange() {
+    func testTogglingTheSwitchIsAHeavySettingsChange() {
         let old = ImmersiveMapSettings.default
-        var new = old
-        new.style.buildingExtrusionEnabled = false
+        let new = old.mapStyle(ImmersiveMapTilesMapStyle(theme: Self.theme(extrusion: false)))
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: old, to: new)
         XCTAssertTrue(plan.actions.contains(.rebuildPreparedData),
                       "Extrusions are baked at parse time: the prepared tiles must rebuild")

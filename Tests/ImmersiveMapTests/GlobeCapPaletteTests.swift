@@ -10,40 +10,36 @@ import XCTest
 /// ocean, the south the polar ice sheet. These tests pin where each colour
 /// comes from.
 final class GlobeCapPaletteTests: XCTestCase {
-    /// The northern cap is the palette's water: past the last tile row the
-    /// planet is the Arctic Ocean.
-    func testNorthPoleFollowsWater() {
-        var baseColors = ImmersiveMapSettings.default.style.baseColors
-        baseColors.water = SIMD4<Float>(0.04, 0.09, 0.20, 1)
-        baseColors.polarIce = SIMD4<Float>(0.30, 0.32, 0.36, 1)
-
-        let palette = GlobeCapRenderer.makePalette(mapBaseColors: ImmersiveMapBaseColors(settings: baseColors))
+    /// The northern cap is the style's north cap colour, made opaque: past
+    /// the last tile row the planet is the Arctic Ocean.
+    func testNorthPoleFollowsTheStyle() {
+        let palette = GlobeCapRenderer.makePalette(baseColors: ImmersiveMapBaseColors(
+            map: SIMD4<Float>(0.09, 0.10, 0.13, 1),
+            northCap: SIMD4<Float>(0.04, 0.09, 0.20, 0.5),
+            southCap: SIMD4<Float>(0.30, 0.32, 0.36, 1)))
 
         assertColor(palette.north.color, equals: SIMD4<Float>(0.04, 0.09, 0.20, 1))
     }
 
-    /// The southern cap is the palette's polar ice: past the last tile row
-    /// the planet is the Antarctic ice sheet.
-    func testSouthPoleFollowsPolarIce() {
-        var baseColors = ImmersiveMapSettings.default.style.baseColors
-        baseColors.tileBackground = SIMD4<Float>(0.09, 0.10, 0.13, 1)
-        baseColors.polarIce = SIMD4<Float>(0.30, 0.32, 0.36, 1)
-
-        let palette = GlobeCapRenderer.makePalette(mapBaseColors: ImmersiveMapBaseColors(settings: baseColors))
+    /// The southern cap is the style's south cap colour: past the last tile
+    /// row the planet is the Antarctic ice sheet.
+    func testSouthPoleFollowsTheStyle() {
+        let palette = GlobeCapRenderer.makePalette(baseColors: ImmersiveMapBaseColors(
+            map: SIMD4<Float>(0.09, 0.10, 0.13, 1),
+            northCap: SIMD4<Float>(0.04, 0.09, 0.20, 1),
+            southCap: SIMD4<Float>(0.30, 0.32, 0.36, 1)))
 
         assertColor(palette.south.color, equals: SIMD4<Float>(0.30, 0.32, 0.36, 1))
     }
 
-    /// A style that says nothing about ice gets the built-in style's snow:
-    /// the same constant the tiles paint Antarctica with, so the default cap
-    /// continues the default tiles seamlessly.
-    func testDefaultPaletteMatchesTheTilesSnow() {
-        let baseColors = ImmersiveMapSettings.default.style.baseColors
+    /// The built-in style's caps are its theme's water and ice: the same
+    /// constants the tiles paint the ocean and Antarctica with, so the caps
+    /// continue the tiles seamlessly.
+    func testTheBuiltInStyleCapsAreTheThemesWaterAndIce() {
+        let palette = GlobeCapRenderer.makePalette(baseColors: ImmersiveMapTilesDefaultMapStyle().baseColors)
 
-        let palette = GlobeCapRenderer.makePalette(mapBaseColors: ImmersiveMapBaseColors(settings: baseColors))
-
-        assertColor(palette.south.color,
-                    equals: ImmersiveMapTilesTheme.default.layers.ice)
+        assertColor(palette.north.color, equals: ImmersiveMapTilesTheme.default.layers.water)
+        assertColor(palette.south.color, equals: ImmersiveMapTilesTheme.default.layers.ice)
     }
 
     private func assertColor(_ color: SIMD4<Float>,

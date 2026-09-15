@@ -69,11 +69,11 @@ final class GlobeCapRenderer {
 
     init(sharedResources: SharedResources,
          maxLatitude: Double,
-         mapBaseColors: ImmersiveMapBaseColors) {
+         baseColors: ImmersiveMapBaseColors) {
         pipeline = sharedResources.pipeline
         northCapBuffers = sharedResources.northCapBuffers
         southCapBuffers = sharedResources.southCapBuffers
-        palette = Self.makePalette(mapBaseColors: mapBaseColors)
+        palette = Self.makePalette(baseColors: baseColors)
     }
 
     func draw(renderEncoder: MTLRenderCommandEncoder,
@@ -106,16 +106,16 @@ final class GlobeCapRenderer {
         renderEncoder.setFrontFacing(.clockwise)
     }
 
-    /// Constant cap colours from the style: the north cap is the palette's
-    /// open ocean, the south its polar ice (ImmersiveMapBaseColors decides),
-    /// each composited to opaque over its natural background.
-    static func makePalette(mapBaseColors: ImmersiveMapBaseColors) -> GlobeCapPalette {
-        let northComposite = compositeOpaqueColor(foreground: mapBaseColors.getNorthPoleColor(),
-                                                  background: mapBaseColors.getWaterColor())
-        let southComposite = compositeOpaqueColor(foreground: mapBaseColors.getSouthPoleColor(),
-                                                  background: mapBaseColors.getTileBgColor())
-        return GlobeCapPalette(north: GlobeCapParams(color: northComposite),
-                               south: GlobeCapParams(color: southComposite))
+    /// Constant cap colours from the style (`ImmersiveMapBaseColors`), each
+    /// made opaque: the caps are the planet past the last tile row, with
+    /// nothing under them to blend over.
+    static func makePalette(baseColors: ImmersiveMapBaseColors) -> GlobeCapPalette {
+        GlobeCapPalette(north: GlobeCapParams(color: opaque(baseColors.northCap)),
+                        south: GlobeCapParams(color: opaque(baseColors.southCap)))
+    }
+
+    private static func opaque(_ color: SIMD4<Float>) -> SIMD4<Float> {
+        SIMD4<Float>(color.x, color.y, color.z, 1)
     }
 
     private func drawNorthCap(renderEncoder: MTLRenderCommandEncoder) {
@@ -138,12 +138,5 @@ final class GlobeCapRenderer {
                                             indexType: southCapBuffers.indexType,
                                             indexBuffer: southCapBuffers.indicesBuffer,
                                             indexBufferOffset: 0)
-    }
-
-    private static func compositeOpaqueColor(foreground: SIMD4<Float>,
-                                             background: SIMD4<Float>) -> SIMD4<Float> {
-        let alpha = simd_clamp(foreground.w, 0, 1)
-        let rgb = foreground.xyz * alpha + background.xyz * (1 - alpha)
-        return SIMD4<Float>(rgb, 1)
     }
 }

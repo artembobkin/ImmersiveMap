@@ -160,6 +160,7 @@ enum HorizonFrameResolver {
     ///   - verticalFovRadians: the render camera's vertical field of view,
     ///     which with the drawable height sizes the feather in pixels.
     static func resolve(settings: ImmersiveMapSettings,
+                        mapColor: SIMD4<Float>,
                         transition: Float,
                         globe: GlobeUniform,
                         renderSurfaceMode: ViewMode,
@@ -189,9 +190,7 @@ enum HorizonFrameResolver {
             max(min(radii * radius * thickness / edge.limbDistance, maximumHaloRadians), minimumRadians)
         }
 
-        let clearColor = SIMD3<Float>(Float(settings.scene.mapClearColor.x),
-                                      Float(settings.scene.mapClearColor.y),
-                                      Float(settings.scene.mapClearColor.z))
+        let clearColor = SIMD3<Float>(mapColor.x, mapColor.y, mapColor.z)
         let planeTint = fog.isEnabled ? fog.horizonColor : clearColor
         let globeTint = isOn ? atmosphere.color : clearColor
         let tint = showsFog ? planeTint : globeTint

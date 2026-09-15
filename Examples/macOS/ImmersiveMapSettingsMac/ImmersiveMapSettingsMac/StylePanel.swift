@@ -62,10 +62,10 @@ struct StylePanel: View {
     }
 }
 
-/// Three palettes for the built-in tile source. Each one is a
-/// `ImmersiveMapTilesTheme` built with the `.layers`,
-/// `.features` and `.labels` builders, plus the engine-level colors that are
-/// not part of any tile: the flat map background and the globe background.
+/// Three palettes for the built-in tile source. Each one is an
+/// `ImmersiveMapTilesTheme` built with the `.layers`, `.features` and
+/// `.labels` builders. What no tile paints (the ground where nothing has
+/// loaded yet, the polar caps) follows the theme's land, water and ice.
 enum StylePalette: String, CaseIterable, Identifiable {
     case day
     case night
@@ -83,11 +83,6 @@ enum StylePalette: String, CaseIterable, Identifiable {
 
     func apply(to settings: inout ImmersiveMapSettings) {
         settings = settings.mapStyle(mapStyle)
-        settings.style.baseColors.tileBackground = tileBackground
-        settings.style.baseColors.globeBackground = globeBackground
-        settings.style.baseColors.water = water
-        settings.style.baseColors.polarIce = polarIce
-        settings.scene.mapClearColor = mapClearColor
     }
 
     /// Map styles compare by their configuration fingerprint, which is what the
@@ -162,57 +157,6 @@ enum StylePalette: String, CaseIterable, Identifiable {
                          fill: SIMD3<Float>(0.88, 0.94, 1.0),
                          stroke: SIMD3<Float>(0.02, 0.09, 0.24))
                 }
-        }
-    }
-
-    /// Painted where no tile has arrived yet, so it should match the palette's
-    /// land color: otherwise loading reads as white holes punched in the map.
-    private var mapClearColor: SIMD4<Double> {
-        switch self {
-        case .day: SIMD4<Double>(1.0, 1.0, 1.0, 1.0)
-        case .night: SIMD4<Double>(0.09, 0.10, 0.13, 1.0)
-        case .blueprint: SIMD4<Double>(0.05, 0.16, 0.38, 1.0)
-        }
-    }
-
-    private var tileBackground: SIMD4<Float> {
-        switch self {
-        case .day: SIMD4<Float>(1.0, 1.0, 1.0, 1.0)
-        case .night: SIMD4<Float>(0.09, 0.10, 0.13, 1.0)
-        case .blueprint: SIMD4<Float>(0.05, 0.16, 0.38, 1.0)
-        }
-    }
-
-    /// Not the same water as `layers.water`, which is a tile color. This one is
-    /// the engine's own, and the northern polar cap fades into it: leave it at
-    /// the daylight blue and a dark palette grows a bright blue spot over the
-    /// Arctic, where Mercator tiles stop and the cap takes over.
-    private var water: SIMD4<Float> {
-        switch self {
-        case .day: SIMD4<Float>(0.3, 0.6, 0.9, 1.0)
-        case .night: SIMD4<Float>(0.04, 0.09, 0.20, 1.0)
-        case .blueprint: SIMD4<Float>(0.03, 0.11, 0.30, 1.0)
-        }
-    }
-
-    /// What the southern cap fades into, and so the color of the south pole. It
-    /// has to match the snow the global landcover paints Antarctica with, or
-    /// the pole reads as a hole in the continent.
-    private var polarIce: SIMD4<Float> {
-        switch self {
-        case .day: SIMD4<Float>(1.0, 1.0, 1.0, 1.0)
-        case .night: SIMD4<Float>(0.30, 0.32, 0.36, 1.0)
-        case .blueprint: SIMD4<Float>(0.22, 0.36, 0.62, 1.0)
-        }
-    }
-
-    /// The sphere under the tiles: visible at globe zooms wherever tiles have
-    /// not landed yet.
-    private var globeBackground: SIMD4<Double> {
-        switch self {
-        case .day: SIMD4<Double>(0.0039, 0.0431, 0.0980, 1.0)
-        case .night: SIMD4<Double>(0.02, 0.03, 0.07, 1.0)
-        case .blueprint: SIMD4<Double>(0.02, 0.08, 0.22, 1.0)
         }
     }
 

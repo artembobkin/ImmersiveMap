@@ -22,7 +22,7 @@ final class TransparentSpaceSettingsTests: XCTestCase {
     /// no longer matters.
     func testTransparentSpaceClearsToATransparentPixel() {
         let settings = ImmersiveMapSettings.default.transparentSpace()
-        let clearColor = RenderFrameClearColor.make(transition: 0, settings: settings)
+        let clearColor = RenderFrameClearColor.make(transition: 0, settings: settings, mapColor: ImmersiveMapTilesTheme.default.baseColors.map)
 
         XCTAssertEqual(clearColor.red, 0)
         XCTAssertEqual(clearColor.green, 0)
@@ -33,7 +33,7 @@ final class TransparentSpaceSettingsTests: XCTestCase {
     func testOpaqueSpaceKeepsItsConfiguredClearColor() {
         var settings = ImmersiveMapSettings.default
         settings.scene.space.clearColor = SIMD4<Double>(0.1, 0.2, 0.3, 1.0)
-        let clearColor = RenderFrameClearColor.make(transition: 0, settings: settings)
+        let clearColor = RenderFrameClearColor.make(transition: 0, settings: settings, mapColor: ImmersiveMapTilesTheme.default.baseColors.map)
 
         XCTAssertEqual(clearColor.red, 0.1, accuracy: 1e-9)
         XCTAssertEqual(clearColor.green, 0.2, accuracy: 1e-9)
@@ -46,14 +46,14 @@ final class TransparentSpaceSettingsTests: XCTestCase {
     /// unroll included, so the app's own background shows behind the
     /// morphing world with nothing tinting it.
     func testTransparentSpaceReachesTheOpaqueMapColorAtTheSurfaceSwitch() {
-        var settings = ImmersiveMapSettings.default.transparentSpace()
-        settings.scene.mapClearColor = SIMD4<Double>(1.0, 1.0, 1.0, 1.0)
+        let settings = ImmersiveMapSettings.default.transparentSpace()
+        let mapColor = SIMD4<Float>(1.0, 1.0, 1.0, 1.0)
 
-        let mid = RenderFrameClearColor.make(transition: 0.5, settings: settings)
+        let mid = RenderFrameClearColor.make(transition: 0.5, settings: settings, mapColor: mapColor)
         XCTAssertEqual(mid.red, 0.0, accuracy: 1e-9)
         XCTAssertEqual(mid.alpha, 0.0, accuracy: 1e-9)
 
-        let flat = RenderFrameClearColor.make(transition: 1.0, settings: settings)
+        let flat = RenderFrameClearColor.make(transition: 1.0, settings: settings, mapColor: mapColor)
         XCTAssertEqual(flat.red, 1.0, accuracy: 1e-9)
         XCTAssertEqual(flat.alpha, 1.0, accuracy: 1e-9)
     }

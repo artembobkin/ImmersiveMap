@@ -50,7 +50,7 @@ final class ImmersiveMapTilesThemeTests: XCTestCase {
         // in the closure body, which is what once sent the leading dot to
         // the type-erased overload.
         let settings = ImmersiveMapView()
-            .buildingRoofShapes()
+            .fog(isEnabled: false)
             .mapStyle(.default.apply { theme in
                 theme.layers.water = [0.2, 0.4, 0.8, 1]
             })

@@ -60,10 +60,8 @@ private struct DescentScreen: View {
                 .camera(camera, position: BerlinStoryboard.overview)
                 .enableCameraUIControls(showChrome)
                 .tourVideoRecorder(videoRecorder)
-                // The dark palette, and with it the backgrounds and the clear
-                // color that no tile carries. See `BerlinNightTheme`.
+                // The dark palette. See `BerlinNightTheme`.
                 .mapStyle(BerlinNightTheme.mapStyle)
-                .styleSettings(BerlinNightTheme.style)
                 .sceneSettings(BerlinNightTheme.scene)
                 .labelSettings(BerlinNightTheme.labels)
                 .ignoresSafeArea()

@@ -16,7 +16,8 @@ final class GlobeDisabledOffscreenRenderTests: XCTestCase {
         var settings = ImmersiveMapSettings.default
         settings.scene.starfield.starCount = 0
         let space = Self.pixel(of: settings.scene.space.clearColor)
-        let map = Self.pixel(of: settings.scene.mapClearColor)
+        let mapColor = ImmersiveMapTilesTheme.default.baseColors.map
+        let map = Self.pixel(of: SIMD4<Double>(Double(mapColor.x), Double(mapColor.y), Double(mapColor.z), Double(mapColor.w)))
 
         let globe = try await renderFrame(settings: settings)
         XCTAssertTrue(globe.corners.allSatisfy { Self.distance($0, space) <= 2 },

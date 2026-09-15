@@ -158,7 +158,6 @@ final class HorizonOffscreenRenderTests: XCTestCase {
             }
         var settings = ImmersiveMapSettings.default
             .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
-            .buildingExtrusion(isEnabled: true)
         settings.scene.starfield.starCount = 0
         settings.scene.shadows.isEnabled = false
         settings.scene.fog = ImmersiveMapSettings.FogSettings(hazeRange: 4...8)
@@ -314,12 +313,14 @@ final class HorizonOffscreenRenderTests: XCTestCase {
         let configuration = ImmersiveMapTilesTheme.default
             .layers { layers in
                 layers.water = Self.fixtureWater
+                // The clear colour is the theme's land.
+                layers.land = SIMD4<Float>(Float(clearColor.x), Float(clearColor.y),
+                                           Float(clearColor.z), Float(clearColor.w))
             }
         var settings = ImmersiveMapSettings.default
             .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
         settings.scene.starfield.starCount = 0
         settings.scene.shadows.isEnabled = false
-        settings.scene.mapClearColor = clearColor
         settings.scene.fog = fog
         let harness = try OffscreenFrameHarness.makeOrSkip(settings: settings, size: 200)
         let latitude = 48.0

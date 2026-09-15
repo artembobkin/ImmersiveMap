@@ -9,9 +9,10 @@ import ImmersiveMap
 /// presentation only, which is why this section opens at street level where the
 /// map is already a plane.
 ///
-/// `buildingExtrusionEnabled` is the master switch: off, no building rises
-/// and every footprint stays a flat fill, which is what the globe shows too.
-/// It is baked into the prepared tiles, so the toggle re-parses them.
+/// The theme's `features.buildingExtrusion` is the master switch: off, no
+/// building rises and every footprint stays a flat fill, which is what the
+/// globe shows too. Both it and the roof switch are theme values, baked into
+/// the prepared tiles, so the toggles re-parse them.
 ///
 /// Buildings always draw solid and depth-correct; the translucent
 /// compositing path was removed.
@@ -28,7 +29,7 @@ struct BuildingsPanel: View {
             PanelRow {
                 // Extrusions are baked into the prepared tiles, so this
                 // toggle re-parses them (a moment of loading is expected).
-                Toggle("3D buildings", isOn: $settings.style.buildingExtrusionEnabled)
+                Toggle("3D buildings", isOn: themeToggle(\.features.buildingExtrusion))
                     .toggleStyle(.switch)
 
                 Toggle("Shadows", isOn: $settings.scene.shadows.isEnabled)
@@ -36,7 +37,7 @@ struct BuildingsPanel: View {
 
                 // Shaped roofs are baked into the prepared tiles, so this
                 // toggle re-parses them (a moment of loading is expected).
-                Toggle("Roof shapes", isOn: $settings.style.buildingRoofShapesEnabled)
+                Toggle("Roof shapes", isOn: themeToggle(\.features.buildingRoofShapes))
                     .toggleStyle(.switch)
             }
 
@@ -71,6 +72,18 @@ struct BuildingsPanel: View {
             }
             .disabled(settings.scene.shadows.isEnabled == false)
         }
+    }
+
+    /// A switch of the built-in theme, read back out of the map style and
+    /// written by re-applying the style with the changed theme. The palette
+    /// picker (see `StylePanel`) replaces the whole theme, switches included.
+    private func themeToggle(_ keyPath: WritableKeyPath<ImmersiveMapTilesTheme, Bool>) -> Binding<Bool> {
+        Binding(get: {
+            settings.mapStyle.tilesTheme?[keyPath: keyPath] ?? false
+        }, set: { newValue in
+            guard let theme = settings.mapStyle.tilesTheme else { return }
+            settings = settings.mapStyle(ImmersiveMapTilesMapStyle(theme: theme.apply { $0[keyPath: keyPath] = newValue }))
+        })
     }
 
     /// The shadow tint as a SwiftUI color and back, in the sRGB space the

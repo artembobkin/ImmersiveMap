@@ -188,9 +188,22 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
 
     public struct FeatureStyles: Equatable, Sendable {
         public var buildingFillColor: SIMD4<Float>
+        /// Whether buildings rise out of their footprints on the flat map.
+        /// Off, every footprint stays a flat fill in the building colour,
+        /// the way buildings draw on the globe. Baked into the prepared
+        /// tiles, so a change re-parses them, like any other theme change.
+        public var buildingExtrusion: Bool
+        /// Whether buildings raise the shaped roofs (gabled, hipped,
+        /// skillion, domes and the rest) the schema reading found on them.
+        /// Off, every building gets a flat lid at its full height.
+        public var buildingRoofShapes: Bool
 
-        public init(buildingFillColor: SIMD4<Float>) {
+        public init(buildingFillColor: SIMD4<Float>,
+                    buildingExtrusion: Bool = true,
+                    buildingRoofShapes: Bool = false) {
             self.buildingFillColor = buildingFillColor
+            self.buildingExtrusion = buildingExtrusion
+            self.buildingRoofShapes = buildingRoofShapes
         }
     }
 
@@ -210,6 +223,13 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
     }
 
     public static let `default` = ImmersiveMapTilesTheme()
+
+    /// What no tile paints, from the same palette: the land where no tile
+    /// has arrived, the water past the northern rim, the ice past the
+    /// southern one.
+    public var baseColors: ImmersiveMapBaseColors {
+        ImmersiveMapBaseColors(map: layers.land, northCap: layers.water, southCap: layers.ice)
+    }
 
     /// A copy with the changes the closure makes: the way to state a theme
     /// as the default plus a few differences.
@@ -277,6 +297,7 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
         add(layers.roads.service); add(layers.roads.path); add(layers.roads.rail)
         add(layers.roads.casing)
         add(features.buildingFillColor)
+        out.append(contentsOf: [features.buildingExtrusion ? 1 : 0, features.buildingRoofShapes ? 1 : 0])
         add(labels.city); add(labels.town); add(labels.country)
         add(labels.poi); add(labels.water); add(labels.road)
         // Not palette values, but they change which labels are drawn, so they

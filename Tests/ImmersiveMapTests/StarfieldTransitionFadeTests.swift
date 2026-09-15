@@ -12,16 +12,17 @@ final class StarfieldTransitionFadeTests: XCTestCase {
     func testSpaceClearColorHoldsUntilTheSurfaceSwitch() {
         let settings = ImmersiveMapSettings.default
         let space = settings.scene.space.clearColor
-        let map = settings.scene.mapClearColor
+        let mapColor = ImmersiveMapTilesTheme.default.baseColors.map
+        let map = SIMD4<Double>(Double(mapColor.x), Double(mapColor.y), Double(mapColor.z), Double(mapColor.w))
 
         for transition in [Float(0), 0.5, 0.95, 0.999] {
-            let sphere = RenderFrameClearColor.make(transition: transition, settings: settings)
+            let sphere = RenderFrameClearColor.make(transition: transition, settings: settings, mapColor: mapColor)
             XCTAssertEqual(sphere.red, space.x, accuracy: 1e-9, "at \(transition)")
             XCTAssertEqual(sphere.green, space.y, accuracy: 1e-9, "at \(transition)")
             XCTAssertEqual(sphere.blue, space.z, accuracy: 1e-9, "at \(transition)")
         }
 
-        let flat = RenderFrameClearColor.make(transition: 1, settings: settings)
+        let flat = RenderFrameClearColor.make(transition: 1, settings: settings, mapColor: mapColor)
         XCTAssertEqual(flat.red, map.x, accuracy: 1e-9)
         XCTAssertEqual(flat.green, map.y, accuracy: 1e-9)
         XCTAssertEqual(flat.blue, map.z, accuracy: 1e-9)

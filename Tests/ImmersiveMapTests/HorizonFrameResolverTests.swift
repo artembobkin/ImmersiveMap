@@ -169,9 +169,9 @@ final class HorizonFrameResolverTests: XCTestCase {
     /// With the fog off the band's colour is the map's clear colour, so the
     /// ground meets the sky above the line in one colour.
     func testTheSeamBandColourFollowsTheClearColour() {
-        var settings = ImmersiveMapSettings.default.fog(isEnabled: false)
-        settings.scene.mapClearColor = SIMD4<Double>(0.1, 0.5, 0.9, 1)
-        let haze = resolve(settings: settings, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25)
+        let settings = ImmersiveMapSettings.default.fog(isEnabled: false)
+        let haze = resolve(settings: settings, mapColor: SIMD4<Float>(0.1, 0.5, 0.9, 1),
+                           transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25)
         XCTAssertEqual(haze.tint, SIMD3<Float>(0.1, 0.5, 0.9))
     }
 
@@ -289,10 +289,11 @@ final class HorizonFrameResolverTests: XCTestCase {
 
     // MARK: - Helpers
 
+    /// The band's colour with the fog off: the style's map colour, which
+    /// every resolve here takes from the built-in theme unless stated.
     private func fogColor(_ settings: ImmersiveMapSettings) -> SIMD3<Float> {
-        SIMD3<Float>(Float(settings.scene.mapClearColor.x),
-                     Float(settings.scene.mapClearColor.y),
-                     Float(settings.scene.mapClearColor.z))
+        let map = ImmersiveMapTilesTheme.default.baseColors.map
+        return SIMD3<Float>(map.x, map.y, map.z)
     }
 
     private func assertGroundSideEqual(_ a: HorizonHaze, _ b: HorizonHaze, file: StaticString = #filePath, line: UInt = #line) {
@@ -308,6 +309,7 @@ final class HorizonFrameResolverTests: XCTestCase {
     /// The render camera of the offscreen harness: unit distance from the
     /// view centre, pitched about the x axis, a square viewport.
     private func resolve(settings: ImmersiveMapSettings,
+                         mapColor: SIMD4<Float> = ImmersiveMapTilesTheme.default.baseColors.map,
                          transition: Float,
                          geometryTransition: Float,
                          mode: ViewMode,
@@ -321,6 +323,7 @@ final class HorizonFrameResolverTests: XCTestCase {
         let projection = Matrix.perspectiveMatrix(fovRadians: .pi / 4, aspect: 1, near: 0.01, far: 200)
         let view = Matrix.lookAt(eye: eye, center: SIMD3<Float>(0, 0, 0), up: up)
         return HorizonFrameResolver.resolve(settings: settings,
+                                            mapColor: mapColor,
                                             transition: transition,
                                             globe: GlobeUniform(panX: 0, panY: 0, radius: radius, transition: geometryTransition),
                                             renderSurfaceMode: mode,
@@ -372,6 +375,7 @@ final class HorizonBandMathTests: XCTestCase {
         let projection = Matrix.perspectiveMatrix(fovRadians: .pi / 4, aspect: 1, near: 0.01, far: 200)
         let view = Matrix.lookAt(eye: eye, center: SIMD3<Float>(0, 0, 0), up: SIMD3<Float>(0, 1, 0))
         return HorizonFrameResolver.resolve(settings: .default,
+                                            mapColor: ImmersiveMapTilesTheme.default.baseColors.map,
                                             transition: 0,
                                             globe: GlobeUniform(panX: 0, panY: 0, radius: radius, transition: 0),
                                             renderSurfaceMode: .spherical,
@@ -398,6 +402,7 @@ final class HorizonBandMathTests: XCTestCase {
         let projection = Matrix.perspectiveMatrix(fovRadians: .pi / 4, aspect: 1, near: 0.01, far: 200)
         let view = Matrix.lookAt(eye: eye, center: SIMD3<Float>(0, 0, 0), up: SIMD3<Float>(0, 1, 0))
         let low = HorizonFrameResolver.resolve(settings: .default,
+                                               mapColor: ImmersiveMapTilesTheme.default.baseColors.map,
                                                transition: 0,
                                                globe: GlobeUniform(panX: 0, panY: 0, radius: 200, transition: 0),
                                                renderSurfaceMode: .spherical,

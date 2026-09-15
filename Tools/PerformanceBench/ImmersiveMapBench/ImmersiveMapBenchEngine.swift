@@ -90,7 +90,7 @@ final class ImmersiveMapBenchEngine: BenchEngine {
         // BENCH_ROOFS=1 turns the shaped building roofs on (they are off by
         // default), for A/B measurements of the roof geometry cost.
         if ProcessInfo.processInfo.environment["BENCH_ROOFS"] == "1" {
-            map = map.buildingRoofShapes()
+            map = map.mapStyle(.default.apply { $0.features.buildingRoofShapes = true })
         }
         switch variant {
         case .standard:

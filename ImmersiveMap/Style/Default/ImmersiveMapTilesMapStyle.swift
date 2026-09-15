@@ -40,6 +40,15 @@ public struct ImmersiveMapTilesMapStyle: ImmersiveMapMapStyle {
     }
 }
 
+extension AnyImmersiveMapMapStyle {
+    /// The theme of a map style that is the built-in one, for an app that
+    /// reads a theme value back out of its settings; nil for any other
+    /// style.
+    public var tilesTheme: ImmersiveMapTilesTheme? {
+        (vectorTileStyle as? ImmersiveMapTilesDefaultMapStyle)?.theme
+    }
+}
+
 extension ImmersiveMapMapStyle where Self == ImmersiveMapTilesMapStyle {
     /// The built-in style, so `.mapStyle(.default)` and
     /// `.mapStyle(.default.apply { ... })` read without the type name.

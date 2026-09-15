@@ -20,8 +20,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         let tile = Tile(x: 39_167, y: 21_090, z: 16)
         let mvtData = MvtFixtureTileMessages.denseCity().serializedData()
 
-        // Extrusion is off by default; the benchmark wants every parse path.
-        let config = ImmersiveMapSettings.default.buildingExtrusion(isEnabled: true)
+        let config = ImmersiveMapSettings.default
         let parser = TileMvtParser.forTests(settings: config)
 
         // The benchmark is only meaningful if the tile drives every stage.
@@ -53,8 +52,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         let tile = Tile(x: 9, y: 5, z: 4)
         let mvtData = MvtFixtureTileMessages.oceanOverview().serializedData()
 
-        // Extrusion is off by default; the benchmark wants every parse path.
-        let config = ImmersiveMapSettings.default.buildingExtrusion(isEnabled: true)
+        let config = ImmersiveMapSettings.default
         let parser = TileMvtParser.forTests(settings: config)
 
         let parsed = try parser.parse(tile: tile, mvtData: mvtData)

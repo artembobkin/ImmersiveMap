@@ -26,6 +26,11 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
     let globalLandcoverMaximumZoom = 9
     let theme: ImmersiveMapTilesTheme
 
+    /// The land, the water and the ice of the theme, where no tile paints.
+    public var baseColors: ImmersiveMapBaseColors {
+        theme.baseColors
+    }
+
     public init(theme: ImmersiveMapTilesTheme = .default) {
         self.theme = theme
     }

@@ -133,13 +133,20 @@ final class TileMvtParserRoofMeshTests: XCTestCase {
     }
 }
 
-/// The roof-shapes toggle (`StyleSettings.buildingRoofShapesEnabled`): off,
+/// The theme's roof switch (`ImmersiveMapTilesTheme.features.buildingRoofShapes`),
+/// which the built-in style passes on as `ExtrusionStyle.roofShapes`: off,
 /// the parser never raises a shaped roof and every building takes the flat
-/// lid at its full height. The flag is prepared-cache identity and a heavy
-/// settings change, pinned alongside.
+/// lid at its full height. Part of the theme, so prepared-cache identity and
+/// a heavy settings change like any other theme change.
 final class BuildingRoofShapesToggleTests: XCTestCase {
-    private func heights(roofShapesEnabled: Bool) -> BuildingExtrusionHeights? {
-        let style = ImmersiveMapTilesDefaultMapStyle()
+    private static func theme(roofShapes: Bool) -> ImmersiveMapTilesTheme {
+        ImmersiveMapTilesTheme.default.apply { theme in
+            theme.features.buildingRoofShapes = roofShapes
+        }
+    }
+
+    private func heights(roofShapes: Bool) -> BuildingExtrusionHeights? {
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: Self.theme(roofShapes: roofShapes))
             .makeStyle(data: DetFeatureStyleData(layerName: "building",
                                                  properties: [:],
                                                  tile: Tile(x: 0, y: 0, z: 16)))
@@ -149,9 +156,7 @@ final class BuildingRoofShapesToggleTests: XCTestCase {
             "roof:shape": .string("gabled"),
             "roof:height": .float(6)
         ]
-        var config = ImmersiveMapSettings.default
-        config.style.buildingRoofShapesEnabled = roofShapesEnabled
-        return BuildingFeatureReader(options: TileParseOptions(settings: config))
+        return BuildingFeatureReader(options: TileParseOptions(settings: .default))
             .extrusionHeights(building: ImmersiveMapTilesSchema().facts(layerName: "building",
                                                                         properties: attributes,
                                                                         tile: Tile(x: 0, y: 0, z: 16),
@@ -161,45 +166,29 @@ final class BuildingRoofShapesToggleTests: XCTestCase {
     }
 
     func testDisabledRoofShapesFallBackToTheFlatLid() throws {
-        let shaped = try XCTUnwrap(heights(roofShapesEnabled: true))
+        let shaped = try XCTUnwrap(heights(roofShapes: true))
         XCTAssertEqual(shaped.roof?.shape, .gabled, "Enabled roof shapes keep the shaped roof")
-        let flat = try XCTUnwrap(heights(roofShapesEnabled: false))
+        let flat = try XCTUnwrap(heights(roofShapes: false))
         XCTAssertNil(flat.roof, "Disabled roof shapes never raise a shaped roof")
         XCTAssertEqual(flat.top, shaped.top, "The flat lid keeps the full building height")
     }
 
-    func testTheFlagIsPreparedCacheIdentity() {
-        func namespace(roofShapesEnabled: Bool) -> String {
-            PreparedTileCacheIdentity(preparedFormatVersion: 84,
-                                      styleRevision: 1,
-                                      tileSourceRevision: 2,
-                                      flatSeparateRoadRenderingMinimumZoom: 8,
-                                      textRevision: 3,
-                                      labelLanguage: .english,
-                                      labelFallbackPolicy: .international,
-                                      houseNumbersEnabled: true,
-                                      houseNumbersMinimumZoom: 17,
-                                      capitalMaximumZoom: 10,
-                                      cityMaximumZoom: 12,
-                                      smallSettlementMaximumZoom: 14,
-                                      landmarkMinimumZoom: 15,
-                                      addTestBorders: false,
-                                      roofShapesEnabled: roofShapesEnabled,
-                                      buildingExtrusionEnabled: true,
-                                      labelsEnabled: true).namespaceComponent
-        }
-        XCTAssertNotEqual(namespace(roofShapesEnabled: true), namespace(roofShapesEnabled: false),
+    func testTheSwitchIsPartOfTheThemeFingerprint() {
+        XCTAssertNotEqual(Self.theme(roofShapes: true).cacheFingerprint,
+                          Self.theme(roofShapes: false).cacheFingerprint,
                           "A tile prepared with flat lids must not answer a map that wants shaped roofs")
     }
 
     func testRoofShapesAreOffByDefault() {
-        XCTAssertFalse(ImmersiveMapSettings.default.style.buildingRoofShapesEnabled)
+        XCTAssertFalse(ImmersiveMapTilesTheme.default.features.buildingRoofShapes)
+        XCTAssertFalse(ImmersiveMapTilesDefaultMapStyle()
+            .makeStyle(data: DetFeatureStyleData(layerName: "building", properties: [:], tile: Tile(x: 0, y: 0, z: 16)))
+            .extrusionStyle!.roofShapes)
     }
 
-    func testTogglingTheFlagIsAHeavySettingsChange() {
+    func testTogglingTheSwitchIsAHeavySettingsChange() {
         let old = ImmersiveMapSettings.default
-        var new = old
-        new.style.buildingRoofShapesEnabled = true
+        let new = old.mapStyle(ImmersiveMapTilesMapStyle(theme: Self.theme(roofShapes: true)))
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: old, to: new)
         XCTAssertTrue(plan.actions.contains(.rebuildPreparedData),
                       "Roof shapes are baked at parse time: the prepared tiles must rebuild")

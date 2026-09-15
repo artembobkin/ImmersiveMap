@@ -42,6 +42,7 @@ final class HorizonRenderSubsystem: RenderSubsystem {
     /// camera; internal so tests can ask what a frame would draw.
     static func resolveHaze(frameContext: FrameContext) -> HorizonHaze {
         HorizonFrameResolver.resolve(settings: frameContext.services.settings,
+                                     mapColor: frameContext.services.baseColors.map,
                                      transition: frameContext.transition,
                                      globe: frameContext.globeRenderUniform,
                                      renderSurfaceMode: frameContext.renderSurfaceMode,

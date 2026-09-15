@@ -4,8 +4,8 @@
 import Metal
 
 /// The polar caps: the sphere beyond the Mercator edge, drawn after the tile
-/// geometry in constant style colours (the north cap the palette's open
-/// ocean, the south its polar ice; see ImmersiveMapBaseColors). Nothing is
+/// geometry in the constant colours the style states for them (see
+/// ImmersiveMapBaseColors). Nothing is
 /// baked: the caps are two fan draws with one colour each.
 final class GlobeCapRenderSubsystem: RenderSubsystem {
     let name: String = "GlobeCap"

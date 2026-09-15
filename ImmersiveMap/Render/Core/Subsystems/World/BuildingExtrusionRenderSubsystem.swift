@@ -6,7 +6,7 @@ import Metal
 /// Draws the extruded buildings of flat mode: opaque geometry straight into
 /// the world pass, before the ground, which then fails its depth test under
 /// them. Always solid; there is no translucent path.
-final class BuildingExtrusionRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProvider {
+final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     let name: String = "BuildingExtrusion"
 
     private let extrudedTilePipeline: ExtrudedTilePipeline
@@ -35,14 +35,6 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem, RenderPassAvailab
     func update(frameContext _: FrameContext) {}
 
     func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
-    /// With extrusion off the tiles carry no building geometry: the layer
-    /// is planned out of the world pass rather than encoding its state for
-    /// nothing.
-    func contributePassAvailability(settings: ImmersiveMapSettings,
-                                    builder: inout RenderPassAvailabilityBuilder) {
-        builder.buildingExtrusionEnabled = settings.style.buildingExtrusionEnabled
-    }
 
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard frameContext.renderSurfaceMode == .flat else {

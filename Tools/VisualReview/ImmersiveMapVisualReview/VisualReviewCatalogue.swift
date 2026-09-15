@@ -876,16 +876,9 @@ enum Showcase {
     }
 
     /// The dark palette of the `BerlinNightDescent` post, as settings: the
-    /// tile colours through the style, the engine colours no tile carries
-    /// through the base colours, and a low sun for long shadows.
+    /// colours through the style, and a low sun for long shadows.
     static var nightSettings: ImmersiveMapSettings {
         var settings = ImmersiveMapSettings.default.mapStyle(AnyImmersiveMapMapStyle(nightStyle))
-        settings.style.baseColors.tileBackground = nightLand
-        settings.style.baseColors.globeBackground = SIMD4<Double>(0.02, 0.03, 0.07, 1.0)
-        settings.style.baseColors.water = SIMD4<Float>(0.04, 0.09, 0.20, 1)
-        settings.style.baseColors.landCover = SIMD4<Float>(0.08, 0.16, 0.12, 0.7)
-        settings.style.baseColors.polarIce = SIMD4<Float>(0.30, 0.32, 0.36, 1)
-        settings.scene.mapClearColor = SIMD4<Double>(0.09, 0.10, 0.13, 1.0)
         settings.scene.light.direction = SIMD3<Float>(0.55, -0.62, 0.56)
         settings.scene.shadows.isEnabled = true
         settings.scene.shadows.strength = 0.45

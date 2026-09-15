@@ -323,17 +323,23 @@ public struct ExtrusionStyle: Sendable {
     /// The height in metres of a building the reading states no height
     /// for; zero leaves it flat.
     public var fallbackHeight: Float
+    /// Whether the shaped roof the reading found (`ImmersiveMapRoof`) is
+    /// raised. Off, the building takes a flat lid at its full height and
+    /// the roof geometry is never built.
+    public var roofShapes: Bool
 
     public init(key: UInt8,
                 color: SIMD4<Float>,
                 heightScale: Float = 1.0,
                 anchorZoom: Int = 16,
-                fallbackHeight: Float = 0) {
+                fallbackHeight: Float = 0,
+                roofShapes: Bool = false) {
         self.key = key
         self.color = color
         self.heightScale = heightScale
         self.anchorZoom = anchorZoom
         self.fallbackHeight = fallbackHeight
+        self.roofShapes = roofShapes
     }
 }
 

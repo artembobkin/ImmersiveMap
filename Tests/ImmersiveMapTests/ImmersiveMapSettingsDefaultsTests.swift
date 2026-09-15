@@ -39,18 +39,15 @@ final class ImmersiveMapSettingsDefaultsTests: XCTestCase {
     }
 
 
-    /// The map color, the tile background and the built-in style's land are one
-    /// color: a tile that has not arrived, the placeholder globe and the horizon
-    /// haze all wear the ground the tiles paint, so loading never flashes a
-    /// lighter patch. The base water follows the style's water for the same
-    /// reason: the polar cap continues the ocean with it.
-    func testMapColorAndBaseColorsMatchTheBuiltInPalette() {
-        let settings = ImmersiveMapSettings.default
-        let layers = ImmersiveMapTilesTheme.default.layers
-        let mapColor = settings.scene.mapClearColor
-        XCTAssertEqual(SIMD4<Float>(Float(mapColor.x), Float(mapColor.y), Float(mapColor.z), Float(mapColor.w)),
-                       layers.land)
-        XCTAssertEqual(settings.style.baseColors.tileBackground, layers.land)
-        XCTAssertEqual(settings.style.baseColors.water, layers.water)
+    /// What no tile paints comes from the same palette as the tiles: a tile
+    /// that has not arrived, the horizon haze and the placeholder globe wear
+    /// the land, the north cap the water and the south cap the ice, so
+    /// loading never flashes a lighter patch and a cap never punches a hole.
+    func testTheBaseColoursAreTheThemesLandWaterAndIce() {
+        let theme = ImmersiveMapTilesTheme.default
+        let base = ImmersiveMapTilesDefaultMapStyle(theme: theme).baseColors
+        XCTAssertEqual(base.map, theme.layers.land)
+        XCTAssertEqual(base.northCap, theme.layers.water)
+        XCTAssertEqual(base.southCap, theme.layers.ice)
     }
 }

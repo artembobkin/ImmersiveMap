@@ -30,6 +30,8 @@ final class RenderPersistentContext {
     // MARK: - Scene Resources
 
     let globeCapRenderer: GlobeCapRenderer
+    /// What no tile paints, as the style states it.
+    let baseColors: ImmersiveMapBaseColors
     /// The caps' rim colour, baked per view from its own placements.
     let starfieldRenderer: StarfieldRenderer
     /// The horizon layer's drawer; its pipeline is shared.
@@ -123,7 +125,7 @@ final class RenderPersistentContext {
         self.shadowFallbackTexture = shared.shadowFallbackTexture
         self.groundShadowMaskFallbackTexture = shared.groundShadowMaskFallbackTexture
 
-        let mapBaseColors = styleRuntime.mapBaseColors
+        self.baseColors = styleRuntime.baseColors
 
         self.polygonPipeline = shared.polygonPipeline
         self.tilePipeline = shared.tilePipeline
@@ -147,7 +149,7 @@ final class RenderPersistentContext {
         // the shared set.
         self.globeCapRenderer = GlobeCapRenderer(sharedResources: shared.globeCap,
                                                  maxLatitude: WebMercatorMath.maxLatitudeRadians,
-                                                 mapBaseColors: mapBaseColors)
+                                                 baseColors: styleRuntime.baseColors)
         self.textRenderer = shared.textRenderer
         self.poiSpriteAtlas = shared.poiSpriteAtlas
         self.tileRenderStore = TileRenderStore(styleRuntime: styleRuntime,

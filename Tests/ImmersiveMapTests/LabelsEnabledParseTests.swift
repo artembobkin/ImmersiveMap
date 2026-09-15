@@ -56,8 +56,6 @@ final class LabelsEnabledParseTests: XCTestCase {
                                       smallSettlementMaximumZoom: 14,
                                       landmarkMinimumZoom: 15,
                                       addTestBorders: false,
-                                      roofShapesEnabled: false,
-                                      buildingExtrusionEnabled: true,
                                       labelsEnabled: labelsEnabled).namespaceComponent
         }
         XCTAssertNotEqual(namespace(labelsEnabled: true), namespace(labelsEnabled: false),

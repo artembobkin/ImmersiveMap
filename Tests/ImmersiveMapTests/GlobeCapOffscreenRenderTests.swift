@@ -93,13 +93,14 @@ final class GlobeCapOffscreenRenderTests: XCTestCase {
     @MainActor
     private func makeHarness() throws -> OffscreenFrameHarness {
         let configuration = ImmersiveMapTilesTheme.default
-            .layers { $0.water = Self.fixtureWater }
+            .layers {
+                $0.water = Self.fixtureWater
+                $0.ice = Self.fixtureWater
+            }
         var settings = ImmersiveMapSettings.default
             .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
-        // The caps are constant palette colours now: paint both poles with
-        // the fixture magenta so the disc checks cover cap and tiles alike.
-        settings.style.baseColors.water = Self.fixtureWater
-        settings.style.baseColors.polarIce = Self.fixtureWater
+        // The caps are the theme's water and ice: both poles are the fixture
+        // magenta too, so the disc checks cover cap and tiles alike.
         // The stars twinkle with scene time; a settle loop needs a still sky.
         settings.scene.starfield.starCount = 0
         return try OffscreenFrameHarness.makeOrSkip(settings: settings)

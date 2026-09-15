@@ -18,5 +18,8 @@ protocol FrameDiagnosticsService: AnyObject {
 struct FrameContextServices {
     let diagnostics: any FrameDiagnosticsService
     let settings: ImmersiveMapSettings
+    /// What no tile paints, from the style: the frame's clear colour once
+    /// the surface is the plane, and the horizon fog's tint.
+    let baseColors: ImmersiveMapBaseColors
     let now: Date
 }

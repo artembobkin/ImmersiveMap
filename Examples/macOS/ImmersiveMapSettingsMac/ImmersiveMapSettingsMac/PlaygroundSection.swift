@@ -52,9 +52,10 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
             """
         case .buildings:
             """
-            `settings.style.buildingExtrusionEnabled` and `settings.scene` \
-            (light, shadows). Flat presentation only, and all of it is per-frame \
-            uniforms, so it applies without touching a single tile.
+            The theme's `features.buildingExtrusion` and `features.buildingRoofShapes` \
+            (baked into the prepared tiles, so a toggle re-parses them) and \
+            `settings.scene` (light, shadows), which is per-frame uniforms and \
+            applies without touching a single tile. Flat presentation only.
             """
         case .sky:
             """

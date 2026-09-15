@@ -623,7 +623,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// transparent pixel and the starfield layer (space background, stars
         /// and the visible Sun) is not drawn at all. `clearColor` is ignored.
         /// The globe surface itself stays opaque, and the map of the flat
-        /// presentation still covers the viewport with `mapClearColor`.
+        /// presentation still covers the viewport with the style's map
+        /// colour (`ImmersiveMapBaseColors.map`).
         public var isTransparent: Bool
 
         public init(clearColor: SIMD4<Double>,
@@ -790,7 +791,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     /// planet's limb and a matching glow on the surface toward it. Globe
     /// presentation only; through the globe-to-flat morph it fades into the
     /// flat map's fog band (which is always on and takes its colour from
-    /// `SceneSettings.mapClearColor`), and the flat map has no atmosphere.
+    /// the style's map colour, `ImmersiveMapBaseColors.map`), and the flat
+    /// map has no atmosphere.
     /// A thin glow at the limb that hides the tile mesh's edge stays even
     /// with the atmosphere off.
     public struct AtmosphereSettings: Equatable, Sendable {
@@ -867,7 +869,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     }
 
     public struct SceneSettings: Equatable, Sendable {
-        public var mapClearColor: SIMD4<Double>
         public var space: SpaceSettings
         public var starfield: StarfieldSettings
         public var light: SceneLightSettings
@@ -875,14 +876,12 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var atmosphere: AtmosphereSettings
         public var fog: FogSettings
 
-        public init(mapClearColor: SIMD4<Double>,
-                    space: SpaceSettings,
+        public init(space: SpaceSettings,
                     starfield: StarfieldSettings,
                     light: SceneLightSettings = SceneLightSettings(),
                     shadows: ShadowSettings = ShadowSettings(),
                     atmosphere: AtmosphereSettings = AtmosphereSettings(),
                     fog: FogSettings = FogSettings()) {
-            self.mapClearColor = mapClearColor
             self.space = space
             self.starfield = starfield
             self.light = light
@@ -893,65 +892,10 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     }
 
     public struct StyleSettings: Equatable, Sendable {
-        public struct BaseColors: Equatable, Sendable {
-            public var tileBackground: SIMD4<Float>
-            public var globeBackground: SIMD4<Double>
-            public var water: SIMD4<Float>
-            public var landCover: SIMD4<Float>
-            /// The southern polar cap's colour: the Antarctic ice sheet past
-            /// the last Mercator tile row. The default matches the snow the
-            /// built-in style paints Antarctica with
-            /// (`ImmersiveMapTilesTheme.layers.ice`),
-            /// so the cap continues the tiles seamlessly; a style with its own
-            /// ice sets both in step. The northern cap takes `water` instead:
-            /// past the northern rim the planet is the Arctic Ocean.
-            public var polarIce: SIMD4<Float>
-
-            public init(tileBackground: SIMD4<Float>,
-                        globeBackground: SIMD4<Double>,
-                        water: SIMD4<Float>,
-                        landCover: SIMD4<Float>,
-                        polarIce: SIMD4<Float> = SIMD4<Float>(0.937, 0.957, 0.973, 1.0)) {
-                self.tileBackground = tileBackground
-                self.globeBackground = globeBackground
-                self.water = water
-                self.landCover = landCover
-                self.polarIce = polarIce
-            }
-        }
-
-        public var preparedTileStyleRevision: UInt32
         public var flatSeparateRoadRenderingMinimumZoom: Int
-        /// Whether buildings rise out of their footprints on the flat map.
-        /// On (the default), every building the tiles give a height is
-        /// extruded, solid and depth-correct. Off, no building is extruded:
-        /// the footprints stay as flat fills in the building color, the way
-        /// they draw on the globe, and with nothing left to cast, the shadow
-        /// pass skips itself.
-        /// Baked at parse time: toggling re-parses the tiles, like any
-        /// style change.
-        public var buildingExtrusionEnabled: Bool
-        /// Whether buildings raise shaped roofs (gabled, hipped, skillion,
-        /// domes and the rest of `roof:shape`) where the tiles describe one.
-        /// Off (the default), every building gets a flat lid at its full
-        /// height. Baked at parse time: toggling re-parses the tiles, like
-        /// any style change.
-        public var buildingRoofShapesEnabled: Bool
-        public var fallbackFeatureColor: SIMD4<Float>
-        public var baseColors: BaseColors
 
-        public init(preparedTileStyleRevision: UInt32,
-                    flatSeparateRoadRenderingMinimumZoom: Int,
-                    buildingExtrusionEnabled: Bool = true,
-                    buildingRoofShapesEnabled: Bool = false,
-                    fallbackFeatureColor: SIMD4<Float>,
-                    baseColors: BaseColors) {
-            self.preparedTileStyleRevision = preparedTileStyleRevision
+        public init(flatSeparateRoadRenderingMinimumZoom: Int) {
             self.flatSeparateRoadRenderingMinimumZoom = flatSeparateRoadRenderingMinimumZoom
-            self.buildingExtrusionEnabled = buildingExtrusionEnabled
-            self.buildingRoofShapesEnabled = buildingRoofShapesEnabled
-            self.fallbackFeatureColor = fallbackFeatureColor
-            self.baseColors = baseColors
         }
     }
 
@@ -1229,12 +1173,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                                                fadeOutSeconds: 0.25),
                               road: LabelSettings.RoadSettings(gridCellSizePoints: 16.0,
                                                                maxGlyphTurnRadians: .pi / 6.0)),
-        // The map color is the built-in style's land, so a tile that has not
-        // arrived, the horizon haze and the placeholder globe all wear the
-        // ground the tiles will paint over them, and loading never flashes a
-        // lighter patch.
-        scene: SceneSettings(mapClearColor: SIMD4<Double>(0.973, 0.965, 0.941, 1.0),
-                             space: SpaceSettings(clearColor: SIMD4<Double>(0.008, 0.012, 0.032, 1.0)),
+        scene: SceneSettings(space: SpaceSettings(clearColor: SIMD4<Double>(0.008, 0.012, 0.032, 1.0)),
                              starfield: StarfieldSettings(starCount: 3400,
                                                           sizeMin: 0.9,
                                                           sizeMax: 5.2,
@@ -1243,17 +1182,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                                           near: 0.1,
                                                           far: 6000.0,
                                                           radiusScale: 10.5)),
-        style: StyleSettings(preparedTileStyleRevision: 86,
-                             flatSeparateRoadRenderingMinimumZoom: 8,
-                             fallbackFeatureColor: SIMD4<Float>(1.0, 0.0, 0.0, 1.0),
-                             // Tile background and water mirror the built-in
-                             // style's land and water: the background is what a
-                             // tile is before its features draw, and the water
-                             // is what the polar cap continues the ocean with.
-                             baseColors: StyleSettings.BaseColors(tileBackground: SIMD4<Float>(0.973, 0.965, 0.941, 1.0),
-                                                                  globeBackground: SIMD4<Double>(0.0039, 0.0431, 0.0980, 1.0),
-                                                                  water: SIMD4<Float>(0.647, 0.812, 0.945, 1.0),
-                                                                  landCover: SIMD4<Float>(0.4, 0.7, 0.4, 0.7))),
+        style: StyleSettings(flatSeparateRoadRenderingMinimumZoom: 8),
         avatars: AvatarSettings(size: .px64,
                                 sizeScale: 1.7,
                                 compressedScale: 0.55,
@@ -1502,27 +1431,9 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
-    /// Shaped building roofs (`roof:shape`) on or off; off gives every
-    /// building a flat lid. Applies by re-parsing the tiles, like any
-    /// style change.
-    func buildingRoofShapes(isEnabled: Bool = true) -> ImmersiveMapSettings {
-        var settings = self
-        settings.style.buildingRoofShapesEnabled = isEnabled
-        return settings
-    }
-
     func styleSettings(_ style: StyleSettings) -> ImmersiveMapSettings {
         var settings = self
         settings.style = style
-        return settings
-    }
-
-    /// Extruded buildings on or off; off leaves every building as its flat
-    /// footprint fill. Applies by re-parsing the tiles, like any style
-    /// change.
-    func buildingExtrusion(isEnabled: Bool = true) -> ImmersiveMapSettings {
-        var settings = self
-        settings.style.buildingExtrusionEnabled = isEnabled
         return settings
     }
 

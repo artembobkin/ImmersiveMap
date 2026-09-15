@@ -84,10 +84,9 @@ public protocol ImmersiveMapVectorTileStyle: Sendable {
     /// rules or the palette must change it, or the map keeps drawing from
     /// tiles prepared by the old style.
     var cacheFingerprint: UInt32 { get }
-    /// The colours of the parts of the map that are not features (the tile
-    /// background, the globe backdrop, water and land cover on the sphere);
-    /// nil takes the settings' base colours.
-    var baseColors: ImmersiveMapSettings.StyleSettings.BaseColors? { get }
+    /// The colours of what no tile paints: the map where no tile has
+    /// arrived and the two polar caps. The default is the built-in theme's.
+    var baseColors: ImmersiveMapBaseColors { get }
     /// The style's identity: the namespace its label identities are minted
     /// in, so two styles never share a label across tiles. The default is
     /// one shared namespace for styles that state none.
@@ -112,8 +111,8 @@ public protocol ImmersiveMapVectorTileStyle: Sendable {
 }
 
 public extension ImmersiveMapVectorTileStyle {
-    var baseColors: ImmersiveMapSettings.StyleSettings.BaseColors? {
-        nil
+    var baseColors: ImmersiveMapBaseColors {
+        ImmersiveMapTilesTheme.default.baseColors
     }
 
     var styleID: String {

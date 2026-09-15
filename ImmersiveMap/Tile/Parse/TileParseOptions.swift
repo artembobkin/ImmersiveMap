@@ -23,12 +23,6 @@ struct TileParseOptions: Equatable {
     /// seamless ribbons with the casing under the fill, sorted by structure
     /// and class, instead of ground polygons.
     var flatSeparateRoadRenderingMinimumZoom: Int
-    /// Whether building footprints are extruded at all. Off, every footprint
-    /// stays a flat ground fill.
-    var buildingExtrusionEnabled: Bool
-    /// Whether roof attributes are parsed into shaped roofs. Off, every
-    /// building takes a flat lid at its full height.
-    var buildingRoofShapesEnabled: Bool
     /// The coarsest tile zoom that draws buildings: a coarser tile never
     /// extrudes, so its merged blocks are neither tessellated nor uploaded.
     /// The placement side decides the number (`BuildingCoveragePlanner`).
@@ -37,14 +31,10 @@ struct TileParseOptions: Equatable {
     init(labelsEnabled: Bool,
          addTestBorders: Bool,
          flatSeparateRoadRenderingMinimumZoom: Int,
-         buildingExtrusionEnabled: Bool,
-         buildingRoofShapesEnabled: Bool,
          buildingMinimumSourceZoom: Int) {
         self.labelsEnabled = labelsEnabled
         self.addTestBorders = addTestBorders
         self.flatSeparateRoadRenderingMinimumZoom = flatSeparateRoadRenderingMinimumZoom
-        self.buildingExtrusionEnabled = buildingExtrusionEnabled
-        self.buildingRoofShapesEnabled = buildingRoofShapesEnabled
         self.buildingMinimumSourceZoom = buildingMinimumSourceZoom
     }
 
@@ -55,8 +45,6 @@ struct TileParseOptions: Equatable {
         self.init(labelsEnabled: settings.labels.isEnabled,
                   addTestBorders: settings.tiles.parsing.addTestBorders,
                   flatSeparateRoadRenderingMinimumZoom: settings.style.flatSeparateRoadRenderingMinimumZoom,
-                  buildingExtrusionEnabled: settings.style.buildingExtrusionEnabled,
-                  buildingRoofShapesEnabled: settings.style.buildingRoofShapesEnabled,
                   buildingMinimumSourceZoom: BuildingCoveragePlanner.minimumSourceZoom)
     }
 }

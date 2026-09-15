@@ -752,18 +752,6 @@ public extension ImmersiveMapView {
         return view
     }
 
-    /// Whether buildings rise out of their footprints on the flat map. On by
-    /// default. Off, no building is extruded: every footprint stays a flat
-    /// fill in the building color, the way buildings draw on the globe, the
-    /// extrusion mode has nothing to composite, and with nothing to cast the
-    /// shadow pass skips itself. The extrusions are baked into the prepared
-    /// tiles, so toggling re-parses them, like any other style change.
-    public func buildingExtrusion(isEnabled: Bool = true) -> ImmersiveMapView {
-        var view = self
-        view.settings = view.settings.buildingExtrusion(isEnabled: isEnabled)
-        return view
-    }
-
     public func avatarSettings(_ avatars: ImmersiveMapSettings.AvatarSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.avatarSettings(avatars)
@@ -869,18 +857,6 @@ public extension ImmersiveMapView {
     public func msaa(isEnabled: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.msaa(isEnabled: isEnabled)
-        return view
-    }
-
-    /// Whether buildings raise shaped roofs (gabled, hipped, skillion, domes
-    /// and the rest of `roof:shape`) where the tiles describe one. Off by
-    /// default: every building gets a flat lid at its full height, and the
-    /// shaped-roof geometry is never parsed. The roofs are baked into the
-    /// prepared tiles, so toggling re-parses them, like any other style
-    /// change.
-    public func buildingRoofShapes(isEnabled: Bool = true) -> ImmersiveMapView {
-        var view = self
-        view.settings = view.settings.buildingRoofShapes(isEnabled: isEnabled)
         return view
     }
 

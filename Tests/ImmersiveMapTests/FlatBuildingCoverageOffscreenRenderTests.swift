@@ -106,7 +106,6 @@ final class FlatBuildingCoverageOffscreenRenderTests: XCTestCase {
             }
         var settings = ImmersiveMapSettings.default
             .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
-            .buildingExtrusion(isEnabled: true)
         settings.scene.starfield.starCount = 0
         // No cast shadows: they would tint the sampled snow according to the
         // sun's azimuth.

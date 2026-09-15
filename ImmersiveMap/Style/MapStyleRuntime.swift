@@ -25,11 +25,11 @@ import simd
 struct MapStyleRuntime {
     let schema: any ImmersiveMapTileSchema
     let style: any ImmersiveMapVectorTileStyle
-    let mapBaseColors: ImmersiveMapBaseColors
+    /// What no tile paints, as the style states it.
+    let baseColors: ImmersiveMapBaseColors
     /// The style's identity, the namespace its label identities are minted
     /// in.
     let styleID: String
-    private let settings: ImmersiveMapSettings.StyleSettings
 
     init(settings: ImmersiveMapSettings) {
         self.init(mapStyle: settings.mapStyle, settings: settings)
@@ -45,14 +45,13 @@ struct MapStyleRuntime {
         self.schema = schema ?? mapStyle.schema
         self.style = style
         self.styleID = style.styleID
-        self.mapBaseColors = ImmersiveMapBaseColors(settings: style.baseColors ?? settings.style.baseColors)
-        self.settings = settings.style
+        self.baseColors = style.baseColors
     }
 
     /// The style's part of the prepared-tile cache identity: the reading's
-    /// and the style's own fingerprints and the settings' style revision.
+    /// and the style's own fingerprints.
     var preparedTileStyleRevision: UInt32 {
-        schema.cacheFingerprint &* 31 &+ style.cacheFingerprint &+ settings.preparedTileStyleRevision
+        schema.cacheFingerprint &* 31 &+ style.cacheFingerprint
     }
 
     /// What a feature is, as the schema reading says.
@@ -79,9 +78,9 @@ struct MapStyleRuntime {
     }
 
     /// The one-unit frame around a tile the parser draws when the settings
-    /// ask for the debug borders: the engine's, in the settings' fallback
-    /// colour, whatever the style.
+    /// ask for the debug borders: the engine's, in a debug red, whatever
+    /// the style.
     func debugBorderStyle() -> FillStyle {
-        FillStyle(key: 0, color: settings.fallbackFeatureColor, outlineAntialiasing: false)
+        FillStyle(key: 0, color: SIMD4<Float>(1, 0, 0, 1), outlineAntialiasing: false)
     }
 }

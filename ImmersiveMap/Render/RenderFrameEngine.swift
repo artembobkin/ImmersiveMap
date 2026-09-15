@@ -306,7 +306,10 @@ final class RenderFrameEngine {
         let diagnostics = FrameDiagnostics(frameIndex: frameTick.index, frameDeltaTime: frameTick.deltaTime)
         diagnostics.setMeasurement(.gpuFrameDurationMs,
                                    value: lastCompletedGPUFrameDuration.withLock { $0 } * 1000.0)
-        let services = FrameContextServices(diagnostics: diagnostics, settings: settings, now: clock.currentDate())
+        let services = FrameContextServices(diagnostics: diagnostics,
+                                            settings: settings,
+                                            baseColors: persistentContext.baseColors,
+                                            now: clock.currentDate())
 
         // The presentation depends on the semantic camera state alone, and
         // the render camera's pose depends on the presentation's phase (the

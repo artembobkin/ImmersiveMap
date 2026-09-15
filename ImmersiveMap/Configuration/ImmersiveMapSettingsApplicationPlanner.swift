@@ -70,8 +70,7 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         // `FrameContext`; the shadow-map texture is reallocated lazily on
         // resolution change, so all of them apply live without recreating the
         // renderer.
-        let sceneLiveChanged = oldValue.scene.mapClearColor != newValue.scene.mapClearColor
-            || oldValue.scene.space != newValue.scene.space
+        let sceneLiveChanged = oldValue.scene.space != newValue.scene.space
             || oldValue.scene.light != newValue.scene.light
             || oldValue.scene.shadows != newValue.scene.shadows
             || oldValue.scene.atmosphere != newValue.scene.atmosphere

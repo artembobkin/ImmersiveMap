@@ -107,7 +107,6 @@ enum RenderGraphFactory {
             debugSubsystem
         ]
         let availabilityProviders: [any RenderPassAvailabilityProvider] = [
-            buildingExtrusionSubsystem,
             baseLabelDrawSubsystem,
             roadLabelDrawSubsystem,
             avatarSubsystem,

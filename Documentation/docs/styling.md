@@ -31,11 +31,18 @@ ImmersiveMapView()
 
 The groups are `layers` (land, water, wood, grass, farmland, ice, sand,
 wetland, park, residential, industrial, boundary, aeroway, and `roads` with
-one colour per road class plus the casing), `features` (the building fill),
-`labels` (fill
+one colour per road class plus the casing), `features` (the building fill,
+and whether buildings rise at all and raise their shaped roofs:
+`buildingExtrusion`, on by default, and `buildingRoofShapes`, off by
+default), `labels` (fill
 and stroke colour, halo, size and weight per label class) and
 `labelVisibility`. Every value feeds the style's cache fingerprint, so a
 changed colour rebakes the prepared tiles by itself.
+
+What no tile paints follows the theme too: the ground where no tile has
+arrived yet is the land colour, the northern polar cap the water and the
+southern one the ice (`ImmersiveMapBaseColors`, which a style of your own
+states itself).
 
 A source in another schema, or a look the theme cannot express, is a style of
 its own: an `ImmersiveMapVectorTileStyle` answering `makeStyle(for:)` per

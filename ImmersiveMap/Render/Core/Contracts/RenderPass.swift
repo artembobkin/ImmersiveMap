@@ -60,7 +60,6 @@ enum RenderSkipReason: String, CaseIterable, Hashable {
     /// Extruded buildings are switched off in the style: the tiles carry no
     /// building geometry, so the building layer and the ownership prepass
     /// that exists only for it are left out of the flat world pass.
-    case buildingExtrusionDisabled
     /// The starfield layer, which paints the space background and the stars,
     /// is off because space is configured transparent.
     case transparentSpace
@@ -77,10 +76,6 @@ struct RenderPassAvailability {
     /// False when space is configured transparent: nothing outside the globe is
     /// painted, so the space background and the stars are skipped.
     let starfieldEnabled: Bool
-    /// False when the style switches extruded buildings off: the prepared
-    /// tiles then carry no building geometry, and the building layer and the
-    /// ownership prepass (which serves only the buildings) are left out.
-    var buildingExtrusionEnabled: Bool = true
     /// True when the frame has scene models to draw; without any the model
     /// layer is left out of the world pass instead of encoding nothing.
     var sceneModelsEnabled: Bool = true
@@ -113,11 +108,6 @@ struct RenderLayerPlanner {
             switch layer {
             case .starfield where availability.starfieldEnabled == false:
                 return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .transparentSpace)
-            case .buildingExtrusion where availability.buildingExtrusionEnabled == false:
-                // The ownership prepass stays: the ground's overlapping
-                // sources rely on a complete map of marks before any of them
-                // draws, whatever the draw order.
-                return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .buildingExtrusionDisabled)
             case .sceneModels where availability.sceneModelsEnabled == false:
                 return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .noSceneModelContent)
             default:

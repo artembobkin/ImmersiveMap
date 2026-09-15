@@ -26,14 +26,12 @@ struct DemoTileStyle: ImmersiveMapVectorTileStyle {
     /// another style's across tiles.
     let styleID = "demo"
 
-    /// Colors for the parts of the map that are not features: the tile
-    /// background behind everything, the globe backdrop, water and land cover.
-    var baseColors: ImmersiveMapSettings.StyleSettings.BaseColors? {
-        ImmersiveMapSettings.StyleSettings.BaseColors(
-            tileBackground: SIMD4<Float>(0.09, 0.10, 0.12, 1),
-            globeBackground: SIMD4<Double>(0.05, 0.06, 0.08, 1),
-            water: SIMD4<Float>(0.10, 0.20, 0.36, 1),
-            landCover: SIMD4<Float>(0.12, 0.14, 0.16, 1))
+    /// What no tile paints: the ground where nothing has loaded yet, in
+    /// this style's land, and the polar caps in its water and its ice.
+    var baseColors: ImmersiveMapBaseColors {
+        ImmersiveMapBaseColors(map: SIMD4<Float>(0.09, 0.10, 0.12, 1),
+                               northCap: SIMD4<Float>(0.10, 0.20, 0.36, 1),
+                               southCap: SIMD4<Float>(0.85, 0.88, 0.92, 1))
     }
 
     func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> FeatureStyle {

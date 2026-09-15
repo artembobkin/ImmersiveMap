@@ -5,16 +5,11 @@ import Foundation
 import ImmersiveMap
 
 /// The dark palette from the `ImmersiveMapSettingsMac` example, packaged as the
-/// look of this post.
-///
-/// It is two separate things that both read as "dark theme". The palette proper
-/// is an `ImmersiveMapTilesMapStyle` built from a configuration: those colors
-/// are baked into prepared tiles and into their disk-cache identity, so the map
-/// is dark from the first tile rather than tinted afterwards. The engine-level
-/// colors that belong to no tile (the flat background, the sphere under the
-/// tiles, the color painted where nothing has loaded yet) live in
-/// `ImmersiveMapSettings` and are set alongside it. Miss the second half and
-/// the descent starts with a white globe and loads dark squares onto it.
+/// look of this post: an `ImmersiveMapTilesMapStyle` built from a theme. Its
+/// colours are baked into prepared tiles and into their disk-cache identity,
+/// so the map is dark from the first tile rather than tinted afterwards, and
+/// what no tile paints (the ground where nothing has loaded yet, the polar
+/// caps) takes the theme's land, water and ice by itself.
 enum BerlinNightTheme {
     /// The land color, reused wherever a surface has to disappear into the map.
     private static let land = SIMD4<Float>(0.09, 0.10, 0.13, 1)
@@ -60,31 +55,8 @@ enum BerlinNightTheme {
             }
     }
 
-    /// The colors the palette cannot carry, because no tile contains them.
-    ///
-    /// All five of them. The polar caps are built out of `water` and
-    /// `polarIce`, so a dark style that sets only the two backgrounds keeps the
-    /// daylight blue at the north pole and fades Antarctica into a dark hole.
-    static var style: ImmersiveMapSettings.StyleSettings {
-        var style = ImmersiveMapSettings.default.style
-        style.baseColors.tileBackground = land
-        style.baseColors.globeBackground = SIMD4<Double>(0.02, 0.03, 0.07, 1.0)
-        style.baseColors.water = SIMD4<Float>(0.04, 0.09, 0.20, 1)
-        style.baseColors.landCover = SIMD4<Float>(0.08, 0.16, 0.12, 0.7)
-        // The same snow the global landcover paints Antarctica with, so the cap
-        // continues the continent instead of punching a hole in it.
-        style.baseColors.polarIce = SIMD4<Float>(0.30, 0.32, 0.36, 1)
-        // Depth-correct buildings, stated even though solid is the default:
-        // the last third of the descent is spent among them, and the theme
-        // must not depend on the engine default staying put.
-        return style
-    }
-
     static var scene: ImmersiveMapSettings.SceneSettings {
         var scene = ImmersiveMapSettings.default.scene
-        // Painted where no tile has arrived yet. It has to match the palette's
-        // land color, or loading reads as pale holes punched in the map.
-        scene.mapClearColor = SIMD4<Double>(0.09, 0.10, 0.13, 1.0)
         // Low light from the south-east across Mitte. The direction points
         // towards the sun in the flat basis (+X east, +Y north, +Z up), so a
         // shallow Z is a long shadow.

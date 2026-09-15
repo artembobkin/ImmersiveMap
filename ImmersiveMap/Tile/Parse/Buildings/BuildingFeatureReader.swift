@@ -32,14 +32,10 @@ struct BuildingFeatureReader {
         let heights: BuildingExtrusionHeights
     }
 
-    private let extrusionEnabled: Bool
-    private let roofShapesEnabled: Bool
     private let minimumSourceZoom: Int
     private let tileExtent = TileCoordinateSpace.tileExtentDouble
 
     init(options: TileParseOptions) {
-        self.extrusionEnabled = options.buildingExtrusionEnabled
-        self.roofShapesEnabled = options.buildingRoofShapesEnabled
         self.minimumSourceZoom = options.buildingMinimumSourceZoom
     }
 
@@ -76,8 +72,7 @@ struct BuildingFeatureReader {
                    polygons: MultiPolygon,
                    partInfo: PartInfo,
                    tile: Tile) -> Extrusion? {
-        guard extrusionEnabled,
-              tile.z >= minimumSourceZoom,
+        guard tile.z >= minimumSourceZoom,
               let building = facts.building,
               building.isHidden == false else {
             return nil
@@ -176,11 +171,10 @@ struct BuildingFeatureReader {
 
         let base = max(0, min(scaledMinHeight, scaledHeight))
         let top = max(scaledHeight, base)
-        // Shaped roofs off: every building takes the flat lid at its full
-        // height. Part of the prepared-cache identity
-        // (PreparedTileCacheIdentity), so toggling re-parses instead of
-        // serving the other shape from disk.
-        guard roofShapesEnabled, let roof = building.roof else {
+        // A style that raises no shaped roofs gives every building the flat
+        // lid at its full height. The style is prepared-cache identity, so a
+        // change re-parses instead of serving the other shape from disk.
+        guard style.roofShapes, let roof = building.roof else {
             return BuildingExtrusionHeights(base: base, top: top, roof: nil)
         }
         return BuildingExtrusionHeights(base: base,

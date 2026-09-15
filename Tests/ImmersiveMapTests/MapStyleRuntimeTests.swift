@@ -17,7 +17,7 @@ final class MapStyleRuntimeTests: XCTestCase {
 
         XCTAssertEqual(context.style.cacheFingerprint, 42)
         XCTAssertEqual(context.styleID, "runtime-context-style")
-        XCTAssertEqual(context.mapBaseColors.getTileBgColor(), SIMD4<Float>(0.1, 0.2, 0.3, 1.0))
+        XCTAssertEqual(context.baseColors.map, SIMD4<Float>(0.1, 0.2, 0.3, 1.0))
     }
 
     func testStyleWithoutAnIdentityGetsTheGenericOne() {
@@ -67,13 +67,10 @@ private struct RuntimeContextTestStyle: ImmersiveMapVectorTileStyle {
         "runtime-context-style"
     }
 
-    var baseColors: ImmersiveMapSettings.StyleSettings.BaseColors? {
-        ImmersiveMapSettings.StyleSettings.BaseColors(
-            tileBackground: SIMD4<Float>(0.1, 0.2, 0.3, 1.0),
-            globeBackground: SIMD4<Double>(0.0, 0.0, 0.0, 1.0),
-            water: SIMD4<Float>(0.0, 0.0, 1.0, 1.0),
-            landCover: SIMD4<Float>(0.0, 1.0, 0.0, 1.0)
-        )
+    var baseColors: ImmersiveMapBaseColors {
+        ImmersiveMapBaseColors(map: SIMD4<Float>(0.1, 0.2, 0.3, 1.0),
+                               northCap: SIMD4<Float>(0.0, 0.0, 1.0, 1.0),
+                               southCap: SIMD4<Float>(1.0, 1.0, 1.0, 1.0))
     }
 
     func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> FeatureStyle {

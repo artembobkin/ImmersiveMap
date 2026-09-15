@@ -46,8 +46,6 @@ final class TileRenderStore: @unchecked Sendable {
             smallSettlementMaximumZoom: UInt32(max(0, config.labels.settlementVisibility.smallSettlementMaximumZoom)),
             landmarkMinimumZoom: UInt32(max(0, config.labels.landmarks.minimumZoom)),
             addTestBorders: config.tiles.parsing.addTestBorders,
-            roofShapesEnabled: config.style.buildingRoofShapesEnabled,
-            buildingExtrusionEnabled: config.style.buildingExtrusionEnabled,
             labelsEnabled: config.labels.isEnabled
         )
         let labelDecisions = TileLabelDecisions(style: styleRuntime.style,

@@ -201,25 +201,6 @@ final class RenderLayerPlannerTests: XCTestCase {
     }
 
 
-    /// With extrusion off the building layer is left out; the ownership
-    /// prepass stays, since the ground's overlapping sources rely on a
-    /// complete map of marks before any of them draws.
-    func testExtrusionOffLeavesOutTheBuildingsButKeepsTheOwnershipPrepass() {
-        let plan = RenderLayerPlanner.plan(
-            availability: RenderPassAvailability(renderSurfaceMode: .flat,
-                                                 labelsEnabled: true,
-                                                 avatarsEnabled: false,
-                                                 debugOverlayEnabled: false,
-                                                 sceneModelOcclusionEnabled: false,
-                                                 starfieldEnabled: true,
-                                                 buildingExtrusionEnabled: false)
-        )
-
-        XCTAssertEqual(enabledLayers(in: plan), [.tileOwnership, .flatMapSurface, .sceneModels, .horizon, .labels])
-        XCTAssertNil(skipReason(for: .tileOwnership, in: plan))
-        XCTAssertEqual(skipReason(for: .buildingExtrusion, in: plan), .buildingExtrusionDisabled)
-    }
-
     /// No scene models on screen: the model layer is left out of the world
     /// pass on both surfaces instead of encoding an empty group.
     func testNoSceneModelsLeavesOutTheModelLayer() {
