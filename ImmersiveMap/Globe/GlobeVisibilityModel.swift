@@ -74,16 +74,6 @@ enum GlobeVisibilityModel {
                                         radius: inputs.globe.radius * staticBound.radiusScale)
     }
 
-    static func pointPassesHorizon(worldPosition: SIMD3<Float>,
-                                   inputs: GlobeVisibilityInputs) -> Bool {
-        if inputs.globeToCameraLength <= 0 || horizonRejectEnabled(for: inputs.transition) == false {
-            return true
-        }
-
-        let dotToCamera = simd_dot(worldPosition - inputs.globeCenter, inputs.globeToCamera)
-        return dotToCamera >= inputs.horizonThreshold
-    }
-
     static func tileMayPassHorizon(bound: GlobeTileVisibilityBound,
                                    inputs: GlobeVisibilityInputs) -> Bool {
         if inputs.globeToCameraLength <= 0 || horizonRejectEnabled(for: inputs.transition) == false {

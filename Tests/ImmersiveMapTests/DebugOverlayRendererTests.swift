@@ -367,7 +367,7 @@ final class DebugOverlayRendererTests: XCTestCase {
         diagnostics.setCounter(.globeCullingVisitedNodes, value: 85)
         diagnostics.setCounter(.globeCullingFrustumRejects, value: 15)
         diagnostics.setCounter(.globeCullingHorizonRejects, value: 33)
-        diagnostics.setCounter(.globeCullingAcceptedLeafTiles, value: 16)
+        diagnostics.setCounter(.globeCullingPlacedTiles, value: 16)
         diagnostics.setCounter(.globeCullingAcceptedWholeSubtrees, value: 0)
         diagnostics.setMeasurement(.globeCullingDurationMs, value: 0.07)
         diagnostics.recordSkipReason(.debugOverlayDisabled)
@@ -401,7 +401,7 @@ final class DebugOverlayRendererTests: XCTestCase {
             "buffers:1 textures:3 pipelines:5",
             "",
             "[Globe culling]",
-            "ms:0.07 nodes:85 frustum:15 horizon:33 leaf:16 subtree:0",
+            "ms:0.07 nodes:85 frustum:15 horizon:33 placed:16 subtree:0",
             "",
             "[Skip]",
             "debugOverlayDisabled,noAvatarContent"

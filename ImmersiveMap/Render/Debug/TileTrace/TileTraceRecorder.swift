@@ -234,7 +234,6 @@ extension TileTraceEvent {
 
     static func tileDemandUpdate(frameIndex: UInt64,
                                  visible: Int,
-                                 preprocessed: Int,
                                  demanded: Int,
                                  ready: Int,
                                  requested: Int,
@@ -249,7 +248,6 @@ extension TileTraceEvent {
                frameIndex: frameIndex,
                fields: [
                    "visible": .int(visible),
-                   "preprocessed": .int(preprocessed),
                    "demanded": .int(demanded),
                    "ready": .int(ready),
                    "requested": .int(requested),

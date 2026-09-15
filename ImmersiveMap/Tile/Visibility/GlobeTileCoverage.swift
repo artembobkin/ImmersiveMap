@@ -9,14 +9,14 @@ struct GlobeCullingMetrics {
                                           visitedNodeCount: 0,
                                           frustumRejectCount: 0,
                                           horizonRejectCount: 0,
-                                          acceptedLeafTileCount: 0,
+                                          placedTileCount: 0,
                                           acceptedWholeSubtreeCount: 0)
 
     var duration: TimeInterval
     var visitedNodeCount: Int
     var frustumRejectCount: Int
     var horizonRejectCount: Int
-    var acceptedLeafTileCount: Int
+    var placedTileCount: Int
     var acceptedWholeSubtreeCount: Int
 }
 
@@ -197,7 +197,7 @@ final class GlobeTileCoverage {
     private func place(_ tile: Tile, walk: inout Walk) {
         guard walk.placed.insert(tile).inserted else { return }
         walk.targets.append(VisibleTile(tile: tile))
-        walk.metrics.acceptedLeafTileCount += 1
+        walk.metrics.placedTileCount += 1
     }
 
     /// Through the morph at the coarse zooms every leaf is taken: the

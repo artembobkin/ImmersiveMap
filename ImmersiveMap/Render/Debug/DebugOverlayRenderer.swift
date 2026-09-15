@@ -443,7 +443,7 @@ final class DebugOverlayRenderer {
             "nodes:\(diagnostics.counterValue(.globeCullingVisitedNodes)) " +
             "frustum:\(diagnostics.counterValue(.globeCullingFrustumRejects)) " +
             "horizon:\(diagnostics.counterValue(.globeCullingHorizonRejects)) " +
-            "leaf:\(diagnostics.counterValue(.globeCullingAcceptedLeafTiles)) " +
+            "placed:\(diagnostics.counterValue(.globeCullingPlacedTiles)) " +
             "subtree:\(diagnostics.counterValue(.globeCullingAcceptedWholeSubtrees))"
         appendSection(title: "Globe culling", body: [globeCullingLine], into: &lines)
 

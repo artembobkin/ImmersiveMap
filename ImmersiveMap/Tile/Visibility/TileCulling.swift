@@ -96,8 +96,8 @@ class TileCulling {
                                 value: metrics.frustumRejectCount)
         diagnostics?.setCounter(.globeCullingHorizonRejects,
                                 value: metrics.horizonRejectCount)
-        diagnostics?.setCounter(.globeCullingAcceptedLeafTiles,
-                                value: metrics.acceptedLeafTileCount)
+        diagnostics?.setCounter(.globeCullingPlacedTiles,
+                                value: metrics.placedTileCount)
         diagnostics?.setCounter(.globeCullingAcceptedWholeSubtrees,
                                 value: metrics.acceptedWholeSubtreeCount)
     }

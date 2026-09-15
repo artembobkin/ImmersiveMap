@@ -32,7 +32,7 @@ final class FrameDiagnostics: FrameDiagnosticsService {
         case globeCullingVisitedNodes
         case globeCullingFrustumRejects
         case globeCullingHorizonRejects
-        case globeCullingAcceptedLeafTiles
+        case globeCullingPlacedTiles
         case globeCullingAcceptedWholeSubtrees
     }
 
@@ -114,7 +114,7 @@ final class FrameDiagnostics: FrameDiagnosticsService {
         let presentMs = (stageDurations[.presentFrame] ?? 0) * 1000.0
         let tileSummary = "tiles v:\(counterValue(.visibleTiles)) r:\(counterValue(.readyTiles)) q:\(counterValue(.requestedTiles))"
         let labelSummary = "labels b:\(counterValue(.baseLabelCount)) rg:\(counterValue(.roadLabelGlyphCount)) rc:\(counterValue(.roadLabelNearCameraCulledPathCount))/\(counterValue(.roadLabelNearCameraCulledAnchorCount))"
-        let globeSummary = "globeCull ms:\(String(format: "%.2f", measurementValue(.globeCullingDurationMs))) n:\(counterValue(.globeCullingVisitedNodes)) f:\(counterValue(.globeCullingFrustumRejects)) h:\(counterValue(.globeCullingHorizonRejects)) l:\(counterValue(.globeCullingAcceptedLeafTiles)) a:\(counterValue(.globeCullingAcceptedWholeSubtrees))"
+        let globeSummary = "globeCull ms:\(String(format: "%.2f", measurementValue(.globeCullingDurationMs))) n:\(counterValue(.globeCullingVisitedNodes)) f:\(counterValue(.globeCullingFrustumRejects)) h:\(counterValue(.globeCullingHorizonRejects)) l:\(counterValue(.globeCullingPlacedTiles)) a:\(counterValue(.globeCullingAcceptedWholeSubtrees))"
         let metalPassSummary = metalPassDurations
             .sorted { $0.key.rawValue < $1.key.rawValue }
             .map { "\($0.key.rawValue):\(String(format: "%.2f", $0.value * 1000.0))" }
