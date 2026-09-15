@@ -18,6 +18,8 @@ struct VisibleContentState {
 
     let centerWorldMercator: SIMD2<Double>
     let center: Center
+    /// The coverage targets: the tiles the frame draws, at the zoom their
+    /// distance from the eye wants (`TileCulling`), finest first.
     let visibleTiles: [VisibleTile]
     /// Flat-mode horizon backdrop: a few very coarse tiles
     /// covering the frustum footprint without the radius clamp - they paint the ground up to

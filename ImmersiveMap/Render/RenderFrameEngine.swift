@@ -330,9 +330,14 @@ final class RenderFrameEngine {
         }
 
         publishStaticResources(frameIndex: frameTick.index)
+        // The coverage reach is a debug knob: a moved slider re-runs the
+        // coverage like a camera change would.
+        let coverageFarRadius = FlatDistanceCoverage.clampFarRadius(
+            Double(debugOverlayControls.snapshot().coverageFarRadiusCameraDistances))
         let visibleContent = visibilityResolver.resolve(cameraFrameState: cameraFrameState,
                                                         resolvedPresentation: resolvedPresentation,
                                                         tileSettings: settings.tiles,
+                                                        farRadius: coverageFarRadius,
                                                         diagnostics: diagnostics)
         // Resolved once here, so the pass injection and every receiver bind
         // site take the same answer from `ShadowPassGateResolver`.

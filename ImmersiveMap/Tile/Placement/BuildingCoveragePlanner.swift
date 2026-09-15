@@ -53,17 +53,22 @@ enum BuildingCoveragePlanner {
     static let fieldRadiusInCells: Double = 3
 
     /// `resident` is every tile in the working set; `visibleTiles` the
-    /// frame's visible tiles at the target zoom, which decide which
-    /// children a cell needs; `eyeGroundCell` the eye's ground point in
-    /// grid cell units (a z14 tile is one unit), nil for the globe, where
-    /// nothing is extruded.
+    /// frame's coverage targets (the exact tiles at the target zoom and the
+    /// parents placed under them), which decide which children a cell
+    /// needs; `eyeGroundCell` the eye's ground point in grid cell units (a
+    /// z14 tile is one unit), nil for the globe, where nothing is extruded;
+    /// `targetZoom` the frame's target zoom, the finest target's when not
+    /// given.
     static func plan(resident: [Tile: MetalTile],
                      visibleTiles: [VisibleTile],
-                     eyeGroundCell: SIMD2<Double>?) -> PlaceTilesContext {
+                     eyeGroundCell: SIMD2<Double>?,
+                     targetZoom: Int? = nil) -> PlaceTilesContext {
         // Coarser than the grid nothing draws: the ground tiles carry no
         // buildings there, and whatever still stands in from a closer
         // view would draw as islands of its own outline.
-        guard let eyeGroundCell, let targetZoom = visibleTiles.first?.z, targetZoom >= minimumSourceZoom else {
+        guard let eyeGroundCell,
+              let targetZoom = targetZoom ?? visibleTiles.map(\.z).max(),
+              targetZoom >= minimumSourceZoom else {
             return .empty
         }
         struct Key: Hashable {
@@ -71,24 +76,31 @@ enum BuildingCoveragePlanner {
             let loop: Int8
         }
 
-        // What the view needs, per world copy: the visible tiles at the
-        // target zoom and every ancestor of one down to the grid.
-        var visibleByLoop: [Int8: Set<Tile>] = [:]
-        var visibleAncestorsByLoop: [Int8: Set<Tile>] = [:]
-        for tile in visibleTiles where tile.z == targetZoom {
-            visibleByLoop[tile.loop, default: []].insert(tile.tile)
+        // What the view needs, per world copy: the targets from the grid
+        // down, every ancestor of one down to the grid, and everything
+        // under one.
+        var targetsByLoop: [Int8: Set<Tile>] = [:]
+        var targetAncestorsByLoop: [Int8: Set<Tile>] = [:]
+        for tile in visibleTiles where tile.z >= minimumSourceZoom {
+            targetsByLoop[tile.loop, default: []].insert(tile.tile)
             var ancestor = tile.tile
             while ancestor.z > minimumSourceZoom, let parent = ancestor.findParentTile(atZoom: ancestor.z - 1) {
                 ancestor = parent
-                visibleAncestorsByLoop[tile.loop, default: []].insert(ancestor)
+                targetAncestorsByLoop[tile.loop, default: []].insert(ancestor)
             }
         }
         func isNeeded(_ tile: Tile, loop: Int8) -> Bool {
-            if tile.z >= targetZoom {
-                let atTarget = tile.z == targetZoom ? tile : tile.findParentTile(atZoom: targetZoom)
-                return atTarget.map { visibleByLoop[loop]?.contains($0) ?? false } ?? false
+            if targetsByLoop[loop]?.contains(tile) ?? false || targetAncestorsByLoop[loop]?.contains(tile) ?? false {
+                return true
             }
-            return visibleAncestorsByLoop[loop]?.contains(tile) ?? false
+            var ancestor = tile
+            while ancestor.z > minimumSourceZoom, let parent = ancestor.findParentTile(atZoom: ancestor.z - 1) {
+                ancestor = parent
+                if targetsByLoop[loop]?.contains(ancestor) ?? false {
+                    return true
+                }
+            }
+            return false
         }
 
         // The resident tiles of the grid and below, every ancestor of one
@@ -96,7 +108,7 @@ enum BuildingCoveragePlanner {
         // cells they belong to, per world copy the view shows.
         var present = Set<Key>()
         var cells = Set<Key>()
-        for loop in visibleByLoop.keys {
+        for loop in targetsByLoop.keys {
             for tile in resident.keys where tile.z >= minimumSourceZoom && isNeeded(tile, loop: loop) {
                 var ancestor = tile
                 while true {

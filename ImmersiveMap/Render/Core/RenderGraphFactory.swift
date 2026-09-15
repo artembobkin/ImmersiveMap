@@ -11,8 +11,7 @@ enum RenderGraphFactory {
                                  shadowMapTextureProvider: @escaping () -> MTLTexture?,
                                  groundShadowMaskTextureProvider: @escaping () -> MTLTexture?) -> RenderGraph {
         let tileDemandPlacementSubsystem = TileDemandPlacementSubsystem(tileRenderStore: context.tileRenderStore,
-                                                                        tileTraceRecorder: context.tileTraceRecorder,
-                                                                        debugOverlayControls: debugOverlayControls)
+                                                                        tileTraceRecorder: context.tileTraceRecorder)
         let tileProjectionIndexSubsystem = TileProjectionIndexSubsystem(flatTileOriginCalculator: context.flatTileOriginCalculator)
         let baseLabelSubsystem = BaseLabelPrepareSubsystem(baseLabelCache: context.baseLabelCache,
                                                            roadLabelCache: context.roadLabelCache,

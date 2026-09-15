@@ -15,9 +15,6 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
     
     private let tileRenderStore: TileRenderStore
     private let tileTraceRecorder: TileTraceRecorder
-    private let visibleTilesPreprocessor: VisibleTilesPreprocessor
-    /// The debug panel's coverage reach knob; nil outside a debug build of the graph.
-    private let debugOverlayControls: DebugOverlayControlState?
 
     private var preprocessedVisibleTilesHashTracker = StagedHashChangeTracker()
     private var placeTilesContext: PlaceTilesContext = .empty
@@ -30,36 +27,29 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
     private var latestCounts = (visible: 0, preprocessed: 0, demanded: 0, ready: 0)
 
     init(tileRenderStore: TileRenderStore,
-         tileTraceRecorder: TileTraceRecorder,
-         visibleTilesPreprocessor: VisibleTilesPreprocessor = VisibleTilesPreprocessor(),
-         debugOverlayControls: DebugOverlayControlState? = nil) {
+         tileTraceRecorder: TileTraceRecorder) {
         self.tileRenderStore = tileRenderStore
         self.tileTraceRecorder = tileTraceRecorder
-        self.visibleTilesPreprocessor = visibleTilesPreprocessor
-        self.debugOverlayControls = debugOverlayControls
     }
 
     func update(frameContext: FrameContext) {
-        // Tile culling stage: resolves current map-space center and
-        // computes which tiles are visible for the active view mode.
+        // The coverage: the frame's targets, every tile at the zoom its
+        // distance from the eye wants (`TileCulling`), and the horizon
+        // backdrop under them on the plane.
         let visibleContent = frameContext.visibleContent
         let center = visibleContent.center
-        let visibleTiles = visibleContent.visibleTiles
+        let preprocessedVisibleTiles = visibleContent.visibleTiles
         let tileZoomLevel = visibleContent.tileZoomLevel
 
-        // Dirty-gate: preprocess/demand/request depend only on the coverage
-        // (coverageVersion changes when the camera/mode changes) and the
-        // working set's contents (contentVersion changes on insert/release).
-        // Skipping is allowed only when there are no requested-but-not-ready tiles:
-        // the loader's retry logic relies on the per-frame request().
-        // The coverage reach is a debug knob: a moved slider re-runs the
-        // demand like a camera change would.
-        let coverageFarRadius = debugOverlayControls.map { Double($0.snapshot().coverageFarRadiusCameraDistances) }
-            ?? FlatDistanceCoverage.farRadius
+        // Dirty-gate: demand/request/placement depend only on the coverage
+        // (coverageVersion changes when the camera, the mode or the reach
+        // changes) and the working set's contents (contentVersion changes on
+        // insert/release). Skipping is allowed only when there are no
+        // requested-but-not-ready tiles: the loader's retry logic relies on
+        // the per-frame request().
         var gateHasher = Hasher()
         gateHasher.combine(visibleContent.coverageVersion)
         gateHasher.combine(tileRenderStore.cacheContentVersion)
-        gateHasher.combine(coverageFarRadius.bitPattern)
         let gateFingerprint = gateHasher.finalize()
         if gateFingerprint == demandGateFingerprint,
            latestRequestedTilesCount == 0 {
@@ -70,32 +60,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
             return
         }
 
-        // Visible-tiles post-processing: shortens the raw visible list and
-        // substitutes tiles with coarser parents to reduce load/placement
-        // pressure. On the plane every tile's zoom follows its distance from
-        // the eye (`FlatDistanceCoverage`).
-        let flatCamera: FlatCoverageCamera? = frameContext.renderSurfaceMode == .flat
-            ? Self.makeFlatCoverageCamera(frameContext: frameContext,
-                                          center: center,
-                                          tileZoomLevel: tileZoomLevel,
-                                          hasBackdrop: visibleContent.backdropTiles.isEmpty == false,
-                                          farRadius: coverageFarRadius)
-            : nil
-        // On the sphere the same rule reads the eye and the globe; the far
-        // field is asked for at the pinned world cover's zoom.
-        let globeCamera: GlobeCoverageCamera? = frameContext.renderSurfaceMode == .spherical
-            ? GlobeCoverageCamera(eye: frameContext.cameraEye,
-                                  globe: frameContext.resolvedPresentation.globeRenderState.globeUniform,
-                                  farRadius: coverageFarRadius)
-            : nil
-        let preprocessedVisibleTiles = visibleTilesPreprocessor.preprocess(visibleTiles: visibleTiles,
-                                                                           center: center,
-                                                                           renderSurfaceMode: frameContext.renderSurfaceMode,
-                                                                           flatCamera: flatCamera,
-                                                                           globeCamera: globeCamera)
-        // The horizon backdrop bypasses the preprocessor: its distance filter
-        // measures distances in target-zoom tiles and would discard the coarse
-        // backdrop tiles. Its demand and placements are shared with the coverage.
+        // The backdrop's demand and placements are shared with the coverage.
         let backdropTiles = visibleContent.backdropTiles
         // A backdrop exists - beneath the main coverage the whole frame is painted
         // at its zoom, so the planner's substitutes never go to that zoom or
@@ -151,18 +116,23 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
                                                                              descendantSearchDepth: 0)
             // The buildings: a partition of the near field over the resident
             // tiles, never a substitute (see the planner).
-            let eyeGroundCell = flatCamera.map { camera in
-                camera.eyeGround * pow(2.0, Double(BuildingCoveragePlanner.minimumSourceZoom - tileZoomLevel))
-            }
+            let eyeGroundCell: SIMD2<Double>? = frameContext.renderSurfaceMode == .flat
+                ? FlatCoverageCamera.eyeGround(eye: frameContext.cameraEye,
+                                               flatRenderState: frameContext.resolvedPresentation.flatRenderState,
+                                               lookAt: SIMD2<Double>(center.tileX, center.tileY),
+                                               targetZoom: tileZoomLevel)
+                    * pow(2.0, Double(BuildingCoveragePlanner.minimumSourceZoom - tileZoomLevel))
+                : nil
             buildingPlaceTilesContext = BuildingCoveragePlanner.plan(resident: resident,
-                                                                     visibleTiles: visibleTiles,
-                                                                     eyeGroundCell: eyeGroundCell)
+                                                                     visibleTiles: preprocessedVisibleTiles,
+                                                                     eyeGroundCell: eyeGroundCell,
+                                                                     targetZoom: tileZoomLevel)
             globeSurfaceSlots = preprocessedVisibleTiles.map(\.tile)
             placementVersion &+= 1
             preprocessedVisibleTilesHashTracker.commitPending()
         }
 
-        let visibleTilesCount = visibleTiles.count
+        let visibleTilesCount = preprocessedVisibleTiles.count
         let readyTilesCount = tileRequestResult.readyTilesCount
         let requestedTilesCount = tileRequestResult.requestedTilesCount
         let renderedTilesCount = placeTilesContext.tilePlacements.count
@@ -195,10 +165,6 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
     }
 
 
-    /// The flat camera looks at the world origin (the pan moves the world
-    /// under it), so the eye is taken as it is, and its ground point is its
-    /// x and y over the exact tile's world size, away from the look-at
-    /// point in tile units. World y grows north while tile y grows south.
     /// The content tiles of the targets, first occurrence first.
     private static func uniqueSourceTiles(of targets: [VisibleTile]) -> [Tile] {
         var seen = Set<Tile>()
@@ -209,25 +175,6 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
             tiles.append(target.tile)
         }
         return tiles
-    }
-
-    private static func makeFlatCoverageCamera(frameContext: FrameContext,
-                                               center: Center,
-                                               tileZoomLevel: Int,
-                                               hasBackdrop: Bool,
-                                               farRadius: Double = FlatDistanceCoverage.farRadius) -> FlatCoverageCamera {
-        let flatRenderState = frameContext.resolvedPresentation.flatRenderState
-        let tileUnits = flatRenderState.renderMapSize / Double(1 << max(0, tileZoomLevel))
-        let eye = frameContext.cameraEye
-        let lookAt = SIMD2<Double>(center.tileX, center.tileY)
-        let eyeGround = lookAt + SIMD2<Double>(Double(eye.x), -Double(eye.y)) / tileUnits
-        return FlatCoverageCamera(eye: SIMD3<Double>(Double(eye.x), Double(eye.y), Double(eye.z)),
-                                  flatRenderState: flatRenderState,
-                                  eyeGround: eyeGround,
-                                  lookAt: lookAt,
-                                  overzoomLevels: max(0, frameContext.zoomLevel - tileZoomLevel),
-                                  backdropZoom: hasBackdrop ? TileCulling.flatBackdropZoomLevel : nil,
-                                  farRadius: farRadius)
     }
 
     private func publishState(frameContext: FrameContext,
