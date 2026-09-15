@@ -8,7 +8,7 @@
 
 struct LabelRuntimeMeta {
     var duplicate: UInt8
-    var isRetained: UInt8
+    var _padding0: UInt8 = 0
     var _padding: UInt16 = 0
     var visibleTileIndex: UInt32
     var fadeAlpha: Float = 0

@@ -3,19 +3,16 @@
 
 /// What the frame needs to know about a label besides its geometry: its
 /// key (the fades follow it across topology changes), whether it is a
-/// duplicate of another visible label or belongs to a retained substitute
-/// (both never shown), whether the slot holds a label at all, and the
-/// camera zoom it appears from.
+/// duplicate of another visible label (never shown), whether the slot
+/// holds a label at all, and the camera zoom it appears from.
 struct BaseLabelPresentationInput {
     static let empty = BaseLabelPresentationInput(labelKey: 0,
                                                   duplicate: 0,
-                                                  isRetained: 0,
                                                   isValid: false,
                                                   minCameraZoom: 0)
 
     let labelKey: UInt64
     let duplicate: UInt8
-    let isRetained: UInt8
     let isValid: Bool
     /// Minimum camera zoom at which the label is visible (0 = always).
     let minCameraZoom: Float
@@ -62,7 +59,6 @@ enum BaseLabelVisibilityResolver {
             let horizonVisible = index < horizonVisibility.count && horizonVisibility[index]
             target[index] = input.isValid &&
                 input.duplicate == 0 &&
-                input.isRetained == 0 &&
                 accepted &&
                 horizonVisible &&
                 input.minCameraZoom <= cameraZoom

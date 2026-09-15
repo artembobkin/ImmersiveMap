@@ -14,7 +14,7 @@ using namespace metal;
 
 struct LabelRuntimeMeta {
     uchar duplicate;
-    uchar isRetained;
+    uchar _padding0;
     ushort _padding;
     uint visibleTileIndex;
     float fadeAlpha;

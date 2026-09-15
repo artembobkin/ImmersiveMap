@@ -11,7 +11,6 @@ import Foundation
 struct BaseLabelSourceEntry {
     let ownerKey: VisibleTile
     let metalTile: MetalTile
-    let isRetained: Bool
     let lodKind: TileLodKind
 
     var metalTileIdentity: ObjectIdentifier {
@@ -26,7 +25,6 @@ struct BaseLabelSourceEntry {
             let entry = BaseLabelSourceEntry(ownerKey: VisibleTile(tile: placeTile.metalTile.tile,
                                                                    loop: placeTile.placeIn.loop),
                                              metalTile: placeTile.metalTile,
-                                             isRetained: false,
                                              lodKind: placeTile.lodKind)
             if let existingEntry = bestEntryByOwnerKey[entry.ownerKey] {
                 if preferredWinner(lhs: entry, rhs: existingEntry) {
@@ -40,31 +38,6 @@ struct BaseLabelSourceEntry {
         return bestEntryByOwnerKey.values.sorted(by: sortForWinnerPriority(lhs:rhs:))
     }
 
-    static func build(from trackedPlaceTiles: [PlaceTileRetantionTracker.TrackedPlaceTile]) -> [BaseLabelSourceEntry] {
-        var bestEntryByOwnerKey: [VisibleTile: BaseLabelSourceEntry] = [:]
-        bestEntryByOwnerKey.reserveCapacity(trackedPlaceTiles.count)
-
-        for trackedPlaceTile in trackedPlaceTiles {
-            let entry = BaseLabelSourceEntry(ownerKey: VisibleTile(tile: trackedPlaceTile.placeTile.metalTile.tile,
-                                                                   loop: trackedPlaceTile.placeTile.placeIn.loop),
-                                             metalTile: trackedPlaceTile.placeTile.metalTile,
-                                             isRetained: trackedPlaceTile.isRetained,
-                                             lodKind: trackedPlaceTile.placeTile.lodKind)
-            if let existingEntry = bestEntryByOwnerKey[entry.ownerKey] {
-                if preferredWinner(lhs: entry, rhs: existingEntry) {
-                    bestEntryByOwnerKey[entry.ownerKey] = entry
-                }
-            } else {
-                bestEntryByOwnerKey[entry.ownerKey] = entry
-            }
-        }
-
-        return bestEntryByOwnerKey.values.sorted(by: sortForWinnerPriority(lhs:rhs:))
-    }
-
-    /// The identity of the frame's source set: which tiles, in which
-    /// slots, by which parsed objects. The base and the road label caches
-    /// both rebuild when it changes.
     static func makeHash(_ sourceEntries: [BaseLabelSourceEntry]) -> Int {
         var hasher = Hasher()
         hasher.combine(sourceEntries.count)
@@ -75,7 +48,6 @@ struct BaseLabelSourceEntry {
             hasher.combine(ownerKey.y)
             hasher.combine(ownerKey.z)
             hasher.combine(ownerKey.loop)
-            hasher.combine(entry.isRetained)
             hasher.combine(entry.lodKind.rawValue)
             hasher.combine(entry.metalTile.tile.x)
             hasher.combine(entry.metalTile.tile.y)
@@ -114,16 +86,8 @@ struct BaseLabelSourceEntry {
         return false
     }
 
+    /// An exact placement outranks a stand-in for the same owner.
     static func priorityRank(for entry: BaseLabelSourceEntry) -> Int {
-        switch (entry.lodKind == .exact, entry.isRetained) {
-        case (true, false):
-            return 0
-        case (true, true):
-            return 1
-        case (false, false):
-            return 2
-        case (false, true):
-            return 3
-        }
+        entry.lodKind == .exact ? 0 : 1
     }
 }

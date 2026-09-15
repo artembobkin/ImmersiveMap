@@ -20,7 +20,6 @@ final class BaseLabelCache {
     private struct TileRecord {
         let ownerKey: VisibleTile
         var metalTileIdentity: ObjectIdentifier
-        var isRetained: Bool
         var tileSlotIndex: UInt32
         var allocation: BaseLabelTileArena.Allocation
         var labelsCount: Int
@@ -54,14 +53,6 @@ final class BaseLabelCache {
         self.labelRuntimeMetaBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
                                                                           slotsCount: InFlightFramePool.inFlightFramesCount,
                                                                           options: [.storageModeShared])
-    }
-
-    func rebuild(trackedPlaceTiles: [PlaceTileRetantionTracker.TrackedPlaceTile],
-                 tileIndexAllocator: VisibleTileIndexAllocator) {
-        synchronize(sourceEntries: BaseLabelSourceEntry.build(from: trackedPlaceTiles),
-                    tileIndexAllocator: tileIndexAllocator,
-                    trackedTilesChanged: true,
-                    projectionChanged: true)
     }
 
     func rebuild(sourceEntries: [BaseLabelSourceEntry],
@@ -182,7 +173,6 @@ final class BaseLabelCache {
         resizeLabelPresentationInputs(to: activeLabelSpanCount)
         for index in labelRuntimeMetaData.indices {
             labelRuntimeMetaData[index] = LabelRuntimeMeta(duplicate: 0,
-                                                           isRetained: 0,
                                                            visibleTileIndex: 0,
                                                            fadeAlpha: 0,
                                                            labelSizePoints: .zero)
@@ -209,7 +199,6 @@ final class BaseLabelCache {
             let validCount = record.labelsCount
             let rangeCapacity = record.allocation.capacity
             var runtimeMeta = Array(repeating: LabelRuntimeMeta(duplicate: 0,
-                                                                isRetained: 0,
                                                                 visibleTileIndex: 0,
                                                                 fadeAlpha: 0,
                                                                 labelSizePoints: .zero),
@@ -231,7 +220,6 @@ final class BaseLabelCache {
                 let labelCollisionPriority = record.labelCollisionPriorities[index]
                 let labelSortKey = record.labelSortKeys[index]
                 runtimeMeta[index] = LabelRuntimeMeta(duplicate: duplicateFlag,
-                                                      isRetained: sourceEntry.isRetained ? 1 : 0,
                                                       visibleTileIndex: 0,
                                                       fadeAlpha: 0,
                                                       labelSizePoints: labelSize)
@@ -246,7 +234,6 @@ final class BaseLabelCache {
                                                         isEnabled: duplicateFlag == 0)
                 presentationInputs[index] = BaseLabelPresentationInput(labelKey: labelKey,
                                                                        duplicate: duplicateFlag,
-                                                                       isRetained: sourceEntry.isRetained ? 1 : 0,
                                                                        isValid: true,
                                                                        minCameraZoom: record.labelMinCameraZooms[index])
                 seenLabelKeys.insert(labelKey)
@@ -312,7 +299,6 @@ final class BaseLabelCache {
                 existingRecord.poiIconRuns = selectedTextLabelSet.poiIconRuns
             }
 
-            existingRecord.isRetained = sourceEntry.isRetained
             tileRecordsByOwnerKey[ownerKey] = existingRecord
             return
         }
@@ -325,7 +311,6 @@ final class BaseLabelCache {
         writePointInputs(pointInputs, at: allocation.start)
         tileRecordsByOwnerKey[ownerKey] = TileRecord(ownerKey: ownerKey,
                                                            metalTileIdentity: metalTileIdentity,
-                                                           isRetained: sourceEntry.isRetained,
                                                            tileSlotIndex: tileSlotIndex,
                                                            allocation: allocation,
                                                            labelsCount: selectedTextLabelSet.labelsCount,
@@ -392,7 +377,6 @@ final class BaseLabelCache {
 
     private func resizeLabelRuntimeMetaData(to count: Int) {
         let zeroRuntimeMeta = LabelRuntimeMeta(duplicate: 0,
-                                               isRetained: 0,
                                                visibleTileIndex: 0,
                                                fadeAlpha: 0,
                                                labelSizePoints: .zero)
@@ -492,7 +476,6 @@ final class BaseLabelCache {
 
     private func writeDefaultRuntimeMeta(into buffer: MTLBuffer) {
         var runtimeMeta = LabelRuntimeMeta(duplicate: 0,
-                                           isRetained: 0,
                                            visibleTileIndex: 0,
                                            fadeAlpha: 0)
         withUnsafeBytes(of: &runtimeMeta) { bytes in

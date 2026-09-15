@@ -59,7 +59,6 @@ final class BaseLabelSourceEntryTests: XCTestCase {
         cache.rebuild(sourceEntries: [
             BaseLabelSourceEntry(ownerKey: ownerKey,
                                  metalTile: metalTile,
-                                 isRetained: false,
                                  lodKind: .exact)
         ], tileIndexAllocator: tileIndexAllocator)
 
@@ -79,7 +78,6 @@ final class BaseLabelSourceEntryTests: XCTestCase {
         cache.rebuild(sourceEntries: [
             BaseLabelSourceEntry(ownerKey: ownerKey,
                                  metalTile: metalTile,
-                                 isRetained: false,
                                  lodKind: .exact)
         ], tileIndexAllocator: VisibleTileIndexAllocator(indexedTiles: [ownerKey]))
 

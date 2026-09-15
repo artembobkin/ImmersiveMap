@@ -7,8 +7,8 @@ import XCTest
 /// The per-label rules of the frame path: which labels reserve collision
 /// space and which want to be shown, written in place.
 final class BaseLabelVisibilityResolverTests: XCTestCase {
-    private func input(key: UInt64 = 1, duplicate: UInt8 = 0, retained: UInt8 = 0, valid: Bool = true, minZoom: Float = 0) -> BaseLabelPresentationInput {
-        BaseLabelPresentationInput(labelKey: key, duplicate: duplicate, isRetained: retained, isValid: valid, minCameraZoom: minZoom)
+    private func input(key: UInt64 = 1, duplicate: UInt8 = 0, valid: Bool = true, minZoom: Float = 0) -> BaseLabelPresentationInput {
+        BaseLabelPresentationInput(labelKey: key, duplicate: duplicate, isValid: valid, minCameraZoom: minZoom)
     }
 
     func testTargetVisibilityRequiresHorizonAndCollisionAndZoom() {
@@ -23,15 +23,15 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
                        "Behind the horizon, lost the collision, below its zoom: each hides")
     }
 
-    func testTargetVisibilityHidesDuplicatesRetainedAndEmptySlots() {
-        let inputs = [input(key: 1, duplicate: 1), input(key: 2, retained: 1), input(key: 0, valid: false), input(key: 3)]
-        var target = [Bool](repeating: true, count: 4)
+    func testTargetVisibilityHidesDuplicatesAndEmptySlots() {
+        let inputs = [input(key: 1, duplicate: 1), input(key: 0, valid: false), input(key: 3)]
+        var target = [Bool](repeating: true, count: 3)
         BaseLabelVisibilityResolver.targetVisibility(inputs: inputs,
-                                                     collisionVisible: [true, true, true, true],
-                                                     horizonVisibility: [true, true, true, true],
+                                                     collisionVisible: [true, true, true],
+                                                     horizonVisibility: [true, true, true],
                                                      cameraZoom: 14,
                                                      into: &target)
-        XCTAssertEqual(target, [false, false, false, true])
+        XCTAssertEqual(target, [false, false, true])
     }
 
     func testTargetVisibilityResizesTheOutputToTheInputs() {

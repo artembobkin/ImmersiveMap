@@ -22,14 +22,12 @@ struct RoadLabelEntry {
     let templateVertices: [LabelVertex]
     let glyphBounds: [SIMD4<Float>]
     let labelSize: SIMD2<Float>
-    let isRetained: UInt8
     let sourcePriority: Int
 }
 
 final class RoadLabelTileRecord {
     let ownerKey: VisibleTile
     var metalTileIdentity: ObjectIdentifier
-    var isRetained: UInt8
     var sourcePriority: Int
     var visibleTileIndex: UInt32
     var instanceStart: Int = 0
@@ -37,7 +35,6 @@ final class RoadLabelTileRecord {
     let labelStyle: LabelTextStyle
     private(set) var entries: [RoadLabelEntry]
     let instanceKeys: [UInt64]
-    private(set) var instanceRetainedFlags: [UInt8]
     let instanceLabelSizes: [SIMD2<Float>]
     // An instance's glyphs are contiguous in glyphInputs (makeTileRecord build
     // order): the ranges make it possible to read an instance's collision AABBs
@@ -77,13 +74,11 @@ final class RoadLabelTileRecord {
     init(metalDevice: MTLDevice,
          ownerKey: VisibleTile,
          metalTileIdentity: ObjectIdentifier,
-         isRetained: UInt8,
          sourcePriority: Int,
          visibleTileIndex: UInt32,
          labelStyle: LabelTextStyle,
          entries: [RoadLabelEntry],
          instanceKeys: [UInt64],
-         instanceRetainedFlags: [UInt8],
          instanceLabelSizes: [SIMD2<Float>],
          instanceGlyphRanges: [Range<Int>],
          instanceAnchorOrdinals: [UInt32],
@@ -96,13 +91,11 @@ final class RoadLabelTileRecord {
          localGlyphVertices: TileBufferView?) {
         self.ownerKey = ownerKey
         self.metalTileIdentity = metalTileIdentity
-        self.isRetained = isRetained
         self.sourcePriority = sourcePriority
         self.visibleTileIndex = visibleTileIndex
         self.labelStyle = labelStyle
         self.entries = entries
         self.instanceKeys = instanceKeys
-        self.instanceRetainedFlags = instanceRetainedFlags
         self.instanceLabelSizes = instanceLabelSizes
         self.instanceGlyphRanges = instanceGlyphRanges
         self.instanceAnchorOrdinals = instanceAnchorOrdinals
@@ -150,9 +143,7 @@ final class RoadLabelTileRecord {
         }
     }
 
-    func updateMetadata(isRetained: UInt8,
-                        sourcePriority: Int) {
-        self.isRetained = isRetained
+    func updateMetadata(sourcePriority: Int) {
         self.sourcePriority = sourcePriority
         if entries.isEmpty == false {
             entries = entries.map { entry in
@@ -167,12 +158,8 @@ final class RoadLabelTileRecord {
                                templateVertices: entry.templateVertices,
                                glyphBounds: entry.glyphBounds,
                                labelSize: entry.labelSize,
-                               isRetained: isRetained,
                                sourcePriority: sourcePriority)
             }
-        }
-        if instanceRetainedFlags.isEmpty == false {
-            instanceRetainedFlags = Array(repeating: isRetained, count: instanceRetainedFlags.count)
         }
         if instanceSourcePriorities.isEmpty == false {
             instanceSourcePriorities = Array(repeating: sourcePriority, count: instanceSourcePriorities.count)
@@ -258,7 +245,6 @@ final class RoadLabelCache {
 
     private(set) var roadLabelStyle: LabelTextStyle?
     private(set) var instanceKeys: [UInt64] = []
-    private(set) var instanceRetainedFlags: [UInt8] = []
     private(set) var instanceLabelSizes: [SIMD2<Float>] = []
 
     var entries: [RoadLabelEntry] {
@@ -273,14 +259,6 @@ final class RoadLabelCache {
     init(metalDevice: MTLDevice,
          textRenderer _: TextRenderer) {
         self.metalDevice = metalDevice
-    }
-
-    func rebuild(trackedPlaceTiles: [PlaceTileRetantionTracker.TrackedPlaceTile],
-                 tileIndexAllocator: VisibleTileIndexAllocator) {
-        synchronize(sourceEntries: BaseLabelSourceEntry.build(from: trackedPlaceTiles),
-                    tileIndexAllocator: tileIndexAllocator,
-                    trackedTilesChanged: true,
-                    projectionChanged: true)
     }
 
     func rebuild(sourceEntries: [BaseLabelSourceEntry],
@@ -314,7 +292,6 @@ final class RoadLabelCache {
         orderedTileRecords.removeAll(keepingCapacity: false)
         roadLabelStyle = nil
         instanceKeys.removeAll(keepingCapacity: false)
-        instanceRetainedFlags.removeAll(keepingCapacity: false)
         instanceLabelSizes.removeAll(keepingCapacity: false)
     }
 
@@ -350,15 +327,13 @@ final class RoadLabelCache {
                                   visibleTileIndex: UInt32) {
         let ownerKey = sourceEntry.ownerKey
         let metalTileIdentity = sourceEntry.metalTileIdentity
-        let isRetained: UInt8 = sourceEntry.isRetained ? 1 : 0
         let sourcePriority = BaseLabelSourceEntry.priorityRank(for: sourceEntry)
 
         if let existingRecord = tileRecordsByOwnerKey[ownerKey] {
             let payloadChanged = existingRecord.metalTileIdentity != metalTileIdentity
             if payloadChanged == false {
                 existingRecord.metalTileIdentity = metalTileIdentity
-                existingRecord.updateMetadata(isRetained: isRetained,
-                                              sourcePriority: sourcePriority)
+                existingRecord.updateMetadata(sourcePriority: sourcePriority)
                 existingRecord.updateVisibleTileIndex(visibleTileIndex)
                 return
             }
@@ -370,7 +345,6 @@ final class RoadLabelCache {
 
     private func rebuildAggregatedState() {
         instanceKeys.removeAll(keepingCapacity: true)
-        instanceRetainedFlags.removeAll(keepingCapacity: true)
         instanceLabelSizes.removeAll(keepingCapacity: true)
 
         var runningInstanceStart = 0
@@ -380,7 +354,6 @@ final class RoadLabelCache {
             }
             record.instanceStart = runningInstanceStart
             instanceKeys.append(contentsOf: record.instanceKeys)
-            instanceRetainedFlags.append(contentsOf: record.instanceRetainedFlags)
             instanceLabelSizes.append(contentsOf: record.instanceLabelSizes)
             runningInstanceStart += record.instanceKeys.count
         }
@@ -390,12 +363,10 @@ final class RoadLabelCache {
                                 visibleTileIndex: UInt32) -> RoadLabelTileRecord {
         let roadLabels = sourceEntry.metalTile.tileBuffers.roadLabels
         let style = roadLabels.labelStyle ?? Self.fallbackStyle
-        let isRetained: UInt8 = sourceEntry.isRetained ? 1 : 0
         let sourcePriority = BaseLabelSourceEntry.priorityRank(for: sourceEntry)
 
         var entries: [RoadLabelEntry] = []
         var instanceKeys: [UInt64] = []
-        var instanceRetainedFlags: [UInt8] = []
         var instanceLabelSizes: [SIMD2<Float>] = []
         var instanceGlyphRanges: [Range<Int>] = []
         var instanceAnchorOrdinals: [UInt32] = []
@@ -471,7 +442,6 @@ final class RoadLabelCache {
                                           templateVertices: [],
                                           glyphBounds: glyphBounds,
                                           labelSize: labelSize,
-                                          isRetained: isRetained,
                                           sourcePriority: sourcePriority))
 
             let pathStart = pathInputs.count
@@ -484,7 +454,6 @@ final class RoadLabelCache {
                 let instanceKey = Self.makeInstanceKey(entryKey: entryKey,
                                                        anchorOrdinal: anchor.anchorOrdinal)
                 instanceKeys.append(instanceKey)
-                instanceRetainedFlags.append(isRetained)
                 instanceLabelSizes.append(labelSize)
                 // The anchor rides the point stream as its own point (outside
                 // the path range), so the placement kernel reads the anchor's
@@ -526,13 +495,11 @@ final class RoadLabelCache {
         return RoadLabelTileRecord(metalDevice: metalDevice,
                                    ownerKey: sourceEntry.ownerKey,
                                    metalTileIdentity: sourceEntry.metalTileIdentity,
-                                   isRetained: isRetained,
                                    sourcePriority: sourcePriority,
                                    visibleTileIndex: visibleTileIndex,
                                    labelStyle: style,
                                    entries: entries,
                                    instanceKeys: instanceKeys,
-                                   instanceRetainedFlags: instanceRetainedFlags,
                                    instanceLabelSizes: instanceLabelSizes,
                                    instanceGlyphRanges: instanceGlyphRanges,
                                    instanceAnchorOrdinals: instanceAnchorOrdinals,

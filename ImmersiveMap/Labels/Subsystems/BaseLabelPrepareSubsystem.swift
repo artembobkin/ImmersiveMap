@@ -761,7 +761,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                     hasVisibleRoadLabels = true
                 }
                 let meta = LabelRuntimeMeta(duplicate: 0,
-                                            isRetained: roadLabelCache.instanceRetainedFlags[index],
                                             visibleTileIndex: 0,
                                             fadeAlpha: alpha,
                                             labelSizePoints: roadLabelCache.instanceLabelSizes[index])
@@ -966,7 +965,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         let fadeAlphas = baseFade.currentAlphas
         var validLabelCount = 0
         var duplicateLabelCount = 0
-        var retainedLabelCount = 0
         var collisionVisibleCount = 0
         var collisionHiddenCount = 0
         var targetVisibleCount = 0
@@ -981,9 +979,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             }
             if input.duplicate != 0 {
                 duplicateLabelCount += 1
-            }
-            if input.isRetained != 0 {
-                retainedLabelCount += 1
             }
             if index < baseCollisionVisible.count, baseCollisionVisible[index] {
                 collisionVisibleCount += 1
@@ -1041,7 +1036,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                       labelInputsCount: baseLabelCache.labelInputsCount,
                                                       validLabelCount: validLabelCount,
                                                       duplicateLabelCount: duplicateLabelCount,
-                                                      retainedLabelCount: retainedLabelCount,
                                                       collisionVisibleCount: collisionVisibleCount,
                                                       collisionHiddenCount: collisionHiddenCount,
                                                       collisionUnknownCount: 0,
@@ -1089,7 +1083,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             let priority = candidate?.priority ?? Int.max
             let secondaryPriority = candidate?.secondaryPriority ?? Int.max
 
-            labels.append("\(index)|\(input.labelKey)|v=\(input.isValid ? 1 : 0)|d=\(input.duplicate)|r=\(input.isRetained)|cv=\(visibility ? "visible" : "hidden")|t=\(targetVisible ? 1 : 0)|hz=\(horizonVisible ? 1 : 0)|a=\(formatTraceFloat(fadeAlpha))|x=\(formatTraceFloat(position.x))|y=\(formatTraceFloat(position.y))|sv=\(screenVisible ? 1 : 0)|p=\(priority)|sp=\(secondaryPriority)|hw=\(formatTraceFloat(halfSize.x))|hh=\(formatTraceFloat(halfSize.y))")
+            labels.append("\(index)|\(input.labelKey)|v=\(input.isValid ? 1 : 0)|d=\(input.duplicate)|cv=\(visibility ? "visible" : "hidden")|t=\(targetVisible ? 1 : 0)|hz=\(horizonVisible ? 1 : 0)|a=\(formatTraceFloat(fadeAlpha))|x=\(formatTraceFloat(position.x))|y=\(formatTraceFloat(position.y))|sv=\(screenVisible ? 1 : 0)|p=\(priority)|sp=\(secondaryPriority)|hw=\(formatTraceFloat(halfSize.x))|hh=\(formatTraceFloat(halfSize.y))")
         }
         return labels.joined(separator: ";")
     }
