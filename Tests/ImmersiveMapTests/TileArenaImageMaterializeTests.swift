@@ -500,7 +500,6 @@ final class TileArenaImageMaterializeTests: XCTestCase {
         PreparedTileCacheIdentity(preparedFormatVersion: PreparedTileDiskCaching.preparedFormatVersion,
                                   styleRevision: 1,
                                   tileSourceRevision: 2,
-                                  flatSeparateRoadRenderingMinimumZoom: 3,
                                   textRevision: 4,
                                   labelLanguage: .english,
                                   labelFallbackPolicy: .international,

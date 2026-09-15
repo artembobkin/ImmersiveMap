@@ -891,14 +891,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
     }
 
-    public struct StyleSettings: Equatable, Sendable {
-        public var flatSeparateRoadRenderingMinimumZoom: Int
-
-        public init(flatSeparateRoadRenderingMinimumZoom: Int) {
-            self.flatSeparateRoadRenderingMinimumZoom = flatSeparateRoadRenderingMinimumZoom
-        }
-    }
-
     public struct DebugSettings: Equatable, Sendable {
         public var enableDebugPanel: Bool
         public var coordinateScale: Float
@@ -1074,7 +1066,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     public var tiles: TileSettings
     public var labels: LabelSettings
     public var scene: SceneSettings
-    public var style: StyleSettings
     public var avatars: AvatarSettings
     public var attribution: AttributionSettings
     public var postProcessing: PostProcessingSettings
@@ -1088,7 +1079,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                 tiles: TileSettings,
                 labels: LabelSettings,
                 scene: SceneSettings,
-                style: StyleSettings,
                 avatars: AvatarSettings,
                 attribution: AttributionSettings = AttributionSettings(),
                 postProcessing: PostProcessingSettings = PostProcessingSettings(),
@@ -1101,7 +1091,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         self.tiles = tiles
         self.labels = labels
         self.scene = scene
-        self.style = style
         self.avatars = avatars
         self.attribution = attribution
         self.postProcessing = postProcessing
@@ -1182,7 +1171,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                                           near: 0.1,
                                                           far: 6000.0,
                                                           radiusScale: 10.5)),
-        style: StyleSettings(flatSeparateRoadRenderingMinimumZoom: 8),
         avatars: AvatarSettings(size: .px64,
                                 sizeScale: 1.7,
                                 compressedScale: 0.55,
@@ -1428,12 +1416,6 @@ public extension ImmersiveMapSettings {
     func shadows(isEnabled: Bool = true) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.shadows.isEnabled = isEnabled
-        return settings
-    }
-
-    func styleSettings(_ style: StyleSettings) -> ImmersiveMapSettings {
-        var settings = self
-        settings.style = style
         return settings
     }
 

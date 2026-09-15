@@ -26,7 +26,6 @@ final class ExtrudedArenaBuildTests: XCTestCase {
         let identity = PreparedTileCacheIdentity(preparedFormatVersion: PreparedTileDiskCaching.preparedFormatVersion,
                                                  styleRevision: 1,
                                                  tileSourceRevision: 2,
-                                                 flatSeparateRoadRenderingMinimumZoom: 8,
                                                  textRevision: 1,
                                                  labelLanguage: .english,
                                                  labelFallbackPolicy: .international,

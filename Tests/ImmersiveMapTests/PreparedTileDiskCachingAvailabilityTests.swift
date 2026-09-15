@@ -182,7 +182,6 @@ final class PreparedTileDiskCachingAvailabilityTests: XCTestCase {
         PreparedTileCacheIdentity(preparedFormatVersion: PreparedTileDiskCaching.preparedFormatVersion,
                                   styleRevision: styleRevision,
                                   tileSourceRevision: 2,
-                                  flatSeparateRoadRenderingMinimumZoom: 3,
                                   textRevision: 4,
                                   labelLanguage: .english,
                                   labelFallbackPolicy: .international,

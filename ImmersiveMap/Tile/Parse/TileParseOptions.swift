@@ -19,10 +19,6 @@ struct TileParseOptions: Equatable {
     var labelsEnabled: Bool
     /// Debug: a one-unit frame around every tile.
     var addTestBorders: Bool
-    /// From this tile zoom up, the road layer takes the separate-road path:
-    /// seamless ribbons with the casing under the fill, sorted by structure
-    /// and class, instead of ground polygons.
-    var flatSeparateRoadRenderingMinimumZoom: Int
     /// The coarsest tile zoom that draws buildings: a coarser tile never
     /// extrudes, so its merged blocks are neither tessellated nor uploaded.
     /// The placement side decides the number (`BuildingCoveragePlanner`).
@@ -30,11 +26,9 @@ struct TileParseOptions: Equatable {
 
     init(labelsEnabled: Bool,
          addTestBorders: Bool,
-         flatSeparateRoadRenderingMinimumZoom: Int,
          buildingMinimumSourceZoom: Int) {
         self.labelsEnabled = labelsEnabled
         self.addTestBorders = addTestBorders
-        self.flatSeparateRoadRenderingMinimumZoom = flatSeparateRoadRenderingMinimumZoom
         self.buildingMinimumSourceZoom = buildingMinimumSourceZoom
     }
 
@@ -44,7 +38,6 @@ struct TileParseOptions: Equatable {
     init(settings: ImmersiveMapSettings) {
         self.init(labelsEnabled: settings.labels.isEnabled,
                   addTestBorders: settings.tiles.parsing.addTestBorders,
-                  flatSeparateRoadRenderingMinimumZoom: settings.style.flatSeparateRoadRenderingMinimumZoom,
                   buildingMinimumSourceZoom: BuildingCoveragePlanner.minimumSourceZoom)
     }
 }

@@ -7,7 +7,6 @@ struct PreparedTileCacheIdentity {
     let preparedFormatVersion: UInt32
     let styleRevision: UInt32
     let tileSourceRevision: UInt64
-    let flatSeparateRoadRenderingMinimumZoom: UInt32
     let textRevision: UInt32
     let labelLanguage: ImmersiveMapSettings.LabelLanguage
     let labelFallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy
@@ -24,7 +23,7 @@ struct PreparedTileCacheIdentity {
     /// that wants them, and vice versa.
     let labelsEnabled: Bool
     var namespaceComponent: String {
-        "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-r\(flatSeparateRoadRenderingMinimumZoom)-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-h\(houseNumbersEnabled ? 1 : 0)-z\(houseNumbersMinimumZoom)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)"
+        "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-h\(houseNumbersEnabled ? 1 : 0)-z\(houseNumbersMinimumZoom)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)"
     }
 
     static func tileSourceRevision(for network: ImmersiveMapSettings.TileSettings.NetworkSettings) -> UInt64 {

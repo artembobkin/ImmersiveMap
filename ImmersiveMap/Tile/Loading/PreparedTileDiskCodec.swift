@@ -299,7 +299,6 @@ enum PreparedTileDiskCodec {
         let preparedFormatVersion: UInt32
         let styleRevision: UInt32
         let tileSourceRevision: UInt64
-        let flatSeparateRoadRenderingMinimumZoom: UInt32
         let textRevision: UInt32
         let tileX: Int32
         let tileY: Int32
@@ -639,7 +638,6 @@ enum PreparedTileDiskCodec {
             preparedFormatVersion: cacheIdentity.preparedFormatVersion,
             styleRevision: cacheIdentity.styleRevision,
             tileSourceRevision: cacheIdentity.tileSourceRevision,
-            flatSeparateRoadRenderingMinimumZoom: cacheIdentity.flatSeparateRoadRenderingMinimumZoom,
             textRevision: cacheIdentity.textRevision,
             tileX: encodeInt32(preparedTile.tile.x, field: "Tile.x"),
             tileY: encodeInt32(preparedTile.tile.y, field: "Tile.y"),
@@ -709,7 +707,6 @@ enum PreparedTileDiskCodec {
         guard entry.preparedFormatVersion == cacheIdentity.preparedFormatVersion,
               entry.styleRevision == cacheIdentity.styleRevision,
               entry.tileSourceRevision == cacheIdentity.tileSourceRevision,
-              entry.flatSeparateRoadRenderingMinimumZoom == cacheIdentity.flatSeparateRoadRenderingMinimumZoom,
               entry.textRevision == cacheIdentity.textRevision,
               entry.tileX == Int32(expectedTile.x),
               entry.tileY == Int32(expectedTile.y),

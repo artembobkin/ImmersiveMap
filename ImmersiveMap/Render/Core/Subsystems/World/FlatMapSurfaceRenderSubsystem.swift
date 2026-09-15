@@ -12,7 +12,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     private let tileStencilTestState: MTLDepthStencilState
     private let groundOutlineState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
-    private let separateRoadRenderingMinimumZoom: Int
     private let debugOverlayControls: DebugOverlayControlState
     private let groundShadowMaskTextureProvider: () -> MTLTexture?
     private let groundShadowMaskFallbackTexture: MTLTexture
@@ -22,7 +21,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
          tileStencilTestState: MTLDepthStencilState,
          groundOutlineState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState,
-         separateRoadRenderingMinimumZoom: Int,
          debugOverlayControls: DebugOverlayControlState,
          groundShadowMaskTextureProvider: @escaping () -> MTLTexture?,
          groundShadowMaskFallbackTexture: MTLTexture) {
@@ -31,7 +29,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         self.tileStencilTestState = tileStencilTestState
         self.groundOutlineState = groundOutlineState
         self.depthDisabledState = depthDisabledState
-        self.separateRoadRenderingMinimumZoom = separateRoadRenderingMinimumZoom
         self.debugOverlayControls = debugOverlayControls
         self.groundShadowMaskTextureProvider = groundShadowMaskTextureProvider
         self.groundShadowMaskFallbackTexture = groundShadowMaskFallbackTexture
@@ -99,7 +96,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   pixelsPerPoint: Float(frameContext.pixelsPerPoint),
                                   drawableSizePx: SIMD2<Float>(Float(frameContext.drawSize.width),
                                                                Float(frameContext.drawSize.height)),
-                                  separateRoadRenderingMinimumZoom: separateRoadRenderingMinimumZoom,
                                   placeTilesContext: tilePlacementState.placeTilesContext,
                                   flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                   groundShadowMask: groundShadowMask,
@@ -116,7 +112,6 @@ FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   pixelsPerPoint: Float(frameContext.pixelsPerPoint),
                                   drawableSizePx: SIMD2<Float>(Float(frameContext.drawSize.width),
                                                                Float(frameContext.drawSize.height)),
-                                  separateRoadRenderingMinimumZoom: separateRoadRenderingMinimumZoom,
                                   placeTilesContext: tilePlacementState.backdropPlaceTilesContext,
                                   flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                   groundShadowMask: groundShadowMask,

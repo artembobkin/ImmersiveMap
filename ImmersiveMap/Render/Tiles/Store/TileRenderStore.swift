@@ -35,7 +35,6 @@ final class TileRenderStore: @unchecked Sendable {
             preparedFormatVersion: PreparedTileDiskCaching.preparedFormatVersion,
             styleRevision: styleRuntime.preparedTileStyleRevision,
             tileSourceRevision: PreparedTileCacheIdentity.tileSourceRevision(for: config.tiles.network),
-            flatSeparateRoadRenderingMinimumZoom: UInt32(max(0, config.style.flatSeparateRoadRenderingMinimumZoom)),
             textRevision: textRenderer.preparedTileTextRevision,
             labelLanguage: config.labels.language,
             labelFallbackPolicy: config.labels.fallbackPolicy,

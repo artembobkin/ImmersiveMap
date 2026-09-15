@@ -144,6 +144,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
             return overviewRoadStyle(stroke,
                                      color: Self.streetRoadColor(cls: effectiveClass, roads: roads),
                                      fadeStartZoom: Self.overviewRoadFadeStartZoom(cls: effectiveClass),
+                                     tileZoom: tileZoom,
                                      tunnel: isTunnel,
                                      construction: isConstruction)
         }
@@ -449,9 +450,24 @@ extension ImmersiveMapTilesDefaultMapStyle {
     /// corridor the tiles ship in pieces reads as one continuous line.
     /// Tunnels are the same stroke at the tunnel opacity; construction
     /// segments read as point-dashed corridors.
+    /// From this tile zoom a road takes the engine's road path (stitched
+    /// across features, sorted by structure and class, drawn over the whole
+    /// ground) even while it is still a symbol stroke; below it the stroke
+    /// is a plain ground line. z8 is where the engine used to switch on
+    /// its own, kept so the picture does not change. The symbol era runs
+    /// through z11, so this could move to z12 once that has been looked at.
+    static let roadPathMinimumTileZoom = 8
+
+    /// The camera zoom from which a road's casing shows: below it the fill
+    /// is too narrow for an edge to read, and the kerb only muddies the
+    /// antialiasing. The casing pass carries it as its fade band, so it
+    /// eases in over the following zoom level, continuous with the camera.
+    static let casingMinimumCameraZoom = 16
+
     func overviewRoadStyle(_ stroke: OverviewRoadStroke,
                            color: SIMD4<Float>,
                            fadeStartZoom: Int,
+                           tileZoom: Int,
                            tunnel: Bool,
                            construction: Bool) -> FeatureStyle {
         let dashed = construction && tunnel == false
@@ -465,21 +481,25 @@ extension ImmersiveMapTilesDefaultMapStyle {
             lineCapRound: dashed == false,
             lineJoinRound: true
         )
-        return .road(RoadStyle(
-            fill: LinePass(
-                key: fillKey,
-                color: fillColor,
-                // The class fades in over the zoom level after it first
-                // ships, continuous with the camera, instead of popping with
-                // the tile.
-                lowZoomFadeMask: LowZoomOverviewFade.classFadeMask(startZoom: fadeStartZoom),
-                lineWidthPoints: stroke.widthPoints,
-                dashLengthPoints: dashed ? 4.0 : 0,
-                dashGapPoints: dashed ? 2.5 : 0,
-                lineGeometry: geometry
-            ),
-            classPriority: stroke.priority
-        ))
+        let fill = LinePass(
+            key: fillKey,
+            color: fillColor,
+            // The class fades in over the zoom level after it first
+            // ships, continuous with the camera, instead of popping with
+            // the tile.
+            lowZoomFadeMask: LowZoomOverviewFade.classFadeMask(startZoom: fadeStartZoom),
+            lineWidthPoints: stroke.widthPoints,
+            dashLengthPoints: dashed ? 4.0 : 0,
+            dashGapPoints: dashed ? 2.5 : 0,
+            lineGeometry: geometry
+        )
+        // A ground line at the coarse zooms, a road from
+        // `roadPathMinimumTileZoom`: the same stroke either way, and the
+        // case is what tells the engine which path draws it.
+        guard tileZoom >= Self.roadPathMinimumTileZoom else {
+            return .line(LineStyle(pass: fill, fillsAreas: false))
+        }
+        return .road(RoadStyle(fill: fill, classPriority: stroke.priority))
     }
 
     func roadStyle(fillKey: UInt8,
@@ -532,7 +552,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
             let casingWidth = width + 2 * (kerbUnitsPerSide ?? Self.roadCasingMetresPerSide * unitsPerMetre)
             casingPass = LinePass(key: Self.roadCasingKey(forFillKey: fillKey),
                                   color: roadCasingColor(from: fillColor),
-                                  lowZoomFadeMask: roadLowZoomFadeMask,
+                                  lowZoomFadeMask: LowZoomOverviewFade.classFadeMask(startZoom: Self.casingMinimumCameraZoom),
                                   minimumWidthPoints: casingFloor,
                                   maximumWidthPoints: maximumWidthPoints > 0 ? maximumWidthPoints + 1.0 : 0,
                                   lineGeometry: makeRoadGeometry(width: casingWidth))

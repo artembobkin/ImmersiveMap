@@ -10,7 +10,6 @@ enum FlatMapSurfaceDrawer {
                      cameraZoom: Double,
                      pixelsPerPoint: Float,
                      drawableSizePx: SIMD2<Float>,
-                     separateRoadRenderingMinimumZoom: Int,
                      placeTilesContext: PlaceTilesContext,
                      flatRenderState: FlatRenderState,
                      groundShadowMask: GroundShadowMaskBinding,
@@ -62,8 +61,6 @@ enum FlatMapSurfaceDrawer {
         // The flat ground pipeline reads the per-pixel ground shadow mask
         // (fragment texture 1) instead of sampling the cascades per layer.
         renderEncoder.setFragmentTexture(groundShadowMask.texture, index: 1)
-
-        let usesSeparateRoadRendering = cameraZoom >= Double(separateRoadRenderingMinimumZoom)
 
         // Unique SOURCES, not placements: a coarse tile standing in for
         // several missing slots draws once at full extent, and the
@@ -201,46 +198,15 @@ enum FlatMapSurfaceDrawer {
                   runFilter: { $0.isLinesClass })
         renderEncoder.popDebugGroup()
 
-        if usesSeparateRoadRendering {
-            // The casing draws from street zoom up only (RoadCasingZoomGate).
-            let drawsCasing = RoadCasingZoomGate.drawsCasing(cameraZoom: cameraZoom)
-            func drawRoadGroup(_ structureKind: RoadStructureKind) {
-                for role in [RoadPassRole.shadow, .casing, .fill, .detail] where role != .casing || drawsCasing {
-                    for source in roadSources {
-                        let structureBucket = source.metalTile.tileBuffers.roads.bucket(for: structureKind)
-                        drawFlatGeometryLayer(renderEncoder: renderEncoder,
-                                              buffers: structureBucket.layer(for: role),
-                                              tile: source.metalTile.tile,
-                                              loop: source.loop,
-                                              flatRenderState: flatRenderState,
-                                              pixelsPerPoint: pixelsPerPoint,
-                                              drawableHeightPx: drawableSizePx.y,
-                                              overviewFade: overviewFadeUniform,
-                                              bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
-                                              cameraEye: cameraUniform.eye,
-                                              markingCutoffWorldDistance: markingCutoffWorldDistance,
-                                              distanceFade: roadDistanceFade,
-                                              // The detail role is road paint through and
-                                              // through (every detail pass carries the
-                                              // marking fade band), so past the cutoff the
-                                              // whole layer skips.
-                                              skipsWholeLayerBeyondMarkingCutoff: role == .detail)
-                    }
-                }
-            }
-
-            renderEncoder.pushDebugGroup("roads")
-            drawRoadGroup(.tunnel)
-            drawRoadGroup(.ground)
-            drawRoadGroup(.automobileGround)
-            drawLayer(\.bridgeOverlay, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset, sources: roadSources, distanceFade: roadDistanceFade)
-            drawRoadGroup(.bridge)
-
-            for structureKind in RoadStructureKind.drawOrder {
+        // The road buckets: whatever the tiles carry. A tile whose roads the
+        // style drew as ground lines carries none, and the casing's zoom is
+        // the style's too, baked as the pass's fade band.
+        func drawRoadGroup(_ structureKind: RoadStructureKind) {
+            for role in [RoadPassRole.shadow, .casing, .fill, .detail] {
                 for source in roadSources {
                     let structureBucket = source.metalTile.tileBuffers.roads.bucket(for: structureKind)
                     drawFlatGeometryLayer(renderEncoder: renderEncoder,
-                                          buffers: structureBucket.layer(for: .overlay),
+                                          buffers: structureBucket.layer(for: role),
                                           tile: source.metalTile.tile,
                                           loop: source.loop,
                                           flatRenderState: flatRenderState,
@@ -250,13 +216,41 @@ enum FlatMapSurfaceDrawer {
                                           bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
                                           cameraEye: cameraUniform.eye,
                                           markingCutoffWorldDistance: markingCutoffWorldDistance,
-                                          distanceFade: roadDistanceFade)
+                                          distanceFade: roadDistanceFade,
+                                          // The detail role is road paint through and
+                                          // through (every detail pass carries the
+                                          // marking fade band), so past the cutoff the
+                                          // whole layer skips.
+                                          skipsWholeLayerBeyondMarkingCutoff: role == .detail)
                 }
             }
-            renderEncoder.popDebugGroup()
-        } else {
-            drawLayer(\.bridgeOverlay, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset, sources: roadSources, distanceFade: roadDistanceFade)
         }
+
+        renderEncoder.pushDebugGroup("roads")
+        drawRoadGroup(.tunnel)
+        drawRoadGroup(.ground)
+        drawRoadGroup(.automobileGround)
+        drawLayer(\.bridgeOverlay, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset, sources: roadSources, distanceFade: roadDistanceFade)
+        drawRoadGroup(.bridge)
+
+        for structureKind in RoadStructureKind.drawOrder {
+            for source in roadSources {
+                let structureBucket = source.metalTile.tileBuffers.roads.bucket(for: structureKind)
+                drawFlatGeometryLayer(renderEncoder: renderEncoder,
+                                      buffers: structureBucket.layer(for: .overlay),
+                                      tile: source.metalTile.tile,
+                                      loop: source.loop,
+                                      flatRenderState: flatRenderState,
+                                      pixelsPerPoint: pixelsPerPoint,
+                                      drawableHeightPx: drawableSizePx.y,
+                                      overviewFade: overviewFadeUniform,
+                                      bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
+                                      cameraEye: cameraUniform.eye,
+                                      markingCutoffWorldDistance: markingCutoffWorldDistance,
+                                      distanceFade: roadDistanceFade)
+            }
+        }
+        renderEncoder.popDebugGroup()
         if isWireframeEnabled {
             renderEncoder.setTriangleFillMode(.fill)
         }

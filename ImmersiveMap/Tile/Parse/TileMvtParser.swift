@@ -167,8 +167,6 @@ final class TileMvtParser {
             let layer = preparedLayer.layer
             let layerName = layer.name
             let layerGeometry = TileLayerGeometry(layer: layer, data: mvtData)
-            let usesSeparateRoadRendering = preparedLayer.hasRoads
-                && tile.z >= options.flatSeparateRoadRenderingMinimumZoom
 
             // Styles resolve exactly once per feature here; the building and
             // road pre-passes below share them instead of asking again.
@@ -228,6 +226,14 @@ final class TileMvtParser {
             }
 
             let buildingPartInfo = buildingReader.partInfo(geometry: layerGeometry, featureFacts: featureFacts)
+            // The road path (stitching, structure and class order, the
+            // decorations, drawn over the whole ground) is taken where the
+            // style answered a road; a layer of plain lines stays on the
+            // ground path.
+            let usesSeparateRoadRendering = featureStyles.contains { style in
+                if case .road = style { return true }
+                return false
+            }
             let roads = RoadLayerContext(
                 usesSeparateRoadRendering: usesSeparateRoadRendering,
                 precomputation: usesSeparateRoadRendering

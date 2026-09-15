@@ -751,7 +751,6 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         PreparedTileCacheIdentity(preparedFormatVersion: PreparedTileDiskCaching.preparedFormatVersion,
                                   styleRevision: 1,
                                   tileSourceRevision: 2,
-                                  flatSeparateRoadRenderingMinimumZoom: 3,
                                   textRevision: textRevision,
                                   labelLanguage: labelLanguage,
                                   labelFallbackPolicy: fallbackPolicy,

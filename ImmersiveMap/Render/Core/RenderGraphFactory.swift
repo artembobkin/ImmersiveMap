@@ -48,7 +48,6 @@ enum RenderGraphFactory {
                                                                     tileStencilTestState: context.tileStencilTestState,
                                                                     groundOutlineState: context.groundOutlineState,
                                                                     depthDisabledState: context.depthDisabledState,
-                                                                    separateRoadRenderingMinimumZoom: settings.style.flatSeparateRoadRenderingMinimumZoom,
                                                                     debugOverlayControls: debugOverlayControls,
                                                                     groundShadowMaskTextureProvider: groundShadowMaskTextureProvider,
                                                                     groundShadowMaskFallbackTexture: context.groundShadowMaskFallbackTexture)

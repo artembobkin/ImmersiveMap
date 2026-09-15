@@ -746,12 +746,6 @@ public extension ImmersiveMapView {
 
 
 
-    public func styleSettings(_ style: ImmersiveMapSettings.StyleSettings) -> ImmersiveMapView {
-        var view = self
-        view.settings = view.settings.styleSettings(style)
-        return view
-    }
-
     public func avatarSettings(_ avatars: ImmersiveMapSettings.AvatarSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.avatarSettings(avatars)

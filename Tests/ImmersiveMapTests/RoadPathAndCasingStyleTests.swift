@@ -1,0 +1,51 @@
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
+// SPDX-License-Identifier: MIT
+
+@testable import ImmersiveMap
+import Mvt
+import XCTest
+
+/// Two decisions the built-in style states and the engine only follows:
+/// which zooms a road takes the road path at (the case of the answer, a
+/// line or a road), and the camera zoom the casing shows from (the casing
+/// pass's fade band).
+final class RoadPathAndCasingStyleTests: XCTestCase {
+    private let style = ImmersiveMapTilesDefaultMapStyle()
+
+    private func roadStyle(cls: String, zoom: Int) -> FeatureStyle {
+        // A street map's layer, without the streetscape: the road is a
+        // stroke with a casing, not a measured carriageway.
+        style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
+                                                  properties: ["class": .string(cls)],
+                                                  tile: Tile(x: 0, y: 0, z: zoom),
+                                                  layerCarriesStreetscape: false,
+                                                  geometryType: .linestring))
+    }
+
+    /// Below the style's road path zoom an overview stroke is a plain line;
+    /// from it the same stroke is a road, so the parser stitches and sorts
+    /// it. The stroke itself is the same either side of the boundary.
+    func testTheOverviewStrokeIsALineBelowTheRoadPathZoomAndARoadFromIt() {
+        XCTAssertEqual(ImmersiveMapTilesDefaultMapStyle.roadPathMinimumTileZoom, 8)
+        let below = roadStyle(cls: "motorway", zoom: 7)
+        let from = roadStyle(cls: "motorway", zoom: 8)
+        if case .line = below {} else { XCTFail("A z7 motorway is a ground line") }
+        if case .road = from {} else { XCTFail("A z8 motorway is a road") }
+        XCTAssertEqual(below.resolvedLineRenderPasses[0].lineWidthPoints,
+                       from.resolvedLineRenderPasses[0].lineWidthPoints)
+        XCTAssertEqual(below.resolvedLineRenderPasses[0].color, from.resolvedLineRenderPasses[0].color)
+    }
+
+    /// The casing eases in from the style's casing zoom, as the pass's own
+    /// fade band, while the fill keeps the road band.
+    func testTheCasingCarriesItsZoomAsTheFadeBand() {
+        XCTAssertEqual(ImmersiveMapTilesDefaultMapStyle.casingMinimumCameraZoom, 16)
+        let street = roadStyle(cls: "motorway", zoom: 14)
+        let casing = street.resolvedLineRenderPasses.first { $0.roadPassRole == .casing }!
+        let fill = street.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
+        XCTAssertEqual(casing.lowZoomFadeMask, LowZoomOverviewFade.classFadeMask(startZoom: 16))
+        XCTAssertEqual(LowZoomOverviewFade.classFadeAlpha(for: 15.99, startZoom: 16), 0)
+        XCTAssertEqual(LowZoomOverviewFade.classFadeAlpha(for: 17, startZoom: 16), 1)
+        XCTAssertEqual(fill.lowZoomFadeMask, style.roadLowZoomFadeMask)
+    }
+}

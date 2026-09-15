@@ -45,7 +45,6 @@ final class LabelsEnabledParseTests: XCTestCase {
             PreparedTileCacheIdentity(preparedFormatVersion: 88,
                                       styleRevision: 1,
                                       tileSourceRevision: 2,
-                                      flatSeparateRoadRenderingMinimumZoom: 8,
                                       textRevision: 3,
                                       labelLanguage: .english,
                                       labelFallbackPolicy: .international,

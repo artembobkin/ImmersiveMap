@@ -106,9 +106,6 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         if oldValue.labels != newValue.labels {
             mark(.labels, actions: [.invalidateCaches, .rebuildPreparedData, .recreateRenderer])
         }
-        if oldValue.style != newValue.style {
-            mark(.style, actions: [.invalidateCaches, .rebuildPreparedData, .rebuildGPUResources, .recreateRenderer])
-        }
         if oldValue.avatars != newValue.avatars {
             mark(.avatars, actions: [.rebuildGPUResources, .recreateRenderer])
         }

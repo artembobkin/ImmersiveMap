@@ -317,7 +317,6 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         let tiles = ImmersiveMapSettings.default.tiles
         let labels = ImmersiveMapSettings.default.labels
         let scene = ImmersiveMapSettings.default.scene
-        let style = ImmersiveMapSettings.default.style
         let avatars = ImmersiveMapSettings.default.avatars
         let attribution = ImmersiveMapSettings.AttributionSettings(
             isVisible: false,
@@ -343,7 +342,6 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
             .tileSettings(tiles)
             .labelSettings(labels)
             .sceneSettings(scene)
-            .styleSettings(style)
             .avatarSettings(avatars)
             .attributionSettings(attribution)
             .postProcessingSettings(postProcessing)
@@ -355,7 +353,6 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertEqual(settings.tiles, tiles)
         XCTAssertEqual(settings.labels, labels)
         XCTAssertEqual(settings.scene, scene)
-        XCTAssertEqual(settings.style, style)
         XCTAssertEqual(settings.avatars, avatars)
         XCTAssertEqual(settings.attribution, attribution)
         XCTAssertEqual(settings.postProcessing, postProcessing)

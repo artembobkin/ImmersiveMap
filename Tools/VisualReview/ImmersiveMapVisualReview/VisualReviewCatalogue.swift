@@ -787,7 +787,6 @@ extension ImmersiveMapView {
             .tileSettings(settings.tiles)
             .labelSettings(settings.labels)
             .sceneSettings(settings.scene)
-            .styleSettings(settings.style)
             .avatarSettings(settings.avatars)
             .attributionSettings(settings.attribution)
             .postProcessingSettings(settings.postProcessing)
