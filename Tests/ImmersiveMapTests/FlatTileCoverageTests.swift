@@ -31,9 +31,9 @@ final class FlatTileCoverageTests: XCTestCase {
         return SIMD3<Double>(Double(origin.x) + Double(origin.z) / 2, Double(origin.y) + Double(origin.z) / 2, 0)
     }
 
-    /// A camera `distance` tiles from the look-at point, pitched `tilt`
+    /// A inputs `distance` tiles from the look-at point, pitched `tilt`
     /// degrees, turned to `bearing` degrees (0 looks north, 90 east).
-    private static func camera(tilt: Double, bearing: Double = 0, distance: Double = 1.2) -> FlatCoverageCamera {
+    private static func inputs(tilt: Double, bearing: Double = 0, distance: Double = 1.2) -> FlatCoverageInputs {
         let radians = bearing * .pi / 180
         // Forward on the ground in tile units: north is -y, east is +x.
         let forward = SIMD2<Double>(sin(radians), -cos(radians))
@@ -41,7 +41,7 @@ final class FlatTileCoverageTests: XCTestCase {
         let eyeGround = lookAt - forward * behind
         let eyeGroundWorld = world(ofTilePoint: eyeGround)
         let eye = SIMD3<Double>(eyeGroundWorld.x, eyeGroundWorld.y, distance * cos(tilt * .pi / 180))
-        return FlatCoverageCamera(eye: eye, flatRenderState: flatRenderState, eyeGround: eyeGround, lookAt: lookAt)
+        return FlatCoverageInputs(eye: eye, flatRenderState: flatRenderState, eyeGround: eyeGround, lookAt: lookAt)
     }
 
     /// How far ahead of the eye's ground point a 45 degree frustum at
@@ -54,9 +54,9 @@ final class FlatTileCoverageTests: XCTestCase {
         return min(40, distance * cos(radians) * tan(farEdge) - distance * sin(radians) + 0.5)
     }
 
-    /// The ground a square 45 degree frustum sees from that camera, as the
+    /// The ground a square 45 degree frustum sees from that inputs, as the
     /// convex wedge the walk tests tiles against: a turned view cuts the
-    /// tile grid diagonally the way a real camera does.
+    /// tile grid diagonally the way a real inputs does.
     private static func polygon(tilt: Double, bearing: Double = 0, distance: Double = 1.2, reach: Double? = nil,
                                 aspect: Double = 1) -> CoveragePolygon {
         let reach = reach ?? Self.reach(tilt: tilt, distance: distance)
@@ -112,17 +112,17 @@ final class FlatTileCoverageTests: XCTestCase {
     /// or coarser, no ceiling. A leaf is exact by its centre wherever its
     /// square is in view; a parent is asked for by the leaf centres in
     /// view, which is the ground the walk reads.
-    private static func leafRuleTargets(leaves: [VisibleTile], camera: FlatCoverageCamera, polygon: CoveragePolygon) -> Set<VisibleTile> {
-        let lookAtWorld = FlatDistanceCoverage.worldPoint(ofTilePoint: camera.lookAt, zoom: zoom, flatRenderState: camera.flatRenderState)
-        let cameraDistance = simd_length(camera.eye - lookAtWorld) * pow(2.0, Double(max(0, camera.overzoomLevels)))
+    private static func leafRuleTargets(leaves: [VisibleTile], inputs: FlatCoverageInputs, polygon: CoveragePolygon) -> Set<VisibleTile> {
+        let lookAtWorld = FlatDistanceCoverage.worldPoint(ofTilePoint: inputs.lookAt, zoom: zoom, flatRenderState: inputs.flatRenderState)
+        let cameraDistance = simd_length(inputs.eye - lookAtWorld) * pow(2.0, Double(max(0, inputs.overzoomLevels)))
         var targets: Set<VisibleTile> = []
         for leaf in leaves {
             let center = worldCenter(of: leaf)
-            let distance = simd_length(center - camera.eye)
+            let distance = simd_length(center - inputs.eye)
             let centerInView = polygon.intersects(minX: center.x, minY: center.y, maxX: center.x, maxY: center.y)
-            if camera.backdropZoom != nil, distance > camera.farRadius * cameraDistance { continue }
+            if inputs.backdropZoom != nil, distance > inputs.farRadius * cameraDistance { continue }
             let wanted = max(0, leaf.z - FlatDistanceCoverage.drop(distance: distance, cameraDistance: cameraDistance))
-            if let backdropZoom = camera.backdropZoom, wanted <= backdropZoom { continue }
+            if let backdropZoom = inputs.backdropZoom, wanted <= backdropZoom { continue }
             if wanted == leaf.z {
                 targets.insert(leaf)
             } else if centerInView, let parent = leaf.tile.findParentTile(atZoom: wanted) {
@@ -136,8 +136,8 @@ final class FlatTileCoverageTests: XCTestCase {
         output.first { $0.loop == tile.loop && ($0.tile == tile.tile || $0.tile.covers(tile.tile)) }
     }
 
-    private func targets(camera: FlatCoverageCamera, polygon: CoveragePolygon, coverage: FlatTileCoverage = FlatTileCoverage()) -> [VisibleTile] {
-        coverage.targets(targetZoom: Self.zoom, camera: camera, polygon: polygon)
+    private func targets(inputs: FlatCoverageInputs, polygon: CoveragePolygon, coverage: FlatTileCoverage = FlatTileCoverage()) -> [VisibleTile] {
+        coverage.targets(targetZoom: Self.zoom, inputs: inputs, polygon: polygon)
     }
 
     /// Straight down the whole view is within the exact radius: every tile
@@ -150,7 +150,7 @@ final class FlatTileCoverageTests: XCTestCase {
                 expected.insert(VisibleTile(x: 255 + column, y: 249 + row, z: Self.zoom))
             }
         }
-        XCTAssertEqual(Set(targets(camera: Self.camera(tilt: 0), polygon: polygon)), expected)
+        XCTAssertEqual(Set(targets(inputs: Self.inputs(tilt: 0), polygon: polygon)), expected)
     }
 
     /// The walk places what the rule says leaf by leaf: the same exact
@@ -162,10 +162,10 @@ final class FlatTileCoverageTests: XCTestCase {
         for tilt in [0.0, 20.0, 30.0, 45.0, 60.0, 70.0, 75.0] {
             for bearing in stride(from: 0.0, through: 150.0, by: 30.0) {
                 let aspect = bearing.truncatingRemainder(dividingBy: 60) == 0 ? 1.0 : 1.78
-                let camera = Self.camera(tilt: tilt, bearing: bearing)
+                let inputs = Self.inputs(tilt: tilt, bearing: bearing)
                 let polygon = Self.polygon(tilt: tilt, bearing: bearing, aspect: aspect)
-                let walked = targets(camera: camera, polygon: polygon)
-                let reference = Self.leafRuleTargets(leaves: Self.leaves(in: polygon), camera: camera, polygon: polygon)
+                let walked = targets(inputs: inputs, polygon: polygon)
+                let reference = Self.leafRuleTargets(leaves: Self.leaves(in: polygon), inputs: inputs, polygon: polygon)
                 let walkedExact = Set(walked.filter { $0.z == Self.zoom })
                 let referenceExact = reference.filter { $0.z == Self.zoom }
                 XCTAssertEqual(walkedExact, referenceExact, "tilt \(tilt) bearing \(bearing): the exact tiles")
@@ -180,19 +180,19 @@ final class FlatTileCoverageTests: XCTestCase {
         }
     }
 
-    /// Every tile nearer than the exact radius, in camera distances, is
+    /// Every tile nearer than the exact radius, in inputs distances, is
     /// asked for exactly, whatever the tilt.
     func testTilesWithinTheExactRadiusAreExact() {
         for tilt in [30.0, 60.0, 75.0] {
-            let camera = Self.camera(tilt: tilt)
+            let inputs = Self.inputs(tilt: tilt)
             let polygon = Self.polygon(tilt: tilt)
-            let output = targets(camera: camera, polygon: polygon)
+            let output = targets(inputs: inputs, polygon: polygon)
             let lookAtWorld = Self.world(ofTilePoint: Self.lookAt)
-            let cameraDistance = simd_length(camera.eye - SIMD3<Double>(lookAtWorld.x, lookAtWorld.y, 0))
+            let cameraDistance = simd_length(inputs.eye - SIMD3<Double>(lookAtWorld.x, lookAtWorld.y, 0))
             XCTAssertEqual(cameraDistance, 1.2, accuracy: 1e-9)
             var checked = 0
             for tile in Self.leaves(in: polygon) {
-                let distance = simd_length(Self.worldCenter(of: tile) - camera.eye)
+                let distance = simd_length(Self.worldCenter(of: tile) - inputs.eye)
                 guard distance <= FlatDistanceCoverage.exactRadius * cameraDistance else { continue }
                 XCTAssertTrue(output.contains(tile), "tilt \(tilt): \(tile.x)/\(tile.y) at \(distance) is within the exact radius")
                 checked += 1
@@ -210,7 +210,7 @@ final class FlatTileCoverageTests: XCTestCase {
             for bearing in stride(from: 0.0, through: 150.0, by: 30.0) {
                 let aspect = bearing.truncatingRemainder(dividingBy: 60) == 0 ? 1.0 : 1.78
                 let coverage = FlatTileCoverage()
-                let output = targets(camera: Self.camera(tilt: tilt, bearing: bearing),
+                let output = targets(inputs: Self.inputs(tilt: tilt, bearing: bearing),
                                      polygon: Self.polygon(tilt: tilt, bearing: bearing, aspect: aspect),
                                      coverage: coverage)
                 let parents = output.filter { $0.z < Self.zoom }.count
@@ -231,7 +231,7 @@ final class FlatTileCoverageTests: XCTestCase {
     /// A coarse parent that contains an exact tile is placed next to it:
     /// overlaps are allowed instead of climbing.
     func testCoarseParentsCoexistWithExactTiles() {
-        let output = targets(camera: Self.camera(tilt: 75), polygon: Self.polygon(tilt: 75))
+        let output = targets(inputs: Self.inputs(tilt: 75), polygon: Self.polygon(tilt: 75))
         let exact = output.filter { $0.z == Self.zoom }
         let coarse = output.filter { $0.z < Self.zoom }
         XCTAssertFalse(exact.isEmpty)
@@ -245,24 +245,24 @@ final class FlatTileCoverageTests: XCTestCase {
     func testTheCeilingTrimsOnlyTheFarthest() {
         // A full disc of tiles around the eye, far more than the ceiling,
         // with the reach pushed past the disc so the ceiling is what cuts.
-        var camera = Self.camera(tilt: 75)
-        camera.farRadius = 100
-        let eye = camera.eyeGround
+        var inputs = Self.inputs(tilt: 75)
+        inputs.farRadius = 100
+        let eye = inputs.eyeGround
         let polygon = Self.square(minX: eye.x - 40, minY: eye.y - 40, maxX: eye.x + 40, maxY: eye.y + 40)
-        let output = targets(camera: camera, polygon: polygon)
+        let output = targets(inputs: inputs, polygon: polygon)
         let lookAtWorld = Self.world(ofTilePoint: Self.lookAt)
-        let cameraDistance = simd_length(camera.eye - SIMD3<Double>(lookAtWorld.x, lookAtWorld.y, 0))
+        let cameraDistance = simd_length(inputs.eye - SIMD3<Double>(lookAtWorld.x, lookAtWorld.y, 0))
         let parents = output.filter { $0.z < Self.zoom }.count
         XCTAssertGreaterThanOrEqual(parents, FlatDistanceCoverage.maximumParents)
         XCTAssertLessThanOrEqual(parents, FlatDistanceCoverage.maximumParents + 4, "at most a tie group past the ceiling")
         let leaves = Self.leaves(in: polygon)
-        for tile in leaves where simd_length(Self.worldCenter(of: tile) - camera.eye) <= FlatDistanceCoverage.exactRadius * cameraDistance {
+        for tile in leaves where simd_length(Self.worldCenter(of: tile) - inputs.eye) <= FlatDistanceCoverage.exactRadius * cameraDistance {
             XCTAssertTrue(output.contains(tile), "the exact zone is never trimmed")
         }
         var farthestKept = 0.0
         var nearestDropped = Double.infinity
         for tile in leaves {
-            let distance = simd_length(Self.worldCenter(of: tile) - camera.eye)
+            let distance = simd_length(Self.worldCenter(of: tile) - inputs.eye)
             let zoom = tile.z - FlatDistanceCoverage.drop(distance: distance, cameraDistance: cameraDistance)
             guard zoom > TileCulling.flatBackdropZoomLevel else { continue }
             if Self.cover(of: tile, in: output) != nil {
@@ -280,28 +280,28 @@ final class FlatTileCoverageTests: XCTestCase {
     /// the ground; within it the levels are as before. Without a backdrop
     /// the reach does not apply.
     func testBeyondTheReachNothingIsPlaced() {
-        var camera = Self.camera(tilt: 75)
+        var inputs = Self.inputs(tilt: 75)
         // A street tilt's frustum, which runs to the horizon.
         let polygon = Self.polygon(tilt: 75)
         let leaves = Self.leaves(in: polygon)
         let lookAtWorld = Self.world(ofTilePoint: Self.lookAt)
-        let cameraDistance = simd_length(camera.eye - SIMD3<Double>(lookAtWorld.x, lookAtWorld.y, 0))
-        camera.farRadius = 6
-        let output = targets(camera: camera, polygon: polygon)
+        let cameraDistance = simd_length(inputs.eye - SIMD3<Double>(lookAtWorld.x, lookAtWorld.y, 0))
+        inputs.farRadius = 6
+        let output = targets(inputs: inputs, polygon: polygon)
         var coveredBeyond = 0
         var uncoveredWithin = 0
         for tile in leaves {
-            let distance = simd_length(Self.worldCenter(of: tile) - camera.eye)
+            let distance = simd_length(Self.worldCenter(of: tile) - inputs.eye)
             let zoom = tile.z - FlatDistanceCoverage.drop(distance: distance, cameraDistance: cameraDistance)
             let covered = Self.cover(of: tile, in: output) != nil
-            if distance > camera.farRadius * cameraDistance * 1.05, covered {
+            if distance > inputs.farRadius * cameraDistance * 1.05, covered {
                 // A parent placed for nearer ground may reach over the line;
                 // a tile beyond it never earns a placement itself.
                 XCTAssertTrue(output.contains { $0.z < Self.zoom && $0.tile.covers(tile.tile) },
                               "beyond the reach only nearer ground's parent covers a tile")
                 coveredBeyond += 1
             }
-            if distance < camera.farRadius * cameraDistance * 0.95, zoom > TileCulling.flatBackdropZoomLevel, covered == false {
+            if distance < inputs.farRadius * cameraDistance * 0.95, zoom > TileCulling.flatBackdropZoomLevel, covered == false {
                 uncoveredWithin += 1
             }
         }
@@ -311,8 +311,8 @@ final class FlatTileCoverageTests: XCTestCase {
         XCTAssertGreaterThan(leaves.count - coveredBeyond, 0)
 
         // No backdrop: the reach is ignored, the far ground stays covered.
-        camera.backdropZoom = nil
-        let uncut = targets(camera: camera, polygon: polygon)
+        inputs.backdropZoom = nil
+        let uncut = targets(inputs: inputs, polygon: polygon)
         for tile in leaves {
             XCTAssertNotNil(Self.cover(of: tile, in: uncut), "without a backdrop every tile stays covered")
         }
@@ -352,15 +352,15 @@ final class FlatTileCoverageTests: XCTestCase {
     }
 
     /// The eye straight above a point `eyeDistance` tiles east of a tile's
-    /// centre, at the camera distance: the camera looks straight down at
+    /// centre, at the inputs distance: the inputs looks straight down at
     /// the point under it, so its own distance is its height and the tile
     /// is `eyeDistance` away.
-    private static func sideCamera(tile: VisibleTile, eyeDistance: Double, cameraDistance: Double = 1.2) -> FlatCoverageCamera {
+    private static func sideInputs(tile: VisibleTile, eyeDistance: Double, cameraDistance: Double = 1.2) -> FlatCoverageInputs {
         let tileCenter = worldCenter(of: tile)
         let horizontal = (eyeDistance * eyeDistance - cameraDistance * cameraDistance).squareRoot()
         let eye = SIMD3<Double>(tileCenter.x + horizontal, tileCenter.y, cameraDistance)
         let lookAt = SIMD2<Double>(Double(tile.x) + 0.5 + horizontal, Double(tile.y) + 0.5)
-        return FlatCoverageCamera(eye: eye, flatRenderState: flatRenderState, eyeGround: lookAt, lookAt: lookAt)
+        return FlatCoverageInputs(eye: eye, flatRenderState: flatRenderState, eyeGround: lookAt, lookAt: lookAt)
     }
 
     /// The memory works through the walk: a tile just past its threshold
@@ -372,7 +372,7 @@ final class FlatTileCoverageTests: XCTestCase {
         let polygon = Self.square(minX: 256.1, minY: 250.1, maxX: 256.9, maxY: 250.9)
         let threshold = FlatDistanceCoverage.threshold(ofLevel: 1, cameraDistance: 1.2)
         func output(eyeDistance: Double) -> [VisibleTile] {
-            coverage.targets(targetZoom: Self.zoom, camera: Self.sideCamera(tile: tile, eyeDistance: eyeDistance), polygon: polygon)
+            coverage.targets(targetZoom: Self.zoom, inputs: Self.sideInputs(tile: tile, eyeDistance: eyeDistance), polygon: polygon)
         }
         XCTAssertTrue(output(eyeDistance: threshold * 0.9).contains(tile))
         XCTAssertTrue(output(eyeDistance: threshold * 1.05).contains(tile),
@@ -395,7 +395,7 @@ final class FlatTileCoverageTests: XCTestCase {
         let polygon = Self.square(minX: 256.1, minY: 250.1, maxX: 256.9, maxY: 250.9)
         let threshold = FlatDistanceCoverage.threshold(ofLevel: 1, cameraDistance: 1.2)
         func output(eyeDistance: Double, targetZoom: Int = Self.zoom, polygon: CoveragePolygon = polygon) -> [VisibleTile] {
-            coverage.targets(targetZoom: targetZoom, camera: Self.sideCamera(tile: tile, eyeDistance: eyeDistance), polygon: polygon)
+            coverage.targets(targetZoom: targetZoom, inputs: Self.sideInputs(tile: tile, eyeDistance: eyeDistance), polygon: polygon)
         }
         XCTAssertTrue(output(eyeDistance: threshold * 0.9).contains(tile))
         XCTAssertTrue(output(eyeDistance: threshold * 1.05).contains(tile), "held by the memory")
@@ -409,7 +409,7 @@ final class FlatTileCoverageTests: XCTestCase {
     }
 
     /// Past the source's deepest zoom the tiles keep doubling in the world
-    /// while the camera's distance does not: measured in the tiles' own
+    /// while the inputs's distance does not: measured in the tiles' own
     /// scale, the view straight down stays exact at any overzoom.
     func testOverzoomKeepsTheNearTilesExact() {
         let polygon = Self.square(minX: 255.1, minY: 249.1, maxX: 256.9, maxY: 250.9)
@@ -419,11 +419,11 @@ final class FlatTileCoverageTests: XCTestCase {
                 expected.insert(VisibleTile(x: 255 + column, y: 249 + row, z: Self.zoom))
             }
         }
-        var camera = Self.camera(tilt: 0, distance: 1.2 / 16)
-        XCTAssertNotEqual(Set(targets(camera: camera, polygon: polygon)), expected,
-                          "Without the overzoom scale the tiles read as sixteen camera distances away")
-        camera.overzoomLevels = 4
-        XCTAssertEqual(Set(targets(camera: camera, polygon: polygon)), expected)
+        var inputs = Self.inputs(tilt: 0, distance: 1.2 / 16)
+        XCTAssertNotEqual(Set(targets(inputs: inputs, polygon: polygon)), expected,
+                          "Without the overzoom scale the tiles read as sixteen inputs distances away")
+        inputs.overzoomLevels = 4
+        XCTAssertEqual(Set(targets(inputs: inputs, polygon: polygon)), expected)
     }
 
     /// The far rows whose parents would be the backdrop's zoom or coarser
@@ -443,8 +443,8 @@ final class FlatTileCoverageTests: XCTestCase {
         let origin = ImmersiveMapProjection.flatTileOriginAndSize(x: 32, y: 31, z: zoom, loop: 0,
                                                                   flatRenderPan: state.pan, renderMapSize: state.renderMapSize)
         let eye = SIMD3<Double>(Double(origin.x) + 0.5, Double(origin.y) + 0.4, 0.3)
-        let camera = FlatCoverageCamera(eye: eye, flatRenderState: state, eyeGround: lookAt + SIMD2<Double>(0, 1.1), lookAt: lookAt)
-        let output = FlatTileCoverage().targets(targetZoom: zoom, camera: camera, polygon: polygon)
+        let inputs = FlatCoverageInputs(eye: eye, flatRenderState: state, eyeGround: lookAt + SIMD2<Double>(0, 1.1), lookAt: lookAt)
+        let output = FlatTileCoverage().targets(targetZoom: zoom, inputs: inputs, polygon: polygon)
         XCTAssertFalse(output.isEmpty)
         XCTAssertTrue(output.allSatisfy { $0.z > TileCulling.flatBackdropZoomLevel },
                       "Nothing at the backdrop's zoom or coarser is placed: \(output)")
@@ -463,10 +463,10 @@ final class FlatTileCoverageTests: XCTestCase {
         let origin = ImmersiveMapProjection.flatTileOriginAndSize(x: 0, y: 0, z: zoom, loop: 0,
                                                                   flatRenderPan: state.pan, renderMapSize: state.renderMapSize)
         let eye = SIMD3<Double>(Double(origin.x) - 0.6, Double(origin.y) + 0.5, 0.2)
-        let camera = FlatCoverageCamera(eye: eye, flatRenderState: state,
+        let inputs = FlatCoverageInputs(eye: eye, flatRenderState: state,
                                         eyeGround: lookAt + SIMD2<Double>(-1.1, 0), lookAt: lookAt,
                                         backdropZoom: nil)
-        let output = FlatTileCoverage().targets(targetZoom: zoom, camera: camera, polygon: polygon)
+        let output = FlatTileCoverage().targets(targetZoom: zoom, inputs: inputs, polygon: polygon)
         for loop: Int8 in [0, 1] {
             for x in 0 ... 1 {
                 for y in 0 ... 1 {

@@ -116,7 +116,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
             // The buildings: a partition of the near field over the resident
             // tiles, never a substitute (see the planner).
             let eyeGroundCell: SIMD2<Double>? = frameContext.renderSurfaceMode == .flat
-                ? FlatCoverageCamera.eyeGround(eye: frameContext.cameraEye,
+                ? FlatCoverageInputs.eyeGround(eye: frameContext.cameraEye,
                                                flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                                lookAt: SIMD2<Double>(center.tileX, center.tileY),
                                                targetZoom: tileZoomLevel)

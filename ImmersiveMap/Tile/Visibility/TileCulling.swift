@@ -38,10 +38,10 @@ class TileCulling {
 
         switch resolvedPresentation.renderSurfaceMode {
         case .spherical:
-            let camera = GlobeCoverageCamera(eye: cameraEye,
+            let inputs = GlobeCoverageInputs(eye: cameraEye,
                                              globe: resolvedPresentation.globeRenderState.globeUniform,
                                              farRadius: farRadius)
-            let resolution = globeCoverage.targets(targetZoom: targetZoom, camera: camera, frustum: cameraFrustum)
+            let resolution = globeCoverage.targets(targetZoom: targetZoom, inputs: inputs, frustum: cameraFrustum)
             visibleTiles = resolution.targets
             backdropTiles = []
             recordGlobeMetrics(resolution.metrics, diagnostics: diagnostics)
@@ -49,14 +49,14 @@ class TileCulling {
             let flatRenderState = resolvedPresentation.flatRenderState
             if let polygon = CoveragePolygonBuilder.make(cameraMatrix: cameraMatrix) {
                 let hasBackdrop = targetZoom > Self.flatBackdropZoomLevel
-                let camera = FlatCoverageCamera.make(eye: cameraEye,
+                let inputs = FlatCoverageInputs.make(eye: cameraEye,
                                                      flatRenderState: flatRenderState,
                                                      center: center,
                                                      targetZoom: targetZoom,
                                                      cameraZoom: cameraState.zoom,
                                                      backdropZoom: hasBackdrop ? Self.flatBackdropZoomLevel : nil,
                                                      farRadius: farRadius)
-                visibleTiles = flatCoverage.targets(targetZoom: targetZoom, camera: camera, polygon: polygon)
+                visibleTiles = flatCoverage.targets(targetZoom: targetZoom, inputs: inputs, polygon: polygon)
                 // The backdrop: the coarse tiles under the whole footprint, all
                 // the way to the horizon, so the coverage's edge is never
                 // drawn in.

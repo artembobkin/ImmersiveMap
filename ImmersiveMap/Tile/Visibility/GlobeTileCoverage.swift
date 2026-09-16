@@ -25,11 +25,12 @@ struct GlobeCoverageResolution {
     let metrics: GlobeCullingMetrics
 }
 
-/// The globe camera as the coverage sees it: the eye in world units (the
-/// camera looks at the world origin, the sphere's front point, and the pan
-/// turns the sphere under it) and the globe it looks at, whose pan and
-/// radius place every tile's centre in that world.
-struct GlobeCoverageCamera {
+/// What the globe coverage walk reads, taken off the frame once: the eye
+/// in world units (the camera looks at the world origin, the sphere's
+/// front point, and the pan turns the sphere under it), the globe it looks
+/// at, whose pan and radius place every tile's centre in that world, and
+/// the walk's reach.
+struct GlobeCoverageInputs {
     var eye: SIMD3<Float>
     var globe: GlobeUniform
     /// The coverage's reach in camera distances, shared with the flat map
@@ -67,7 +68,7 @@ final class GlobeTileCoverage {
     private struct Walk {
         let targetZoom: Int
         let frustum: Frustum
-        let inputs: GlobeVisibilityInputs
+        let visibility: GlobeVisibilityInputs
         let eye: SIMD3<Float>
         let cameraDistance: Double
         let reach: Double
@@ -77,7 +78,7 @@ final class GlobeTileCoverage {
         var metrics = GlobeCullingMetrics.zero
     }
 
-    func targets(targetZoom: Int, camera: GlobeCoverageCamera, frustum: Frustum?) -> GlobeCoverageResolution {
+    func targets(targetZoom: Int, inputs: GlobeCoverageInputs, frustum: Frustum?) -> GlobeCoverageResolution {
         let startTime = CACurrentMediaTime()
         guard targetZoom >= 0, let frustum else {
             leafDrops.removeAll()
@@ -88,13 +89,13 @@ final class GlobeTileCoverage {
             previousTargetZoom = targetZoom
         }
         nextLeafDrops.removeAll(keepingCapacity: true)
-        let cameraDistance = Double(simd_length(camera.eye))
+        let cameraDistance = Double(simd_length(inputs.eye))
         var walk = Walk(targetZoom: targetZoom,
                         frustum: frustum,
-                        inputs: GlobeVisibilityModel.makeInputs(globe: camera.globe, cameraEye: camera.eye),
-                        eye: camera.eye,
+                        visibility: GlobeVisibilityModel.makeInputs(globe: inputs.globe, cameraEye: inputs.eye),
+                        eye: inputs.eye,
                         cameraDistance: cameraDistance,
-                        reach: camera.farRadius * cameraDistance,
+                        reach: inputs.farRadius * cameraDistance,
                         usesRule: targetZoom > Self.floorZoom && cameraDistance > 0)
         visit(Tile(x: 0, y: 0, z: 0), accepted: false, walk: &walk)
         leafDrops = nextLeafDrops
@@ -106,13 +107,13 @@ final class GlobeTileCoverage {
     /// whole, so they are not asked again below it.
     private func visit(_ tile: Tile, accepted: Bool, walk: inout Walk) {
         walk.metrics.visitedNodeCount += 1
-        if walk.inputs.transition > 0, walk.targetZoom <= transitionLowZoomFallbackLimit {
+        if walk.visibility.transition > 0, walk.targetZoom <= transitionLowZoomFallbackLimit {
             acceptLeafDescendants(of: tile, walk: &walk)
             return
         }
         var accepted = accepted
         if accepted == false {
-            switch evaluateVisibility(for: tile, targetZoom: walk.targetZoom, frustum: walk.frustum, inputs: walk.inputs) {
+            switch evaluateVisibility(for: tile, targetZoom: walk.targetZoom, frustum: walk.frustum, inputs: walk.visibility) {
             case .rejectFrustum:
                 walk.metrics.frustumRejectCount += 1
                 return
@@ -137,7 +138,7 @@ final class GlobeTileCoverage {
             return
         }
 
-        let bound = GlobeVisibilityModel.tileBound(tile: tile, inputs: walk.inputs)
+        let bound = GlobeVisibilityModel.tileBound(tile: tile, inputs: walk.visibility)
         let centerDistance = Double(simd_length(bound.center - walk.eye))
         if tile.z == walk.targetZoom {
             // A leaf: exact by its centre, with the memory.

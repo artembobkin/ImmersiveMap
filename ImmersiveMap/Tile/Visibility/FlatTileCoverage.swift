@@ -53,7 +53,7 @@ final class FlatTileCoverage {
 
     private struct Walk {
         let targetZoom: Int
-        let camera: FlatCoverageCamera
+        let inputs: FlatCoverageInputs
         let polygon: CoveragePolygon
         let cameraDistance: Double
         /// The reach in world units, nil without a backdrop.
@@ -63,7 +63,7 @@ final class FlatTileCoverage {
         var visited = 0
     }
 
-    func targets(targetZoom: Int, camera: FlatCoverageCamera, polygon: CoveragePolygon) -> [VisibleTile] {
+    func targets(targetZoom: Int, inputs: FlatCoverageInputs, polygon: CoveragePolygon) -> [VisibleTile] {
         guard targetZoom >= 0 else {
             leafDrops.removeAll()
             return []
@@ -73,16 +73,16 @@ final class FlatTileCoverage {
             previousTargetZoom = targetZoom
         }
         nextLeafDrops.removeAll(keepingCapacity: true)
-        let lookAtWorld = FlatDistanceCoverage.worldPoint(ofTilePoint: camera.lookAt, zoom: targetZoom,
-                                                          flatRenderState: camera.flatRenderState)
+        let lookAtWorld = FlatDistanceCoverage.worldPoint(ofTilePoint: inputs.lookAt, zoom: targetZoom,
+                                                          flatRenderState: inputs.flatRenderState)
         // In the tiles' own scale: past the source's deepest zoom the tiles
         // keep doubling while the camera's distance does not.
-        let cameraDistance = simd_length(camera.eye - lookAtWorld) * pow(2.0, Double(max(0, camera.overzoomLevels)))
+        let cameraDistance = simd_length(inputs.eye - lookAtWorld) * pow(2.0, Double(max(0, inputs.overzoomLevels)))
         var walk = Walk(targetZoom: targetZoom,
-                        camera: camera,
+                        inputs: inputs,
                         polygon: polygon,
                         cameraDistance: cameraDistance,
-                        reach: camera.backdropZoom == nil ? nil : camera.farRadius * cameraDistance)
+                        reach: inputs.backdropZoom == nil ? nil : inputs.farRadius * cameraDistance)
         for loop in Self.loops {
             visit(VisibleTile(x: 0, y: 0, z: 0, loop: loop), walk: &walk)
         }
@@ -98,7 +98,7 @@ final class FlatTileCoverage {
         // leave, so a shallow world keeps them all.
         var kept = Array(walk.placed.keys)
         let parents = kept.filter { $0.z < targetZoom }
-        if camera.backdropZoom != nil, parents.count > FlatDistanceCoverage.maximumParents {
+        if inputs.backdropZoom != nil, parents.count > FlatDistanceCoverage.maximumParents {
             let distances = parents.map { walk.placed[$0]! }.sorted()
             let cutoff = distances[FlatDistanceCoverage.maximumParents - 1] * (1 + 1e-5)
             kept = kept.filter { $0.z == targetZoom || walk.placed[$0]! <= cutoff }
@@ -133,10 +133,10 @@ final class FlatTileCoverage {
 
     private func visit(_ node: VisibleTile, walk: inout Walk) {
         walk.visited += 1
-        guard let square = Self.square(of: node, flatRenderState: walk.camera.flatRenderState, meets: walk.polygon) else {
+        guard let square = Self.square(of: node, flatRenderState: walk.inputs.flatRenderState, meets: walk.polygon) else {
             return
         }
-        let eye = walk.camera.eye
+        let eye = walk.inputs.eye
         if node.z == walk.targetZoom {
             // A leaf: exact by its centre, with the memory.
             let center = SIMD3<Double>((square.minX + square.maxX) / 2, (square.minY + square.maxY) / 2, 0)
@@ -150,7 +150,7 @@ final class FlatTileCoverage {
             if drop == 0 {
                 walk.placed[node] = distance
             } else if let ancestor = node.tile.findParentTile(atZoom: max(0, node.z - drop)),
-                      walk.camera.backdropZoom.map({ ancestor.z > $0 }) ?? true {
+                      walk.inputs.backdropZoom.map({ ancestor.z > $0 }) ?? true {
                 // Held a level coarser than the rule asks: the parent at the
                 // held level covers it, placed here if the rule did not.
                 let target = VisibleTile(tile: ancestor, loop: node.loop)
@@ -175,7 +175,7 @@ final class FlatTileCoverage {
         // so a band that only grazes the edge does not place it. The inset
         // part may lie outside the view while the tile still holds leaves
         // in it, which is why the descent is decided on the whole square.
-        let inset = walk.camera.flatRenderState.renderMapSize / Double(1 << walk.targetZoom) / 2
+        let inset = walk.inputs.flatRenderState.renderMapSize / Double(1 << walk.targetZoom) / 2
         let sampled = Square(minX: square.minX + inset, minY: square.minY + inset,
                              maxX: square.maxX - inset, maxY: square.maxY - inset)
         if let (nearSampled, farSampled) = Self.distances(from: eye, toSquare: sampled, clippedTo: walk.polygon) {
@@ -190,7 +190,7 @@ final class FlatTileCoverage {
             let coarsest = max(0, walk.targetZoom - FlatDistanceCoverage.drop(distance: farDistance,
                                                                               cameraDistance: walk.cameraDistance))
             if nearSampled <= (walk.reach ?? .infinity), node.z >= coarsest, node.z <= finest,
-               walk.camera.backdropZoom.map({ node.z > $0 }) ?? true {
+               walk.inputs.backdropZoom.map({ node.z > $0 }) ?? true {
                 // Keyed by where the tile's band starts inside it: the nearest
                 // ground that wants this zoom, which is what the ceiling ranks
                 // the parents by.

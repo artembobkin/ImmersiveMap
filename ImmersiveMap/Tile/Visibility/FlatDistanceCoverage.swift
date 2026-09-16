@@ -4,14 +4,15 @@
 import Foundation
 import simd
 
-/// The flat camera as the coverage sees it: the eye in world units (the
-/// engine's camera looks at the world origin, the flat pan moves the world
-/// under it, so this is the frame's eye as it is), the flat render state
-/// that places tiles in that world, and the two ground points in tile
-/// units of the target zoom: the eye's, which the building coverage
-/// measures its field from, and the look-at point, which the coverage
-/// projects into the world for the camera's own distance.
-struct FlatCoverageCamera {
+/// What the flat coverage walk reads, taken off the frame once: the eye
+/// in world units (the engine's camera looks at the world origin, the flat
+/// pan moves the world under it, so this is the frame's eye as it is), the
+/// flat render state that places tiles in that world, the two ground
+/// points in tile units of the target zoom (the eye's, which the building
+/// coverage measures its field from, and the look-at point, which the
+/// coverage projects into the world for the camera's own distance), and
+/// the walk's own knobs: the overzoom, the backdrop zoom and the reach.
+struct FlatCoverageInputs {
     var eye: SIMD3<Double>
     var flatRenderState: FlatRenderState
     var eyeGround: SIMD2<Double>
@@ -30,7 +31,7 @@ struct FlatCoverageCamera {
     /// the backdrop.
     var farRadius: Double = FlatDistanceCoverage.farRadius
 
-    /// The frame's flat camera as the coverage reads it. The engine's camera
+    /// The frame's inputs as the coverage reads them. The engine's camera
     /// looks at the world origin (the pan moves the world under it), so the
     /// eye is taken as it is; its ground point is its x and y over the
     /// target zoom's tile size, away from the look-at point in tile units,
@@ -41,9 +42,9 @@ struct FlatCoverageCamera {
                      targetZoom: Int,
                      cameraZoom: Double,
                      backdropZoom: Int?,
-                     farRadius: Double) -> FlatCoverageCamera {
+                     farRadius: Double) -> FlatCoverageInputs {
         let lookAt = SIMD2<Double>(center.tileX, center.tileY)
-        return FlatCoverageCamera(eye: SIMD3<Double>(Double(eye.x), Double(eye.y), Double(eye.z)),
+        return FlatCoverageInputs(eye: SIMD3<Double>(Double(eye.x), Double(eye.y), Double(eye.z)),
                                   flatRenderState: flatRenderState,
                                   eyeGround: eyeGround(eye: eye, flatRenderState: flatRenderState, lookAt: lookAt, targetZoom: targetZoom),
                                   lookAt: lookAt,
