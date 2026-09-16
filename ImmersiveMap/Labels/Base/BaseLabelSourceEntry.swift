@@ -23,7 +23,7 @@ struct BaseLabelSourceEntry {
 
         for placeTile in placeTiles {
             let entry = BaseLabelSourceEntry(ownerKey: VisibleTile(tile: placeTile.metalTile.tile,
-                                                                   loop: placeTile.placeIn.loop),
+                                                                   worldWrap: placeTile.placeIn.worldWrap),
                                              metalTile: placeTile.metalTile,
                                              lodKind: placeTile.lodKind)
             if let existingEntry = bestEntryByOwnerKey[entry.ownerKey] {
@@ -47,7 +47,7 @@ struct BaseLabelSourceEntry {
             hasher.combine(ownerKey.x)
             hasher.combine(ownerKey.y)
             hasher.combine(ownerKey.z)
-            hasher.combine(ownerKey.loop)
+            hasher.combine(ownerKey.worldWrap)
             hasher.combine(entry.lodKind.rawValue)
             hasher.combine(entry.metalTile.tile.x)
             hasher.combine(entry.metalTile.tile.y)
@@ -73,7 +73,7 @@ struct BaseLabelSourceEntry {
         if lhs.ownerKey.y != rhs.ownerKey.y {
             return lhs.ownerKey.y < rhs.ownerKey.y
         }
-        return lhs.ownerKey.loop < rhs.ownerKey.loop
+        return lhs.ownerKey.worldWrap < rhs.ownerKey.worldWrap
     }
 
     private static func preferredWinner(lhs: BaseLabelSourceEntry, rhs: BaseLabelSourceEntry) -> Bool {

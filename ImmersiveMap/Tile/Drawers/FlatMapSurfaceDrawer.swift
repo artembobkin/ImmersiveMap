@@ -65,20 +65,20 @@ enum FlatMapSurfaceDrawer {
         // Unique SOURCES, not placements: a coarse tile standing in for
         // several missing slots draws once at full extent, and the
         // tile-priority stencil keeps it out of every slot a finer tile
-        // owns (TileSourceStencilPriority). The loop is part of the key:
+        // owns (TileSourceStencilPriority). The world wrap is part of the key:
         // the flat world's wrap copies place the same tile at different
         // origins across the seam. Finest first, so the owner writes win.
         struct SourceKey: Hashable {
             let tile: Tile
-            let loop: Int8
+            let worldWrap: Int8
         }
         var seenSources = Set<SourceKey>()
-        var uniqueSources: [(metalTile: MetalTile, loop: Int8)] = []
+        var uniqueSources: [(metalTile: MetalTile, worldWrap: Int8)] = []
         uniqueSources.reserveCapacity(placeTilesContext.tilePlacements.count)
         for placeTile in placeTilesContext.tilePlacements {
-            let key = SourceKey(tile: placeTile.metalTile.tile, loop: placeTile.placeIn.loop)
+            let key = SourceKey(tile: placeTile.metalTile.tile, worldWrap: placeTile.placeIn.worldWrap)
             if seenSources.insert(key).inserted {
-                uniqueSources.append((placeTile.metalTile, placeTile.placeIn.loop))
+                uniqueSources.append((placeTile.metalTile, placeTile.placeIn.worldWrap))
             }
         }
         uniqueSources.sort { $0.metalTile.tile.z > $1.metalTile.tile.z }
@@ -96,7 +96,7 @@ enum FlatMapSurfaceDrawer {
             let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: source.metalTile.tile.x,
                                                                              y: source.metalTile.tile.y,
                                                                              z: source.metalTile.tile.z,
-                                                                             loop: source.loop,
+                                                                             worldWrap: source.worldWrap,
                                                                              flatRenderPan: flatRenderState.pan,
                                                                              renderMapSize: flatRenderState.renderMapSize)
             return RoadDistanceLOD.tileBeyondCutoff(centerWorld: roadFade.centerWorld,
@@ -106,7 +106,7 @@ enum FlatMapSurfaceDrawer {
 
         func drawLayer(_ keyPath: KeyPath<TileBuffers, TileBuffers.GeometryLayer>,
                        bandOffset: Float,
-                       sources: [(metalTile: MetalTile, loop: Int8)]? = nil,
+                       sources: [(metalTile: MetalTile, worldWrap: Int8)]? = nil,
                        distanceFade: TileRoadDistanceFadeUniform = .disabled,
                        primitiveType: MTLPrimitiveType = .triangle,
                        runFilter: ((GroundStyleRun) -> Bool)? = nil) {
@@ -114,7 +114,7 @@ enum FlatMapSurfaceDrawer {
                 drawFlatGeometryLayer(renderEncoder: renderEncoder,
                                       buffers: source.metalTile.tileBuffers[keyPath: keyPath],
                                       tile: source.metalTile.tile,
-                                      loop: source.loop,
+                                      worldWrap: source.worldWrap,
                                       flatRenderState: flatRenderState,
                                       pixelsPerPoint: pixelsPerPoint,
                                       drawableHeightPx: drawableSizePx.y,
@@ -208,7 +208,7 @@ enum FlatMapSurfaceDrawer {
                     drawFlatGeometryLayer(renderEncoder: renderEncoder,
                                           buffers: structureBucket.layer(for: role),
                                           tile: source.metalTile.tile,
-                                          loop: source.loop,
+                                          worldWrap: source.worldWrap,
                                           flatRenderState: flatRenderState,
                                           pixelsPerPoint: pixelsPerPoint,
                                           drawableHeightPx: drawableSizePx.y,
@@ -239,7 +239,7 @@ enum FlatMapSurfaceDrawer {
                 drawFlatGeometryLayer(renderEncoder: renderEncoder,
                                       buffers: structureBucket.layer(for: .overlay),
                                       tile: source.metalTile.tile,
-                                      loop: source.loop,
+                                      worldWrap: source.worldWrap,
                                       flatRenderState: flatRenderState,
                                       pixelsPerPoint: pixelsPerPoint,
                                       drawableHeightPx: drawableSizePx.y,
@@ -262,7 +262,7 @@ enum FlatMapSurfaceDrawer {
     private static func drawFlatGeometryLayer(renderEncoder: MTLRenderCommandEncoder,
                                               buffers: TileBuffers.GeometryLayer,
                                               tile: Tile,
-                                              loop: Int8,
+                                              worldWrap: Int8,
                                               flatRenderState: FlatRenderState,
                                               pixelsPerPoint: Float,
                                               drawableHeightPx: Float,
@@ -277,7 +277,7 @@ enum FlatMapSurfaceDrawer {
         let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
                                                                          y: tile.y,
                                                                          z: tile.z,
-                                                                         loop: loop,
+                                                                         worldWrap: worldWrap,
                                                                          flatRenderPan: flatRenderState.pan,
                                                                          renderMapSize: flatRenderState.renderMapSize)
         let scale = originAndSize.z / 4096.0

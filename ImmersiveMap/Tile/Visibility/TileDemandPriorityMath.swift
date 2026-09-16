@@ -27,7 +27,7 @@ enum TileDemandPriorityMath {
                 let direct = abs(wrappedCenterX - tileCenterX)
                 dx = min(direct, 1.0 - direct)
             case .flat:
-                dx = abs(wrappedCenterX - (tileCenterX + Double(target.loop)))
+                dx = abs(wrappedCenterX - (tileCenterX + Double(target.worldWrap)))
             }
             let dy = abs(clampedCenterY - tileCenterY)
             return max(dx, dy)
@@ -44,8 +44,8 @@ enum TileDemandPriorityMath {
                 if left.z != right.z {
                     return left.z > right.z
                 }
-                if left.loop != right.loop {
-                    return left.loop < right.loop
+                if left.worldWrap != right.worldWrap {
+                    return left.worldWrap < right.worldWrap
                 }
                 if left.x != right.x {
                     return left.x < right.x

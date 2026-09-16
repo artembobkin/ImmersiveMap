@@ -33,7 +33,7 @@ final class ShadowMapReuseController {
     struct CasterKey: Hashable {
         let tile: ObjectIdentifier
         let placeIn: Tile
-        let loop: Int8
+        let worldWrap: Int8
     }
 
     private var fit: ShadowAnchoredFit?
@@ -116,7 +116,7 @@ final class ShadowMapReuseController {
         where placement.metalTile.tileBuffers.extruded.indicesCount > 0 {
             keys.insert(CasterKey(tile: ObjectIdentifier(placement.metalTile),
                                   placeIn: placement.placeIn.tile,
-                                  loop: placement.placeIn.loop))
+                                  worldWrap: placement.placeIn.worldWrap))
         }
         return keys
     }

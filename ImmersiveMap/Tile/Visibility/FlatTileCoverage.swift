@@ -38,7 +38,7 @@ import simd
 /// (`FlatDistanceCoverage.maximumParents`) trims the farthest when a
 /// pose asks for more.
 final class FlatTileCoverage {
-    private static let loops: [Int8] = [-1, 0, 1]
+    private static let worldWraps: [Int8] = [-1, 0, 1]
 
     /// How much nearer than the rule asks the walk looks into a tile: a
     /// leaf the memory holds exact is at most this far past the exact
@@ -83,8 +83,8 @@ final class FlatTileCoverage {
                         polygon: polygon,
                         cameraDistance: cameraDistance,
                         reach: inputs.backdropZoom == nil ? nil : inputs.farRadius * cameraDistance)
-        for loop in Self.loops {
-            visit(VisibleTile(x: 0, y: 0, z: 0, loop: loop), walk: &walk)
+        for worldWrap in Self.worldWraps {
+            visit(VisibleTile(x: 0, y: 0, z: 0, worldWrap: worldWrap), walk: &walk)
         }
         leafDrops = nextLeafDrops
         visitedNodeCount = walk.visited
@@ -121,11 +121,11 @@ final class FlatTileCoverage {
                 visit(child)
             }
         }
-        for loop in loops {
-            visit(VisibleTile(x: 0, y: 0, z: 0, loop: loop))
+        for worldWrap in worldWraps {
+            visit(VisibleTile(x: 0, y: 0, z: 0, worldWrap: worldWrap))
         }
         return tiles.sorted { lhs, rhs in
-            if lhs.loop != rhs.loop { return lhs.loop < rhs.loop }
+            if lhs.worldWrap != rhs.worldWrap { return lhs.worldWrap < rhs.worldWrap }
             if lhs.x != rhs.x { return lhs.x < rhs.x }
             return lhs.y < rhs.y
         }
@@ -153,7 +153,7 @@ final class FlatTileCoverage {
                       walk.inputs.backdropZoom.map({ ancestor.z > $0 }) ?? true {
                 // Held a level coarser than the rule asks: the parent at the
                 // held level covers it, placed here if the rule did not.
-                let target = VisibleTile(tile: ancestor, loop: node.loop)
+                let target = VisibleTile(tile: ancestor, worldWrap: node.worldWrap)
                 walk.placed[target] = min(walk.placed[target] ?? .infinity, distance)
             }
             return
@@ -291,7 +291,7 @@ final class FlatTileCoverage {
 
     /// The tile's square in world units, nil when the polygon misses it.
     private static func square(of node: VisibleTile, flatRenderState: FlatRenderState, meets polygon: CoveragePolygon) -> Square? {
-        let origin = ImmersiveMapProjection.flatTileOriginAndSize(x: node.x, y: node.y, z: node.z, loop: node.loop,
+        let origin = ImmersiveMapProjection.flatTileOriginAndSize(x: node.x, y: node.y, z: node.z, worldWrap: node.worldWrap,
                                                                   flatRenderPan: flatRenderState.pan,
                                                                   renderMapSize: flatRenderState.renderMapSize)
         let square = Square(minX: Double(origin.x),
@@ -308,17 +308,17 @@ final class FlatTileCoverage {
         let x = node.x * 2
         let y = node.y * 2
         let z = node.z + 1
-        return [VisibleTile(x: x, y: y, z: z, loop: node.loop),
-                VisibleTile(x: x + 1, y: y, z: z, loop: node.loop),
-                VisibleTile(x: x, y: y + 1, z: z, loop: node.loop),
-                VisibleTile(x: x + 1, y: y + 1, z: z, loop: node.loop)]
+        return [VisibleTile(x: x, y: y, z: z, worldWrap: node.worldWrap),
+                VisibleTile(x: x + 1, y: y, z: z, worldWrap: node.worldWrap),
+                VisibleTile(x: x, y: y + 1, z: z, worldWrap: node.worldWrap),
+                VisibleTile(x: x + 1, y: y + 1, z: z, worldWrap: node.worldWrap)]
     }
 
     /// Renderer-stable order: finest first, then by world copy and position.
     static func sorted(_ targets: [VisibleTile]) -> [VisibleTile] {
         targets.sorted { lhs, rhs in
             if lhs.z != rhs.z { return lhs.z > rhs.z }
-            if lhs.loop != rhs.loop { return lhs.loop < rhs.loop }
+            if lhs.worldWrap != rhs.worldWrap { return lhs.worldWrap < rhs.worldWrap }
             if lhs.x != rhs.x { return lhs.x < rhs.x }
             return lhs.y < rhs.y
         }

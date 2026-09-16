@@ -88,7 +88,7 @@ final class TileProjectionIndexSubsystem: RenderSubsystem {
         var seenTiles: Set<VisibleTile> = []
 
         for placeTile in placeTiles {
-            let projectionTile = VisibleTile(tile: placeTile.metalTile.tile, loop: placeTile.placeIn.loop)
+            let projectionTile = VisibleTile(tile: placeTile.metalTile.tile, worldWrap: placeTile.placeIn.worldWrap)
             if seenTiles.insert(projectionTile).inserted {
                 projectionTiles.append(projectionTile)
             }
@@ -104,7 +104,7 @@ final class TileProjectionIndexSubsystem: RenderSubsystem {
             hasher.combine(tile.x)
             hasher.combine(tile.y)
             hasher.combine(tile.z)
-            hasher.combine(tile.loop)
+            hasher.combine(tile.worldWrap)
         }
         return hasher.finalize()
     }

@@ -44,15 +44,15 @@ final class TileOwnershipRenderSubsystem: RenderSubsystem {
         // copies at the seam are distinct quads of the same tile.
         struct SourceKey: Hashable {
             let tile: Tile
-            let loop: Int8
+            let worldWrap: Int8
         }
         var seenSources = Set<SourceKey>()
-        var uniqueSources: [(tile: Tile, loop: Int8)] = []
+        var uniqueSources: [(tile: Tile, worldWrap: Int8)] = []
         uniqueSources.reserveCapacity(placements.count)
         for placeTile in placements {
-            let key = SourceKey(tile: placeTile.metalTile.tile, loop: placeTile.placeIn.loop)
+            let key = SourceKey(tile: placeTile.metalTile.tile, worldWrap: placeTile.placeIn.worldWrap)
             if seenSources.insert(key).inserted {
-                uniqueSources.append((placeTile.metalTile.tile, placeTile.placeIn.loop))
+                uniqueSources.append((placeTile.metalTile.tile, placeTile.placeIn.worldWrap))
             }
         }
 
@@ -66,7 +66,7 @@ final class TileOwnershipRenderSubsystem: RenderSubsystem {
             let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: source.tile.x,
                                                                              y: source.tile.y,
                                                                              z: source.tile.z,
-                                                                             loop: source.loop,
+                                                                             worldWrap: source.worldWrap,
                                                                              flatRenderPan: flatRenderState.pan,
                                                                              renderMapSize: flatRenderState.renderMapSize)
             let scale = originAndSize.z / 4096.0

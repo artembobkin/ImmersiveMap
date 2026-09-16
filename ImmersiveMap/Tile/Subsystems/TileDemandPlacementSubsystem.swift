@@ -69,7 +69,7 @@ final class TileDemandPlacementSubsystem: RenderSubsystem {
         // stand-in is asked for. What covers a loading target is what is
         // resident already (the working set keeps the tiles that stand in
         // for one, see `TileWorkingSetStore`), and beneath it the backdrop
-        // or the pinned world cover. `VisibleTile` includes `loop`, so
+        // or the pinned world cover. `VisibleTile` includes `worldWrap`, so
         // flat-mode wrapped copies share one content tile (`Tile`); the
         // list is deduplicated.
         let demandedSourceTiles = Self.uniqueSourceTiles(of: targets + backdropTiles)

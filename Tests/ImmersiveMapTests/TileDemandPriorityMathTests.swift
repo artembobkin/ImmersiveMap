@@ -37,12 +37,12 @@ final class TileDemandPriorityMathTests: XCTestCase {
         XCTAssertEqual(Set(sorted.prefix(2)), Set([nearDetailed, nearbyDetailed]))
     }
 
-    func testFlatSortRespectsLoopOffset() {
-        // Center near the world's right edge (x=0.9): the loop 1 copy of tile x=0
-        // (world position 1.0625) is closer than its loop 0 copy (0.0625).
+    func testFlatSortRespectsWorldWrapOffset() {
+        // Center near the world's right edge (x=0.9): the world copy 1 of tile x=0
+        // (world position 1.0625) is closer than its copy 0 (0.0625).
         let center = SIMD2<Double>(0.9, 0.5)
-        let wrappedCopy = VisibleTile(x: 0, y: 2, z: 3, loop: 1)
-        let baseCopy = VisibleTile(x: 0, y: 2, z: 3, loop: 0)
+        let wrappedCopy = VisibleTile(x: 0, y: 2, z: 3, worldWrap: 1)
+        let baseCopy = VisibleTile(x: 0, y: 2, z: 3, worldWrap: 0)
 
         let sorted = TileDemandPriorityMath.sortedByCameraProximity([baseCopy, wrappedCopy],
                                                                     centerWorldMercator: center,
@@ -67,7 +67,7 @@ final class TileDemandPriorityMathTests: XCTestCase {
 
     func testSortIsDeterministicForEqualDistances() {
         // Four tiles symmetric around the center: equal distances, the order
-        // must be stable (loop/x/y) from call to call.
+        // must be stable (world wrap, x, y) from call to call.
         let center = SIMD2<Double>(0.5, 0.5)
         let tiles = [
             VisibleTile(x: 4, y: 3, z: 3),

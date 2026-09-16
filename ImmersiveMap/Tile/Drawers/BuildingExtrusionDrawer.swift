@@ -106,7 +106,7 @@ enum BuildingExtrusionDrawer {
             let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
                                                                              y: tile.y,
                                                                              z: tile.z,
-                                                                             loop: placeIn.loop,
+                                                                             worldWrap: placeIn.worldWrap,
                                                                              flatRenderPan: flatRenderState.pan,
                                                                              renderMapSize: flatRenderState.renderMapSize)
             let scale = originAndSize.z / 4096.0
@@ -167,7 +167,7 @@ enum BuildingExtrusionDrawer {
             let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
                                                                              y: tile.y,
                                                                              z: tile.z,
-                                                                             loop: placeIn.loop,
+                                                                             worldWrap: placeIn.worldWrap,
                                                                              flatRenderPan: flatRenderState.pan,
                                                                              renderMapSize: flatRenderState.renderMapSize)
             let scale = originAndSize.z / 4096.0

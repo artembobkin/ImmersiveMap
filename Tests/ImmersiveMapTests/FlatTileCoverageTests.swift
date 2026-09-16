@@ -25,7 +25,7 @@ final class FlatTileCoverageTests: XCTestCase {
     }
 
     private static func worldCenter(of tile: VisibleTile) -> SIMD3<Double> {
-        let origin = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x, y: tile.y, z: tile.z, loop: tile.loop,
+        let origin = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x, y: tile.y, z: tile.z, worldWrap: tile.worldWrap,
                                                                   flatRenderPan: flatRenderState.pan,
                                                                   renderMapSize: flatRenderState.renderMapSize)
         return SIMD3<Double>(Double(origin.x) + Double(origin.z) / 2, Double(origin.y) + Double(origin.z) / 2, 0)
@@ -95,7 +95,7 @@ final class FlatTileCoverageTests: XCTestCase {
         var tiles: [VisibleTile] = []
         for y in minRow ... maxRow {
             for x in minColumn ... maxColumn {
-                let origin = ImmersiveMapProjection.flatTileOriginAndSize(x: x, y: y, z: zoom, loop: 0,
+                let origin = ImmersiveMapProjection.flatTileOriginAndSize(x: x, y: y, z: zoom, worldWrap: 0,
                                                                           flatRenderPan: state.pan, renderMapSize: state.renderMapSize)
                 if polygon.intersects(minX: Double(origin.x), minY: Double(origin.y),
                                       maxX: Double(origin.x) + Double(origin.z), maxY: Double(origin.y) + Double(origin.z)) {
@@ -126,14 +126,14 @@ final class FlatTileCoverageTests: XCTestCase {
             if wanted == leaf.z {
                 targets.insert(leaf)
             } else if centerInView, let parent = leaf.tile.findParentTile(atZoom: wanted) {
-                targets.insert(VisibleTile(tile: parent, loop: leaf.loop))
+                targets.insert(VisibleTile(tile: parent, worldWrap: leaf.worldWrap))
             }
         }
         return targets
     }
 
     private static func cover(of tile: VisibleTile, in output: [VisibleTile]) -> VisibleTile? {
-        output.first { $0.loop == tile.loop && ($0.tile == tile.tile || $0.tile.covers(tile.tile)) }
+        output.first { $0.worldWrap == tile.worldWrap && ($0.tile == tile.tile || $0.tile.covers(tile.tile)) }
     }
 
     private func targets(inputs: FlatCoverageInputs, polygon: CoveragePolygon, coverage: FlatTileCoverage = FlatTileCoverage()) -> [VisibleTile] {
@@ -440,7 +440,7 @@ final class FlatTileCoverageTests: XCTestCase {
         // straight above a point 1.1 tiles south of the look-at, 0.3 up.
         let polygon = CoveragePolygon(vertices: [world(SIMD2<Double>(32.2, 32.5)), world(SIMD2<Double>(32.8, 32.5)),
                                                  world(SIMD2<Double>(32.8, -1)), world(SIMD2<Double>(32.2, -1))])
-        let origin = ImmersiveMapProjection.flatTileOriginAndSize(x: 32, y: 31, z: zoom, loop: 0,
+        let origin = ImmersiveMapProjection.flatTileOriginAndSize(x: 32, y: 31, z: zoom, worldWrap: 0,
                                                                   flatRenderPan: state.pan, renderMapSize: state.renderMapSize)
         let eye = SIMD3<Double>(Double(origin.x) + 0.5, Double(origin.y) + 0.4, 0.3)
         let inputs = FlatCoverageInputs(eye: eye, flatRenderState: state, eyeGround: lookAt + SIMD2<Double>(0, 1.1), lookAt: lookAt)
@@ -460,17 +460,17 @@ final class FlatTileCoverageTests: XCTestCase {
         // The whole world and its eastern copy.
         let polygon = CoveragePolygon(vertices: [SIMD2<Float>(-1.1, -1.1), SIMD2<Float>(3.1, -1.1),
                                                  SIMD2<Float>(3.1, 1.1), SIMD2<Float>(-1.1, 1.1)])
-        let origin = ImmersiveMapProjection.flatTileOriginAndSize(x: 0, y: 0, z: zoom, loop: 0,
+        let origin = ImmersiveMapProjection.flatTileOriginAndSize(x: 0, y: 0, z: zoom, worldWrap: 0,
                                                                   flatRenderPan: state.pan, renderMapSize: state.renderMapSize)
         let eye = SIMD3<Double>(Double(origin.x) - 0.6, Double(origin.y) + 0.5, 0.2)
         let inputs = FlatCoverageInputs(eye: eye, flatRenderState: state,
                                         eyeGround: lookAt + SIMD2<Double>(-1.1, 0), lookAt: lookAt,
                                         backdropZoom: nil)
         let output = FlatTileCoverage().targets(targetZoom: zoom, inputs: inputs, polygon: polygon)
-        for loop: Int8 in [0, 1] {
+        for worldWrap: Int8 in [0, 1] {
             for x in 0 ... 1 {
                 for y in 0 ... 1 {
-                    let tile = VisibleTile(x: x, y: y, z: zoom, loop: loop)
+                    let tile = VisibleTile(x: x, y: y, z: zoom, worldWrap: worldWrap)
                     XCTAssertNotNil(Self.cover(of: tile, in: output), "\(tile) is covered in its own world copy: \(output)")
                 }
             }

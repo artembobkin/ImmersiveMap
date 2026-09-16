@@ -3,19 +3,23 @@
 
 import Foundation
 
-/// Tile instance visible in a specific wrapped world copy in flat mode.
+/// A tile in a specific copy of the world. The flat map repeats the world
+/// along the x axis so the antimeridian is never an edge, and `worldWrap`
+/// says which copy this is: 0 the world itself, -1 the copy to its west,
+/// 1 the copy to its east. The same `Tile` in two copies is two places on
+/// screen, a world's width apart.
 struct VisibleTile: Hashable {
     let tile: Tile
-    let loop: Int8
+    let worldWrap: Int8
 
-    init(tile: Tile, loop: Int8 = 0) {
+    init(tile: Tile, worldWrap: Int8 = 0) {
         self.tile = tile
-        self.loop = loop
+        self.worldWrap = worldWrap
     }
 
-    init(x: Int, y: Int, z: Int, loop: Int8 = 0) {
+    init(x: Int, y: Int, z: Int, worldWrap: Int8 = 0) {
         self.tile = Tile(x: x, y: y, z: z)
-        self.loop = loop
+        self.worldWrap = worldWrap
     }
 
     var x: Int { tile.x }

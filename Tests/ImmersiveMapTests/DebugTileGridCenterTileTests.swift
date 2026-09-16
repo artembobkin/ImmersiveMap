@@ -15,7 +15,7 @@ final class DebugTileGridCenterTileTests: XCTestCase {
         // Zoom two, so the world is a four by four grid; the centre sits inside
         // tile (2, 1) at world (0.6, 0.4).
         let placeTiles = try makePlaceTiles(coordinates: (0..<4).flatMap { row in
-            (0..<4).map { column in (x: column, y: row, loop: Int8(0)) }
+            (0..<4).map { column in (x: column, y: row, worldWrap: Int8(0)) }
         }, zoom: 2)
 
         let candidates = DebugTileGridCenterTile.candidates(placeTiles: placeTiles,
@@ -28,10 +28,10 @@ final class DebugTileGridCenterTileTests: XCTestCase {
     /// A centre landing exactly on a shared edge belongs to the tile the edge starts,
     /// never to both, or the grid would flicker between two tiles while panning.
     func testCentreOnATileEdgeBelongsToOneTileOnly() throws {
-        let placeTiles = try makePlaceTiles(coordinates: [(x: 0, y: 0, loop: 0),
-                                                          (x: 1, y: 0, loop: 0),
-                                                          (x: 0, y: 1, loop: 0),
-                                                          (x: 1, y: 1, loop: 0)],
+        let placeTiles = try makePlaceTiles(coordinates: [(x: 0, y: 0, worldWrap: 0),
+                                                          (x: 1, y: 0, worldWrap: 0),
+                                                          (x: 0, y: 1, worldWrap: 0),
+                                                          (x: 1, y: 1, worldWrap: 0)],
                                             zoom: 1)
 
         let candidates = DebugTileGridCenterTile.candidates(placeTiles: placeTiles,
@@ -42,23 +42,23 @@ final class DebugTileGridCenterTileTests: XCTestCase {
     }
 
     func testWrappedWorldCopiesAllContainTheCentre() throws {
-        let placeTiles = try makePlaceTiles(coordinates: [(x: 1, y: 0, loop: -1),
-                                                          (x: 1, y: 0, loop: 0),
-                                                          (x: 1, y: 0, loop: 1),
-                                                          (x: 0, y: 0, loop: 0)],
+        let placeTiles = try makePlaceTiles(coordinates: [(x: 1, y: 0, worldWrap: -1),
+                                                          (x: 1, y: 0, worldWrap: 0),
+                                                          (x: 1, y: 0, worldWrap: 1),
+                                                          (x: 0, y: 0, worldWrap: 0)],
                                             zoom: 1)
 
         let candidates = DebugTileGridCenterTile.candidates(placeTiles: placeTiles,
                                                             centerWorldMercator: SIMD2<Double>(0.75, 0.25))
 
         XCTAssertEqual(candidates.count, 3)
-        XCTAssertEqual(Set(candidates.map(\.placeIn.loop)), [-1, 0, 1])
+        XCTAssertEqual(Set(candidates.map(\.placeIn.worldWrap)), [-1, 0, 1])
     }
 
     func testNearestToViewportCenterPicksTheCopyUnderTheMiddleOfTheView() throws {
-        let candidates = try makePlaceTiles(coordinates: [(x: 1, y: 0, loop: -1),
-                                                          (x: 1, y: 0, loop: 0),
-                                                          (x: 1, y: 0, loop: 1)],
+        let candidates = try makePlaceTiles(coordinates: [(x: 1, y: 0, worldWrap: -1),
+                                                          (x: 1, y: 0, worldWrap: 0),
+                                                          (x: 1, y: 0, worldWrap: 1)],
                                             zoom: 1)
         let viewportSize = SIMD2<Float>(1000, 800)
         let projected = [
@@ -71,12 +71,12 @@ final class DebugTileGridCenterTileTests: XCTestCase {
                                                                       projectedCenters: projected,
                                                                       viewportSize: viewportSize)
 
-        XCTAssertEqual(picked?.placeIn.loop, 0)
+        XCTAssertEqual(picked?.placeIn.worldWrap, 0)
     }
 
     func testNearestToViewportCenterIgnoresCopiesThatDoNotProject() throws {
-        let candidates = try makePlaceTiles(coordinates: [(x: 1, y: 0, loop: 0),
-                                                          (x: 1, y: 0, loop: 1)],
+        let candidates = try makePlaceTiles(coordinates: [(x: 1, y: 0, worldWrap: 0),
+                                                          (x: 1, y: 0, worldWrap: 1)],
                                             zoom: 1)
         let projected = [
             // Closest to the middle, but behind the camera, so it is not on screen.
@@ -88,16 +88,16 @@ final class DebugTileGridCenterTileTests: XCTestCase {
                                                                       projectedCenters: projected,
                                                                       viewportSize: SIMD2<Float>(1000, 800))
 
-        XCTAssertEqual(picked?.placeIn.loop, 1)
+        XCTAssertEqual(picked?.placeIn.worldWrap, 1)
     }
 
-    private func makePlaceTiles(coordinates: [(x: Int, y: Int, loop: Int8)],
+    private func makePlaceTiles(coordinates: [(x: Int, y: Int, worldWrap: Int8)],
                                 zoom: Int) throws -> [PlaceTile] {
         try coordinates.map { coordinate in
             let tile = Tile(x: coordinate.x, y: coordinate.y, z: zoom)
             return PlaceTile(metalTile: MetalTile(tile: tile,
                                                   tileBuffers: try TileBuffersFixtures.makeEmptyTileBuffers()),
-                             placeIn: VisibleTile(tile: tile, loop: coordinate.loop),
+                             placeIn: VisibleTile(tile: tile, worldWrap: coordinate.worldWrap),
                              lodKind: .exact)
         }
     }

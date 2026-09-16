@@ -134,7 +134,7 @@ enum FlatDistanceCoverage {
     static func worldPoint(ofTilePoint point: SIMD2<Double>, zoom: Int, flatRenderState: FlatRenderState) -> SIMD3<Double> {
         let x = Int(floor(point.x))
         let y = Int(floor(point.y))
-        let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: x, y: y, z: zoom, loop: 0,
+        let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: x, y: y, z: zoom, worldWrap: 0,
                                                                          flatRenderPan: flatRenderState.pan,
                                                                          renderMapSize: flatRenderState.renderMapSize)
         let size = Double(originAndSize.z)

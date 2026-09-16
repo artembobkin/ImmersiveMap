@@ -137,12 +137,12 @@ final class TilePlacementPlannerTests: XCTestCase {
         XCTAssertEqual(placed.first?.metalTile.tile, grandchild)
     }
 
-    func testAWrappedTargetKeepsItsLoopInEveryStandIn() throws {
+    func testAWrappedTargetKeepsItsWorldWrapInEveryStandIn() throws {
         let resident = try resident([grandparent] + children)
-        let wrapped = VisibleTile(tile: parent, loop: 1)
+        let wrapped = VisibleTile(tile: parent, worldWrap: 1)
         let placed = TilePlacementPlanner.buildPlacements(targets: [wrapped], resident: resident, zoom: 5).tilePlacements
         XCTAssertEqual(Set(placed.map(\.metalTile.tile)), Set(children), "complete children win")
-        XCTAssertTrue(placed.allSatisfy { $0.placeIn.loop == 1 }, "drawn in the target's world copy")
+        XCTAssertTrue(placed.allSatisfy { $0.placeIn.worldWrap == 1 }, "drawn in the target's world copy")
 
         let ancestorOnly = try self.resident([grandparent])
         let ancestor = TilePlacementPlanner.buildPlacements(targets: [wrapped], resident: ancestorOnly, zoom: 5).tilePlacements

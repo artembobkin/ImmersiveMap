@@ -42,12 +42,12 @@ final class BuildingCoveragePlannerTests: XCTestCase {
 
     /// The whole cell in view at `zoom`: every descendant of the cell at
     /// that zoom is visible.
-    private func wholeCellVisible(at zoom: Int, loop: Int8 = 0) -> [VisibleTile] {
+    private func wholeCellVisible(at zoom: Int, worldWrap: Int8 = 0) -> [VisibleTile] {
         let span = 1 << (zoom - cell.z)
         var tiles: [VisibleTile] = []
         for dx in 0 ..< span {
             for dy in 0 ..< span {
-                tiles.append(VisibleTile(x: cell.x * span + dx, y: cell.y * span + dy, z: zoom, loop: loop))
+                tiles.append(VisibleTile(x: cell.x * span + dx, y: cell.y * span + dy, z: zoom, worldWrap: worldWrap))
             }
         }
         return tiles
@@ -255,21 +255,21 @@ final class BuildingCoveragePlannerTests: XCTestCase {
 
     func testWrappedCopiesStayApart() throws {
         // The same cell visible in two world copies: each copy draws it in
-        // its own loop, and only the copy near the eye is in the field.
-        let visible = wholeCellVisible(at: 16, loop: 0) + wholeCellVisible(at: 16, loop: 1)
-        let eyeInLoopOne = eye + SIMD2<Double>(Double(1 << 14), 0)
-        let context = BuildingCoveragePlanner.plan(resident: try resident([cell]), visibleTiles: visible, eyeGroundCell: eyeInLoopOne)
-        XCTAssertEqual(context.tilePlacements.map(\.placeIn.loop), [1])
+        // its own world copy, and only the copy near the eye is in the field.
+        let visible = wholeCellVisible(at: 16, worldWrap: 0) + wholeCellVisible(at: 16, worldWrap: 1)
+        let eyeInWorldWrapOne = eye + SIMD2<Double>(Double(1 << 14), 0)
+        let context = BuildingCoveragePlanner.plan(resident: try resident([cell]), visibleTiles: visible, eyeGroundCell: eyeInWorldWrapOne)
+        XCTAssertEqual(context.tilePlacements.map(\.placeIn.worldWrap), [1])
     }
 
     func testChildrenInAnotherWorldCopyDoNotCompleteTheCell() throws {
-        // Loop 0 sees the cell; its children are visible only in loop 1. In
-        // loop 0 nothing below the cell is needed by loop 1's view, so the
-        // cell resolves in loop 0 from what loop 0 needs.
-        let visible = wholeCellVisible(at: 16, loop: 0)
+        // World copy 0 sees the cell; its children are visible only in copy 1. In
+        // copy 0 nothing below the cell is needed by copy 1's view, so the
+        // cell resolves in copy 0 from what copy 0 needs.
+        let visible = wholeCellVisible(at: 16, worldWrap: 0)
         let context = BuildingCoveragePlanner.plan(resident: try resident([cell] + children), visibleTiles: visible, eyeGroundCell: eye)
-        XCTAssertTrue(context.tilePlacements.allSatisfy { $0.placeIn.loop == 0 })
-        XCTAssertEqual(pairs(context), own(children), "loop 0 needs all four children and has them")
+        XCTAssertTrue(context.tilePlacements.allSatisfy { $0.placeIn.worldWrap == 0 })
+        XCTAssertEqual(pairs(context), own(children), "world copy 0 needs all four children and has them")
     }
 
     /// Zoomed out past the grid, the retention still holds the tiles of
@@ -278,7 +278,7 @@ final class BuildingCoveragePlannerTests: XCTestCase {
         let resident = try resident([cell] + children)
         let coarse = [VisibleTile(x: cell.x / 2, y: cell.y / 2, z: 13)]
         XCTAssertTrue(plan(resident: resident, visible: coarse).tilePlacements.isEmpty)
-        let atTheGrid = [VisibleTile(tile: cell, loop: 0)]
+        let atTheGrid = [VisibleTile(tile: cell, worldWrap: 0)]
         XCTAssertEqual(pairs(plan(resident: resident, visible: atTheGrid)), own([cell]),
                        "At the grid's own zoom the cell draws itself")
     }

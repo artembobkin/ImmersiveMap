@@ -60,9 +60,9 @@ struct TilePlacementPlanner {
 
         /// The resident descendants of `tile` down to the search depth, and
         /// whether they cover it whole.
-        func descendants(of tile: Tile, loop: Int8, depth: Int) -> (placements: [PlaceTile], complete: Bool) {
+        func descendants(of tile: Tile, worldWrap: Int8, depth: Int) -> (placements: [PlaceTile], complete: Bool) {
             if let metalTile = resident[tile] {
-                return ([PlaceTile(metalTile: metalTile, placeIn: VisibleTile(tile: tile, loop: loop), lodKind: .retainedReplacement)], true)
+                return ([PlaceTile(metalTile: metalTile, placeIn: VisibleTile(tile: tile, worldWrap: worldWrap), lodKind: .retainedReplacement)], true)
             }
             guard depth > 0, branches.contains(tile) else {
                 return ([], false)
@@ -70,7 +70,7 @@ struct TilePlacementPlanner {
             var placements: [PlaceTile] = []
             var complete = true
             for child in children(of: tile) {
-                let resolved = descendants(of: child, loop: loop, depth: depth - 1)
+                let resolved = descendants(of: child, worldWrap: worldWrap, depth: depth - 1)
                 placements.append(contentsOf: resolved.placements)
                 complete = complete && resolved.complete
             }
@@ -100,7 +100,7 @@ struct TilePlacementPlanner {
             }
 
             let below: (placements: [PlaceTile], complete: Bool) = descendantSearchDepth > 0 && branches.contains(sourceTile)
-                ? descendants(of: sourceTile, loop: target.loop, depth: descendantSearchDepth)
+                ? descendants(of: sourceTile, worldWrap: target.worldWrap, depth: descendantSearchDepth)
                 : (placements: [], complete: false)
             below.placements.forEach(append)
             if below.complete, below.placements.isEmpty == false {

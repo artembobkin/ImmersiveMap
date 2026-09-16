@@ -86,17 +86,17 @@ enum ImmersiveMapProjection {
     }
 
     /// Returns tile origin (`x`, `y`) and size in flat render-local space.
-    /// Coordinates are view-relative: frame-local render pan and wrapped world `loop` are already applied.
+    /// Coordinates are view-relative: frame-local render pan and the world wrap (`worldWrap`, the copy of the world) are already applied.
     static func flatTileOriginAndSize(x: Int,
                                       y: Int,
                                       z: Int,
-                                      loop: Int8,
+                                      worldWrap: Int8,
                                       flatRenderPan: SIMD2<Double>,
                                       renderMapSize: Double) -> SIMD3<Float> {
         let tilesCount = 1 << z
         let tileSize = renderMapSize / Double(tilesCount)
         let halfRenderMapSize = renderMapSize * 0.5
-        let originX = Double(x) * tileSize - halfRenderMapSize + flatRenderPan.x * halfRenderMapSize + Double(loop) * renderMapSize
+        let originX = Double(x) * tileSize - halfRenderMapSize + flatRenderPan.x * halfRenderMapSize + Double(worldWrap) * renderMapSize
         // Tile row index grows SOUTH while the flat render world is y-up:
         // this is where the two meet (see TileCoordinateSpace, world spaces).
         let originY = Double(tilesCount - y - 1) * tileSize - halfRenderMapSize - flatRenderPan.y * halfRenderMapSize

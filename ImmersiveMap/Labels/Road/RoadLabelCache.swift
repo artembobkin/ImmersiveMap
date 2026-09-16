@@ -551,7 +551,7 @@ final class RoadLabelCache {
         hasher.combine(ownerKey.x)
         hasher.combine(ownerKey.y)
         hasher.combine(ownerKey.z)
-        hasher.combine(ownerKey.loop)
+        hasher.combine(ownerKey.worldWrap)
         hasher.combine(sourceKey)
         hasher.combine(labelIndex)
         hasher.combine(pathRange.start)

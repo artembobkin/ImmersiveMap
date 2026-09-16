@@ -36,7 +36,7 @@ final class FlatTileOriginCalculator {
             let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.tile.x,
                                                                     y: tile.tile.y,
                                                                     z: tile.tile.z,
-                                                                    loop: tile.loop,
+                                                                    worldWrap: tile.worldWrap,
                                                                     flatRenderPan: flatRenderState.pan,
                                                                     renderMapSize: flatRenderState.renderMapSize)
             return FlatTileOriginData(panRelativeOrigin: SIMD2<Float>(originAndSize.x, originAndSize.y),

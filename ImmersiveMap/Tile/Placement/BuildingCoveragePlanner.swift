@@ -73,30 +73,30 @@ enum BuildingCoveragePlanner {
         }
         struct Key: Hashable {
             let tile: Tile
-            let loop: Int8
+            let worldWrap: Int8
         }
 
         // What the view needs, per world copy: the targets from the grid
         // down, every ancestor of one down to the grid, and everything
         // under one.
-        var targetsByLoop: [Int8: Set<Tile>] = [:]
-        var targetAncestorsByLoop: [Int8: Set<Tile>] = [:]
+        var targetsByWorldWrap: [Int8: Set<Tile>] = [:]
+        var targetAncestorsByWorldWrap: [Int8: Set<Tile>] = [:]
         for tile in visibleTiles where tile.z >= minimumSourceZoom {
-            targetsByLoop[tile.loop, default: []].insert(tile.tile)
+            targetsByWorldWrap[tile.worldWrap, default: []].insert(tile.tile)
             var ancestor = tile.tile
             while ancestor.z > minimumSourceZoom, let parent = ancestor.findParentTile(atZoom: ancestor.z - 1) {
                 ancestor = parent
-                targetAncestorsByLoop[tile.loop, default: []].insert(ancestor)
+                targetAncestorsByWorldWrap[tile.worldWrap, default: []].insert(ancestor)
             }
         }
-        func isNeeded(_ tile: Tile, loop: Int8) -> Bool {
-            if targetsByLoop[loop]?.contains(tile) ?? false || targetAncestorsByLoop[loop]?.contains(tile) ?? false {
+        func isNeeded(_ tile: Tile, worldWrap: Int8) -> Bool {
+            if targetsByWorldWrap[worldWrap]?.contains(tile) ?? false || targetAncestorsByWorldWrap[worldWrap]?.contains(tile) ?? false {
                 return true
             }
             var ancestor = tile
             while ancestor.z > minimumSourceZoom, let parent = ancestor.findParentTile(atZoom: ancestor.z - 1) {
                 ancestor = parent
-                if targetsByLoop[loop]?.contains(ancestor) ?? false {
+                if targetsByWorldWrap[worldWrap]?.contains(ancestor) ?? false {
                     return true
                 }
             }
@@ -108,13 +108,13 @@ enum BuildingCoveragePlanner {
         // cells they belong to, per world copy the view shows.
         var present = Set<Key>()
         var cells = Set<Key>()
-        for loop in targetsByLoop.keys {
-            for tile in resident.keys where tile.z >= minimumSourceZoom && isNeeded(tile, loop: loop) {
+        for worldWrap in targetsByWorldWrap.keys {
+            for tile in resident.keys where tile.z >= minimumSourceZoom && isNeeded(tile, worldWrap: worldWrap) {
                 var ancestor = tile
                 while true {
-                    present.insert(Key(tile: ancestor, loop: loop))
+                    present.insert(Key(tile: ancestor, worldWrap: worldWrap))
                     if ancestor.z == minimumSourceZoom {
-                        cells.insert(Key(tile: ancestor, loop: loop))
+                        cells.insert(Key(tile: ancestor, worldWrap: worldWrap))
                         break
                     }
                     guard let parent = ancestor.findParentTile(atZoom: ancestor.z - 1) else {
@@ -133,24 +133,24 @@ enum BuildingCoveragePlanner {
         /// or below the target zoom a resident tile draws whole, its finer
         /// residents unused; a missing one hands its slot to the finer
         /// residents it has, and the cover fills the quadrants they leave.
-        func resolve(_ tile: Tile, loop: Int8, cover: MetalTile?) -> [PlaceTile] {
+        func resolve(_ tile: Tile, worldWrap: Int8, cover: MetalTile?) -> [PlaceTile] {
             let own = resident[tile]
             let cover = own ?? cover
             let needed: [Tile]
             if tile.z < targetZoom {
-                needed = children(of: tile).filter { isNeeded($0, loop: loop) }
-            } else if own == nil, children(of: tile).contains(where: { present.contains(Key(tile: $0, loop: loop)) }) {
+                needed = children(of: tile).filter { isNeeded($0, worldWrap: worldWrap) }
+            } else if own == nil, children(of: tile).contains(where: { present.contains(Key(tile: $0, worldWrap: worldWrap)) }) {
                 needed = children(of: tile)
             } else {
                 needed = []
             }
-            let branches = needed.filter { present.contains(Key(tile: $0, loop: loop)) }
+            let branches = needed.filter { present.contains(Key(tile: $0, worldWrap: worldWrap)) }
             guard let cover else {
-                return branches.flatMap { resolve($0, loop: loop, cover: nil) }
+                return branches.flatMap { resolve($0, worldWrap: worldWrap, cover: nil) }
             }
             func place(in slot: Tile) -> PlaceTile {
                 PlaceTile(metalTile: cover,
-                          placeIn: VisibleTile(tile: slot, loop: loop),
+                          placeIn: VisibleTile(tile: slot, worldWrap: worldWrap),
                           lodKind: cover.tile == slot ? .exact : .coarseSubstitute)
             }
             if branches.isEmpty {
@@ -158,8 +158,8 @@ enum BuildingCoveragePlanner {
             }
             var placements: [PlaceTile] = []
             for child in needed {
-                if present.contains(Key(tile: child, loop: loop)) {
-                    placements.append(contentsOf: resolve(child, loop: loop, cover: cover))
+                if present.contains(Key(tile: child, worldWrap: worldWrap)) {
+                    placements.append(contentsOf: resolve(child, worldWrap: worldWrap, cover: cover))
                 } else {
                     placements.append(place(in: child))
                 }
@@ -170,19 +170,19 @@ enum BuildingCoveragePlanner {
         var result: [PlaceTile] = []
         let cellsCount = Double(1 << minimumSourceZoom)
         for cell in cells {
-            let center = SIMD2<Double>(Double(cell.tile.x) + Double(cell.loop) * cellsCount + 0.5,
+            let center = SIMD2<Double>(Double(cell.tile.x) + Double(cell.worldWrap) * cellsCount + 0.5,
                                        Double(cell.tile.y) + 0.5)
             guard simd_length(center - eyeGroundCell) <= fieldRadiusInCells else {
                 continue
             }
-            result.append(contentsOf: resolve(cell.tile, loop: cell.loop, cover: nil))
+            result.append(contentsOf: resolve(cell.tile, worldWrap: cell.worldWrap, cover: nil))
         }
         result.sort { lhs, rhs in
             if lhs.placeIn.z != rhs.placeIn.z {
                 return lhs.placeIn.z > rhs.placeIn.z
             }
-            if lhs.placeIn.loop != rhs.placeIn.loop {
-                return lhs.placeIn.loop < rhs.placeIn.loop
+            if lhs.placeIn.worldWrap != rhs.placeIn.worldWrap {
+                return lhs.placeIn.worldWrap < rhs.placeIn.worldWrap
             }
             if lhs.placeIn.x != rhs.placeIn.x {
                 return lhs.placeIn.x < rhs.placeIn.x

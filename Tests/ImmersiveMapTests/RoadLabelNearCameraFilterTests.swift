@@ -138,7 +138,7 @@ final class RoadLabelNearCameraFilterTests: XCTestCase {
         let inputs = RoadLabelNearCameraFilter.makeTileCornerInputs(tile: VisibleTile(x: 12,
                                                                                      y: 34,
                                                                                      z: 6,
-                                                                                     loop: -1))
+                                                                                     worldWrap: -1))
 
         XCTAssertEqual(inputs.map(\.uv), [
             SIMD2<Float>(0, 0),

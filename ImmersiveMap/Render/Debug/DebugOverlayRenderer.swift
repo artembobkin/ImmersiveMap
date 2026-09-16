@@ -1018,7 +1018,7 @@ final class DebugOverlayRenderer {
         let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: placeTile.placeIn.x,
                                                                 y: placeTile.placeIn.y,
                                                                 z: placeTile.placeIn.z,
-                                                                loop: placeTile.placeIn.loop,
+                                                                worldWrap: placeTile.placeIn.worldWrap,
                                                                 flatRenderPan: frameContext.flatRenderState.pan,
                                                                 renderMapSize: frameContext.flatRenderState.renderMapSize)
         return [FlatTileOriginData(panRelativeOrigin: SIMD2<Float>(originAndSize.x, originAndSize.y),
