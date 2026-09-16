@@ -61,9 +61,6 @@ final class GlobeTileCoverage {
     static let floorZoom = 3
 
     private let transitionLowZoomFallbackLimit = 3
-    private var leafDrops: [Tile: Int] = [:]
-    private var nextLeafDrops: [Tile: Int] = [:]
-    private var previousTargetZoom: Int?
 
     private struct Walk {
         let targetZoom: Int
@@ -81,14 +78,8 @@ final class GlobeTileCoverage {
     func targets(targetZoom: Int, inputs: GlobeCoverageInputs, frustum: Frustum?) -> GlobeCoverageResolution {
         let startTime = CACurrentMediaTime()
         guard targetZoom >= 0, let frustum else {
-            leafDrops.removeAll()
             return GlobeCoverageResolution(targets: [], metrics: .zero)
         }
-        if previousTargetZoom != targetZoom {
-            leafDrops.removeAll()
-            previousTargetZoom = targetZoom
-        }
-        nextLeafDrops.removeAll(keepingCapacity: true)
         let cameraDistance = Double(simd_length(inputs.eye))
         var walk = Walk(targetZoom: targetZoom,
                         frustum: frustum,
@@ -98,7 +89,6 @@ final class GlobeTileCoverage {
                         reach: inputs.farRadius * cameraDistance,
                         usesRule: targetZoom > Self.floorZoom && cameraDistance > 0)
         visit(Tile(x: 0, y: 0, z: 0), accepted: false, walk: &walk)
-        leafDrops = nextLeafDrops
         walk.metrics.duration = CACurrentMediaTime() - startTime
         return GlobeCoverageResolution(targets: FlatTileCoverage.sorted(walk.targets), metrics: walk.metrics)
     }
@@ -141,18 +131,13 @@ final class GlobeTileCoverage {
         let bound = GlobeVisibilityModel.tileBound(tile: tile, inputs: walk.visibility)
         let centerDistance = Double(simd_length(bound.center - walk.eye))
         if tile.z == walk.targetZoom {
-            // A leaf: exact by its centre, with the memory.
-            let drop = FlatDistanceCoverage.settledDrop(
-                raw: FlatDistanceCoverage.drop(distance: centerDistance, cameraDistance: walk.cameraDistance),
-                previous: leafDrops[tile],
-                distance: centerDistance,
-                cameraDistance: walk.cameraDistance)
-            nextLeafDrops[tile] = drop
+            // A leaf: exact by its centre.
+            let drop = FlatDistanceCoverage.drop(distance: centerDistance, cameraDistance: walk.cameraDistance)
             if drop == 0 {
                 place(tile, walk: &walk)
             } else if let ancestor = tile.findParentTile(atZoom: max(Self.floorZoom, tile.z - drop)) {
-                // Held a level coarser than the rule asks: the parent at the
-                // held level covers it, placed here if the rule did not.
+                // Wanted coarser: the ancestor at that zoom covers it, placed
+                // here if the parents' measure did not.
                 place(ancestor, walk: &walk)
             }
             return
@@ -186,7 +171,7 @@ final class GlobeTileCoverage {
             place(tile, walk: &walk)
         }
         let finestForDescent = max(Self.floorZoom,
-                                   walk.targetZoom - FlatDistanceCoverage.drop(distance: nearDistance / FlatTileCoverage.descentMargin,
+                                   walk.targetZoom - FlatDistanceCoverage.drop(distance: nearDistance,
                                                                                cameraDistance: walk.cameraDistance))
         if tile.z < finestForDescent {
             for child in Self.children(of: tile) {

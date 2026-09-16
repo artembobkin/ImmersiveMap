@@ -91,15 +91,15 @@ final class GlobeTileCoverageTests: XCTestCase {
         XCTAssertTrue(output.allSatisfy { $0.z == 6 }, "\(output.filter { $0.z != 6 })")
     }
 
-    /// The memory works through the walk: a tile just past the exact
-    /// threshold keeps its level, and coming back it stays coarser until
-    /// the margin is crossed.
-    func testTheLevelMemoryHoldsAcrossFrames() {
+    /// A leaf follows the rule frame by frame, with nothing carried over:
+    /// past the exact threshold it drops a level and a parent covers it,
+    /// back inside it is exact again.
+    func testALeafFollowsTheRuleFrameByFrame() {
         let coverage = GlobeTileCoverage()
         let tile = Tile(x: 32, y: 32, z: 6)
         // The eye on the axis above the front point, which is a corner of
         // the tile: the tile's centre sits a fixed distance to the side, so
-        // it leaves the exact zone as the eye comes DOWN, where the inputs's
+        // it leaves the exact zone as the eye comes DOWN, where the camera's
         // own distance shrinks under it. Search for the height where the
         // rule drops it.
         func output(eyeDistance: Float) -> [VisibleTile] {
@@ -112,15 +112,11 @@ final class GlobeTileCoverageTests: XCTestCase {
             threshold /= 1.01
             XCTAssertGreaterThan(threshold, 0.001, "the rule drops the tile somewhere")
         }
-        XCTAssertTrue(output(eyeDistance: threshold * 1.2).contains(VisibleTile(tile: tile)), "well within the exact radius")
-        XCTAssertTrue(output(eyeDistance: threshold * 0.97).contains(VisibleTile(tile: tile)), "held just past it")
-        let dropped = output(eyeDistance: threshold * 0.8)
-        XCTAssertFalse(dropped.contains(VisibleTile(tile: tile)), "well past it the tile drops a level")
+        XCTAssertTrue(output(eyeDistance: threshold * 1.03).contains(VisibleTile(tile: tile)), "within the exact radius")
+        let dropped = output(eyeDistance: threshold * 0.97)
+        XCTAssertFalse(dropped.contains(VisibleTile(tile: tile)), "past it the tile drops a level")
         XCTAssertNotNil(Self.cover(of: tile, in: dropped), "and a parent covers it")
-        let held = output(eyeDistance: threshold * 1.03)
-        XCTAssertFalse(held.contains(VisibleTile(tile: tile)), "coming back the coarser level holds")
-        XCTAssertNotNil(Self.cover(of: tile, in: held))
-        XCTAssertTrue(output(eyeDistance: threshold * 1.2).contains(VisibleTile(tile: tile)))
+        XCTAssertTrue(output(eyeDistance: threshold * 1.03).contains(VisibleTile(tile: tile)), "back inside, exact again at once")
     }
 
     /// A short reach turns most of the view into the far field: the cover

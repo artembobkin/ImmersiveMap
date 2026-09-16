@@ -20,14 +20,12 @@ import simd
 /// eighteen tiles at a street tilt, with no leaf enumerated that a parent
 /// covers.
 ///
-/// At the target zoom a tile is exact by its centre's distance, with the
-/// level memory: it changes between exact and not only once its distance
-/// has crossed the threshold by the hysteresis margin. The walk looks
-/// into a tile a margin (`descentMargin`) earlier than the rule asks, so a
-/// leaf the memory still holds exact is reached; and a leaf the memory
-/// holds a level coarser than the rule asks places its own parent at the
-/// held level, so the ground under it stays covered without widening any
-/// parent's band.
+/// At the target zoom a tile is exact by its centre's distance, read
+/// fresh every frame. A leaf whose centre wants a coarser zoom places its
+/// own ancestor at that zoom: the ancestor's band usually placed it
+/// already, but a leaf at the view's edge, its centre outside the
+/// footprint, has no ground the parents' clipped measure sees, and its
+/// square is still in view.
 ///
 /// Beyond `farRadius` camera distances nothing is placed: the backdrop
 /// paints the horizon, and the walk does not look there. Parents at the
@@ -40,14 +38,6 @@ import simd
 final class FlatTileCoverage {
     private static let worldWraps: [Int8] = [-1, 0, 1]
 
-    /// How much nearer than the rule asks the walk looks into a tile: a
-    /// leaf the memory holds exact is at most this far past the exact
-    /// threshold, and the walk has to reach it to read the memory.
-    static let descentMargin: Double = 1 + FlatDistanceCoverage.hysteresis
-
-    private var leafDrops: [VisibleTile: Int] = [:]
-    private var nextLeafDrops: [VisibleTile: Int] = [:]
-    private var previousTargetZoom: Int?
     /// How many tiles the last walk looked at, for the diagnostics.
     private(set) var visitedNodeCount = 0
 
@@ -64,15 +54,7 @@ final class FlatTileCoverage {
     }
 
     func targets(targetZoom: Int, inputs: FlatCoverageInputs, polygon: CoveragePolygon) -> [VisibleTile] {
-        guard targetZoom >= 0 else {
-            leafDrops.removeAll()
-            return []
-        }
-        if previousTargetZoom != targetZoom {
-            leafDrops.removeAll()
-            previousTargetZoom = targetZoom
-        }
-        nextLeafDrops.removeAll(keepingCapacity: true)
+        guard targetZoom >= 0 else { return [] }
         let lookAtWorld = FlatDistanceCoverage.worldPoint(ofTilePoint: inputs.lookAt, zoom: targetZoom,
                                                           flatRenderState: inputs.flatRenderState)
         // In the tiles' own scale: past the source's deepest zoom the tiles
@@ -86,7 +68,6 @@ final class FlatTileCoverage {
         for worldWrap in Self.worldWraps {
             visit(VisibleTile(x: 0, y: 0, z: 0, worldWrap: worldWrap), walk: &walk)
         }
-        leafDrops = nextLeafDrops
         visitedNodeCount = walk.visited
 
         // The ceiling: the farthest parents go, so the horizon alone pays,
@@ -138,21 +119,16 @@ final class FlatTileCoverage {
         }
         let eye = walk.inputs.eye
         if node.z == walk.targetZoom {
-            // A leaf: exact by its centre, with the memory.
+            // A leaf: exact by its centre.
             let center = SIMD3<Double>((square.minX + square.maxX) / 2, (square.minY + square.maxY) / 2, 0)
             let distance = simd_length(center - eye)
-            let drop = FlatDistanceCoverage.settledDrop(
-                raw: FlatDistanceCoverage.drop(distance: distance, cameraDistance: walk.cameraDistance),
-                previous: leafDrops[node],
-                distance: distance,
-                cameraDistance: walk.cameraDistance)
-            nextLeafDrops[node] = drop
+            let drop = FlatDistanceCoverage.drop(distance: distance, cameraDistance: walk.cameraDistance)
             if drop == 0 {
                 walk.placed[node] = distance
             } else if let ancestor = node.tile.findParentTile(atZoom: max(0, node.z - drop)),
                       walk.inputs.backdropZoom.map({ ancestor.z > $0 }) ?? true {
-                // Held a level coarser than the rule asks: the parent at the
-                // held level covers it, placed here if the rule did not.
+                // Wanted coarser: the ancestor at that zoom covers it, placed
+                // here if the parents' clipped measure did not see its centre.
                 let target = VisibleTile(tile: ancestor, worldWrap: node.worldWrap)
                 walk.placed[target] = min(walk.placed[target] ?? .infinity, distance)
             }
@@ -198,9 +174,9 @@ final class FlatTileCoverage {
                 walk.placed[node] = min(walk.placed[node] ?? .infinity, max(nearSampled, bandStart))
             }
         }
-        // Looked into a margin early, so a leaf the memory holds exact is
-        // reached and read.
-        let finestForDescent = max(0, walk.targetZoom - FlatDistanceCoverage.drop(distance: nearDistance / Self.descentMargin,
+        // Looked into where its nearest ground wants a finer zoom than its
+        // own: the leaves that are exact lie within that ground.
+        let finestForDescent = max(0, walk.targetZoom - FlatDistanceCoverage.drop(distance: nearDistance,
                                                                                   cameraDistance: walk.cameraDistance))
         if node.z < finestForDescent {
             for child in Self.children(of: node) {

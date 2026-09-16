@@ -330,29 +330,9 @@ final class FlatTileCoverageTests: XCTestCase {
         XCTAssertEqual(controls.snapshot().coverageFarRadiusCameraDistances, Float(FlatDistanceCoverage.farRadiusRange.lowerBound))
     }
 
-    /// A tile changes level only once its distance has crossed the
-    /// threshold by the hysteresis margin, in either direction.
-    func testHysteresisHoldsALevelNearItsThreshold() {
-        let cameraDistance = 1.2
-        let threshold = FlatDistanceCoverage.threshold(ofLevel: 1, cameraDistance: cameraDistance)
-        XCTAssertEqual(FlatDistanceCoverage.drop(distance: threshold * 0.99, cameraDistance: cameraDistance), 0)
-        XCTAssertEqual(FlatDistanceCoverage.drop(distance: threshold * 1.01, cameraDistance: cameraDistance), 1)
-        // Coarsening: just past the threshold the previous level holds.
-        XCTAssertEqual(FlatDistanceCoverage.settledDrop(raw: 1, previous: 0, distance: threshold * 1.05, cameraDistance: cameraDistance), 0)
-        XCTAssertEqual(FlatDistanceCoverage.settledDrop(raw: 1, previous: 0, distance: threshold * 1.15, cameraDistance: cameraDistance), 1)
-        // Refining: just under the threshold the coarser level holds.
-        XCTAssertEqual(FlatDistanceCoverage.settledDrop(raw: 0, previous: 1, distance: threshold * 0.95, cameraDistance: cameraDistance), 1)
-        XCTAssertEqual(FlatDistanceCoverage.settledDrop(raw: 0, previous: 1, distance: threshold * 0.85, cameraDistance: cameraDistance), 0)
-        // A jump of two levels settles as far as the margins allow.
-        let second = FlatDistanceCoverage.threshold(ofLevel: 2, cameraDistance: cameraDistance)
-        XCTAssertEqual(FlatDistanceCoverage.settledDrop(raw: 2, previous: 0, distance: second * 1.05, cameraDistance: cameraDistance), 1)
-        XCTAssertEqual(FlatDistanceCoverage.settledDrop(raw: 2, previous: 0, distance: second * 1.15, cameraDistance: cameraDistance), 2)
-        XCTAssertEqual(FlatDistanceCoverage.settledDrop(raw: 0, previous: 0, distance: 1, cameraDistance: cameraDistance), 0)
-        XCTAssertEqual(FlatDistanceCoverage.settledDrop(raw: 3, previous: nil, distance: 100, cameraDistance: cameraDistance), 3)
-    }
 
     /// The eye straight above a point `eyeDistance` tiles east of a tile's
-    /// centre, at the inputs distance: the inputs looks straight down at
+    /// centre, at the camera distance: the camera looks straight down at
     /// the point under it, so its own distance is its height and the tile
     /// is `eyeDistance` away.
     private static func sideInputs(tile: VisibleTile, eyeDistance: Double, cameraDistance: Double = 1.2) -> FlatCoverageInputs {
@@ -363,10 +343,10 @@ final class FlatTileCoverageTests: XCTestCase {
         return FlatCoverageInputs(eye: eye, flatRenderState: flatRenderState, eyeGround: lookAt, lookAt: lookAt)
     }
 
-    /// The memory works through the walk: a tile just past its threshold
-    /// keeps the level it had the frame before, and a tile held a level
-    /// coarser is covered by the parent it holds.
-    func testTheLevelMemoryHoldsAcrossFrames() {
+    /// A leaf follows the rule frame by frame, with nothing carried over:
+    /// past its threshold it drops a level and its parent covers it, back
+    /// inside it is exact again.
+    func testALeafFollowsTheRuleFrameByFrame() {
         let coverage = FlatTileCoverage()
         let tile = VisibleTile(x: 256, y: 250, z: Self.zoom)
         let polygon = Self.square(minX: 256.1, minY: 250.1, maxX: 256.9, maxY: 250.9)
@@ -374,42 +354,15 @@ final class FlatTileCoverageTests: XCTestCase {
         func output(eyeDistance: Double) -> [VisibleTile] {
             coverage.targets(targetZoom: Self.zoom, inputs: Self.sideInputs(tile: tile, eyeDistance: eyeDistance), polygon: polygon)
         }
-        XCTAssertTrue(output(eyeDistance: threshold * 0.9).contains(tile))
-        XCTAssertTrue(output(eyeDistance: threshold * 1.05).contains(tile),
-                      "Just past the threshold the tile keeps its exact level")
-        let dropped = output(eyeDistance: threshold * 1.15)
-        XCTAssertFalse(dropped.contains(tile), "Well past it the tile drops a level")
+        XCTAssertTrue(output(eyeDistance: threshold * 0.95).contains(tile))
+        let dropped = output(eyeDistance: threshold * 1.05)
+        XCTAssertFalse(dropped.contains(tile), "Past the threshold the tile drops a level")
         XCTAssertNotNil(Self.cover(of: tile, in: dropped), "and its parent covers it")
-        let held = output(eyeDistance: threshold * 0.95)
-        XCTAssertFalse(held.contains(tile), "Coming back, the coarser level holds until the margin is crossed")
-        XCTAssertNotNil(Self.cover(of: tile, in: held), "and the held parent is placed for it")
-        XCTAssertTrue(output(eyeDistance: threshold * 0.85).contains(tile))
-    }
-
-    /// The level memory belongs to one target zoom and to tiles that stay
-    /// visible: a zoom change forgets it, and so does a frame without the
-    /// tile.
-    func testTheLevelMemoryIsForgottenOnAZoomChangeAndOnAbsence() {
-        let coverage = FlatTileCoverage()
-        let tile = VisibleTile(x: 256, y: 250, z: Self.zoom)
-        let polygon = Self.square(minX: 256.1, minY: 250.1, maxX: 256.9, maxY: 250.9)
-        let threshold = FlatDistanceCoverage.threshold(ofLevel: 1, cameraDistance: 1.2)
-        func output(eyeDistance: Double, targetZoom: Int = Self.zoom, polygon: CoveragePolygon = polygon) -> [VisibleTile] {
-            coverage.targets(targetZoom: targetZoom, inputs: Self.sideInputs(tile: tile, eyeDistance: eyeDistance), polygon: polygon)
-        }
-        XCTAssertTrue(output(eyeDistance: threshold * 0.9).contains(tile))
-        XCTAssertTrue(output(eyeDistance: threshold * 1.05).contains(tile), "held by the memory")
-        // A frame at another target zoom forgets the memory.
-        _ = output(eyeDistance: threshold * 0.9, targetZoom: Self.zoom - 1)
-        XCTAssertFalse(output(eyeDistance: threshold * 1.05).contains(tile), "after a zoom change the raw level applies")
-        // Back exact, then a frame without the tile forgets it too.
-        XCTAssertTrue(output(eyeDistance: threshold * 0.85).contains(tile))
-        _ = output(eyeDistance: threshold * 0.85, polygon: Self.square(minX: 300.1, minY: 300.1, maxX: 300.9, maxY: 300.9))
-        XCTAssertFalse(output(eyeDistance: threshold * 1.05).contains(tile), "absent for a frame, the tile starts from its raw level")
+        XCTAssertTrue(output(eyeDistance: threshold * 0.95).contains(tile), "Back inside, exact again at once")
     }
 
     /// Past the source's deepest zoom the tiles keep doubling in the world
-    /// while the inputs's distance does not: measured in the tiles' own
+    /// while the camera's distance does not: measured in the tiles' own
     /// scale, the view straight down stays exact at any overzoom.
     func testOverzoomKeepsTheNearTilesExact() {
         let polygon = Self.square(minX: 255.1, minY: 249.1, maxX: 256.9, maxY: 250.9)

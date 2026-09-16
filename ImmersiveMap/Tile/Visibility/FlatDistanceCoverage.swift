@@ -77,11 +77,6 @@ struct FlatCoverageInputs {
 /// The rule also stops at `farRadius` camera distances from the eye:
 /// beyond it no tile is placed at any zoom, the backdrop and the haze
 /// paint the horizon on the plane, the pinned world cover on the sphere.
-///
-/// A tile at the target zoom changes between exact and not only when its
-/// distance has crossed the threshold by `hysteresis`, so a boundary
-/// sliding with the camera does not flicker the tiles under it
-/// (`settledDrop`, with the walk's per-leaf memory).
 enum FlatDistanceCoverage {
     /// The radius of the exact zone in camera distances: everything nearer
     /// than this many times the camera's distance to its look-at point is
@@ -99,9 +94,6 @@ enum FlatDistanceCoverage {
     /// exact radius. A guard, since the walk bounds the count by the rule
     /// itself.
     static let maximumParents = 14
-    /// How far past a level's threshold a tile's distance must go before
-    /// the tile changes level, as a fraction of the threshold.
-    static let hysteresis: Double = 0.1
     /// The reach in camera distances: ground farther than this many times
     /// the camera's distance to its look-at point is left to the backdrop.
     /// 10 keeps a street tilt at about ten parents instead of the ceiling's
@@ -115,7 +107,7 @@ enum FlatDistanceCoverage {
         return min(max(farRadius, farRadiusRange.lowerBound), farRadiusRange.upperBound)
     }
 
-    /// The number of levels a tile at `distance` drops, before hysteresis.
+    /// The number of levels a tile at `distance` drops.
     static func drop(distance: Double, cameraDistance: Double) -> Int {
         let exactDistance = exactRadius * max(cameraDistance, 1e-9)
         guard distance > exactDistance else {
@@ -143,29 +135,4 @@ enum FlatDistanceCoverage {
                              0)
     }
 
-    /// The level a tile settles at: the raw level, unless its distance has
-    /// not yet crossed the threshold between its previous level and the
-    /// raw one by the hysteresis margin.
-    static func settledDrop(raw: Int, previous: Int?, distance: Double, cameraDistance: Double) -> Int {
-        guard let previous, previous != raw else {
-            return raw
-        }
-        var settled = previous
-        if raw > previous {
-            for level in (previous + 1) ... raw {
-                guard distance > threshold(ofLevel: level, cameraDistance: cameraDistance) * (1 + hysteresis) else {
-                    break
-                }
-                settled = level
-            }
-        } else {
-            for level in stride(from: previous - 1, through: raw, by: -1) {
-                guard distance < threshold(ofLevel: level + 1, cameraDistance: cameraDistance) * (1 - hysteresis) else {
-                    break
-                }
-                settled = level
-            }
-        }
-        return settled
-    }
 }
