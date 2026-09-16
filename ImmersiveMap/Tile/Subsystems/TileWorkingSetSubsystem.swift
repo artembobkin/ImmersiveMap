@@ -1,17 +1,20 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-//
-//  TileDemandPlacementSubsystem.swift
-//  ImmersiveMap
-//
-
 import Foundation
 import Metal
 import simd
 
-final class TileDemandPlacementSubsystem: RenderSubsystem {
-    let name: String = "TileDemandPlacement"
+/// Keeps the tiles' working set in step with the frame's coverage. The
+/// walk (`TileCulling`) says which tiles the frame wants, this subsystem
+/// turns that into what the frame can have: it orders the wanted tiles
+/// from the store nearest first and lets go of the rest, plans what
+/// draws in a wanted tile's place while it loads (`TilePlacementPlanner`,
+/// `BuildingCoveragePlanner`, over what is resident this frame), and
+/// publishes the placements and the counts. Two gates keep it idle when
+/// neither the coverage nor the store's contents changed.
+final class TileWorkingSetSubsystem: RenderSubsystem {
+    let name: String = "TileWorkingSet"
     
     private let tileRenderStore: TileRenderStore
     private let tileTraceRecorder: TileTraceRecorder
