@@ -23,11 +23,11 @@ final class FlatSubstituteStencilOffscreenRenderTests: XCTestCase {
     /// children share; zoom 14.2 is well past the flat transition.
     private static let parent = Tile(x: 4954, y: 2570, z: 13)
     private static let exactChild = Tile(x: 9908, y: 5140, z: 14)
-    /// The z3 ancestor that the horizon backdrop draws under everything:
+    /// The z0 world cover that the horizon backdrop draws under everything:
     /// loaded on purpose, because the backdrop must lose to the exact child
     /// through the stencil (it once flooded the whole frame by winning the
     /// rank-depth test against the finer background).
-    private static let backdropAncestor = Tile(x: 4, y: 2, z: 3)
+    private static let backdropAncestor = Tile(x: 0, y: 0, z: 0)
 
     @MainActor
     func testExactChildRejectsTheSubstituteInItsSlot() async throws {

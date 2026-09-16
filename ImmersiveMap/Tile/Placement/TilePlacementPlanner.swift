@@ -39,7 +39,7 @@ struct TilePlacementPlanner {
     static let descendantSearchDepth = Int.max
 
     /// `descendantSearchDepth` 0 turns the descendant stand-ins off: the
-    /// backdrop's z3 targets are covered by the main coverage's finer tiles
+    /// backdrop's targets are covered by the main coverage's finer tiles
     /// already, and placing them a second time would draw them twice.
     static func buildPlacements(targets: [VisibleTile],
                                 resident: [Tile: MetalTile],

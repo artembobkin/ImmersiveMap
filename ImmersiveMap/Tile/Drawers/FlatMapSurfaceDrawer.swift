@@ -148,7 +148,7 @@ enum FlatMapSurfaceDrawer {
         drawLayer(\.ground, bandOffset: 0, runFilter: isOpaqueFillRun)
         renderEncoder.popDebugGroup()
         // The horizon backdrop stops here: its job is the painted far band
-        // under the fog, where its z3 linework (rivers, borders, roads) is
+        // under the fog, where its coarse linework (rivers, borders, roads) is
         // sub-pixel; skipping those sweeps also skips the tile's dense
         // sphere-split ribbon mesh, whose vertices the flat pass would
         // transform only to fog them away.

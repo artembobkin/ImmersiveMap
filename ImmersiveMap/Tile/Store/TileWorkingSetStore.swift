@@ -26,13 +26,15 @@ import Metal
 /// Command buffers retain every resource they bind, so releasing an entry
 /// never frees a buffer the GPU still reads.
 final class TileWorkingSetStore {
-    /// Low-zoom world coverage is pinned lazily: once materialized, tiles
-    /// with z <= this level are not released when they leave the demanded
-    /// set, so the far zone of a tilted camera and the globe's back side
-    /// stay resident (the whole world at z0-3 is at most 85 generalized
-    /// tiles). A memory warning still drops the ones not currently demanded;
-    /// they warm up again from disk.
-    static let pinnedWorldCoverMaxZoomLevel = 3
+    /// The world cover is pinned lazily: once materialized, tiles with
+    /// z <= this level are not released when they leave the demanded set,
+    /// so the far zone of a tilted camera and the globe's back side stay
+    /// resident. The cover is the one z0 tile, the whole world generalized
+    /// to a single tile: the flat map's horizon backdrop and the sphere's
+    /// far field draw it (`TileCulling.flatBackdropZoomLevel`,
+    /// `GlobeTileCoverage.floorZoom`). A memory warning still drops it when
+    /// not currently demanded; it warms up again from disk.
+    static let pinnedWorldCoverMaxZoomLevel = 0
 
 
     private struct Entry {

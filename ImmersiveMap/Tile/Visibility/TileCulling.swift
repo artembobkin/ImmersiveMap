@@ -8,11 +8,11 @@ import simd
 /// (`FlatTileCoverage`, `GlobeTileCoverage`) over the distance rule
 /// (`FlatDistanceCoverage`), plus the flat map's horizon backdrop.
 class TileCulling {
-    /// Zoom of the flat-mode horizon backdrop: at this zoom the whole world is
-    /// 64 generalized tiles, the frustum footprint is covered by 1-4 of them,
-    /// and all of them fall into the world-coverage pinning (z <= 3) - after
-    /// warm-up the backdrop costs nothing.
-    static let flatBackdropZoomLevel = 3
+    /// Zoom of the flat-mode horizon backdrop: the pinned world cover's,
+    /// so the footprint is covered by the one z0 tile per world copy it
+    /// meets, always resident, and after warm-up the backdrop costs
+    /// nothing.
+    static let flatBackdropZoomLevel = TileWorkingSetStore.pinnedWorldCoverMaxZoomLevel
 
     /// Moves when the targets or the backdrop differ from the last frame's,
     /// not when the walk merely ran again: the working set gates on it.

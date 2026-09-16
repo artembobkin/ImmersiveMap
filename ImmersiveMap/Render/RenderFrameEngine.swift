@@ -422,7 +422,7 @@ final class RenderFrameEngine {
         }
         // The horizon backdrop is not among the ground placements (labels and
         // the projection index never see it), yet it is on screen: without it the
-        // HUD looks as if the z3 fallback does not exist at all.
+        // HUD looks as if the backdrop does not exist at all.
         let backdropPlacements = frameContext.sharedState.tilePlacementState.backdropPlaceTilesContext.tilePlacements
         let displayedTiles = (frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements + backdropPlacements)
             .map(\.metalTile.tile)

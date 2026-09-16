@@ -9,7 +9,7 @@ import XCTest
 /// leaf by leaf, without visiting the leaves a parent covers. Exact within
 /// the exact radius, one level per `1 / steepness` doublings beyond,
 /// overlaps allowed, the farthest parents trimmed to the ceiling, the rest
-/// of the far field handed to the z3 horizon backdrop.
+/// of the far field handed to the horizon backdrop.
 final class FlatTileCoverageTests: XCTestCase {
     /// A z9 world whose tiles are one world unit wide, so distances read in
     /// tiles.
@@ -379,7 +379,7 @@ final class FlatTileCoverageTests: XCTestCase {
     }
 
     /// The far rows whose parents would be the backdrop's zoom or coarser
-    /// are not placed: the z3 backdrop paints them.
+    /// are not placed: the backdrop paints them.
     func testTheFarFieldIsHandedToTheBackdrop() {
         let zoom = 6
         let state = FlatRenderState(pan: .zero, renderMapSize: Double(1 << zoom))

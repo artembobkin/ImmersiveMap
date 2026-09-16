@@ -55,10 +55,10 @@ struct GlobeCoverageInputs {
 /// left alone: the whole world is pinned there and nothing is saved by
 /// coarsening, so the walk places the leaves at the target zoom.
 enum GlobeTileCoverage {
-    /// The deepest zoom of the pinned world cover (the working set keeps
-    /// z0 to z3 resident): the floor of every placement on the sphere and
-    /// what the far field is asked for.
-    static let floorZoom = 3
+    /// The zoom of the pinned world cover, which the working set keeps
+    /// resident: the floor of every placement on the sphere and what the
+    /// far field is asked for.
+    static let floorZoom = TileWorkingSetStore.pinnedWorldCoverMaxZoomLevel
 
     private static let transitionLowZoomFallbackLimit = 3
 

@@ -160,7 +160,7 @@ final class TileWorkingSetStoreTests: XCTestCase {
 
     func testContainsFollowsResidencyWithoutATrace() throws {
         let store = makeStore()
-        let pinned = Tile(x: 1, y: 1, z: 3)
+        let pinned = Tile(x: 0, y: 0, z: 0)
         let ordinary = Tile(x: 1, y: 1, z: 4)
         XCTAssertFalse(store.contains(ordinary))
         store.insert(try makeMetalTile(pinned), forKey: pinned)
@@ -173,36 +173,38 @@ final class TileWorkingSetStoreTests: XCTestCase {
         XCTAssertTrue(store.contains(pinned), "the pinned world cover stays")
     }
 
-    func testWorldCoverUpToZ3IsPinnedAcrossDemandUpdates() throws {
+    func testTheWorldCoverIsPinnedAcrossDemandUpdates() throws {
         let store = makeStore()
-        let pinned = Tile(x: 1, y: 1, z: 3)
-        let ordinary = Tile(x: 1, y: 1, z: 4)
+        let pinned = Tile(x: 0, y: 0, z: 0)
+        let ordinary = Tile(x: 1, y: 1, z: 1)
         store.insert(try makeMetalTile(pinned), forKey: pinned)
         store.insert(try makeMetalTile(ordinary), forKey: ordinary)
 
         store.updateDemandedTiles([] as [Tile])
 
         XCTAssertNotNil(store.tile(forKey: pinned),
-                        "The z0-3 world cover must survive leaving demand")
+                        "The z0 world cover must survive leaving demand")
         XCTAssertNil(store.tile(forKey: ordinary),
-                     "z4 is past the pinned cover and is released")
+                     "z1 is past the pinned cover and is released")
     }
 
     func testThePinnedCoverIsNeverAStandInThatKeepsAnything() throws {
-        // A loading z4 target has only pinned ancestors: nothing to keep,
+        // A loading z1 target has only the pinned ancestor: nothing to keep,
         // nothing to release.
         let store = makeStore()
-        let pinned = Tile(x: 0, y: 0, z: 3)
+        let pinned = Tile(x: 0, y: 0, z: 0)
         store.insert(try makeMetalTile(pinned), forKey: pinned)
-        store.updateDemandedTiles([Tile(x: 0, y: 0, z: 4)])
+        store.updateDemandedTiles([Tile(x: 0, y: 0, z: 1)])
         XCTAssertNotNil(store.tile(forKey: pinned))
         XCTAssertEqual(store.residentTileCount, 1)
     }
 
     func testMemoryWarningReleasesUndemandedWorldCoverAndKeepsDemandedTiles() throws {
+        // The resident demanded z13 is the loading z14's finest resident
+        // ancestor, so the cover under both stands in for nothing.
         let store = makeStore()
-        let demanded = Tile(x: 0, y: 0, z: 2)
-        let hidden = Tile(x: 1, y: 0, z: 2)
+        let demanded = Tile(x: 5, y: 5, z: 13)
+        let hidden = Tile(x: 0, y: 0, z: 0)
         let loading = Tile(x: 10, y: 10, z: 14)
         let standIn = Tile(x: 40, y: 40, z: 16)
         store.insert(try makeMetalTile(demanded), forKey: demanded)
@@ -210,31 +212,33 @@ final class TileWorkingSetStoreTests: XCTestCase {
         store.insert(try makeMetalTile(standIn), forKey: standIn)
         store.updateDemandedTiles([demanded, loading])
         XCTAssertNotNil(store.tile(forKey: standIn))
+        XCTAssertNotNil(store.tile(forKey: hidden), "the cover is pinned while nothing presses")
 
         store.releaseUndemandedTiles()
 
         XCTAssertNotNil(store.tile(forKey: demanded),
                         "The demanded set stays so the map does not blank")
         XCTAssertNil(store.tile(forKey: hidden),
-                     "Pinned cover outside demand is handed back under pressure")
+                     "The pinned cover outside demand is handed back under pressure")
         XCTAssertNotNil(store.tile(forKey: standIn), "what the frame draws under a loading target stays")
     }
 
-    func testMemoryWarningKeepsACoverTileStandingInOnTheSphere() throws {
+    func testMemoryWarningKeepsTheCoverStandingInOnTheSphere() throws {
         // The sphere has no backdrop: a loading z5 target is drawn from its
-        // finest resident ancestor, the pinned z3 here, which a warning
-        // therefore keeps; a cover tile under no loading target goes.
-        let store = makeStore()
-        let standingIn = Tile(x: 4, y: 4, z: 3)
-        let idle = Tile(x: 0, y: 0, z: 3)
-        store.insert(try makeMetalTile(standingIn), forKey: standingIn)
-        store.insert(try makeMetalTile(idle), forKey: idle)
-        store.updateDemandedTiles([Tile(x: 16, y: 16, z: 5)])
+        // finest resident ancestor, the pinned cover here, which a warning
+        // therefore keeps. Under no loading target the cover goes.
+        let cover = Tile(x: 0, y: 0, z: 0)
+        let standingIn = makeStore()
+        standingIn.insert(try makeMetalTile(cover), forKey: cover)
+        standingIn.updateDemandedTiles([Tile(x: 16, y: 16, z: 5)])
+        standingIn.releaseUndemandedTiles()
+        XCTAssertNotNil(standingIn.tile(forKey: cover))
 
-        store.releaseUndemandedTiles()
-
-        XCTAssertNotNil(store.tile(forKey: standingIn))
-        XCTAssertNil(store.tile(forKey: idle))
+        let idle = makeStore()
+        idle.insert(try makeMetalTile(cover), forKey: cover)
+        idle.updateDemandedTiles([] as [Tile])
+        idle.releaseUndemandedTiles()
+        XCTAssertNil(idle.tile(forKey: cover))
     }
 
     func testMemoryWarningReleasesWhatNoFrameNeeds() throws {
@@ -285,7 +289,7 @@ final class TileWorkingSetStoreTests: XCTestCase {
 
     func testContentVersionBumpsOnMemoryWarningRelease() throws {
         let store = makeStore()
-        let tile = Tile(x: 2, y: 1, z: 2)
+        let tile = Tile(x: 0, y: 0, z: 0)
         store.insert(try makeMetalTile(tile), forKey: tile)
         store.updateDemandedTiles([] as [Tile])
         let beforeWarning = store.contentVersion

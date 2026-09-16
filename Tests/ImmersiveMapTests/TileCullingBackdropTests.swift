@@ -40,11 +40,11 @@ final class TileCullingBackdropTests: XCTestCase {
     }
 
     func testBackdropSkippedWhenTargetZoomNotAboveBackdropZoom() throws {
-        let fixture = try makeFixture(zoom: 3.0, renderSurfaceMode: .flat)
+        let fixture = try makeFixture(zoom: Double(TileCulling.flatBackdropZoomLevel), renderSurfaceMode: .flat)
 
         let content = TileCulling().resolveVisibleContent(cameraState: fixture.cameraState,
                                                           resolvedPresentation: fixture.resolvedPresentation,
-                                                          targetZoom: 3,
+                                                          targetZoom: TileCulling.flatBackdropZoomLevel,
                                                           cameraMatrix: fixture.cameraMatrix,
                                                           cameraFrustum: fixture.cameraFrustum,
                                                           cameraEye: fixture.cameraEye)

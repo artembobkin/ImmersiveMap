@@ -74,7 +74,7 @@ final class GlobeTileCoverageTests: XCTestCase {
     /// At the cover's zoom and above it nothing coarsens: the whole world is
     /// pinned there, and the walk places the leaves at the target zoom.
     func testShallowTargetsStayExact() {
-        for zoom in 1 ... GlobeTileCoverage.floorZoom {
+        for zoom in 0 ... GlobeTileCoverage.floorZoom {
             let output = GlobeTileCoverage.targets(targetZoom: zoom, inputs: Self.inputs(eyeDistance: 4), frustum: Self.frustum(eyeDistance: 4)).targets
             XCTAssertFalse(output.isEmpty)
             XCTAssertTrue(output.allSatisfy { $0.z == zoom }, "z\(zoom): \(output)")

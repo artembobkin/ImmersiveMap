@@ -47,11 +47,13 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
 
         // The gate: the demand, the loads and the placements depend on the
         // coverage (its version moves when the targets or the backdrop
-        // change) and on the working set's contents (its version moves on
-        // every insert and release), on nothing else. Both as they were
-        // when the placements were last planned, and no tile in flight:
-        // nothing to do. A tile in flight keeps the per-frame request
-        // going, which the loader's retries rely on.
+        // change) and on the working set's contents (its version moves
+        // when a tile lands and when memory pressure releases one; the
+        // releases the demand itself causes touch only tiles it stopped
+        // asking about), on nothing else. Both as they were when the
+        // placements were last planned, and no tile in flight: nothing to
+        // do. A tile in flight keeps the per-frame request going, which
+        // the loader's retries rely on.
         let coverageVersion = visibleContent.coverageVersion
         if coverageVersion == plannedCoverageVersion,
            tileRenderStore.cacheContentVersion == plannedContentVersion,
@@ -83,8 +85,7 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
                                                                                 centerWorldMercator: visibleContent.centerWorldMercator,
                                                                                 renderSurfaceMode: frameContext.renderSurfaceMode)
         let prioritizedDemand = Self.uniqueSourceTiles(of: prioritizedTargets + backdropTiles)
-        // The store keeps the demand and releases the rest, so the content
-        // version is read after it.
+        // The store keeps the demand and releases the rest.
         let tileRequestResult = tileRenderStore.requestTiles(prioritizedDemand,
                                                              frameIndex: frameContext.frameIndex)
         let contentVersion = tileRenderStore.cacheContentVersion
