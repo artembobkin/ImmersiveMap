@@ -150,8 +150,7 @@ enum BuildingCoveragePlanner {
             }
             func place(in slot: Tile) -> PlaceTile {
                 PlaceTile(metalTile: cover,
-                          placeIn: VisibleTile(tile: slot, worldWrap: worldWrap),
-                          lodKind: cover.tile == slot ? .exact : .coarseSubstitute)
+                          placeIn: VisibleTile(tile: slot, worldWrap: worldWrap))
             }
             if branches.isEmpty {
                 return [place(in: tile)]

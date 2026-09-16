@@ -72,7 +72,7 @@ struct DebugOverlayHUDSnapshot: Equatable {
         let surface = frameContext.renderSurfaceMode == .spherical ? "globe" : "flat"
         let viewport = frameContext.viewport
         let eye = frameContext.cameraEye
-        let placeTiles = frameContext.sharedState.placeTileTrackingState.placeTiles
+        let placeTiles = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
         let sourceZoomCounts = zoomCountsLine(title: "srcZ", tiles: placeTiles.map { $0.metalTile.tile })
         let targetZoomCounts = zoomCountsLine(title: "targetZ", tiles: placeTiles.map { $0.placeIn.tile })
 

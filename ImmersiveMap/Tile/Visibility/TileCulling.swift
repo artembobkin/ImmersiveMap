@@ -14,7 +14,11 @@ class TileCulling {
     /// warm-up the backdrop costs nothing.
     static let flatBackdropZoomLevel = 3
 
+    /// Moves when the targets or the backdrop differ from the last frame's,
+    /// not when the walk merely ran again: the working set gates on it.
     private var coverageVersion: UInt64 = 0
+    private var previousVisibleTiles: [VisibleTile] = []
+    private var previousBackdropTiles: [VisibleTile] = []
 
     init() {}
 
@@ -69,7 +73,11 @@ class TileCulling {
             }
         }
 
-        coverageVersion &+= 1
+        if visibleTiles != previousVisibleTiles || backdropTiles != previousBackdropTiles {
+            coverageVersion &+= 1
+            previousVisibleTiles = visibleTiles
+            previousBackdropTiles = backdropTiles
+        }
         return VisibleContentState(centerWorldMercator: semanticCenterWorldMercator,
                                    center: center,
                                    visibleTiles: visibleTiles,

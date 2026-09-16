@@ -109,7 +109,6 @@ struct MarkerFrameState {
 
 final class FrameContextSharedState {
     var tilePlacementState: TilePlacementState = .empty
-    var placeTileTrackingState: PlaceTileTrackingState = .empty
     var tileProjectionIndexState: TileProjectionIndexState = .empty
     var baseLabelState: BaseLabelState = .empty
     var baseLabelDebugBoxesState: BaseLabelDebugBoxesState = .empty

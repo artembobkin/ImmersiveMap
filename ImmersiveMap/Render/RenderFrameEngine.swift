@@ -420,11 +420,11 @@ final class RenderFrameEngine {
         guard let tileLoadingStatusReporter = persistentContext.tileLoadingStatusReporter else {
             return
         }
-        // The horizon backdrop is not part of placeTileTrackingState (labels and
+        // The horizon backdrop is not among the ground placements (labels and
         // the projection index never see it), yet it is on screen: without it the
         // HUD looks as if the z3 fallback does not exist at all.
         let backdropPlacements = frameContext.sharedState.tilePlacementState.backdropPlaceTilesContext.tilePlacements
-        let displayedTiles = (frameContext.sharedState.placeTileTrackingState.placeTiles + backdropPlacements)
+        let displayedTiles = (frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements + backdropPlacements)
             .map(\.metalTile.tile)
         tileLoadingStatusReporter.recordDisplayedTiles(displayedTiles)
     }

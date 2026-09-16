@@ -9,7 +9,6 @@ import MetalKit
 /// only through main-actor hops.
 final class TileRenderStore: @unchecked Sendable {
     struct TileRequestResult {
-        let readyTilesBySource: [Tile: MetalTile?]
         let readyTilesCount: Int
         let requestedTilesCount: Int
     }
@@ -106,8 +105,6 @@ final class TileRenderStore: @unchecked Sendable {
 
     func requestTiles(_ tiles: [Tile], frameIndex: UInt64? = nil) -> TileRequestResult {
         workingSet.updateDemandedTiles(tiles)
-        var readyTilesBySource: [Tile: MetalTile?] = [:]
-        readyTilesBySource.reserveCapacity(tiles.count)
         var request: [Tile] = []
         var readyTilesCount = 0
         for tile in tiles {
@@ -121,8 +118,6 @@ final class TileRenderStore: @unchecked Sendable {
                 readyTilesCount += 1
             }
 
-            // Keep tile availability for the caller.
-            readyTilesBySource[tile] = metalTile
         }
         
         
@@ -133,8 +128,7 @@ final class TileRenderStore: @unchecked Sendable {
                                                    ready: readyTilesCount,
                                                    requested: request.count))
 
-        return TileRequestResult(readyTilesBySource: readyTilesBySource,
-                                 readyTilesCount: readyTilesCount,
+        return TileRequestResult(readyTilesCount: readyTilesCount,
                                  requestedTilesCount: request.count)
     }
 

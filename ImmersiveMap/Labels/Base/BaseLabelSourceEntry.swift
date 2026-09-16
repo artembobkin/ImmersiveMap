@@ -11,7 +11,8 @@ import Foundation
 struct BaseLabelSourceEntry {
     let ownerKey: VisibleTile
     let metalTile: MetalTile
-    let lodKind: TileLodKind
+    /// The source is drawn in its own slot somewhere on screen.
+    let inOwnSlot: Bool
 
     var metalTileIdentity: ObjectIdentifier {
         ObjectIdentifier(metalTile)
@@ -25,7 +26,7 @@ struct BaseLabelSourceEntry {
             let entry = BaseLabelSourceEntry(ownerKey: VisibleTile(tile: placeTile.metalTile.tile,
                                                                    worldWrap: placeTile.placeIn.worldWrap),
                                              metalTile: placeTile.metalTile,
-                                             lodKind: placeTile.lodKind)
+                                             inOwnSlot: placeTile.inOwnSlot)
             if let existingEntry = bestEntryByOwnerKey[entry.ownerKey] {
                 if preferredWinner(lhs: entry, rhs: existingEntry) {
                     bestEntryByOwnerKey[entry.ownerKey] = entry
@@ -48,7 +49,7 @@ struct BaseLabelSourceEntry {
             hasher.combine(ownerKey.y)
             hasher.combine(ownerKey.z)
             hasher.combine(ownerKey.worldWrap)
-            hasher.combine(entry.lodKind.rawValue)
+            hasher.combine(entry.inOwnSlot)
             hasher.combine(entry.metalTile.tile.x)
             hasher.combine(entry.metalTile.tile.y)
             hasher.combine(entry.metalTile.tile.z)
@@ -86,8 +87,9 @@ struct BaseLabelSourceEntry {
         return false
     }
 
-    /// An exact placement outranks a stand-in for the same owner.
+    /// A source drawn in its own slot outranks one standing in for
+    /// another target.
     static func priorityRank(for entry: BaseLabelSourceEntry) -> Int {
-        entry.lodKind == .exact ? 0 : 1
+        entry.inOwnSlot ? 0 : 1
     }
 }

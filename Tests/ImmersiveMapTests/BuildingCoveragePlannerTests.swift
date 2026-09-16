@@ -82,8 +82,8 @@ final class BuildingCoveragePlannerTests: XCTestCase {
                        "Two children draw themselves; the cell draws clipped to the two missing quadrants")
         for placement in context.tilePlacements {
             let clipped = placement.metalTile.tile != placement.placeIn.tile
-            XCTAssertEqual(placement.lodKind, clipped ? .coarseSubstitute : .exact,
-                           "A clipped placement is a coarse substitute, one in its own slot is exact")
+            XCTAssertEqual(placement.inOwnSlot, clipped == false,
+                           "A clipped placement stands in, one in its own slot draws itself")
         }
     }
 

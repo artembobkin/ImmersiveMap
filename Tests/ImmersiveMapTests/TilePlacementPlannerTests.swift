@@ -37,13 +37,13 @@ final class TilePlacementPlannerTests: XCTestCase {
         XCTAssertEqual(placed.count, 1)
         XCTAssertEqual(placed.first?.metalTile.tile, parent)
         XCTAssertEqual(placed.first?.placeIn.tile, parent)
-        XCTAssertEqual(placed.first?.lodKind, .exact)
+        XCTAssertEqual(placed.first?.inOwnSlot, true)
     }
 
-    func testACoarserTargetIsMarkedAsASubstitute() throws {
+    func testAResidentTargetCoarserThanTheZoomStillDrawsItsOwnSlot() throws {
         let resident = try resident([parent])
         let placed = placements(targets: [parent], resident: resident, zoom: 7)
-        XCTAssertEqual(placed.first?.lodKind, .coarseSubstitute)
+        XCTAssertEqual(placed.first?.inOwnSlot, true, "a parent the coverage asked for is no stand-in")
     }
 
     func testAMissingTargetDrawsItsFinestResidentAncestor() throws {
@@ -52,7 +52,7 @@ final class TilePlacementPlannerTests: XCTestCase {
         XCTAssertEqual(placed.count, 1)
         XCTAssertEqual(placed.first?.metalTile.tile, grandparent, "the finest ancestor, not the coarser one")
         XCTAssertEqual(placed.first?.placeIn.tile, parent, "placed in the target's slot")
-        XCTAssertEqual(placed.first?.lodKind, .coarseSubstitute)
+        XCTAssertEqual(placed.first?.inOwnSlot, false)
     }
 
     func testAnAncestorAtTheBackdropZoomIsNotASubstitute() throws {
@@ -67,7 +67,7 @@ final class TilePlacementPlannerTests: XCTestCase {
         let resident = try resident(children + [grandparent])
         let placed = placements(targets: [parent], resident: resident, zoom: 5)
         XCTAssertEqual(Set(placed.map(\.metalTile.tile)), Set(children), "the four children cover the target whole")
-        XCTAssertTrue(placed.allSatisfy { $0.placeIn.tile == $0.metalTile.tile && $0.lodKind == .retainedReplacement },
+        XCTAssertTrue(placed.allSatisfy(\.inOwnSlot),
                       "each drawn at its own extent")
     }
 
@@ -78,9 +78,9 @@ final class TilePlacementPlannerTests: XCTestCase {
                        "the detailed child the camera saw stays, the coarse ancestor paints the rest")
         let child = placed.first { $0.metalTile.tile == children[0] }
         let ancestor = placed.first { $0.metalTile.tile == grandparent }
-        XCTAssertEqual(child?.lodKind, .retainedReplacement)
+        XCTAssertEqual(child?.inOwnSlot, true)
         XCTAssertEqual(child?.placeIn.tile, children[0], "the child is drawn at its own extent")
-        XCTAssertEqual(ancestor?.lodKind, .coarseSubstitute)
+        XCTAssertEqual(ancestor?.inOwnSlot, false)
         XCTAssertEqual(ancestor?.placeIn.tile, parent, "the ancestor is placed for the whole target")
     }
 
@@ -147,7 +147,7 @@ final class TilePlacementPlannerTests: XCTestCase {
         let ancestorOnly = try self.resident([grandparent])
         let ancestor = TilePlacementPlanner.buildPlacements(targets: [wrapped], resident: ancestorOnly, zoom: 5).tilePlacements
         XCTAssertEqual(ancestor.first?.placeIn, wrapped)
-        XCTAssertEqual(ancestor.first?.lodKind, .coarseSubstitute)
+        XCTAssertEqual(ancestor.first?.inOwnSlot, false)
     }
 
     func testAResidentTargetAlsoStandsInForItsMissingChildren() throws {
@@ -159,7 +159,8 @@ final class TilePlacementPlannerTests: XCTestCase {
         XCTAssertEqual(placed.count, 3)
         XCTAssertTrue(placed.allSatisfy { $0.metalTile.tile == parent })
         XCTAssertEqual(Set(placed.map(\.placeIn.tile)), [parent, children[0], children[1]])
-        XCTAssertEqual(placed.first { $0.placeIn.tile == parent }?.lodKind, .coarseSubstitute, "a resident target coarser than the zoom")
+        XCTAssertEqual(placed.first { $0.placeIn.tile == parent }?.inOwnSlot, true, "a resident target draws its own slot")
+        XCTAssertTrue(placed.filter { $0.placeIn.tile != parent }.allSatisfy { $0.inOwnSlot == false }, "and stands in for the children")
     }
 
     func testTheBackdropContextSearchesNoDescendants() throws {

@@ -995,7 +995,7 @@ final class DebugOverlayRenderer {
                                     frameContext: frameContext)
 
         let sourceTile = placeTile.metalTile.tile
-        if placeTile.lodKind != .exact || sourceTile != placeTile.placeIn.tile {
+        if placeTile.inOwnSlot == false {
             guard let sourceAnchorPoint = makeTileSourceLabelAnchorPoint(placeTile: placeTile,
                                                                          frameContext: frameContext) else {
                 return

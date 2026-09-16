@@ -25,19 +25,19 @@ enum RendererDebugOverlayDrawer {
                                                  polygonPipeline: polygonPipeline,
                                                  textRenderer: textRenderer,
                                                  frameContext: frameContext,
-                                                 placeTiles: frameContext.sharedState.placeTileTrackingState.placeTiles)
+                                                 placeTiles: frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements)
         }
         if controls.tileGridEnabled {
             debugOverlayRenderer.drawTileGridOverlay(renderEncoder: renderEncoder,
                                                      polygonPipeline: polygonPipeline,
                                                      textRenderer: textRenderer,
                                                      frameContext: frameContext,
-                                                     placeTiles: frameContext.sharedState.placeTileTrackingState.placeTiles,
+                                                     placeTiles: frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements,
                                                      density: controls.tileGridDensity)
         }
         if controls.roadLabelTilesEnabled {
             let activeTiles = Set(frameContext.sharedState.roadLabelState.activeRoadLabelTiles)
-            let roadLabelPlaceTiles = frameContext.sharedState.placeTileTrackingState.placeTiles.filter { placeTile in
+            let roadLabelPlaceTiles = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements.filter { placeTile in
                 activeTiles.contains(placeTile.placeIn)
             }
             debugOverlayRenderer.drawRoadLabelTileOverlay(renderEncoder: renderEncoder,

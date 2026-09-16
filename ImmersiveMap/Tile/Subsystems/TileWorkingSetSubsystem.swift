@@ -11,20 +11,22 @@ import simd
 /// from the store nearest first and lets go of the rest, plans what
 /// draws in a wanted tile's place while it loads (`TilePlacementPlanner`,
 /// `BuildingCoveragePlanner`, over what is resident this frame), and
-/// publishes the placements and the counts. Two gates keep it idle when
+/// publishes the placements and the counts. One gate keeps it idle when
 /// neither the coverage nor the store's contents changed.
 final class TileWorkingSetSubsystem: RenderSubsystem {
     let name: String = "TileWorkingSet"
-    
+
     private let tileRenderStore: TileRenderStore
     private let tileTraceRecorder: TileTraceRecorder
 
-    private var targetsHashTracker = StagedHashChangeTracker()
     private var placeTilesContext: PlaceTilesContext = .empty
     private var backdropPlaceTilesContext: PlaceTilesContext = .empty
     private var buildingPlaceTilesContext: PlaceTilesContext = .empty
     private var placementVersion: UInt64 = 0
-    private var demandGateFingerprint: Int?
+    /// The coverage and the working set the last placements were planned
+    /// over, nil until the first plan.
+    private var plannedCoverageVersion: UInt64?
+    private var plannedContentVersion: UInt64?
     private var latestRequestedTilesCount: Int = 0
     private var latestCounts = (visible: 0, demanded: 0, ready: 0)
 
@@ -43,17 +45,16 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
         let targets = visibleContent.visibleTiles
         let tileZoomLevel = visibleContent.tileZoomLevel
 
-        // Dirty-gate: demand/request/placement depend only on the coverage
-        // (coverageVersion changes when the camera, the mode or the reach
-        // changes) and the working set's contents (contentVersion changes on
-        // insert/release). Skipping is allowed only when there are no
-        // requested-but-not-ready tiles: the loader's retry logic relies on
-        // the per-frame request().
-        var gateHasher = Hasher()
-        gateHasher.combine(visibleContent.coverageVersion)
-        gateHasher.combine(tileRenderStore.cacheContentVersion)
-        let gateFingerprint = gateHasher.finalize()
-        if gateFingerprint == demandGateFingerprint,
+        // The gate: the demand, the loads and the placements depend on the
+        // coverage (its version moves when the targets or the backdrop
+        // change) and on the working set's contents (its version moves on
+        // every insert and release), on nothing else. Both as they were
+        // when the placements were last planned, and no tile in flight:
+        // nothing to do. A tile in flight keeps the per-frame request
+        // going, which the loader's retries rely on.
+        let coverageVersion = visibleContent.coverageVersion
+        if coverageVersion == plannedCoverageVersion,
+           tileRenderStore.cacheContentVersion == plannedContentVersion,
            latestRequestedTilesCount == 0 {
             publishState(frameContext: frameContext,
                          visibleTilesCount: latestCounts.visible,
@@ -76,37 +77,23 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
         // flat-mode wrapped copies share one content tile (`Tile`); the
         // list is deduplicated.
         let demandedSourceTiles = Self.uniqueSourceTiles(of: targets + backdropTiles)
-        // Demand order = network and parsing priority: tiles closest to the camera
-        // start first. The placement hash uses the stable
-        // `demandedSourceTiles` (center-based sorting would change on every
-        // camera shift and cause needless rebuilds) - both lists have the same contents.
+        // Demand order = network and parsing priority: tiles closest to the
+        // camera start first.
         let prioritizedTargets = TileDemandPriorityMath.sortedByCameraProximity(targets,
                                                                                 centerWorldMercator: visibleContent.centerWorldMercator,
                                                                                 renderSurfaceMode: frameContext.renderSurfaceMode)
         let prioritizedDemand = Self.uniqueSourceTiles(of: prioritizedTargets + backdropTiles)
-        // Returns source-tile availability map for GPU rendering:
-        // value contains Metal-ready tile buffers, or `nil` while still loading.
+        // The store keeps the demand and releases the rest, so the content
+        // version is read after it.
         let tileRequestResult = tileRenderStore.requestTiles(prioritizedDemand,
                                                              frameIndex: frameContext.frameIndex)
-        let readyTilesBySource = tileRequestResult.readyTilesBySource
+        let contentVersion = tileRenderStore.cacheContentVersion
 
-        var hashBuilder = Hasher()
-        hashBuilder.combine(CoverageTargetsHasher.computeTargetsHash(
-            targets: targets + backdropTiles,
-            demandedSourceTiles: demandedSourceTiles,
-            readyTilesBySource: readyTilesBySource
-        ))
-        // The placement also reads the stand-ins (descendants standing in
-        // are never demanded), so a tile landing outside the demand, which
-        // bumps the content version, rebuilds it too.
-        hashBuilder.combine(tileRenderStore.cacheContentVersion)
-        let targetsHash = hashBuilder.finalize()
-
-        let placementChanged = targetsHashTracker.stage(targetsHash)
+        // The placement is a function of the targets and of what is
+        // resident now (the stand-ins included, which are never demanded):
+        // replanned from scratch when either moved, kept otherwise.
+        let placementChanged = coverageVersion != plannedCoverageVersion || contentVersion != plannedContentVersion
         if placementChanged {
-            // The placement is a function of the targets and of what is
-            // resident now (the stand-ins included): nothing is carried
-            // over from the previous frame's placement.
             let resident = tileRenderStore.residentTiles()
             placeTilesContext = TilePlacementPlanner.buildPlacements(targets: targets,
                                                                      resident: resident,
@@ -130,14 +117,15 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
                                                                      eyeGroundCell: eyeGroundCell,
                                                                      targetZoom: tileZoomLevel)
             placementVersion &+= 1
-            targetsHashTracker.commitPending()
+            plannedCoverageVersion = coverageVersion
+            plannedContentVersion = contentVersion
         }
 
         let visibleTilesCount = targets.count
         let readyTilesCount = tileRequestResult.readyTilesCount
         let requestedTilesCount = tileRequestResult.requestedTilesCount
         let renderedTilesCount = placeTilesContext.tilePlacements.count
-        let lodSummary = summarizeLOD(placeTilesContext.tilePlacements)
+        let inOwnSlotCount = placeTilesContext.tilePlacements.count { $0.inOwnSlot }
         tileTraceRecorder.record(.tileDemandUpdate(frameIndex: frameContext.frameIndex,
                                                    visible: visibleTilesCount,
                                                    demanded: demandedSourceTiles.count,
@@ -147,11 +135,9 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
                                                    placementChanged: placementChanged,
                                                    placementVersion: placementVersion,
                                                    surface: frameContext.renderSurfaceMode == .spherical ? "globe" : "flat",
-                                                   lodExact: lodSummary.exact,
-                                                   lodCoarse: lodSummary.coarse,
-                                                   lodRetained: lodSummary.retained))
+                                                   inOwnSlot: inOwnSlotCount,
+                                                   standIns: renderedTilesCount - inOwnSlotCount))
 
-        demandGateFingerprint = gateFingerprint
         latestRequestedTilesCount = requestedTilesCount
         latestCounts = (visible: visibleTilesCount,
                         demanded: demandedSourceTiles.count,
@@ -162,7 +148,6 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
                      readyTilesCount: readyTilesCount,
                      requestedTilesCount: requestedTilesCount)
     }
-
 
     /// The content tiles of the targets, first occurrence first.
     private static func uniqueSourceTiles(of targets: [VisibleTile]) -> [Tile] {
@@ -191,7 +176,6 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
             requestedTilesCount: requestedTilesCount,
             renderedTilesCount: renderedTilesCount
         )
-        frameContext.sharedState.placeTileTrackingState = PlaceTileTrackingState(placeTiles: placeTilesContext.tilePlacements)
 
         frameContext.services.diagnostics.setCounter(.visibleTiles, value: visibleTilesCount)
         frameContext.services.diagnostics.setCounter(.readyTiles, value: readyTilesCount)
@@ -205,11 +189,11 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
 
     func handleMemoryWarning() {
         tileRenderStore.handleMemoryWarning()
-        // Placement contexts are kept and hold their tiles strongly; the store
-        // keeps the demanded set, so the map doesn't go blank; the next frame
-        // rebuilds placements from scratch.
-        targetsHashTracker.invalidate()
-        demandGateFingerprint = nil
+        // The placement contexts are kept and hold their tiles strongly, and
+        // the store keeps the demanded set, so the map does not go blank.
+        // The next frame replans from scratch.
+        plannedCoverageVersion = nil
+        plannedContentVersion = nil
         placementVersion &+= 1
     }
 
@@ -218,25 +202,8 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
         placeTilesContext = .empty
         backdropPlaceTilesContext = .empty
         buildingPlaceTilesContext = .empty
-        targetsHashTracker.invalidate()
-        demandGateFingerprint = nil
+        plannedCoverageVersion = nil
+        plannedContentVersion = nil
         placementVersion &+= 1
-    }
-
-    private func summarizeLOD(_ placements: [PlaceTile]) -> (exact: Int, coarse: Int, retained: Int) {
-        var exact = 0
-        var coarse = 0
-        var retained = 0
-        for placement in placements {
-            switch placement.lodKind {
-            case .exact:
-                exact += 1
-            case .coarseSubstitute:
-                coarse += 1
-            case .retainedReplacement:
-                retained += 1
-            }
-        }
-        return (exact: exact, coarse: coarse, retained: retained)
     }
 }

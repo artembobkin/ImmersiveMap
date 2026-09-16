@@ -241,9 +241,8 @@ extension TileTraceEvent {
                                  placementChanged: Bool,
                                  placementVersion: UInt64,
                                  surface: String,
-                                 lodExact: Int,
-                                 lodCoarse: Int,
-                                 lodRetained: Int) -> TileTraceEvent {
+                                 inOwnSlot: Int,
+                                 standIns: Int) -> TileTraceEvent {
         .event("tile_demand_update",
                frameIndex: frameIndex,
                fields: [
@@ -255,9 +254,8 @@ extension TileTraceEvent {
                    "placementChanged": .bool(placementChanged),
                    "placementVersion": .int(Int(placementVersion)),
                    "surface": .string(surface),
-                   "lodExact": .int(lodExact),
-                   "lodCoarse": .int(lodCoarse),
-                   "lodRetained": .int(lodRetained)
+                   "inOwnSlot": .int(inOwnSlot),
+                   "standIns": .int(standIns)
                ])
     }
 

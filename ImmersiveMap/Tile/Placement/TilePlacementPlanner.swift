@@ -62,7 +62,7 @@ struct TilePlacementPlanner {
         /// whether they cover it whole.
         func descendants(of tile: Tile, worldWrap: Int8, depth: Int) -> (placements: [PlaceTile], complete: Bool) {
             if let metalTile = resident[tile] {
-                return ([PlaceTile(metalTile: metalTile, placeIn: VisibleTile(tile: tile, worldWrap: worldWrap), lodKind: .retainedReplacement)], true)
+                return ([PlaceTile(metalTile: metalTile, placeIn: VisibleTile(tile: tile, worldWrap: worldWrap))], true)
             }
             guard depth > 0, branches.contains(tile) else {
                 return ([], false)
@@ -94,8 +94,7 @@ struct TilePlacementPlanner {
             let sourceTile = target.tile
             if let metalTile = resident[sourceTile] {
                 append(PlaceTile(metalTile: metalTile,
-                                 placeIn: target,
-                                 lodKind: sourceTile.z < zoom ? .coarseSubstitute : .exact))
+                                 placeIn: target))
                 continue
             }
 
@@ -115,7 +114,7 @@ struct TilePlacementPlanner {
                         break
                     }
                     if let metalTile = resident[ancestor] {
-                        append(PlaceTile(metalTile: metalTile, placeIn: target, lodKind: .coarseSubstitute))
+                        append(PlaceTile(metalTile: metalTile, placeIn: target))
                         break
                     }
                 }

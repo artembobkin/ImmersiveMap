@@ -13,11 +13,9 @@ final class BaseLabelSourceEntryTests: XCTestCase {
         let metalTile = MetalTile(tile: Tile(x: 8, y: 8, z: 4),
                                   tileBuffers: try makeTileBuffers())
         let nearPlaceTile = PlaceTile(metalTile: metalTile,
-                                      placeIn: VisibleTile(x: 32, y: 32, z: 6),
-                                      lodKind: .retainedReplacement)
+                                      placeIn: VisibleTile(x: 32, y: 32, z: 6))
         let farPlaceTile = PlaceTile(metalTile: metalTile,
-                                     placeIn: VisibleTile(x: 48, y: 48, z: 6),
-                                     lodKind: .retainedReplacement)
+                                     placeIn: VisibleTile(x: 48, y: 48, z: 6))
 
         let nearFirstEntries = BaseLabelSourceEntry.build(from: [nearPlaceTile, farPlaceTile])
         let farFirstEntries = BaseLabelSourceEntry.build(from: [farPlaceTile, nearPlaceTile])
@@ -32,11 +30,9 @@ final class BaseLabelSourceEntryTests: XCTestCase {
         let lowerOwnerTile = MetalTile(tile: Tile(x: 8, y: 8, z: 4), tileBuffers: try makeTileBuffers())
         let higherOwnerTile = MetalTile(tile: Tile(x: 9, y: 8, z: 4), tileBuffers: try makeTileBuffers())
         let substitute = PlaceTile(metalTile: lowerOwnerTile,
-                                   placeIn: VisibleTile(x: 48, y: 48, z: 6),
-                                   lodKind: .retainedReplacement)
+                                   placeIn: VisibleTile(x: 48, y: 48, z: 6))
         let exact = PlaceTile(metalTile: higherOwnerTile,
-                              placeIn: VisibleTile(x: 9, y: 8, z: 4),
-                              lodKind: .exact)
+                              placeIn: VisibleTile(x: 9, y: 8, z: 4))
 
         let entries = BaseLabelSourceEntry.build(from: [substitute, exact])
 
@@ -59,7 +55,7 @@ final class BaseLabelSourceEntryTests: XCTestCase {
         cache.rebuild(sourceEntries: [
             BaseLabelSourceEntry(ownerKey: ownerKey,
                                  metalTile: metalTile,
-                                 lodKind: .exact)
+                                 inOwnSlot: true)
         ], tileIndexAllocator: tileIndexAllocator)
 
         XCTAssertEqual(cache.labelInputsCount, 3)
@@ -78,7 +74,7 @@ final class BaseLabelSourceEntryTests: XCTestCase {
         cache.rebuild(sourceEntries: [
             BaseLabelSourceEntry(ownerKey: ownerKey,
                                  metalTile: metalTile,
-                                 lodKind: .exact)
+                                 inOwnSlot: true)
         ], tileIndexAllocator: VisibleTileIndexAllocator(indexedTiles: [ownerKey]))
 
         let candidates = cache.labelCollisionAABBInputs

@@ -97,8 +97,7 @@ final class DebugTileGridCenterTileTests: XCTestCase {
             let tile = Tile(x: coordinate.x, y: coordinate.y, z: zoom)
             return PlaceTile(metalTile: MetalTile(tile: tile,
                                                   tileBuffers: try TileBuffersFixtures.makeEmptyTileBuffers()),
-                             placeIn: VisibleTile(tile: tile, worldWrap: coordinate.worldWrap),
-                             lodKind: .exact)
+                             placeIn: VisibleTile(tile: tile, worldWrap: coordinate.worldWrap))
         }
     }
 }

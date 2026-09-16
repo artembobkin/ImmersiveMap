@@ -52,6 +52,30 @@ final class TileCullingBackdropTests: XCTestCase {
         XCTAssertTrue(content.backdropTiles.isEmpty)
     }
 
+    /// The coverage version is the working set's gate: it moves when the
+    /// targets or the backdrop differ from the last frame's, and not when
+    /// the walk merely ran again over the same pose.
+    func testTheCoverageVersionMovesOnlyWithTheCoverage() throws {
+        let culling = TileCulling()
+        let fixture = try makeFixture(zoom: 9.0, renderSurfaceMode: .flat)
+        func resolve(_ fixture: Fixture, targetZoom: Int) -> VisibleContentState {
+            culling.resolveVisibleContent(cameraState: fixture.cameraState,
+                                          resolvedPresentation: fixture.resolvedPresentation,
+                                          targetZoom: targetZoom,
+                                          cameraMatrix: fixture.cameraMatrix,
+                                          cameraFrustum: fixture.cameraFrustum,
+                                          cameraEye: fixture.cameraEye)
+        }
+        let first = resolve(fixture, targetZoom: 9)
+        let again = resolve(fixture, targetZoom: 9)
+        XCTAssertEqual(again.visibleTiles, first.visibleTiles)
+        XCTAssertEqual(again.coverageVersion, first.coverageVersion, "the same coverage keeps its version")
+
+        let coarser = resolve(fixture, targetZoom: 8)
+        XCTAssertNotEqual(coarser.visibleTiles, first.visibleTiles)
+        XCTAssertNotEqual(coarser.coverageVersion, first.coverageVersion, "a different coverage moves it")
+    }
+
     private struct Fixture {
         let cameraState: ImmersiveMapCameraState
         let resolvedPresentation: ResolvedPresentationState

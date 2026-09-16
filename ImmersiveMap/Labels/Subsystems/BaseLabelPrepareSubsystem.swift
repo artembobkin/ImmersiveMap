@@ -125,9 +125,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     }
 
     func update(frameContext: FrameContext) {
-        let placeTileTrackingState = frameContext.sharedState.placeTileTrackingState
+        let placeTiles = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
         let projectionIndexState = frameContext.sharedState.tileProjectionIndexState
-        let sourceEntries = BaseLabelSourceEntry.build(from: placeTileTrackingState.placeTiles)
+        let sourceEntries = BaseLabelSourceEntry.build(from: placeTiles)
         latestCameraFingerprint = makeVisibilityCameraFingerprint(frameContext: frameContext)
 
         // One source set serves the base and the road label caches alike.
