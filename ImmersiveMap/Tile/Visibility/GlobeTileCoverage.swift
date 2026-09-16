@@ -54,13 +54,13 @@ struct GlobeCoverageInputs {
 /// working set already holds. A target zoom at or below the cover's is
 /// left alone: the whole world is pinned there and nothing is saved by
 /// coarsening, so the walk places the leaves at the target zoom.
-final class GlobeTileCoverage {
+enum GlobeTileCoverage {
     /// The deepest zoom of the pinned world cover (the working set keeps
     /// z0 to z3 resident): the floor of every placement on the sphere and
     /// what the far field is asked for.
     static let floorZoom = 3
 
-    private let transitionLowZoomFallbackLimit = 3
+    private static let transitionLowZoomFallbackLimit = 3
 
     private struct Walk {
         let targetZoom: Int
@@ -75,7 +75,7 @@ final class GlobeTileCoverage {
         var metrics = GlobeCullingMetrics.zero
     }
 
-    func targets(targetZoom: Int, inputs: GlobeCoverageInputs, frustum: Frustum?) -> GlobeCoverageResolution {
+    static func targets(targetZoom: Int, inputs: GlobeCoverageInputs, frustum: Frustum?) -> GlobeCoverageResolution {
         let startTime = CACurrentMediaTime()
         guard targetZoom >= 0, let frustum else {
             return GlobeCoverageResolution(targets: [], metrics: .zero)
@@ -95,7 +95,7 @@ final class GlobeTileCoverage {
 
     /// `accepted`: the tile lies in a subtree the visibility tests accepted
     /// whole, so they are not asked again below it.
-    private func visit(_ tile: Tile, accepted: Bool, walk: inout Walk) {
+    private static func visit(_ tile: Tile, accepted: Bool, walk: inout Walk) {
         walk.metrics.visitedNodeCount += 1
         if walk.visibility.transition > 0, walk.targetZoom <= transitionLowZoomFallbackLimit {
             acceptLeafDescendants(of: tile, walk: &walk)
@@ -180,7 +180,7 @@ final class GlobeTileCoverage {
         }
     }
 
-    private func place(_ tile: Tile, walk: inout Walk) {
+    private static func place(_ tile: Tile, walk: inout Walk) {
         guard walk.placed.insert(tile).inserted else { return }
         walk.targets.append(VisibleTile(tile: tile))
         walk.metrics.placedTileCount += 1
@@ -188,7 +188,7 @@ final class GlobeTileCoverage {
 
     /// Through the morph at the coarse zooms every leaf is taken: the
     /// visibility tests do not hold there.
-    private func acceptLeafDescendants(of tile: Tile, walk: inout Walk) {
+    private static func acceptLeafDescendants(of tile: Tile, walk: inout Walk) {
         if tile.z == walk.targetZoom {
             place(tile, walk: &walk)
             return
@@ -206,7 +206,7 @@ final class GlobeTileCoverage {
                 Tile(x: x, y: y + 1, z: z), Tile(x: x + 1, y: y + 1, z: z)]
     }
 
-    private func evaluateVisibility(for tile: Tile,
+    private static func evaluateVisibility(for tile: Tile,
                                     targetZoom: Int,
                                     frustum: Frustum,
                                     inputs: GlobeVisibilityInputs) -> GlobeNodeVisibilityEvaluation {
@@ -240,7 +240,7 @@ final class GlobeTileCoverage {
         return .descend
     }
 
-    private func minimumRejectZoom(targetZoom: Int,
+    private static func minimumRejectZoom(targetZoom: Int,
                                    transition: Float) -> Int {
         min(targetZoom, transition > 0 ? 4 : 3)
     }

@@ -35,11 +35,14 @@ import simd
 /// go down to z0, so no ground goes unpainted. The parents ceiling
 /// (`FlatDistanceCoverage.maximumParents`) trims the farthest when a
 /// pose asks for more.
-final class FlatTileCoverage {
-    private static let worldWraps: [Int8] = [-1, 0, 1]
+struct FlatCoverageResolution {
+    let targets: [VisibleTile]
+    /// How many tiles the walk looked at, for the diagnostics.
+    let visitedNodeCount: Int
+}
 
-    /// How many tiles the last walk looked at, for the diagnostics.
-    private(set) var visitedNodeCount = 0
+enum FlatTileCoverage {
+    private static let worldWraps: [Int8] = [-1, 0, 1]
 
     private struct Walk {
         let targetZoom: Int
@@ -53,8 +56,8 @@ final class FlatTileCoverage {
         var visited = 0
     }
 
-    func targets(targetZoom: Int, inputs: FlatCoverageInputs, polygon: CoveragePolygon) -> [VisibleTile] {
-        guard targetZoom >= 0 else { return [] }
+    static func targets(targetZoom: Int, inputs: FlatCoverageInputs, polygon: CoveragePolygon) -> FlatCoverageResolution {
+        guard targetZoom >= 0 else { return FlatCoverageResolution(targets: [], visitedNodeCount: 0) }
         let lookAtWorld = FlatDistanceCoverage.worldPoint(ofTilePoint: inputs.lookAt, zoom: targetZoom,
                                                           flatRenderState: inputs.flatRenderState)
         // In the tiles' own scale: past the source's deepest zoom the tiles
@@ -68,7 +71,6 @@ final class FlatTileCoverage {
         for worldWrap in Self.worldWraps {
             visit(VisibleTile(x: 0, y: 0, z: 0, worldWrap: worldWrap), walk: &walk)
         }
-        visitedNodeCount = walk.visited
 
         // The ceiling: the farthest parents go, so the horizon alone pays,
         // and the exact zone never does. The cut is a distance, the one
@@ -84,7 +86,7 @@ final class FlatTileCoverage {
             let cutoff = distances[FlatDistanceCoverage.maximumParents - 1] * (1 + 1e-5)
             kept = kept.filter { $0.z == targetZoom || walk.placed[$0]! <= cutoff }
         }
-        return Self.sorted(kept)
+        return FlatCoverageResolution(targets: Self.sorted(kept), visitedNodeCount: walk.visited)
     }
 
     /// The tiles at `zoom` the polygon meets, every world copy, in a
@@ -112,7 +114,7 @@ final class FlatTileCoverage {
         }
     }
 
-    private func visit(_ node: VisibleTile, walk: inout Walk) {
+    private static func visit(_ node: VisibleTile, walk: inout Walk) {
         walk.visited += 1
         guard let square = Self.square(of: node, flatRenderState: walk.inputs.flatRenderState, meets: walk.polygon) else {
             return

@@ -136,8 +136,8 @@ final class FlatTileCoverageTests: XCTestCase {
         output.first { $0.worldWrap == tile.worldWrap && ($0.tile == tile.tile || $0.tile.covers(tile.tile)) }
     }
 
-    private func targets(inputs: FlatCoverageInputs, polygon: CoveragePolygon, coverage: FlatTileCoverage = FlatTileCoverage()) -> [VisibleTile] {
-        coverage.targets(targetZoom: Self.zoom, inputs: inputs, polygon: polygon)
+    private func targets(inputs: FlatCoverageInputs, polygon: CoveragePolygon) -> [VisibleTile] {
+        FlatTileCoverage.targets(targetZoom: Self.zoom, inputs: inputs, polygon: polygon).targets
     }
 
     /// Straight down the whole view is within the exact radius: every tile
@@ -209,14 +209,14 @@ final class FlatTileCoverageTests: XCTestCase {
         for tilt in [0.0, 30.0, 45.0, 60.0, 70.0, 75.0] {
             for bearing in stride(from: 0.0, through: 150.0, by: 30.0) {
                 let aspect = bearing.truncatingRemainder(dividingBy: 60) == 0 ? 1.0 : 1.78
-                let coverage = FlatTileCoverage()
-                let output = targets(inputs: Self.inputs(tilt: tilt, bearing: bearing),
-                                     polygon: Self.polygon(tilt: tilt, bearing: bearing, aspect: aspect),
-                                     coverage: coverage)
+                let resolution = FlatTileCoverage.targets(targetZoom: Self.zoom,
+                                                          inputs: Self.inputs(tilt: tilt, bearing: bearing),
+                                                          polygon: Self.polygon(tilt: tilt, bearing: bearing, aspect: aspect))
+                let output = resolution.targets
                 let parents = output.filter { $0.z < Self.zoom }.count
                 XCTAssertLessThanOrEqual(parents, FlatDistanceCoverage.maximumParents + 4, "tilt \(tilt) bearing \(bearing): parents \(parents)")
                 XCTAssertLessThanOrEqual(output.count - parents, 14, "tilt \(tilt) bearing \(bearing): the exact zone is bounded by its radius")
-                XCTAssertLessThan(coverage.visitedNodeCount, 400, "tilt \(tilt) bearing \(bearing): the walk stays small")
+                XCTAssertLessThan(resolution.visitedNodeCount, 400, "tilt \(tilt) bearing \(bearing): the walk stays small")
                 if tilt == 0 {
                     XCTAssertLessThanOrEqual(output.count, 6, "tilt \(tilt) bearing \(bearing): \(output.count)")
                     XCTAssertTrue(output.allSatisfy { $0.z == Self.zoom }, "tilt \(tilt) bearing \(bearing): straight down everything is exact")
@@ -347,12 +347,11 @@ final class FlatTileCoverageTests: XCTestCase {
     /// past its threshold it drops a level and its parent covers it, back
     /// inside it is exact again.
     func testALeafFollowsTheRuleFrameByFrame() {
-        let coverage = FlatTileCoverage()
         let tile = VisibleTile(x: 256, y: 250, z: Self.zoom)
         let polygon = Self.square(minX: 256.1, minY: 250.1, maxX: 256.9, maxY: 250.9)
         let threshold = FlatDistanceCoverage.threshold(ofLevel: 1, cameraDistance: 1.2)
         func output(eyeDistance: Double) -> [VisibleTile] {
-            coverage.targets(targetZoom: Self.zoom, inputs: Self.sideInputs(tile: tile, eyeDistance: eyeDistance), polygon: polygon)
+            FlatTileCoverage.targets(targetZoom: Self.zoom, inputs: Self.sideInputs(tile: tile, eyeDistance: eyeDistance), polygon: polygon).targets
         }
         XCTAssertTrue(output(eyeDistance: threshold * 0.95).contains(tile))
         let dropped = output(eyeDistance: threshold * 1.05)
@@ -397,7 +396,7 @@ final class FlatTileCoverageTests: XCTestCase {
                                                                   flatRenderPan: state.pan, renderMapSize: state.renderMapSize)
         let eye = SIMD3<Double>(Double(origin.x) + 0.5, Double(origin.y) + 0.4, 0.3)
         let inputs = FlatCoverageInputs(eye: eye, flatRenderState: state, eyeGround: lookAt + SIMD2<Double>(0, 1.1), lookAt: lookAt)
-        let output = FlatTileCoverage().targets(targetZoom: zoom, inputs: inputs, polygon: polygon)
+        let output = FlatTileCoverage.targets(targetZoom: zoom, inputs: inputs, polygon: polygon).targets
         XCTAssertFalse(output.isEmpty)
         XCTAssertTrue(output.allSatisfy { $0.z > TileCulling.flatBackdropZoomLevel },
                       "Nothing at the backdrop's zoom or coarser is placed: \(output)")
@@ -419,7 +418,7 @@ final class FlatTileCoverageTests: XCTestCase {
         let inputs = FlatCoverageInputs(eye: eye, flatRenderState: state,
                                         eyeGround: lookAt + SIMD2<Double>(-1.1, 0), lookAt: lookAt,
                                         backdropZoom: nil)
-        let output = FlatTileCoverage().targets(targetZoom: zoom, inputs: inputs, polygon: polygon)
+        let output = FlatTileCoverage.targets(targetZoom: zoom, inputs: inputs, polygon: polygon).targets
         for worldWrap: Int8 in [0, 1] {
             for x in 0 ... 1 {
                 for y in 0 ... 1 {

@@ -14,8 +14,6 @@ class TileCulling {
     /// warm-up the backdrop costs nothing.
     static let flatBackdropZoomLevel = 3
 
-    private let flatCoverage = FlatTileCoverage()
-    private let globeCoverage = GlobeTileCoverage()
     private var coverageVersion: UInt64 = 0
 
     init() {}
@@ -41,7 +39,7 @@ class TileCulling {
             let inputs = GlobeCoverageInputs(eye: cameraEye,
                                              globe: resolvedPresentation.globeRenderState.globeUniform,
                                              farRadius: farRadius)
-            let resolution = globeCoverage.targets(targetZoom: targetZoom, inputs: inputs, frustum: cameraFrustum)
+            let resolution = GlobeTileCoverage.targets(targetZoom: targetZoom, inputs: inputs, frustum: cameraFrustum)
             visibleTiles = resolution.targets
             backdropTiles = []
             recordGlobeMetrics(resolution.metrics, diagnostics: diagnostics)
@@ -56,14 +54,15 @@ class TileCulling {
                                                      cameraZoom: cameraState.zoom,
                                                      backdropZoom: hasBackdrop ? Self.flatBackdropZoomLevel : nil,
                                                      farRadius: farRadius)
-                visibleTiles = flatCoverage.targets(targetZoom: targetZoom, inputs: inputs, polygon: polygon)
+                let resolution = FlatTileCoverage.targets(targetZoom: targetZoom, inputs: inputs, polygon: polygon)
+                visibleTiles = resolution.targets
                 // The backdrop: the coarse tiles under the whole footprint, all
                 // the way to the horizon, so the coverage's edge is never
                 // drawn in.
                 backdropTiles = hasBackdrop
                     ? FlatTileCoverage.tiles(atZoom: Self.flatBackdropZoomLevel, polygon: polygon, flatRenderState: flatRenderState)
                     : []
-                diagnostics?.setCounter(.globeCullingVisitedNodes, value: flatCoverage.visitedNodeCount)
+                diagnostics?.setCounter(.globeCullingVisitedNodes, value: resolution.visitedNodeCount)
             } else {
                 visibleTiles = []
                 backdropTiles = []

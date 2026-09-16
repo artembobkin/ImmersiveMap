@@ -36,9 +36,8 @@ final class GlobeTileCoverageTests: XCTestCase {
     /// below the floor, far fewer targets than leaves in view, and a walk
     /// of a few hundred tiles.
     func testNearTilesAreExactAndTheFarFieldIsTheCover() {
-        let coverage = GlobeTileCoverage()
         let inputs = Self.inputs(eyeDistance: 0.05)
-        let resolution = coverage.targets(targetZoom: 6, inputs: inputs, frustum: Self.frustum(eyeDistance: 0.05))
+        let resolution = GlobeTileCoverage.targets(targetZoom: 6, inputs: inputs, frustum: Self.frustum(eyeDistance: 0.05))
         let output = resolution.targets
         XCTAssertTrue(output.contains(VisibleTile(x: 32, y: 32, z: 6)), "the tile under the eye is exact: \(output)")
         XCTAssertTrue(output.allSatisfy { $0.z >= GlobeTileCoverage.floorZoom })
@@ -65,7 +64,7 @@ final class GlobeTileCoverageTests: XCTestCase {
     /// Overlaps are allowed on the sphere as on the plane: a parent placed
     /// for the ground around an exact tile covers the exact tile too.
     func testParentsOverlapTheExactTiles() {
-        let output = GlobeTileCoverage().targets(targetZoom: 6, inputs: Self.inputs(eyeDistance: 0.05), frustum: Self.frustum(eyeDistance: 0.05)).targets
+        let output = GlobeTileCoverage.targets(targetZoom: 6, inputs: Self.inputs(eyeDistance: 0.05), frustum: Self.frustum(eyeDistance: 0.05)).targets
         let exact = output.filter { $0.z == 6 }
         let parents = output.filter { $0.z < 6 }
         XCTAssertTrue(parents.contains { parent in exact.contains { parent.tile.covers($0.tile) } },
@@ -76,17 +75,17 @@ final class GlobeTileCoverageTests: XCTestCase {
     /// pinned there, and the walk places the leaves at the target zoom.
     func testShallowTargetsStayExact() {
         for zoom in 1 ... GlobeTileCoverage.floorZoom {
-            let output = GlobeTileCoverage().targets(targetZoom: zoom, inputs: Self.inputs(eyeDistance: 4), frustum: Self.frustum(eyeDistance: 4)).targets
+            let output = GlobeTileCoverage.targets(targetZoom: zoom, inputs: Self.inputs(eyeDistance: 4), frustum: Self.frustum(eyeDistance: 4)).targets
             XCTAssertFalse(output.isEmpty)
             XCTAssertTrue(output.allSatisfy { $0.z == zoom }, "z\(zoom): \(output)")
         }
-        XCTAssertTrue(GlobeTileCoverage().targets(targetZoom: 6, inputs: Self.inputs(eyeDistance: 4), frustum: nil).targets.isEmpty)
+        XCTAssertTrue(GlobeTileCoverage.targets(targetZoom: 6, inputs: Self.inputs(eyeDistance: 4), frustum: nil).targets.isEmpty)
     }
 
     /// Seen from afar every tile is scaled alike and the whole sphere is
     /// within the exact zone: the culling's target zoom keeps the count.
     func testFromAfarEverythingInViewIsExact() {
-        let output = GlobeTileCoverage().targets(targetZoom: 6, inputs: Self.inputs(eyeDistance: 4), frustum: Self.frustum(eyeDistance: 4, fovRadians: .pi / 6)).targets
+        let output = GlobeTileCoverage.targets(targetZoom: 6, inputs: Self.inputs(eyeDistance: 4), frustum: Self.frustum(eyeDistance: 4, fovRadians: .pi / 6)).targets
         XCTAssertFalse(output.isEmpty)
         XCTAssertTrue(output.allSatisfy { $0.z == 6 }, "\(output.filter { $0.z != 6 })")
     }
@@ -95,7 +94,6 @@ final class GlobeTileCoverageTests: XCTestCase {
     /// past the exact threshold it drops a level and a parent covers it,
     /// back inside it is exact again.
     func testALeafFollowsTheRuleFrameByFrame() {
-        let coverage = GlobeTileCoverage()
         let tile = Tile(x: 32, y: 32, z: 6)
         // The eye on the axis above the front point, which is a corner of
         // the tile: the tile's centre sits a fixed distance to the side, so
@@ -103,7 +101,7 @@ final class GlobeTileCoverageTests: XCTestCase {
         // own distance shrinks under it. Search for the height where the
         // rule drops it.
         func output(eyeDistance: Float) -> [VisibleTile] {
-            coverage.targets(targetZoom: 6, inputs: Self.inputs(eyeDistance: eyeDistance), frustum: Self.frustum(eyeDistance: eyeDistance)).targets
+            GlobeTileCoverage.targets(targetZoom: 6, inputs: Self.inputs(eyeDistance: eyeDistance), frustum: Self.frustum(eyeDistance: eyeDistance)).targets
         }
         var threshold: Float = 0.05
         XCTAssertEqual(FlatDistanceCoverage.drop(distance: Self.distance(from: Self.inputs(eyeDistance: threshold), to: tile), cameraDistance: Double(threshold)), 0)
@@ -122,7 +120,7 @@ final class GlobeTileCoverageTests: XCTestCase {
     /// A short reach turns most of the view into the far field: the cover
     /// tiles, nothing between them and the exact zone.
     func testAShortReachHandsTheViewToTheCover() {
-        let output = GlobeTileCoverage().targets(targetZoom: 6, inputs: Self.inputs(eyeDistance: 0.05, farRadius: 3), frustum: Self.frustum(eyeDistance: 0.05)).targets
+        let output = GlobeTileCoverage.targets(targetZoom: 6, inputs: Self.inputs(eyeDistance: 0.05, farRadius: 3), frustum: Self.frustum(eyeDistance: 0.05)).targets
         XCTAssertTrue(output.allSatisfy { $0.z >= GlobeTileCoverage.floorZoom })
         XCTAssertGreaterThan(output.filter { $0.z == GlobeTileCoverage.floorZoom }.count, 0)
         XCTAssertTrue(output.contains(VisibleTile(x: 32, y: 32, z: 6)))
