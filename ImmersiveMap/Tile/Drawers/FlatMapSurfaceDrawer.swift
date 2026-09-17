@@ -19,8 +19,7 @@ enum FlatMapSurfaceDrawer {
                      groundOutlineState: MTLDepthStencilState,
                      isWireframeEnabled: Bool,
                      opaqueFillsOnly: Bool = false,
-                     markingCutoffWorldDistance: Float = .infinity,
-                     roadFade: (centerWorld: SIMD2<Float>, start: Float, end: Float) = (.zero, .infinity, .infinity)) {
+                     markingCutoffWorldDistance: Float = .infinity) {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder)
         // Every tile triangle (ground, road buckets, bridge overlay) is
         // counter-clockwise in render space, the parser's contract
@@ -83,34 +82,11 @@ enum FlatMapSurfaceDrawer {
         }
         uniqueSources.sort { $0.metalTile.tile.z > $1.metalTile.tile.z }
 
-        // Distance LOD for the roads (RoadDistanceLOD): the road layers fade
-        // with the ground distance to the look-at point and are clipped at
-        // the ring's outer radius in the vertex stage; a source entirely
-        // beyond that radius draws none of its road buckets and no bridge
-        // overlay. The ground fills and ribbons draw as usual.
-        let roadDistanceFade = roadFade.end.isFinite
-            ? TileRoadDistanceFadeUniform.fade(centerWorld: roadFade.centerWorld, startWorld: roadFade.start, endWorld: roadFade.end)
-            : TileRoadDistanceFadeUniform.disabled
-        let roadCutoffWorldDistance = roadFade.end
-        let roadSources = uniqueSources.filter { source in
-            let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: source.metalTile.tile.x,
-                                                                             y: source.metalTile.tile.y,
-                                                                             z: source.metalTile.tile.z,
-                                                                             worldWrap: source.worldWrap,
-                                                                             flatRenderPan: flatRenderState.pan,
-                                                                             renderMapSize: flatRenderState.renderMapSize)
-            return RoadDistanceLOD.tileBeyondCutoff(centerWorld: roadFade.centerWorld,
-                                                    tileOriginAndSize: originAndSize,
-                                                    cutoffWorldDistance: roadCutoffWorldDistance) == false
-        }
-
         func drawLayer(_ keyPath: KeyPath<TileBuffers, TileBuffers.GeometryLayer>,
                        bandOffset: Float,
-                       sources: [(metalTile: MetalTile, worldWrap: Int8)]? = nil,
-                       distanceFade: TileRoadDistanceFadeUniform = .disabled,
                        primitiveType: MTLPrimitiveType = .triangle,
                        runFilter: ((GroundStyleRun) -> Bool)? = nil) {
-            for source in sources ?? uniqueSources {
+            for source in uniqueSources {
                 drawFlatGeometryLayer(renderEncoder: renderEncoder,
                                       buffers: source.metalTile.tileBuffers[keyPath: keyPath],
                                       tile: source.metalTile.tile,
@@ -122,7 +98,6 @@ enum FlatMapSurfaceDrawer {
                                       bandOffset: bandOffset,
                                       cameraEye: cameraUniform.eye,
                                       markingCutoffWorldDistance: markingCutoffWorldDistance,
-                                      distanceFade: distanceFade,
                                       primitiveType: primitiveType,
                                       runFilter: runFilter)
             }
@@ -203,7 +178,7 @@ enum FlatMapSurfaceDrawer {
         // the style's too, baked as the pass's fade band.
         func drawRoadGroup(_ structureKind: RoadStructureKind) {
             for role in [RoadPassRole.shadow, .casing, .fill, .detail] {
-                for source in roadSources {
+                for source in uniqueSources {
                     let structureBucket = source.metalTile.tileBuffers.roads.bucket(for: structureKind)
                     drawFlatGeometryLayer(renderEncoder: renderEncoder,
                                           buffers: structureBucket.layer(for: role),
@@ -216,7 +191,6 @@ enum FlatMapSurfaceDrawer {
                                           bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
                                           cameraEye: cameraUniform.eye,
                                           markingCutoffWorldDistance: markingCutoffWorldDistance,
-                                          distanceFade: roadDistanceFade,
                                           // The detail role is road paint through and
                                           // through (every detail pass carries the
                                           // marking fade band), so past the cutoff the
@@ -230,11 +204,11 @@ enum FlatMapSurfaceDrawer {
         drawRoadGroup(.tunnel)
         drawRoadGroup(.ground)
         drawRoadGroup(.automobileGround)
-        drawLayer(\.bridgeOverlay, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset, sources: roadSources, distanceFade: roadDistanceFade)
+        drawLayer(\.bridgeOverlay, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset)
         drawRoadGroup(.bridge)
 
         for structureKind in RoadStructureKind.drawOrder {
-            for source in roadSources {
+            for source in uniqueSources {
                 let structureBucket = source.metalTile.tileBuffers.roads.bucket(for: structureKind)
                 drawFlatGeometryLayer(renderEncoder: renderEncoder,
                                       buffers: structureBucket.layer(for: .overlay),
@@ -246,8 +220,7 @@ enum FlatMapSurfaceDrawer {
                                       overviewFade: overviewFadeUniform,
                                       bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
                                       cameraEye: cameraUniform.eye,
-                                      markingCutoffWorldDistance: markingCutoffWorldDistance,
-                                      distanceFade: roadDistanceFade)
+                                      markingCutoffWorldDistance: markingCutoffWorldDistance)
             }
         }
         renderEncoder.popDebugGroup()
@@ -270,7 +243,6 @@ enum FlatMapSurfaceDrawer {
                                               bandOffset: Float,
                                               cameraEye: SIMD3<Float>,
                                               markingCutoffWorldDistance: Float,
-                                              distanceFade: TileRoadDistanceFadeUniform,
                                               skipsWholeLayerBeyondMarkingCutoff: Bool = false,
                                               primitiveType: MTLPrimitiveType = .triangle,
                                               runFilter: ((GroundStyleRun) -> Bool)? = nil) {
@@ -329,10 +301,6 @@ enum FlatMapSurfaceDrawer {
         // The group's place in the rank-depth band (Tile.metal, buffer 7).
         var bandOffsetValue = bandOffset
         renderEncoder.setVertexBytes(&bandOffsetValue, length: MemoryLayout<Float>.stride, index: 7)
-        // The road distance fade ring (Tile.metal, buffer 9): the road
-        // layers take it, everything else passes the disabled value.
-        var distanceFadeValue = distanceFade
-        renderEncoder.setVertexBytes(&distanceFadeValue, length: MemoryLayout<TileRoadDistanceFadeUniform>.stride, index: 9)
 
         // Anchors point-dashed patterns to the geometry: the scale depends on
         // the source tile's world size and the viewport, never on the live

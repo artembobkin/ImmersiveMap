@@ -73,23 +73,3 @@ struct TileFootprintFadeUniform {
     }
 }
 
-/// Mirror of `RoadDistanceFadeUniform` (TileShading.h, Tile.metal vertex
-/// buffer 9): the road fade ring around the look-at point in world units,
-/// and whether the layer being drawn takes it. See `RoadDistanceLOD`.
-struct TileRoadDistanceFadeUniform {
-    var centerWorld: SIMD2<Float>
-    var startWorld: Float
-    var endWorld: Float
-    var enabled: Float
-    var padding0: Float = 0
-    var padding1: Float = 0
-    var padding2: Float = 0
-
-    /// The ring, for the road layers.
-    static func fade(centerWorld: SIMD2<Float>, startWorld: Float, endWorld: Float) -> TileRoadDistanceFadeUniform {
-        TileRoadDistanceFadeUniform(centerWorld: centerWorld, startWorld: startWorld, endWorld: endWorld, enabled: 1)
-    }
-
-    /// Untouched: the ground fills and ribbons.
-    static let disabled = TileRoadDistanceFadeUniform(centerWorld: .zero, startWorld: 0, endWorld: 0, enabled: 0)
-}

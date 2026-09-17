@@ -22,27 +22,17 @@ final class TileClipDistanceContractTests: XCTestCase {
         // substitute draws at full extent and the tile-priority stencil
         // rejects it wherever a finer tile painted, exactly like the
         // sphere. Only the buildings keep their slot clips (TileExtruded).
-        // The two clip distances here are the road distance cut, the outer
-        // radius of the road fade ring about the look-at point
-        // (RoadDistanceLOD), and the camera's near plane, which the rank
-        // depth takes away from the z clip; no slot's edge.
+        // The one clip distance here is the camera's near plane, which the
+        // rank depth takes away from the z clip; no slot's edge, and no
+        // road distance cut: the roads draw wherever their tile does.
         XCTAssertNil(source.range(of: "localClipBounds"))
         XCTAssertNil(source.range(of: "[[clip_distance]] [4]"))
-        XCTAssertTrue(source.contains("float clipDistance [[clip_distance]] [2];"))
-        XCTAssertTrue(source.contains("out.clipDistance[1] = out.position.w - kFlatCameraNearPlane;"),
+        XCTAssertTrue(source.contains("float clipDistance [[clip_distance]] [1];"))
+        XCTAssertTrue(source.contains("out.clipDistance[0] = out.position.w - kFlatCameraNearPlane;"),
                       "A ground triangle running behind the eye is cut at the near plane, not at w = 0")
         XCTAssertTrue(source.contains("constant float kFlatCameraNearPlane = \(RenderCamera.nearPlane);"),
                       "The shader's near plane is the camera's")
-        XCTAssertTrue(source.contains("constant RoadDistanceFadeUniform& roadFade [[buffer(9)]]"))
-        XCTAssertTrue(source.contains("float centerDistance = length(worldPosition.xy - roadFade.centerWorld);"),
-                      "The fade measures on the ground plane from the look-at point, not from the eye")
-        XCTAssertTrue(source.contains("out.clipDistance[0] = roadFade.enabled > 0.5 ? roadFade.endWorld - centerDistance : 1.0;"))
-        XCTAssertTrue(source.contains("color.a *= half(in.distanceFade);"),
-                      "The lines fragment applies the fade the vertex stage resolved")
-        XCTAssertEqual(MemoryLayout<TileRoadDistanceFadeUniform>.stride, 32,
-                       "A float2 and six floats, the shader's RoadDistanceFadeUniform")
-        XCTAssertEqual(MemoryLayout<TileRoadDistanceFadeUniform>.offset(of: \.startWorld), 8)
-        XCTAssertEqual(MemoryLayout<TileRoadDistanceFadeUniform>.offset(of: \.enabled), 16)
+        XCTAssertNil(source.range(of: "roadFade"), "No road distance fade: the roads are not faded with the distance")
         // The flat rank-depth step is one value with the sphere's, both
         // mirrored by GlobeSurfaceDepthRank.
         XCTAssertTrue(source.contains("constant float kFlatTileLayerDepthStep = 4e-7;"))

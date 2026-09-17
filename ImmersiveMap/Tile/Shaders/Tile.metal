@@ -83,23 +83,15 @@ struct VertexOut {
     uint styleIndex [[flat, function_constant(kTileLineFields)]];
     float lineDistance [[function_constant(kTileLineFields)]];
     float lineParameterRaw [[function_constant(kTileLineFields)]];
-    // The road distance fade, resolved per vertex from the ground distance
-    // to the look-at point (RoadDistanceFadeUniform); 1 on every layer the
-    // fade is off for.
-    float distanceFade [[function_constant(kTileLineFields)]];
     // The outline variant carries the clip position once more, as an
     // ordinary (perspective-correct) interpolant: divided by w in the
     // fragment it is the point of the projected edge the rasterizer paired
     // with this fragment, and unlike a screen position computed per vertex
     // it survives a segment clipped by the near plane.
     float4 clipPosition [[function_constant(kTileFillOutline)]];
-    // Two cuts, neither a slot clip (see above). [0] is the road distance
-    // cut: the far end of the fade band, where the roads are fully
-    // transparent anyway, so the rasterizer drops them there and no
-    // fragment beyond it is shaded; a constant positive value on the
-    // layers the fade is off for. [1] is the camera's near plane, which the
-    // rank depth took away from the z clip (kFlatCameraNearPlane).
-    float clipDistance [[clip_distance]] [2];
+    // One cut, not a slot clip (see above): the camera's near plane, which
+    // the rank depth took away from the z clip (kFlatCameraNearPlane).
+    float clipDistance [[clip_distance]] [1];
 };
 
 // The fragment stage's view of VertexOut: the same interpolants matched by
@@ -112,7 +104,6 @@ struct FragmentIn {
     uint styleIndex [[flat, function_constant(kTileLineFields)]];
     float lineDistance [[function_constant(kTileLineFields)]];
     float lineParameterRaw [[function_constant(kTileLineFields)]];
-    float distanceFade [[function_constant(kTileLineFields)]];
     float4 clipPosition [[function_constant(kTileFillOutline)]];
 };
 
@@ -123,8 +114,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                                   constant float* lowZoomFadeMasks [[buffer(4)]],
                                   constant LineStyle* lineStyles [[buffer(5)]],
                                   constant float& depthBandOffset [[buffer(7)]],
-                                  constant OverviewFadeUniform& overviewFade [[buffer(8)]],
-                                  constant RoadDistanceFadeUniform& roadFade [[buffer(9)]]) {
+                                  constant OverviewFadeUniform& overviewFade [[buffer(8)]]) {
     float4 worldPosition = modelMatrix * float4(float2(vertexIn.position.xy), 0.0, 1.0);
 
     VertexOut out;
@@ -142,19 +132,9 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
         - (float(vertexIn.styleIndex) + 1.0) * kFlatTileLayerDepthStep;
     out.position.z = layerNdcZ * out.position.w;
     out.worldPos = worldPosition.xyz;
-    // The road distance fade: a smooth step over the ring, from the ground
-    // distance of this vertex to the look-at point; the cut at the ring's
-    // outer radius drops the geometry the fade has already made invisible.
-    // Off: fade 1 and a cut that never triggers (a constant, so it
-    // interpolates to itself).
-    float centerDistance = length(worldPosition.xy - roadFade.centerWorld);
-    float distanceFade = roadFade.enabled > 0.5
-        ? 1.0 - smoothstep(roadFade.startWorld, roadFade.endWorld, centerDistance)
-        : 1.0;
-    out.clipDistance[0] = roadFade.enabled > 0.5 ? roadFade.endWorld - centerDistance : 1.0;
     // The near plane, in the clip space w (the view depth): what the z clip
     // would have cut had z been the projection's.
-    out.clipDistance[1] = out.position.w - kFlatCameraNearPlane;
+    out.clipDistance[0] = out.position.w - kFlatCameraNearPlane;
     if (kTileFillOutline) {
         out.clipPosition = out.position;
     }
@@ -162,7 +142,6 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
         out.styleIndex = uint(vertexIn.styleIndex);
         out.lineDistance = float(vertexIn.lineDistance) / 127.0;
         out.lineParameterRaw = float(vertexIn.lineParameter);
-        out.distanceFade = distanceFade;
     } else {
         TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles);
         out.color = style.color;
@@ -211,8 +190,6 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
         color = tileLineFragmentColor(in.styleIndex, in.lineDistance, in.lineParameterRaw,
                                       styles, lowZoomFadeMasks, lineStyles,
                                       overviewFade, lineDash);
-        // The road distance fade, resolved in the vertex stage.
-        color.a *= half(in.distanceFade);
     } else {
         color = in.color;
         // The footprint fade: where this pixel covers more of the source

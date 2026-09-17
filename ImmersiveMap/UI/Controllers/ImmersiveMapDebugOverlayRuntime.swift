@@ -104,18 +104,6 @@ final class ImmersiveMapDebugOverlayRuntime {
         // The shadow group is part of the reworked AppKit panel; the UIKit one
         // still carries the tabbed layout and has no such group yet. The road
         // fade knobs are bench controls of the same panel.
-        hudView.onRoadFadeStartCameraDistancesChanged = { [weak controls, weak renderRuntime] cameraDistances in
-            controls?.setRoadFadeStartCameraDistances(cameraDistances)
-            renderRuntime?.requestFrame(reason: .externalStateChanged)
-        }
-        hudView.onRoadFadeEndCameraDistancesChanged = { [weak controls, weak renderRuntime] cameraDistances in
-            controls?.setRoadFadeEndCameraDistances(cameraDistances)
-            renderRuntime?.requestFrame(reason: .externalStateChanged)
-        }
-        hudView.onRoadFadeMinimumEndMetersChanged = { [weak controls, weak renderRuntime] meters in
-            controls?.setRoadFadeMinimumEndMeters(meters)
-            renderRuntime?.requestFrame(reason: .externalStateChanged)
-        }
         hudView.onCoverageFarRadiusCameraDistancesChanged = { [weak controls, weak renderRuntime] cameraDistances in
             controls?.setCoverageFarRadiusCameraDistances(cameraDistances)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
