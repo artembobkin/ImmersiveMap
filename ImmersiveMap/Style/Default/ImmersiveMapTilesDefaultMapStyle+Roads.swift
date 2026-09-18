@@ -65,14 +65,29 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // carriageway carries where it is, which way it faces and how long it
         // is, which is everything a zebra is made of. It draws as stripes on
         // the asphalt instead of as a footway ribbon.
-        // Not in a tunnel, where there is only the roof to see, and not
-        // where the source measured the crossings itself: those are the
-        // same crossings seen through OSM tags, and each is striped once.
+        // Only in a tile with the streetscape: a zebra is paint on a
+        // carriageway, and a street map's stroke has no carriageway to paint
+        // on, so there the crossing is hidden and the footway underneath it
+        // is the map. Not in a tunnel, where there is only the roof to see,
+        // and not where the source measured the crossings itself: those are
+        // the same crossings seen through OSM tags, and each is striped once.
         if let crossing = Self.crossingMarking(props: props), tileZoom >= Self.streetDetailMinimumTileZoom {
-            guard isTunnel == false, layerShipsMeasuredCrossings == false else {
+            guard layerCarriesStreetscape, isTunnel == false, layerShipsMeasuredCrossings == false else {
                 return hiddenStyle
             }
             return crosswalkStyle(marked: crossing, tile: tile)
+        }
+        // Without the streetscape the roads are lines and nothing else: no
+        // surface polygon, no parking lot. A street map draws its roads as
+        // strokes by class (below), and an asphalt polygon among strokes
+        // reads as a hole in the map rather than as a road.
+        if layerCarriesStreetscape == false {
+            switch road.kind {
+            case .surface, .parkingLot:
+                return hiddenStyle
+            case .centreline, .paint:
+                break
+            }
         }
         // A junction area: the carriageway as the tiles map it, a polygon.
         // It draws as the surface of the road class that enters it, with the
@@ -102,7 +117,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
             // A surface parking lot: its own asphalt with a kerb, like a
             // junction area of the service tier, and from street zoom the
             // synthesized comb of parking-bay stripes on top.
-            return parkingAreaStyle(tile: tile, layerCarriesStreetscape: layerCarriesStreetscape)
+            return parkingAreaStyle(tile: tile)
         case .centreline, .paint:
             break
         }

@@ -269,10 +269,11 @@ extension ImmersiveMapTilesDefaultMapStyle {
     /// is a stylization, not a claim about mapped spaces, which OSM almost
     /// never carries; the polygon and its `orientation` hint are the facts.
     /// The surface clips the ribbons inside it (a parking aisle needs no kerb
-    /// of its own across the lot) and never cuts anyone's paint. In a tile
-    /// without the streetscape the lot is its asphalt and kerb alone: the
-    /// comb is a streetscape figure.
-    func parkingAreaStyle(tile: Tile, layerCarriesStreetscape: Bool = true) -> FeatureStyle {
+    /// of its own across the lot) and never cuts anyone's paint. A tile
+    /// without the streetscape draws no lot at all (the routing hides it):
+    /// the lot is a streetscape figure like everything else painted on
+    /// asphalt.
+    func parkingAreaStyle(tile: Tile) -> FeatureStyle {
         let roads = theme.layers.roads
         let fillKey: UInt8 = 42
         let color = roads.service
@@ -290,7 +291,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // figure painted on a road surface: a lot looks the same at z15 as
         // at z16, and the camera-zoom band decides how faint the stripes are.
         var comb: [LinePass] = []
-        if layerCarriesStreetscape, tile.z >= Self.streetDetailMinimumTileZoom {
+        if tile.z >= Self.streetDetailMinimumTileZoom {
             comb = [LinePass(key: Self.parkingBayKey,
                              color: Self.roadMarkingColor,
                              lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,

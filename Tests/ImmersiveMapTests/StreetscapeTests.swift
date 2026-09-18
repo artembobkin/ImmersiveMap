@@ -66,15 +66,29 @@ final class StreetscapeTests: XCTestCase {
                              "In a tile with the streetscape, the four-lane two-way street is painted down the middle")
     }
 
-    func testAParkingLotAloneIsAsphaltWithoutTheComb() throws {
+    func testAParkingLotIsAStreetscapeFigure() throws {
         let data = VectorTileFixture.layerTile(layerName: "transportation", features: [parkingLot])
         let bare = try parse(data).drawingRoadPhases.automobileGround
-        XCTAssertGreaterThan(bare.fill.drawing.indices.count, 0, "The lot's asphalt draws")
-        XCTAssertGreaterThan(bare.casing.drawing.indices.count, 0, "with its kerb")
+        XCTAssertEqual(bare.fill.drawing.indices.count, 0,
+                       "Without the streetscape the roads are lines only: no lot asphalt")
+        XCTAssertEqual(bare.casing.drawing.indices.count, 0, "no kerb")
         XCTAssertEqual(bare.detail.drawing.indices.count, 0, "and no parking-bay comb")
 
         let painted = try parse(withStreetscape: [parkingLot]).drawingRoadPhases.automobileGround
-        XCTAssertGreaterThan(painted.detail.drawing.indices.count, 0, "The comb is a streetscape figure")
+        XCTAssertGreaterThan(painted.fill.drawing.indices.count, 0, "With the streetscape the lot's asphalt draws")
+        XCTAssertGreaterThan(painted.casing.drawing.indices.count, 0, "with its kerb")
+        XCTAssertGreaterThan(painted.detail.drawing.indices.count, 0, "and the comb")
+    }
+
+    func testAHandMappedSurfaceNeverDrawsWithoutTheStreetscape() throws {
+        let area = VectorTileFixture.Feature(
+            id: 6,
+            geometry: .polygon(ring: [(1800, 800), (2600, 800), (2600, 1300), (1800, 1300)]),
+            // A junction area without `origin=graph`: mapped by hand.
+            properties: ["class": "primary", "subclass": "junction_area"])
+        let data = VectorTileFixture.layerTile(layerName: "transportation", features: [area])
+        let bare = try parse(data).drawingRoadPhases.automobileGround
+        XCTAssertEqual(bare.fill.drawing.indices.count, 0, "A road polygon is not a line")
     }
 
     func testMeasuredPaintMakesATileAStreetscapeTile() throws {
@@ -85,11 +99,15 @@ final class StreetscapeTests: XCTestCase {
                        "and no fill ribbon in the paint's colour stands in for it")
     }
 
-    func testAMarkedCrossingIsPartOfAStreetMap() throws {
+    func testAMarkedCrossingIsAStreetscapeFigure() throws {
         let data = VectorTileFixture.layerTile(layerName: "transportation", features: [markedCrossing])
         let bare = try parse(data).drawingRoadPhases.automobileGround
-        XCTAssertGreaterThan(bare.detail.drawing.indices.count, 0,
-                             "A marked crossing is part of a street map, streetscape or not")
+        XCTAssertEqual(bare.detail.drawing.indices.count, 0,
+                       "Without the streetscape there is no carriageway to paint a zebra on")
+
+        let painted = try parse(withStreetscape: [markedCrossing]).drawingRoadPhases.automobileGround
+        XCTAssertGreaterThan(painted.detail.drawing.indices.count, 0,
+                             "With the streetscape the tagged crossing is striped")
     }
 
     // MARK: - A street map's strokes, width by class
