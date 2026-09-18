@@ -4,10 +4,16 @@
 import Metal
 import simd
 
+/// The flat ground: the main coverage's sources through the vector drawer
+/// (`FlatMapSurfaceDrawer`), the rasterized rules' tiles as textured quads
+/// (`TileRasterDrawer`) over pictures rendered ahead of the frame
+/// (`TileRasterizer`, kept by `TileRasterStore`), and the horizon backdrop
+/// last.
 final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     let name: String = "FlatMapSurface"
 
     private let tilePipeline: TilePipeline
+    private let tileRasterPipeline: TileRasterPipeline
     private let groundOwnerState: MTLDepthStencilState
     private let tileStencilTestState: MTLDepthStencilState
     private let groundOutlineState: MTLDepthStencilState
@@ -15,8 +21,18 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     private let debugOverlayControls: DebugOverlayControlState
     private let groundShadowMaskTextureProvider: () -> MTLTexture?
     private let groundShadowMaskFallbackTexture: MTLTexture
+    private let rasterizer: TileRasterizer
+    private let rasterStore = TileRasterStore()
+    /// The rasterized sources of the frame, resolved in `prepareGPU` from
+    /// the placements and the store, drawn in `encode`.
+    private var rasterSources: [TileRasterDrawer.Source] = []
+    /// The placements the vector drawer takes this frame: everything the
+    /// raster sources do not cover.
+    private var vectorPlaceTilesContext: PlaceTilesContext = .empty
 
     init(tilePipeline: TilePipeline,
+         tileRasterPipeline: TileRasterPipeline,
+         metalContext: RenderMetalContext,
          groundOwnerState: MTLDepthStencilState,
          tileStencilTestState: MTLDepthStencilState,
          groundOutlineState: MTLDepthStencilState,
@@ -25,6 +41,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
          groundShadowMaskTextureProvider: @escaping () -> MTLTexture?,
          groundShadowMaskFallbackTexture: MTLTexture) {
         self.tilePipeline = tilePipeline
+        self.tileRasterPipeline = tileRasterPipeline
         self.groundOwnerState = groundOwnerState
         self.tileStencilTestState = tileStencilTestState
         self.groundOutlineState = groundOutlineState
@@ -32,11 +49,70 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         self.debugOverlayControls = debugOverlayControls
         self.groundShadowMaskTextureProvider = groundShadowMaskTextureProvider
         self.groundShadowMaskFallbackTexture = groundShadowMaskFallbackTexture
+        self.rasterizer = TileRasterizer(metalContext: metalContext,
+                                         tilePipeline: tilePipeline,
+                                         groundOwnerState: groundOwnerState,
+                                         tileStencilTestState: tileStencilTestState,
+                                         groundOutlineState: groundOutlineState,
+                                         groundShadowMaskFallbackTexture: groundShadowMaskFallbackTexture)
     }
 
     func update(frameContext _: FrameContext) {}
 
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
+    /// Splits the main coverage into the vector placements and the raster
+    /// sources, rendering the pictures the frame lacks. A rasterized target
+    /// draws as a picture only when it is resident and placed in its own
+    /// slot: a stand-in for a tile still loading stays vector, and so does
+    /// a picture the device declined.
+    func prepareGPU(frameContext: FrameContext, resourceRegistry _: RenderResourceRegistry) {
+        rasterSources = []
+        let placements = frameContext.sharedState.tilePlacementState.placeTilesContext
+        vectorPlaceTilesContext = placements
+        guard frameContext.renderSurfaceMode == .flat else {
+            rasterStore.releaseStale(frameIndex: frameContext.frameIndex)
+            return
+        }
+        let rasterizedTiles = frameContext.visibleContent.rasterizedTiles
+        guard rasterizedTiles.isEmpty == false else {
+            rasterStore.releaseStale(frameIndex: frameContext.frameIndex)
+            return
+        }
+        let mapColor = frameContext.services.baseColors.map
+        let clearColor = MTLClearColor(red: Double(mapColor.x), green: Double(mapColor.y),
+                                       blue: Double(mapColor.z), alpha: Double(mapColor.w))
+        var vectorPlacements: [PlaceTile] = []
+        vectorPlacements.reserveCapacity(placements.tilePlacements.count)
+        var seen = Set<TileRasterKey>()
+        for placement in placements.tilePlacements {
+            guard placement.inOwnSlot, let resolution = rasterizedTiles[placement.placeIn] else {
+                vectorPlacements.append(placement)
+                continue
+            }
+            let key = TileRasterKey(tile: placement.metalTile.tile, resolution: resolution)
+            var texture = rasterStore.texture(for: key, frameIndex: frameContext.frameIndex)
+            if texture == nil {
+                texture = rasterizer.render(metalTile: placement.metalTile,
+                                            resolution: resolution,
+                                            pixelsPerPoint: Double(frameContext.pixelsPerPoint),
+                                            clearColor: clearColor)
+                if let texture {
+                    rasterStore.insert(texture, for: key, frameIndex: frameContext.frameIndex)
+                }
+            }
+            guard let texture else {
+                vectorPlacements.append(placement)
+                continue
+            }
+            // The world-wrap copies at the seam share one picture.
+            if seen.insert(key).inserted || placement.placeIn.worldWrap != 0 {
+                rasterSources.append(TileRasterDrawer.Source(tile: placement.metalTile.tile,
+                                                             worldWrap: placement.placeIn.worldWrap,
+                                                             texture: texture))
+            }
+        }
+        vectorPlaceTilesContext = PlaceTilesContext(tilePlacements: vectorPlacements)
+        rasterStore.releaseStale(frameIndex: frameContext.frameIndex)
+    }
 
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard layer == .flatMapSurface,
@@ -61,6 +137,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         let markingCutoff = RoadMarkingDistanceLOD.cutoffWorldDistance(
             drawableHeightPx: Float(frameContext.drawSize.height),
             unitsPerMeter: Float(unitsPerMeter))
+        let drawableSizePx = SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height))
         // The drawer sets its own depth-stencil states per group: the
         // ground owns the tile-priority stencil (depth tested against the
         // buildings, never written), the road buckets only test it.
@@ -76,9 +153,8 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   cameraUniform: frameContext.cameraUniform,
                                   cameraZoom: frameContext.zoom,
                                   pixelsPerPoint: Float(frameContext.pixelsPerPoint),
-                                  drawableSizePx: SIMD2<Float>(Float(frameContext.drawSize.width),
-                                                               Float(frameContext.drawSize.height)),
-                                  placeTilesContext: tilePlacementState.placeTilesContext,
+                                  drawableSizePx: drawableSizePx,
+                                  placeTilesContext: vectorPlaceTilesContext,
                                   flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                   groundShadowMask: groundShadowMask,
                                   tilePipeline: tilePipeline,
@@ -91,12 +167,22 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   // exactly (FlatMapSurfaceDrawer.usesExactRankDepth).
                                   exactRankDepthBelowZoom: frameContext.visibleContent.tileZoomLevel,
                                   markingCutoffWorldDistance: markingCutoff)
-FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
+        // The rasterized sources: their pictures over their extents, the
+        // stencil deciding against the vector sources as between any two
+        // sources. Between the main coverage and the backdrop, since the
+        // stencil, not the order, settles ownership among them all.
+        TileRasterDrawer.draw(renderEncoder: encoder,
+                              cameraUniform: frameContext.cameraUniform,
+                              sources: rasterSources,
+                              flatRenderState: frameContext.resolvedPresentation.flatRenderState,
+                              groundShadowMask: groundShadowMask,
+                              pipeline: tileRasterPipeline,
+                              groundOwnerState: groundOwnerState)
+        FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   cameraZoom: frameContext.zoom,
                                   pixelsPerPoint: Float(frameContext.pixelsPerPoint),
-                                  drawableSizePx: SIMD2<Float>(Float(frameContext.drawSize.width),
-                                                               Float(frameContext.drawSize.height)),
+                                  drawableSizePx: drawableSizePx,
                                   placeTilesContext: tilePlacementState.backdropPlaceTilesContext,
                                   flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                   groundShadowMask: groundShadowMask,
@@ -113,10 +199,16 @@ FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   // ground: the backdrop's sub-pixel linework is skipped
                                   // (see the drawer).
                                   opaqueFillsOnly: true)
-                encoder.setDepthStencilState(depthDisabledState)
+        encoder.setDepthStencilState(depthDisabledState)
     }
 
-    func handleMemoryWarning() {}
+    func handleMemoryWarning() {
+        rasterStore.removeAll()
+        rasterizer.releaseScratch()
+    }
 
-    func evict() {}
+    func evict() {
+        rasterStore.removeAll()
+        rasterizer.releaseScratch()
+    }
 }

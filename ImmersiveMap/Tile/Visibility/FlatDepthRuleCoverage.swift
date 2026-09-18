@@ -6,13 +6,27 @@ import simd
 
 /// One rule of the flat map's coverage: the ground up to `depth` camera
 /// distances into the view (and past the previous rule's depth) is drawn
-/// `zoomDrop` levels below the target zoom.
+/// `zoomDrop` levels below the target zoom, as vector tiles or, with
+/// `rasterized`, as each tile's picture rendered once into a texture of
+/// `rasterResolution` texels a side (`TileRasterizer`).
 struct FlatDepthRule: Hashable {
     var zoomDrop: Int
     /// In camera distances: 1 is the distance from the camera to the point
     /// it looks at, measured along the camera's view axis (the frustum's
     /// depth), so a rule's edge is one row of the screen.
     var depth: Double
+    /// The band's tiles draw as textures instead of vector geometry.
+    var rasterized: Bool = false
+    /// Texels a side of a rasterized tile, one of
+    /// `FlatDepthRules.rasterResolutions`.
+    var rasterResolution: Int = FlatDepthRules.defaultRasterResolution
+
+    init(zoomDrop: Int, depth: Double, rasterized: Bool = false, rasterResolution: Int = FlatDepthRules.defaultRasterResolution) {
+        self.zoomDrop = zoomDrop
+        self.depth = depth
+        self.rasterized = rasterized
+        self.rasterResolution = rasterResolution
+    }
 }
 
 /// The rules, nearest first. Any number of them; the debug panel edits
@@ -22,13 +36,24 @@ struct FlatDepthRules: Hashable {
 
     static let zoomDropRange = 0 ... 8
     static let depthRange: ClosedRange<Double> = 0.25 ... 60
+    /// The raster resolutions a rule can pick, texels a side of one tile.
+    static let rasterResolutions = [256, 512, 1024, 2048]
+    static let defaultRasterResolution = 512
 
-    /// About ten tiles at a street tilt: the exact tiles to a little past
-    /// the look-at point, two levels coarser to twice that, five levels
-    /// coarser out to seven camera distances, the backdrop beyond.
-    static let `default` = FlatDepthRules(rules: [FlatDepthRule(zoomDrop: 0, depth: 1.3),
-                                                  FlatDepthRule(zoomDrop: 2, depth: 2.6),
-                                                  FlatDepthRule(zoomDrop: 5, depth: 7)])
+    /// The nearest of `rasterResolutions` to `resolution`.
+    static func clampedRasterResolution(_ resolution: Int) -> Int {
+        rasterResolutions.min { abs($0 - resolution) < abs($1 - resolution) } ?? defaultRasterResolution
+    }
+
+    /// The exact tiles as vector geometry to a little past the look-at
+    /// point, then rasterized bands: one level coarser at 512 texels to
+    /// twice that depth, two levels coarser at 256 texels to about six
+    /// camera distances, five levels coarser at 256 texels to about eight,
+    /// the backdrop beyond.
+    static let `default` = FlatDepthRules(rules: [FlatDepthRule(zoomDrop: 0, depth: 1.3, rasterized: false, rasterResolution: 1024),
+                                                  FlatDepthRule(zoomDrop: 1, depth: 2.6, rasterized: true, rasterResolution: 512),
+                                                  FlatDepthRule(zoomDrop: 2, depth: 5.86, rasterized: true, rasterResolution: 256),
+                                                  FlatDepthRule(zoomDrop: 5, depth: 8.07, rasterized: true, rasterResolution: 256)])
 
     /// The rules as the coverage reads them: every value inside its range
     /// (a depth that is not a number falls to the range's start), sorted
@@ -40,7 +65,10 @@ struct FlatDepthRules: Hashable {
                 ? min(max(rule.depth, Self.depthRange.lowerBound), Self.depthRange.upperBound)
                 : Self.depthRange.lowerBound
             let drop = min(max(rule.zoomDrop, Self.zoomDropRange.lowerBound), Self.zoomDropRange.upperBound)
-            cleaned.append(FlatDepthRule(zoomDrop: drop, depth: depth))
+            cleaned.append(FlatDepthRule(zoomDrop: drop,
+                                         depth: depth,
+                                         rasterized: rule.rasterized,
+                                         rasterResolution: Self.clampedRasterResolution(rule.rasterResolution)))
         }
         cleaned.sort { $0.depth < $1.depth }
         var unique: [FlatDepthRule] = []
@@ -54,19 +82,24 @@ struct FlatDepthRules: Hashable {
     }
 }
 
-/// One rule's band as the frame resolved it: its zoom, its far depth and
-/// how many tiles it placed.
+/// One rule's band as the frame resolved it: its zoom, its far depth,
+/// how many tiles it placed and, for a rasterized rule, the resolution.
 struct FlatDepthBand: Hashable {
     let zoom: Int
     let depth: Double
     let tileCount: Int
+    var rasterResolution: Int? = nil
 }
 
 struct FlatDepthRuleCoverageResolution {
-    static let empty = FlatDepthRuleCoverageResolution(targets: [], bands: [], visitedNodeCount: 0)
+    static let empty = FlatDepthRuleCoverageResolution(targets: [], bands: [], rasterizedTargets: [:], visitedNodeCount: 0)
 
     let targets: [VisibleTile]
     let bands: [FlatDepthBand]
+    /// The targets a rasterized rule placed, with the rule's resolution. A
+    /// tile two bands share takes the nearer band's answer, so a tile of a
+    /// vector band that reaches under a rasterized one stays vector.
+    let rasterizedTargets: [VisibleTile: Int]
     /// How many tiles the enumeration looked at, for the diagnostics.
     let visitedNodeCount: Int
 }
@@ -101,6 +134,7 @@ enum FlatDepthRuleCoverage {
         let floorZoom = min(backdropZoom.map { $0 + 1 } ?? 0, targetZoom)
 
         var placed = Set<VisibleTile>()
+        var rasterizedTargets: [VisibleTile: Int] = [:]
         var bands: [FlatDepthBand] = []
         var visited = 0
         var previousDepth = 0.0
@@ -117,13 +151,22 @@ enum FlatDepthRuleCoverage {
                                                    flatRenderState: flatRenderState,
                                                    visited: &visited)
                 count = tiles.count
+                if rule.rasterized {
+                    for tile in tiles where placed.contains(tile) == false {
+                        rasterizedTargets[tile] = rule.rasterResolution
+                    }
+                }
                 placed.formUnion(tiles)
             }
-            bands.append(FlatDepthBand(zoom: zoom, depth: rule.depth, tileCount: count))
+            bands.append(FlatDepthBand(zoom: zoom,
+                                       depth: rule.depth,
+                                       tileCount: count,
+                                       rasterResolution: rule.rasterized ? rule.rasterResolution : nil))
             previousDepth = rule.depth
         }
         return FlatDepthRuleCoverageResolution(targets: FlatTileCoverage.sorted(Array(placed)),
                                                bands: bands,
+                                               rasterizedTargets: rasterizedTargets,
                                                visitedNodeCount: visited)
     }
 

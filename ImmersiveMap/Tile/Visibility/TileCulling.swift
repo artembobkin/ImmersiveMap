@@ -38,6 +38,7 @@ class TileCulling {
         let visibleTiles: [VisibleTile]
         let backdropTiles: [VisibleTile]
         var flatDepthBands: [FlatDepthBand] = []
+        var rasterizedTiles: [VisibleTile: Int] = [:]
 
         switch resolvedPresentation.renderSurfaceMode {
         case .spherical:
@@ -59,6 +60,7 @@ class TileCulling {
                                                                polygon: polygon)
                 visibleTiles = resolution.targets
                 flatDepthBands = resolution.bands
+                rasterizedTiles = resolution.rasterizedTargets
                 // The backdrop: the coarse tiles under the whole footprint, all
                 // the way to the horizon, so the coverage's edge is never
                 // drawn in.
@@ -83,7 +85,8 @@ class TileCulling {
                                    backdropTiles: backdropTiles,
                                    tileZoomLevel: targetZoom,
                                    coverageVersion: coverageVersion,
-                                   flatDepthBands: flatDepthBands)
+                                   flatDepthBands: flatDepthBands,
+                                   rasterizedTiles: rasterizedTiles)
     }
 
     static func makeCenter(centerWorldMercator: SIMD2<Double>,

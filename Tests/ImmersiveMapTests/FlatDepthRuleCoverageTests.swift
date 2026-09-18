@@ -86,7 +86,9 @@ final class FlatDepthRuleCoverageTests: XCTestCase {
                        "drops clamped, the first of two rules at one depth kept")
         XCTAssertEqual(FlatDepthRules(rules: []).normalized(), FlatDepthRules.default, "at least one rule")
         XCTAssertEqual(FlatDepthRules.default.normalized(), FlatDepthRules.default, "the default is already normal")
-        XCTAssertEqual(FlatDepthRules.default.rules.map(\.zoomDrop), [0, 2, 5])
+        XCTAssertEqual(FlatDepthRules.default.rules.map(\.zoomDrop), [0, 1, 2, 5])
+        XCTAssertEqual(FlatDepthRules.default.rules.map(\.rasterized), [false, true, true, true])
+        XCTAssertEqual(FlatDepthRules.default.rules.map(\.rasterResolution), [1024, 512, 256, 256])
     }
 
     // MARK: - The depth lines
@@ -121,8 +123,8 @@ final class FlatDepthRuleCoverageTests: XCTestCase {
         let resolution = Self.resolve(fixture, targetZoom: 16)
         let plain = FlatTileCoverage.tiles(atZoom: 16, polygon: fixture.polygon, flatRenderState: fixture.flatRenderState)
         XCTAssertEqual(resolution.targets, FlatTileCoverage.sorted(plain))
-        XCTAssertEqual(resolution.bands.map(\.zoom), [16, 14, 11])
-        XCTAssertEqual(resolution.bands.map(\.tileCount), [plain.count, 0, 0], "only the rule spanning depth 1 places tiles")
+        XCTAssertEqual(resolution.bands.map(\.zoom), [16, 15, 14, 11])
+        XCTAssertEqual(resolution.bands.map(\.tileCount), [plain.count, 0, 0, 0], "only the rule spanning depth 1 places tiles")
         XCTAssertGreaterThan(resolution.visitedNodeCount, plain.count)
 
         // Rules that all end nearer than the camera place nothing: the
@@ -138,8 +140,8 @@ final class FlatDepthRuleCoverageTests: XCTestCase {
     func testAStreetTiltPlacesEachRulesBand() throws {
         let fixture = try Self.makeFixture(zoom: 16, pitchDegrees: 75)
         let resolution = Self.resolve(fixture, targetZoom: 16)
-        XCTAssertEqual(resolution.bands.map(\.zoom), [16, 14, 11])
-        XCTAssertEqual(resolution.bands.map(\.depth), [1.3, 2.6, 7])
+        XCTAssertEqual(resolution.bands.map(\.zoom), [16, 15, 14, 11])
+        XCTAssertEqual(resolution.bands.map(\.depth), [1.3, 2.6, 5.86, 8.07])
         XCTAssertTrue(resolution.bands.allSatisfy { $0.tileCount > 0 }, "every rule has ground at a street tilt: \(resolution.bands)")
         let lastDepth = FlatDepthRules.default.rules.last!.depth
         for target in resolution.targets {
@@ -151,7 +153,7 @@ final class FlatDepthRuleCoverageTests: XCTestCase {
         }
         XCTAssertEqual(resolution.targets, FlatTileCoverage.sorted(resolution.targets), "finest first, stable")
         XCTAssertEqual(Set(resolution.targets).count, resolution.targets.count)
-        XCTAssertLessThanOrEqual(resolution.targets.count, 14, "about ten tiles: \(resolution.bands)")
+        XCTAssertLessThanOrEqual(resolution.targets.count, 24, "a few tiles per band: \(resolution.bands)")
         XCTAssertGreaterThanOrEqual(resolution.targets.count, 4)
         let again = Self.resolve(fixture, targetZoom: 16)
         XCTAssertEqual(again.targets, resolution.targets, "deterministic")
@@ -164,7 +166,7 @@ final class FlatDepthRuleCoverageTests: XCTestCase {
         for pitchDegrees in [0.0, 20.0, 40.0, 55.0, 65.0, 70.0, 75.0] {
             let fixture = try Self.makeFixture(zoom: 16, pitchDegrees: pitchDegrees)
             let resolution = Self.resolve(fixture, targetZoom: 16)
-            XCTAssertLessThanOrEqual(resolution.targets.count, 16, "pitch \(pitchDegrees): \(resolution.bands)")
+            XCTAssertLessThanOrEqual(resolution.targets.count, 24, "pitch \(pitchDegrees): \(resolution.bands)")
             XCTAssertGreaterThanOrEqual(resolution.targets.count, 2, "pitch \(pitchDegrees)")
         }
     }
@@ -217,9 +219,45 @@ final class FlatDepthRuleCoverageTests: XCTestCase {
     func testTheRulesReadoutLine() {
         let bands = [FlatDepthBand(zoom: 16, depth: 1.3, tileCount: 4),
                      FlatDepthBand(zoom: 14, depth: 2.6, tileCount: 3),
-                     FlatDepthBand(zoom: 11, depth: 7, tileCount: 2)]
-        XCTAssertEqual(DebugOverlayHUDSnapshot.depthRulesLine(bands), "rules: z16 \u{2264}1.3 (4) / z14 \u{2264}2.6 (3) / z11 \u{2264}7.0 (2)")
+                     FlatDepthBand(zoom: 11, depth: 7, tileCount: 2, rasterResolution: 512)]
+        XCTAssertEqual(DebugOverlayHUDSnapshot.depthRulesLine(bands),
+                       "rules: z16 \u{2264}1.3 (4) / z14 \u{2264}2.6 (3) / z11 \u{2264}7.0 (2) raster 512")
         XCTAssertEqual(DebugOverlayHUDSnapshot.depthRulesLine([]), "rules: none")
+    }
+
+    // MARK: - Rasterized rules
+
+    func testARasterResolutionIsOneOfTheOptions() {
+        let rules = FlatDepthRules(rules: [FlatDepthRule(zoomDrop: 0, depth: 1, rasterized: true, rasterResolution: 700),
+                                           FlatDepthRule(zoomDrop: 2, depth: 2, rasterized: false, rasterResolution: 9000)])
+        let normalized = rules.normalized().rules
+        XCTAssertEqual(normalized.map(\.rasterResolution), [512, 2048], "the nearest option")
+        XCTAssertEqual(normalized.map(\.rasterized), [true, false])
+        XCTAssertEqual(FlatDepthRules.clampedRasterResolution(0), 256)
+        XCTAssertEqual(FlatDepthRule(zoomDrop: 0, depth: 1).rasterized, false, "vector unless asked")
+    }
+
+    /// A rasterized rule's tiles are the raster targets at its resolution.
+    /// A tile the nearer vector band already placed stays vector, so the
+    /// nearer band's answer wins where two bands share a tile.
+    func testARasterizedRulesTilesAreTheRasterTargets() throws {
+        let fixture = try Self.makeFixture(zoom: 16, pitchDegrees: 75)
+        let rules = FlatDepthRules(rules: [FlatDepthRule(zoomDrop: 0, depth: 1.3),
+                                           FlatDepthRule(zoomDrop: 2, depth: 2.6, rasterized: true, rasterResolution: 1024),
+                                           FlatDepthRule(zoomDrop: 5, depth: 7)])
+        let resolution = Self.resolve(fixture, targetZoom: 16, rules: rules)
+        let rasterized = resolution.rasterizedTargets
+        XCTAssertFalse(rasterized.isEmpty, "The second band has tiles")
+        XCTAssertTrue(rasterized.values.allSatisfy { $0 == 1024 })
+        XCTAssertTrue(rasterized.keys.allSatisfy { $0.z == 14 }, "Only the rasterized band's tiles")
+        XCTAssertTrue(rasterized.keys.allSatisfy { resolution.targets.contains($0) })
+        XCTAssertEqual(resolution.bands.map(\.rasterResolution), [nil, 1024, nil])
+
+        let vectorOnly = Self.resolve(fixture, targetZoom: 16, rules: FlatDepthRules(rules: rules.rules.map {
+            FlatDepthRule(zoomDrop: $0.zoomDrop, depth: $0.depth)
+        }))
+        XCTAssertTrue(vectorOnly.rasterizedTargets.isEmpty)
+        XCTAssertEqual(vectorOnly.targets, resolution.targets, "Rasterizing changes how a band draws, not what it places")
     }
 
     func testTheRulesAreTheDebugPanels() {

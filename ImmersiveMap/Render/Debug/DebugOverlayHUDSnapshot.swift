@@ -107,7 +107,8 @@ struct DebugOverlayHUDSnapshot: Equatable {
     static func depthRulesLine(_ bands: [FlatDepthBand]) -> String {
         guard bands.isEmpty == false else { return "rules: none" }
         let entries = bands.map { band in
-            "z\(band.zoom) \u{2264}\(String(format: "%.1f", band.depth)) (\(band.tileCount))"
+            let raster = band.rasterResolution.map { " raster \($0)" } ?? ""
+            return "z\(band.zoom) \u{2264}\(String(format: "%.1f", band.depth)) (\(band.tileCount))" + raster
         }
         return "rules: " + entries.joined(separator: " / ")
     }

@@ -146,14 +146,21 @@ final class DebugOverlayHUDView: NSView {
                                                             action: nil)
     private let wireframeLabel = NSTextField(labelWithString: "")
     private let wireframeSwitch = NSSwitch()
-    /// One depth rule's editor: the drop picker and the depth slider, each
-    /// with its named row. Rebuilt when the number of rules changes.
+    /// One depth rule's editor: the drop picker, the depth slider, the
+    /// raster switch and the raster resolution picker, each with its named
+    /// row. Rebuilt when the number of rules changes.
     private struct DepthRuleRow {
         let dropLabel: NSTextField
         let dropControl: NSSegmentedControl
         let depthLabel: NSTextField
         let depthSlider: NSSlider
-        var views: [NSView] { [dropLabel, dropControl, depthLabel, depthSlider] }
+        let rasterLabel: NSTextField
+        let rasterSwitch: NSSwitch
+        let resolutionLabel: NSTextField
+        let resolutionControl: NSSegmentedControl
+        var views: [NSView] {
+            [dropLabel, dropControl, depthLabel, depthSlider, rasterLabel, rasterSwitch, resolutionLabel, resolutionControl]
+        }
     }
     private var depthRuleRows: [DepthRuleRow] = []
     private let depthRulesAddButton = NSButton()
@@ -449,7 +456,23 @@ final class DebugOverlayHUDView: NSView {
             configureControlLabel(depthLabel, text: "")
             let depthSlider = NSSlider()
             configureSlider(depthSlider, range: FlatDepthRules.depthRange, action: #selector(depthRuleDepthSliderChanged(_:)))
-            return DepthRuleRow(dropLabel: dropLabel, dropControl: dropControl, depthLabel: depthLabel, depthSlider: depthSlider)
+            let rasterLabel = NSTextField(labelWithString: "")
+            configureControlLabel(rasterLabel, text: "")
+            let rasterSwitch = NSSwitch()
+            rasterSwitch.target = self
+            rasterSwitch.action = #selector(depthRuleRasterSwitchChanged(_:))
+            refuseFocus(rasterSwitch)
+            let resolutionLabel = NSTextField(labelWithString: "")
+            configureControlLabel(resolutionLabel, text: "")
+            let resolutionControl = NSSegmentedControl(labels: FlatDepthRules.rasterResolutions.map(String.init),
+                                                       trackingMode: .selectOne,
+                                                       target: self,
+                                                       action: #selector(depthRuleResolutionControlChanged(_:)))
+            refuseFocus(resolutionControl)
+            return DepthRuleRow(dropLabel: dropLabel, dropControl: dropControl,
+                                depthLabel: depthLabel, depthSlider: depthSlider,
+                                rasterLabel: rasterLabel, rasterSwitch: rasterSwitch,
+                                resolutionLabel: resolutionLabel, resolutionControl: resolutionControl)
         }
         for row in depthRuleRows {
             row.views.forEach(contentView.addSubview)
@@ -463,6 +486,11 @@ final class DebugOverlayHUDView: NSView {
             row.dropControl.selectedSegment = rule.zoomDrop - FlatDepthRules.zoomDropRange.lowerBound
             row.depthSlider.doubleValue = rule.depth
             row.depthLabel.stringValue = Self.depthRuleDepthTitle(index: index, depth: rule.depth)
+            row.rasterLabel.stringValue = Self.depthRuleRasterTitle(index: index)
+            row.rasterSwitch.state = rule.rasterized ? .on : .off
+            row.resolutionLabel.stringValue = Self.depthRuleResolutionTitle(index: index)
+            row.resolutionControl.selectedSegment = FlatDepthRules.rasterResolutions.firstIndex(of: rule.rasterResolution) ?? 0
+            row.resolutionControl.isEnabled = rule.rasterized
         }
         depthRulesRemoveButton.isEnabled = flatDepthRules.rules.count > 1
     }
@@ -473,6 +501,30 @@ final class DebugOverlayHUDView: NSView {
 
     static func depthRuleDepthTitle(index: Int, depth: Double) -> String {
         String(format: "Rule %d: to %.2f cam. dist.", index + 1, depth)
+    }
+
+    static func depthRuleRasterTitle(index: Int) -> String {
+        "Rule \(index + 1): rasterize tiles"
+    }
+
+    static func depthRuleResolutionTitle(index: Int) -> String {
+        "Rule \(index + 1): raster texels per tile"
+    }
+
+    @objc private func depthRuleRasterSwitchChanged(_ sender: NSSwitch) {
+        guard let index = depthRuleRows.firstIndex(where: { $0.rasterSwitch === sender }),
+              index < flatDepthRules.rules.count else { return }
+        flatDepthRules.rules[index].rasterized = sender.state == .on
+        depthRuleRows[index].resolutionControl.isEnabled = sender.state == .on
+        onFlatDepthRulesChanged?(flatDepthRules)
+    }
+
+    @objc private func depthRuleResolutionControlChanged(_ sender: NSSegmentedControl) {
+        guard let index = depthRuleRows.firstIndex(where: { $0.resolutionControl === sender }),
+              index < flatDepthRules.rules.count,
+              FlatDepthRules.rasterResolutions.indices.contains(sender.selectedSegment) else { return }
+        flatDepthRules.rules[index].rasterResolution = FlatDepthRules.rasterResolutions[sender.selectedSegment]
+        onFlatDepthRulesChanged?(flatDepthRules)
     }
 
     @objc private func depthRuleDropControlChanged(_ sender: NSSegmentedControl) {
@@ -686,6 +738,8 @@ final class DebugOverlayHUDView: NSView {
         for row in depthRuleRows {
             cursor = layoutControlRow(row.dropLabel, row.dropControl, at: cursor, contentWidth: contentWidth)
             cursor = layoutControlRow(row.depthLabel, row.depthSlider, at: cursor, contentWidth: contentWidth)
+            cursor = layoutSwitchRow(row.rasterLabel, row.rasterSwitch, at: cursor, contentWidth: contentWidth)
+            cursor = layoutControlRow(row.resolutionLabel, row.resolutionControl, at: cursor, contentWidth: contentWidth)
         }
         cursor = layoutFullWidthRow(depthRulesAddButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutFullWidthRow(depthRulesRemoveButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)

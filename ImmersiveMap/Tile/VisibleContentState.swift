@@ -31,6 +31,9 @@ struct VisibleContentState {
     /// The flat map's depth bands, nearest first (`FlatDepthRuleCoverage`):
     /// each rule's zoom, depth and tile count. Empty on the globe.
     let flatDepthBands: [FlatDepthBand]
+    /// The targets a rasterized rule placed, with the texels a side their
+    /// picture is rendered at (`TileRasterizer`). Empty on the globe.
+    let rasterizedTiles: [VisibleTile: Int]
 
     init(centerWorldMercator: SIMD2<Double>,
          center: Center,
@@ -38,7 +41,8 @@ struct VisibleContentState {
          backdropTiles: [VisibleTile],
          tileZoomLevel: Int,
          coverageVersion: UInt64,
-         flatDepthBands: [FlatDepthBand] = []) {
+         flatDepthBands: [FlatDepthBand] = [],
+         rasterizedTiles: [VisibleTile: Int] = [:]) {
         self.centerWorldMercator = centerWorldMercator
         self.center = center
         self.visibleTiles = visibleTiles
@@ -46,5 +50,6 @@ struct VisibleContentState {
         self.tileZoomLevel = tileZoomLevel
         self.coverageVersion = coverageVersion
         self.flatDepthBands = flatDepthBands
+        self.rasterizedTiles = rasterizedTiles
     }
 }
