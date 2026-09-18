@@ -82,6 +82,10 @@ final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendab
         debugOverlayHUDSnapshotStore.publish(snapshot)
     }
 
+    func attachTileLoadingStatus(provider: (@Sendable () -> TileLoadingStatusSnapshot?)?) {
+        debugOverlayHUDSnapshotStore.attachTileLoadingStatus(provider: provider)
+    }
+
     func updateMarkerProjectionSnapshot(_ snapshot: MarkerProjectionSnapshot) {
         // The only caller: RenderFrameEngine.renderFrame on the main thread
         // (display link in the main runloop). No hop: the snapshot must apply

@@ -52,6 +52,20 @@ enum BuildingCoveragePlanner {
     /// drawn.
     static let fieldRadiusInCells: Double = 3
 
+    /// The eye's ground point in grid cell units. The engine's camera looks
+    /// at the world origin (the pan moves the world under it), so the eye
+    /// is taken as it is: its x and y over the target zoom's tile size,
+    /// away from the look-at point in tile units, with world y growing
+    /// north while tile y grows south, then scaled to the grid's zoom.
+    static func eyeGroundCell(eye: SIMD3<Float>,
+                              flatRenderState: FlatRenderState,
+                              lookAt: SIMD2<Double>,
+                              targetZoom: Int) -> SIMD2<Double> {
+        let tileUnits = flatRenderState.renderMapSize / Double(1 << max(0, targetZoom))
+        let eyeGround = lookAt + SIMD2<Double>(Double(eye.x), -Double(eye.y)) / tileUnits
+        return eyeGround * pow(2.0, Double(minimumSourceZoom - targetZoom))
+    }
+
     /// `resident` is every tile in the working set; `visibleTiles` the
     /// frame's coverage targets (the exact tiles at the target zoom and the
     /// parents placed under them), which decide which children a cell

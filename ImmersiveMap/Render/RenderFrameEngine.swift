@@ -128,6 +128,12 @@ final class RenderFrameEngine {
         self.passEncoder = RenderFramePassEncoder(attachments: attachments,
                                                   renderGraph: renderGraph)
         self.visibilityResolver = RenderFrameVisibilityResolver()
+        // The HUD reads the loader's state between frames through this; the
+        // reporter is held weakly so a discarded engine's reporter answers
+        // nothing rather than living on in the sink.
+        if let reporter = persistentContext.tileLoadingStatusReporter {
+            eventSink.attachTileLoadingStatus(provider: { [weak reporter] in reporter?.snapshot() })
+        }
     }
 
     // MARK: - Rendering
@@ -217,6 +223,7 @@ final class RenderFrameEngine {
     /// which would otherwise resurrect state a successor has just reset.
     func prepareForDiscard() {
         persistentContext.tileRenderStore.cancelLoading()
+        eventSink.attachTileLoadingStatus(provider: nil)
         (eventSink as? ImmersiveMapRenderEventSink)?.invalidateDelivery()
     }
 
@@ -330,14 +337,12 @@ final class RenderFrameEngine {
         }
 
         publishStaticResources(frameIndex: frameTick.index)
-        // The coverage reach is a debug knob: a moved slider re-runs the
-        // coverage like a camera change would.
-        let coverageFarRadius = FlatDistanceCoverage.clampFarRadius(
-            Double(debugOverlayControls.snapshot().coverageFarRadiusCameraDistances))
+        // The depth rules are the debug panel's: an edited rule re-runs
+        // the coverage like a camera change would.
         let visibleContent = visibilityResolver.resolve(cameraFrameState: cameraFrameState,
                                                         resolvedPresentation: resolvedPresentation,
                                                         tileSettings: settings.tiles,
-                                                        farRadius: coverageFarRadius,
+                                                        rules: debugOverlayControls.snapshot().flatDepthRules,
                                                         diagnostics: diagnostics)
         // Resolved once here, so the pass injection and every receiver bind
         // site take the same answer from `ShadowPassGateResolver`.

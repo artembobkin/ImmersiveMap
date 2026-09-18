@@ -12,7 +12,7 @@ final class GlobeTileCoverageTests: XCTestCase {
     private static let globe = GlobeUniform(panX: 0, panY: 0, radius: 1, transition: 0)
 
     private static func inputs(eyeDistance: Float, farRadius: Double = FlatDistanceCoverage.farRadius) -> GlobeCoverageInputs {
-        GlobeCoverageInputs(eye: SIMD3<Float>(0, 0, eyeDistance), globe: globe, farRadius: farRadius)
+        GlobeCoverageInputs(eye: SIMD3<Float>(0, 0, eyeDistance), globe: globe, rule: CoverageRule(farRadius: farRadius))
     }
 
     /// A wide frustum looking at the sphere's front point from the eye.

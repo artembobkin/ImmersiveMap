@@ -19,6 +19,11 @@ import MetalKit
 // or an entry that cannot be materialized, continues to the network.
 // Decisions about when a tile request is temporarily blocked after errors are
 // delegated to `TileRetryController` (per-tile backoff + global cooldown).
+// Every stage that holds a lane slot has a deadline (`StageDeadlines`): a
+// load whose stage outlives it is retired by the watchdog (the slot freed,
+// a stalled failure recorded, the retry backoff armed and the renderer
+// woken), so no answer that never comes, from a disk, a driver or a server,
+// can hold a slot or hide a hole on the map for the rest of the process.
 /// Thread-safe (`@unchecked Sendable`): the loader's mutable state is
 /// serialized by `stateQueue`; loading work runs from background Tasks.
 final class ImmersiveMapNeedsTile: @unchecked Sendable {
@@ -50,6 +55,32 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         let generation: UInt64
         var task: Task<Void, Never>
         var stage: LoadStage
+        /// When `stage` was entered: the watchdog's clock for the stage.
+        var stageStartedAt: Date
+        /// The tile is in the working set (markLoadSucceeded ran): what is
+        /// left of the load is its disk save, or the hop to finishLoading.
+        var landed = false
+        /// Demand named the tile again after it landed, while the entry
+        /// still stood: the working set may have released the tile in
+        /// between (the camera left and came back inside the save), and
+        /// the request was answered "already loading". The end of the load
+        /// asks for a frame, so the next request starts it afresh.
+        var demandReturned = false
+    }
+
+    /// How long each slot-holding stage may run before the watchdog retires
+    /// the load. Generous: a parse of the largest tile takes a couple of
+    /// seconds in a Debug build, a disk hit tens of milliseconds, and the
+    /// network stage is bounded by URLSession's own timeouts (30 s per
+    /// request, 60 s per resource) well inside its deadline. The queued
+    /// stages hold no slot and have no deadline: they wait for a slot the
+    /// deadlines of the running stages guarantee.
+    struct StageDeadlines: Equatable {
+        var disk: TimeInterval
+        var network: TimeInterval
+        var cpu: TimeInterval
+
+        static let `default` = StageDeadlines(disk: 20, network: 90, cpu: 60)
     }
 
     // A downloaded tile waiting for a free CPU slot.
@@ -73,6 +104,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
     private let maxConcurrentFetches: Int
     private let maxConcurrentPrepares: Int
     private let maxConcurrentDiskLoads: Int
+    private let stageDeadlines: StageDeadlines
     // Whether loads enter through the disk stage. Off when the pipeline has
     // no prepared disk cache: a guaranteed miss per tile buys nothing.
     private let usesDiskStage: Bool
@@ -89,12 +121,15 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
     private let tileLoadingStatusReporter: TileLoadingStatusReporter?
     private let stateQueue = DispatchQueue(label: "ImmersiveMap.ImmersiveMapNeedsTile.state")
 
-    /// Called on the main queue when the nearest retry window expires.
-    /// Rendering is on-demand: after a failed download the frames stop, the
-    /// per-frame `request()` no longer runs, and without an external kick the
-    /// backoff expires "in silence": the hole where the tile should be hangs
-    /// until the next gesture. The owner must request a frame on this callback.
-    var onRetryWindowExpired: (() -> Void)?
+    /// Called when the loader needs a frame to make progress: the nearest
+    /// retry window expired, the watchdog retired a stalled load, or a load
+    /// ended after demand had returned to its tile. Rendering is on-demand:
+    /// after a failed download the frames stop, the per-frame `request()`
+    /// no longer runs, and without an external kick the backoff expires "in
+    /// silence": the hole where the tile should be hangs until the next
+    /// gesture. The owner must request a frame on this callback. Called on
+    /// the main queue for the wake, on the calling task otherwise.
+    var onFrameNeeded: (() -> Void)?
     private var retryWakeWorkItem: DispatchWorkItem?
     private var retryWakeDeadline: Date?
     private let now: () -> Date
@@ -122,6 +157,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
          retryPolicy: RetryPolicy = .default,
          maxConcurrentPrepares: Int = ImmersiveMapNeedsTile.defaultMaxConcurrentPrepares,
          maxConcurrentDiskLoads: Int = ImmersiveMapNeedsTile.defaultMaxConcurrentDiskLoads,
+         stageDeadlines: StageDeadlines = .default,
          now: @escaping () -> Date = Date.init,
          retryWakeScheduler: @escaping (TimeInterval, DispatchWorkItem) -> Void = { delay, workItem in
              DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
@@ -131,6 +167,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         self.maxConcurrentFetches = config.tiles.network.maxConcurrentFetches
         self.maxConcurrentPrepares = max(1, maxConcurrentPrepares)
         self.maxConcurrentDiskLoads = max(1, maxConcurrentDiskLoads)
+        self.stageDeadlines = stageDeadlines
         self.usesDiskStage = loadPipeline.hasPreparedDiskCache
         self.pendingTilesQueue = DeduplicatedTilesFIFO(capacity: config.tiles.network.pendingRequestQueueCapacity)
         self.loadPipeline = loadPipeline
@@ -179,6 +216,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
             pendingTilesQueue.clear()
             retryController.retainOnly(tiles: wantedTiles)
             dropUnwantedQueuedNetworkWorkLocked()
+            reapStalledLoadsLocked(now: now())
 
             // Schedule the whole batch inside one lock to avoid a sync per tile.
             for tile in deduplicatedTiles {
@@ -194,7 +232,10 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         if wantedTiles.contains(tile) == false {
             return
         }
-        if ongoingTasks[tile] != nil {
+        if let ongoingTask = ongoingTasks[tile] {
+            if ongoingTask.landed {
+                ongoingTasks[tile]?.demandReturned = true
+            }
             tileTraceRecorder.record(.tileSchedulerAlreadyLoading(tile))
             return
         }
@@ -264,11 +305,15 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
                 await self.runNetworkStage(tile: tile, generation: generation)
             }
         }
-        ongoingTasks[tile] = OngoingTask(generation: generation, task: task, stage: entryStage)
+        ongoingTasks[tile] = OngoingTask(generation: generation,
+                                         task: task,
+                                         stage: entryStage,
+                                         stageStartedAt: now())
         tileTraceRecorder.record(.tileLoadScheduled(
             tile,
             inFlight: usesDiskStage ? diskInFlightCount : networkInFlightCount
         ))
+        armWakeLocked()
     }
 
     // Disk stage: asks the prepared cache before the network. A hit is final
@@ -350,6 +395,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
                 return false
             }
             ongoingTasks[tile]?.stage = .networkQueued
+            ongoingTasks[tile]?.stageStartedAt = now()
             diskInFlightCount = max(0, diskInFlightCount - 1)
             startNextPendingLoadLocked()
             return true
@@ -380,12 +426,14 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         dispatchPrecondition(condition: .onQueue(stateQueue))
         networkInFlightCount += 1
         ongoingTasks[tile]?.stage = .network
+        ongoingTasks[tile]?.stageStartedAt = now()
         let task = Task(priority: .utility) {
             await self.runNetworkStage(tile: tile, generation: generation)
         }
         // The tile's current Task is swapped: cancelAll must cancel the live
         // stage; the disk task has already finished by this point.
         ongoingTasks[tile]?.task = task
+        armWakeLocked()
     }
 
     // Starts parked network work while free slots remain, discarding stale
@@ -485,6 +533,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
                 return false
             }
             ongoingTasks[tile]?.stage = .cpuQueued
+            ongoingTasks[tile]?.stageStartedAt = now()
             networkInFlightCount = max(0, networkInFlightCount - 1)
             if usesDiskStage {
                 // The pending FIFO feeds the disk lane; a freed network slot
@@ -528,6 +577,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         dispatchPrecondition(condition: .onQueue(stateQueue))
         cpuInFlightCount += 1
         ongoingTasks[tile]?.stage = .cpu
+        ongoingTasks[tile]?.stageStartedAt = now()
         let task = Task(priority: .utility) {
             await self.runCPUStage(tile: tile,
                                    generation: generation,
@@ -536,6 +586,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         // The tile's current Task is swapped: cancelAll must cancel the live
         // stage; the network task has already finished by this point.
         ongoingTasks[tile]?.task = task
+        armWakeLocked()
     }
 
     private func runCPUStage(tile: Tile,
@@ -683,7 +734,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
                                                       plan: plan,
                                                       sourceETag: etag)
             } else {
-                markLoadFailed(tile: tile, generation: generation, reason: .parseFailed)
+                markLoadFailed(tile: tile, generation: generation, reason: .materializeFailed)
             }
         case let .failure(downloadFailure):
             // The disk stage already answered what the disk could; a failed
@@ -830,12 +881,138 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
             onFinishLoadingAttemptForTesting?(tile)
         }
         #endif
+        var needsFrame = false
         stateQueue.sync {
-            guard ongoingTasks[tile]?.generation == generation else {
+            guard let ongoingTask = ongoingTasks[tile], ongoingTask.generation == generation else {
                 return
             }
             ongoingTasks.removeValue(forKey: tile)
+            // Every exit above records its own end; this closes a row that
+            // an exit without one would leave claiming a stage.
+            tileLoadingStatusReporter?.recordLoadEnded(tile: tile)
+            needsFrame = ongoingTask.demandReturned && wantedTiles.contains(tile)
         }
+        if needsFrame {
+            onFrameNeeded?()
+        }
+    }
+
+    // MARK: - Stage watchdog
+
+    /// Retires every load whose slot-holding stage has outlived its
+    /// deadline: the task is cancelled (its late answers fail the generation
+    /// gate), the entry removed so the next request runs the whole chain
+    /// again, the lane counter released, a stalled failure recorded for the
+    /// HUD, the trace and the retry backoff, the work waiting for the freed
+    /// slot started, and the wake armed so a frame re-requests the tile
+    /// once the backoff passes. Must be called only from within `stateQueue`.
+    /// A landed load (its save still running under the CPU slot) is retired
+    /// without a failure: the tile is on screen, only the slot is owed.
+    @discardableResult
+    private func reapStalledLoadsLocked(now: Date) -> Bool {
+        dispatchPrecondition(condition: .onQueue(stateQueue))
+        var freedEntrySlots = 0
+        var reapedAny = false
+        for (tile, ongoingTask) in ongoingTasks {
+            guard let deadline = deadline(of: ongoingTask.stage),
+                  let slotStageName = Self.slotHoldingStageName(ongoingTask.stage) else {
+                continue
+            }
+            let age = now.timeIntervalSince(ongoingTask.stageStartedAt)
+            guard age >= deadline else {
+                continue
+            }
+            ongoingTask.task.cancel()
+            ongoingTasks.removeValue(forKey: tile)
+            switch ongoingTask.stage {
+            case .disk:
+                diskInFlightCount = max(0, diskInFlightCount - 1)
+                freedEntrySlots += 1
+            case .network:
+                networkInFlightCount = max(0, networkInFlightCount - 1)
+                if usesDiskStage == false {
+                    freedEntrySlots += 1
+                }
+            case .cpu:
+                cpuInFlightCount = max(0, cpuInFlightCount - 1)
+            case .networkQueued, .cpuQueued:
+                break
+            }
+            let stageName = ongoingTask.landed ? "save" : slotStageName
+            if ongoingTask.landed == false {
+                retryController.registerFailure(for: tile, reason: .stalled(stage: stageName))
+                tileLoadingStatusReporter?.recordLoadStalled(tile: tile, stage: stageName)
+            }
+            tileTraceRecorder.record(.tileLoadStalled(tile, stage: stageName, age: age))
+            reapedAny = true
+        }
+        guard reapedAny else {
+            return false
+        }
+        for _ in 0..<freedEntrySlots {
+            startNextPendingLoadLocked()
+        }
+        startNextQueuedNetworkWorkLocked()
+        startNextQueuedCPUWorkLocked()
+        armWakeLocked()
+        return true
+    }
+
+    private func deadline(of stage: LoadStage) -> TimeInterval? {
+        switch stage {
+        case .disk:
+            return stageDeadlines.disk
+        case .network:
+            return stageDeadlines.network
+        case .cpu:
+            return stageDeadlines.cpu
+        case .networkQueued, .cpuQueued:
+            return nil
+        }
+    }
+
+    private static func slotHoldingStageName(_ stage: LoadStage) -> String? {
+        switch stage {
+        case .disk:
+            return "disk"
+        case .network:
+            return "network"
+        case .cpu:
+            return "parse"
+        case .networkQueued, .cpuQueued:
+            return nil
+        }
+    }
+
+    /// The moment the earliest running stage outlives its deadline.
+    /// Must be called only from within `stateQueue`.
+    private func earliestStageDeadlineLocked() -> Date? {
+        dispatchPrecondition(condition: .onQueue(stateQueue))
+        var earliest: Date?
+        for ongoingTask in ongoingTasks.values {
+            guard let deadline = deadline(of: ongoingTask.stage) else {
+                continue
+            }
+            let deadlineDate = ongoingTask.stageStartedAt.addingTimeInterval(deadline)
+            if let current = earliest, current <= deadlineDate {
+                continue
+            }
+            earliest = deadlineDate
+        }
+        return earliest
+    }
+
+    /// Arms the wake for whichever comes first: a retry window expiring or
+    /// a running stage outliving its deadline. The renderer is on demand,
+    /// so without this a stalled load in a still scene would be noticed
+    /// only by the next gesture. Must be called only from within `stateQueue`.
+    private func armWakeLocked() {
+        dispatchPrecondition(condition: .onQueue(stateQueue))
+        let candidates = [retryController.earliestNextRetryDate(), earliestStageDeadlineLocked()].compactMap { $0 }
+        guard let wakeAt = candidates.min() else {
+            return
+        }
+        scheduleRetryWakeLocked(at: wakeAt)
     }
 
     // Starts the next suitable tile from the pending queue in the freed
@@ -885,6 +1062,10 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
             guard ongoingTasks[tile]?.generation == generation else {
                 return false
             }
+            // What follows (the disk save, the hop to finishLoading) gets
+            // its own deadline window, and is retired without a failure.
+            ongoingTasks[tile]?.landed = true
+            ongoingTasks[tile]?.stageStartedAt = now()
             retryController.registerSuccess(for: tile)
             tileLoadingStatusReporter?.recordLoadCompleted(tile: tile)
             tileTraceRecorder.record(.tileLoadSuccess(tile, source: source))
@@ -939,16 +1120,18 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         stateQueue.sync {
             retryWakeWorkItem = nil
             retryWakeDeadline = nil
+            // The wake serves the watchdog too: a stage past its deadline is
+            // retired here, and the frame requested below re-requests the
+            // tile once its backoff passes.
+            reapStalledLoadsLocked(now: now())
             shouldNotify = wantedTiles.isEmpty == false
             // Windows later than the fired one may have been absorbed by its
             // deadline, so re-arm for the nearest remaining one. Already
             // expired windows are retried by the frame the owner requests via the callback.
-            if let nextWakeAt = retryController.earliestNextRetryDate(), nextWakeAt > now() {
-                scheduleRetryWakeLocked(at: nextWakeAt)
-            }
+            armWakeLocked()
         }
         if shouldNotify {
-            onRetryWindowExpired?()
+            onFrameNeeded?()
         }
     }
 
@@ -964,6 +1147,10 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         switch reason {
         case .parseFailed:
             return "parse_failed"
+        case .materializeFailed:
+            return "materialize_failed"
+        case let .stalled(stage):
+            return "stalled_\(stage)"
         case let .download(downloadFailure):
             return downloadFailureDescription(downloadFailure)
         }

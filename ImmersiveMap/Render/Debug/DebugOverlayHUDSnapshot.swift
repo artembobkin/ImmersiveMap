@@ -21,6 +21,21 @@ struct DebugOverlayHUDSnapshot: Equatable {
     let sectionSpacing: Float
     let textColor: SIMD3<Float>
 
+    /// The same frame snapshot with the tile list read again from the
+    /// reporter: what the panel applies between frames.
+    func replacingTileLoadingStatus(_ tileLoadingStatus: TileLoadingStatusSnapshot?) -> DebugOverlayHUDSnapshot {
+        DebugOverlayHUDSnapshot(coordinateLines: coordinateLines,
+                                diagnosticsLines: diagnosticsLines,
+                                tileLoadingStatusLines: tileLoadingStatus?.lines ?? [],
+                                tileLoadingStatusTiles: tileLoadingStatus?.tiles ?? [],
+                                coordinateScale: coordinateScale,
+                                diagnosticsScale: diagnosticsScale,
+                                leftPadding: leftPadding,
+                                topPadding: topPadding,
+                                sectionSpacing: sectionSpacing,
+                                textColor: textColor)
+    }
+
     static func make(settings: ImmersiveMapSettings.DebugSettings,
                      zoom: Double,
                      latitude: Double,
@@ -80,9 +95,21 @@ struct DebugOverlayHUDSnapshot: Equatable {
             "camera z:\(format(cameraState.zoom)) pitch:\(format(pitchDegrees)) bearing:\(format(bearingDegrees))",
             "surface:\(surface) transition:\(format(Double(frameContext.transition))) viewport:\(Int(viewport.x))x\(Int(viewport.y))",
             "eye x:\(format(Double(eye.x))) y:\(format(Double(eye.y))) z:\(format(Double(eye.z)))",
+            depthRulesLine(frameContext.visibleContent.flatDepthBands),
             targetZoomCounts,
             sourceZoomCounts
         ]
+    }
+
+    /// The flat map's depth rules as the frame resolved them, nearest
+    /// first: each band's zoom, far depth and tile count. "rules: none" on
+    /// the globe.
+    static func depthRulesLine(_ bands: [FlatDepthBand]) -> String {
+        guard bands.isEmpty == false else { return "rules: none" }
+        let entries = bands.map { band in
+            "z\(band.zoom) \u{2264}\(String(format: "%.1f", band.depth)) (\(band.tileCount))"
+        }
+        return "rules: " + entries.joined(separator: " / ")
     }
 
     private static func zoomCountsLine(title: String, tiles: [Tile]) -> String {

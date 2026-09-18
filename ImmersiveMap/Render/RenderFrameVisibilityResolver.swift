@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 /// Computes the frame's coverage from the camera snapshot, the presentation
-/// state and the tile settings: the target zoom, then the walk over the
-/// distance rule (`TileCulling`). `farRadius` is the coverage's reach in
-/// camera distances, the debug panel's knob or the rule's own.
+/// state and the tile settings: the target zoom, then the coverage
+/// (`TileCulling`). `rules` are the plane's depth rules, the debug
+/// panel's or the default.
 final class RenderFrameVisibilityResolver {
     private let tileCulling: TileCulling
     private var cachedFingerprint: Int?
@@ -17,19 +17,19 @@ final class RenderFrameVisibilityResolver {
     func resolve(cameraFrameState: CameraFrameState,
                  resolvedPresentation: ResolvedPresentationState,
                  tileSettings: ImmersiveMapSettings.TileSettings,
-                 farRadius: Double = FlatDistanceCoverage.farRadius,
+                 rules: FlatDepthRules = .default,
                  diagnostics: (any FrameDiagnosticsService)? = nil) -> VisibleContentState {
         let zoomPlan = TileCoverageZoomPolicy.resolve(cameraZoom: cameraFrameState.mapCameraState.zoom,
                                                       renderSurfaceMode: resolvedPresentation.renderSurfaceMode,
                                                       maximumZoomLevel: tileSettings.coverage.maximumZoomLevel)
         // The coverage is a pure function of the camera pose, drawSize,
-        // presentation state and reach: with an unchanged fingerprint the
+        // presentation state and rules: with an unchanged fingerprint the
         // previous result is reused (along with its coverageVersion, which
         // the demand pipeline's dirty-gate relies on).
         let fingerprint = Self.makeFingerprint(cameraFrameState: cameraFrameState,
                                                resolvedPresentation: resolvedPresentation,
                                                targetZoom: zoomPlan.baseZoom,
-                                               farRadius: farRadius)
+                                               rules: rules)
         if fingerprint == cachedFingerprint,
            let cachedContent {
             return cachedContent
@@ -41,7 +41,7 @@ final class RenderFrameVisibilityResolver {
                                                         cameraMatrix: cameraFrameState.cameraMatrices.projectionView,
                                                         cameraFrustum: cameraFrameState.cameraFrustum,
                                                         cameraEye: cameraFrameState.cameraEye,
-                                                        farRadius: farRadius,
+                                                        rules: rules,
                                                         diagnostics: diagnostics)
         cachedFingerprint = fingerprint
         cachedContent = content
@@ -51,7 +51,7 @@ final class RenderFrameVisibilityResolver {
     private static func makeFingerprint(cameraFrameState: CameraFrameState,
                                         resolvedPresentation: ResolvedPresentationState,
                                         targetZoom: Int,
-                                        farRadius: Double) -> Int {
+                                        rules: FlatDepthRules) -> Int {
         var hasher = Hasher()
         let cameraState = cameraFrameState.mapCameraState
         hasher.combine(cameraState.centerWorldMercator.x.bitPattern)
@@ -62,7 +62,7 @@ final class RenderFrameVisibilityResolver {
         hasher.combine(cameraFrameState.drawSize.width.bitPattern)
         hasher.combine(cameraFrameState.drawSize.height.bitPattern)
         hasher.combine(targetZoom)
-        hasher.combine(farRadius.bitPattern)
+        hasher.combine(rules)
         hasher.combine(resolvedPresentation.renderSurfaceMode == .flat)
         let globeUniform = resolvedPresentation.globeRenderState.globeUniform
         hasher.combine(globeUniform.panX.bitPattern)

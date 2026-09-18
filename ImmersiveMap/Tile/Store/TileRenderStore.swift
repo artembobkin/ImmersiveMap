@@ -78,7 +78,7 @@ final class TileRenderStore: @unchecked Sendable {
         // Backoff-window expiry wakes the on-demand renderer: the frame reruns
         // requestTiles and retries the failed tiles. Without this, a hole left
         // by a load failure hangs until the next camera gesture.
-        mapNeedsTile!.onRetryWindowExpired = { [weak self] in
+        mapNeedsTile!.onFrameNeeded = { [weak self] in
             self?.eventSink?.invalidate(.tileRetryDue)
         }
     }
@@ -156,6 +156,9 @@ final class TileRenderStore: @unchecked Sendable {
             // Backing allocation failed (memory pressure): report a
             // materialize failure so the loader's retry path owns the tile
             // instead of the cache holding a permanently blank one.
+            #if DEBUG
+            print("[WARN] Failed to materialize tile \(preparedTile.tile): the arena allocation failed")
+            #endif
             tileTraceRecorder.record(.tileMaterializeFailed(preparedTile.tile))
             return false
         }

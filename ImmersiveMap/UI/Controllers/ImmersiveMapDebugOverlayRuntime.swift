@@ -17,6 +17,9 @@ final class ImmersiveMapDebugOverlayRuntime {
     // on main.
     nonisolated(unsafe) private var hudSnapshotTimer: Timer?
     private var consumedHUDSnapshotVersion: UInt64 = 0
+    /// What the panel shows right now: the base a between-frames refresh
+    /// of the tile list is built on.
+    private var appliedHUDSnapshot: DebugOverlayHUDSnapshot?
     /// The settings the map is running with, so the panel can hand back a
     /// whole value with one branch changed.
     private var currentSettings: ImmersiveMapSettings?
@@ -102,10 +105,10 @@ final class ImmersiveMapDebugOverlayRuntime {
         }
         #if os(macOS)
         // The shadow group is part of the reworked AppKit panel; the UIKit one
-        // still carries the tabbed layout and has no such group yet. The road
-        // fade knobs are bench controls of the same panel.
-        hudView.onCoverageFarRadiusCameraDistancesChanged = { [weak controls, weak renderRuntime] cameraDistances in
-            controls?.setCoverageFarRadiusCameraDistances(cameraDistances)
+        // still carries the tabbed layout and has no such group yet. The
+        // depth rules are bench controls of the same panel.
+        hudView.onFlatDepthRulesChanged = { [weak controls, weak renderRuntime] rules in
+            controls?.setFlatDepthRules(rules)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
         hudView.onShadowSettingsChanged = { [weak self] shadows in
@@ -181,6 +184,7 @@ final class ImmersiveMapDebugOverlayRuntime {
         } else {
             stopHUDSnapshotTimer()
             consumedHUDSnapshotVersion = hudSnapshotStore.publish(nil)
+            appliedHUDSnapshot = nil
             hudView.apply(snapshot: nil)
         }
     }
@@ -205,12 +209,27 @@ final class ImmersiveMapDebugOverlayRuntime {
         hudSnapshotTimer = nil
     }
 
+    /// Applies the newest frame snapshot, and between frames keeps the tile
+    /// list current from the reporter itself: the on-demand loop renders a
+    /// frame for a landing tile and then sleeps, and the snapshot of that
+    /// frame is throttled more often than not, so without this the rows
+    /// would show the last state before the landing for as long as the
+    /// camera stands still (a tile forever "parse", "disk", "network").
     private func flushPendingHUDSnapshot() {
-        guard let value = hudSnapshotStore.consumeLatest(after: consumedHUDSnapshotVersion) else {
+        if let value = hudSnapshotStore.consumeLatest(after: consumedHUDSnapshotVersion) {
+            consumedHUDSnapshotVersion = value.version
+            appliedHUDSnapshot = value.snapshot
+            hudView.apply(snapshot: value.snapshot)
             return
         }
+        refreshTileLoadingStatusBetweenFrames()
+    }
 
-        consumedHUDSnapshotVersion = value.version
-        hudView.apply(snapshot: value.snapshot)
+    private func refreshTileLoadingStatusBetweenFrames() {
+        guard let refreshed = hudSnapshotStore.refreshedSnapshot(applying: appliedHUDSnapshot) else {
+            return
+        }
+        appliedHUDSnapshot = refreshed
+        hudView.apply(snapshot: refreshed)
     }
 }

@@ -14,6 +14,15 @@ import Foundation
 enum TileRetryFailureReason {
     case download(TileDownloader.DownloadFailure)
     case parseFailed
+    /// The parsed tile could not be turned into GPU state (the arena
+    /// allocation failed under memory pressure). Transient, so it is backed
+    /// off like a network error rather than parked for the parse cooldown.
+    case materializeFailed
+    /// The loader's watchdog retired the load because a stage held its lane
+    /// slot past the stage's deadline. Backed off like a network error: the
+    /// next attempt is usually fine, and a tile that stalls every time must
+    /// not burn a slot continuously.
+    case stalled(stage: String)
 }
 
 final class TileRetryController {
@@ -143,6 +152,8 @@ final class TileRetryController {
         switch reason {
         case .parseFailed:
             return policy.parseFailureCooldown
+        case .stalled, .materializeFailed:
+            return exponentialBackoff(failureCount: failureCount)
         case let .download(downloadFailure):
             switch downloadFailure {
             case .missingAuthorizationToken:
@@ -165,7 +176,7 @@ final class TileRetryController {
     // (e.g. auth/rate-limit), or nil if only per-tile backoff is needed.
     private func globalRetryDelay(for reason: TileRetryFailureReason) -> TimeInterval? {
         switch reason {
-        case .parseFailed:
+        case .parseFailed, .stalled, .materializeFailed:
             return nil
         case let .download(downloadFailure):
             switch downloadFailure {

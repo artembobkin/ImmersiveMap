@@ -232,6 +232,15 @@ extension TileTraceEvent {
                ])
     }
 
+    static func tileLoadStalled(_ tile: Tile, stage: String, age: TimeInterval) -> TileTraceEvent {
+        .event("tile_load_stalled",
+               fields: [
+                   "tile": .tile(tile),
+                   "stage": .string(stage),
+                   "ageSeconds": .double(age)
+               ])
+    }
+
     static func tileDemandUpdate(frameIndex: UInt64,
                                  visible: Int,
                                  demanded: Int,

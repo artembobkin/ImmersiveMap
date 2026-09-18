@@ -34,18 +34,28 @@ final class MetalTileFactory: @unchecked Sendable {
     private static let ioCommandQueueLock = NSLock()
     nonisolated(unsafe) private static var ioCommandQueuesByDevice: [ObjectIdentifier: MTLIOCommandQueue] = [:]
 
+    /// How long one MTLIO load may take before the materialize gives up on
+    /// it. A tile's container is a few megabytes at most and a healthy load
+    /// ends in tens of milliseconds, so this is reached only by a request
+    /// the driver never answers. The load then fails transiently: the pair
+    /// on disk stays, the tile takes the network stage this once, and the
+    /// next hit tries the queue again. Nothing is remembered across loads,
+    /// because one slow answer (a saturated disk, a paused process) says
+    /// nothing about the next.
+    static let fileBlobLoadTimeout: TimeInterval = 15
+
     /// One IO command queue per device, shared by every factory.
     ///
     /// The queue is a device-level object, and an app runs one engine, so
     /// per-factory queues bought nothing. They cost, though: each queue
-    /// spawns its own IO threads and holds kernel-side resources for as long
-    /// as it lives. A process that builds engines in a loop (the test suite
-    /// creates dozens through `ImmersiveMapStillRecorder` and the video
-    /// export; a host app that recreates its renderer does the same) piles
-    /// those up, and past some count the IOGPU driver stops servicing
-    /// submissions on freshly created queues entirely: loads park in
-    /// `IOGPUIOCommandQueuePerformIO` and their completion handlers never
-    /// run. Sharing keeps the count at one per device no matter how many
+    /// spawns four IO threads that sit parked in the driver
+    /// (`IOGPUIOCommandQueuePerformIO`, their idle state, not a hang) and
+    /// holds kernel-side resources for as long as it lives. A process that
+    /// builds engines in a loop (the test suite creates dozens through
+    /// `ImmersiveMapStillRecorder` and the video export; a host app that
+    /// recreates its renderer does the same) piles those up, and past some
+    /// count loads on freshly created queues stopped completing in the test
+    /// suite. Sharing keeps the count at one per device no matter how many
     /// engines come and go.
     private static func sharedIOCommandQueue(for metalDevice: MTLDevice) -> MTLIOCommandQueue? {
         guard MTLIOPreparedTileGeometryTransport.isSupported(metalDevice: metalDevice) else {
@@ -161,11 +171,21 @@ final class MetalTileFactory: @unchecked Sendable {
                     // so an exotic caller cannot delete a healthy entry.
                     return .allocationFailed
                 }
-                guard await loadFileBlob(from: url,
-                                         format: format,
-                                         into: buffer,
-                                         byteCount: image.arenaByteCount,
-                                         queue: queue) else {
+                // A load the queue never answers fails transiently: the
+                // entry is left alone (it is healthy as far as anyone
+                // knows) and the tile takes the network stage instead of
+                // holding its disk slot on a continuation.
+                guard let loaded = await loadFileBlob(from: url,
+                                                      format: format,
+                                                      into: buffer,
+                                                      byteCount: image.arenaByteCount,
+                                                      queue: queue) else {
+#if DEBUG
+                    print("MTLIO load of \(image.tile) did not complete within \(Self.fileBlobLoadTimeout) s")
+#endif
+                    return .allocationFailed
+                }
+                guard loaded else {
                     return .imageUnreadable
                 }
                 // A .complete status proves the DMA finished, not that these
@@ -407,11 +427,18 @@ final class MetalTileFactory: @unchecked Sendable {
     // MARK: - MTLIO blob load
 
 #if !targetEnvironment(simulator)
+    /// Whether the load completed with the whole blob, false when the file
+    /// could not be opened or the load ended in error, nil when the queue
+    /// did not answer within `fileBlobLoadTimeout`. The completion handler
+    /// is the only thing that resumes this await, and a load awaited without
+    /// a deadline would hold its tile's disk slot for the rest of the
+    /// process if the handler never ran; the loader's stage watchdog is the
+    /// second line behind this one.
     private func loadFileBlob(from url: URL,
                               format: PreparedTileFileBlobFormat,
                               into buffer: MTLBuffer,
                               byteCount: Int,
-                              queue: MTLIOCommandQueue) async -> Bool {
+                              queue: MTLIOCommandQueue) async -> Bool? {
         let fileHandle: MTLIOFileHandle?
         switch format {
         case .raw:
@@ -428,12 +455,18 @@ final class MetalTileFactory: @unchecked Sendable {
                              size: byteCount,
                              sourceHandle: fileHandle,
                              sourceHandleOffset: 0)
-        return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+        let loaded: Bool? = await CallbackTimeout.await(seconds: Self.fileBlobLoadTimeout) { complete in
             ioCommandBuffer.addCompletedHandler { completedBuffer in
-                continuation.resume(returning: completedBuffer.status == .complete)
+                complete(completedBuffer.status == .complete)
             }
             ioCommandBuffer.commit()
         }
+        if loaded == nil {
+            // Best effort: a late answer is ignored either way, and the
+            // buffer it would write is retained by the command buffer.
+            ioCommandBuffer.tryCancel()
+        }
+        return loaded
     }
 #endif
 }

@@ -23,17 +23,24 @@ struct TileLoadingStatusTileSnapshot: Equatable {
     let progress: Double
     let detail: String
     let preparationStages: [TilePreparationStageSnapshot]
+    /// How long the row has shown its current detail, in whole seconds, for
+    /// a record whose status is live work (`.loading`, `.parsing`); zero
+    /// otherwise. A stage that stays put grows old in the HUD instead of
+    /// looking like it started a moment ago.
+    let stageAgeSeconds: Int
 
     init(tile: Tile,
          status: TileLoadingTileStatus,
          progress: Double,
          detail: String,
-         preparationStages: [TilePreparationStageSnapshot] = []) {
+         preparationStages: [TilePreparationStageSnapshot] = [],
+         stageAgeSeconds: Int = 0) {
         self.tile = tile
         self.status = status
         self.progress = progress
         self.detail = detail
         self.preparationStages = preparationStages
+        self.stageAgeSeconds = stageAgeSeconds
     }
 }
 
@@ -130,7 +137,10 @@ struct TileLoadingStatusSnapshot: Equatable {
     }
 }
 
-final class TileLoadingStatusReporter {
+/// `@unchecked Sendable`: every read and write goes through the serial
+/// `queue`, so the reporter is handed to the loader's tasks and to the HUD's
+/// timer alike.
+final class TileLoadingStatusReporter: @unchecked Sendable {
     private struct PhaseCounters {
         var inFlight = 0
         var completed = 0
@@ -150,6 +160,8 @@ final class TileLoadingStatusReporter {
         var preparationStages: [TilePreparationStageSnapshot] = []
         var stageStartTimes: [String: TimeInterval] = [:]
         var sequence: UInt64
+        /// When `detail` last changed, for the row's stage age.
+        var detailSince: TimeInterval
     }
 
     private let queue = DispatchQueue(label: "ImmersiveMap.TileLoadingStatusReporter")
@@ -302,6 +314,66 @@ final class TileLoadingStatusReporter {
             tileRecords.removeValue(forKey: tile)
             pruneInactiveStaleTiles()
         }
+    }
+
+    /// The loader's watchdog retired the load: its stage held a lane slot
+    /// past the stage's deadline. The row says so, the phase it was in is
+    /// closed, and the failure counts like any other so the retry backoff
+    /// owns the next attempt.
+    func recordLoadStalled(tile: Tile, stage: String) {
+        queue.sync {
+            endActiveWork(for: tile)
+            totalFailed += 1
+            let reason = "stalled in \(stage)"
+            latestFailure = reason
+            updateTile(tile,
+                       status: .failed,
+                       progress: 1,
+                       detail: reason)
+            pruneInactiveStaleTiles()
+        }
+    }
+
+    /// The load's task ended (the loader dropped its entry) while the row
+    /// still showed live work: no completion, failure, cancellation or drop
+    /// was recorded on the way out. Nothing on the happy paths reaches here.
+    /// The row stops claiming a stage nobody is in, so the HUD never carries
+    /// a stage past the death of its task.
+    func recordLoadEnded(tile: Tile) {
+        queue.sync {
+            guard let record = tileRecords[tile],
+                  Self.isActiveResourceStatus(record.status) else {
+                return
+            }
+            endActiveWork(for: tile)
+            updateTile(tile,
+                       status: .failed,
+                       progress: 1,
+                       detail: "ended in \(record.detail)")
+            pruneInactiveStaleTiles()
+        }
+    }
+
+    /// Takes the tile out of every live set and closes the phase it was in,
+    /// the way a cancellation does, for the two exits above.
+    private func endActiveWork(for tile: Tile) {
+        activeLoadTiles.remove(tile)
+        activeLoads = activeLoadTiles.count
+        if activeDiskTiles.remove(tile) != nil {
+            disk.inFlight = activeDiskTiles.count
+            finishStage("disk", for: tile)
+        }
+        if activeNetworkTiles.remove(tile) != nil {
+            network.inFlight = activeNetworkTiles.count
+            finishStage("network", for: tile)
+        }
+        if activeParsingTiles.remove(tile) != nil {
+            parsing.inFlight = activeParsingTiles.count
+            finishStage("parse", for: tile)
+        }
+        refreshLatestDiskTile()
+        refreshLatestNetworkTile()
+        refreshLatestParsingTile()
     }
 
     func recordDiskStarted(tile: Tile) {
@@ -472,6 +544,7 @@ final class TileLoadingStatusReporter {
 
     func snapshot() -> TileLoadingStatusSnapshot {
         queue.sync {
+            let time = now()
             let tiles = tileRecords
                 .filter { tile, record in
                     shouldIncludeTile(tile, record: record)
@@ -482,7 +555,10 @@ final class TileLoadingStatusReporter {
                                                                 status: record.status,
                                                                 progress: record.progress,
                                                                 detail: record.detail,
-                                                                preparationStages: record.preparationStages),
+                                                                preparationStages: record.preparationStages,
+                                                                stageAgeSeconds: Self.isActiveResourceStatus(record.status)
+                                                                    ? Int(max(0, time - record.detailSince))
+                                                                    : 0),
                         sequence: record.sequence
                     )
                 }
@@ -513,10 +589,15 @@ final class TileLoadingStatusReporter {
                             progress: Double,
                             detail: String) {
         sequence &+= 1
+        let time = now()
         var record = tileRecords[tile] ?? TileRecord(status: status,
                                                      progress: progress,
                                                      detail: detail,
-                                                     sequence: sequence)
+                                                     sequence: sequence,
+                                                     detailSince: time)
+        if record.detail != detail || record.status != status {
+            record.detailSince = time
+        }
         record.status = status
         record.progress = min(max(progress, 0), 1)
         record.detail = detail
@@ -528,7 +609,8 @@ final class TileLoadingStatusReporter {
         var record = tileRecords[tile] ?? TileRecord(status: .queued,
                                                      progress: 0.1,
                                                      detail: "queued",
-                                                     sequence: sequence)
+                                                     sequence: sequence,
+                                                     detailSince: now())
         record.stageStartTimes[name] = now()
         tileRecords[tile] = record
     }
@@ -539,7 +621,8 @@ final class TileLoadingStatusReporter {
         var record = tileRecords[tile] ?? TileRecord(status: .queued,
                                                      progress: 0.1,
                                                      detail: "queued",
-                                                     sequence: sequence)
+                                                     sequence: sequence,
+                                                     detailSince: now())
         let duration = record.stageStartTimes.removeValue(forKey: name).map { max(0, now() - $0) }
         record.preparationStages.removeAll { $0.name == name }
         record.preparationStages.append(TilePreparationStageSnapshot(name: name,
@@ -552,7 +635,8 @@ final class TileLoadingStatusReporter {
         var record = tileRecords[tile] ?? TileRecord(status: .queued,
                                                      progress: 0.1,
                                                      detail: "queued",
-                                                     sequence: sequence)
+                                                     sequence: sequence,
+                                                     detailSince: now())
         record.preparationStages.removeAll { $0.name == name }
         record.preparationStages.append(TilePreparationStageSnapshot(name: name,
                                                                      duration: nil))
@@ -576,7 +660,8 @@ final class TileLoadingStatusReporter {
         var record = tileRecords[tile] ?? TileRecord(status: .ready,
                                                      progress: 1,
                                                      detail: "displayed",
-                                                     sequence: sequence)
+                                                     sequence: sequence,
+                                                     detailSince: now())
         record.preparationStages = stages
         tileRecords[tile] = record
     }

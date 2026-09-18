@@ -185,6 +185,50 @@ struct CoveragePolygon {
         return Double(xRange.lowerBound) <= maxX + tolerance && Double(xRange.upperBound) >= minX - tolerance
     }
 
+    /// The polygon cut by a line, keeping the side `inside` lies on
+    /// (Sutherland-Hodgman against one half-plane). Nil when nothing of it
+    /// is left, or too little to have an area.
+    func clipped(keepingSideOf inside: SIMD2<Double>, ofLineFrom a: SIMD2<Double>, to b: SIMD2<Double>) -> CoveragePolygon? {
+        let edge = b - a
+        func side(_ point: SIMD2<Double>) -> Double {
+            edge.x * (point.y - a.y) - edge.y * (point.x - a.x)
+        }
+        let insideSide = side(inside)
+        guard abs(insideSide) > 1e-18 else { return self }
+        let orientation = insideSide > 0 ? 1.0 : -1.0
+        let points = vertices.map { SIMD2<Double>($0) }
+        var clipped: [SIMD2<Float>] = []
+        clipped.reserveCapacity(points.count + 2)
+        for index in points.indices {
+            let current = points[index]
+            let previous = points[(index + points.count - 1) % points.count]
+            let currentInside = orientation * side(current) >= 0
+            let previousInside = orientation * side(previous) >= 0
+            if currentInside {
+                if previousInside == false {
+                    clipped.append(SIMD2<Float>(Self.intersection(previous, current, a, b)))
+                }
+                clipped.append(SIMD2<Float>(current))
+            } else if previousInside {
+                clipped.append(SIMD2<Float>(Self.intersection(previous, current, a, b)))
+            }
+        }
+        guard clipped.count >= 3 else { return nil }
+        let polygon = CoveragePolygon(vertices: clipped)
+        guard abs(polygon.signedArea) > Double(CoveragePolygonBuilder.planeIntersectionTolerance) else { return nil }
+        return polygon
+    }
+
+    /// Where the segment from `a` to `b` crosses the line through `c` and `d`.
+    static func intersection(_ a: SIMD2<Double>, _ b: SIMD2<Double>, _ c: SIMD2<Double>, _ d: SIMD2<Double>) -> SIMD2<Double> {
+        let ab = b - a
+        let cd = d - c
+        let denominator = ab.x * cd.y - ab.y * cd.x
+        guard abs(denominator) > 1e-18 else { return a }
+        let t = ((c.x - a.x) * cd.y - (c.y - a.y) * cd.x) / denominator
+        return a + ab * t
+    }
+
     init(vertices: [SIMD2<Float>]) {
         self.vertices = vertices
 

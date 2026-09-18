@@ -419,7 +419,7 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
                                            retryWakeScheduler: wakeScheduler.schedule)
         let wakeExpectation = expectation(description: "retry wake callback fired")
         wakeExpectation.assertForOverFulfill = false
-        loader.onRetryWindowExpired = { wakeExpectation.fulfill() }
+        loader.onFrameNeeded = { wakeExpectation.fulfill() }
         let tile = Tile(x: 1, y: 1, z: 4)
 
         loader.request(tiles: [tile])
@@ -427,9 +427,12 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         XCTAssertTrue(didStart)
 
         pipeline.completeDownload(tile, result: .failure(.network))
-        let didSchedule = await wakeScheduler.waitUntilScheduledCount(1)
+        // The watchdog armed a wake at the disk deadline when the load
+        // started; the failure replaces it with the retry window.
+        let didSchedule = await wakeScheduler.waitUntilScheduledCount(2)
         XCTAssertTrue(didSchedule)
-        guard let armedWake = wakeScheduler.scheduledWakes.first else {
+        guard let armedWake = wakeScheduler.liveWakes.first else {
+            XCTFail("The failure armed no live wake")
             return
         }
         XCTAssertGreaterThan(armedWake.delay, 0)
@@ -454,12 +457,13 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         XCTAssertTrue(didStart)
 
         pipeline.completeDownload(tile, result: .failure(.network))
-        let didSchedule = await wakeScheduler.waitUntilScheduledCount(1)
+        let didSchedule = await wakeScheduler.waitUntilScheduledCount(2)
         XCTAssertTrue(didSchedule)
+        XCTAssertFalse(wakeScheduler.liveWakes.isEmpty)
 
         loader.cancelAll()
 
-        XCTAssertTrue(wakeScheduler.scheduledWakes[0].workItem.isCancelled)
+        XCTAssertTrue(wakeScheduler.liveWakes.isEmpty)
     }
 
     func testCancelAllClearsReporterStateAndIgnoresLatePreparationCompletion() async {
@@ -598,10 +602,17 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         XCTAssertTrue(firstStarted)
         XCTAssertTrue(secondStarted)
 
-        // The first tile fails at T+0: its window is T+0.5, the alarm is armed for it.
+        // The first tile fails at T+0: its window is T+0.5, the alarm is armed
+        // for it (replacing the watchdog's wake at the stage deadline).
         pipeline.completeDownload(firstTile, result: .failure(.network))
-        let didScheduleFirst = await wakeScheduler.waitUntilScheduledCount(1)
+        let didScheduleFirst = await wakeScheduler.waitUntilScheduledCount(2)
         XCTAssertTrue(didScheduleFirst)
+        let armedCount = wakeScheduler.scheduledWakes.count
+        guard let retryWake = wakeScheduler.liveWakes.first else {
+            XCTFail("The failure armed no live wake")
+            return
+        }
+        XCTAssertEqual(retryWake.delay, 0.5, accuracy: 0.001)
 
         // The second fails at T+0.4: its T+0.9 window is absorbed by the earlier deadline.
         now = Date(timeIntervalSince1970: 1000.4)
@@ -611,11 +622,307 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         // The alarm fires at T+0.6: the first tile's window has already expired and must not
         // mask the second's future window - re-arm for T+0.9.
         now = Date(timeIntervalSince1970: 1000.6)
-        wakeScheduler.scheduledWakes[0].workItem.perform()
+        retryWake.workItem.perform()
 
-        let didRearm = await wakeScheduler.waitUntilScheduledCount(2)
+        let didRearm = await wakeScheduler.waitUntilScheduledCount(armedCount + 1)
         XCTAssertTrue(didRearm)
-        XCTAssertEqual(wakeScheduler.scheduledWakes[1].delay, 0.3, accuracy: 0.001)
+        XCTAssertEqual(wakeScheduler.scheduledWakes.last?.delay ?? -1, 0.3, accuracy: 0.001)
+    }
+
+    // MARK: - Stage watchdog
+
+    private static let shortDeadlines = ImmersiveMapNeedsTile.StageDeadlines(disk: 5, network: 5, cpu: 5)
+
+    func testAStalledDiskStageIsRetiredAndTheTileRetriedAfterItsBackoff() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        var now = Date(timeIntervalSince1970: 1000)
+        let pipeline = ControlledTileLoadPipeline(suspendsDiskReads: true)
+        let reporter = TileLoadingStatusReporter()
+        let wakeScheduler = RecordingRetryWakeScheduler()
+        let loader = ImmersiveMapNeedsTile(config: settings,
+                                           loadPipeline: pipeline,
+                                           maxConcurrentDiskLoads: 1,
+                                           stageDeadlines: Self.shortDeadlines,
+                                           now: { now },
+                                           retryWakeScheduler: wakeScheduler.schedule,
+                                           tileLoadingStatusReporter: reporter)
+        let stalled = Tile(x: 1, y: 1, z: 4)
+        let waiting = Tile(x: 2, y: 1, z: 4)
+
+        loader.request(tiles: [stalled, waiting])
+        let didStartRead = await pipeline.waitUntilDiskReadStarted(stalled)
+        XCTAssertTrue(didStartRead)
+        XCTAssertEqual(reporter.snapshot().disk.inFlight, 1)
+        XCTAssertFalse(pipeline.hasDiskReadStarted(waiting), "The one disk slot is held by the read that never answers")
+
+        // Inside the deadline a frame's request leaves the load alone.
+        now = Date(timeIntervalSince1970: 1004)
+        loader.request(tiles: [stalled, waiting])
+        XCTAssertEqual(reporter.snapshot().tiles.first { $0.tile == stalled }?.detail, "disk")
+
+        // Past it, the load is retired: the row says so, the slot is free
+        // and goes to the tile that waited for it.
+        now = Date(timeIntervalSince1970: 1006)
+        loader.request(tiles: [stalled, waiting])
+
+        let retired = reporter.snapshot()
+        let row = retired.tiles.first { $0.tile == stalled }
+        XCTAssertEqual(row?.status, .failed)
+        XCTAssertEqual(row?.detail, "stalled in disk")
+        XCTAssertEqual(retired.disk.inFlight, 0)
+        XCTAssertEqual(retired.totalFailed, 1)
+        let waitingStarted = await pipeline.waitUntilDiskReadStarted(waiting)
+        XCTAssertTrue(waitingStarted)
+        // Its miss hands the slot back, so the retired tile can use it.
+        pipeline.completeDiskRead(waiting)
+        let waitingDownloading = await pipeline.waitUntilStarted(waiting)
+        XCTAssertTrue(waitingDownloading)
+
+        // The stalled tile sits out its backoff, then runs the whole chain again.
+        loader.request(tiles: [stalled])
+        XCTAssertEqual(pipeline.diskReadCount(for: stalled), 1)
+        now = Date(timeIntervalSince1970: 1007)
+        loader.request(tiles: [stalled])
+        let didReadAgain = await pipeline.waitUntilDiskReadCount(2, for: stalled)
+        XCTAssertTrue(didReadAgain)
+
+        // The retired task's late answer changes nothing: its generation is gone.
+        pipeline.completeDiskRead(stalled)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertEqual(reporter.snapshot().tiles.first { $0.tile == stalled }?.detail, "disk")
+
+        loader.cancelAll()
+        pipeline.completeDiskRead(stalled)
+        pipeline.completeDiskRead(waiting)
+    }
+
+    func testAStalledParseIsRetiredAndFreesItsCPUSlot() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 2
+        var now = Date(timeIntervalSince1970: 1000)
+        let pipeline = ControlledTileLoadPipeline()
+        let reporter = TileLoadingStatusReporter()
+        let wakeScheduler = RecordingRetryWakeScheduler()
+        let loader = ImmersiveMapNeedsTile(config: settings,
+                                           loadPipeline: pipeline,
+                                           maxConcurrentPrepares: 1,
+                                           stageDeadlines: Self.shortDeadlines,
+                                           now: { now },
+                                           retryWakeScheduler: wakeScheduler.schedule,
+                                           tileLoadingStatusReporter: reporter)
+        let stalled = Tile(x: 1, y: 1, z: 4)
+        let waiting = Tile(x: 2, y: 1, z: 4)
+
+        loader.request(tiles: [stalled, waiting])
+        let stalledStarted = await pipeline.waitUntilStarted(stalled)
+        let waitingStarted = await pipeline.waitUntilStarted(waiting)
+        XCTAssertTrue(stalledStarted)
+        XCTAssertTrue(waitingStarted)
+
+        pipeline.completeDownload(stalled, result: .success(Data([1]), etag: nil))
+        let stalledParsing = await pipeline.waitUntilPrepared(stalled)
+        XCTAssertTrue(stalledParsing)
+        pipeline.completeDownload(waiting, result: .success(Data([2]), etag: nil))
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertFalse(pipeline.hasPrepared(waiting), "The one CPU slot is held by the parse that never ends")
+        XCTAssertEqual(reporter.snapshot().tiles.first { $0.tile == stalled }?.detail, "parse")
+
+        now = Date(timeIntervalSince1970: 1006)
+        loader.request(tiles: [stalled, waiting])
+
+        let row = reporter.snapshot().tiles.first { $0.tile == stalled }
+        XCTAssertEqual(row?.status, .failed)
+        XCTAssertEqual(row?.detail, "stalled in parse")
+        let waitingParsing = await pipeline.waitUntilPrepared(waiting)
+        XCTAssertTrue(waitingParsing, "The freed CPU slot goes to the queued parse")
+        XCTAssertEqual(reporter.snapshot().parsing.inFlight, 1)
+
+        // The retired parse answering late is ignored, the waiting one lands.
+        pipeline.completePrepare(stalled)
+        pipeline.completePrepare(waiting)
+        let didMaterialize = await pipeline.waitUntilMaterialized(waiting)
+        XCTAssertTrue(didMaterialize)
+        pipeline.completeMaterialize(waiting, result: true)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        let final = reporter.snapshot()
+        XCTAssertEqual(final.parsing.inFlight, 0)
+        XCTAssertEqual(final.tiles.first { $0.tile == stalled }?.detail, "stalled in parse")
+        XCTAssertEqual(final.tiles.first { $0.tile == waiting }?.status, .ready)
+        loader.cancelAll()
+    }
+
+    func testTheWatchdogWakeRetiresAStalledLoadWithoutAFrame() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        var now = Date(timeIntervalSince1970: 1000)
+        let pipeline = ControlledTileLoadPipeline(suspendsDiskReads: true)
+        let reporter = TileLoadingStatusReporter()
+        let wakeScheduler = RecordingRetryWakeScheduler()
+        let loader = ImmersiveMapNeedsTile(config: settings,
+                                           loadPipeline: pipeline,
+                                           stageDeadlines: Self.shortDeadlines,
+                                           now: { now },
+                                           retryWakeScheduler: wakeScheduler.schedule,
+                                           tileLoadingStatusReporter: reporter)
+        let wakeExpectation = expectation(description: "the wake asked for a frame")
+        wakeExpectation.assertForOverFulfill = false
+        loader.onFrameNeeded = { wakeExpectation.fulfill() }
+        let tile = Tile(x: 1, y: 1, z: 4)
+
+        loader.request(tiles: [tile])
+        let didStartRead = await pipeline.waitUntilDiskReadStarted(tile)
+        XCTAssertTrue(didStartRead)
+
+        // The stage start armed the wake at its deadline: a still scene
+        // renders no frame, so this is what notices the stall.
+        guard let watchdogWake = wakeScheduler.liveWakes.first else {
+            XCTFail("The stage start armed no wake")
+            return
+        }
+        XCTAssertEqual(watchdogWake.delay, Self.shortDeadlines.disk, accuracy: 0.001)
+
+        now = Date(timeIntervalSince1970: 1005.5)
+        watchdogWake.workItem.perform()
+
+        await fulfillment(of: [wakeExpectation], timeout: 2)
+        let snapshot = reporter.snapshot()
+        XCTAssertEqual(snapshot.tiles.first { $0.tile == tile }?.detail, "stalled in disk")
+        XCTAssertEqual(snapshot.disk.inFlight, 0)
+        // Re-armed for the retry window, so the frame that re-requests the
+        // tile comes on its own too.
+        XCTAssertEqual(wakeScheduler.liveWakes.last?.delay ?? -1,
+                       TileRetryController.Policy.default.baseBackoff,
+                       accuracy: 0.001)
+
+        loader.cancelAll()
+        pipeline.completeDiskRead(tile)
+    }
+
+    func testALandedLoadPastItsDeadlineIsRetiredWithoutAFailure() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 2
+        var now = Date(timeIntervalSince1970: 1000)
+        let pipeline = ControlledTileLoadPipeline(suspendsSaves: true)
+        let reporter = TileLoadingStatusReporter()
+        let loader = ImmersiveMapNeedsTile(config: settings,
+                                           loadPipeline: pipeline,
+                                           maxConcurrentPrepares: 1,
+                                           stageDeadlines: Self.shortDeadlines,
+                                           now: { now },
+                                           retryWakeScheduler: RecordingRetryWakeScheduler().schedule,
+                                           tileLoadingStatusReporter: reporter)
+        let landed = Tile(x: 1, y: 1, z: 4)
+        let waiting = Tile(x: 2, y: 1, z: 4)
+
+        loader.request(tiles: [landed, waiting])
+        _ = await pipeline.waitUntilStarted(landed)
+        _ = await pipeline.waitUntilStarted(waiting)
+        pipeline.completeDownload(landed, result: .success(Data([1]), etag: nil))
+        _ = await pipeline.waitUntilPrepared(landed)
+        pipeline.completePrepare(landed)
+        _ = await pipeline.waitUntilMaterialized(landed)
+        pipeline.completeMaterialize(landed, result: true)
+        let saveStarted = await pipeline.waitUntilSaveStarted(landed)
+        XCTAssertTrue(saveStarted)
+        XCTAssertEqual(reporter.snapshot().tiles.first { $0.tile == landed }?.detail, "ready")
+        pipeline.completeDownload(waiting, result: .success(Data([2]), etag: nil))
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertFalse(pipeline.hasPrepared(waiting), "The save still holds the one CPU slot")
+
+        // The save outlives the deadline: the slot is owed, nothing failed.
+        // The frame draws the landed tile and asks only for what is missing.
+        reporter.recordDisplayedTiles([landed])
+        now = Date(timeIntervalSince1970: 1006)
+        loader.request(tiles: [waiting])
+
+        let snapshot = reporter.snapshot()
+        XCTAssertEqual(snapshot.tiles.first { $0.tile == landed }?.status, .ready)
+        XCTAssertEqual(snapshot.tiles.first { $0.tile == landed }?.detail, "displayed")
+        XCTAssertEqual(snapshot.totalFailed, 0)
+        XCTAssertNil(snapshot.latestFailure)
+        let waitingParsing = await pipeline.waitUntilPrepared(waiting)
+        XCTAssertTrue(waitingParsing, "The freed slot goes to the queued parse")
+
+        loader.cancelAll()
+        pipeline.completeSave(landed)
+        pipeline.completePrepare(waiting)
+    }
+
+    func testADemandThatReturnsWhileTheSaveRunsIsServedByTheNextFrame() async {
+        let settings = ImmersiveMapSettings.default
+        let pipeline = ControlledTileLoadPipeline(suspendsSaves: true)
+        let reporter = TileLoadingStatusReporter()
+        let loader = ImmersiveMapNeedsTile(config: settings,
+                                           loadPipeline: pipeline,
+                                           tileLoadingStatusReporter: reporter)
+        let tile = Tile(x: 77, y: 40, z: 7)
+        let frameRequested = expectation(description: "the loader asked for a frame")
+        frameRequested.assertForOverFulfill = false
+        // What the store does with the hook: a frame, whose request runs
+        // the demand again.
+        loader.onFrameNeeded = { [weak loader] in
+            frameRequested.fulfill()
+            loader?.request(tiles: [tile])
+        }
+
+        // Frame 1: the tile is demanded, loads, and lands.
+        loader.request(tiles: [tile])
+        _ = await pipeline.waitUntilStarted(tile)
+        pipeline.completeDownload(tile, result: .success(Data([1, 2, 3]), etag: nil))
+        _ = await pipeline.waitUntilPrepared(tile)
+        pipeline.completePrepare(tile)
+        _ = await pipeline.waitUntilMaterialized(tile)
+        pipeline.completeMaterialize(tile, result: true)
+        let saveStarted = await pipeline.waitUntilSaveStarted(tile)
+        XCTAssertTrue(saveStarted)
+
+        // Frame 2, the one the landing invalidated: the camera moved on,
+        // the working set released the tile. Frame 3: the camera is back,
+        // the tile is not resident, and the load still stands.
+        loader.request(tiles: [])
+        loader.request(tiles: [tile])
+        XCTAssertEqual(pipeline.diskReadCount(for: tile), 1, "The standing load answers the returned demand")
+
+        // The save ends: the load asks for a frame, whose demand starts a
+        // fresh load instead of leaving the hole until the next gesture.
+        pipeline.completeSave(tile)
+        await fulfillment(of: [frameRequested], timeout: 5)
+        let secondLoad = await pipeline.waitUntilDiskReadCount(2, for: tile)
+        XCTAssertTrue(secondLoad)
+        loader.cancelAll()
+    }
+
+    func testAMaterializeFailureBacksOffLikeATransientError() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 1
+        let pipeline = ControlledTileLoadPipeline()
+        let reporter = TileLoadingStatusReporter()
+        let wakeScheduler = RecordingRetryWakeScheduler()
+        let loader = ImmersiveMapNeedsTile(config: settings,
+                                           loadPipeline: pipeline,
+                                           retryWakeScheduler: wakeScheduler.schedule,
+                                           tileLoadingStatusReporter: reporter)
+        let tile = Tile(x: 1, y: 1, z: 4)
+
+        loader.request(tiles: [tile])
+        _ = await pipeline.waitUntilStarted(tile)
+        pipeline.completeDownload(tile, result: .success(Data([1]), etag: nil))
+        _ = await pipeline.waitUntilPrepared(tile)
+        pipeline.completePrepare(tile)
+        _ = await pipeline.waitUntilMaterialized(tile)
+        pipeline.completeMaterialize(tile, result: false)
+        let failed = await reporter.waitUntilStatus(.failed, for: tile)
+        XCTAssertEqual(failed?.detail, "materialize_failed")
+
+        guard let retryWake = wakeScheduler.liveWakes.first else {
+            XCTFail("The failure armed no live wake")
+            return
+        }
+        XCTAssertLessThanOrEqual(retryWake.delay, TileRetryController.Policy.default.baseBackoff,
+                                 "Memory pressure passes; the parse cooldown would park the tile for minutes")
+        loader.cancelAll()
     }
 
     // MARK: - Disk stage
@@ -1090,546 +1397,14 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
     }
 }
 
-private final class RecordingRetryWakeScheduler {
-    struct ScheduledWake {
-        let delay: TimeInterval
-        let workItem: DispatchWorkItem
-    }
-
-    private let lock = NSLock()
-    private var wakes: [ScheduledWake] = []
-
-    var scheduledWakes: [ScheduledWake] {
-        lock.lock()
-        defer { lock.unlock() }
-        return wakes
-    }
-
-    func schedule(delay: TimeInterval, workItem: DispatchWorkItem) {
-        lock.lock()
-        wakes.append(ScheduledWake(delay: delay, workItem: workItem))
-        lock.unlock()
-    }
-
-    func waitUntilScheduledCount(_ count: Int) async -> Bool {
+private extension TileLoadingStatusReporter {
+    func waitUntilStatus(_ status: TileLoadingTileStatus, for tile: Tile) async -> TileLoadingStatusTileSnapshot? {
         for _ in 0..<500 {
-            if scheduledWakes.count >= count {
-                return true
+            if let row = snapshot().tiles.first(where: { $0.tile == tile }), row.status == status {
+                return row
             }
             try? await Task.sleep(nanoseconds: 10_000_000)
         }
-        return false
-    }
-}
-
-private final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sendable {
-    private let suspendsSaves: Bool
-    private let suspendsDiskReads: Bool
-    let hasPreparedDiskCache: Bool
-    private let lock = NSLock()
-    private var diskReadStartedTiles: Set<Tile> = []
-    private var diskReadCounts: [Tile: Int] = [:]
-    private var diskReadContinuations: [Tile: [CheckedContinuation<Void, Never>]] = [:]
-    private var startedTiles: Set<Tile> = []
-    private var startCounts: [Tile: Int] = [:]
-    private var canceledTiles: Set<Tile> = []
-    private var preparedTiles: Set<Tile> = []
-    private var materializedTiles: Set<Tile> = []
-    private var materializeCounts: [Tile: Int] = [:]
-    private var saveStartedTiles: Set<Tile> = []
-    private var savedETags: [Tile: String?] = [:]
-    private var removedFromDiskTiles: Set<Tile> = []
-    private var diskEntries: [Tile: String?] = [:]
-    private var downloadContinuations: [Tile: CheckedContinuation<TileDownloader.DownloadResult, Never>] = [:]
-    private var prepareContinuations: [Tile: CheckedContinuation<PreparedTileLoadResult?, Never>] = [:]
-    private var materializeContinuations: [Tile: CheckedContinuation<PreparedTileMaterializeOutcome, Never>] = [:]
-    // A completion that arrives before its stage has started is held and
-    // delivered the moment the stage registers, in order. The loader runs its
-    // stages on child tasks (the disk serve and the download concurrently),
-    // so a test that completes one stage and immediately completes the next
-    // races the scheduler: on a loaded runner the second stage had not yet
-    // suspended on its continuation, the completion was dropped, and the
-    // scenario deadlocked into cascading assertion failures (seen on
-    // testAllocationFailureOnETagMatchedEntryKeepsTheDiskPair in CI, never
-    // natively). Holding it makes a test's completions order-independent.
-    private var pendingDownloadResults: [Tile: [TileDownloader.DownloadResult]] = [:]
-    private var pendingPrepareResults: [Tile: [PreparedTileLoadResult?]] = [:]
-    private var pendingMaterializeOutcomes: [Tile: [PreparedTileMaterializeOutcome]] = [:]
-    private var saveContinuations: [Tile: CheckedContinuation<Void, Never>] = [:]
-
-    init(suspendsSaves: Bool = false,
-         suspendsDiskReads: Bool = false,
-         hasPreparedDiskCache: Bool = true) {
-        self.suspendsSaves = suspendsSaves
-        self.suspendsDiskReads = suspendsDiskReads
-        self.hasPreparedDiskCache = hasPreparedDiskCache
-    }
-
-    // Registers a prepared-tile entry "on disk": `etag` is the stored source
-    // ETag (nil models an entry saved from a server response without one).
-    func setDiskEntry(_ tile: Tile, etag: String?) {
-        lock.lock()
-        diskEntries[tile] = etag
-        lock.unlock()
-    }
-
-    func isPreparedOnDisk(_ tile: Tile) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return diskEntries[tile] != nil
-    }
-
-    func hasRemovedFromDisk(_ tile: Tile) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return removedFromDiskTiles.contains(tile)
-    }
-
-    func savedETag(for tile: Tile) -> String?? {
-        lock.lock()
-        defer { lock.unlock() }
-        return savedETags[tile]
-    }
-
-    func materializeCount(for tile: Tile) -> Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return materializeCounts[tile, default: 0]
-    }
-
-    // Counts and (optionally) suspends only the disk-stage reads
-    // (matchingETag == nil); the CPU stage's ETag-matched lookups pass
-    // through so a test controls one lane at a time.
-    func requestPreparedDiskCached(tile: Tile, matchingETag: String?) async -> PreparedTileDiskCacheHit? {
-        if matchingETag == nil {
-            if suspendsDiskReads {
-                await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-                    recordDiskRead(tile: tile, holding: continuation)
-                }
-            } else {
-                recordDiskRead(tile: tile, holding: nil)
-            }
-        }
-        return diskEntryHit(tile: tile, matchingETag: matchingETag)
-    }
-
-    /// Registers the read and, when suspending, its continuation in one lock
-    /// acquisition: a test that observed the count may complete the read
-    /// immediately, and a resume must never race the registration.
-    private func recordDiskRead(tile: Tile, holding continuation: CheckedContinuation<Void, Never>?) {
-        lock.lock()
-        diskReadStartedTiles.insert(tile)
-        diskReadCounts[tile, default: 0] += 1
-        if let continuation {
-            diskReadContinuations[tile, default: []].append(continuation)
-        }
-        lock.unlock()
-    }
-
-    func completeDiskRead(_ tile: Tile) {
-        var continuation: CheckedContinuation<Void, Never>?
-        lock.lock()
-        if var held = diskReadContinuations[tile], held.isEmpty == false {
-            continuation = held.removeFirst()
-            diskReadContinuations[tile] = held.isEmpty ? nil : held
-        }
-        lock.unlock()
-        continuation?.resume()
-    }
-
-    func diskReadCount(for tile: Tile) -> Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return diskReadCounts[tile, default: 0]
-    }
-
-    func waitUntilDiskReadCount(_ count: Int, for tile: Tile) async -> Bool {
-        for _ in 0..<500 {
-            if diskReadCount(for: tile) >= count {
-                return true
-            }
-            try? await Task.sleep(nanoseconds: 10_000_000)
-        }
-        return false
-    }
-
-    func hasDiskReadStarted(_ tile: Tile) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return diskReadStartedTiles.contains(tile)
-    }
-
-    func waitUntilDiskReadStarted(_ tile: Tile) async -> Bool {
-        for _ in 0..<500 {
-            if hasDiskReadStarted(tile) {
-                return true
-            }
-            try? await Task.sleep(nanoseconds: 10_000_000)
-        }
-        return false
-    }
-
-    private func diskEntryHit(tile: Tile, matchingETag: String?) -> PreparedTileDiskCacheHit? {
-        lock.lock()
-        defer { lock.unlock() }
-        guard let storedETag = diskEntries[tile] else {
-            return nil
-        }
-        if let matchingETag, matchingETag != storedETag {
-            return nil
-        }
-        return PreparedTileDiskCacheHit(image: Self.makeArenaImage(tile: tile),
-                                        sourceETag: storedETag)
-    }
-
-    /// A structurally empty arena image: the mock's `materialize(image:)` is
-    /// stubbed, so the payload never reaches the real factory.
-    static func makeArenaImage(tile: Tile) -> PreparedTileArenaImage {
-        let emptyMeta = PreparedTileArenaImage.TextLabelSetMeta(placementInputs: [],
-                                                                glyphRunStyles: [],
-                                                                poiIconRunStyles: [])
-        return PreparedTileArenaImage(
-            tile: tile,
-            spans: [],
-            arenaByteCount: 0,
-            groundStyleRuns: [],
-            textLabels: emptyMeta,
-            roadLabels: PreparedTileArenaImage.RoadLabelsMeta(pathInputs: [],
-                                                              pathRanges: [],
-                                                              pathLabels: [],
-                                                              labelStyle: nil,
-                                                              glyphBounds: [],
-                                                              glyphBoundRanges: [],
-                                                              sizes: [],
-                                                              anchorRanges: [],
-                                                              anchors: []),
-            blob: .inline(Data())
-        )
-    }
-
-    func download(tile: Tile) async -> TileDownloader.DownloadResult {
-        await withTaskCancellationHandler(operation: {
-            await withCheckedContinuation { continuation in
-                recordDownloadStarted(tile: tile, continuation: continuation)
-            }
-        }, onCancel: {
-            recordDownloadCanceled(tile)
-        })
-    }
-
-    func savePreparedOnDisk(tile: Tile,
-                            preparedTile _: PreparedTileCPU,
-                            plan _: TileArenaImagePlan?,
-                            sourceETag: String?) async {
-        recordSavedETag(tile: tile, sourceETag: sourceETag)
-        guard suspendsSaves else { return }
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            lock.lock()
-            saveStartedTiles.insert(tile)
-            saveContinuations[tile] = continuation
-            lock.unlock()
-        }
-    }
-
-    func removePreparedFromDisk(tile: Tile) {
-        lock.lock()
-        removedFromDiskTiles.insert(tile)
-        // Mirror the real cache: a removed pair stops being served.
-        diskEntries[tile] = nil
-        lock.unlock()
-    }
-
-    private func recordSavedETag(tile: Tile, sourceETag: String?) {
-        lock.lock()
-        savedETags[tile] = sourceETag
-        lock.unlock()
-    }
-
-    func prepare(tile: Tile, data _: Data) async -> PreparedTileLoadResult? {
-        await withCheckedContinuation { continuation in
-            recordPrepareStarted(tile: tile, continuation: continuation)
-        }
-    }
-
-    func materialize(preparedTile: PreparedTileCPU,
-                     plan _: TileArenaImagePlan?) async -> PreparedTileMaterializeOutcome {
-        await withCheckedContinuation { continuation in
-            recordMaterializeStarted(tile: preparedTile.tile, continuation: continuation)
-        }
-    }
-
-    func materialize(image: PreparedTileArenaImage) async -> PreparedTileMaterializeOutcome {
-        await withCheckedContinuation { continuation in
-            recordMaterializeStarted(tile: image.tile, continuation: continuation)
-        }
-    }
-
-    func hasStarted(_ tile: Tile) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return startedTiles.contains(tile)
-    }
-
-    func startCount(for tile: Tile) -> Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return startCounts[tile, default: 0]
-    }
-
-    func hasSaveStarted(_ tile: Tile) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return saveStartedTiles.contains(tile)
-    }
-
-    func wasCanceled(_ tile: Tile) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return canceledTiles.contains(tile)
-    }
-
-    func hasPrepared(_ tile: Tile) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return preparedTiles.contains(tile)
-    }
-
-    func hasMaterialized(_ tile: Tile) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return materializedTiles.contains(tile)
-    }
-
-    func completeDownload(_ tile: Tile, result: TileDownloader.DownloadResult) {
-        let continuation: CheckedContinuation<TileDownloader.DownloadResult, Never>?
-        lock.lock()
-        continuation = downloadContinuations.removeValue(forKey: tile)
-        if continuation == nil {
-            pendingDownloadResults[tile, default: []].append(result)
-        }
-        lock.unlock()
-        continuation?.resume(returning: result)
-    }
-
-    func completePrepare(_ tile: Tile, timings: [TileParseLayerTiming] = []) {
-        completePrepare(tile, result: PreparedTileLoadResult(preparedTile: Self.makePreparedTile(tile: tile),
-                                                             parseLayerTimings: timings))
-    }
-
-    func completePrepareFailing(_ tile: Tile) {
-        completePrepare(tile, result: nil)
-    }
-
-    private func completePrepare(_ tile: Tile, result: PreparedTileLoadResult?) {
-        let continuation: CheckedContinuation<PreparedTileLoadResult?, Never>?
-        lock.lock()
-        continuation = prepareContinuations.removeValue(forKey: tile)
-        if continuation == nil {
-            pendingPrepareResults[tile, default: []].append(result)
-        }
-        lock.unlock()
-        continuation?.resume(returning: result)
-    }
-
-    /// Boolean convenience for the many tests that only distinguish success
-    /// from a transient failure; false maps to `.allocationOrStoreFailed`.
-    func completeMaterialize(_ tile: Tile, result: Bool) {
-        completeMaterialize(tile, outcome: result ? .materialized : .allocationOrStoreFailed)
-    }
-
-    func completeMaterialize(_ tile: Tile, outcome: PreparedTileMaterializeOutcome) {
-        let continuation: CheckedContinuation<PreparedTileMaterializeOutcome, Never>?
-        lock.lock()
-        continuation = materializeContinuations.removeValue(forKey: tile)
-        if continuation == nil {
-            pendingMaterializeOutcomes[tile, default: []].append(outcome)
-        }
-        lock.unlock()
-        continuation?.resume(returning: outcome)
-    }
-
-    func completeSave(_ tile: Tile) {
-        let continuation: CheckedContinuation<Void, Never>?
-        lock.lock()
-        continuation = saveContinuations.removeValue(forKey: tile)
-        lock.unlock()
-        continuation?.resume()
-    }
-
-    func waitUntilStarted(_ tile: Tile, attempts: Int = 500) async -> Bool {
-        for _ in 0..<attempts {
-            if hasStarted(tile) {
-                return true
-            }
-            try? await Task.sleep(nanoseconds: 10_000_000)
-        }
-        return false
-    }
-
-    func waitUntilStartCount(_ count: Int, for tile: Tile) async -> Bool {
-        for _ in 0..<500 {
-            if startCount(for: tile) >= count {
-                return true
-            }
-            try? await Task.sleep(nanoseconds: 10_000_000)
-        }
-        return false
-    }
-
-    func waitUntilSaved(_ tile: Tile) async -> Bool {
-        for _ in 0..<500 {
-            if savedETag(for: tile) != nil {
-                return true
-            }
-            try? await Task.sleep(nanoseconds: 10_000_000)
-        }
-        return false
-    }
-
-    func waitUntilSaveStarted(_ tile: Tile) async -> Bool {
-        for _ in 0..<500 {
-            if hasSaveStarted(tile) {
-                return true
-            }
-            try? await Task.sleep(nanoseconds: 10_000_000)
-        }
-        return false
-    }
-
-    func waitUntilPrepared(_ tile: Tile) async -> Bool {
-        for _ in 0..<500 {
-            if hasPrepared(tile) {
-                return true
-            }
-            try? await Task.sleep(nanoseconds: 10_000_000)
-        }
-        return false
-    }
-
-    func waitUntilMaterializeCount(_ count: Int, for tile: Tile) async -> Bool {
-        for _ in 0..<500 {
-            if materializeCount(for: tile) >= count {
-                return true
-            }
-            try? await Task.sleep(nanoseconds: 10_000_000)
-        }
-        return false
-    }
-
-    func waitUntilMaterialized(_ tile: Tile) async -> Bool {
-        for _ in 0..<500 {
-            if hasMaterialized(tile) {
-                return true
-            }
-            try? await Task.sleep(nanoseconds: 10_000_000)
-        }
-        return false
-    }
-
-    private func recordDownloadStarted(
-        tile: Tile,
-        continuation: CheckedContinuation<TileDownloader.DownloadResult, Never>
-    ) {
-        lock.lock()
-        startedTiles.insert(tile)
-        startCounts[tile, default: 0] += 1
-        let pending = Self.takeFirstPending(&pendingDownloadResults, tile)
-        if pending == nil {
-            downloadContinuations[tile] = continuation
-        }
-        lock.unlock()
-        if let pending {
-            continuation.resume(returning: pending)
-        }
-    }
-
-    private func recordPrepareStarted(
-        tile: Tile,
-        continuation: CheckedContinuation<PreparedTileLoadResult?, Never>
-    ) {
-        lock.lock()
-        preparedTiles.insert(tile)
-        let pending = Self.takeFirstPending(&pendingPrepareResults, tile)
-        if pending == nil {
-            prepareContinuations[tile] = continuation
-        }
-        lock.unlock()
-        if let pending {
-            continuation.resume(returning: pending)
-        }
-    }
-
-    private func recordMaterializeStarted(
-        tile: Tile,
-        continuation: CheckedContinuation<PreparedTileMaterializeOutcome, Never>
-    ) {
-        lock.lock()
-        materializedTiles.insert(tile)
-        materializeCounts[tile, default: 0] += 1
-        let pending = Self.takeFirstPending(&pendingMaterializeOutcomes, tile)
-        if pending == nil {
-            materializeContinuations[tile] = continuation
-        }
-        lock.unlock()
-        if let pending {
-            continuation.resume(returning: pending)
-        }
-    }
-
-    /// Pops the oldest held completion for the tile, if any. Must run under
-    /// `lock`.
-    private static func takeFirstPending<Value>(_ pending: inout [Tile: [Value]], _ tile: Tile) -> Value? {
-        guard var queue = pending[tile], queue.isEmpty == false else {
-            return nil
-        }
-        let first = queue.removeFirst()
-        pending[tile] = queue.isEmpty ? nil : queue
-        return first
-    }
-
-    private func recordDownloadCanceled(_ tile: Tile) {
-        let continuation: CheckedContinuation<TileDownloader.DownloadResult, Never>?
-        lock.lock()
-        canceledTiles.insert(tile)
-        continuation = downloadContinuations.removeValue(forKey: tile)
-        lock.unlock()
-        continuation?.resume(returning: .failure(.network))
-    }
-
-    private static func makePreparedTile(tile: Tile) -> PreparedTileCPU {
-        let emptyGeometry = PreparedTileCPU.GeometryLayer(vertices: [],
-                                                         indices: [],
-                                                         styles: [],
-                                                         overviewStyleMasks: [])
-        let emptyRoadPhases = RoadGeometryPhases(shadow: emptyGeometry,
-                                                 casing: emptyGeometry,
-                                                 fill: emptyGeometry,
-                                                 detail: emptyGeometry,
-                                                 overlay: emptyGeometry)
-
-        let emptyTextLabelSet = PreparedTileCPU.TextLabelSet(placementInputs: [],
-                                                             glyphRuns: [],
-                                                             poiIconRuns: [])
-        return PreparedTileCPU(tile: tile,
-                               ground: emptyGeometry,
-                               roads: RoadStructureBuckets(tunnel: emptyRoadPhases,
-                                                          ground: emptyRoadPhases,
-                                                          automobileGround: emptyRoadPhases,
-                                                          bridge: emptyRoadPhases),
-                               bridgeOverlay: emptyGeometry,
-                               extruded: PreparedTileCPU.Extruded(vertices: [],
-                                                                  indices: [],
-                                                                  styles: []),
-                               textLabels: emptyTextLabelSet,
-                               roadLabels: PreparedTileCPU.RoadLabels(pathInputs: [],
-                                                                      pathRanges: [],
-                                                                      pathLabels: [],
-                                                                      labelStyle: nil,
-                                                                      localGlyphVertices: [],
-                                                                      glyphBounds: [],
-                                                                      glyphBoundRanges: [],
-                                                                      sizes: [],
-                                                                      anchorRanges: [],
-                                                                      anchors: []))
+        return snapshot().tiles.first { $0.tile == tile }
     }
 }

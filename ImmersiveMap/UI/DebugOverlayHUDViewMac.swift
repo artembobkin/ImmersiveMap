@@ -146,8 +146,21 @@ final class DebugOverlayHUDView: NSView {
                                                             action: nil)
     private let wireframeLabel = NSTextField(labelWithString: "")
     private let wireframeSwitch = NSSwitch()
-    private let coverageReachLabel = NSTextField(labelWithString: "")
-    private let coverageReachSlider = NSSlider()
+    /// One depth rule's editor: the drop picker and the depth slider, each
+    /// with its named row. Rebuilt when the number of rules changes.
+    private struct DepthRuleRow {
+        let dropLabel: NSTextField
+        let dropControl: NSSegmentedControl
+        let depthLabel: NSTextField
+        let depthSlider: NSSlider
+        var views: [NSView] { [dropLabel, dropControl, depthLabel, depthSlider] }
+    }
+    private var depthRuleRows: [DepthRuleRow] = []
+    private let depthRulesAddButton = NSButton()
+    private let depthRulesRemoveButton = NSButton()
+    /// The rules as the editor shows them: any moved control emits the
+    /// whole list.
+    private var flatDepthRules = FlatDepthRules.default
     private let surfaceModeButton = NSButton()
 
     private var snapshot: DebugOverlayHUDSnapshot?
@@ -172,8 +185,8 @@ final class DebugOverlayHUDView: NSView {
     var onTileGridEnabledChanged: ((Bool) -> Void)?
     var onTileGridDensityChanged: ((Int) -> Void)?
     var onWireframeEnabledChanged: ((Bool) -> Void)?
-    /// The flat coverage's reach, in camera distances.
-    var onCoverageFarRadiusCameraDistancesChanged: ((Float) -> Void)?
+    /// The plane's depth rules, whole, on every edit.
+    var onFlatDepthRulesChanged: ((FlatDepthRules) -> Void)?
     var onRoadLabelTilesEnabledChanged: ((Bool) -> Void)?
     var onBaseLabelBoundsEnabledChanged: ((Bool) -> Void)?
     var onRoadLabelBoundsEnabledChanged: ((Bool) -> Void)?
@@ -219,7 +232,6 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(tileLayersLabel, text: "Tile layers")
         configureControlLabel(tileGridLabel, text: "Tile grid")
         configureControlLabel(wireframeLabel, text: "Wireframe")
-        configureControlLabel(coverageReachLabel, text: "")
         configureControlLabel(roadLabelTilesLabel, text: "Road label tiles")
         configureControlLabel(baseLabelBoundsLabel, text: "Base label boxes")
         configureControlLabel(roadLabelBoundsLabel, text: "Road label boxes")
@@ -247,7 +259,6 @@ final class DebugOverlayHUDView: NSView {
         configureSwitch(tileLayersSwitch, action: #selector(tileLayersSwitchChanged))
         configureSwitch(tileGridSwitch, action: #selector(tileGridSwitchChanged))
         configureSwitch(wireframeSwitch, action: #selector(wireframeSwitchChanged))
-        configureSlider(coverageReachSlider, range: FlatDistanceCoverage.farRadiusRange, action: #selector(coverageReachSliderChanged))
         configureSwitch(roadLabelTilesSwitch, action: #selector(roadLabelTilesSwitchChanged))
         configureSwitch(baseLabelBoundsSwitch, action: #selector(baseLabelBoundsSwitchChanged))
         configureSwitch(roadLabelBoundsSwitch, action: #selector(roadLabelBoundsSwitchChanged))
@@ -307,6 +318,14 @@ final class DebugOverlayHUDView: NSView {
                               title: "Switch globe / flat",
                               symbolName: "arrow.triangle.2.circlepath",
                               action: #selector(surfaceModeButtonTapped))
+        configureActionButton(depthRulesAddButton,
+                              title: "Add depth rule",
+                              symbolName: "plus.circle",
+                              action: #selector(depthRulesAddButtonTapped))
+        configureActionButton(depthRulesRemoveButton,
+                              title: "Remove last depth rule",
+                              symbolName: "minus.circle",
+                              action: #selector(depthRulesRemoveButtonTapped))
         configureActionButton(tileTraceButton,
                               title: "",
                               symbolName: nil,
@@ -323,6 +342,7 @@ final class DebugOverlayHUDView: NSView {
         }
 
         scrolledSubviews.forEach(contentView.addSubview)
+        rebuildDepthRuleRows()
 
         tilesStatusListView.onExpansionChanged = { [weak self] in
             self?.needsLayout = true
@@ -370,7 +390,8 @@ final class DebugOverlayHUDView: NSView {
          controlsGroupLabel, axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch,
          tileGridLabel, tileGridSwitch, tileGridDensityControl,
          wireframeLabel, wireframeSwitch,
-         coverageReachLabel, coverageReachSlider, surfaceModeButton,
+         depthRulesAddButton, depthRulesRemoveButton,
+         surfaceModeButton,
          tilesGroupLabel, tileTraceButton, tileTraceStatusLabel, tilesStatusLabel, tilesStatusListView]
     }
 
@@ -395,13 +416,99 @@ final class DebugOverlayHUDView: NSView {
         tileGridSwitch.state = controls.tileGridEnabled ? .on : .off
         tileGridDensityControl.selectedSegment = DebugOverlayHUDTextComposer.tileGridDensityIndex(for: controls.tileGridDensity)
         wireframeSwitch.state = controls.wireframeEnabled ? .on : .off
-        coverageReachSlider.doubleValue = Double(controls.coverageFarRadiusCameraDistances)
-        coverageReachLabel.stringValue = Self.coverageReachTitle(controls.coverageFarRadiusCameraDistances)
+        flatDepthRules = controls.flatDepthRules
+        if depthRuleRows.count != flatDepthRules.rules.count {
+            rebuildDepthRuleRows()
+        }
+        updateDepthRuleRows()
         roadLabelTilesSwitch.state = controls.roadLabelTilesEnabled ? .on : .off
         baseLabelBoundsSwitch.state = controls.baseLabelBoundsEnabled ? .on : .off
         roadLabelBoundsSwitch.state = controls.roadLabelBoundsEnabled ? .on : .off
         updateVisibility()
         needsLayout = true
+    }
+
+    // MARK: - Depth rules
+
+    /// One editor row per rule, in the scrolled content next to the other
+    /// controls. The old rows leave the view; the values follow in
+    /// `updateDepthRuleRows`.
+    private func rebuildDepthRuleRows() {
+        for row in depthRuleRows {
+            row.views.forEach { $0.removeFromSuperview() }
+        }
+        depthRuleRows = flatDepthRules.rules.indices.map { _ in
+            let dropLabel = NSTextField(labelWithString: "")
+            configureControlLabel(dropLabel, text: "")
+            let dropControl = NSSegmentedControl(labels: FlatDepthRules.zoomDropRange.map(String.init),
+                                                 trackingMode: .selectOne,
+                                                 target: self,
+                                                 action: #selector(depthRuleDropControlChanged(_:)))
+            refuseFocus(dropControl)
+            let depthLabel = NSTextField(labelWithString: "")
+            configureControlLabel(depthLabel, text: "")
+            let depthSlider = NSSlider()
+            configureSlider(depthSlider, range: FlatDepthRules.depthRange, action: #selector(depthRuleDepthSliderChanged(_:)))
+            return DepthRuleRow(dropLabel: dropLabel, dropControl: dropControl, depthLabel: depthLabel, depthSlider: depthSlider)
+        }
+        for row in depthRuleRows {
+            row.views.forEach(contentView.addSubview)
+        }
+        needsLayout = true
+    }
+
+    private func updateDepthRuleRows() {
+        for (index, (row, rule)) in zip(depthRuleRows, flatDepthRules.rules).enumerated() {
+            row.dropLabel.stringValue = Self.depthRuleDropTitle(index: index)
+            row.dropControl.selectedSegment = rule.zoomDrop - FlatDepthRules.zoomDropRange.lowerBound
+            row.depthSlider.doubleValue = rule.depth
+            row.depthLabel.stringValue = Self.depthRuleDepthTitle(index: index, depth: rule.depth)
+        }
+        depthRulesRemoveButton.isEnabled = flatDepthRules.rules.count > 1
+    }
+
+    static func depthRuleDropTitle(index: Int) -> String {
+        "Rule \(index + 1): zoom drop"
+    }
+
+    static func depthRuleDepthTitle(index: Int, depth: Double) -> String {
+        String(format: "Rule %d: to %.2f cam. dist.", index + 1, depth)
+    }
+
+    @objc private func depthRuleDropControlChanged(_ sender: NSSegmentedControl) {
+        guard let index = depthRuleRows.firstIndex(where: { $0.dropControl === sender }),
+              index < flatDepthRules.rules.count else { return }
+        flatDepthRules.rules[index].zoomDrop = sender.selectedSegment + FlatDepthRules.zoomDropRange.lowerBound
+        onFlatDepthRulesChanged?(flatDepthRules)
+    }
+
+    @objc private func depthRuleDepthSliderChanged(_ sender: NSSlider) {
+        guard let index = depthRuleRows.firstIndex(where: { $0.depthSlider === sender }),
+              index < flatDepthRules.rules.count else { return }
+        flatDepthRules.rules[index].depth = sender.doubleValue
+        depthRuleRows[index].depthLabel.stringValue = Self.depthRuleDepthTitle(index: index, depth: sender.doubleValue)
+        onFlatDepthRulesChanged?(flatDepthRules)
+    }
+
+    /// A new last rule: two levels coarser than the last and twice as far,
+    /// inside the ranges.
+    @objc private func depthRulesAddButtonTapped() {
+        let last = flatDepthRules.rules.last ?? FlatDepthRules.default.rules[0]
+        let rule = FlatDepthRule(zoomDrop: min(last.zoomDrop + 2, FlatDepthRules.zoomDropRange.upperBound),
+                                 depth: min(last.depth * 2, FlatDepthRules.depthRange.upperBound))
+        guard rule.depth > last.depth else { return }
+        flatDepthRules.rules.append(rule)
+        rebuildDepthRuleRows()
+        updateDepthRuleRows()
+        onFlatDepthRulesChanged?(flatDepthRules)
+    }
+
+    @objc private func depthRulesRemoveButtonTapped() {
+        guard flatDepthRules.rules.count > 1 else { return }
+        flatDepthRules.rules.removeLast()
+        rebuildDepthRuleRows()
+        updateDepthRuleRows()
+        onFlatDepthRulesChanged?(flatDepthRules)
     }
 
     /// The shadow group reflects the live settings, so a change made anywhere
@@ -576,7 +683,12 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutSwitchRow(tileGridLabel, tileGridSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutFullWidthRow(tileGridDensityControl, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutSwitchRow(wireframeLabel, wireframeSwitch, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(coverageReachLabel, coverageReachSlider, at: cursor, contentWidth: contentWidth)
+        for row in depthRuleRows {
+            cursor = layoutControlRow(row.dropLabel, row.dropControl, at: cursor, contentWidth: contentWidth)
+            cursor = layoutControlRow(row.depthLabel, row.depthSlider, at: cursor, contentWidth: contentWidth)
+        }
+        cursor = layoutFullWidthRow(depthRulesAddButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
+        cursor = layoutFullWidthRow(depthRulesRemoveButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutFullWidthRow(surfaceModeButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor += Layout.groupSpacing
 
@@ -951,15 +1063,6 @@ final class DebugOverlayHUDView: NSView {
         onTileLayersEnabledChanged?(tileLayersSwitch.state == .on)
     }
 
-    @objc private func coverageReachSliderChanged() {
-        let cameraDistances = Float(coverageReachSlider.doubleValue)
-        coverageReachLabel.stringValue = Self.coverageReachTitle(cameraDistances)
-        onCoverageFarRadiusCameraDistancesChanged?(cameraDistances)
-    }
-
-    static func coverageReachTitle(_ cameraDistances: Float) -> String {
-        String(format: "Tiles reach %.0f cam. dist.", cameraDistances)
-    }
 
 
     @objc private func wireframeSwitchChanged() {

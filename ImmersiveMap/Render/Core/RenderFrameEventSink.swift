@@ -26,8 +26,16 @@ protocol RenderFrameEventSink: AnyObject, Sendable {
     /// model.
     func completeSceneModelPathAnimations(_ results: [SceneModelPathAnimationResult])
     func updateDebugOverlayHUDSnapshot(_ snapshot: DebugOverlayHUDSnapshot?)
+    /// A live source for the HUD's tile list, attached by the engine at
+    /// creation and detached (nil) when it is discarded, so the panel can
+    /// read the loader's state between frames. Sinks with no HUD ignore it.
+    func attachTileLoadingStatus(provider: (@Sendable () -> TileLoadingStatusSnapshot?)?)
     /// Unlike `updateAvatarSelectionSnapshot` (completion handler, off-main),
     /// this is called synchronously from the render loop on the main thread so
     /// that marker positions apply in the same CA transaction as the frame.
     func updateMarkerProjectionSnapshot(_ snapshot: MarkerProjectionSnapshot)
+}
+
+extension RenderFrameEventSink {
+    func attachTileLoadingStatus(provider: (@Sendable () -> TileLoadingStatusSnapshot?)?) {}
 }

@@ -73,13 +73,18 @@ enum DebugOverlayTilesStatusRow: Equatable {
     case stage(tile: Tile, stage: TilePreparationStageSnapshot, isExpanded: Bool)
     case layer(tile: Tile, timing: TileParseLayerTiming)
 
+    /// A live stage younger than this shows no age: every row would flicker
+    /// a "0s" or "1s" for the moment it takes a healthy stage to pass.
+    static let stageAgeDisplayThreshold = 2
+
     var text: String {
         switch self {
         case let .tile(tile, isExpanded, canExpand):
             let disclosure = canExpand ? (isExpanded ? "▾" : "▸") : " "
             let tileText = "z\(tile.tile.z)/\(tile.tile.x)/\(tile.tile.y)"
             let detailText = tile.detail.isEmpty ? Self.statusText(tile.status) : tile.detail
-            return "\(disclosure) \(tileText) \(detailText)"
+            let ageText = tile.stageAgeSeconds >= Self.stageAgeDisplayThreshold ? " \(tile.stageAgeSeconds)s" : ""
+            return "\(disclosure) \(tileText) \(detailText)\(ageText)"
         case let .stage(_, stage, isExpanded):
             let disclosure = stage.layerTimings.isEmpty ? " " : (isExpanded ? "▾" : "▸")
             if let duration = stage.duration {

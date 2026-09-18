@@ -12,9 +12,8 @@ struct DebugOverlayControlSnapshot: Equatable {
     let roadLabelBoundsEnabled: Bool
     let tileGridEnabled: Bool
     let tileGridDensity: Int
-    /// The flat coverage's reach about the eye, in camera distances
-    /// (FlatDistanceCoverage.farRadius): ground beyond it gets no tile.
-    let coverageFarRadiusCameraDistances: Float
+    /// The plane's depth rules (`FlatDepthRuleCoverage`), normalized.
+    let flatDepthRules: FlatDepthRules
 
     init(axesEnabled: Bool,
          tileLayersEnabled: Bool,
@@ -24,7 +23,7 @@ struct DebugOverlayControlSnapshot: Equatable {
          roadLabelBoundsEnabled: Bool = false,
          tileGridEnabled: Bool = false,
          tileGridDensity: Int = DebugTileGridDensity.standard,
-         coverageFarRadiusCameraDistances: Float = Float(FlatDistanceCoverage.farRadius)) {
+         flatDepthRules: FlatDepthRules = .default) {
         self.axesEnabled = axesEnabled
         self.tileLayersEnabled = tileLayersEnabled
         self.wireframeEnabled = wireframeEnabled
@@ -33,7 +32,7 @@ struct DebugOverlayControlSnapshot: Equatable {
         self.roadLabelBoundsEnabled = roadLabelBoundsEnabled
         self.tileGridEnabled = tileGridEnabled
         self.tileGridDensity = DebugTileGridDensity.clamp(tileGridDensity)
-        self.coverageFarRadiusCameraDistances = Float(FlatDistanceCoverage.clampFarRadius(Double(coverageFarRadiusCameraDistances)))
+        self.flatDepthRules = flatDepthRules.normalized()
     }
 }
 
@@ -47,7 +46,7 @@ final class DebugOverlayControlState {
     private var roadLabelBoundsEnabled = false
     private var tileGridEnabled = false
     private var tileGridDensity = DebugTileGridDensity.standard
-    private var coverageFarRadiusCameraDistances = Float(FlatDistanceCoverage.farRadius)
+    private var flatDepthRules = FlatDepthRules.default
 
     func snapshot() -> DebugOverlayControlSnapshot {
         lock.lock()
@@ -60,7 +59,7 @@ final class DebugOverlayControlState {
                                            roadLabelBoundsEnabled: roadLabelBoundsEnabled,
                                            tileGridEnabled: tileGridEnabled,
                                            tileGridDensity: tileGridDensity,
-                                           coverageFarRadiusCameraDistances: coverageFarRadiusCameraDistances)
+                                           flatDepthRules: flatDepthRules)
     }
 
     func setAxesEnabled(_ isEnabled: Bool) {
@@ -111,9 +110,9 @@ final class DebugOverlayControlState {
         lock.unlock()
     }
 
-    func setCoverageFarRadiusCameraDistances(_ cameraDistances: Float) {
+    func setFlatDepthRules(_ rules: FlatDepthRules) {
         lock.lock()
-        coverageFarRadiusCameraDistances = Float(FlatDistanceCoverage.clampFarRadius(Double(cameraDistances)))
+        flatDepthRules = rules.normalized()
         lock.unlock()
     }
 }

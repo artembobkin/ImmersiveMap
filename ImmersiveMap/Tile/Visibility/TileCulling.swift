@@ -4,9 +4,9 @@
 import simd
 
 /// The frame's coverage: which tiles the frame draws, at which zooms,
-/// from the camera pose. One walk of the tile tree per surface
-/// (`FlatTileCoverage`, `GlobeTileCoverage`) over the distance rule
-/// (`FlatDistanceCoverage`), plus the flat map's horizon backdrop.
+/// from the camera pose. The plane's depth rules (`FlatDepthRuleCoverage`)
+/// plus its horizon backdrop, or the sphere's walk (`GlobeTileCoverage`)
+/// over the distance rule (`FlatDistanceCoverage`).
 class TileCulling {
     /// Zoom of the flat-mode horizon backdrop: the pinned world cover's,
     /// so the footprint is covered by the one z0 tile per world copy it
@@ -22,27 +22,27 @@ class TileCulling {
 
     init() {}
 
-    /// `farRadius` is the coverage's reach in camera distances
-    /// (`FlatDistanceCoverage.farRadius` unless the debug panel moves it).
+    /// `rules` are the plane's depth rules (`FlatDepthRules.default`
+    /// unless the debug panel edits them).
     func resolveVisibleContent(cameraState: ImmersiveMapCameraState,
                                resolvedPresentation: ResolvedPresentationState,
                                targetZoom: Int,
                                cameraMatrix: matrix_float4x4?,
                                cameraFrustum: Frustum?,
                                cameraEye: SIMD3<Float>,
-                               farRadius: Double = FlatDistanceCoverage.farRadius,
+                               rules: FlatDepthRules = .default,
                                diagnostics: (any FrameDiagnosticsService)? = nil) -> VisibleContentState {
         let semanticCenterWorldMercator = cameraState.centerWorldMercator
         let center = Self.makeCenter(centerWorldMercator: semanticCenterWorldMercator,
                                      targetZoom: targetZoom)
         let visibleTiles: [VisibleTile]
         let backdropTiles: [VisibleTile]
+        var flatDepthBands: [FlatDepthBand] = []
 
         switch resolvedPresentation.renderSurfaceMode {
         case .spherical:
             let inputs = GlobeCoverageInputs(eye: cameraEye,
-                                             globe: resolvedPresentation.globeRenderState.globeUniform,
-                                             farRadius: farRadius)
+                                             globe: resolvedPresentation.globeRenderState.globeUniform)
             let resolution = GlobeTileCoverage.targets(targetZoom: targetZoom, inputs: inputs, frustum: cameraFrustum)
             visibleTiles = resolution.targets
             backdropTiles = []
@@ -51,15 +51,14 @@ class TileCulling {
             let flatRenderState = resolvedPresentation.flatRenderState
             if let polygon = CoveragePolygonBuilder.make(cameraMatrix: cameraMatrix) {
                 let hasBackdrop = targetZoom > Self.flatBackdropZoomLevel
-                let inputs = FlatCoverageInputs.make(eye: cameraEye,
-                                                     flatRenderState: flatRenderState,
-                                                     center: center,
-                                                     targetZoom: targetZoom,
-                                                     cameraZoom: cameraState.zoom,
-                                                     backdropZoom: hasBackdrop ? Self.flatBackdropZoomLevel : nil,
-                                                     farRadius: farRadius)
-                let resolution = FlatTileCoverage.targets(targetZoom: targetZoom, inputs: inputs, polygon: polygon)
+                let resolution = FlatDepthRuleCoverage.resolve(eye: cameraEye,
+                                                               flatRenderState: flatRenderState,
+                                                               targetZoom: targetZoom,
+                                                               backdropZoom: hasBackdrop ? Self.flatBackdropZoomLevel : nil,
+                                                               rules: rules,
+                                                               polygon: polygon)
                 visibleTiles = resolution.targets
+                flatDepthBands = resolution.bands
                 // The backdrop: the coarse tiles under the whole footprint, all
                 // the way to the horizon, so the coverage's edge is never
                 // drawn in.
@@ -83,7 +82,8 @@ class TileCulling {
                                    visibleTiles: visibleTiles,
                                    backdropTiles: backdropTiles,
                                    tileZoomLevel: targetZoom,
-                                   coverageVersion: coverageVersion)
+                                   coverageVersion: coverageVersion,
+                                   flatDepthBands: flatDepthBands)
     }
 
     static func makeCenter(centerWorldMercator: SIMD2<Double>,

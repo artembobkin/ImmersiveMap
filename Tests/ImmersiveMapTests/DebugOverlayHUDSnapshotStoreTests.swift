@@ -29,6 +29,40 @@ final class DebugOverlayHUDSnapshotStoreTests: XCTestCase {
         XCTAssertNil(value?.snapshot)
     }
 
+    func testTheAttachedProviderAnswersBetweenFramesUntilDetached() {
+        let store = DebugOverlayHUDSnapshotStore()
+        XCTAssertNil(store.currentTileLoadingStatus())
+
+        let reporter = TileLoadingStatusReporter()
+        let tile = Tile(x: 1, y: 1, z: 4)
+        reporter.recordDemand(input: 1, deduplicated: 1, tiles: [tile])
+        reporter.recordLoadScheduled(tile: tile)
+        store.attachTileLoadingStatus(provider: { reporter.snapshot() })
+
+        XCTAssertEqual(store.currentTileLoadingStatus()?.tiles.map(\.tile), [tile])
+
+        store.attachTileLoadingStatus(provider: nil)
+        XCTAssertNil(store.currentTileLoadingStatus())
+    }
+
+    func testReplacingTheTileListKeepsTheFrameAndIsEqualWhenNothingMoved() {
+        let snapshot = makeSnapshot(zoom: "z: 4.62")
+        let reporter = TileLoadingStatusReporter()
+
+        XCTAssertEqual(snapshot.replacingTileLoadingStatus(reporter.snapshot()), snapshot)
+
+        let tile = Tile(x: 1, y: 1, z: 4)
+        reporter.recordDemand(input: 1, deduplicated: 1, tiles: [tile])
+        reporter.recordLoadScheduled(tile: tile)
+        let refreshed = snapshot.replacingTileLoadingStatus(reporter.snapshot())
+
+        XCTAssertNotEqual(refreshed, snapshot)
+        XCTAssertEqual(refreshed.coordinateLines, snapshot.coordinateLines)
+        XCTAssertEqual(refreshed.diagnosticsLines, snapshot.diagnosticsLines)
+        XCTAssertEqual(refreshed.tileLoadingStatusTiles.map(\.tile), [tile])
+        XCTAssertFalse(refreshed.tileLoadingStatusLines.isEmpty)
+    }
+
     private func makeSnapshot(zoom: String) -> DebugOverlayHUDSnapshot {
         let settings = ImmersiveMapSettings.default.debug
         return DebugOverlayHUDSnapshot(

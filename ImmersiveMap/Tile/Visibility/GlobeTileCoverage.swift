@@ -29,13 +29,12 @@ struct GlobeCoverageResolution {
 /// in world units (the camera looks at the world origin, the sphere's
 /// front point, and the pan turns the sphere under it), the globe it looks
 /// at, whose pan and radius place every tile's centre in that world, and
-/// the walk's reach.
+/// the rule's knobs.
 struct GlobeCoverageInputs {
     var eye: SIMD3<Float>
     var globe: GlobeUniform
-    /// The coverage's reach in camera distances, shared with the flat map
-    /// (`FlatDistanceCoverage.farRadius`, or the debug panel's value).
-    var farRadius: Double = FlatDistanceCoverage.farRadius
+    /// The rule's knobs (`CoverageRule.default`).
+    var rule: CoverageRule = .default
 }
 
 /// The sphere's coverage: the same walk as the plane's (`FlatTileCoverage`)
@@ -70,6 +69,7 @@ enum GlobeTileCoverage {
         let cameraDistance: Double
         let reach: Double
         let usesRule: Bool
+        let rule: CoverageRule
         var targets: [VisibleTile] = []
         var placed: Set<Tile> = []
         var metrics = GlobeCullingMetrics.zero
@@ -86,8 +86,9 @@ enum GlobeTileCoverage {
                         visibility: GlobeVisibilityModel.makeInputs(globe: inputs.globe, cameraEye: inputs.eye),
                         eye: inputs.eye,
                         cameraDistance: cameraDistance,
-                        reach: inputs.farRadius * cameraDistance,
-                        usesRule: targetZoom > Self.floorZoom && cameraDistance > 0)
+                        reach: inputs.rule.farRadius * cameraDistance,
+                        usesRule: targetZoom > Self.floorZoom && cameraDistance > 0,
+                        rule: inputs.rule)
         visit(Tile(x: 0, y: 0, z: 0), accepted: false, walk: &walk)
         walk.metrics.duration = CACurrentMediaTime() - startTime
         return GlobeCoverageResolution(targets: FlatTileCoverage.sorted(walk.targets), metrics: walk.metrics)
@@ -132,7 +133,7 @@ enum GlobeTileCoverage {
         let centerDistance = Double(simd_length(bound.center - walk.eye))
         if tile.z == walk.targetZoom {
             // A leaf: exact by its centre.
-            let drop = FlatDistanceCoverage.drop(distance: centerDistance, cameraDistance: walk.cameraDistance)
+            let drop = FlatDistanceCoverage.drop(distance: centerDistance, cameraDistance: walk.cameraDistance, rule: walk.rule)
             if drop == 0 {
                 place(tile, walk: &walk)
             } else if let ancestor = tile.findParentTile(atZoom: max(Self.floorZoom, tile.z - drop)) {
@@ -159,20 +160,20 @@ enum GlobeTileCoverage {
         let farDistance = centerDistance + radius
         let finest = max(Self.floorZoom,
                          walk.targetZoom - FlatDistanceCoverage.drop(distance: nearDistance,
-                                                                     cameraDistance: walk.cameraDistance))
+                                                                     cameraDistance: walk.cameraDistance, rule: walk.rule))
         // Past the reach the ground wants the cover: a tile reaching over
         // the line is wanted down to the floor.
         let coarsest = farDistance > walk.reach
             ? Self.floorZoom
             : max(Self.floorZoom,
                   walk.targetZoom - FlatDistanceCoverage.drop(distance: farDistance,
-                                                              cameraDistance: walk.cameraDistance))
+                                                              cameraDistance: walk.cameraDistance, rule: walk.rule))
         if tile.z >= coarsest, tile.z <= finest {
             place(tile, walk: &walk)
         }
         let finestForDescent = max(Self.floorZoom,
                                    walk.targetZoom - FlatDistanceCoverage.drop(distance: nearDistance,
-                                                                               cameraDistance: walk.cameraDistance))
+                                                                               cameraDistance: walk.cameraDistance, rule: walk.rule))
         if tile.z < finestForDescent {
             for child in Self.children(of: tile) {
                 visit(child, accepted: accepted, walk: &walk)

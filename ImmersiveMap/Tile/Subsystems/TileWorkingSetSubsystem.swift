@@ -38,8 +38,8 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
 
     func update(frameContext: FrameContext) {
         // The coverage: the frame's targets, every tile at the zoom its
-        // distance from the eye wants (`TileCulling`), and the horizon
-        // backdrop under them on the plane.
+        // place on screen wants (`TileCulling`), and the horizon backdrop
+        // under them on the plane.
         let visibleContent = frameContext.visibleContent
         let center = visibleContent.center
         let targets = visibleContent.visibleTiles
@@ -107,11 +107,10 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
             // The buildings: a partition of the near field over the resident
             // tiles, never a substitute (see the planner).
             let eyeGroundCell: SIMD2<Double>? = frameContext.renderSurfaceMode == .flat
-                ? FlatCoverageInputs.eyeGround(eye: frameContext.cameraEye,
-                                               flatRenderState: frameContext.resolvedPresentation.flatRenderState,
-                                               lookAt: SIMD2<Double>(center.tileX, center.tileY),
-                                               targetZoom: tileZoomLevel)
-                    * pow(2.0, Double(BuildingCoveragePlanner.minimumSourceZoom - tileZoomLevel))
+                ? BuildingCoveragePlanner.eyeGroundCell(eye: frameContext.cameraEye,
+                                                        flatRenderState: frameContext.resolvedPresentation.flatRenderState,
+                                                        lookAt: SIMD2<Double>(center.tileX, center.tileY),
+                                                        targetZoom: tileZoomLevel)
                 : nil
             buildingPlaceTilesContext = BuildingCoveragePlanner.plan(resident: resident,
                                                                      visibleTiles: targets,
