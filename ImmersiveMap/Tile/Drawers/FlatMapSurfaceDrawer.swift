@@ -5,6 +5,21 @@ import Metal
 import simd
 
 enum FlatMapSurfaceDrawer {
+    /// Whether a source draws with the exact rank depth (Tile.metal,
+    /// kTileExactRankDepth): every source below `exactRankDepthBelowZoom`.
+    /// The rank depth in the vertex z survives the near cut only while a
+    /// source's triangles are small against the near distance, which the
+    /// target zoom's tiles are and a coarser band's are not (each level
+    /// down doubles the error), so the target zoom keeps the early depth
+    /// test and everything coarser takes the exact path.
+    static func usesExactRankDepth(sourceZoom: Int, exactRankDepthBelowZoom: Int) -> Bool {
+        sourceZoom < exactRankDepthBelowZoom
+    }
+
+    /// - Parameter exactRankDepthBelowZoom: the sources below this zoom
+    ///   write their rank depth from the fragment stage
+    ///   (`usesExactRankDepth`). The main coverage passes the target zoom,
+    ///   the horizon backdrop `Int.max` for every source of it.
     static func draw(renderEncoder: MTLRenderCommandEncoder,
                      cameraUniform: CameraUniform,
                      cameraZoom: Double,
@@ -18,6 +33,7 @@ enum FlatMapSurfaceDrawer {
                      tileStencilTestState: MTLDepthStencilState,
                      groundOutlineState: MTLDepthStencilState,
                      isWireframeEnabled: Bool,
+                     exactRankDepthBelowZoom: Int,
                      opaqueFillsOnly: Bool = false,
                      markingCutoffWorldDistance: Float = .infinity) {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder)
@@ -72,21 +88,50 @@ enum FlatMapSurfaceDrawer {
             let worldWrap: Int8
         }
         var seenSources = Set<SourceKey>()
-        var uniqueSources: [(metalTile: MetalTile, worldWrap: Int8)] = []
+        var uniqueSources: [(metalTile: MetalTile, worldWrap: Int8, exactRankDepth: Bool)] = []
         uniqueSources.reserveCapacity(placeTilesContext.tilePlacements.count)
         for placeTile in placeTilesContext.tilePlacements {
             let key = SourceKey(tile: placeTile.metalTile.tile, worldWrap: placeTile.placeIn.worldWrap)
             if seenSources.insert(key).inserted {
-                uniqueSources.append((placeTile.metalTile, placeTile.placeIn.worldWrap))
+                let exact = usesExactRankDepth(sourceZoom: placeTile.metalTile.tile.z,
+                                               exactRankDepthBelowZoom: exactRankDepthBelowZoom)
+                uniqueSources.append((placeTile.metalTile, placeTile.placeIn.worldWrap, exact))
             }
         }
         uniqueSources.sort { $0.metalTile.tile.z > $1.metalTile.tile.z }
 
+        // Each group selects its pipeline per source, since a source's
+        // depth path is its own (usesExactRankDepth): finest first, so the
+        // exact sources come last and the state changes once per group.
+        enum GroundPipeline {
+            case lines
+            case fills
+            case opaqueFills
+            case fillOutline
+        }
+        var selectedPipeline: (GroundPipeline, Bool)?
+        func selectPipeline(_ pipeline: GroundPipeline, exactRankDepth: Bool) {
+            if let selectedPipeline, selectedPipeline == (pipeline, exactRankDepth) { return }
+            selectedPipeline = (pipeline, exactRankDepth)
+            switch pipeline {
+            case .lines:
+                tilePipeline.selectFlatLinesPipeline(renderEncoder: renderEncoder, exactRankDepth: exactRankDepth)
+            case .fills:
+                tilePipeline.selectFlatFillsPipeline(renderEncoder: renderEncoder, exactRankDepth: exactRankDepth)
+            case .opaqueFills:
+                tilePipeline.selectFlatOpaquePipeline(renderEncoder: renderEncoder, exactRankDepth: exactRankDepth)
+            case .fillOutline:
+                tilePipeline.selectFlatFillOutlinePipeline(renderEncoder: renderEncoder, exactRankDepth: exactRankDepth)
+            }
+        }
+
         func drawLayer(_ keyPath: KeyPath<TileBuffers, TileBuffers.GeometryLayer>,
+                       pipeline: GroundPipeline,
                        bandOffset: Float,
                        primitiveType: MTLPrimitiveType = .triangle,
                        runFilter: ((GroundStyleRun) -> Bool)? = nil) {
             for source in uniqueSources {
+                selectPipeline(pipeline, exactRankDepth: source.exactRankDepth)
                 drawFlatGeometryLayer(renderEncoder: renderEncoder,
                                       buffers: source.metalTile.tileBuffers[keyPath: keyPath],
                                       tile: source.metalTile.tile,
@@ -119,8 +164,7 @@ enum FlatMapSurfaceDrawer {
         }
         renderEncoder.pushDebugGroup("ground.opaqueFills")
         renderEncoder.setDepthStencilState(groundOwnerState)
-        tilePipeline.selectFlatOpaquePipeline(renderEncoder: renderEncoder)
-        drawLayer(\.ground, bandOffset: 0, runFilter: isOpaqueFillRun)
+        drawLayer(\.ground, pipeline: .opaqueFills, bandOffset: 0, runFilter: isOpaqueFillRun)
         renderEncoder.popDebugGroup()
         // The horizon backdrop stops here: its job is the painted far band
         // under the fog, where its coarse linework (rivers, borders, roads) is
@@ -146,14 +190,14 @@ enum FlatMapSurfaceDrawer {
         // that is translucent this frame (mid-fade) gets no outline: its
         // fill wrote no depth to test against, and the fringe would double
         // blend along the edge.
-        if tilePipeline.selectFlatFillOutlinePipeline(renderEncoder: renderEncoder) {
+        if tilePipeline.hasFlatFillOutlinePipeline {
             renderEncoder.pushDebugGroup("ground.fillOutlines")
             renderEncoder.setDepthStencilState(groundOutlineState)
             var fillOutlineUniform = TileFillOutlineUniform(viewportSizePx: drawableSizePx)
             renderEncoder.setFragmentBytes(&fillOutlineUniform,
                                            length: MemoryLayout<TileFillOutlineUniform>.stride,
                                            index: 9)
-            drawLayer(\.ground, bandOffset: 0, primitiveType: .line, runFilter: { run in
+            drawLayer(\.ground, pipeline: .fillOutline, bandOffset: 0, primitiveType: .line, runFilter: { run in
                 run.isFillOutlineClass
                     && run.isAlphaOpaque
                     && TileStyleFadeMath.fadeIsOne(mask: run.fadeMask, overviewFade: overviewFadeUniform)
@@ -163,12 +207,11 @@ enum FlatMapSurfaceDrawer {
         // Everything after only tests the priority.
         renderEncoder.pushDebugGroup("ground.translucentFills")
         renderEncoder.setDepthStencilState(tileStencilTestState)
-        tilePipeline.selectFlatFillsPipeline(renderEncoder: renderEncoder)
-        drawLayer(\.ground, bandOffset: 0, runFilter: isTranslucentFillRun)
+        drawLayer(\.ground, pipeline: .fills, bandOffset: 0, runFilter: isTranslucentFillRun)
         renderEncoder.popDebugGroup()
         renderEncoder.pushDebugGroup("ground.lineRibbons")
-        tilePipeline.selectPipeline(renderEncoder: renderEncoder)
         drawLayer(\.ground,
+                  pipeline: .lines,
                   bandOffset: GlobeSurfaceDepthRank.classDepthBand,
                   runFilter: { $0.isLinesClass })
         renderEncoder.popDebugGroup()
@@ -179,6 +222,7 @@ enum FlatMapSurfaceDrawer {
         func drawRoadGroup(_ structureKind: RoadStructureKind) {
             for role in [RoadPassRole.shadow, .casing, .fill, .detail] {
                 for source in uniqueSources {
+                    selectPipeline(.lines, exactRankDepth: source.exactRankDepth)
                     let structureBucket = source.metalTile.tileBuffers.roads.bucket(for: structureKind)
                     drawFlatGeometryLayer(renderEncoder: renderEncoder,
                                           buffers: structureBucket.layer(for: role),
@@ -204,11 +248,12 @@ enum FlatMapSurfaceDrawer {
         drawRoadGroup(.tunnel)
         drawRoadGroup(.ground)
         drawRoadGroup(.automobileGround)
-        drawLayer(\.bridgeOverlay, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset)
+        drawLayer(\.bridgeOverlay, pipeline: .lines, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset)
         drawRoadGroup(.bridge)
 
         for structureKind in RoadStructureKind.drawOrder {
             for source in uniqueSources {
+                selectPipeline(.lines, exactRankDepth: source.exactRankDepth)
                 let structureBucket = source.metalTile.tileBuffers.roads.bucket(for: structureKind)
                 drawFlatGeometryLayer(renderEncoder: renderEncoder,
                                       buffers: structureBucket.layer(for: .overlay),

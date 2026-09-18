@@ -86,6 +86,10 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   tileStencilTestState: tileStencilTestState,
                                   groundOutlineState: groundOutlineState,
                                   isWireframeEnabled: isWireframeEnabled,
+                                  // The target zoom's tiles keep the rank depth in
+                                  // the vertex z, every coarser band writes it
+                                  // exactly (FlatMapSurfaceDrawer.usesExactRankDepth).
+                                  exactRankDepthBelowZoom: frameContext.visibleContent.tileZoomLevel,
                                   markingCutoffWorldDistance: markingCutoff)
 FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
@@ -101,6 +105,10 @@ FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   tileStencilTestState: tileStencilTestState,
                                   groundOutlineState: groundOutlineState,
                                   isWireframeEnabled: isWireframeEnabled,
+                                  // The backdrop's z0 cells are the largest triangles
+                                  // of the frame: every one of its sources writes the
+                                  // rank depth exactly.
+                                  exactRankDepthBelowZoom: .max,
                                   // The far band under the fog needs only the painted
                                   // ground: the backdrop's sub-pixel linework is skipped
                                   // (see the drawer).

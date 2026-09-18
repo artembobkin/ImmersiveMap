@@ -30,6 +30,22 @@ constant bool kTileFillFields = !kTileLineFields;
 /// fringe's alpha slides continuously instead of the edge jumping a pixel.
 /// Line fields never accompany it (a line primitive has no ribbon field).
 constant bool kTileFillOutline [[function_constant(2)]];
+/// The exact rank depth: the fragment stage writes the layer's rank as a
+/// constant ([[depth(any)]], tileExactDepthFragmentShader) instead of the
+/// rasterizer interpolating it from the vertex z. The vertex band below
+/// (out.position.z = layerNdcZ * w) is exact only until a triangle is cut
+/// at the near plane: the clipper builds the cut vertex from the two ends
+/// in float, and a vertex hundreds of world units away leaves an error of
+/// its own magnitude times 2^-24 in a w of 0.01, which is thousands of rank
+/// steps at the cut and still tens to thousands at the far pixels the
+/// triangle reaches on screen. The base and the landcover of the horizon
+/// backdrop (z0 cells of 64 tile units) then swap order from frame to
+/// frame, a flicker that follows the camera, and a coarse band's layers
+/// swap the same way at a smaller scale. A source whose triangles are
+/// small against the near distance (the target zoom's tiles) keeps the
+/// vertex band and the early depth test; every coarser source and the
+/// backdrop take this variant (FlatMapSurfaceDrawer decides by zoom).
+constant bool kTileExactRankDepth [[function_constant(3)]];
 constant bool kSamplesShadowCascades = !kGroundShadowMaskEnabled;
 
 /// The drawable size in pixels, what the outline needs to place the
@@ -60,7 +76,10 @@ constant float kFlatTileLayerDepthStep = 4e-7;
 // then cut at the eye's own plane (w = 0) and its cut vertex projects to
 // infinity, which the rasterizer resolves differently from frame to
 // frame, blocks of the near ground dropping out at a street tilt on the
-// deepest zoom. The near clip distance below cuts at the real plane.
+// deepest zoom. The near clip distance below cuts at the real plane. The
+// cut vertex's depth is still the clipper's float arithmetic on the two
+// ends, which is why large triangles take the exact rank depth instead
+// (kTileExactRankDepth).
 constant float kFlatCameraNearPlane = 0.01;
 
 // lineStyle packs the per-style constants (edge threshold, width points,
@@ -89,6 +108,9 @@ struct VertexOut {
     // with this fragment, and unlike a screen position computed per vertex
     // it survives a segment clipped by the near plane.
     float4 clipPosition [[function_constant(kTileFillOutline)]];
+    // The exact variant: the layer's rank depth, flat, written by the
+    // fragment stage as the fragment's depth.
+    float rankDepth [[flat, function_constant(kTileExactRankDepth)]];
     // One cut, not a slot clip (see above): the camera's near plane, which
     // the rank depth took away from the z clip (kFlatCameraNearPlane).
     float clipDistance [[clip_distance]] [1];
@@ -105,6 +127,14 @@ struct FragmentIn {
     float lineDistance [[function_constant(kTileLineFields)]];
     float lineParameterRaw [[function_constant(kTileLineFields)]];
     float4 clipPosition [[function_constant(kTileFillOutline)]];
+    float rankDepth [[flat, function_constant(kTileExactRankDepth)]];
+};
+
+/// The exact variant's output: the colour and the rank depth as the
+/// fragment's depth, so the depth test compares the constant itself.
+struct TileExactDepthFragmentOut {
+    half4 color [[color(0)]];
+    float depth [[depth(any)]];
 };
 
 vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
@@ -131,6 +161,9 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     float layerNdcZ = 1.0 - depthBandOffset
         - (float(vertexIn.styleIndex) + 1.0) * kFlatTileLayerDepthStep;
     out.position.z = layerNdcZ * out.position.w;
+    if (kTileExactRankDepth) {
+        out.rankDepth = layerNdcZ;
+    }
     out.worldPos = worldPosition.xyz;
     // The near plane, in the clip space w (the view depth): what the z clip
     // would have cut had z been the projection's.
@@ -156,18 +189,20 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
 
 // Nothing here discards: a retained substitute is kept out of covered
 // slots by the tile-priority stencil test (early, before shading), so the
-// GPU can resolve visibility before the fragment runs.
-fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
-                                  constant OverviewFadeUniform& overviewFade [[buffer(0)]],
-                                  constant Shadow& shadow [[buffer(3)]],
-                                  constant LineDashUniform& lineDash [[buffer(4)]],
-                                  constant Style* styles [[buffer(5), function_constant(kTileLineFields)]],
-                                  constant float* lowZoomFadeMasks [[buffer(6), function_constant(kTileLineFields)]],
-                                  constant LineStyle* lineStyles [[buffer(7), function_constant(kTileLineFields)]],
-                                  constant FillOutlineUniform& fillOutline [[buffer(9), function_constant(kTileFillOutline)]],
-                                  constant FootprintFadeUniform& footprintFade [[buffer(10), function_constant(kTileFillFields)]],
-                                  depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
-                                  texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
+// GPU can resolve visibility before the fragment runs. The body is shared
+// by the two entries below: the plain one returns the colour and leaves
+// the depth to the rasterizer, the exact one writes the rank depth too.
+static inline half4 tileFragmentColor(FragmentIn in,
+                                      constant OverviewFadeUniform& overviewFade,
+                                      constant Shadow& shadow,
+                                      constant LineDashUniform& lineDash,
+                                      constant Style* styles,
+                                      constant float* lowZoomFadeMasks,
+                                      constant LineStyle* lineStyles,
+                                      constant FillOutlineUniform& fillOutline,
+                                      constant FootprintFadeUniform& footprintFade,
+                                      depth2d<float> shadowMap,
+                                      texture2d<half> groundShadowMask) {
     float shadowFactor;
     if (kGroundShadowMaskEnabled) {
         // One bilinear tap of the mask instead of a cascade lookup in every
@@ -225,4 +260,42 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
     // keeps its tight contact (no normal-offset shift).
     color.rgb *= shadowColorMultiplier(shadow, half(shadowFactor));
     return color;
+}
+
+fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
+                                  constant OverviewFadeUniform& overviewFade [[buffer(0)]],
+                                  constant Shadow& shadow [[buffer(3)]],
+                                  constant LineDashUniform& lineDash [[buffer(4)]],
+                                  constant Style* styles [[buffer(5), function_constant(kTileLineFields)]],
+                                  constant float* lowZoomFadeMasks [[buffer(6), function_constant(kTileLineFields)]],
+                                  constant LineStyle* lineStyles [[buffer(7), function_constant(kTileLineFields)]],
+                                  constant FillOutlineUniform& fillOutline [[buffer(9), function_constant(kTileFillOutline)]],
+                                  constant FootprintFadeUniform& footprintFade [[buffer(10), function_constant(kTileFillFields)]],
+                                  depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
+                                  texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
+    return tileFragmentColor(in, overviewFade, shadow, lineDash, styles, lowZoomFadeMasks, lineStyles,
+                             fillOutline, footprintFade, shadowMap, groundShadowMask);
+}
+
+// The exact rank depth (kTileExactRankDepth): the same colour, and the
+// layer's rank written as the fragment's depth, a constant per style that
+// no clipping or interpolation can move. Costs the early depth and stencil
+// tests of its draws, which is why only the sources whose triangles are
+// too large for the vertex band use it.
+fragment TileExactDepthFragmentOut tileExactDepthFragmentShader(FragmentIn in [[stage_in]],
+                                                                constant OverviewFadeUniform& overviewFade [[buffer(0)]],
+                                                                constant Shadow& shadow [[buffer(3)]],
+                                                                constant LineDashUniform& lineDash [[buffer(4)]],
+                                                                constant Style* styles [[buffer(5), function_constant(kTileLineFields)]],
+                                                                constant float* lowZoomFadeMasks [[buffer(6), function_constant(kTileLineFields)]],
+                                                                constant LineStyle* lineStyles [[buffer(7), function_constant(kTileLineFields)]],
+                                                                constant FillOutlineUniform& fillOutline [[buffer(9), function_constant(kTileFillOutline)]],
+                                                                constant FootprintFadeUniform& footprintFade [[buffer(10), function_constant(kTileFillFields)]],
+                                                                depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
+                                                                texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
+    TileExactDepthFragmentOut out;
+    out.color = tileFragmentColor(in, overviewFade, shadow, lineDash, styles, lowZoomFadeMasks, lineStyles,
+                                  fillOutline, footprintFade, shadowMap, groundShadowMask);
+    out.depth = in.rankDepth;
+    return out;
 }

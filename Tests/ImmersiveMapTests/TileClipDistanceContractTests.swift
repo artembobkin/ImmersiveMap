@@ -37,11 +37,44 @@ final class TileClipDistanceContractTests: XCTestCase {
         // mirrored by GlobeSurfaceDepthRank.
         XCTAssertTrue(source.contains("constant float kFlatTileLayerDepthStep = 4e-7;"))
         XCTAssertTrue(source.contains("constant float& depthBandOffset [[buffer(7)]]"))
-        // The fragment writes no depth: doing so (a flat rank depth, exact
-        // but shaded for every fill layer) cost more than the sliver
-        // artifact it cured; that is kept away by the camera limits instead.
-        XCTAssertNil(source.range(of: "[[depth("))
+        // Two fragment entries over one body. The plain one writes no
+        // depth: a flat rank depth from the fragment stage is exact but
+        // shaded for every fill layer, more than the target zoom's small
+        // triangles need, whose vertex band survives the near cut to
+        // within a few rank steps. The exact one writes the rank as the
+        // fragment's depth ([[depth(any)]]) for the sources whose
+        // triangles do not: a coarse band's tiles and the z0 backdrop,
+        // where the clipper's float error at the cut vertex is thousands
+        // of rank steps and the base and the landcover swap from frame to
+        // frame. Which source takes which is the drawer's zoom rule
+        // (FlatMapSurfaceDrawer.usesExactRankDepth), through function
+        // constant 3.
+        XCTAssertTrue(source.contains("constant bool kTileExactRankDepth [[function_constant(3)]];"))
+        XCTAssertTrue(source.contains("fragment half4 tileFragmentShader("))
+        XCTAssertTrue(source.contains("fragment TileExactDepthFragmentOut tileExactDepthFragmentShader("))
+        XCTAssertEqual(source.components(separatedBy: "[[depth(").count - 1, 1,
+                       "One depth output, on the exact variant's return struct")
+        XCTAssertTrue(source.contains("float depth [[depth(any)]];"))
+        XCTAssertTrue(source.contains("float rankDepth [[flat, function_constant(kTileExactRankDepth)]];"))
+        XCTAssertTrue(source.contains("out.depth = in.rankDepth;"))
         XCTAssertTrue(source.contains("out.position.z = layerNdcZ * out.position.w;"))
+    }
+
+    /// The drawer's zoom rule for the exact rank depth: the target zoom's
+    /// tiles keep the vertex band, every coarser source and the backdrop
+    /// (asked for with `Int.max`) write the rank from the fragment stage.
+    func testTheExactRankDepthGoesToEverySourceBelowTheTargetZoom() {
+        XCTAssertFalse(FlatMapSurfaceDrawer.usesExactRankDepth(sourceZoom: 15, exactRankDepthBelowZoom: 15))
+        XCTAssertFalse(FlatMapSurfaceDrawer.usesExactRankDepth(sourceZoom: 16, exactRankDepthBelowZoom: 15),
+                       "A finer retained tile has smaller triangles still")
+        XCTAssertTrue(FlatMapSurfaceDrawer.usesExactRankDepth(sourceZoom: 14, exactRankDepthBelowZoom: 15))
+        XCTAssertTrue(FlatMapSurfaceDrawer.usesExactRankDepth(sourceZoom: 13, exactRankDepthBelowZoom: 15))
+        XCTAssertTrue(FlatMapSurfaceDrawer.usesExactRankDepth(sourceZoom: 0, exactRankDepthBelowZoom: 15))
+        XCTAssertTrue(FlatMapSurfaceDrawer.usesExactRankDepth(sourceZoom: 0, exactRankDepthBelowZoom: .max),
+                      "The backdrop's every source")
+        XCTAssertTrue(FlatMapSurfaceDrawer.usesExactRankDepth(sourceZoom: 16, exactRankDepthBelowZoom: .max))
+        XCTAssertFalse(FlatMapSurfaceDrawer.usesExactRankDepth(sourceZoom: 0, exactRankDepthBelowZoom: 0),
+                       "At the world zoom the target's own tile keeps the band")
     }
 
     func testBuildingShadersClipWithSlotDistancesOnBothPaths() throws {
