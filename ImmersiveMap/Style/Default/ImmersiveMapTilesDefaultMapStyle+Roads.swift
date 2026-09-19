@@ -287,7 +287,9 @@ extension ImmersiveMapTilesDefaultMapStyle {
             return roadStyle(fillKey: 40, color: roads.path, width: widthMetres, priority: 35, casing: false, tunnel: isTunnel,
                              minimumWidthPoints: 0.5, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes)
         case "rail", "transit":
-            return railStyle(subclass: subclass, tileZoom: tileZoom)
+            // Railways are skipped for now: not drawn at any zoom, on any
+            // surface. `railStyle` stays for when they come back.
+            return hiddenStyle
         case "ferry":
             return line(key: 41, color: theme.layers.water, width: 4 * s, dashLength: 8, dashGap: 8)
         default:

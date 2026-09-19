@@ -37,9 +37,17 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
         for automobile in ["motorway", "trunk", "primary", "secondary", "tertiary", "minor", "service"] {
             XCTAssertEqual(tier(automobile), .automobile, "\(automobile) is automobile")
         }
-        for pedestrian in ["path", "track", "rail"] {
+        for pedestrian in ["path", "track"] {
             XCTAssertEqual(tier(pedestrian), .pedestrian, "\(pedestrian) is the finer network under it")
         }
+        // Railways are skipped for now (see the style's routing): hidden,
+        // so no road and no tier of their own.
+        var railProps: [String: MvtValue] = [:]
+        railProps["class"] = MvtValue.string("rail")
+        let rail = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
+                                                             properties: railProps,
+                                                             tile: Tile(x: 39616, y: 20486, z: 16)))
+        XCTAssertNil(rail.roadStyle, "a railway draws nothing")
     }
 
     // MARK: - End inset
