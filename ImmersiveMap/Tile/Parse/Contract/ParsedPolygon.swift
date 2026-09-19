@@ -18,6 +18,13 @@ struct ParsedPolygon {
     /// (end-feather distance for solid styles, arc length for
     /// point-dashed ones).
     var lineParameters: [Int16] = []
+    /// A deferred ribbon (`ParseLine.parse(deferredExtrusion:)`): every
+    /// vertex is a point of the centreline and this is the unit direction,
+    /// snorm Int8, the vertex shader extrudes it along by the width the
+    /// style resolves on screen; zero for a centreline vertex itself (a
+    /// join's or a cap's hub). Empty for pre-extruded ribbons and fills,
+    /// whose vertices are final. Lockstep with `vertices` when non-empty.
+    var lineNormals: [SIMD2<Int8>] = []
     /// The polygon's ring edges as a line list (pairs of indices into
     /// `vertices`), for the fill-outline antialiasing pass: the flat
     /// drawer rasterizes them as one-pixel line primitives in the fill's

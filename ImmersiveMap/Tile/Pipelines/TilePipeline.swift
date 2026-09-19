@@ -159,6 +159,10 @@ class TilePipeline {
         vertexDescriptor.attributes[3].format = .short
         vertexDescriptor.attributes[3].offset = MemoryLayout<SIMD2<Int16>>.size + 2
         vertexDescriptor.attributes[3].bufferIndex = 0
+        // The deferred ribbons' extrusion direction, snorm to a unit float2.
+        vertexDescriptor.attributes[4].format = .char2Normalized
+        vertexDescriptor.attributes[4].offset = MemoryLayout<TileVertexIn>.offset(of: \.normal)!
+        vertexDescriptor.attributes[4].bufferIndex = 0
         vertexDescriptor.layouts[0].stride = MemoryLayout<TileVertexIn>.stride
         vertexDescriptor.layouts[0].stepFunction = .perVertex
         

@@ -146,6 +146,12 @@ final class DebugOverlayHUDView: NSView {
                                                             action: nil)
     private let wireframeLabel = NSTextField(labelWithString: "")
     private let wireframeSwitch = NSSwitch()
+    /// The buildings' screen-footprint level of detail, two thresholds in
+    /// pixels (`BuildingLODUniform`).
+    private let buildingCutLabel = NSTextField(labelWithString: "")
+    private let buildingCutSlider = NSSlider()
+    private let buildingFadeLabel = NSTextField(labelWithString: "")
+    private let buildingFadeSlider = NSSlider()
     /// One depth rule's editor: the drop picker, the depth slider, the
     /// raster switch and the raster resolution picker, each with its named
     /// row. Rebuilt when the number of rules changes.
@@ -194,6 +200,8 @@ final class DebugOverlayHUDView: NSView {
     var onWireframeEnabledChanged: ((Bool) -> Void)?
     /// The plane's depth rules, whole, on every edit.
     var onFlatDepthRulesChanged: ((FlatDepthRules) -> Void)?
+    /// The building level of detail thresholds: the cut and the fade, in pixels.
+    var onBuildingLODChanged: ((Float, Float) -> Void)?
     var onRoadLabelTilesEnabledChanged: ((Bool) -> Void)?
     var onBaseLabelBoundsEnabledChanged: ((Bool) -> Void)?
     var onRoadLabelBoundsEnabledChanged: ((Bool) -> Void)?
@@ -266,6 +274,10 @@ final class DebugOverlayHUDView: NSView {
         configureSwitch(tileLayersSwitch, action: #selector(tileLayersSwitchChanged))
         configureSwitch(tileGridSwitch, action: #selector(tileGridSwitchChanged))
         configureSwitch(wireframeSwitch, action: #selector(wireframeSwitchChanged))
+        configureControlLabel(buildingCutLabel, text: "")
+        configureControlLabel(buildingFadeLabel, text: "")
+        configureSlider(buildingCutSlider, range: BuildingLODUniform.cutRange, action: #selector(buildingLODSliderChanged))
+        configureSlider(buildingFadeSlider, range: BuildingLODUniform.fadeRange, action: #selector(buildingLODSliderChanged))
         configureSwitch(roadLabelTilesSwitch, action: #selector(roadLabelTilesSwitchChanged))
         configureSwitch(baseLabelBoundsSwitch, action: #selector(baseLabelBoundsSwitchChanged))
         configureSwitch(roadLabelBoundsSwitch, action: #selector(roadLabelBoundsSwitchChanged))
@@ -397,6 +409,7 @@ final class DebugOverlayHUDView: NSView {
          controlsGroupLabel, axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch,
          tileGridLabel, tileGridSwitch, tileGridDensityControl,
          wireframeLabel, wireframeSwitch,
+         buildingCutLabel, buildingCutSlider, buildingFadeLabel, buildingFadeSlider,
          depthRulesAddButton, depthRulesRemoveButton,
          surfaceModeButton,
          tilesGroupLabel, tileTraceButton, tileTraceStatusLabel, tilesStatusLabel, tilesStatusListView]
@@ -423,6 +436,9 @@ final class DebugOverlayHUDView: NSView {
         tileGridSwitch.state = controls.tileGridEnabled ? .on : .off
         tileGridDensityControl.selectedSegment = DebugOverlayHUDTextComposer.tileGridDensityIndex(for: controls.tileGridDensity)
         wireframeSwitch.state = controls.wireframeEnabled ? .on : .off
+        buildingCutSlider.doubleValue = Double(controls.buildingLODCutPixels)
+        buildingFadeSlider.doubleValue = Double(controls.buildingLODFadePixels)
+        updateBuildingLODLabels()
         flatDepthRules = controls.flatDepthRules
         if depthRuleRows.count != flatDepthRules.rules.count {
             rebuildDepthRuleRows()
@@ -735,6 +751,8 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutSwitchRow(tileGridLabel, tileGridSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutFullWidthRow(tileGridDensityControl, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutSwitchRow(wireframeLabel, wireframeSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(buildingCutLabel, buildingCutSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(buildingFadeLabel, buildingFadeSlider, at: cursor, contentWidth: contentWidth)
         for row in depthRuleRows {
             cursor = layoutControlRow(row.dropLabel, row.dropControl, at: cursor, contentWidth: contentWidth)
             cursor = layoutControlRow(row.depthLabel, row.depthSlider, at: cursor, contentWidth: contentWidth)
@@ -1121,6 +1139,28 @@ final class DebugOverlayHUDView: NSView {
 
     @objc private func wireframeSwitchChanged() {
         onWireframeEnabledChanged?(wireframeSwitch.state == .on)
+    }
+
+    static func buildingCutTitle(pixels: Float) -> String {
+        String(format: "Buildings: cut under %.1f px", pixels)
+    }
+
+    static func buildingFadeTitle(pixels: Float) -> String {
+        String(format: "Buildings: flat under %.1f px", pixels)
+    }
+
+    private func updateBuildingLODLabels() {
+        buildingCutLabel.stringValue = Self.buildingCutTitle(pixels: Float(buildingCutSlider.doubleValue))
+        buildingFadeLabel.stringValue = Self.buildingFadeTitle(pixels: Float(buildingFadeSlider.doubleValue))
+    }
+
+    @objc private func buildingLODSliderChanged() {
+        // The fade never sits under the cut: the moved slider pushes the other.
+        if buildingFadeSlider.doubleValue < buildingCutSlider.doubleValue {
+            buildingFadeSlider.doubleValue = buildingCutSlider.doubleValue
+        }
+        updateBuildingLODLabels()
+        onBuildingLODChanged?(Float(buildingCutSlider.doubleValue), Float(buildingFadeSlider.doubleValue))
     }
 
     @objc private func roadLabelTilesSwitchChanged() {

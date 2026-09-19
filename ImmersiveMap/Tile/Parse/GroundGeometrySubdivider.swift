@@ -58,7 +58,15 @@ enum GroundGeometrySubdivider {
         for key in polygonByStyle.keys {
             guard let polygons = polygonByStyle[key] else { continue }
             polygonByStyle[key] = polygons.map { polygon in
-                subdivide(polygon, step: polygon.isLineRibbon ? ribbonStep : step)
+                // A deferred ribbon (centreline plus directions) has no
+                // geometry to split yet, and never reaches a sphere-era
+                // tile (LineFeatureReader defers only where this grid is
+                // nil); left whole if it ever does.
+                if polygon.lineNormals.isEmpty == false {
+                    assertionFailure("A deferred ribbon in a sphere-era tile")
+                    return polygon
+                }
+                return subdivide(polygon, step: polygon.isLineRibbon ? ribbonStep : step)
             }
         }
     }

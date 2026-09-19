@@ -17,13 +17,16 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     private let depthDisabledState: MTLDepthStencilState
     private let shadowMapTextureProvider: () -> MTLTexture?
     private let shadowFallbackTexture: MTLTexture
+    private let debugOverlayControls: DebugOverlayControlState
 
     init(extrudedTilePipeline: ExtrudedTilePipeline,
          extrudedDepthState: MTLDepthStencilState,
          extrudedStencilTestState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState,
          shadowMapTextureProvider: @escaping () -> MTLTexture?,
-         shadowFallbackTexture: MTLTexture) {
+         shadowFallbackTexture: MTLTexture,
+         debugOverlayControls: DebugOverlayControlState) {
+        self.debugOverlayControls = debugOverlayControls
         self.extrudedTilePipeline = extrudedTilePipeline
         self.extrudedDepthState = extrudedDepthState
         self.extrudedStencilTestState = extrudedStencilTestState
@@ -51,7 +54,8 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
                 placeTilesContext: frameContext.sharedState.tilePlacementState.buildingPlaceTilesContext,
                 flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                 extrudedTilePipeline: extrudedTilePipeline,
-                extrudedDepthState: extrudedDepthState)
+                extrudedDepthState: extrudedDepthState,
+                buildingLOD: buildingLOD(frameContext: frameContext))
             return
         }
 
@@ -75,6 +79,18 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
                                               flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                               extrudedTilePipeline: extrudedTilePipeline,
                                               extrudedStencilTestState: extrudedStencilTestState,
-                                              depthDisabledState: depthDisabledState)
+                                              depthDisabledState: depthDisabledState,
+                                              buildingLOD: buildingLOD(frameContext: frameContext))
+    }
+
+    /// The screen-footprint level of detail for this frame: the debug
+    /// panel's thresholds over the frame's camera.
+    private func buildingLOD(frameContext: FrameContext) -> BuildingLODUniform {
+        let controls = debugOverlayControls.snapshot()
+        return BuildingLODUniform.make(projectionView: frameContext.cameraMatrices.projectionView,
+                                       view: frameContext.cameraMatrices.view,
+                                       drawableHeightPx: Float(frameContext.drawSize.height),
+                                       cutPixels: controls.buildingLODCutPixels,
+                                       fadePixels: controls.buildingLODFadePixels)
     }
 }

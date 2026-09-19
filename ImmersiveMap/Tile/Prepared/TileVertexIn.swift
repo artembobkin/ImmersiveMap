@@ -27,14 +27,24 @@ struct TileVertexIn: Sendable {
     /// Attribute-less polygon geometry saturates it, so a polygon that shares
     /// a line style (road decorations) reads as line interior.
     let lineParameter: Int16
+    /// A deferred ribbon's extrusion direction, snorm (`Int8.max` is one):
+    /// `position` is then a point of the centreline and the flat vertex
+    /// shader moves the vertex along this by the style's width on screen,
+    /// so the ribbon is as wide as it should be at every distance and
+    /// never a sub-pixel sliver (`ParsedPolygon.lineNormals`). Zero on a
+    /// centreline hub and on every vertex whose position is final: the
+    /// pre-extruded ribbons of the sphere-era tiles and all fills.
+    let normal: SIMD2<Int8>
 
     init(position: SIMD2<Int16>,
          styleIndex: UInt8,
          lineDistance: Int8 = 0,
-         lineParameter: Int16 = Int16.max) {
+         lineParameter: Int16 = Int16.max,
+         normal: SIMD2<Int8> = .zero) {
         self.position = position
         self.styleIndex = styleIndex
         self.lineDistance = lineDistance
         self.lineParameter = lineParameter
+        self.normal = normal
     }
 }

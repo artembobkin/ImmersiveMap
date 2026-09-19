@@ -38,11 +38,12 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
     func testVertexLayoutMatchesThePipelineContract() {
         // TilePipeline's vertex descriptor and the arena image format both
         // hard-code these offsets; a layout drift is a rendering bug.
-        XCTAssertEqual(MemoryLayout<TileVertexIn>.stride, 8)
+        XCTAssertEqual(MemoryLayout<TileVertexIn>.stride, 12)
         XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.position), 0)
         XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.styleIndex), 4)
         XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.lineDistance), 5)
         XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.lineParameter), 6)
+        XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.normal), 8)
         // The per-style line parameters are an arena span and a shader struct.
         XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 32)
     }
@@ -56,9 +57,9 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
         XCTAssertEqual(polygon.lineParameters.count, polygon.vertices.count)
 
         // A horizontal line extrudes vertically: the quad spans the extruded
-        // width (styled half-width plus feather on each side), not the styled
-        // width.
-        let extrudedHalfWidth = Float(width) * 0.5 + ParseLine.featherTileUnits
+        // width (styled half-width plus feather on each side, never less
+        // than the minimum), not the styled width.
+        let extrudedHalfWidth = ParseLine.extrudedHalfWidth(halfWidth: Float(width) * 0.5)
         let ys = Set(polygon.vertices.map(\.y))
         XCTAssertEqual(ys.count, 2)
         let flippedCenterY = tileExtent - 100
@@ -71,6 +72,69 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
         XCTAssertTrue(polygon.lineDistances.allSatisfy { abs(Int($0)) == Int(Int8.max) })
         XCTAssertEqual(Set(polygon.lineDistances).count, 2)
         XCTAssertTrue(polygon.lineParameters.allSatisfy { $0 == Int16.max })
+    }
+
+    /// A hairline's ribbon is never narrower than the minimum: a pixel a
+    /// side at the tile's own scale, so the pixel-wide coverage the shader
+    /// draws for it has geometry under it. The styled edge stays where the
+    /// style put it, through the edge threshold derived from the same
+    /// extrusion.
+    func testAHairlineIsExtrudedToTheMinimumAndKeepsItsStyledEdge() throws {
+        let width = 1.0
+        let polygon = try XCTUnwrap(parseLine(points: [SIMD2(100, 100), SIMD2(200, 100)], width: width))
+        let ys = polygon.vertices.map { Float($0.y) }
+        let flippedCenterY = tileExtent - 100
+        XCTAssertEqual(ys.max()!, flippedCenterY + ParseLine.minimumExtrudedHalfWidth, accuracy: 0.501)
+        XCTAssertEqual(ys.min()!, flippedCenterY - ParseLine.minimumExtrudedHalfWidth, accuracy: 0.501)
+        XCTAssertEqual(ParseLine.extrudedHalfWidth(halfWidth: 0.5), ParseLine.minimumExtrudedHalfWidth)
+        XCTAssertEqual(ParseLine.extrudedHalfWidth(halfWidth: 20), 20 + ParseLine.featherTileUnits,
+                       "a wide line keeps the plain feather")
+        let style = TileUnificationStage.makeTileLineStyle(from: LinePass(key: 1,
+                                                                      color: SIMD4<Float>(repeating: 1),
+                                                                      lineGeometry: LineGeometryStyle(lineWidth: width)))
+        XCTAssertEqual(style.edgeThreshold, 0.5 / ParseLine.minimumExtrudedHalfWidth, accuracy: 1e-6,
+                       "the styled edge sits at the styled half-width inside the wider ribbon")
+    }
+
+    /// A deferred ribbon carries the centreline and unit directions instead
+    /// of extruded positions: the rows sit on the centreline with opposite
+    /// normals, a round join's hub and a cap's hub carry no direction, and
+    /// nothing is clipped to the tile.
+    func testADeferredRibbonCarriesTheCentrelineAndTheDirections() throws {
+        let polygon = try XCTUnwrap(ParseLine().parse(points: [SIMD2(100, 100), SIMD2(200, 100), SIMD2(200, 300)],
+                                                      width: 10,
+                                                      tileExtent: tileExtent,
+                                                      startCapRound: true,
+                                                      endCapRound: false,
+                                                      lineJoinRound: true,
+                                                      clipGeometryToTileBounds: false,
+                                                      deferredExtrusion: true))
+        XCTAssertEqual(polygon.lineNormals.count, polygon.vertices.count)
+        XCTAssertTrue(polygon.isLineRibbon)
+        // The first segment's rows: both vertices on the centreline (render
+        // space flips y), the directions straight up and down.
+        XCTAssertEqual(polygon.vertices[0], SIMD2<Int16>(100, Int16(tileExtent) - 100))
+        XCTAssertEqual(polygon.vertices[1], SIMD2<Int16>(100, Int16(tileExtent) - 100))
+        XCTAssertEqual(polygon.lineNormals[0], SIMD2<Int8>(0, Int8.max))
+        XCTAssertEqual(polygon.lineNormals[1], SIMD2<Int8>(0, -Int8.max))
+        XCTAssertEqual(polygon.lineDistances[0], Int8.max)
+        XCTAssertEqual(polygon.lineDistances[1], -Int8.max)
+        // Every direction is a unit vector or the zero of a hub, and a hub
+        // is a centreline vertex.
+        for (normal, distance) in zip(polygon.lineNormals, polygon.lineDistances) {
+            let length = hypot(Float(normal.x), Float(normal.y)) / Float(Int8.max)
+            if distance == 0 {
+                XCTAssertEqual(normal, .zero, "a hub carries no direction")
+            } else {
+                XCTAssertEqual(length, 1, accuracy: 0.02)
+            }
+        }
+        XCTAssertTrue(polygon.lineDistances.contains(0), "the round join and the cap have hubs")
+        // Deferred ribbons are the centreline's extent, nothing wider.
+        XCTAssertTrue(polygon.vertices.allSatisfy { $0.x >= 100 && $0.x <= 200 })
+
+        let baked = try XCTUnwrap(parseLine(points: [SIMD2(100, 100), SIMD2(200, 100)], width: 10))
+        XCTAssertTrue(baked.lineNormals.isEmpty, "a pre-extruded ribbon carries no directions")
     }
 
     func testFreeButtEndsGetALongitudinalRamp() throws {
@@ -146,7 +210,7 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
         // to the second's, with a step small enough that no chord sags more
         // than half a unit inside the rim.
         let center = SIMD2<Float>(200, 3996)
-        let radius = Float(width) * 0.5 + ParseLine.featherTileUnits
+        let radius = ParseLine.extrudedHalfWidth(halfWidth: Float(width) * 0.5)
         XCTAssertEqual(fanVertices[0], SIMD2<Int16>(200, 3996))
         let rim = fanVertices.dropFirst().map { SIMD2<Float>(Float($0.x), Float($0.y)) }
         XCTAssertEqual(rim.first, SIMD2<Float>(200, 3996 + radius), "starts at the first segment's outer corner")

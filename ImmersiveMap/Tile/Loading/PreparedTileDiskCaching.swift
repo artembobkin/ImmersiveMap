@@ -721,7 +721,17 @@ final class PreparedTileDiskCaching {
     // street-palette counterparts and the per-frame blend between the two
     // are gone, so the style stride halves. A v92 entry carries the old
     // stride.
-    static let preparedFormatVersion: UInt32 = 93
+    // 94: a line ribbon is extruded to at least eight tile units a side
+    // (ParseLine.minimumExtrudedHalfWidth), so a hairline's geometry covers
+    // a pixel; a v93 entry carries slivers narrower than that.
+    // 95: `TileVertexIn` grows a per-vertex extrusion direction (stride 8
+    // to 12) and the road buckets of a flat-era tile carry centrelines
+    // plus directions for the GPU to extrude at the width on screen; a
+    // v94 entry has the old stride and baked ribbons.
+    // 96: `ExtrudedVertexIn`'s padding bytes became the building's footprint
+    // radius (BuildingLODUniform); a v95 entry carries zeros there, which the
+    // level of detail would read as a building too small to draw.
+    static let preparedFormatVersion: UInt32 = 96
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import Foundation
+import simd
 
 /// The second stage of a parse: packs what the readers accumulated into the
 /// tile's streams, one `DrawingGeometryLayer` per bucket, with the style
@@ -32,6 +33,7 @@ enum TileUnificationStage {
         let vertexOffset = UInt32(vertexCount)
         let hasLineAttributes = polygon.lineDistances.count == polygon.vertices.count
             && polygon.lineParameters.count == polygon.vertices.count
+        let hasLineNormals = hasLineAttributes && polygon.lineNormals.count == polygon.vertices.count
         for (index, position) in polygon.vertices.enumerated() {
             // Attribute-less polygons default to the saturated line interior
             // (see TileVertexIn), so decoration polygons that share a line
@@ -40,7 +42,8 @@ enum TileUnificationStage {
                                        to: TileVertexIn(position: position,
                                                         styleIndex: styleBufferIndex,
                                                         lineDistance: hasLineAttributes ? polygon.lineDistances[index] : 0,
-                                                        lineParameter: hasLineAttributes ? polygon.lineParameters[index] : Int16.max))
+                                                        lineParameter: hasLineAttributes ? polygon.lineParameters[index] : Int16.max,
+                                                        normal: hasLineNormals ? polygon.lineNormals[index] : .zero))
             vertexCount += 1
         }
         for index in polygon.indices {
@@ -173,6 +176,26 @@ enum TileUnificationStage {
                 lineStyles: lineStyles)
     }
 
+    /// The radius of the circle about the mesh's ground centre that holds
+    /// every vertex's ground position, in tile units: half the building's
+    /// extent, whatever its shape.
+    static func footprintRadius(of mesh: ParsedExtrudedMesh) -> Float {
+        guard mesh.vertices.isEmpty == false else { return 0 }
+        var lower = SIMD2<Float>(repeating: .greatestFiniteMagnitude)
+        var upper = SIMD2<Float>(repeating: -.greatestFiniteMagnitude)
+        for vertex in mesh.vertices {
+            let ground = SIMD2<Float>(vertex.position.x, vertex.position.y)
+            lower = simd_min(lower, ground)
+            upper = simd_max(upper, ground)
+        }
+        let centre = (lower + upper) * 0.5
+        var radius: Float = 0
+        for vertex in mesh.vertices {
+            radius = max(radius, simd_length(SIMD2<Float>(vertex.position.x, vertex.position.y) - centre))
+        }
+        return radius
+    }
+
     /// The GPU-side line parameters of one style. The edge threshold derives
     /// from the tessellated width and the tessellator's feather constant, so
     /// the two stay one definition; a style with no line width keeps a zero
@@ -180,7 +203,7 @@ enum TileUnificationStage {
     static func makeTileLineStyle(from pass: LinePass) -> TileLineStyle {
         let halfWidth = Float(pass.lineGeometry.lineWidth) * 0.5
         let edgeThreshold = halfWidth > 0
-            ? halfWidth / (halfWidth + ParseLine.featherTileUnits)
+            ? halfWidth / ParseLine.extrudedHalfWidth(halfWidth: halfWidth)
             : 0
         return TileLineStyle(widthPoints: pass.lineWidthPoints,
                              dashLengthPoints: pass.dashLengthPoints,
@@ -188,7 +211,8 @@ enum TileUnificationStage {
                              edgeThreshold: edgeThreshold,
                              minimumWidthPoints: pass.minimumWidthPoints,
                              dashInTileUnits: pass.dashInTileUnits,
-                             maximumWidthPoints: pass.maximumWidthPoints)
+                             maximumWidthPoints: pass.maximumWidthPoints,
+                             halfWidthUnits: halfWidth)
     }
 
     /// Expects the polygons already sorted by `OrderedRoadPolygon.sort`; the
@@ -394,10 +418,15 @@ enum TileUnificationStage {
             let styleBufferIndex = styleIndexByKey[styleKey] ?? 0
             if let extrudedMeshes = extrudedByStyle[styleKey] {
                 for extrudedMesh in extrudedMeshes {
+                    // One mesh is one building: its footprint radius is
+                    // the same on every vertex, for the screen-footprint
+                    // level of detail (BuildingLODUniform).
+                    let footprintRadius = Self.footprintRadius(of: extrudedMesh)
                     for vertex in extrudedMesh.vertices {
                         unifiedExtrudedVertices.append(ExtrudedVertexIn(position: vertex.position,
                                                                         normal: vertex.normal,
-                                                                        styleIndex: styleBufferIndex))
+                                                                        styleIndex: styleBufferIndex,
+                                                                        footprintRadius: footprintRadius))
                     }
                     for index in extrudedMesh.indices {
                         unifiedExtrudedIndices.append(index + currentExtrudedVertexOffset)

@@ -26,6 +26,10 @@ struct VertexIn {
     unsigned char styleIndex [[attribute(1)]];
     char lineDistance [[attribute(2)]];
     short lineParameter [[attribute(3)]];
+    // A deferred ribbon's extrusion direction (snorm, unit; zero on a
+    // centreline hub and on every pre-extruded vertex): the flat vertex
+    // stage moves the vertex along it by the style's width on screen.
+    float2 normal [[attribute(4)]];
 };
 
 
@@ -72,8 +76,37 @@ struct LineStyle {
     // Ceiling for a world-locked width in points (zero: none); see the
     // Swift TileLineStyle.maximumWidthPoints.
     float maximumWidthPoints;
-    float reserved2;
+    // The styled half-width in tile units, for the deferred extrusion.
+    float halfWidthUnits;
 };
+
+/// The visible half-width of a line on screen, in pixels, from its style
+/// and the pixels one tile unit spans where it is drawn: the point-locked
+/// width as is, the world-locked width under its symbol ceiling and its
+/// floor (the same resolution `tileLineCoverage` reaches through the
+/// distance field). The deferred ribbons' vertex stage extrudes to this
+/// plus one pixel of feather.
+static inline float tileLineEdgePixels(LineStyle lineStyle,
+                                       float pixelsPerUnit,
+                                       float pixelsPerPoint,
+                                       float roadSurfaceBlend) {
+    if (lineStyle.widthPoints > 0.0) {
+        return lineStyle.widthPoints * 0.5 * pixelsPerPoint;
+    }
+    float edgePx = lineStyle.halfWidthUnits * pixelsPerUnit;
+    if (lineStyle.maximumWidthPoints > 0.0) {
+        float symbolPx = min(edgePx, lineStyle.maximumWidthPoints * 0.5 * pixelsPerPoint);
+        edgePx = mix(symbolPx, edgePx, roadSurfaceBlend);
+    }
+    if (lineStyle.minimumWidthPoints > 0.0) {
+        edgePx = max(edgePx, lineStyle.minimumWidthPoints * 0.5 * pixelsPerPoint);
+    }
+    return edgePx;
+}
+
+/// The feather a deferred ribbon is extruded past its visible edge: the
+/// one-pixel antialiasing ramp of `tileLineCoverage`.
+constant float kTileDeferredRibbonFeatherPx = 1.0;
 
 struct OverviewFadeUniform {
     float overviewAlpha;
@@ -93,6 +126,9 @@ struct OverviewFadeUniform {
     // LowZoomOverviewFade.classFadeMask), and the class comes in over the
     // following zoom level, continuous with the camera.
     float cameraZoom;
+    // The drawable in pixels: what the deferred ribbons' vertex stage
+    // converts a tile unit's clip-space span into pixels with.
+    float2 viewportSizePx;
 };
 
 /// Per-draw dash scale: tile units per layout point at the tile's nominal
@@ -174,6 +210,10 @@ static inline TileVertexStyle tileVertexStyle(VertexIn vertexIn,
 /// giving the cuts the same one-pixel ramp as the sides. A solid style
 /// carries the end-feather distance whose zero isoline is a free butt end's
 /// styled cut.
+/// - Parameter deferredEdgePx: a deferred ribbon's visible half-width in
+///   pixels, resolved by its vertex stage, which extruded the rim one
+///   feather past it (Tile.metal); zero for a pre-extruded ribbon, whose
+///   edge is read off the baked field below.
 static inline half tileLineCoverage(float lineDistance,
                                     float lineParameter,
                                     half4 lineStyle,
@@ -182,7 +222,8 @@ static inline half tileLineCoverage(float lineDistance,
                                     half dashInTileUnits,
                                     float pixelsPerPoint,
                                     float roadSurfaceBlend,
-                                    float dashUnitsPerPoint) {
+                                    float dashUnitsPerPoint,
+                                    float deferredEdgePx) {
     // The derivatives are taken before the threshold test: fwidth needs the
     // whole 2x2 quad, so it must not sit behind potentially divergent flow.
     float sideSpan = max(fwidth(lineDistance), 1e-5);
@@ -194,7 +235,11 @@ static inline half tileLineCoverage(float lineDistance,
     float rimPx = 1.0 / sideSpan;
     half widthPoints = lineStyle.y;
     float edgePx;
-    if (widthPoints > 0.0h) {
+    if (deferredEdgePx > 0.0) {
+        // The vertex stage resolved the width and put the rim one feather
+        // past it: the edge is where it said, bounded by the rim like any.
+        edgePx = min(deferredEdgePx, rimPx - 0.5);
+    } else if (widthPoints > 0.0h) {
         edgePx = min(float(widthPoints) * 0.5 * pixelsPerPoint, rimPx - 0.5);
     } else {
         // World-locked width, optionally floored: a road class never thins
@@ -219,8 +264,18 @@ static inline half tileLineCoverage(float lineDistance,
             edgePx = max(edgePx, floorPx);
         }
     }
+    // Never thinner than a pixel: a line the style wants narrower draws a
+    // pixel wide at the alpha of its width (Mapbox GL's rule), so a
+    // hairline keeps its brightness under camera motion instead of
+    // flickering as its sub-pixel band crosses pixel centres. The rim
+    // still bounds the edge: the ribbon is tessellated wide enough for
+    // this (ParseLine.minimumExtrudedHalfWidth).
+    const float minimumEdgePx = 0.5;
+    float requestedEdgePx = edgePx;
+    edgePx = max(edgePx, min(minimumEdgePx, rimPx - 0.5));
+    float thinness = clamp(requestedEdgePx / minimumEdgePx, 0.0, 1.0);
     float sideDistancePx = edgePx - abs(lineDistance) * rimPx;
-    float coverage = smoothstep(-0.5, 0.5, sideDistancePx);
+    float coverage = smoothstep(-0.5, 0.5, sideDistancePx) * thinness;
 
     half dashLengthPoints = lineStyle.z;
     if (dashLengthPoints > 0.0h) {
@@ -292,7 +347,8 @@ static inline half4 tileLineFragmentColor(uint styleIndex,
                                           constant float* lowZoomFadeMasks,
                                           constant LineStyle* lineStyles,
                                           constant OverviewFadeUniform& overviewFade,
-                                          constant LineDashUniform& lineDash) {
+                                          constant LineDashUniform& lineDash,
+                                          float deferredEdgePx) {
     Style style = styles[styleIndex];
     LineStyle lineStyle = lineStyles[styleIndex];
     half4 color = half4(style.color);
@@ -314,7 +370,8 @@ static inline half4 tileLineFragmentColor(uint styleIndex,
                                 lineStyle.dashInTileUnits > 0.0 ? 1.0h : 0.0h,
                                 overviewFade.pixelsPerPoint,
                                 overviewFade.roadSurfaceBlend,
-                                lineDash.unitsPerPoint);
+                                lineDash.unitsPerPoint,
+                                deferredEdgePx);
     return color;
 }
 
@@ -335,7 +392,8 @@ static inline half4 tileGroundColor(TileVertexStyle style,
                                          style.lineDashInTileUnits,
                                          overviewFade.pixelsPerPoint,
                                          overviewFade.roadSurfaceBlend,
-                                         lineDash.unitsPerPoint);
+                                         lineDash.unitsPerPoint,
+                                         0.0);
     half4 color = style.color;
     color.a *= lineCoverage;
     return color;

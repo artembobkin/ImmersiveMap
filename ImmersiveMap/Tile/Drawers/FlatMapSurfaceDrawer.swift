@@ -58,7 +58,8 @@ enum FlatMapSurfaceDrawer {
             pixelsPerPoint: pixelsPerPoint * LineWidthZoomTaper.scale(for: cameraZoom),
             roadSurfaceBlend: LowZoomOverviewFade.roadSurfaceBlend(for: cameraZoom),
             roadMarkingAlpha: LowZoomOverviewFade.roadMarkingAlpha(for: cameraZoom),
-            cameraZoom: Float(cameraZoom)
+            cameraZoom: Float(cameraZoom),
+            viewportSizePx: drawableSizePx
         )
         var shadowUniformValue = groundShadowMask.uniform
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)

@@ -13,11 +13,45 @@ struct VertexIn {
     float3 position [[attribute(0)]];
     float3 normal [[attribute(1)]];
     unsigned char styleIndex [[attribute(2)]];
+    // The building's footprint radius, 14.2 fixed point like the position.
+    unsigned short footprintRadius [[attribute(3)]];
 };
 
 // The CPU quantizes positions to quarter tile units; see
 // ExtrudedVertexIn.positionScale.
 constant float kExtrudedPositionInverseScale = 0.25;
+
+// Mirror of BuildingLODUniform (vertex buffer 7): the screen-footprint
+// level of detail of the buildings.
+struct BuildingLOD {
+    float4 cameraDepthRow;
+    float pixelsPerWorldUnitAtUnitDepth;
+    float cutPixels;
+    float fadePixels;
+    float padding;
+};
+
+// How much of a building's height stays, from its footprint on screen: a
+// building whose footprint is under the cut is dropped (the caller turns
+// zero into a negative clip distance), one between the cut and the fade
+// sinks into its footprint, one past the fade stands whole. The footprint
+// in pixels is the baked radius (tile units, through the model's uniform
+// scale into world units) times the pixels a world unit spans at this
+// vertex's view depth. A distant block of small houses is flat ground
+// this way, not a field of sub-pixel walls flickering at every move.
+static inline float buildingHeightScale(constant BuildingLOD& lod,
+                                        float footprintRadius,
+                                        float4x4 modelMatrix,
+                                        float4 worldPosition) {
+    float radiusUnits = footprintRadius * kExtrudedPositionInverseScale;
+    float radiusWorld = radiusUnits * length(modelMatrix[0].xyz);
+    float depth = max(dot(lod.cameraDepthRow, worldPosition), 0.01);
+    float footprintPx = radiusWorld * lod.pixelsPerWorldUnitAtUnitDepth / depth;
+    if (footprintPx < lod.cutPixels) {
+        return 0.0;
+    }
+    return smoothstep(lod.cutPixels, lod.fadePixels, footprintPx);
+}
 
 // color and the unit normal are unit-range, so they interpolate as half:
 // fewer interpolant registers and double-rate ALU on A-series GPUs. World
@@ -68,11 +102,17 @@ vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
                                           constant Camera& camera [[buffer(1)]],
                                           constant Style* styles [[buffer(2)]],
                                           constant float4x4& modelMatrix [[buffer(3)]],
-                                          constant float4& localClipBounds [[buffer(4)]]) {
+                                          constant float4& localClipBounds [[buffer(4)]],
+                                          constant BuildingLOD& lod [[buffer(7)]]) {
     Style style = styles[vertexIn.styleIndex];
     float4x4 matrix = camera.matrix;
 
     float3 localPosition = vertexIn.position * kExtrudedPositionInverseScale;
+    // The footprint is sized at the building's ground, before the height
+    // is scaled, so every vertex of a building agrees.
+    float heightScale = buildingHeightScale(lod, float(vertexIn.footprintRadius), modelMatrix,
+                                            modelMatrix * float4(localPosition.xy, 0.0, 1.0));
+    localPosition.z *= heightScale;
     float4 worldPosition = modelMatrix * float4(localPosition, 1.0);
     float4 clipPosition = matrix * worldPosition;
     float3x3 normalMatrix = float3x3(modelMatrix[0].xyz, modelMatrix[1].xyz, modelMatrix[2].xyz);
@@ -84,6 +124,10 @@ vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
     out.worldPosition = worldPosition.xyz;
     out.worldNormal = half3(worldNormal);
     writeLocalClipDistances(out.clipDistance, localPosition.xy, localClipBounds);
+    if (heightScale <= 0.0) {
+        // Under the cut: gone, no fragment is born.
+        out.clipDistance[0] = -1.0;
+    }
     return out;
 }
 
@@ -180,11 +224,20 @@ struct ExtrudedShadowVertexOut {
 vertex ExtrudedShadowVertexOut tileExtrudedShadowVertexShader(VertexIn vertexIn [[stage_in]],
                                                               constant ShadowCasterMatrices& casters [[buffer(1)]],
                                                               constant float4x4& modelMatrix [[buffer(3)]],
-                                          constant float4& localClipBounds [[buffer(4)]]) {
+                                                              constant float4& localClipBounds [[buffer(4)]],
+                                                              constant BuildingLOD& lod [[buffer(7)]]) {
     float3 localPosition = vertexIn.position * kExtrudedPositionInverseScale;
+    // The same level of detail as the world pass, by the camera's depth:
+    // a building that sank or went casts the shadow of what is drawn.
+    float heightScale = buildingHeightScale(lod, float(vertexIn.footprintRadius), modelMatrix,
+                                            modelMatrix * float4(localPosition.xy, 0.0, 1.0));
+    localPosition.z *= heightScale;
     float4 worldPosition = modelMatrix * float4(localPosition, 1.0);
     ExtrudedShadowVertexOut out;
     out.position = casters.lightProjectionView * worldPosition;
     writeLocalClipDistances(out.clipDistance, localPosition.xy, localClipBounds);
+    if (heightScale <= 0.0) {
+        out.clipDistance[0] = -1.0;
+    }
     return out;
 }

@@ -34,6 +34,10 @@ class ExtrudedTilePipeline {
         vertexDescriptor.attributes[2].format = .uchar
         vertexDescriptor.attributes[2].offset = 9
         vertexDescriptor.attributes[2].bufferIndex = 0
+        // The building's footprint radius, 14.2 fixed point like the position.
+        vertexDescriptor.attributes[3].format = .ushort
+        vertexDescriptor.attributes[3].offset = 10
+        vertexDescriptor.attributes[3].bufferIndex = 0
         vertexDescriptor.layouts[0].stride = MemoryLayout<ExtrudedVertexIn>.stride
         vertexDescriptor.layouts[0].stepFunction = .perVertex
 

@@ -81,6 +81,10 @@ constant float kFlatTileLayerDepthStep = 4e-7;
 // ends, which is why large triangles take the exact rank depth instead
 // (kTileExactRankDepth).
 constant float kFlatCameraNearPlane = 0.01;
+// The farthest a deferred ribbon's vertex moves, in tile units: a quarter
+// of the tile, past which a width on screen is a camera at the vertex's
+// own depth and the triangle only needs to stay finite.
+constant float kTileDeferredRibbonMaximumUnits = 1024.0;
 
 // lineStyle packs the per-style constants (edge threshold, width points,
 // dash points, gap points); constant per primitive, so half is exact enough.
@@ -102,6 +106,10 @@ struct VertexOut {
     uint styleIndex [[flat, function_constant(kTileLineFields)]];
     float lineDistance [[function_constant(kTileLineFields)]];
     float lineParameterRaw [[function_constant(kTileLineFields)]];
+    // A deferred ribbon's visible half-width in pixels, resolved here from
+    // the style and the vertex's own scale on screen (the rim is extruded
+    // one feather past it); zero for a pre-extruded ribbon.
+    float deferredEdgePx [[flat, function_constant(kTileLineFields)]];
     // The outline variant carries the clip position once more, as an
     // ordinary (perspective-correct) interpolant: divided by w in the
     // fragment it is the point of the projected edge the rasterizer paired
@@ -126,6 +134,7 @@ struct FragmentIn {
     uint styleIndex [[flat, function_constant(kTileLineFields)]];
     float lineDistance [[function_constant(kTileLineFields)]];
     float lineParameterRaw [[function_constant(kTileLineFields)]];
+    float deferredEdgePx [[flat, function_constant(kTileLineFields)]];
     float4 clipPosition [[function_constant(kTileFillOutline)]];
     float rankDepth [[flat, function_constant(kTileExactRankDepth)]];
 };
@@ -145,7 +154,40 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                                   constant LineStyle* lineStyles [[buffer(5)]],
                                   constant float& depthBandOffset [[buffer(7)]],
                                   constant OverviewFadeUniform& overviewFade [[buffer(8)]]) {
-    float4 worldPosition = modelMatrix * float4(float2(vertexIn.position.xy), 0.0, 1.0);
+    float2 localPosition = float2(vertexIn.position.xy);
+    float deferredEdgePx = 0.0;
+    if (kTileLineFields) {
+        // A deferred ribbon: the vertex is a point of the centreline and
+        // carries the direction to extrude along. The style's width is
+        // resolved in pixels right here, from how many pixels one tile
+        // unit spans at this vertex (the clip-space span of the direction,
+        // divided out by the perspective), and the vertex moves out by
+        // that plus the feather, in tile units. So the ribbon is as wide
+        // on screen as the style says at every distance, a stroke's floor
+        // holds in pixels to the horizon, and no ribbon is ever a sliver
+        // thinner than a pixel for the rasterizer to hit and miss.
+        float2 normal = vertexIn.normal;
+        if (dot(normal, normal) > 0.25) {
+            normal = normalize(normal);
+            LineStyle lineStyle = lineStyles[vertexIn.styleIndex];
+            float4 clipCentre = camera.matrix * (modelMatrix * float4(localPosition, 0.0, 1.0));
+            float4 clipAlong = camera.matrix * (modelMatrix * float4(normal, 0.0, 0.0));
+            // Behind the near plane the span is meaningless and the vertex
+            // is cut anyway: the depths are floored so the width stays
+            // finite there.
+            float w0 = max(clipCentre.w, kFlatCameraNearPlane);
+            float w1 = max(clipCentre.w + clipAlong.w, kFlatCameraNearPlane);
+            float2 screenSpan = ((clipCentre.xy + clipAlong.xy) / w1 - clipCentre.xy / w0)
+                * overviewFade.viewportSizePx * 0.5;
+            float pixelsPerUnit = max(length(screenSpan), 1e-4);
+            deferredEdgePx = tileLineEdgePixels(lineStyle, pixelsPerUnit,
+                                                overviewFade.pixelsPerPoint, overviewFade.roadSurfaceBlend);
+            float units = min((deferredEdgePx + kTileDeferredRibbonFeatherPx) / pixelsPerUnit,
+                              kTileDeferredRibbonMaximumUnits);
+            localPosition += normal * units;
+        }
+    }
+    float4 worldPosition = modelMatrix * float4(localPosition, 0.0, 1.0);
 
     VertexOut out;
     out.position = camera.matrix * worldPosition;
@@ -175,6 +217,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
         out.styleIndex = uint(vertexIn.styleIndex);
         out.lineDistance = float(vertexIn.lineDistance) / 127.0;
         out.lineParameterRaw = float(vertexIn.lineParameter);
+        out.deferredEdgePx = deferredEdgePx;
     } else {
         TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles);
         out.color = style.color;
@@ -224,7 +267,7 @@ static inline half4 tileFragmentColor(FragmentIn in,
     if (kTileLineFields) {
         color = tileLineFragmentColor(in.styleIndex, in.lineDistance, in.lineParameterRaw,
                                       styles, lowZoomFadeMasks, lineStyles,
-                                      overviewFade, lineDash);
+                                      overviewFade, lineDash, in.deferredEdgePx);
     } else {
         color = in.color;
         // The footprint fade: where this pixel covers more of the source

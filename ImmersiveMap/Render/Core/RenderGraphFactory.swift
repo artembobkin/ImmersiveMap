@@ -63,7 +63,8 @@ enum RenderGraphFactory {
                                                                           extrudedStencilTestState: context.extrudedStencilTestState,
                                                                           depthDisabledState: context.depthDisabledState,
                                                                           shadowMapTextureProvider: shadowMapTextureProvider,
-                                                                          shadowFallbackTexture: context.shadowFallbackTexture)
+                                                                          shadowFallbackTexture: context.shadowFallbackTexture,
+                                                                          debugOverlayControls: debugOverlayControls)
         let starfieldSubsystem = StarfieldRenderSubsystem(starfieldRenderer: context.starfieldRenderer,
                                                           skyBackdropDepthState: context.skyBackdropDepthState,
                                                           depthDisabledState: context.depthDisabledState)

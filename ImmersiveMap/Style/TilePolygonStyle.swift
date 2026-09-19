@@ -57,8 +57,9 @@ struct TileLineStyle {
     /// continuously with the camera instead of doubling at every tile level.
     /// Zero disables the ceiling; ignored when `widthPoints` locks the width.
     var maximumWidthPoints: Float
-    /// Reserved; keeps the stride stable for future line parameters.
-    var reserved2: Float = 0
+    /// The styled half-width in tile units, what a deferred ribbon's vertex
+    /// shader extrudes a world-locked style by (`TileVertexIn.normal`).
+    var halfWidthUnits: Float
 
     init(widthPoints: Float,
          dashLengthPoints: Float,
@@ -66,7 +67,9 @@ struct TileLineStyle {
          edgeThreshold: Float,
          minimumWidthPoints: Float = 0,
          dashInTileUnits: Bool = false,
-         maximumWidthPoints: Float = 0) {
+         maximumWidthPoints: Float = 0,
+         halfWidthUnits: Float = 0) {
+        self.halfWidthUnits = halfWidthUnits
         self.widthPoints = widthPoints
         self.dashLengthPoints = dashLengthPoints
         self.dashGapPoints = dashGapPoints

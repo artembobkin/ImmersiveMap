@@ -23,6 +23,10 @@ struct TileOverviewFadeUniform {
     /// See `LowZoomOverviewFade.classFadeMask`: the live camera zoom the
     /// per-class road fade is evaluated against.
     var cameraZoom: Float
+    /// The drawable in pixels, what the deferred ribbons' vertex stage
+    /// converts a tile unit's clip-space span into pixels with (Tile.metal).
+    /// Zero on the sphere and wherever no ribbon is deferred.
+    var viewportSizePx: SIMD2<Float>
 
     init(overviewAlpha: Float,
          roadAlpha: Float,
@@ -30,7 +34,8 @@ struct TileOverviewFadeUniform {
          pixelsPerPoint: Float,
          roadSurfaceBlend: Float = 0,
          roadMarkingAlpha: Float = 0,
-         cameraZoom: Float) {
+         cameraZoom: Float,
+         viewportSizePx: SIMD2<Float> = .zero) {
         self.overviewAlpha = overviewAlpha
         self.roadAlpha = roadAlpha
         self.landuseAlpha = landuseAlpha
@@ -38,6 +43,7 @@ struct TileOverviewFadeUniform {
         self.roadSurfaceBlend = roadSurfaceBlend
         self.roadMarkingAlpha = roadMarkingAlpha
         self.cameraZoom = cameraZoom
+        self.viewportSizePx = viewportSizePx
     }
 }
 

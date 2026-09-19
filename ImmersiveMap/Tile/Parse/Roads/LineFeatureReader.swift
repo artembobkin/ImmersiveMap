@@ -254,7 +254,13 @@ struct LineFeatureReader {
                                                                        extendClippedStart: shouldExtendStart,
                                                                        extendClippedEnd: shouldExtendEnd,
                                                                        clipPadding: usesSeparateRoadRendering ? sharedRoadPadding : 0,
-                                                                       clipGeometryToTileBounds: usesSeparateRoadRendering == false) {
+                                                                       clipGeometryToTileBounds: usesSeparateRoadRendering == false,
+                                                                       // A road bucket ribbon of a flat-era tile is
+                                                                       // extruded on the GPU to its width on screen; a
+                                                                       // sphere-era tile keeps the baked ribbon, which
+                                                                       // the grid split and the sphere projection need.
+                                                                       deferredExtrusion: usesSeparateRoadRendering
+                                                                           && GroundGeometrySubdivider.step(forTileZoom: tile.z) == nil) {
                                 if usesSeparateRoadRendering {
                                     result.appendRoad(linePolygon,
                                                       key: lineRenderPass.key,

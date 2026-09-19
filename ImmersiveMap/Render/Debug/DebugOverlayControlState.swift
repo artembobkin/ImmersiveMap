@@ -14,6 +14,11 @@ struct DebugOverlayControlSnapshot: Equatable {
     let tileGridDensity: Int
     /// The plane's depth rules (`FlatDepthRuleCoverage`), normalized.
     let flatDepthRules: FlatDepthRules
+    /// The buildings' screen-footprint level of detail (`BuildingLODUniform`):
+    /// a building whose footprint is under the cut is dropped, one under
+    /// the fade sinks into its footprint.
+    let buildingLODCutPixels: Float
+    let buildingLODFadePixels: Float
 
     init(axesEnabled: Bool,
          tileLayersEnabled: Bool,
@@ -23,7 +28,11 @@ struct DebugOverlayControlSnapshot: Equatable {
          roadLabelBoundsEnabled: Bool = false,
          tileGridEnabled: Bool = false,
          tileGridDensity: Int = DebugTileGridDensity.standard,
-         flatDepthRules: FlatDepthRules = .default) {
+         flatDepthRules: FlatDepthRules = .default,
+         buildingLODCutPixels: Float = BuildingLODUniform.defaultCutPixels,
+         buildingLODFadePixels: Float = BuildingLODUniform.defaultFadePixels) {
+        self.buildingLODCutPixels = max(buildingLODCutPixels, 0)
+        self.buildingLODFadePixels = max(buildingLODFadePixels, self.buildingLODCutPixels)
         self.axesEnabled = axesEnabled
         self.tileLayersEnabled = tileLayersEnabled
         self.wireframeEnabled = wireframeEnabled
@@ -47,6 +56,8 @@ final class DebugOverlayControlState {
     private var tileGridEnabled = false
     private var tileGridDensity = DebugTileGridDensity.standard
     private var flatDepthRules = FlatDepthRules.default
+    private var buildingLODCutPixels = BuildingLODUniform.defaultCutPixels
+    private var buildingLODFadePixels = BuildingLODUniform.defaultFadePixels
 
     func snapshot() -> DebugOverlayControlSnapshot {
         lock.lock()
@@ -59,7 +70,16 @@ final class DebugOverlayControlState {
                                            roadLabelBoundsEnabled: roadLabelBoundsEnabled,
                                            tileGridEnabled: tileGridEnabled,
                                            tileGridDensity: tileGridDensity,
-                                           flatDepthRules: flatDepthRules)
+                                           flatDepthRules: flatDepthRules,
+                                           buildingLODCutPixels: buildingLODCutPixels,
+                                           buildingLODFadePixels: buildingLODFadePixels)
+    }
+
+    func setBuildingLOD(cutPixels: Float, fadePixels: Float) {
+        lock.lock()
+        buildingLODCutPixels = cutPixels
+        buildingLODFadePixels = fadePixels
+        lock.unlock()
     }
 
     func setAxesEnabled(_ isEnabled: Bool) {

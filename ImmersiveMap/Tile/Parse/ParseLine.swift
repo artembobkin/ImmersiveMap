@@ -184,6 +184,21 @@ class ParseLine {
     /// a one-pixel ramp down to a quarter of a screen pixel per tile unit; a
     /// tile minified further than that is already mip-filtered.
     static let featherTileUnits: Float = 2.0
+    /// The narrowest ribbon, in tile units from the centreline: a pixel a
+    /// side at the tile's own scale (4096 units over about 512 points),
+    /// so a hairline's geometry always covers the pixel centres its
+    /// pixel-wide coverage needs (`tileLineCoverage`), instead of a
+    /// sub-pixel sliver that the rasterizer hits and misses from frame to
+    /// frame. The styled edge stays where the style put it: the edge
+    /// threshold is derived from the same extrusion.
+    static let minimumExtrudedHalfWidth: Float = 8.0
+
+    /// How far the ribbon is extruded from the centreline for a styled
+    /// half-width: the feather beyond the styled edge, never less than
+    /// `minimumExtrudedHalfWidth`.
+    static func extrudedHalfWidth(halfWidth: Float) -> Float {
+        max(halfWidth + featherTileUnits, minimumExtrudedHalfWidth)
+    }
     /// Largest angle one fan triangle of a round join may span. At this step
     /// the chord of a ribbon of half-width R sits R(1 - cos(step/2)) inside
     /// the rim: under 1.5 percent of R, below the antialiasing band on any
@@ -203,6 +218,11 @@ class ParseLine {
 
     private struct GeneratedPolygon {
         var vertices: [SIMD2<Float>] = []
+        /// Deferred extrusion: the centreline point each vertex was
+        /// extruded from and the unit direction it went, lockstep with
+        /// `vertices` (zero direction for a hub vertex on the centreline).
+        var centres: [SIMD2<Float>] = []
+        var normals: [SIMD2<Float>] = []
         /// Normalized signed centerline distances, lockstep with `vertices`:
         /// ±1 at the extruded rim, 0 on the centerline.
         var distances: [Float] = []
@@ -268,7 +288,8 @@ class ParseLine {
                extendClippedStart: Bool = false,
                extendClippedEnd: Bool = false,
                clipPadding: Float = 0,
-               clipGeometryToTileBounds: Bool = true) -> ParsedPolygon? {
+               clipGeometryToTileBounds: Bool = true,
+               deferredExtrusion: Bool = false) -> ParsedPolygon? {
         guard points.count >= 2, width > 0 else { return nil }
 
         // The geometry is extruded past the styled half-width so the shader's
@@ -276,7 +297,7 @@ class ParseLine {
         // sits inside the emitted field is the per-style edge threshold,
         // computed at unification with the same feather constant.
         let halfWidth = Float(width * 0.5)
-        let extrudedHalfWidth = halfWidth + Self.featherTileUnits
+        let extrudedHalfWidth = Self.extrudedHalfWidth(halfWidth: halfWidth)
         let effectivePoints = extendedEndpoints(points: points,
                                                 tileExtent: tileExtent,
                                                 clipPadding: clipPadding,
@@ -335,6 +356,15 @@ class ParseLine {
             }
         }
 
+        if deferredExtrusion {
+            // The centreline and the directions go to the GPU, which
+            // extrudes by the width the style resolves on screen
+            // (Tile.metal): the geometry is never a sub-pixel sliver
+            // whatever the camera does. Never clipped to the tile: the
+            // centreline already is, and the extrusion overflows the seam
+            // by its screen width like a stitching margin.
+            return quantizeDeferred(polygon: polygon, emitsArcLength: emitsArcLength)
+        }
         return finalizePolygon(polygon,
                                tileExtent: tileExtent,
                                clipGeometryToTileBounds: clipGeometryToTileBounds,
@@ -349,6 +379,24 @@ class ParseLine {
             return clipToTile(polygon: polygon, tileExtent: tileExtent, emitsArcLength: emitsArcLength)
         }
         return quantize(polygon: polygon, emitsArcLength: emitsArcLength)
+    }
+
+    private func quantizeDeferred(polygon: GeneratedPolygon, emitsArcLength: Bool) -> ParsedPolygon? {
+        guard polygon.indices.isEmpty == false,
+              polygon.centres.count == polygon.vertices.count,
+              polygon.normals.count == polygon.vertices.count else { return nil }
+        return ParsedPolygon(vertices: polygon.centres.map(toShortVector),
+                             indices: polygon.indices,
+                             lineDistances: polygon.distances.map(Self.quantizeDistance),
+                             lineParameters: polygon.parameters.map {
+                                 Self.quantizeParameter($0, emitsArcLength: emitsArcLength)
+                             },
+                             lineNormals: polygon.normals.map(Self.quantizeNormal))
+    }
+
+    static func quantizeNormal(_ direction: SIMD2<Float>) -> SIMD2<Int8> {
+        SIMD2<Int8>(Int8(clamping: Int((direction.x * Float(Int8.max)).rounded())),
+                    Int8(clamping: Int((direction.y * Float(Int8.max)).rounded())))
     }
 
     private func extendedEndpoints(points: [SIMD2<Float>],
@@ -571,9 +619,14 @@ class ParseLine {
             }
 
             let base = UInt32(polygon.vertices.count)
+            let normal = precomputed.segmentNormals[index]
             for row in rows {
                 polygon.vertices.append(row.position + offset)
                 polygon.vertices.append(row.position - offset)
+                polygon.centres.append(row.position)
+                polygon.centres.append(row.position)
+                polygon.normals.append(normal)
+                polygon.normals.append(-normal)
                 polygon.distances.append(1.0)
                 polygon.distances.append(-1.0)
                 polygon.parameters.append(row.parameter)
@@ -636,6 +689,8 @@ class ParseLine {
             let stepCount = max(1, Int((turnAngle / Self.joinArcMaximumStepRadians).rounded(.up)))
             let base = UInt32(polygon.vertices.count)
             polygon.vertices.append(center)
+            polygon.centres.append(center)
+            polygon.normals.append(.zero)
             polygon.distances.append(0.0)
             polygon.parameters.append(joinParameter)
             for step in 0...stepCount {
@@ -646,6 +701,8 @@ class ParseLine {
                 let length = simd_length(direction)
                 direction = length > Self.epsilon ? direction / length : outerDirection0
                 polygon.vertices.append(center + direction * extrudedHalfWidth)
+                polygon.centres.append(center)
+                polygon.normals.append(direction)
                 polygon.distances.append(1.0)
                 polygon.parameters.append(joinParameter)
             }
@@ -674,11 +731,16 @@ class ParseLine {
 
         let base = UInt32(polygon.vertices.count)
         polygon.vertices.append(center)
+        polygon.centres.append(center)
+        polygon.normals.append(.zero)
         polygon.distances.append(0.0)
         polygon.parameters.append(parameter)
         for point in Self.capUnitSemicircle {
-            let transformed = center + (forward * point.x + right * point.y) * radius
+            let direction = forward * point.x + right * point.y
+            let transformed = center + direction * radius
             polygon.vertices.append(transformed)
+            polygon.centres.append(center)
+            polygon.normals.append(simd_normalize(direction))
             polygon.distances.append(1.0)
             polygon.parameters.append(parameter)
         }

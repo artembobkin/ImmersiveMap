@@ -258,9 +258,10 @@ fragment half4 tileSphereFragmentShader(SphereFragmentIn in [[stage_in]],
     // from the flat style index right here.
     half4 color;
     if (kTileSphereLineFields) {
+        // No deferred ribbons on the sphere: every rim is baked.
         color = tileLineFragmentColor(in.styleIndex, in.lineDistance, in.lineParameterRaw,
                                       styles, lowZoomFadeMasks, lineStyles,
-                                      overviewFade, lineDash);
+                                      overviewFade, lineDash, 0.0);
     } else {
         color = in.color;
     }
