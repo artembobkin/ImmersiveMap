@@ -93,8 +93,9 @@ final class FlatRingRuleCoverageTests: XCTestCase {
         XCTAssertEqual(FlatRingRules.default.normalized(), FlatRingRules.default, "the default is already normal")
         XCTAssertEqual(FlatRingRules.default.rules.map(\.zoomDrop), [0, 1, 2, 4])
         XCTAssertEqual(FlatRingRules.default.rules.map(\.distance), [1, 2, 3, 20])
-        XCTAssertEqual(FlatRingRules.default.rules.map(\.rasterized), [false, false, true, true])
-        XCTAssertEqual(FlatRingRules.default.rules.map(\.rasterResolution), [1024, 2048, 256, 256])
+        XCTAssertEqual(FlatRingRules.default.rules.map(\.rasterized), [true, true, true, true])
+        XCTAssertEqual(FlatRingRules.default.rules.map(\.rasterResolution), [256, 256, 256, 256])
+        XCTAssertEqual(FlatRingRules.rasterResolutions, [256], "one size: a larger picture per tile is memory the far ground cannot have")
         XCTAssertEqual(FlatRingRules.default.rules.map(\.drawsLines), [true, true, false, false])
     }
 
@@ -295,7 +296,7 @@ final class FlatRingRuleCoverageTests: XCTestCase {
         let rules = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1, rasterized: true, rasterResolution: 700),
                                           FlatRingRule(zoomDrop: 2, distance: 2, rasterized: false, rasterResolution: 9000)])
         let normalized = rules.normalized().rules
-        XCTAssertEqual(normalized.map(\.rasterResolution), [512, 2048], "the nearest option")
+        XCTAssertEqual(normalized.map(\.rasterResolution), [256, 256], "the one size")
         XCTAssertEqual(normalized.map(\.rasterized), [true, false])
         XCTAssertEqual(FlatRingRules.clampedRasterResolution(0), 256)
         XCTAssertEqual(FlatRingRule(zoomDrop: 0, distance: 1).rasterized, false, "vector unless asked")
@@ -307,15 +308,15 @@ final class FlatRingRuleCoverageTests: XCTestCase {
     func testARasterizedRulesTilesAreTheRasterTargets() throws {
         let fixture = try Self.makeFixture(zoom: 16, pitchDegrees: 75)
         let rules = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1),
-                                          FlatRingRule(zoomDrop: 2, distance: 6, rasterized: true, rasterResolution: 1024),
+                                          FlatRingRule(zoomDrop: 2, distance: 6, rasterized: true),
                                           FlatRingRule(zoomDrop: 5, distance: 60)])
         let resolution = Self.resolve(fixture, targetZoom: 16, rules: rules)
         let rasterized = resolution.rasterizedTargets
         XCTAssertFalse(rasterized.isEmpty, "The second band has tiles")
-        XCTAssertTrue(rasterized.values.allSatisfy { $0 == 1024 })
+        XCTAssertTrue(rasterized.values.allSatisfy { $0 == 256 })
         XCTAssertTrue(rasterized.keys.allSatisfy { $0.z == 14 }, "Only the rasterized band's tiles")
         XCTAssertTrue(rasterized.keys.allSatisfy { resolution.targets.contains($0) })
-        XCTAssertEqual(resolution.bands.map(\.rasterResolution), [nil, 1024, nil])
+        XCTAssertEqual(resolution.bands.map(\.rasterResolution), [nil, 256, nil])
 
         let vectorOnly = Self.resolve(fixture, targetZoom: 16, rules: FlatRingRules(rules: rules.rules.map {
             FlatRingRule(zoomDrop: $0.zoomDrop, distance: $0.distance)
@@ -326,11 +327,11 @@ final class FlatRingRuleCoverageTests: XCTestCase {
 
     func testTheRulesAreTheDebugPanels() {
         let controls = DebugOverlayControlState()
-        XCTAssertEqual(controls.snapshot().flatRingRules, .default)
+        XCTAssertEqual(controls.snapshot().ringRuleSets, .default)
         let edited = FlatRingRules(rules: [FlatRingRule(zoomDrop: 1, distance: 3), FlatRingRule(zoomDrop: 0, distance: 1)])
-        controls.setFlatRingRules(edited)
-        XCTAssertEqual(controls.snapshot().flatRingRules, edited.normalized())
-        XCTAssertEqual(controls.snapshot().flatRingRules.rules.map(\.distance), [1, 3], "stored sorted")
+        controls.setRingRuleSets(RingRuleSets(sets: [RingRuleSet(firstZoom: 0, rules: edited)]))
+        XCTAssertEqual(controls.snapshot().ringRuleSets.rules(forTargetZoom: 12), edited.normalized())
+        XCTAssertEqual(controls.snapshot().ringRuleSets.sets[0].rules.rules.map(\.distance), [1, 3], "stored sorted")
     }
 
     #if os(macOS)

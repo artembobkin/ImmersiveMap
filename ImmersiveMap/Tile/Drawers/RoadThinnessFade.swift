@@ -9,7 +9,7 @@ import Foundation
 /// smoothly between the two. The widths are the road's visible width in
 /// drawable pixels, after the perspective has thinned it. Edited in the
 /// debug panel. Mirror of `tileRoadThinnessFade` in TileShading.h.
-struct RoadThinnessFade: Equatable {
+struct RoadThinnessFade: Hashable {
     var goneWidthPixels: Float
     var opaqueWidthPixels: Float
 

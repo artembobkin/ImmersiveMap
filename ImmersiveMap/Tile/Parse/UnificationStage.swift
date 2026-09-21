@@ -15,6 +15,7 @@ enum TileUnificationStage {
     /// are raw pointer stores without per-append growth or uniqueness checks.
     static func appendPolygon(_ polygon: ParsedPolygon,
                               styleBufferIndex: UInt8,
+                              bakesFootprintRadius: Bool = false,
                               vertices: inout UnsafeMutableBufferPointer<TileVertexIn>,
                               indices: inout UnsafeMutableBufferPointer<UInt32>,
                               vertexCount: inout Int,
@@ -34,6 +35,11 @@ enum TileUnificationStage {
         let hasLineAttributes = polygon.lineDistances.count == polygon.vertices.count
             && polygon.lineParameters.count == polygon.vertices.count
         let hasLineNormals = hasLineAttributes && polygon.lineNormals.count == polygon.vertices.count
+        // A fill of the footprint fade band carries its polygon's radius in
+        // the bytes a ribbon keeps its direction in.
+        let footprintNormal: SIMD2<Int8> = bakesFootprintRadius && hasLineAttributes == false
+            ? TileVertexIn.footprintRadiusNormal(radiusUnits: Self.footprintRadius(of: polygon))
+            : .zero
         for (index, position) in polygon.vertices.enumerated() {
             // Attribute-less polygons default to the saturated line interior
             // (see TileVertexIn), so decoration polygons that share a line
@@ -43,13 +49,27 @@ enum TileUnificationStage {
                                                         styleIndex: styleBufferIndex,
                                                         lineDistance: hasLineAttributes ? polygon.lineDistances[index] : 0,
                                                         lineParameter: hasLineAttributes ? polygon.lineParameters[index] : Int16.max,
-                                                        normal: hasLineNormals ? polygon.lineNormals[index] : .zero))
+                                                        normal: hasLineNormals ? polygon.lineNormals[index] : footprintNormal))
             vertexCount += 1
         }
         for index in polygon.indices {
             indices.initializeElement(at: indexCount, to: index &+ vertexOffset)
             indexCount += 1
         }
+    }
+
+    /// Half the diagonal of a ground polygon's bounding box, in tile units:
+    /// the radius its footprint on screen is sized from.
+    static func footprintRadius(of polygon: ParsedPolygon) -> Float {
+        guard let first = polygon.vertices.first else { return 0 }
+        var lower = SIMD2<Float>(Float(first.x), Float(first.y))
+        var upper = lower
+        for vertex in polygon.vertices {
+            let point = SIMD2<Float>(Float(vertex.x), Float(vertex.y))
+            lower = simd_min(lower, point)
+            upper = simd_max(upper, point)
+        }
+        return simd_length(upper - lower) * 0.5
     }
 
     /// - Parameter splitLinesClass: orders the unified indices as three class
@@ -130,12 +150,16 @@ enum TileUnificationStage {
                         let styleBufferIndex = styleIndexByKey[styleKey] ?? 0
                         guard let polygons = polygonByStyle[styleKey] else { continue }
                         let recordsOutline = sweep == 0 && emitsFillOutline(styleKey)
+                        let bakesFootprintRadius = stylesByKey[styleKey].map {
+                            LowZoomOverviewFade.isFootprintFadeBand(mask: $0.pass.lowZoomFadeMask)
+                        } ?? false
                         for polygon in polygons where includesPolygon(polygon) {
                             if recordsOutline, polygon.outlineIndices.isEmpty == false {
                                 outlinedFills.append((polygon, UInt32(vertexCount)))
                             }
                             Self.appendPolygon(polygon,
                                                styleBufferIndex: styleBufferIndex,
+                                               bakesFootprintRadius: bakesFootprintRadius,
                                                vertices: &vertexBuffer,
                                                indices: &indexBuffer,
                                                vertexCount: &vertexCount,
@@ -419,8 +443,7 @@ enum TileUnificationStage {
             if let extrudedMeshes = extrudedByStyle[styleKey] {
                 for extrudedMesh in extrudedMeshes {
                     // One mesh is one building: its footprint radius is
-                    // the same on every vertex, for the screen-footprint
-                    // level of detail (BuildingLODUniform).
+                    // the same on every vertex (`ExtrudedVertexIn.footprintRadius`).
                     let footprintRadius = Self.footprintRadius(of: extrudedMesh)
                     for vertex in extrudedMesh.vertices {
                         unifiedExtrudedVertices.append(ExtrudedVertexIn(position: vertex.position,

@@ -32,8 +32,11 @@ struct BakedStyle {
     }
 
     init(extrusion: ExtrusionStyle) {
+        // The fill under an extrusion fades with its footprint on screen,
+        // like the building above it.
         self.pass = LinePass(key: extrusion.key,
                              color: extrusion.color,
+                             lowZoomFadeMask: LowZoomOverviewFade.footprintFadeMask,
                              lineGeometry: LineGeometryStyle(lineWidth: Self.fillRibbonWidth))
         self.farColor = nil
         self.outlineAntialiasing = false

@@ -9,9 +9,13 @@ import Metal
 struct TileRasterKey: Hashable {
     let tile: Tile
     let resolution: Int
-    /// Whether the picture holds the tile's lines (`FlatRingRule.drawsLines`):
-    /// the two are different pictures.
-    var drawsLines: Bool = true
+    /// The ground families the picture holds (`RasterZone.pictureGroups`):
+    /// each set is a different picture.
+    var groups: GroundLayerGroups = .all
+    /// The building fills' footprint fade the picture was drawn with, whole
+    /// square pixels: a picture bakes the fade in.
+    var footprintGoneAreaPx: Int = 0
+    var footprintOpaqueAreaPx: Int = 0
 }
 
 /// The rasterized tiles' pictures (`TileRasterizer`), kept for as long as

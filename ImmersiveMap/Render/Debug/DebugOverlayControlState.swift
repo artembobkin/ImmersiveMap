@@ -12,15 +12,20 @@ struct DebugOverlayControlSnapshot: Equatable {
     let roadLabelBoundsEnabled: Bool
     let tileGridEnabled: Bool
     let tileGridDensity: Int
-    /// The plane's ring rules (`FlatRingRuleCoverage`), normalized.
-    let flatRingRules: FlatRingRules
-    /// The buildings' screen-footprint level of detail (`BuildingLODUniform`):
-    /// a building whose footprint is under the cut is dropped, one under
-    /// the fade sinks into its footprint.
-    let buildingLODCutPixels: Float
-    let buildingLODFadePixels: Float
+    /// The ring rules by target zoom (`RingRuleSets`), normalized.
+    let ringRuleSets: RingRuleSets
+    /// The tuning of the rule set the snapshot was taken for
+    /// (`RingRuleSetTuning`, `DebugOverlayControlState.snapshot(forTargetZoom:)`).
+    /// The flat building fills' footprint fade (`BuildingFootprintFade`), as
+    /// footprint areas on screen in square pixels: a fill is gone at the
+    /// first and under, whole at the second and over.
+    let buildingGoneAreaPixels: Float
+    let buildingOpaqueAreaPixels: Float
     /// The roads' thinness fade (`RoadThinnessFade`).
     let roadThinnessFade: RoadThinnessFade
+    /// Where the flat ground turns from geometry into pictures and what the
+    /// pictures hold (`RasterZone`).
+    let rasterZone: RasterZone
 
     init(axesEnabled: Bool,
          tileLayersEnabled: Bool,
@@ -30,13 +35,15 @@ struct DebugOverlayControlSnapshot: Equatable {
          roadLabelBoundsEnabled: Bool = false,
          tileGridEnabled: Bool = false,
          tileGridDensity: Int = DebugTileGridDensity.standard,
-         flatRingRules: FlatRingRules = .default,
-         buildingLODCutPixels: Float = BuildingLODUniform.defaultCutPixels,
-         buildingLODFadePixels: Float = BuildingLODUniform.defaultFadePixels,
-         roadThinnessFade: RoadThinnessFade = .default) {
+         ringRuleSets: RingRuleSets = .default,
+         buildingGoneAreaPixels: Float = BuildingFootprintFade.defaultGoneAreaPixels,
+         buildingOpaqueAreaPixels: Float = BuildingFootprintFade.defaultOpaqueAreaPixels,
+         roadThinnessFade: RoadThinnessFade = .default,
+         rasterZone: RasterZone = .default) {
         self.roadThinnessFade = roadThinnessFade
-        self.buildingLODCutPixels = max(buildingLODCutPixels, 0)
-        self.buildingLODFadePixels = max(buildingLODFadePixels, self.buildingLODCutPixels)
+        self.rasterZone = rasterZone
+        self.buildingGoneAreaPixels = max(buildingGoneAreaPixels, 0)
+        self.buildingOpaqueAreaPixels = max(buildingOpaqueAreaPixels, self.buildingGoneAreaPixels)
         self.axesEnabled = axesEnabled
         self.tileLayersEnabled = tileLayersEnabled
         self.wireframeEnabled = wireframeEnabled
@@ -45,7 +52,7 @@ struct DebugOverlayControlSnapshot: Equatable {
         self.roadLabelBoundsEnabled = roadLabelBoundsEnabled
         self.tileGridEnabled = tileGridEnabled
         self.tileGridDensity = DebugTileGridDensity.clamp(tileGridDensity)
-        self.flatRingRules = flatRingRules.normalized()
+        self.ringRuleSets = ringRuleSets.normalized()
     }
 }
 
@@ -59,14 +66,15 @@ final class DebugOverlayControlState {
     private var roadLabelBoundsEnabled = false
     private var tileGridEnabled = false
     private var tileGridDensity = DebugTileGridDensity.standard
-    private var flatRingRules = FlatRingRules.default
-    private var buildingLODCutPixels = BuildingLODUniform.defaultCutPixels
-    private var buildingLODFadePixels = BuildingLODUniform.defaultFadePixels
-    private var roadThinnessFade = RoadThinnessFade.default
+    private var ringRuleSets = RingRuleSets.default
 
-    func snapshot() -> DebugOverlayControlSnapshot {
+    /// The controls as a frame at `targetZoom` reads them: the building
+    /// level of detail, the road fade and the raster zone are those of the
+    /// rule set the zoom falls in.
+    func snapshot(forTargetZoom targetZoom: Int = 0) -> DebugOverlayControlSnapshot {
         lock.lock()
         defer { lock.unlock() }
+        let tuning = ringRuleSets.tuning(forTargetZoom: targetZoom)
         return DebugOverlayControlSnapshot(axesEnabled: axesEnabled,
                                            tileLayersEnabled: tileLayersEnabled,
                                            wireframeEnabled: wireframeEnabled,
@@ -75,24 +83,15 @@ final class DebugOverlayControlState {
                                            roadLabelBoundsEnabled: roadLabelBoundsEnabled,
                                            tileGridEnabled: tileGridEnabled,
                                            tileGridDensity: tileGridDensity,
-                                           flatRingRules: flatRingRules,
-                                           buildingLODCutPixels: buildingLODCutPixels,
-                                           buildingLODFadePixels: buildingLODFadePixels,
-                                           roadThinnessFade: roadThinnessFade)
+                                           ringRuleSets: ringRuleSets,
+                                           buildingGoneAreaPixels: tuning.buildingGoneAreaPixels,
+                                           buildingOpaqueAreaPixels: tuning.buildingOpaqueAreaPixels,
+                                           roadThinnessFade: tuning.roadThinnessFade,
+                                           rasterZone: tuning.rasterZone)
     }
 
-    func setRoadThinnessFade(_ fade: RoadThinnessFade) {
-        lock.lock()
-        roadThinnessFade = fade
-        lock.unlock()
-    }
 
-    func setBuildingLOD(cutPixels: Float, fadePixels: Float) {
-        lock.lock()
-        buildingLODCutPixels = cutPixels
-        buildingLODFadePixels = fadePixels
-        lock.unlock()
-    }
+
 
     func setAxesEnabled(_ isEnabled: Bool) {
         lock.lock()
@@ -142,9 +141,9 @@ final class DebugOverlayControlState {
         lock.unlock()
     }
 
-    func setFlatRingRules(_ rules: FlatRingRules) {
+    func setRingRuleSets(_ sets: RingRuleSets) {
         lock.lock()
-        flatRingRules = rules.normalized()
+        ringRuleSets = sets.normalized()
         lock.unlock()
     }
 }

@@ -18,11 +18,8 @@ enum BuildingExtrusionDrawer {
                               flatRenderState: FlatRenderState,
                               extrudedTilePipeline: ExtrudedTilePipeline,
                               extrudedStencilTestState: MTLDepthStencilState,
-                              depthDisabledState: MTLDepthStencilState,
-                              buildingLOD: BuildingLODUniform) {
+                              depthDisabledState: MTLDepthStencilState) {
         var cameraUniformValue = cameraUniform
-        var buildingLODValue = buildingLOD
-        renderEncoder.setVertexBytes(&buildingLODValue, length: MemoryLayout<BuildingLODUniform>.stride, index: 7)
         // The walls and roofs are wound clockwise on purpose (the exterior
         // ring is forced clockwise in TileMvtParser+Helpers and the roofs
         // match it in RoofGeometryBuilder), so their front face is Metal's
@@ -71,12 +68,9 @@ enum BuildingExtrusionDrawer {
                                   placeTilesContext: PlaceTilesContext,
                                   flatRenderState: FlatRenderState,
                                   extrudedTilePipeline: ExtrudedTilePipeline,
-                                  extrudedDepthState: MTLDepthStencilState,
-                                  buildingLOD: BuildingLODUniform) {
+                                  extrudedDepthState: MTLDepthStencilState) {
         renderEncoder.setCullMode(.none)
         extrudedTilePipeline.selectShadowPipeline(renderEncoder: renderEncoder)
-        var buildingLODValue = buildingLOD
-        renderEncoder.setVertexBytes(&buildingLODValue, length: MemoryLayout<BuildingLODUniform>.stride, index: 7)
         renderEncoder.setDepthStencilState(extrudedDepthState)
         renderEncoder.setDepthClipMode(.clamp)
         var castersValue = ShadowCasterUniform(lightProjectionView: lightProjectionView)

@@ -113,6 +113,7 @@ final class SharedRenderResources {
     /// The tile-ownership stencil prepass of the flat passes.
     let tileOwnershipPipeline: TileOwnershipPipeline
     let tileRasterPipeline: TileRasterPipeline
+    let tileSphereRasterPipeline: TileSphereRasterPipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
     let fxaaPipeline: FXAAPipeline
     let starfieldPipeline: StarfieldPipeline
@@ -304,6 +305,7 @@ final class SharedRenderResources {
         self.extrudedTilePipeline = compiled.extrudedTilePipeline
         self.tileOwnershipPipeline = compiled.tileOwnershipPipeline
         self.tileRasterPipeline = compiled.tileRasterPipeline
+        self.tileSphereRasterPipeline = compiled.tileSphereRasterPipeline
         self.groundShadowMaskPipeline = compiled.groundShadowMaskPipeline
         self.fxaaPipeline = compiled.fxaaPipeline
         self.starfieldPipeline = compiled.starfieldPipeline
@@ -331,6 +333,7 @@ final class SharedRenderResources {
         let extrudedTilePipeline: ExtrudedTilePipeline
         let tileOwnershipPipeline: TileOwnershipPipeline
         let tileRasterPipeline: TileRasterPipeline
+        let tileSphereRasterPipeline: TileSphereRasterPipeline
         let groundShadowMaskPipeline: GroundShadowMaskPipeline
         let fxaaPipeline: FXAAPipeline
         let starfieldPipeline: StarfieldPipeline
@@ -363,6 +366,7 @@ final class SharedRenderResources {
         var extrudedTilePipeline: ExtrudedTilePipeline?
         var tileOwnershipPipeline: TileOwnershipPipeline?
         var tileRasterPipeline: TileRasterPipeline?
+        var tileSphereRasterPipeline: TileSphereRasterPipeline?
         var groundShadowMaskPipeline: GroundShadowMaskPipeline?
         var fxaaPipeline: FXAAPipeline?
         var starfieldPipeline: StarfieldPipeline?
@@ -410,6 +414,10 @@ final class SharedRenderResources {
                                                       library: library,
                                                       sampleCount: sampleCount,
                                                       readsGroundShadowMask: true) },
+            { tileSphereRasterPipeline = TileSphereRasterPipeline(metalDevice: device,
+                                                                  pixelFormat: pixelFormat,
+                                                                  library: library,
+                                                                  sampleCount: sampleCount) },
             { globeVectorSurfacePipeline = TilePipeline(metalDevice: device,
                                                         pixelFormat: pixelFormat,
                                                         library: library,
@@ -442,6 +450,7 @@ final class SharedRenderResources {
             extrudedTilePipeline: extrudedTilePipeline!,
             tileOwnershipPipeline: tileOwnershipPipeline!,
             tileRasterPipeline: tileRasterPipeline!,
+            tileSphereRasterPipeline: tileSphereRasterPipeline!,
             groundShadowMaskPipeline: groundShadowMaskPipeline!,
             fxaaPipeline: fxaaPipeline!,
             starfieldPipeline: starfieldPipeline!,

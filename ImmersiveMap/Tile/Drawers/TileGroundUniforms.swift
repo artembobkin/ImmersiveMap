@@ -36,6 +36,11 @@ struct TileOverviewFadeUniform {
     /// in pixels. A zero opaque width turns it off.
     var roadFadeGoneWidthPx: Float = 0
     var roadFadeOpaqueWidthPx: Float = 0
+    /// The footprint fade of the building fills (`tileFootprintAlpha`), the
+    /// debug panel's two footprint areas in square pixels. A zero opaque
+    /// area turns it off.
+    var footprintGoneAreaPx: Float = 0
+    var footprintOpaqueAreaPx: Float = 0
 
     init(overviewAlpha: Float,
          roadAlpha: Float,
@@ -46,7 +51,9 @@ struct TileOverviewFadeUniform {
          cameraZoom: Float,
          viewportSizePx: SIMD2<Float> = .zero,
          pointWidthReferenceDepth: Float = 0,
-         roadThinnessFade: RoadThinnessFade = .off) {
+         roadThinnessFade: RoadThinnessFade = .off,
+         footprintGoneAreaPx: Float = 0,
+         footprintOpaqueAreaPx: Float = 0) {
         self.overviewAlpha = overviewAlpha
         self.roadAlpha = roadAlpha
         self.landuseAlpha = landuseAlpha
@@ -58,6 +65,8 @@ struct TileOverviewFadeUniform {
         self.pointWidthReferenceDepth = pointWidthReferenceDepth
         self.roadFadeGoneWidthPx = roadThinnessFade.goneWidthPixels
         self.roadFadeOpaqueWidthPx = roadThinnessFade.opaqueWidthPixels
+        self.footprintGoneAreaPx = max(footprintGoneAreaPx, 0)
+        self.footprintOpaqueAreaPx = max(footprintOpaqueAreaPx, self.footprintGoneAreaPx)
     }
 }
 

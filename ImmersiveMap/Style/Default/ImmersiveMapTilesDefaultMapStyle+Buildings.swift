@@ -16,6 +16,8 @@ extension ImmersiveMapTilesDefaultMapStyle {
             // rises: how buildings draw on the globe, now on the plane too.
             return .fill(FillStyle(key: 30,
                                    color: theme.features.buildingFillColor,
+                                   // A small footprint on screen fades out.
+                                   lowZoomFadeMask: LowZoomOverviewFade.footprintFadeMask,
                                    outlineAntialiasing: false))
         }
         return .extrusion(ExtrusionStyle(

@@ -6,9 +6,11 @@ import simd
 
 /// One rule of the flat map's coverage: the ground up to `distance` rings
 /// of tiles from the look-at tile (and past the previous rule's rings) is
-/// drawn `zoomDrop` levels below the target zoom, as vector tiles or, with
-/// `rasterized`, as each tile's picture rendered once into a texture of
-/// `rasterResolution` texels a side (`TileRasterizer`).
+/// drawn `zoomDrop` levels below the target zoom. With `rasterized`, the
+/// part of the band past the raster zone's start (`RasterZone`) draws as
+/// each tile's picture, rendered once into a texture of `rasterResolution`
+/// texels a side (`TileRasterizer`). Without it the band is geometry at
+/// every distance.
 struct FlatRingRule: Hashable {
     var zoomDrop: Int
     /// In tiles of the target zoom, counted on the grid from the look-at
@@ -16,7 +18,7 @@ struct FlatRingRule: Hashable {
     /// and so on. A ring number, not a radius, so a rule's edge runs along
     /// tile edges.
     var distance: Int
-    /// The band's tiles draw as textures instead of vector geometry.
+    /// The band's tiles may draw as pictures, where the raster zone says.
     var rasterized: Bool = false
     /// Texels a side of a rasterized tile, one of
     /// `FlatRingRules.rasterResolutions`.
@@ -40,32 +42,41 @@ struct FlatRingRule: Hashable {
 }
 
 /// The rules, nearest first. Any number of them. The debug panel edits
-/// the list.
+/// the list, and both surfaces read it: the plane through
+/// `FlatRingRuleCoverage`, the sphere through `GlobeTileCoverage`, which
+/// reads every switch of a rule as the plane does.
 struct FlatRingRules: Hashable {
     var rules: [FlatRingRule]
 
     static let zoomDropRange = 0 ... 8
     static let distanceRange = 0 ... 256
-    /// The raster resolutions a rule can pick, texels a side of one tile.
-    static let rasterResolutions = [256, 512, 1024, 2048]
-    static let defaultRasterResolution = 512
+    /// The raster resolutions a rule can have, texels a side of one tile:
+    /// the one size. A picture is kept per pictured tile with its mip
+    /// chain, and a frame pictures dozens of tiles, so anything larger
+    /// multiplies into memory the map cannot spend on its far ground. The
+    /// far ground does not need more either: past the raster zone's start
+    /// a tile is minified on screen.
+    static let rasterResolutions = [256]
+    static let defaultRasterResolution = 256
 
     /// The nearest of `rasterResolutions` to `resolution`.
     static func clampedRasterResolution(_ resolution: Int) -> Int {
         rasterResolutions.min { abs($0 - resolution) < abs($1 - resolution) } ?? defaultRasterResolution
     }
 
-    /// The exact tiles as vector geometry to one ring around the look-at
-    /// tile and one level coarser to ring 2, both with their lines, then
-    /// two levels coarser to ring 3 and four levels coarser to ring 20,
-    /// both rasterized at 256 texels without lines, nothing beyond. The
-    /// roads fade out by their width on screen inside the vector rings
-    /// (`RoadThinnessFade`), so the pictures beyond them carry none.
-    static let `default` = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1, rasterized: false, rasterResolution: 1024),
-                                                 FlatRingRule(zoomDrop: 1, distance: 2, rasterized: false, rasterResolution: 2048),
-                                                 FlatRingRule(zoomDrop: 2, distance: 3, rasterized: true, rasterResolution: 256,
+    /// The exact tiles to one ring around the look-at tile and one level
+    /// coarser to ring 2, both with their lines, then two levels coarser
+    /// to ring 3 and four levels coarser to ring 20, both without lines,
+    /// nothing beyond.
+    /// Every rule is rasterizable, so where the ground turns into pictures
+    /// is the raster zone's distance alone and no rule's edge. The roads
+    /// fade out by their width on screen inside the lined rings
+    /// (`RoadThinnessFade`).
+    static let `default` = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1, rasterized: true),
+                                                 FlatRingRule(zoomDrop: 1, distance: 2, rasterized: true),
+                                                 FlatRingRule(zoomDrop: 2, distance: 3, rasterized: true,
                                                               drawsLines: false),
-                                                 FlatRingRule(zoomDrop: 4, distance: 20, rasterized: true, rasterResolution: 256,
+                                                 FlatRingRule(zoomDrop: 4, distance: 20, rasterized: true,
                                                               drawsLines: false)])
 
     /// The rules as the coverage reads them: every value inside its range,

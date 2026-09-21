@@ -4,9 +4,9 @@
 import Metal
 
 /// The rasterized tile pipeline (TileRaster.metal): one textured quad per
-/// rasterized source in the flat world pass, opaque, writing the ground's
-/// rank depth from the fragment stage and owning the tile-priority stencil
-/// through the ground owner state.
+/// rasterized source in the flat world pass, blended by the picture's share
+/// of the pixel in the raster zone (`RasterZone`), with the rank depth the
+/// draw states written from the fragment stage.
 final class TileRasterPipeline {
     let pipelineState: MTLRenderPipelineState
 
@@ -27,7 +27,13 @@ final class TileRasterPipeline {
         descriptor.fragmentFunction = try! library.makeFunction(name: "tileRasterFragmentShader", constantValues: values)
         descriptor.rasterSampleCount = sampleCount
         descriptor.colorAttachments[0].pixelFormat = pixelFormat
-        descriptor.colorAttachments[0].isBlendingEnabled = false
+        descriptor.colorAttachments[0].isBlendingEnabled = true
+        descriptor.colorAttachments[0].rgbBlendOperation = .add
+        descriptor.colorAttachments[0].alphaBlendOperation = .add
+        descriptor.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
+        descriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
+        descriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
+        descriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
         descriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
         descriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
         pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: descriptor)

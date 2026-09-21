@@ -17,11 +17,13 @@ final class RenderFrameVisibilityResolver {
     func resolve(cameraFrameState: CameraFrameState,
                  resolvedPresentation: ResolvedPresentationState,
                  tileSettings: ImmersiveMapSettings.TileSettings,
-                 rules: FlatRingRules = .default,
+                 ruleSets: RingRuleSets = .default,
                  diagnostics: (any FrameDiagnosticsService)? = nil) -> VisibleContentState {
         let zoomPlan = TileCoverageZoomPolicy.resolve(cameraZoom: cameraFrameState.mapCameraState.zoom,
                                                       renderSurfaceMode: resolvedPresentation.renderSurfaceMode,
                                                       maximumZoomLevel: tileSettings.coverage.maximumZoomLevel)
+        // The frame is drawn by the rules of the set its target zoom falls in.
+        let rules = ruleSets.rules(forTargetZoom: zoomPlan.baseZoom)
         // The coverage is a pure function of the camera pose, drawSize,
         // presentation state and rules: with an unchanged fingerprint the
         // previous result is reused (along with its coverageVersion, which

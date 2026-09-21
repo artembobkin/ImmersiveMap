@@ -7,7 +7,8 @@ import simd
 /// Renders one tile's picture: the flat ground drawer (`FlatMapSurfaceDrawer`)
 /// run over the tile alone, through a camera looking straight down at the
 /// tile's extent, into a square texture of the rule's resolution
-/// (`FlatRingRule.rasterResolution`). The picture is what the vector
+/// (`FlatRingRule.rasterResolution`). A picture holds the ground families
+/// the raster zone names (`RasterZone.pictureGroups`) and never a road. The picture is what the vector
 /// draw would paint at the camera zoom where the tile spans that many
 /// pixels, so the fades and the point-locked widths read as at that zoom.
 /// Each picture takes its own command buffer on the frame's queue, ahead
@@ -85,7 +86,9 @@ final class TileRasterizer {
                 resolution: Int,
                 pixelsPerPoint: Double,
                 clearColor: MTLClearColor,
-                drawsLines: Bool = true) -> MTLTexture? {
+                groups: GroundLayerGroups = .all,
+                footprintGoneAreaPx: Float = 0,
+                footprintOpaqueAreaPx: Float = 0) -> MTLTexture? {
         let device = metalContext.device
         let tile = metalTile.tile
         guard let picture = Self.makePictureTexture(device: device, resolution: resolution),
@@ -152,7 +155,10 @@ final class TileRasterizer {
                                   // Straight down, w is one everywhere: the vertex
                                   // band is exact and no triangle meets the near plane.
                                   exactRankDepthBelowZoom: 0,
-                                  linelessTiles: drawsLines ? [] : [placement.placeIn])
+                                  sourceGroups: [FlatGroundSourceKey(tile: tile, worldWrap: 0): groups],
+                                  drawsRoads: false,
+                                  footprintGoneAreaPx: footprintGoneAreaPx,
+                                  footprintOpaqueAreaPx: footprintOpaqueAreaPx)
         encoder.endEncoding()
         if let blit = commandBuffer.makeBlitCommandEncoder() {
             blit.generateMipmaps(for: picture)

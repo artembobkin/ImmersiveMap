@@ -4,6 +4,13 @@
 import Metal
 import simd
 
+/// A source of the flat ground draw: a tile at one of the world's wrap
+/// copies, which place the same tile at different origins across the seam.
+struct FlatGroundSourceKey: Hashable {
+    let tile: Tile
+    let worldWrap: Int8
+}
+
 enum FlatMapSurfaceDrawer {
     /// Whether a source draws with the exact rank depth (Tile.metal,
     /// kTileExactRankDepth): every source below `exactRankDepthBelowZoom`.
@@ -47,6 +54,13 @@ enum FlatMapSurfaceDrawer {
     ///   write their rank depth from the fragment stage
     ///   (`usesExactRankDepth`). The main coverage passes the target zoom,
     ///   the horizon backdrop `Int.max` for every source of it.
+    /// - Parameter sourceGroups: the ground families a source draws
+    ///   (`GroundLayerGroups`), every one of them for a source not named.
+    ///   The raster zone splits a tile's ground between the draw under its
+    ///   picture and the draw over it this way (`RasterZone`).
+    /// - Parameter drawsRoads: whether the road buckets and the bridge
+    ///   overlay draw. Off for the draw under the pictures and for a
+    ///   picture itself: a road is never part of a picture.
     static func draw(renderEncoder: MTLRenderCommandEncoder,
                      cameraUniform: CameraUniform,
                      cameraZoom: Double,
@@ -64,7 +78,11 @@ enum FlatMapSurfaceDrawer {
                      opaqueFillsOnly: Bool = false,
                      markingCutoffWorldDistance: Float = .infinity,
                      linelessTiles: Set<VisibleTile> = [],
-                     roadThinnessFade: RoadThinnessFade = .off) {
+                     sourceGroups: [FlatGroundSourceKey: GroundLayerGroups] = [:],
+                     drawsRoads: Bool = true,
+                     roadThinnessFade: RoadThinnessFade = .off,
+                     footprintGoneAreaPx: Float = 0,
+                     footprintOpaqueAreaPx: Float = 0) {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder)
         // Every tile triangle (ground, road buckets, bridge overlay) is
         // counter-clockwise in render space, the parser's contract
@@ -90,7 +108,9 @@ enum FlatMapSurfaceDrawer {
             cameraZoom: Float(cameraZoom),
             viewportSizePx: drawableSizePx,
             pointWidthReferenceDepth: screenCentreGroundDepth(cameraMatrix: cameraUniform.matrix),
-            roadThinnessFade: roadThinnessFade
+            roadThinnessFade: roadThinnessFade,
+            footprintGoneAreaPx: footprintGoneAreaPx,
+            footprintOpaqueAreaPx: footprintOpaqueAreaPx
         )
         var shadowUniformValue = groundShadowMask.uniform
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
@@ -115,10 +135,7 @@ enum FlatMapSurfaceDrawer {
         // owns (TileSourceStencilPriority). The world wrap is part of the key:
         // the flat world's wrap copies place the same tile at different
         // origins across the seam. Finest first, so the owner writes win.
-        struct SourceKey: Hashable {
-            let tile: Tile
-            let worldWrap: Int8
-        }
+        typealias SourceKey = FlatGroundSourceKey
         var seenSources = Set<SourceKey>()
         var uniqueSources: [(metalTile: MetalTile, worldWrap: Int8, exactRankDepth: Bool)] = []
         uniqueSources.reserveCapacity(placeTilesContext.tilePlacements.count)
@@ -172,8 +189,16 @@ enum FlatMapSurfaceDrawer {
                        bandOffset: Float,
                        primitiveType: MTLPrimitiveType = .triangle,
                        linesOnly: Bool = false,
+                       appliesGroups: Bool = true,
                        runFilter: ((GroundStyleRun) -> Bool)? = nil) {
             for source in linesOnly ? linedSources : uniqueSources {
+                var sourceRunFilter = runFilter
+                if appliesGroups,
+                   let groups = sourceGroups[SourceKey(tile: source.metalTile.tile, worldWrap: source.worldWrap)],
+                   groups != .all {
+                    guard groups.isEmpty == false else { continue }
+                    sourceRunFilter = { run in groups.contains(run.group) && runFilter?(run) != false }
+                }
                 selectPipeline(pipeline, exactRankDepth: source.exactRankDepth)
                 drawFlatGeometryLayer(renderEncoder: renderEncoder,
                                       buffers: source.metalTile.tileBuffers[keyPath: keyPath],
@@ -187,7 +212,7 @@ enum FlatMapSurfaceDrawer {
                                       cameraEye: cameraUniform.eye,
                                       markingCutoffWorldDistance: markingCutoffWorldDistance,
                                       primitiveType: primitiveType,
-                                      runFilter: runFilter)
+                                      runFilter: sourceRunFilter)
             }
         }
 
@@ -288,11 +313,21 @@ enum FlatMapSurfaceDrawer {
             }
         }
 
+        guard drawsRoads else {
+            if isWireframeEnabled {
+                renderEncoder.setTriangleFillMode(.fill)
+            }
+            renderEncoder.setCullMode(.none)
+            renderEncoder.setFrontFacing(.clockwise)
+            return
+        }
         renderEncoder.pushDebugGroup("roads")
         drawRoadGroup(.tunnel)
         drawRoadGroup(.ground)
         drawRoadGroup(.automobileGround)
-        drawLayer(\.bridgeOverlay, pipeline: .lines, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset, linesOnly: true)
+        // Road geometry, so no ground family decides it.
+        drawLayer(\.bridgeOverlay, pipeline: .lines, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
+                  linesOnly: true, appliesGroups: false)
         drawRoadGroup(.bridge)
 
         for structureKind in RoadStructureKind.drawOrder {

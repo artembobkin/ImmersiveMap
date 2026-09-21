@@ -5,8 +5,8 @@ import simd
 
 /// The frame's coverage: which tiles the frame draws, at which zooms,
 /// from the camera pose. The plane's ring rules (`FlatRingRuleCoverage`)
-/// plus its horizon backdrop, or the sphere's walk (`GlobeTileCoverage`)
-/// over the distance rule (`FlatDistanceCoverage`).
+/// or the sphere's walk (`GlobeTileCoverage`) over the same rules, both
+/// counted from the tile the camera looks at.
 class TileCulling {
     /// Zoom of the flat-mode horizon backdrop: the pinned world cover's,
     /// so the footprint is covered by the one z0 tile per world copy it
@@ -22,7 +22,7 @@ class TileCulling {
 
     init() {}
 
-    /// `rules` are the plane's ring rules (`FlatRingRules.default`
+    /// `rules` are the ring rules of both surfaces (`FlatRingRules.default`
     /// unless the debug panel edits them).
     func resolveVisibleContent(cameraState: ImmersiveMapCameraState,
                                resolvedPresentation: ResolvedPresentationState,
@@ -44,9 +44,14 @@ class TileCulling {
         switch resolvedPresentation.renderSurfaceMode {
         case .spherical:
             let inputs = GlobeCoverageInputs(eye: cameraEye,
-                                             globe: resolvedPresentation.globeRenderState.globeUniform)
+                                             globe: resolvedPresentation.globeRenderState.globeUniform,
+                                             rules: rules,
+                                             lookAtTile: GlobeRingMath.lookAtTile(center: center, targetZoom: targetZoom))
             let resolution = GlobeTileCoverage.targets(targetZoom: targetZoom, inputs: inputs, frustum: cameraFrustum)
             visibleTiles = resolution.targets
+            flatRingBands = resolution.bands
+            linelessTiles = resolution.linelessTargets
+            rasterizedTiles = resolution.rasterizedTargets
             backdropTiles = []
             recordGlobeMetrics(resolution.metrics, diagnostics: diagnostics)
         case .flat:

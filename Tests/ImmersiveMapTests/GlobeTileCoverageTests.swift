@@ -5,14 +5,23 @@
 import simd
 import XCTest
 
-/// The sphere's coverage walk: the flat distance rule read off the globe,
-/// with the pinned world cover as the floor and as the far field, and the
-/// frustum and horizon rejects of the tree walk.
+/// The sphere's coverage walk: the ring rules read off the globe's grid
+/// from the look-at tile, with the pinned world cover as the floor and as
+/// the ground past the last rule, and the frustum and horizon rejects of
+/// the tree walk.
 final class GlobeTileCoverageTests: XCTestCase {
     private static let globe = GlobeUniform(panX: 0, panY: 0, radius: 1, transition: 0)
 
-    private static func inputs(eyeDistance: Float, farRadius: Double = FlatDistanceCoverage.farRadius) -> GlobeCoverageInputs {
-        GlobeCoverageInputs(eye: SIMD3<Float>(0, 0, eyeDistance), globe: globe, rule: CoverageRule(farRadius: farRadius))
+    /// The globe at pan zero looks at longitude and latitude zero, the
+    /// corner four tiles share: the look-at tile is the south-east one.
+    private static func inputs(eyeDistance: Float,
+                               rules: FlatRingRules = .default,
+                               targetZoom: Int = 6,
+                               globe: GlobeUniform = globe,
+                               lookAtTile: (x: Int, y: Int)? = nil) -> GlobeCoverageInputs {
+        let half = (1 << targetZoom) / 2
+        return GlobeCoverageInputs(eye: SIMD3<Float>(0, 0, eyeDistance), globe: globe, rules: rules,
+                                   lookAtTile: lookAtTile ?? (half, half))
     }
 
     /// A wide frustum looking at the sphere's front point from the eye.
@@ -22,37 +31,36 @@ final class GlobeTileCoverageTests: XCTestCase {
         return Frustum(pv: projection * view)
     }
 
-    private static func distance(from inputs: GlobeCoverageInputs, to tile: Tile) -> Double {
-        let visibility = GlobeVisibilityModel.makeInputs(globe: inputs.globe, cameraEye: inputs.eye)
-        return Double(simd_length(GlobeVisibilityModel.tileBound(tile: tile, inputs: visibility).center - inputs.eye))
-    }
-
     private static func cover(of tile: Tile, in output: [VisibleTile]) -> VisibleTile? {
         output.first { $0.tile == tile || $0.tile.covers(tile) }
     }
 
-    /// Close in, the tile under the eye is exact, the ring around it steps
-    /// down the ladder, and the far field is the pinned cover: nothing
-    /// below the floor, far fewer targets than leaves in view, and a walk
-    /// of a few hundred tiles.
-    func testNearTilesAreExactAndTheFarFieldIsTheCover() {
-        let inputs = Self.inputs(eyeDistance: 0.05)
-        let resolution = GlobeTileCoverage.targets(targetZoom: 6, inputs: inputs, frustum: Self.frustum(eyeDistance: 0.05))
+    /// The eye is high enough for the frustum to hold the first three
+    /// rings whole.
+    private static func resolve(eyeDistance: Float = 0.3,
+                                rules: FlatRingRules = .default,
+                                targetZoom: Int = 6) -> GlobeCoverageResolution {
+        GlobeTileCoverage.targets(targetZoom: targetZoom,
+                                  inputs: inputs(eyeDistance: eyeDistance, rules: rules, targetZoom: targetZoom),
+                                  frustum: frustum(eyeDistance: eyeDistance))
+    }
+
+    /// Close in, the look-at tile and the ring around it are exact, the
+    /// rings beyond step down by their rules, and the ground past the last
+    /// rule is the pinned cover: nothing below the floor and a small walk.
+    func testTheRingsAroundTheLookAtTileFollowTheRules() {
+        let resolution = Self.resolve()
         let output = resolution.targets
-        XCTAssertTrue(output.contains(VisibleTile(x: 32, y: 32, z: 6)), "the tile under the eye is exact: \(output)")
-        XCTAssertTrue(output.allSatisfy { $0.z >= GlobeTileCoverage.floorZoom })
-        let exact = output.filter { $0.z == 6 }
-        let cover = output.filter { $0.z == GlobeTileCoverage.floorZoom }
-        XCTAssertGreaterThan(exact.count, 0)
-        XCTAssertGreaterThan(cover.count, 0, "the far field is asked for at the cover's zoom")
-        XCTAssertLessThan(output.count, 60, "far fewer targets than leaves in view: \(output.count)")
-        XCTAssertLessThan(resolution.metrics.visitedNodeCount, 600, "the walk stays small: \(resolution.metrics.visitedNodeCount)")
-        // Every exact tile is within the exact radius, every farther visible
-        // tile is covered by a parent at the zoom its distance wants or coarser.
-        let cameraDistance = 0.05
-        for target in exact {
-            XCTAssertLessThanOrEqual(Self.distance(from: inputs, to: target.tile), FlatDistanceCoverage.exactRadius * cameraDistance * 1.01)
+        for x in 31 ... 33 {
+            for y in 31 ... 33 {
+                XCTAssertTrue(output.contains(VisibleTile(x: x, y: y, z: 6)), "ring 1 is exact: z6/\(x)/\(y)")
+            }
         }
+        XCTAssertFalse(output.contains(VisibleTile(x: 34, y: 32, z: 6)), "ring 2 is not drawn at the target zoom")
+        XCTAssertNotNil(output.first { $0.z == 5 && $0.tile.covers(Tile(x: 34, y: 32, z: 6)) }, "ring 2 is one level coarser")
+        XCTAssertNotNil(output.first { $0.z == 4 && $0.tile.covers(Tile(x: 35, y: 32, z: 6)) }, "ring 3 is two levels coarser")
+        XCTAssertTrue(output.allSatisfy { $0.z >= GlobeTileCoverage.floorZoom })
+        XCTAssertLessThan(resolution.metrics.visitedNodeCount, 600, "the walk stays small: \(resolution.metrics.visitedNodeCount)")
         for x in 28 ... 36 {
             for y in 28 ... 36 {
                 let tile = Tile(x: x, y: y, z: 6)
@@ -61,68 +69,132 @@ final class GlobeTileCoverageTests: XCTestCase {
         }
     }
 
+    /// Every placed tile answers to a rule: it is at the zoom of a band
+    /// whose rings it meets, or it is the cover over ground past the last
+    /// rule.
+    func testEveryTargetSitsInABandOfItsZoom() {
+        let rules = FlatRingRules.default.normalized().rules
+        let output = Self.resolve().targets
+        XCTAssertFalse(output.isEmpty)
+        for target in output {
+            let rings = GlobeRingMath.ringRange(of: target.tile, targetZoom: 6, lookAt: (32, 32))
+            var firstRing = 0
+            var answers = target.z == GlobeTileCoverage.floorZoom && rings.upperBound > (rules.last?.distance ?? 0)
+            for rule in rules {
+                let zoom = max(GlobeTileCoverage.floorZoom, 6 - rule.zoomDrop)
+                if zoom == target.z, firstRing <= rings.upperBound, rule.distance >= rings.lowerBound {
+                    answers = true
+                }
+                firstRing = rule.distance + 1
+            }
+            XCTAssertTrue(answers, "\(target.tile) at rings \(rings) answers to no rule")
+        }
+    }
+
+    /// The bands are reported as on the plane, one per rule, with the
+    /// tiles each placed.
+    func testTheBandsReportTheirZoomsAndCounts() {
+        let resolution = Self.resolve()
+        XCTAssertEqual(resolution.bands.map(\.zoom), [6, 5, 4, 2])
+        XCTAssertEqual(resolution.bands.map(\.distance), [1, 2, 3, 20])
+        XCTAssertEqual(resolution.bands.first?.tileCount, 9, "the look-at tile and ring 1, all in view")
+        XCTAssertEqual(resolution.bands.map(\.rasterResolution), [256, 256, 256, 256], "the plane's default pictures every band")
+        let banded = resolution.bands.reduce(0) { $0 + $1.tileCount }
+        XCTAssertLessThanOrEqual(banded, resolution.targets.count)
+    }
+
     /// Overlaps are allowed on the sphere as on the plane: a parent placed
-    /// for the ground around an exact tile covers the exact tile too.
+    /// for the ring around the exact tiles covers exact tiles too.
     func testParentsOverlapTheExactTiles() {
-        let output = GlobeTileCoverage.targets(targetZoom: 6, inputs: Self.inputs(eyeDistance: 0.05), frustum: Self.frustum(eyeDistance: 0.05)).targets
+        let output = Self.resolve().targets
         let exact = output.filter { $0.z == 6 }
         let parents = output.filter { $0.z < 6 }
         XCTAssertTrue(parents.contains { parent in exact.contains { parent.tile.covers($0.tile) } },
                       "some parent contains an exact tile: \(parents) over \(exact)")
     }
 
-    /// At the cover's zoom and above it nothing coarsens: the whole world is
-    /// pinned there, and the walk places the leaves at the target zoom.
-    func testShallowTargetsStayExact() {
-        for zoom in 0 ... GlobeTileCoverage.floorZoom {
-            let output = GlobeTileCoverage.targets(targetZoom: zoom, inputs: Self.inputs(eyeDistance: 4), frustum: Self.frustum(eyeDistance: 4)).targets
-            XCTAssertFalse(output.isEmpty)
-            XCTAssertTrue(output.allSatisfy { $0.z == zoom }, "z\(zoom): \(output)")
+    /// Past the last rule the ground is the pinned cover, and a single
+    /// short rule hands the rest of the view to it.
+    func testPastTheLastRuleTheGroundIsTheCover() {
+        let rules = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1)])
+        let output = Self.resolve(rules: rules).targets
+        XCTAssertTrue(output.contains(VisibleTile(x: 32, y: 32, z: 6)))
+        XCTAssertTrue(output.contains(VisibleTile(x: 0, y: 0, z: GlobeTileCoverage.floorZoom)))
+        XCTAssertTrue(output.allSatisfy { $0.z == 6 || $0.z == GlobeTileCoverage.floorZoom }, "\(output)")
+        XCTAssertEqual(output.filter { $0.z == 6 }.count, 9)
+    }
+
+    /// The columns close on themselves: a look-at tile in the first column
+    /// takes its ring from the last column, across the antimeridian.
+    func testTheRingsCrossTheAntimeridian() {
+        let seamGlobe = GlobeUniform(panX: 1, panY: 0, radius: 1, transition: 0)
+        let inputs = Self.inputs(eyeDistance: 0.3, globe: seamGlobe, lookAtTile: (0, 32))
+        let output = GlobeTileCoverage.targets(targetZoom: 6, inputs: inputs, frustum: Self.frustum(eyeDistance: 0.3)).targets
+        XCTAssertTrue(output.contains(VisibleTile(x: 0, y: 32, z: 6)), "\(output)")
+        XCTAssertTrue(output.contains(VisibleTile(x: 63, y: 32, z: 6)), "the ring's column across the seam is exact: \(output)")
+        XCTAssertFalse(output.contains(VisibleTile(x: 62, y: 32, z: 6)), "ring 2 across the seam is coarser")
+    }
+
+    /// The shallow zooms need no rule of their own: the whole world is a
+    /// few rings wide, and nothing goes below the cover.
+    func testShallowTargetsStaySane() {
+        for zoom in 0 ... 2 {
+            let output = Self.resolve(eyeDistance: 4, targetZoom: zoom).targets
+            XCTAssertFalse(output.isEmpty, "z\(zoom)")
+            XCTAssertTrue(output.allSatisfy { $0.z >= GlobeTileCoverage.floorZoom && $0.z <= zoom }, "z\(zoom): \(output)")
+            XCTAssertTrue(output.contains { $0.z == zoom }, "the look-at tile is exact at z\(zoom): \(output)")
         }
         XCTAssertTrue(GlobeTileCoverage.targets(targetZoom: 6, inputs: Self.inputs(eyeDistance: 4), frustum: nil).targets.isEmpty)
     }
 
-    /// Seen from afar every tile is scaled alike and the whole sphere is
-    /// within the exact zone: the culling's target zoom keeps the count.
-    func testFromAfarEverythingInViewIsExact() {
-        let output = GlobeTileCoverage.targets(targetZoom: 6, inputs: Self.inputs(eyeDistance: 4), frustum: Self.frustum(eyeDistance: 4, fovRadians: .pi / 6)).targets
-        XCTAssertFalse(output.isEmpty)
-        XCTAssertTrue(output.allSatisfy { $0.z == 6 }, "\(output.filter { $0.z != 6 })")
+    /// The zooms along the rings need no order: a list whose second rule is
+    /// finer than its third still covers the view.
+    func testAnyRuleListCoversTheView() {
+        let rules = FlatRingRules(rules: [FlatRingRule(zoomDrop: 2, distance: 1),
+                                          FlatRingRule(zoomDrop: 0, distance: 3),
+                                          FlatRingRule(zoomDrop: 3, distance: 30)])
+        let output = Self.resolve(rules: rules).targets
+        XCTAssertTrue(output.contains(VisibleTile(x: 35, y: 32, z: 6)), "ring 3 is exact under the second rule: \(output)")
+        for x in 28 ... 36 {
+            for y in 28 ... 36 {
+                XCTAssertNotNil(Self.cover(of: Tile(x: x, y: y, z: 6), in: output), "z6/\(x)/\(y) is covered")
+            }
+        }
     }
 
-    /// A leaf follows the rule frame by frame, with nothing carried over:
-    /// past the exact threshold it drops a level and a parent covers it,
-    /// back inside it is exact again.
-    func testALeafFollowsTheRuleFrameByFrame() {
-        let tile = Tile(x: 32, y: 32, z: 6)
-        // The eye on the axis above the front point, which is a corner of
-        // the tile: the tile's centre sits a fixed distance to the side, so
-        // it leaves the exact zone as the eye comes DOWN, where the camera's
-        // own distance shrinks under it. Search for the height where the
-        // rule drops it.
-        func output(eyeDistance: Float) -> [VisibleTile] {
-            GlobeTileCoverage.targets(targetZoom: 6, inputs: Self.inputs(eyeDistance: eyeDistance), frustum: Self.frustum(eyeDistance: eyeDistance)).targets
-        }
-        var threshold: Float = 0.05
-        XCTAssertEqual(FlatDistanceCoverage.drop(distance: Self.distance(from: Self.inputs(eyeDistance: threshold), to: tile), cameraDistance: Double(threshold)), 0)
-        while FlatDistanceCoverage.drop(distance: Self.distance(from: Self.inputs(eyeDistance: threshold), to: tile),
-                                        cameraDistance: Double(threshold)) == 0 {
-            threshold /= 1.01
-            XCTAssertGreaterThan(threshold, 0.001, "the rule drops the tile somewhere")
-        }
-        XCTAssertTrue(output(eyeDistance: threshold * 1.03).contains(VisibleTile(tile: tile)), "within the exact radius")
-        let dropped = output(eyeDistance: threshold * 0.97)
-        XCTAssertFalse(dropped.contains(VisibleTile(tile: tile)), "past it the tile drops a level")
-        XCTAssertNotNil(Self.cover(of: tile, in: dropped), "and a parent covers it")
-        XCTAssertTrue(output(eyeDistance: threshold * 1.03).contains(VisibleTile(tile: tile)), "back inside, exact again at once")
+    /// A rule that draws no lines names its tiles, and the cover past the
+    /// last rule follows the last rule.
+    func testALinelessRuleNamesItsTiles() {
+        let rules = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1),
+                                          FlatRingRule(zoomDrop: 2, distance: 6, drawsLines: false)])
+        let resolution = Self.resolve(rules: rules)
+        XCTAssertFalse(resolution.linelessTargets.isEmpty)
+        XCTAssertTrue(resolution.linelessTargets.allSatisfy { $0.z == 4 || $0.z == GlobeTileCoverage.floorZoom },
+                      "\(resolution.linelessTargets)")
+        XCTAssertTrue(resolution.linelessTargets.contains(VisibleTile(x: 0, y: 0, z: GlobeTileCoverage.floorZoom)))
+        XCTAssertFalse(resolution.linelessTargets.contains(VisibleTile(x: 32, y: 32, z: 6)))
+        XCTAssertTrue(Self.resolve().linelessTargets.allSatisfy { $0.z < 5 }, "the default's lined rings stay lined")
     }
 
-    /// A short reach turns most of the view into the far field: the cover
-    /// tiles, nothing between them and the exact zone.
-    func testAShortReachHandsTheViewToTheCover() {
-        let output = GlobeTileCoverage.targets(targetZoom: 6, inputs: Self.inputs(eyeDistance: 0.05, farRadius: 3), frustum: Self.frustum(eyeDistance: 0.05)).targets
-        XCTAssertTrue(output.allSatisfy { $0.z >= GlobeTileCoverage.floorZoom })
-        XCTAssertGreaterThan(output.filter { $0.z == GlobeTileCoverage.floorZoom }.count, 0)
-        XCTAssertTrue(output.contains(VisibleTile(x: 32, y: 32, z: 6)))
+    /// A rasterizable rule names its tiles with its resolution, the nearer
+    /// band's answer for a tile two bands ask for, and a vector rule none.
+    func testARasterizableRuleNamesItsTiles() {
+        let rules = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1),
+                                          FlatRingRule(zoomDrop: 2, distance: 6, rasterized: true)])
+        let resolution = Self.resolve(rules: rules)
+        XCTAssertFalse(resolution.rasterizedTargets.isEmpty)
+        XCTAssertTrue(resolution.rasterizedTargets.values.allSatisfy { $0 == FlatRingRules.defaultRasterResolution })
+        XCTAssertTrue(resolution.rasterizedTargets.keys.allSatisfy { $0.z == 4 || $0.z == GlobeTileCoverage.floorZoom },
+                      "the rasterizable band and the cover past it: \(resolution.rasterizedTargets.keys)")
+        XCTAssertNil(resolution.rasterizedTargets[VisibleTile(x: 32, y: 32, z: 6)], "the vector band stays vector")
+        XCTAssertTrue(resolution.rasterizedTargets.keys.allSatisfy { resolution.targets.contains($0) })
+        let vector = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1), FlatRingRule(zoomDrop: 2, distance: 6)])
+        XCTAssertTrue(Self.resolve(rules: vector).rasterizedTargets.isEmpty)
+    }
+
+    /// The rules are read frame by frame, with nothing carried over: the
+    /// same inputs give the same targets.
+    func testTheWalkCarriesNothingOver() {
+        XCTAssertEqual(Self.resolve().targets, Self.resolve().targets)
     }
 }

@@ -30,8 +30,10 @@ struct ExtrudedVertexIn {
     let styleIndex: UInt8
     /// The radius of the building's footprint (the circle about its centre
     /// that holds every vertex), in the same 14.2 fixed point as the
-    /// positions, the same on every vertex of the building: what the
-    /// vertex stage sizes the building on screen with (`BuildingLODUniform`).
+    /// positions, the same on every vertex of the building. No shader
+    /// reads it now: every building draws whole at every size on screen.
+    /// The bytes are the vertex's padding, kept so the prepared tile format
+    /// stands.
     let footprintRadius: UInt16
 
     /// - Parameter footprintRadius: in tile units.

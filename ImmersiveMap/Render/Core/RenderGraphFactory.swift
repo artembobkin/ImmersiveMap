@@ -42,9 +42,18 @@ enum RenderGraphFactory {
                                                             depthDisabledState: context.depthDisabledState,
                                                             shadowMapTextureProvider: shadowMapTextureProvider,
                                                             shadowFallbackTexture: context.shadowFallbackTexture)
+        // One set of tile pictures for both grounds, so the surface switch
+        // at the end of the unroll finds them rendered.
+        let tileRasterPictures = TileRasterPictures(rasterizer: TileRasterizer(
+            metalContext: context.metalContext,
+            tilePipeline: context.tilePipeline,
+            groundOwnerState: context.groundOwnerState,
+            tileStencilTestState: context.tileStencilTestState,
+            groundOutlineState: context.groundOutlineState,
+            groundShadowMaskFallbackTexture: context.groundShadowMaskFallbackTexture))
         let flatMapSurfaceSubsystem = FlatMapSurfaceRenderSubsystem(tilePipeline: context.tilePipeline,
                                                                     tileRasterPipeline: context.tileRasterPipeline,
-                                                                    metalContext: context.metalContext,
+                                                                    pictures: tileRasterPictures,
                                                                     groundOwnerState: context.groundOwnerState,
                                                                     tileStencilTestState: context.tileStencilTestState,
                                                                     groundOutlineState: context.groundOutlineState,
@@ -78,6 +87,8 @@ enum RenderGraphFactory {
                                                                             depthDisabledState: context.depthDisabledState,
                                                                             opaqueDepthState: context.sphereOpaqueOwnerState,
                                                                             translucentDepthState: context.tileStencilTestState,
+                                                                            rasterPipeline: context.tileSphereRasterPipeline,
+                                                                            pictures: tileRasterPictures,
                                                                             debugOverlayControls: debugOverlayControls)
         let globeCapSubsystem = GlobeCapRenderSubsystem(globeCapDepthState: context.globeCapDepthState,
                                                         depthDisabledState: context.depthDisabledState,

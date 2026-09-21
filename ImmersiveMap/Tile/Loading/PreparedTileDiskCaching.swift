@@ -729,14 +729,18 @@ final class PreparedTileDiskCaching {
     // plus directions for the GPU to extrude at the width on screen; a
     // v94 entry has the old stride and baked ribbons.
     // 96: `ExtrudedVertexIn`'s padding bytes became the building's footprint
-    // radius (BuildingLODUniform); a v95 entry carries zeros there, which the
-    // level of detail would read as a building too small to draw.
+    // radius; a v95 entry carries zeros there, which the level of detail
+    // of the time read as a building too small to draw.
     // 97: the built-in style's roads state a width in points (screen-fixed)
     // instead of a width on the ground; a v96 entry carries line styles and
     // host ribbons baked for the ground width.
     // 98: the built-in style draws minor and service roads from tile z14
     // only; a v97 entry of z12 or z13 still carries them.
-    static let preparedFormatVersion: UInt32 = 98
+    // 99: the building fills carry the footprint fade mask and their
+    // polygon's footprint radius in the vertices' normal bytes
+    // (TileVertexIn.footprintRadiusNormal); a v98 entry carries zeros there
+    // and the old mask, so its buildings would never fade.
+    static let preparedFormatVersion: UInt32 = 99
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

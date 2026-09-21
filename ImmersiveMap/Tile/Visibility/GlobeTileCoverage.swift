@@ -22,76 +22,110 @@ struct GlobeCullingMetrics {
 
 struct GlobeCoverageResolution {
     let targets: [VisibleTile]
+    /// One band per rule, nearest first, as on the plane: its zoom, its
+    /// last ring and the tiles it placed.
+    let bands: [FlatRingBand]
+    /// The targets placed by a rule that draws no lines
+    /// (`FlatRingRule.drawsLines`). A tile two bands ask for takes the
+    /// nearer band's answer, and the cover past the last rule the last
+    /// rule's.
+    let linelessTargets: Set<VisibleTile>
+    /// The targets a rasterizable rule placed, with the rule's resolution
+    /// (`FlatRingRule.rasterized`), by the same nearer band.
+    let rasterizedTargets: [VisibleTile: Int]
     let metrics: GlobeCullingMetrics
 }
 
 /// What the globe coverage walk reads, taken off the frame once: the eye
 /// in world units (the camera looks at the world origin, the sphere's
 /// front point, and the pan turns the sphere under it), the globe it looks
-/// at, whose pan and radius place every tile's centre in that world, and
-/// the rule's knobs.
+/// at, whose pan and radius place every tile's centre in that world, the
+/// ring rules, and the target zoom's tile the camera looks at, which the
+/// rings are counted from.
 struct GlobeCoverageInputs {
     var eye: SIMD3<Float>
     var globe: GlobeUniform
-    /// The rule's knobs (`CoverageRule.default`).
-    var rule: CoverageRule = .default
+    var rules: FlatRingRules = .default
+    var lookAtTile: (x: Int, y: Int)
 }
 
-/// The sphere's coverage: the same walk as the plane's (`FlatTileCoverage`)
-/// over the same distance rule, read off the sphere. The walk descends
-/// from the root with the frustum and horizon rejects, and at every tile
-/// the distances from the eye to the nearest and farthest points of the
-/// tile's bounding sphere say which zooms its ground wants; a tile is
-/// placed when its own zoom is among them, and looked into where a finer
-/// one is wanted. Overlapping placements are fine: the sphere draws its
-/// sources through the same tile-priority stencil as the plane.
+/// The sphere's coverage: the plane's ring rules (`FlatRingRules`) read off
+/// the sphere's grid. The walk descends from the root with the frustum and
+/// horizon rejects, which stand where the plane has its frustum footprint,
+/// and at every tile the rings of its nearest and farthest target tiles
+/// from the look-at tile (`GlobeRingMath`) say which rules' bands it
+/// meets. A tile is placed when a band it meets is drawn at its zoom, and
+/// looked into where a band it meets is drawn finer. Overlapping
+/// placements are fine, as on the plane: the sphere draws its sources
+/// through the same tile-priority stencil.
 ///
-/// Two things differ from the plane. The sphere has no backdrop layer, so
-/// ground beyond the reach is asked for at the pinned world cover's zoom
-/// (`floorZoom`, always resident, nothing to load), and no placement goes
-/// below that cover either: a coarser stand-in would be a tile the
-/// working set already holds. A target zoom at or below the cover's is
-/// left alone: the whole world is pinned there and nothing is saved by
-/// coarsening, so the walk places the leaves at the target zoom.
+/// One thing differs from the plane. Beyond the last rule the plane places
+/// nothing and leaves the ground to the haze. The sphere has no haze, so
+/// ground past the last rule is asked for at the pinned world cover's zoom
+/// (`floorZoom`, always resident, nothing to load), and no band goes below
+/// that cover either: a coarser stand-in would be a tile the working set
+/// already holds.
 enum GlobeTileCoverage {
     /// The zoom of the pinned world cover, which the working set keeps
     /// resident: the floor of every placement on the sphere and what the
-    /// far field is asked for.
+    /// ground past the last rule is asked for.
     static let floorZoom = TileWorkingSetStore.pinnedWorldCoverMaxZoomLevel
 
     private static let transitionLowZoomFallbackLimit = 3
+
+    /// One rule as the walk reads it: the rings it owns and the zoom it
+    /// draws them at.
+    private struct Band {
+        let firstRing: Int
+        let lastRing: Int
+        let zoom: Int
+        let drawsLines: Bool
+        /// Texels a side of the band's pictures, nil for a vector band.
+        let rasterResolution: Int?
+        var tileCount = 0
+    }
 
     private struct Walk {
         let targetZoom: Int
         let frustum: Frustum
         let visibility: GlobeVisibilityInputs
-        let eye: SIMD3<Float>
-        let cameraDistance: Double
-        let reach: Double
-        let usesRule: Bool
-        let rule: CoverageRule
+        let lookAtTile: (x: Int, y: Int)
+        var bands: [Band]
         var targets: [VisibleTile] = []
         var placed: Set<Tile> = []
+        var lineless: Set<VisibleTile> = []
+        var rasterized: [VisibleTile: Int] = [:]
         var metrics = GlobeCullingMetrics.zero
     }
 
     static func targets(targetZoom: Int, inputs: GlobeCoverageInputs, frustum: Frustum?) -> GlobeCoverageResolution {
         let startTime = CACurrentMediaTime()
         guard targetZoom >= 0, let frustum else {
-            return GlobeCoverageResolution(targets: [], metrics: .zero)
+            return GlobeCoverageResolution(targets: [], bands: [], linelessTargets: [], rasterizedTargets: [:], metrics: .zero)
         }
-        let cameraDistance = Double(simd_length(inputs.eye))
+        var bands: [Band] = []
+        for rule in inputs.rules.normalized().rules {
+            bands.append(Band(firstRing: bands.last.map { $0.lastRing + 1 } ?? 0,
+                              lastRing: rule.distance,
+                              zoom: min(targetZoom, max(Self.floorZoom, targetZoom - rule.zoomDrop)),
+                              drawsLines: rule.drawsLines,
+                              rasterResolution: rule.rasterized ? rule.rasterResolution : nil))
+        }
         var walk = Walk(targetZoom: targetZoom,
                         frustum: frustum,
                         visibility: GlobeVisibilityModel.makeInputs(globe: inputs.globe, cameraEye: inputs.eye),
-                        eye: inputs.eye,
-                        cameraDistance: cameraDistance,
-                        reach: inputs.rule.farRadius * cameraDistance,
-                        usesRule: targetZoom > Self.floorZoom && cameraDistance > 0,
-                        rule: inputs.rule)
+                        lookAtTile: inputs.lookAtTile,
+                        bands: bands)
         visit(Tile(x: 0, y: 0, z: 0), accepted: false, walk: &walk)
         walk.metrics.duration = CACurrentMediaTime() - startTime
-        return GlobeCoverageResolution(targets: FlatTileCoverage.sorted(walk.targets), metrics: walk.metrics)
+        return GlobeCoverageResolution(targets: FlatTileCoverage.sorted(walk.targets),
+                                       bands: walk.bands.map {
+                                           FlatRingBand(zoom: $0.zoom, distance: $0.lastRing, tileCount: $0.tileCount,
+                                                        rasterResolution: $0.rasterResolution)
+                                       },
+                                       linelessTargets: walk.lineless,
+                                       rasterizedTargets: walk.rasterized,
+                                       metrics: walk.metrics)
     }
 
     /// `accepted`: the tile lies in a subtree the visibility tests accepted
@@ -118,63 +152,46 @@ enum GlobeTileCoverage {
                 break
             }
         }
-        guard walk.usesRule else {
-            if tile.z == walk.targetZoom {
-                place(tile, walk: &walk)
-                return
-            }
-            for child in Self.children(of: tile) {
-                visit(child, accepted: accepted, walk: &walk)
-            }
-            return
-        }
 
-        let bound = GlobeVisibilityModel.tileBound(tile: tile, inputs: walk.visibility)
-        let centerDistance = Double(simd_length(bound.center - walk.eye))
-        if tile.z == walk.targetZoom {
-            // A leaf: exact by its centre.
-            let drop = FlatDistanceCoverage.drop(distance: centerDistance, cameraDistance: walk.cameraDistance, rule: walk.rule)
-            if drop == 0 {
-                place(tile, walk: &walk)
-            } else if let ancestor = tile.findParentTile(atZoom: max(Self.floorZoom, tile.z - drop)) {
-                // Wanted coarser: the ancestor at that zoom covers it, placed
-                // here if the parents' measure did not.
-                place(ancestor, walk: &walk)
-            }
-            return
-        }
-
-        let radius = Double(bound.radius)
-        let nearDistance = max(0, centerDistance - radius)
-        if nearDistance > walk.reach {
-            // The far field: the pinned cover paints it.
-            if tile.z == Self.floorZoom {
-                place(tile, walk: &walk)
-            } else if tile.z < Self.floorZoom {
-                for child in Self.children(of: tile) {
-                    visit(child, accepted: accepted, walk: &walk)
+        // The bands the tile meets: a rule's rings against the rings of the
+        // tile's nearest and farthest target tiles. No order of the zooms
+        // along the rings is assumed, so any rule list holds.
+        let rings = GlobeRingMath.ringRange(of: tile, targetZoom: walk.targetZoom, lookAt: walk.lookAtTile)
+        var placesTile = false
+        var drawsLines = true
+        var rasterResolution: Int?
+        var finestWanted = Self.floorZoom
+        for index in walk.bands.indices {
+            let band = walk.bands[index]
+            guard band.firstRing <= rings.upperBound, band.lastRing >= rings.lowerBound else { continue }
+            finestWanted = max(finestWanted, band.zoom)
+            if band.zoom == tile.z, placesTile == false {
+                placesTile = true
+                drawsLines = band.drawsLines
+                rasterResolution = band.rasterResolution
+                if walk.placed.contains(tile) == false {
+                    walk.bands[index].tileCount += 1
                 }
             }
-            return
         }
-        let farDistance = centerDistance + radius
-        let finest = max(Self.floorZoom,
-                         walk.targetZoom - FlatDistanceCoverage.drop(distance: nearDistance,
-                                                                     cameraDistance: walk.cameraDistance, rule: walk.rule))
-        // Past the reach the ground wants the cover: a tile reaching over
-        // the line is wanted down to the floor.
-        let coarsest = farDistance > walk.reach
-            ? Self.floorZoom
-            : max(Self.floorZoom,
-                  walk.targetZoom - FlatDistanceCoverage.drop(distance: farDistance,
-                                                              cameraDistance: walk.cameraDistance, rule: walk.rule))
-        if tile.z >= coarsest, tile.z <= finest {
+        // Past the last rule the pinned cover paints the ground.
+        if placesTile == false, tile.z == Self.floorZoom, rings.upperBound > (walk.bands.last?.lastRing ?? -1) {
+            placesTile = true
+            drawsLines = walk.bands.last?.drawsLines ?? true
+            rasterResolution = walk.bands.last?.rasterResolution
+        }
+        if placesTile {
+            if walk.placed.contains(tile) == false {
+                if drawsLines == false {
+                    walk.lineless.insert(VisibleTile(tile: tile))
+                }
+                if let rasterResolution {
+                    walk.rasterized[VisibleTile(tile: tile)] = rasterResolution
+                }
+            }
             place(tile, walk: &walk)
         }
-        let finestForDescent = max(Self.floorZoom,
-                                   walk.targetZoom - FlatDistanceCoverage.drop(distance: nearDistance,
-                                                                               cameraDistance: walk.cameraDistance, rule: walk.rule))
-        if tile.z < finestForDescent {
+        if tile.z < min(finestWanted, walk.targetZoom) {
             for child in Self.children(of: tile) {
                 visit(child, accepted: accepted, walk: &walk)
             }

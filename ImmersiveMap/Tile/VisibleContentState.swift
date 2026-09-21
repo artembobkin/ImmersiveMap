@@ -28,14 +28,15 @@ struct VisibleContentState {
     let backdropTiles: [VisibleTile]
     let tileZoomLevel: Int
     let coverageVersion: UInt64
-    /// The flat map's ring bands, nearest first (`FlatRingRuleCoverage`):
-    /// each rule's zoom, last ring and tile count. Empty on the globe.
+    /// The ring rules' bands, nearest first (`FlatRingRuleCoverage` on the
+    /// plane, `GlobeTileCoverage` on the sphere): each rule's zoom, last
+    /// ring and tile count.
     let flatRingBands: [FlatRingBand]
     /// The targets a rasterized rule placed, with the texels a side their
-    /// picture is rendered at (`TileRasterizer`). Empty on the globe.
+    /// picture is rendered at (`TileRasterizer`), on either surface.
     let rasterizedTiles: [VisibleTile: Int]
     /// The targets a rule that draws no lines placed
-    /// (`FlatRingRule.drawsLines`). Empty on the globe.
+    /// (`FlatRingRule.drawsLines`), on either surface.
     let linelessTiles: Set<VisibleTile>
 
     init(centerWorldMercator: SIMD2<Double>,

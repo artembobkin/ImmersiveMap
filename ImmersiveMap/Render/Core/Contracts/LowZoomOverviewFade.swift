@@ -94,6 +94,17 @@ enum LowZoomOverviewFade {
     /// the camera and shared by the flat and the atlas path. Masks below the
     /// base keep their fixed bands (`Kind`, the markings).
     static let classFadeMaskBase: Float = 10.0
+
+    /// The footprint fade band: a fill carrying this mask takes its alpha
+    /// from its polygon's footprint on screen (`BuildingFootprintFade`, the
+    /// building fills), and the parser bakes the polygon's footprint radius
+    /// into its vertices for it (`TileVertexIn.footprintRadiusNormal`). No
+    /// zoom fade of its own.
+    static let footprintFadeMask: Float = 5.0
+
+    static func isFootprintFadeBand(mask: Float) -> Bool {
+        mask >= 4.5 && mask < 9.5
+    }
     static let classFadeBandZooms: Double = 1.0
 
     static func classFadeMask(startZoom: Int) -> Float {

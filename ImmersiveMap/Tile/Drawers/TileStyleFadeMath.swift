@@ -11,6 +11,10 @@ enum TileStyleFadeMath {
         if mask >= 9.5 {
             // Class fade: fully in one zoom level past its start zoom.
             return overviewFade.cameraZoom - (mask - 10.0) >= 1.0
+        } else if mask >= 4.5 {
+            // The footprint fade band: opaque only while the fade is off,
+            // since the vertex stage gives every polygon its own alpha.
+            return overviewFade.footprintOpaqueAreaPx <= 0
         } else if mask >= 3.5 {
             return overviewFade.roadMarkingAlpha >= 1.0
         } else if mask >= 2.5 {
@@ -35,6 +39,8 @@ enum TileStyleFadeMath {
         if mask >= 9.5 {
             // Class fade: nothing shows until the camera passes its start zoom.
             return overviewFade.cameraZoom - (mask - 10.0) <= 0.0
+        } else if mask >= 4.5 {
+            return false
         } else if mask >= 3.5 {
             return overviewFade.roadMarkingAlpha <= 0.0
         } else if mask >= 2.5 {

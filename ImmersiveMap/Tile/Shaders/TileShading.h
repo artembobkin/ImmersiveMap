@@ -137,7 +137,44 @@ struct OverviewFadeUniform {
     // tileRoadThinnessFade. A zero opaque width turns it off.
     float roadFadeGoneWidthPx;
     float roadFadeOpaqueWidthPx;
+    // The footprint fade of the building fills, as footprint areas on
+    // screen in square pixels (BuildingFootprintFade). A zero opaque area
+    // turns it off. The extruded buildings do not fade.
+    float footprintGoneAreaPx;
+    float footprintOpaqueAreaPx;
 };
+
+/// The alpha of a fill of the footprint fade band (mask 5, see
+/// LowZoomOverviewFade.footprintFadeMask) from its polygon's footprint on
+/// screen: the radius the parser packed into the normal bytes (two
+/// base-128 digits of quarter tile units), through the model's scale into
+/// world units, times the pixels a world unit spans at the vertex's view
+/// depth, as the area of the square inscribed in that disc. Gone at the
+/// gone area and under, whole at the opaque area and over. Mirrored by
+/// BuildingFootprintFade.swift.
+static inline float tileFootprintAlpha(float2 packedRadius,
+                                       float4x4 modelMatrix,
+                                       float4x4 cameraMatrix,
+                                       float viewDepth,
+                                       constant OverviewFadeUniform& overviewFade) {
+    if (overviewFade.footprintOpaqueAreaPx <= 0.0) {
+        return 1.0;
+    }
+    float quarterUnits = round(packedRadius.x * 127.0) * 128.0 + round(packedRadius.y * 127.0);
+    if (quarterUnits <= 0.0) {
+        return 1.0;
+    }
+    float radiusWorld = quarterUnits * 0.25 * length(modelMatrix[0].xyz);
+    // The projection's vertical focal length is the length of the camera
+    // matrix's y row (the view part is a rotation), on the perspective
+    // camera and on the rasterizer's straight-down one alike.
+    float focal = length(float3(cameraMatrix[0][1], cameraMatrix[1][1], cameraMatrix[2][1]));
+    float radiusPx = radiusWorld * overviewFade.viewportSizePx.y * 0.5 * focal / max(viewDepth, 1e-6);
+    float areaPx = 2.0 * radiusPx * radiusPx;
+    return smoothstep(overviewFade.footprintGoneAreaPx,
+                      max(overviewFade.footprintOpaqueAreaPx, overviewFade.footprintGoneAreaPx + 1e-3),
+                      areaPx);
+}
 
 /// How much a point-locked deferred ribbon's width scales at a view depth:
 /// the style's points hold at the centre of the screen and the width
@@ -353,6 +390,10 @@ static inline half tileStyleFade(half lowZoomFadeMask, constant OverviewFadeUnif
         float startZoom = float(lowZoomFadeMask) - 10.0;
         float t = clamp(overviewFade.cameraZoom - startZoom, 0.0, 1.0);
         return half(t * t * (3.0 - 2.0 * t));
+    } else if (lowZoomFadeMask >= 4.5h) {
+        // The footprint fade band: no zoom fade, the flat vertex stage
+        // resolves the alpha per polygon (tileFootprintAlpha).
+        return 1.0h;
     } else if (lowZoomFadeMask >= 3.5h) {
         return half(overviewFade.roadMarkingAlpha);
     } else if (lowZoomFadeMask >= 2.5h) {

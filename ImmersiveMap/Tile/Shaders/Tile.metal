@@ -234,6 +234,10 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
         // and the frame only, so the fills fragment neither interpolates
         // the mask nor walks the fade bands.
         out.color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade);
+        if (style.lowZoomFadeMask >= 4.5h && style.lowZoomFadeMask < 9.5h) {
+            out.color.a *= half(tileFootprintAlpha(vertexIn.normal, modelMatrix, camera.matrix,
+                                                   out.position.w, overviewFade));
+        }
         out.farColor = half4(styles[vertexIn.styleIndex].farColor);
     }
     return out;

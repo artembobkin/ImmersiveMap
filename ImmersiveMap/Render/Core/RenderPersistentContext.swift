@@ -23,6 +23,7 @@ final class RenderPersistentContext {
     let extrudedTilePipeline: ExtrudedTilePipeline
     let tileOwnershipPipeline: TileOwnershipPipeline
     let tileRasterPipeline: TileRasterPipeline
+    let tileSphereRasterPipeline: TileSphereRasterPipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
     let fxaaPipeline: FXAAPipeline
     let tilePointScreenPipelines: TilePointScreenPipelines
@@ -134,6 +135,7 @@ final class RenderPersistentContext {
         self.extrudedTilePipeline = shared.extrudedTilePipeline
         self.tileOwnershipPipeline = shared.tileOwnershipPipeline
         self.tileRasterPipeline = shared.tileRasterPipeline
+        self.tileSphereRasterPipeline = shared.tileSphereRasterPipeline
         self.groundShadowMaskPipeline = shared.groundShadowMaskPipeline
         self.fxaaPipeline = shared.fxaaPipeline
         self.tilePointScreenPipelines = shared.tilePointScreenPipelines

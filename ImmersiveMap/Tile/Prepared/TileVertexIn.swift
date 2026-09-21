@@ -34,7 +34,20 @@ struct TileVertexIn: Sendable {
     /// never a sub-pixel sliver (`ParsedPolygon.lineNormals`). Zero on a
     /// centreline hub and on every vertex whose position is final: the
     /// pre-extruded ribbons of the sphere-era tiles and all fills.
+    ///
+    /// A fill of the footprint fade band (`LowZoomOverviewFade.footprintFadeMask`)
+    /// carries its polygon's footprint radius here instead, see
+    /// `footprintRadiusNormal`.
     let normal: SIMD2<Int8>
+
+    /// A polygon's footprint radius packed into the `normal` bytes: quarter
+    /// tile units as two base-128 digits, high then low, so the snorm fetch
+    /// hands the shader two exact integers over 127. Holds up to 4095 tile
+    /// units, a whole tile. Zero: no radius, the fill never fades.
+    static func footprintRadiusNormal(radiusUnits: Float) -> SIMD2<Int8> {
+        let quarterUnits = Int(min(max((radiusUnits * 4).rounded(), 0), 16383))
+        return SIMD2<Int8>(Int8(quarterUnits / 128), Int8(quarterUnits % 128))
+    }
 
     init(position: SIMD2<Int16>,
          styleIndex: UInt8,

@@ -43,7 +43,9 @@ enum GlobeVectorSurfaceDrawer {
                      depthDisabledState: MTLDepthStencilState,
                      isWireframeEnabled: Bool,
                      pureSphere: Bool,
-                     globeFrame: GlobeFrameConstantsUniform) {
+                     globeFrame: GlobeFrameConstantsUniform,
+                     linelessTiles: Set<VisibleTile> = [],
+                     sourceGroups: [Tile: GroundLayerGroups] = [:]) {
         guard placeTilesContext.tilePlacements.isEmpty == false else {
             return
         }
@@ -105,6 +107,24 @@ enum GlobeVectorSurfaceDrawer {
                 uniqueSources.append(placement.metalTile)
             }
             uniqueSources.sort { $0.tile.z > $1.tile.z }
+            // The sources that draw their line ribbons
+            // (`FlatRingRule.drawsLines`): a source does while any slot it
+            // is placed in belongs to a rule that draws them, as on the
+            // plane. The morph's single blended draw keeps every line.
+            var linedSourceTiles = Set<MetalTile>()
+            for placement in placeTilesContext.tilePlacements where linelessTiles.contains(placement.placeIn) == false {
+                linedSourceTiles.insert(placement.metalTile)
+            }
+            // The ground families a source draws in this call, every one
+            // for a source not named: the raster zone splits a pictured
+            // tile's ground between the draw under its picture and the
+            // draw over it (`GlobeVectorSurfaceRenderSubsystem`). On the
+            // sphere a picture holds every fill, so the fills go together.
+            func draws(_ group: GroundLayerGroups, _ source: MetalTile) -> Bool {
+                sourceGroups[source.tile]?.contains(group) ?? true
+            }
+            let fillSources = uniqueSources.filter { draws(.landFills, $0) }
+            let linedSources = uniqueSources.filter { linedSourceTiles.contains($0) && draws(.groundLines, $0) }
 
             // The opaque fill layers, depth-written and unblended.
             renderEncoder.pushDebugGroup("ground.opaqueFills")
@@ -114,7 +134,7 @@ enum GlobeVectorSurfaceDrawer {
                 run.isFillsClass && isOpaque(run, overviewFade: overviewFadeUniform)
             }
             forEachSource(renderEncoder: renderEncoder,
-                          sources: uniqueSources,
+                          sources: fillSources,
                           renderMapSize: renderMapSize,
                           pixelsPerPoint: pixelsPerPoint,
                           drawableHeightPx: drawableHeightPx,
@@ -139,7 +159,7 @@ enum GlobeVectorSurfaceDrawer {
                     && TileStyleFadeMath.fadeIsZero(mask: run.fadeMask, overviewFade: overviewFadeUniform) == false
             }
             forEachSource(renderEncoder: renderEncoder,
-                          sources: uniqueSources,
+                          sources: fillSources,
                           renderMapSize: renderMapSize,
                           pixelsPerPoint: pixelsPerPoint,
                           drawableHeightPx: drawableHeightPx,
@@ -161,7 +181,7 @@ enum GlobeVectorSurfaceDrawer {
             renderEncoder.pushDebugGroup("ground.lineRibbons")
             pipeline.selectSphereClassPipeline(renderEncoder: renderEncoder, linesClass: true, morph: morph)
             forEachSource(renderEncoder: renderEncoder,
-                          sources: uniqueSources,
+                          sources: linedSources,
                           renderMapSize: renderMapSize,
                           pixelsPerPoint: pixelsPerPoint,
                           drawableHeightPx: drawableHeightPx,
