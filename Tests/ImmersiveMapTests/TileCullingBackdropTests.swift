@@ -6,11 +6,11 @@ import CoreGraphics
 import simd
 import XCTest
 
-/// Flat-mode horizon backdrop: a few tiles at a fixed coarse zoom cover the
-/// frustum footprint without the radius clamp. Absent on the globe and when the
-/// target zoom is not above the backdrop zoom.
+/// The flat map draws no horizon backdrop: the rules' bands are the whole
+/// coverage, nothing is placed under them, and no band goes down to the
+/// world cover's zoom. The globe never had one.
 final class TileCullingBackdropTests: XCTestCase {
-    func testFlatModeResolvesBackdropTilesAtFixedZoom() throws {
+    func testFlatModeResolvesNoBackdropTiles() throws {
         let fixture = try makeFixture(zoom: 9.0, renderSurfaceMode: .flat)
 
         let content = TileCulling().resolveVisibleContent(cameraState: fixture.cameraState,
@@ -20,10 +20,9 @@ final class TileCullingBackdropTests: XCTestCase {
                                                           cameraFrustum: fixture.cameraFrustum,
                                                           cameraEye: fixture.cameraEye)
 
-        XCTAssertFalse(content.backdropTiles.isEmpty)
-        XCTAssertTrue(content.backdropTiles.allSatisfy { $0.z == TileCulling.flatBackdropZoomLevel },
-                      "The backdrop must live at a fixed zoom, got: \(content.backdropTiles.map(\.z))")
-        XCTAssertTrue(content.visibleTiles.allSatisfy { $0.z == 9 })
+        XCTAssertTrue(content.backdropTiles.isEmpty, "nothing under the bands")
+        XCTAssertTrue(content.visibleTiles.allSatisfy { $0.z == 9 }, "straight down: the first rule at the target zoom")
+        XCTAssertTrue(content.visibleTiles.allSatisfy { $0.z > TileCulling.flatBackdropZoomLevel })
     }
 
     func testGlobeModeHasNoBackdropTiles() throws {

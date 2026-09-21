@@ -12,8 +12,8 @@ struct DebugOverlayControlSnapshot: Equatable {
     let roadLabelBoundsEnabled: Bool
     let tileGridEnabled: Bool
     let tileGridDensity: Int
-    /// The plane's depth rules (`FlatDepthRuleCoverage`), normalized.
-    let flatDepthRules: FlatDepthRules
+    /// The plane's ring rules (`FlatRingRuleCoverage`), normalized.
+    let flatRingRules: FlatRingRules
     /// The buildings' screen-footprint level of detail (`BuildingLODUniform`):
     /// a building whose footprint is under the cut is dropped, one under
     /// the fade sinks into its footprint.
@@ -28,7 +28,7 @@ struct DebugOverlayControlSnapshot: Equatable {
          roadLabelBoundsEnabled: Bool = false,
          tileGridEnabled: Bool = false,
          tileGridDensity: Int = DebugTileGridDensity.standard,
-         flatDepthRules: FlatDepthRules = .default,
+         flatRingRules: FlatRingRules = .default,
          buildingLODCutPixels: Float = BuildingLODUniform.defaultCutPixels,
          buildingLODFadePixels: Float = BuildingLODUniform.defaultFadePixels) {
         self.buildingLODCutPixels = max(buildingLODCutPixels, 0)
@@ -41,7 +41,7 @@ struct DebugOverlayControlSnapshot: Equatable {
         self.roadLabelBoundsEnabled = roadLabelBoundsEnabled
         self.tileGridEnabled = tileGridEnabled
         self.tileGridDensity = DebugTileGridDensity.clamp(tileGridDensity)
-        self.flatDepthRules = flatDepthRules.normalized()
+        self.flatRingRules = flatRingRules.normalized()
     }
 }
 
@@ -55,7 +55,7 @@ final class DebugOverlayControlState {
     private var roadLabelBoundsEnabled = false
     private var tileGridEnabled = false
     private var tileGridDensity = DebugTileGridDensity.standard
-    private var flatDepthRules = FlatDepthRules.default
+    private var flatRingRules = FlatRingRules.default
     private var buildingLODCutPixels = BuildingLODUniform.defaultCutPixels
     private var buildingLODFadePixels = BuildingLODUniform.defaultFadePixels
 
@@ -70,7 +70,7 @@ final class DebugOverlayControlState {
                                            roadLabelBoundsEnabled: roadLabelBoundsEnabled,
                                            tileGridEnabled: tileGridEnabled,
                                            tileGridDensity: tileGridDensity,
-                                           flatDepthRules: flatDepthRules,
+                                           flatRingRules: flatRingRules,
                                            buildingLODCutPixels: buildingLODCutPixels,
                                            buildingLODFadePixels: buildingLODFadePixels)
     }
@@ -130,9 +130,9 @@ final class DebugOverlayControlState {
         lock.unlock()
     }
 
-    func setFlatDepthRules(_ rules: FlatDepthRules) {
+    func setFlatRingRules(_ rules: FlatRingRules) {
         lock.lock()
-        flatDepthRules = rules.normalized()
+        flatRingRules = rules.normalized()
         lock.unlock()
     }
 }

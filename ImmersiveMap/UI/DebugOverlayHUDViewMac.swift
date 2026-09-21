@@ -152,28 +152,28 @@ final class DebugOverlayHUDView: NSView {
     private let buildingCutSlider = NSSlider()
     private let buildingFadeLabel = NSTextField(labelWithString: "")
     private let buildingFadeSlider = NSSlider()
-    /// One depth rule's editor: the drop picker, the depth slider, the
+    /// One ring rule's editor: the drop picker, the distance slider, the
     /// raster switch and the raster resolution picker, each with its named
     /// row. Rebuilt when the number of rules changes.
-    private struct DepthRuleRow {
+    private struct RingRuleRow {
         let dropLabel: NSTextField
         let dropControl: NSSegmentedControl
-        let depthLabel: NSTextField
-        let depthSlider: NSSlider
+        let distanceLabel: NSTextField
+        let distanceSlider: NSSlider
         let rasterLabel: NSTextField
         let rasterSwitch: NSSwitch
         let resolutionLabel: NSTextField
         let resolutionControl: NSSegmentedControl
         var views: [NSView] {
-            [dropLabel, dropControl, depthLabel, depthSlider, rasterLabel, rasterSwitch, resolutionLabel, resolutionControl]
+            [dropLabel, dropControl, distanceLabel, distanceSlider, rasterLabel, rasterSwitch, resolutionLabel, resolutionControl]
         }
     }
-    private var depthRuleRows: [DepthRuleRow] = []
-    private let depthRulesAddButton = NSButton()
-    private let depthRulesRemoveButton = NSButton()
+    private var ringRuleRows: [RingRuleRow] = []
+    private let ringRulesAddButton = NSButton()
+    private let ringRulesRemoveButton = NSButton()
     /// The rules as the editor shows them: any moved control emits the
     /// whole list.
-    private var flatDepthRules = FlatDepthRules.default
+    private var flatRingRules = FlatRingRules.default
     private let surfaceModeButton = NSButton()
 
     private var snapshot: DebugOverlayHUDSnapshot?
@@ -198,8 +198,8 @@ final class DebugOverlayHUDView: NSView {
     var onTileGridEnabledChanged: ((Bool) -> Void)?
     var onTileGridDensityChanged: ((Int) -> Void)?
     var onWireframeEnabledChanged: ((Bool) -> Void)?
-    /// The plane's depth rules, whole, on every edit.
-    var onFlatDepthRulesChanged: ((FlatDepthRules) -> Void)?
+    /// The plane's ring rules, whole, on every edit.
+    var onFlatRingRulesChanged: ((FlatRingRules) -> Void)?
     /// The building level of detail thresholds: the cut and the fade, in pixels.
     var onBuildingLODChanged: ((Float, Float) -> Void)?
     var onRoadLabelTilesEnabledChanged: ((Bool) -> Void)?
@@ -337,14 +337,14 @@ final class DebugOverlayHUDView: NSView {
                               title: "Switch globe / flat",
                               symbolName: "arrow.triangle.2.circlepath",
                               action: #selector(surfaceModeButtonTapped))
-        configureActionButton(depthRulesAddButton,
-                              title: "Add depth rule",
+        configureActionButton(ringRulesAddButton,
+                              title: "Add ring rule",
                               symbolName: "plus.circle",
-                              action: #selector(depthRulesAddButtonTapped))
-        configureActionButton(depthRulesRemoveButton,
-                              title: "Remove last depth rule",
+                              action: #selector(ringRulesAddButtonTapped))
+        configureActionButton(ringRulesRemoveButton,
+                              title: "Remove last ring rule",
                               symbolName: "minus.circle",
-                              action: #selector(depthRulesRemoveButtonTapped))
+                              action: #selector(ringRulesRemoveButtonTapped))
         configureActionButton(tileTraceButton,
                               title: "",
                               symbolName: nil,
@@ -361,7 +361,7 @@ final class DebugOverlayHUDView: NSView {
         }
 
         scrolledSubviews.forEach(contentView.addSubview)
-        rebuildDepthRuleRows()
+        rebuildRingRuleRows()
 
         tilesStatusListView.onExpansionChanged = { [weak self] in
             self?.needsLayout = true
@@ -410,7 +410,7 @@ final class DebugOverlayHUDView: NSView {
          tileGridLabel, tileGridSwitch, tileGridDensityControl,
          wireframeLabel, wireframeSwitch,
          buildingCutLabel, buildingCutSlider, buildingFadeLabel, buildingFadeSlider,
-         depthRulesAddButton, depthRulesRemoveButton,
+         ringRulesAddButton, ringRulesRemoveButton,
          surfaceModeButton,
          tilesGroupLabel, tileTraceButton, tileTraceStatusLabel, tilesStatusLabel, tilesStatusListView]
     }
@@ -439,11 +439,11 @@ final class DebugOverlayHUDView: NSView {
         buildingCutSlider.doubleValue = Double(controls.buildingLODCutPixels)
         buildingFadeSlider.doubleValue = Double(controls.buildingLODFadePixels)
         updateBuildingLODLabels()
-        flatDepthRules = controls.flatDepthRules
-        if depthRuleRows.count != flatDepthRules.rules.count {
-            rebuildDepthRuleRows()
+        flatRingRules = controls.flatRingRules
+        if ringRuleRows.count != flatRingRules.rules.count {
+            rebuildRingRuleRows()
         }
-        updateDepthRuleRows()
+        updateRingRuleRows()
         roadLabelTilesSwitch.state = controls.roadLabelTilesEnabled ? .on : .off
         baseLabelBoundsSwitch.state = controls.baseLabelBoundsEnabled ? .on : .off
         roadLabelBoundsSwitch.state = controls.roadLabelBoundsEnabled ? .on : .off
@@ -451,132 +451,147 @@ final class DebugOverlayHUDView: NSView {
         needsLayout = true
     }
 
-    // MARK: - Depth rules
+    // MARK: - Ring rules
 
     /// One editor row per rule, in the scrolled content next to the other
     /// controls. The old rows leave the view; the values follow in
-    /// `updateDepthRuleRows`.
-    private func rebuildDepthRuleRows() {
-        for row in depthRuleRows {
+    /// `updateRingRuleRows`.
+    private func rebuildRingRuleRows() {
+        for row in ringRuleRows {
             row.views.forEach { $0.removeFromSuperview() }
         }
-        depthRuleRows = flatDepthRules.rules.indices.map { _ in
+        ringRuleRows = flatRingRules.rules.indices.map { _ in
             let dropLabel = NSTextField(labelWithString: "")
             configureControlLabel(dropLabel, text: "")
-            let dropControl = NSSegmentedControl(labels: FlatDepthRules.zoomDropRange.map(String.init),
+            let dropControl = NSSegmentedControl(labels: FlatRingRules.zoomDropRange.map(String.init),
                                                  trackingMode: .selectOne,
                                                  target: self,
-                                                 action: #selector(depthRuleDropControlChanged(_:)))
+                                                 action: #selector(ringRuleDropControlChanged(_:)))
             refuseFocus(dropControl)
-            let depthLabel = NSTextField(labelWithString: "")
-            configureControlLabel(depthLabel, text: "")
-            let depthSlider = NSSlider()
-            configureSlider(depthSlider, range: FlatDepthRules.depthRange, action: #selector(depthRuleDepthSliderChanged(_:)))
+            let distanceLabel = NSTextField(labelWithString: "")
+            configureControlLabel(distanceLabel, text: "")
+            let distanceSlider = NSSlider()
+            configureSlider(distanceSlider, range: Self.ringRuleSliderRange, action: #selector(ringRuleDistanceSliderChanged(_:)))
             let rasterLabel = NSTextField(labelWithString: "")
             configureControlLabel(rasterLabel, text: "")
             let rasterSwitch = NSSwitch()
             rasterSwitch.target = self
-            rasterSwitch.action = #selector(depthRuleRasterSwitchChanged(_:))
+            rasterSwitch.action = #selector(ringRuleRasterSwitchChanged(_:))
             refuseFocus(rasterSwitch)
             let resolutionLabel = NSTextField(labelWithString: "")
             configureControlLabel(resolutionLabel, text: "")
-            let resolutionControl = NSSegmentedControl(labels: FlatDepthRules.rasterResolutions.map(String.init),
+            let resolutionControl = NSSegmentedControl(labels: FlatRingRules.rasterResolutions.map(String.init),
                                                        trackingMode: .selectOne,
                                                        target: self,
-                                                       action: #selector(depthRuleResolutionControlChanged(_:)))
+                                                       action: #selector(ringRuleResolutionControlChanged(_:)))
             refuseFocus(resolutionControl)
-            return DepthRuleRow(dropLabel: dropLabel, dropControl: dropControl,
-                                depthLabel: depthLabel, depthSlider: depthSlider,
+            return RingRuleRow(dropLabel: dropLabel, dropControl: dropControl,
+                                distanceLabel: distanceLabel, distanceSlider: distanceSlider,
                                 rasterLabel: rasterLabel, rasterSwitch: rasterSwitch,
                                 resolutionLabel: resolutionLabel, resolutionControl: resolutionControl)
         }
-        for row in depthRuleRows {
+        for row in ringRuleRows {
             row.views.forEach(contentView.addSubview)
         }
         needsLayout = true
     }
 
-    private func updateDepthRuleRows() {
-        for (index, (row, rule)) in zip(depthRuleRows, flatDepthRules.rules).enumerated() {
-            row.dropLabel.stringValue = Self.depthRuleDropTitle(index: index)
-            row.dropControl.selectedSegment = rule.zoomDrop - FlatDepthRules.zoomDropRange.lowerBound
-            row.depthSlider.doubleValue = rule.depth
-            row.depthLabel.stringValue = Self.depthRuleDepthTitle(index: index, depth: rule.depth)
-            row.rasterLabel.stringValue = Self.depthRuleRasterTitle(index: index)
+    private func updateRingRuleRows() {
+        for (index, (row, rule)) in zip(ringRuleRows, flatRingRules.rules).enumerated() {
+            row.dropLabel.stringValue = Self.ringRuleDropTitle(index: index)
+            row.dropControl.selectedSegment = rule.zoomDrop - FlatRingRules.zoomDropRange.lowerBound
+            row.distanceSlider.doubleValue = Self.ringRuleSliderValue(distance: rule.distance)
+            row.distanceLabel.stringValue = Self.ringRuleDistanceTitle(index: index, distance: rule.distance)
+            row.rasterLabel.stringValue = Self.ringRuleRasterTitle(index: index)
             row.rasterSwitch.state = rule.rasterized ? .on : .off
-            row.resolutionLabel.stringValue = Self.depthRuleResolutionTitle(index: index)
-            row.resolutionControl.selectedSegment = FlatDepthRules.rasterResolutions.firstIndex(of: rule.rasterResolution) ?? 0
+            row.resolutionLabel.stringValue = Self.ringRuleResolutionTitle(index: index)
+            row.resolutionControl.selectedSegment = FlatRingRules.rasterResolutions.firstIndex(of: rule.rasterResolution) ?? 0
             row.resolutionControl.isEnabled = rule.rasterized
         }
-        depthRulesRemoveButton.isEnabled = flatDepthRules.rules.count > 1
+        ringRulesRemoveButton.isEnabled = flatRingRules.rules.count > 1
     }
 
-    static func depthRuleDropTitle(index: Int) -> String {
+    static func ringRuleDropTitle(index: Int) -> String {
         "Rule \(index + 1): zoom drop"
     }
 
-    static func depthRuleDepthTitle(index: Int, depth: Double) -> String {
-        String(format: "Rule %d: to %.2f cam. dist.", index + 1, depth)
+    static func ringRuleDistanceTitle(index: Int, distance: Int) -> String {
+        "Rule \(index + 1): to ring \(distance) from the look-at tile"
     }
 
-    static func depthRuleRasterTitle(index: Int) -> String {
+    /// The distance slider runs on the square root of the ring number, so
+    /// the first rings, where one step matters, take most of its travel.
+    static let ringRuleSliderRange: ClosedRange<Double> = 0 ... Double(FlatRingRules.distanceRange.upperBound).squareRoot()
+
+    static func ringRuleSliderValue(distance: Int) -> Double {
+        Double(max(distance, 0)).squareRoot()
+    }
+
+    static func ringRuleDistance(sliderValue: Double) -> Int {
+        let distance = Int((sliderValue * sliderValue).rounded())
+        return min(max(distance, FlatRingRules.distanceRange.lowerBound), FlatRingRules.distanceRange.upperBound)
+    }
+
+    static func ringRuleRasterTitle(index: Int) -> String {
         "Rule \(index + 1): rasterize tiles"
     }
 
-    static func depthRuleResolutionTitle(index: Int) -> String {
+    static func ringRuleResolutionTitle(index: Int) -> String {
         "Rule \(index + 1): raster texels per tile"
     }
 
-    @objc private func depthRuleRasterSwitchChanged(_ sender: NSSwitch) {
-        guard let index = depthRuleRows.firstIndex(where: { $0.rasterSwitch === sender }),
-              index < flatDepthRules.rules.count else { return }
-        flatDepthRules.rules[index].rasterized = sender.state == .on
-        depthRuleRows[index].resolutionControl.isEnabled = sender.state == .on
-        onFlatDepthRulesChanged?(flatDepthRules)
+    @objc private func ringRuleRasterSwitchChanged(_ sender: NSSwitch) {
+        guard let index = ringRuleRows.firstIndex(where: { $0.rasterSwitch === sender }),
+              index < flatRingRules.rules.count else { return }
+        flatRingRules.rules[index].rasterized = sender.state == .on
+        ringRuleRows[index].resolutionControl.isEnabled = sender.state == .on
+        onFlatRingRulesChanged?(flatRingRules)
     }
 
-    @objc private func depthRuleResolutionControlChanged(_ sender: NSSegmentedControl) {
-        guard let index = depthRuleRows.firstIndex(where: { $0.resolutionControl === sender }),
-              index < flatDepthRules.rules.count,
-              FlatDepthRules.rasterResolutions.indices.contains(sender.selectedSegment) else { return }
-        flatDepthRules.rules[index].rasterResolution = FlatDepthRules.rasterResolutions[sender.selectedSegment]
-        onFlatDepthRulesChanged?(flatDepthRules)
+    @objc private func ringRuleResolutionControlChanged(_ sender: NSSegmentedControl) {
+        guard let index = ringRuleRows.firstIndex(where: { $0.resolutionControl === sender }),
+              index < flatRingRules.rules.count,
+              FlatRingRules.rasterResolutions.indices.contains(sender.selectedSegment) else { return }
+        flatRingRules.rules[index].rasterResolution = FlatRingRules.rasterResolutions[sender.selectedSegment]
+        onFlatRingRulesChanged?(flatRingRules)
     }
 
-    @objc private func depthRuleDropControlChanged(_ sender: NSSegmentedControl) {
-        guard let index = depthRuleRows.firstIndex(where: { $0.dropControl === sender }),
-              index < flatDepthRules.rules.count else { return }
-        flatDepthRules.rules[index].zoomDrop = sender.selectedSegment + FlatDepthRules.zoomDropRange.lowerBound
-        onFlatDepthRulesChanged?(flatDepthRules)
+    @objc private func ringRuleDropControlChanged(_ sender: NSSegmentedControl) {
+        guard let index = ringRuleRows.firstIndex(where: { $0.dropControl === sender }),
+              index < flatRingRules.rules.count else { return }
+        flatRingRules.rules[index].zoomDrop = sender.selectedSegment + FlatRingRules.zoomDropRange.lowerBound
+        onFlatRingRulesChanged?(flatRingRules)
     }
 
-    @objc private func depthRuleDepthSliderChanged(_ sender: NSSlider) {
-        guard let index = depthRuleRows.firstIndex(where: { $0.depthSlider === sender }),
-              index < flatDepthRules.rules.count else { return }
-        flatDepthRules.rules[index].depth = sender.doubleValue
-        depthRuleRows[index].depthLabel.stringValue = Self.depthRuleDepthTitle(index: index, depth: sender.doubleValue)
-        onFlatDepthRulesChanged?(flatDepthRules)
+    @objc private func ringRuleDistanceSliderChanged(_ sender: NSSlider) {
+        guard let index = ringRuleRows.firstIndex(where: { $0.distanceSlider === sender }),
+              index < flatRingRules.rules.count else { return }
+        let distance = Self.ringRuleDistance(sliderValue: sender.doubleValue)
+        guard flatRingRules.rules[index].distance != distance else { return }
+        flatRingRules.rules[index].distance = distance
+        ringRuleRows[index].distanceLabel.stringValue = Self.ringRuleDistanceTitle(index: index, distance: distance)
+        onFlatRingRulesChanged?(flatRingRules)
     }
 
-    /// A new last rule: two levels coarser than the last and twice as far,
-    /// inside the ranges.
-    @objc private func depthRulesAddButtonTapped() {
-        let last = flatDepthRules.rules.last ?? FlatDepthRules.default.rules[0]
-        let rule = FlatDepthRule(zoomDrop: min(last.zoomDrop + 2, FlatDepthRules.zoomDropRange.upperBound),
-                                 depth: min(last.depth * 2, FlatDepthRules.depthRange.upperBound))
-        guard rule.depth > last.depth else { return }
-        flatDepthRules.rules.append(rule)
-        rebuildDepthRuleRows()
-        updateDepthRuleRows()
-        onFlatDepthRulesChanged?(flatDepthRules)
+    /// A new last rule: two levels coarser than the last and reaching
+    /// twice as many rings (at least one more), inside the ranges.
+    @objc private func ringRulesAddButtonTapped() {
+        let last = flatRingRules.rules.last ?? FlatRingRules.default.rules[0]
+        let rule = FlatRingRule(zoomDrop: min(last.zoomDrop + 2, FlatRingRules.zoomDropRange.upperBound),
+                                 distance: min(max(last.distance * 2, last.distance + 1), FlatRingRules.distanceRange.upperBound))
+        guard rule.distance > last.distance else { return }
+        flatRingRules.rules.append(rule)
+        rebuildRingRuleRows()
+        updateRingRuleRows()
+        onFlatRingRulesChanged?(flatRingRules)
     }
 
-    @objc private func depthRulesRemoveButtonTapped() {
-        guard flatDepthRules.rules.count > 1 else { return }
-        flatDepthRules.rules.removeLast()
-        rebuildDepthRuleRows()
-        updateDepthRuleRows()
-        onFlatDepthRulesChanged?(flatDepthRules)
+    @objc private func ringRulesRemoveButtonTapped() {
+        guard flatRingRules.rules.count > 1 else { return }
+        flatRingRules.rules.removeLast()
+        rebuildRingRuleRows()
+        updateRingRuleRows()
+        onFlatRingRulesChanged?(flatRingRules)
     }
 
     /// The shadow group reflects the live settings, so a change made anywhere
@@ -753,14 +768,14 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutSwitchRow(wireframeLabel, wireframeSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(buildingCutLabel, buildingCutSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(buildingFadeLabel, buildingFadeSlider, at: cursor, contentWidth: contentWidth)
-        for row in depthRuleRows {
+        for row in ringRuleRows {
             cursor = layoutControlRow(row.dropLabel, row.dropControl, at: cursor, contentWidth: contentWidth)
-            cursor = layoutControlRow(row.depthLabel, row.depthSlider, at: cursor, contentWidth: contentWidth)
+            cursor = layoutControlRow(row.distanceLabel, row.distanceSlider, at: cursor, contentWidth: contentWidth)
             cursor = layoutSwitchRow(row.rasterLabel, row.rasterSwitch, at: cursor, contentWidth: contentWidth)
             cursor = layoutControlRow(row.resolutionLabel, row.resolutionControl, at: cursor, contentWidth: contentWidth)
         }
-        cursor = layoutFullWidthRow(depthRulesAddButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
-        cursor = layoutFullWidthRow(depthRulesRemoveButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
+        cursor = layoutFullWidthRow(ringRulesAddButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
+        cursor = layoutFullWidthRow(ringRulesRemoveButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutFullWidthRow(surfaceModeButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor += Layout.groupSpacing
 

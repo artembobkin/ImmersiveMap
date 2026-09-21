@@ -95,20 +95,20 @@ struct DebugOverlayHUDSnapshot: Equatable {
             "camera z:\(format(cameraState.zoom)) pitch:\(format(pitchDegrees)) bearing:\(format(bearingDegrees))",
             "surface:\(surface) transition:\(format(Double(frameContext.transition))) viewport:\(Int(viewport.x))x\(Int(viewport.y))",
             "eye x:\(format(Double(eye.x))) y:\(format(Double(eye.y))) z:\(format(Double(eye.z)))",
-            depthRulesLine(frameContext.visibleContent.flatDepthBands),
+            ringRulesLine(frameContext.visibleContent.flatRingBands),
             targetZoomCounts,
             sourceZoomCounts
         ]
     }
 
-    /// The flat map's depth rules as the frame resolved them, nearest
-    /// first: each band's zoom, far depth and tile count. "rules: none" on
+    /// The flat map's ring rules as the frame resolved them, nearest
+    /// first: each band's zoom, last ring and tile count. "rules: none" on
     /// the globe.
-    static func depthRulesLine(_ bands: [FlatDepthBand]) -> String {
+    static func ringRulesLine(_ bands: [FlatRingBand]) -> String {
         guard bands.isEmpty == false else { return "rules: none" }
         let entries = bands.map { band in
             let raster = band.rasterResolution.map { " raster \($0)" } ?? ""
-            return "z\(band.zoom) \u{2264}\(String(format: "%.1f", band.depth)) (\(band.tileCount))" + raster
+            return "z\(band.zoom) \u{2264}\(band.distance) (\(band.tileCount))" + raster
         }
         return "rules: " + entries.joined(separator: " / ")
     }

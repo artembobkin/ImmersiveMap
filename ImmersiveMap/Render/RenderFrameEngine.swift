@@ -337,12 +337,12 @@ final class RenderFrameEngine {
         }
 
         publishStaticResources(frameIndex: frameTick.index)
-        // The depth rules are the debug panel's: an edited rule re-runs
+        // The ring rules are the debug panel's: an edited rule re-runs
         // the coverage like a camera change would.
         let visibleContent = visibilityResolver.resolve(cameraFrameState: cameraFrameState,
                                                         resolvedPresentation: resolvedPresentation,
                                                         tileSettings: settings.tiles,
-                                                        rules: debugOverlayControls.snapshot().flatDepthRules,
+                                                        rules: debugOverlayControls.snapshot().flatRingRules,
                                                         diagnostics: diagnostics)
         // Resolved once here, so the pass injection and every receiver bind
         // site take the same answer from `ShadowPassGateResolver`.

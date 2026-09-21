@@ -7,7 +7,7 @@ import simd
 /// Renders one tile's picture: the flat ground drawer (`FlatMapSurfaceDrawer`)
 /// run over the tile alone, through a camera looking straight down at the
 /// tile's extent, into a square texture of the rule's resolution
-/// (`FlatDepthRule.rasterResolution`). The picture is what the vector
+/// (`FlatRingRule.rasterResolution`). The picture is what the vector
 /// draw would paint at the camera zoom where the tile spans that many
 /// pixels, so the fades and the point-locked widths read as at that zoom.
 /// Each picture takes its own command buffer on the frame's queue, ahead

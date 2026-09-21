@@ -106,9 +106,9 @@ final class ImmersiveMapDebugOverlayRuntime {
         #if os(macOS)
         // The shadow group is part of the reworked AppKit panel; the UIKit one
         // still carries the tabbed layout and has no such group yet. The
-        // depth rules are bench controls of the same panel.
-        hudView.onFlatDepthRulesChanged = { [weak controls, weak renderRuntime] rules in
-            controls?.setFlatDepthRules(rules)
+        // ring rules are bench controls of the same panel.
+        hudView.onFlatRingRulesChanged = { [weak controls, weak renderRuntime] rules in
+            controls?.setFlatRingRules(rules)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
         hudView.onBuildingLODChanged = { [weak controls, weak renderRuntime] cutPixels, fadePixels in

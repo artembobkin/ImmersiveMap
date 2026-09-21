@@ -5,9 +5,8 @@ import Foundation
 import simd
 
 /// The flat map's tile enumeration: the tiles of one zoom under a polygon
-/// of the plane, every world copy, in a deterministic order. The depth
-/// rules (`FlatDepthRuleCoverage`) enumerate each band's ground with it,
-/// and the horizon backdrop the whole footprint.
+/// of the plane, every world copy, in a deterministic order. The ring
+/// rules (`FlatRingRuleCoverage`) enumerate each band's ground with it.
 enum FlatTileCoverage {
     private static let worldWraps: [Int8] = [-1, 0, 1]
 

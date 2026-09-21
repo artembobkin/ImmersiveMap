@@ -5,10 +5,10 @@ import Metal
 import simd
 
 /// The flat ground: the main coverage's sources through the vector drawer
-/// (`FlatMapSurfaceDrawer`), the rasterized rules' tiles as textured quads
-/// (`TileRasterDrawer`) over pictures rendered ahead of the frame
-/// (`TileRasterizer`, kept by `TileRasterStore`), and the horizon backdrop
-/// last.
+/// (`FlatMapSurfaceDrawer`) and the rasterized rules' tiles as textured
+/// quads (`TileRasterDrawer`) over pictures rendered ahead of the frame
+/// (`TileRasterizer`, kept by `TileRasterStore`). Nothing is drawn under
+/// them: beyond the last rule the haze paints the horizon.
 final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     let name: String = "FlatMapSurface"
 
@@ -120,7 +120,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
             return
         }
 
-        let tilePlacementState = frameContext.sharedState.tilePlacementState
         let debugControls = debugOverlayControls.snapshot()
         let isWireframeEnabled = debugControls.wireframeEnabled
         let groundShadowMask = GroundShadowMaskBinding.resolve(frameContext: frameContext,
@@ -140,15 +139,10 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         let drawableSizePx = SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height))
         // The drawer sets its own depth-stencil states per group: the
         // ground owns the tile-priority stencil (depth tested against the
-        // buildings, never written), the road buckets only test it.
-        // The MAIN coverage draws first and the coarse horizon backdrop
-        // last: the layered ground writes rank depth, so everything must
-        // draw finest-first (the sphere's rule), and the stencil carves the
-        // backdrop out of every pixel the main coverage owns instead of the
-        // old painter's order; beyond the coverage's edge the backdrop
-        // still paints all the way to the horizon. The backdrop binds the
-        // same shadow mask: it lies outside the fitted shadow map, so the
-        // mask is lit there.
+        // buildings, never written), the road buckets only test it. The
+        // layered ground writes rank depth, so everything draws
+        // finest-first (the sphere's rule) and the stencil settles which
+        // source owns a pixel.
         FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   cameraZoom: frameContext.zoom,
@@ -169,8 +163,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   markingCutoffWorldDistance: markingCutoff)
         // The rasterized sources: their pictures over their extents, the
         // stencil deciding against the vector sources as between any two
-        // sources. Between the main coverage and the backdrop, since the
-        // stencil, not the order, settles ownership among them all.
+        // sources.
         TileRasterDrawer.draw(renderEncoder: encoder,
                               cameraUniform: frameContext.cameraUniform,
                               sources: rasterSources,
@@ -178,27 +171,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                               groundShadowMask: groundShadowMask,
                               pipeline: tileRasterPipeline,
                               groundOwnerState: groundOwnerState)
-        FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
-                                  cameraUniform: frameContext.cameraUniform,
-                                  cameraZoom: frameContext.zoom,
-                                  pixelsPerPoint: Float(frameContext.pixelsPerPoint),
-                                  drawableSizePx: drawableSizePx,
-                                  placeTilesContext: tilePlacementState.backdropPlaceTilesContext,
-                                  flatRenderState: frameContext.resolvedPresentation.flatRenderState,
-                                  groundShadowMask: groundShadowMask,
-                                  tilePipeline: tilePipeline,
-                                  groundOwnerState: groundOwnerState,
-                                  tileStencilTestState: tileStencilTestState,
-                                  groundOutlineState: groundOutlineState,
-                                  isWireframeEnabled: isWireframeEnabled,
-                                  // The backdrop's z0 cells are the largest triangles
-                                  // of the frame: every one of its sources writes the
-                                  // rank depth exactly.
-                                  exactRankDepthBelowZoom: .max,
-                                  // The far band under the fog needs only the painted
-                                  // ground: the backdrop's sub-pixel linework is skipped
-                                  // (see the drawer).
-                                  opaqueFillsOnly: true)
         encoder.setDepthStencilState(depthDisabledState)
     }
 

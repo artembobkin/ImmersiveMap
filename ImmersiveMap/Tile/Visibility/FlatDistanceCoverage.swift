@@ -5,8 +5,8 @@ import Foundation
 import simd
 
 /// The knobs of the sphere's distance rule (`FlatDistanceCoverage`, read
-/// by `GlobeTileCoverage`). The plane's coverage is the depth rules
-/// (`FlatDepthRuleCoverage`) and reads none of this.
+/// by `GlobeTileCoverage`). The plane's coverage is the ring rules
+/// (`FlatRingRuleCoverage`) and reads none of this.
 struct CoverageRule: Hashable {
     /// The exact zone's radius, in camera distances.
     var exactRadius: Double = FlatDistanceCoverage.exactRadius

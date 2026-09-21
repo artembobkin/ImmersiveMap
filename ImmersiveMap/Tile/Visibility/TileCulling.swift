@@ -4,7 +4,7 @@
 import simd
 
 /// The frame's coverage: which tiles the frame draws, at which zooms,
-/// from the camera pose. The plane's depth rules (`FlatDepthRuleCoverage`)
+/// from the camera pose. The plane's ring rules (`FlatRingRuleCoverage`)
 /// plus its horizon backdrop, or the sphere's walk (`GlobeTileCoverage`)
 /// over the distance rule (`FlatDistanceCoverage`).
 class TileCulling {
@@ -22,7 +22,7 @@ class TileCulling {
 
     init() {}
 
-    /// `rules` are the plane's depth rules (`FlatDepthRules.default`
+    /// `rules` are the plane's ring rules (`FlatRingRules.default`
     /// unless the debug panel edits them).
     func resolveVisibleContent(cameraState: ImmersiveMapCameraState,
                                resolvedPresentation: ResolvedPresentationState,
@@ -30,14 +30,14 @@ class TileCulling {
                                cameraMatrix: matrix_float4x4?,
                                cameraFrustum: Frustum?,
                                cameraEye: SIMD3<Float>,
-                               rules: FlatDepthRules = .default,
+                               rules: FlatRingRules = .default,
                                diagnostics: (any FrameDiagnosticsService)? = nil) -> VisibleContentState {
         let semanticCenterWorldMercator = cameraState.centerWorldMercator
         let center = Self.makeCenter(centerWorldMercator: semanticCenterWorldMercator,
                                      targetZoom: targetZoom)
         let visibleTiles: [VisibleTile]
         let backdropTiles: [VisibleTile]
-        var flatDepthBands: [FlatDepthBand] = []
+        var flatRingBands: [FlatRingBand] = []
         var rasterizedTiles: [VisibleTile: Int] = [:]
 
         switch resolvedPresentation.renderSurfaceMode {
@@ -51,22 +51,20 @@ class TileCulling {
         case .flat:
             let flatRenderState = resolvedPresentation.flatRenderState
             if let polygon = CoveragePolygonBuilder.make(cameraMatrix: cameraMatrix) {
-                let hasBackdrop = targetZoom > Self.flatBackdropZoomLevel
-                let resolution = FlatDepthRuleCoverage.resolve(eye: cameraEye,
-                                                               flatRenderState: flatRenderState,
-                                                               targetZoom: targetZoom,
-                                                               backdropZoom: hasBackdrop ? Self.flatBackdropZoomLevel : nil,
-                                                               rules: rules,
-                                                               polygon: polygon)
+                // No horizon backdrop: the flat map draws the rules' bands
+                // and nothing under them, and the world cover's zoom stays
+                // the floor no band and no stand-in goes down to. Beyond
+                // the last rule the haze paints the horizon over the clear
+                // colour.
+                let resolution = FlatRingRuleCoverage.resolve(flatRenderState: flatRenderState,
+                                                              targetZoom: targetZoom,
+                                                              backdropZoom: Self.flatBackdropZoomLevel,
+                                                              rules: rules,
+                                                              polygon: polygon)
                 visibleTiles = resolution.targets
-                flatDepthBands = resolution.bands
+                flatRingBands = resolution.bands
                 rasterizedTiles = resolution.rasterizedTargets
-                // The backdrop: the coarse tiles under the whole footprint, all
-                // the way to the horizon, so the coverage's edge is never
-                // drawn in.
-                backdropTiles = hasBackdrop
-                    ? FlatTileCoverage.tiles(atZoom: Self.flatBackdropZoomLevel, polygon: polygon, flatRenderState: flatRenderState)
-                    : []
+                backdropTiles = []
                 diagnostics?.setCounter(.globeCullingVisitedNodes, value: resolution.visitedNodeCount)
             } else {
                 visibleTiles = []
@@ -85,7 +83,7 @@ class TileCulling {
                                    backdropTiles: backdropTiles,
                                    tileZoomLevel: targetZoom,
                                    coverageVersion: coverageVersion,
-                                   flatDepthBands: flatDepthBands,
+                                   flatRingBands: flatRingBands,
                                    rasterizedTiles: rasterizedTiles)
     }
 

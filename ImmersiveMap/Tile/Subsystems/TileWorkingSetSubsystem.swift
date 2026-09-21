@@ -67,10 +67,12 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
 
         // The backdrop's demand and placements are shared with the coverage.
         let backdropTiles = visibleContent.backdropTiles
-        // A backdrop exists - beneath the main coverage the whole frame is painted
-        // at its zoom, so the planner's substitutes never go to that zoom or
-        // coarser (it is already drawn by the layer below).
-        let backdropZoomLevel = backdropTiles.isEmpty ? nil : TileCulling.flatBackdropZoomLevel
+        // The plane draws no backdrop, but the world cover's zoom is still
+        // the floor of the planner's stand-ins: a target still loading is
+        // never covered by the pinned world tile, which at a street zoom
+        // is a plain of one colour with nothing on it. The globe keeps its
+        // cover as a stand-in.
+        let backdropZoomLevel: Int? = frameContext.renderSurfaceMode == .flat ? TileCulling.flatBackdropZoomLevel : nil
         // The demand is the targets and the backdrop, nothing else: no
         // stand-in is asked for. What covers a loading target is what is
         // resident already (the working set keeps the tiles that stand in

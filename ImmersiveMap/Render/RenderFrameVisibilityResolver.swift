@@ -3,7 +3,7 @@
 
 /// Computes the frame's coverage from the camera snapshot, the presentation
 /// state and the tile settings: the target zoom, then the coverage
-/// (`TileCulling`). `rules` are the plane's depth rules, the debug
+/// (`TileCulling`). `rules` are the plane's ring rules, the debug
 /// panel's or the default.
 final class RenderFrameVisibilityResolver {
     private let tileCulling: TileCulling
@@ -17,7 +17,7 @@ final class RenderFrameVisibilityResolver {
     func resolve(cameraFrameState: CameraFrameState,
                  resolvedPresentation: ResolvedPresentationState,
                  tileSettings: ImmersiveMapSettings.TileSettings,
-                 rules: FlatDepthRules = .default,
+                 rules: FlatRingRules = .default,
                  diagnostics: (any FrameDiagnosticsService)? = nil) -> VisibleContentState {
         let zoomPlan = TileCoverageZoomPolicy.resolve(cameraZoom: cameraFrameState.mapCameraState.zoom,
                                                       renderSurfaceMode: resolvedPresentation.renderSurfaceMode,
@@ -51,7 +51,7 @@ final class RenderFrameVisibilityResolver {
     private static func makeFingerprint(cameraFrameState: CameraFrameState,
                                         resolvedPresentation: ResolvedPresentationState,
                                         targetZoom: Int,
-                                        rules: FlatDepthRules) -> Int {
+                                        rules: FlatRingRules) -> Int {
         var hasher = Hasher()
         let cameraState = cameraFrameState.mapCameraState
         hasher.combine(cameraState.centerWorldMercator.x.bitPattern)
