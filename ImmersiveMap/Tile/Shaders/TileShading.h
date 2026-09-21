@@ -129,7 +129,40 @@ struct OverviewFadeUniform {
     // The drawable in pixels: what the deferred ribbons' vertex stage
     // converts a tile unit's clip-space span into pixels with.
     float2 viewportSizePx;
+    // The view depth of the ground point at the centre of the screen: what
+    // a point-locked deferred ribbon's width is stated at. Zero: the width
+    // holds in pixels at every depth. See tilePointWidthPerspectiveScale.
+    float pointWidthReferenceDepth;
+    // The roads' thinness fade, as widths on screen in pixels; see
+    // tileRoadThinnessFade. A zero opaque width turns it off.
+    float roadFadeGoneWidthPx;
+    float roadFadeOpaqueWidthPx;
 };
+
+/// How much a point-locked deferred ribbon's width scales at a view depth:
+/// the style's points hold at the centre of the screen and the width
+/// follows the perspective from there, thinner toward the horizon and
+/// wider in the foreground, the way a width on the ground would. The
+/// foreground growth is capped so a road under a low camera stays a symbol.
+constant float kTilePointWidthPerspectiveMaximum = 2.0;
+static inline float tilePointWidthPerspectiveScale(float referenceDepth, float viewDepth) {
+    if (referenceDepth <= 0.0) {
+        return 1.0;
+    }
+    return min(referenceDepth / max(viewDepth, 1e-6), kTilePointWidthPerspectiveMaximum);
+}
+
+/// How much of a road is left at its width on screen: a road thinner than
+/// `opaqueWidthPx` fades with its width and is gone at `goneWidthPx`, so a
+/// road the perspective has thinned leaves the picture instead of staying
+/// a full-strength hairline. One when `opaqueWidthPx` is zero (off).
+/// Mirrored by RoadThinnessFade.alpha.
+static inline float tileRoadThinnessFade(float widthPx, float goneWidthPx, float opaqueWidthPx) {
+    if (opaqueWidthPx <= 0.0) {
+        return 1.0;
+    }
+    return smoothstep(goneWidthPx, max(opaqueWidthPx, goneWidthPx + 1e-3), widthPx);
+}
 
 /// Per-draw dash scale: tile units per layout point at the tile's nominal
 /// display scale. A constant of the tile and the viewport, never of the live

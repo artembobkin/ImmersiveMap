@@ -217,15 +217,15 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
             XCTAssertTrue(road.resolvedLineRenderPasses[0].lineGeometry.lineJoinRound, "\(className) at z\(zoom)")
         }
 
-        // From z12 the world width takes over: no point lock, floor as a
-        // safety net, so street-zoom world growth is untouched.
+        // From z12 the road stays a symbol: the class's width in points,
+        // fixed on screen, with no floor because it never thins by zoom.
         let streetMotorway = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 12)
         let streetFill = streetMotorway.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
-        XCTAssertEqual(streetFill.lineWidthPoints, 0)
-        XCTAssertEqual(streetFill.minimumWidthPoints, 2.2)
+        XCTAssertEqual(streetFill.lineWidthPoints, 7.0)
+        XCTAssertEqual(streetFill.minimumWidthPoints, 0)
         XCTAssertEqual(streetFill.color, configuration.layers.roads.motorway)
         let streetPrimary = makeStyle(style, layerName: "transportation", className: "primary", zoom: 12)
-        XCTAssertEqual(streetPrimary.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!.minimumWidthPoints, 1.6)
+        XCTAssertEqual(streetPrimary.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!.lineWidthPoints, 6.0)
 
         // A tunnel keeps the tunnel opacity on the same stroke.
         let tunnel = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 8,

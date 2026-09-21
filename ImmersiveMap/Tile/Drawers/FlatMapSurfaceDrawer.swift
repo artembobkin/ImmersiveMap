@@ -16,6 +16,33 @@ enum FlatMapSurfaceDrawer {
         sourceZoom < exactRankDepthBelowZoom
     }
 
+    /// The view depth of the ground point under the centre of the screen,
+    /// which is the clip-space w there: the depth the point-locked road
+    /// widths are stated at, so a road is its style's points wide at the
+    /// centre and follows the perspective away from it. Zero, which turns
+    /// the perspective off, when the centre ray does not meet the ground.
+    static func screenCentreGroundDepth(cameraMatrix: matrix_float4x4) -> Float {
+        let inverse = cameraMatrix.inverse
+        let nearClip = inverse * SIMD4<Float>(0, 0, 0, 1)
+        let farClip = inverse * SIMD4<Float>(0, 0, 1, 1)
+        guard abs(nearClip.w) > .leastNormalMagnitude, abs(farClip.w) > .leastNormalMagnitude else {
+            return 0
+        }
+        let near = SIMD3<Float>(nearClip.x, nearClip.y, nearClip.z) / nearClip.w
+        let far = SIMD3<Float>(farClip.x, farClip.y, farClip.z) / farClip.w
+        let descent = near.z - far.z
+        guard abs(descent) > .leastNormalMagnitude else {
+            return 0
+        }
+        let t = near.z / descent
+        guard t.isFinite, t > 0 else {
+            return 0
+        }
+        let ground = near + (far - near) * t
+        let depth = (cameraMatrix * SIMD4<Float>(ground.x, ground.y, 0, 1)).w
+        return depth.isFinite && depth > 0 ? depth : 0
+    }
+
     /// - Parameter exactRankDepthBelowZoom: the sources below this zoom
     ///   write their rank depth from the fragment stage
     ///   (`usesExactRankDepth`). The main coverage passes the target zoom,
@@ -35,7 +62,9 @@ enum FlatMapSurfaceDrawer {
                      isWireframeEnabled: Bool,
                      exactRankDepthBelowZoom: Int,
                      opaqueFillsOnly: Bool = false,
-                     markingCutoffWorldDistance: Float = .infinity) {
+                     markingCutoffWorldDistance: Float = .infinity,
+                     linelessTiles: Set<VisibleTile> = [],
+                     roadThinnessFade: RoadThinnessFade = .off) {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder)
         // Every tile triangle (ground, road buckets, bridge overlay) is
         // counter-clockwise in render space, the parser's contract
@@ -59,7 +88,9 @@ enum FlatMapSurfaceDrawer {
             roadSurfaceBlend: LowZoomOverviewFade.roadSurfaceBlend(for: cameraZoom),
             roadMarkingAlpha: LowZoomOverviewFade.roadMarkingAlpha(for: cameraZoom),
             cameraZoom: Float(cameraZoom),
-            viewportSizePx: drawableSizePx
+            viewportSizePx: drawableSizePx,
+            pointWidthReferenceDepth: screenCentreGroundDepth(cameraMatrix: cameraUniform.matrix),
+            roadThinnessFade: roadThinnessFade
         )
         var shadowUniformValue = groundShadowMask.uniform
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
@@ -100,6 +131,16 @@ enum FlatMapSurfaceDrawer {
             }
         }
         uniqueSources.sort { $0.metalTile.tile.z > $1.metalTile.tile.z }
+        // The sources that draw their lines (`FlatRingRule.drawsLines`): a
+        // source does while any slot it is placed in belongs to a rule that
+        // draws them, so a stand-in for a lined slot keeps its roads.
+        var linedSourceKeys = Set<SourceKey>()
+        for placeTile in placeTilesContext.tilePlacements where linelessTiles.contains(placeTile.placeIn) == false {
+            linedSourceKeys.insert(SourceKey(tile: placeTile.metalTile.tile, worldWrap: placeTile.placeIn.worldWrap))
+        }
+        let linedSources = uniqueSources.filter {
+            linedSourceKeys.contains(SourceKey(tile: $0.metalTile.tile, worldWrap: $0.worldWrap))
+        }
 
         // Each group selects its pipeline per source, since a source's
         // depth path is its own (usesExactRankDepth): finest first, so the
@@ -130,8 +171,9 @@ enum FlatMapSurfaceDrawer {
                        pipeline: GroundPipeline,
                        bandOffset: Float,
                        primitiveType: MTLPrimitiveType = .triangle,
+                       linesOnly: Bool = false,
                        runFilter: ((GroundStyleRun) -> Bool)? = nil) {
-            for source in uniqueSources {
+            for source in linesOnly ? linedSources : uniqueSources {
                 selectPipeline(pipeline, exactRankDepth: source.exactRankDepth)
                 drawFlatGeometryLayer(renderEncoder: renderEncoder,
                                       buffers: source.metalTile.tileBuffers[keyPath: keyPath],
@@ -214,6 +256,7 @@ enum FlatMapSurfaceDrawer {
         drawLayer(\.ground,
                   pipeline: .lines,
                   bandOffset: GlobeSurfaceDepthRank.classDepthBand,
+                  linesOnly: true,
                   runFilter: { $0.isLinesClass })
         renderEncoder.popDebugGroup()
 
@@ -222,7 +265,7 @@ enum FlatMapSurfaceDrawer {
         // the style's too, baked as the pass's fade band.
         func drawRoadGroup(_ structureKind: RoadStructureKind) {
             for role in [RoadPassRole.shadow, .casing, .fill, .detail] {
-                for source in uniqueSources {
+                for source in linedSources {
                     selectPipeline(.lines, exactRankDepth: source.exactRankDepth)
                     let structureBucket = source.metalTile.tileBuffers.roads.bucket(for: structureKind)
                     drawFlatGeometryLayer(renderEncoder: renderEncoder,
@@ -249,11 +292,11 @@ enum FlatMapSurfaceDrawer {
         drawRoadGroup(.tunnel)
         drawRoadGroup(.ground)
         drawRoadGroup(.automobileGround)
-        drawLayer(\.bridgeOverlay, pipeline: .lines, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset)
+        drawLayer(\.bridgeOverlay, pipeline: .lines, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset, linesOnly: true)
         drawRoadGroup(.bridge)
 
         for structureKind in RoadStructureKind.drawOrder {
-            for source in uniqueSources {
+            for source in linedSources {
                 selectPipeline(.lines, exactRankDepth: source.exactRankDepth)
                 let structureBucket = source.metalTile.tileBuffers.roads.bucket(for: structureKind)
                 drawFlatGeometryLayer(renderEncoder: renderEncoder,

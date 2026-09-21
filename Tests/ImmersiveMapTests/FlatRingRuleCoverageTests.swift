@@ -93,8 +93,9 @@ final class FlatRingRuleCoverageTests: XCTestCase {
         XCTAssertEqual(FlatRingRules.default.normalized(), FlatRingRules.default, "the default is already normal")
         XCTAssertEqual(FlatRingRules.default.rules.map(\.zoomDrop), [0, 1, 2, 4])
         XCTAssertEqual(FlatRingRules.default.rules.map(\.distance), [1, 2, 3, 20])
-        XCTAssertEqual(FlatRingRules.default.rules.map(\.rasterized), [false, false, false, true])
-        XCTAssertEqual(FlatRingRules.default.rules.map(\.rasterResolution), [1024, 2048, 2048, 512])
+        XCTAssertEqual(FlatRingRules.default.rules.map(\.rasterized), [false, false, true, true])
+        XCTAssertEqual(FlatRingRules.default.rules.map(\.rasterResolution), [1024, 2048, 256, 256])
+        XCTAssertEqual(FlatRingRules.default.rules.map(\.drawsLines), [true, true, false, false])
     }
 
     // MARK: - The look-at tile and its squares

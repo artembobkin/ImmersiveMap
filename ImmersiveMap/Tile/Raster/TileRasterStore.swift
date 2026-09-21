@@ -9,6 +9,9 @@ import Metal
 struct TileRasterKey: Hashable {
     let tile: Tile
     let resolution: Int
+    /// Whether the picture holds the tile's lines (`FlatRingRule.drawsLines`):
+    /// the two are different pictures.
+    var drawsLines: Bool = true
 }
 
 /// The rasterized tiles' pictures (`TileRasterizer`), kept for as long as

@@ -88,13 +88,15 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                 vectorPlacements.append(placement)
                 continue
             }
-            let key = TileRasterKey(tile: placement.metalTile.tile, resolution: resolution)
+            let drawsLines = frameContext.visibleContent.linelessTiles.contains(placement.placeIn) == false
+            let key = TileRasterKey(tile: placement.metalTile.tile, resolution: resolution, drawsLines: drawsLines)
             var texture = rasterStore.texture(for: key, frameIndex: frameContext.frameIndex)
             if texture == nil {
                 texture = rasterizer.render(metalTile: placement.metalTile,
                                             resolution: resolution,
                                             pixelsPerPoint: Double(frameContext.pixelsPerPoint),
-                                            clearColor: clearColor)
+                                            clearColor: clearColor,
+                                            drawsLines: drawsLines)
                 if let texture {
                     rasterStore.insert(texture, for: key, frameIndex: frameContext.frameIndex)
                 }
@@ -160,7 +162,9 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   // the vertex z, every coarser band writes it
                                   // exactly (FlatMapSurfaceDrawer.usesExactRankDepth).
                                   exactRankDepthBelowZoom: frameContext.visibleContent.tileZoomLevel,
-                                  markingCutoffWorldDistance: markingCutoff)
+                                  markingCutoffWorldDistance: markingCutoff,
+                                  linelessTiles: frameContext.visibleContent.linelessTiles,
+                                  roadThinnessFade: debugControls.roadThinnessFade)
         // The rasterized sources: their pictures over their extents, the
         // stencil deciding against the vector sources as between any two
         // sources.

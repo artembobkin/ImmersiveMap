@@ -19,6 +19,8 @@ struct DebugOverlayControlSnapshot: Equatable {
     /// the fade sinks into its footprint.
     let buildingLODCutPixels: Float
     let buildingLODFadePixels: Float
+    /// The roads' thinness fade (`RoadThinnessFade`).
+    let roadThinnessFade: RoadThinnessFade
 
     init(axesEnabled: Bool,
          tileLayersEnabled: Bool,
@@ -30,7 +32,9 @@ struct DebugOverlayControlSnapshot: Equatable {
          tileGridDensity: Int = DebugTileGridDensity.standard,
          flatRingRules: FlatRingRules = .default,
          buildingLODCutPixels: Float = BuildingLODUniform.defaultCutPixels,
-         buildingLODFadePixels: Float = BuildingLODUniform.defaultFadePixels) {
+         buildingLODFadePixels: Float = BuildingLODUniform.defaultFadePixels,
+         roadThinnessFade: RoadThinnessFade = .default) {
+        self.roadThinnessFade = roadThinnessFade
         self.buildingLODCutPixels = max(buildingLODCutPixels, 0)
         self.buildingLODFadePixels = max(buildingLODFadePixels, self.buildingLODCutPixels)
         self.axesEnabled = axesEnabled
@@ -58,6 +62,7 @@ final class DebugOverlayControlState {
     private var flatRingRules = FlatRingRules.default
     private var buildingLODCutPixels = BuildingLODUniform.defaultCutPixels
     private var buildingLODFadePixels = BuildingLODUniform.defaultFadePixels
+    private var roadThinnessFade = RoadThinnessFade.default
 
     func snapshot() -> DebugOverlayControlSnapshot {
         lock.lock()
@@ -72,7 +77,14 @@ final class DebugOverlayControlState {
                                            tileGridDensity: tileGridDensity,
                                            flatRingRules: flatRingRules,
                                            buildingLODCutPixels: buildingLODCutPixels,
-                                           buildingLODFadePixels: buildingLODFadePixels)
+                                           buildingLODFadePixels: buildingLODFadePixels,
+                                           roadThinnessFade: roadThinnessFade)
+    }
+
+    func setRoadThinnessFade(_ fade: RoadThinnessFade) {
+        lock.lock()
+        roadThinnessFade = fade
+        lock.unlock()
     }
 
     func setBuildingLOD(cutPixels: Float, fadePixels: Float) {

@@ -27,6 +27,15 @@ struct TileOverviewFadeUniform {
     /// converts a tile unit's clip-space span into pixels with (Tile.metal).
     /// Zero on the sphere and wherever no ribbon is deferred.
     var viewportSizePx: SIMD2<Float>
+    /// The view depth of the ground point at the centre of the screen, what
+    /// a point-locked deferred ribbon's width is stated at
+    /// (`tilePointWidthPerspectiveScale` in TileShading.h). Zero: the width
+    /// holds in pixels at every depth.
+    var pointWidthReferenceDepth: Float = 0
+    /// The roads' thinness fade (`RoadThinnessFade`), as widths on screen
+    /// in pixels. A zero opaque width turns it off.
+    var roadFadeGoneWidthPx: Float = 0
+    var roadFadeOpaqueWidthPx: Float = 0
 
     init(overviewAlpha: Float,
          roadAlpha: Float,
@@ -35,7 +44,9 @@ struct TileOverviewFadeUniform {
          roadSurfaceBlend: Float = 0,
          roadMarkingAlpha: Float = 0,
          cameraZoom: Float,
-         viewportSizePx: SIMD2<Float> = .zero) {
+         viewportSizePx: SIMD2<Float> = .zero,
+         pointWidthReferenceDepth: Float = 0,
+         roadThinnessFade: RoadThinnessFade = .off) {
         self.overviewAlpha = overviewAlpha
         self.roadAlpha = roadAlpha
         self.landuseAlpha = landuseAlpha
@@ -44,6 +55,9 @@ struct TileOverviewFadeUniform {
         self.roadMarkingAlpha = roadMarkingAlpha
         self.cameraZoom = cameraZoom
         self.viewportSizePx = viewportSizePx
+        self.pointWidthReferenceDepth = pointWidthReferenceDepth
+        self.roadFadeGoneWidthPx = roadThinnessFade.goneWidthPixels
+        self.roadFadeOpaqueWidthPx = roadThinnessFade.opaqueWidthPixels
     }
 }
 

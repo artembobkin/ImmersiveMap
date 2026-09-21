@@ -64,17 +64,18 @@ final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
 
     // MARK: - Symbol to surface
 
-    func testRoadsCarryASymbolCeilingThatTheSurfaceReleases() {
+    func testRoadsAreSymbolsOfAFixedWidthOnScreen() {
         let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
         func v(_ s: String) -> MvtValue { .string(s) }
         let primary = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                                 properties: ["class": v("primary")],
                                                                 tile: Tile(x: 39615, y: 20486, z: 16)))
         let fill = primary.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
-        XCTAssertEqual(fill.maximumWidthPoints, 6.0, "a primary is a 6-point symbol until the surface takes over")
+        XCTAssertEqual(fill.lineWidthPoints, 6.0, "a primary is a 6-point symbol at every zoom")
+        XCTAssertEqual(fill.maximumWidthPoints, 0, "a point-locked width has no ceiling to release")
         XCTAssertNil(primary.resolvedLineRenderPasses.first { $0.roadPassRole == .casing },
                      "the symbol draws kerbless like the rest of the automobile tier")
-        XCTAssertGreaterThan(fill.lineGeometry.lineWidth, 0, "the ribbon is still the true width")
+        XCTAssertGreaterThan(fill.lineGeometry.lineWidth, 0, "the ribbon hosts the point width")
     }
 
     func testTheSurfaceBlendIsContinuousAcrossTheHandoverZooms() {

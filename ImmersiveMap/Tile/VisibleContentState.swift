@@ -34,6 +34,9 @@ struct VisibleContentState {
     /// The targets a rasterized rule placed, with the texels a side their
     /// picture is rendered at (`TileRasterizer`). Empty on the globe.
     let rasterizedTiles: [VisibleTile: Int]
+    /// The targets a rule that draws no lines placed
+    /// (`FlatRingRule.drawsLines`). Empty on the globe.
+    let linelessTiles: Set<VisibleTile>
 
     init(centerWorldMercator: SIMD2<Double>,
          center: Center,
@@ -42,7 +45,8 @@ struct VisibleContentState {
          tileZoomLevel: Int,
          coverageVersion: UInt64,
          flatRingBands: [FlatRingBand] = [],
-         rasterizedTiles: [VisibleTile: Int] = [:]) {
+         rasterizedTiles: [VisibleTile: Int] = [:],
+         linelessTiles: Set<VisibleTile> = []) {
         self.centerWorldMercator = centerWorldMercator
         self.center = center
         self.visibleTiles = visibleTiles
@@ -51,5 +55,6 @@ struct VisibleContentState {
         self.coverageVersion = coverageVersion
         self.flatRingBands = flatRingBands
         self.rasterizedTiles = rasterizedTiles
+        self.linelessTiles = linelessTiles
     }
 }

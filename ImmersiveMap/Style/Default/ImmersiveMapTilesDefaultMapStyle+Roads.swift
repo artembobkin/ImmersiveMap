@@ -21,6 +21,16 @@ extension ImmersiveMapTilesDefaultMapStyle {
     /// a palette wants the kerb back.
     static let drawsAutomobileKerb = false
 
+    /// Experiment: every road past the overview era keeps one width on
+    /// screen, in points per class, at every zoom and every distance from
+    /// the camera, instead of a width on the ground. The class's symbol
+    /// width (its old point ceiling) is the width.
+    static let roadsAreScreenFixed = true
+
+    /// The screen-fixed width of a class that states no symbol width (paths
+    /// and the unclassified fallback).
+    static let screenFixedFallbackWidthPoints: Float = 2.0
+
     /// Markings fade on their own band (see `LowZoomOverviewFade`), so they
     /// carry the mask that selects it instead of the roads' one.
     static let roadMarkingLowZoomFadeMask: Float = 4.0
@@ -316,13 +326,13 @@ extension ImmersiveMapTilesDefaultMapStyle {
             return 9
         case "tertiary", "rail", "transit":
             return 10
-        case "service":
-            return 13
-        case "path", "track":
+        case "service", "path", "track":
             return 14
         default:
-            // minor and unknown classes.
-            return 12
+            // minor (residential, living street, unclassified) and unknown
+            // classes: the small automobile network joins at street zoom,
+            // together with the service roads.
+            return 14
         }
     }
 
@@ -540,9 +550,20 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // cap on the cut end bulged half a carriageway back over the
         // translucent surface as a darker semicircle. The construction
         // point-dash only applies to surface segments.
+        // A screen-fixed road is a symbol at every zoom: the class states a
+        // width in points, the shader extrudes the centreline to exactly
+        // that many pixels at every vertex, and the ground width plays no
+        // part in the fill or the casing. The ribbon the parser sees is the
+        // point-locked host, as for the overview strokes.
+        let fixedWidthPoints: Float = Self.roadsAreScreenFixed
+            ? (maximumWidthPoints > 0 ? maximumWidthPoints : Self.screenFixedFallbackWidthPoints)
+            : 0
+        let fillRibbonWidth = Self.roadsAreScreenFixed
+            ? Double(fixedWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint
+            : width
         let fillGeometry = tunnel
-            ? LineGeometryStyle(lineWidth: width, lineCapRound: false, lineJoinRound: true)
-            : makeRoadGeometry(width: width)
+            ? LineGeometryStyle(lineWidth: fillRibbonWidth, lineCapRound: false, lineJoinRound: true)
+            : makeRoadGeometry(width: fillRibbonWidth)
         let constructionDash: (length: Float, gap: Float)? = construction && tunnel == false
             ? (length: 5.0, gap: 2.5)
             : nil
@@ -557,7 +578,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // camera past that the way a street map's roads do. The ceiling
         // exists for the carriageway, whose true width is far wider than a
         // readable symbol at region zooms.
-        let maximumWidthPoints: Float = strokes ? 0 : maximumWidthPoints
+        let symbolCeilingPoints: Float = strokes || Self.roadsAreScreenFixed ? 0 : maximumWidthPoints
 
         var casingPass: LinePass?
         if casing, tunnel == false, Self.drawsAutomobileKerb || strokes {
@@ -566,21 +587,28 @@ extension ImmersiveMapTilesDefaultMapStyle {
             // few units on a symbolic width and metres wide on a true one,
             // which turns every street into a dark-edged ribbon. A stroke's
             // casing is the same margin measured in points.
-            let casingWidth = width + 2 * (kerbUnitsPerSide ?? Self.roadCasingMetresPerSide * unitsPerMetre)
+            // A screen-fixed casing is the fill's points plus a fixed margin
+            // of points on each side.
+            let casingWidthPoints = fixedWidthPoints + 2 * Float(Self.streetStrokeCasingPointsPerSide)
+            let casingWidth = Self.roadsAreScreenFixed
+                ? Double(casingWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint
+                : width + 2 * (kerbUnitsPerSide ?? Self.roadCasingMetresPerSide * unitsPerMetre)
             casingPass = LinePass(key: Self.roadCasingKey(forFillKey: fillKey),
                                   color: roadCasingColor(from: fillColor),
                                   lowZoomFadeMask: LowZoomOverviewFade.classFadeMask(startZoom: Self.casingMinimumCameraZoom),
-                                  minimumWidthPoints: casingFloor,
-                                  maximumWidthPoints: maximumWidthPoints > 0 ? maximumWidthPoints + 1.0 : 0,
+                                  lineWidthPoints: Self.roadsAreScreenFixed ? casingWidthPoints : 0,
+                                  minimumWidthPoints: Self.roadsAreScreenFixed ? 0 : casingFloor,
+                                  maximumWidthPoints: symbolCeilingPoints > 0 ? symbolCeilingPoints + 1.0 : 0,
                                   lineGeometry: makeRoadGeometry(width: casingWidth))
         }
         let fillPass = LinePass(key: fillPassKey,
                                 color: fillColor,
                                 lowZoomFadeMask: roadLowZoomFadeMask,
+                                lineWidthPoints: fixedWidthPoints,
                                 dashLengthPoints: constructionDash?.length ?? 0,
                                 dashGapPoints: constructionDash?.gap ?? 0,
-                                minimumWidthPoints: minimumWidthPoints,
-                                maximumWidthPoints: maximumWidthPoints,
+                                minimumWidthPoints: Self.roadsAreScreenFixed ? 0 : minimumWidthPoints,
+                                maximumWidthPoints: symbolCeilingPoints,
                                 lineGeometry: fillGeometry)
         var paint: [LinePass] = []
         // Each marking is one dashed hairline pass, offset sideways from the

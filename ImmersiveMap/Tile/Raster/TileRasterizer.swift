@@ -84,7 +84,8 @@ final class TileRasterizer {
     func render(metalTile: MetalTile,
                 resolution: Int,
                 pixelsPerPoint: Double,
-                clearColor: MTLClearColor) -> MTLTexture? {
+                clearColor: MTLClearColor,
+                drawsLines: Bool = true) -> MTLTexture? {
         let device = metalContext.device
         let tile = metalTile.tile
         guard let picture = Self.makePictureTexture(device: device, resolution: resolution),
@@ -150,7 +151,8 @@ final class TileRasterizer {
                                   isWireframeEnabled: false,
                                   // Straight down, w is one everywhere: the vertex
                                   // band is exact and no triangle meets the near plane.
-                                  exactRankDepthBelowZoom: 0)
+                                  exactRankDepthBelowZoom: 0,
+                                  linelessTiles: drawsLines ? [] : [placement.placeIn])
         encoder.endEncoding()
         if let blit = commandBuffer.makeBlitCommandEncoder() {
             blit.generateMipmaps(for: picture)

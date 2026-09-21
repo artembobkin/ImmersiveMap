@@ -115,6 +115,10 @@ final class ImmersiveMapDebugOverlayRuntime {
             controls?.setBuildingLOD(cutPixels: cutPixels, fadePixels: fadePixels)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
+        hudView.onRoadThinnessFadeChanged = { [weak controls, weak renderRuntime] fade in
+            controls?.setRoadThinnessFade(fade)
+            renderRuntime?.requestFrame(reason: .externalStateChanged)
+        }
         hudView.onShadowSettingsChanged = { [weak self] shadows in
             guard let self, var settings = currentSettings else { return }
             settingsOverride.shadows = shadows

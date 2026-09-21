@@ -152,6 +152,12 @@ final class DebugOverlayHUDView: NSView {
     private let buildingCutSlider = NSSlider()
     private let buildingFadeLabel = NSTextField(labelWithString: "")
     private let buildingFadeSlider = NSSlider()
+    /// The roads' thinness fade, two widths on screen in pixels
+    /// (`RoadThinnessFade`).
+    private let roadFadeGoneLabel = NSTextField(labelWithString: "")
+    private let roadFadeGoneSlider = NSSlider()
+    private let roadFadeOpaqueLabel = NSTextField(labelWithString: "")
+    private let roadFadeOpaqueSlider = NSSlider()
     /// One ring rule's editor: the drop picker, the distance slider, the
     /// raster switch and the raster resolution picker, each with its named
     /// row. Rebuilt when the number of rules changes.
@@ -162,10 +168,12 @@ final class DebugOverlayHUDView: NSView {
         let distanceSlider: NSSlider
         let rasterLabel: NSTextField
         let rasterSwitch: NSSwitch
+        let linesLabel: NSTextField
+        let linesSwitch: NSSwitch
         let resolutionLabel: NSTextField
         let resolutionControl: NSSegmentedControl
         var views: [NSView] {
-            [dropLabel, dropControl, distanceLabel, distanceSlider, rasterLabel, rasterSwitch, resolutionLabel, resolutionControl]
+            [dropLabel, dropControl, distanceLabel, distanceSlider, rasterLabel, rasterSwitch, resolutionLabel, resolutionControl, linesLabel, linesSwitch]
         }
     }
     private var ringRuleRows: [RingRuleRow] = []
@@ -202,6 +210,7 @@ final class DebugOverlayHUDView: NSView {
     var onFlatRingRulesChanged: ((FlatRingRules) -> Void)?
     /// The building level of detail thresholds: the cut and the fade, in pixels.
     var onBuildingLODChanged: ((Float, Float) -> Void)?
+    var onRoadThinnessFadeChanged: ((RoadThinnessFade) -> Void)?
     var onRoadLabelTilesEnabledChanged: ((Bool) -> Void)?
     var onBaseLabelBoundsEnabledChanged: ((Bool) -> Void)?
     var onRoadLabelBoundsEnabledChanged: ((Bool) -> Void)?
@@ -278,6 +287,10 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(buildingFadeLabel, text: "")
         configureSlider(buildingCutSlider, range: BuildingLODUniform.cutRange, action: #selector(buildingLODSliderChanged))
         configureSlider(buildingFadeSlider, range: BuildingLODUniform.fadeRange, action: #selector(buildingLODSliderChanged))
+        configureControlLabel(roadFadeGoneLabel, text: "")
+        configureControlLabel(roadFadeOpaqueLabel, text: "")
+        configureSlider(roadFadeGoneSlider, range: RoadThinnessFade.goneRange, action: #selector(roadThinnessFadeSliderChanged))
+        configureSlider(roadFadeOpaqueSlider, range: RoadThinnessFade.opaqueRange, action: #selector(roadThinnessFadeSliderChanged))
         configureSwitch(roadLabelTilesSwitch, action: #selector(roadLabelTilesSwitchChanged))
         configureSwitch(baseLabelBoundsSwitch, action: #selector(baseLabelBoundsSwitchChanged))
         configureSwitch(roadLabelBoundsSwitch, action: #selector(roadLabelBoundsSwitchChanged))
@@ -410,6 +423,7 @@ final class DebugOverlayHUDView: NSView {
          tileGridLabel, tileGridSwitch, tileGridDensityControl,
          wireframeLabel, wireframeSwitch,
          buildingCutLabel, buildingCutSlider, buildingFadeLabel, buildingFadeSlider,
+         roadFadeGoneLabel, roadFadeGoneSlider, roadFadeOpaqueLabel, roadFadeOpaqueSlider,
          ringRulesAddButton, ringRulesRemoveButton,
          surfaceModeButton,
          tilesGroupLabel, tileTraceButton, tileTraceStatusLabel, tilesStatusLabel, tilesStatusListView]
@@ -439,6 +453,9 @@ final class DebugOverlayHUDView: NSView {
         buildingCutSlider.doubleValue = Double(controls.buildingLODCutPixels)
         buildingFadeSlider.doubleValue = Double(controls.buildingLODFadePixels)
         updateBuildingLODLabels()
+        roadFadeGoneSlider.doubleValue = Double(controls.roadThinnessFade.goneWidthPixels)
+        roadFadeOpaqueSlider.doubleValue = Double(controls.roadThinnessFade.opaqueWidthPixels)
+        updateRoadThinnessFadeLabels()
         flatRingRules = controls.flatRingRules
         if ringRuleRows.count != flatRingRules.rules.count {
             rebuildRingRuleRows()
@@ -478,6 +495,12 @@ final class DebugOverlayHUDView: NSView {
             rasterSwitch.target = self
             rasterSwitch.action = #selector(ringRuleRasterSwitchChanged(_:))
             refuseFocus(rasterSwitch)
+            let linesLabel = NSTextField(labelWithString: "")
+            configureControlLabel(linesLabel, text: "")
+            let linesSwitch = NSSwitch()
+            linesSwitch.target = self
+            linesSwitch.action = #selector(ringRuleLinesSwitchChanged(_:))
+            refuseFocus(linesSwitch)
             let resolutionLabel = NSTextField(labelWithString: "")
             configureControlLabel(resolutionLabel, text: "")
             let resolutionControl = NSSegmentedControl(labels: FlatRingRules.rasterResolutions.map(String.init),
@@ -488,6 +511,7 @@ final class DebugOverlayHUDView: NSView {
             return RingRuleRow(dropLabel: dropLabel, dropControl: dropControl,
                                 distanceLabel: distanceLabel, distanceSlider: distanceSlider,
                                 rasterLabel: rasterLabel, rasterSwitch: rasterSwitch,
+                                linesLabel: linesLabel, linesSwitch: linesSwitch,
                                 resolutionLabel: resolutionLabel, resolutionControl: resolutionControl)
         }
         for row in ringRuleRows {
@@ -504,6 +528,8 @@ final class DebugOverlayHUDView: NSView {
             row.distanceLabel.stringValue = Self.ringRuleDistanceTitle(index: index, distance: rule.distance)
             row.rasterLabel.stringValue = Self.ringRuleRasterTitle(index: index)
             row.rasterSwitch.state = rule.rasterized ? .on : .off
+            row.linesLabel.stringValue = Self.ringRuleLinesTitle(index: index)
+            row.linesSwitch.state = rule.drawsLines ? .on : .off
             row.resolutionLabel.stringValue = Self.ringRuleResolutionTitle(index: index)
             row.resolutionControl.selectedSegment = FlatRingRules.rasterResolutions.firstIndex(of: rule.rasterResolution) ?? 0
             row.resolutionControl.isEnabled = rule.rasterized
@@ -534,6 +560,17 @@ final class DebugOverlayHUDView: NSView {
 
     static func ringRuleRasterTitle(index: Int) -> String {
         "Rule \(index + 1): rasterize tiles"
+    }
+
+    static func ringRuleLinesTitle(index: Int) -> String {
+        "Rule \(index + 1): draw lines"
+    }
+
+    @objc private func ringRuleLinesSwitchChanged(_ sender: NSSwitch) {
+        guard let index = ringRuleRows.firstIndex(where: { $0.linesSwitch === sender }),
+              index < flatRingRules.rules.count else { return }
+        flatRingRules.rules[index].drawsLines = sender.state == .on
+        onFlatRingRulesChanged?(flatRingRules)
     }
 
     static func ringRuleResolutionTitle(index: Int) -> String {
@@ -768,11 +805,14 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutSwitchRow(wireframeLabel, wireframeSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(buildingCutLabel, buildingCutSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(buildingFadeLabel, buildingFadeSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(roadFadeGoneLabel, roadFadeGoneSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(roadFadeOpaqueLabel, roadFadeOpaqueSlider, at: cursor, contentWidth: contentWidth)
         for row in ringRuleRows {
             cursor = layoutControlRow(row.dropLabel, row.dropControl, at: cursor, contentWidth: contentWidth)
             cursor = layoutControlRow(row.distanceLabel, row.distanceSlider, at: cursor, contentWidth: contentWidth)
             cursor = layoutSwitchRow(row.rasterLabel, row.rasterSwitch, at: cursor, contentWidth: contentWidth)
             cursor = layoutControlRow(row.resolutionLabel, row.resolutionControl, at: cursor, contentWidth: contentWidth)
+            cursor = layoutSwitchRow(row.linesLabel, row.linesSwitch, at: cursor, contentWidth: contentWidth)
         }
         cursor = layoutFullWidthRow(ringRulesAddButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutFullWidthRow(ringRulesRemoveButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
@@ -1176,6 +1216,27 @@ final class DebugOverlayHUDView: NSView {
         }
         updateBuildingLODLabels()
         onBuildingLODChanged?(Float(buildingCutSlider.doubleValue), Float(buildingFadeSlider.doubleValue))
+    }
+
+    static func roadFadeGoneTitle(pixels: Float) -> String {
+        String(format: "Roads: gone under %.1f px wide", pixels)
+    }
+
+    static func roadFadeOpaqueTitle(pixels: Float) -> String {
+        pixels > 0
+            ? String(format: "Roads: opaque from %.1f px wide", pixels)
+            : "Roads: thinness fade off"
+    }
+
+    private func updateRoadThinnessFadeLabels() {
+        roadFadeGoneLabel.stringValue = Self.roadFadeGoneTitle(pixels: Float(roadFadeGoneSlider.doubleValue))
+        roadFadeOpaqueLabel.stringValue = Self.roadFadeOpaqueTitle(pixels: Float(roadFadeOpaqueSlider.doubleValue))
+    }
+
+    @objc private func roadThinnessFadeSliderChanged() {
+        updateRoadThinnessFadeLabels()
+        onRoadThinnessFadeChanged?(RoadThinnessFade(goneWidthPixels: Float(roadFadeGoneSlider.doubleValue),
+                                                    opaqueWidthPixels: Float(roadFadeOpaqueSlider.doubleValue)))
     }
 
     @objc private func roadLabelTilesSwitchChanged() {

@@ -182,7 +182,16 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
             float pixelsPerUnit = max(length(screenSpan), 1e-4);
             deferredEdgePx = tileLineEdgePixels(lineStyle, pixelsPerUnit,
                                                 overviewFade.pixelsPerPoint, overviewFade.roadSurfaceBlend);
-            float units = min((deferredEdgePx + kTileDeferredRibbonFeatherPx) / pixelsPerUnit,
+            // A point-locked width is stated at the centre of the screen
+            // and follows the perspective from there. The rim moves by the
+            // width at this vertex; the fragment stage scales the flat
+            // unscaled width by its own depth, so the edge is exact per
+            // pixel whatever depth range the triangle spans.
+            float rimEdgePx = deferredEdgePx;
+            if (lineStyle.widthPoints > 0.0) {
+                rimEdgePx *= tilePointWidthPerspectiveScale(overviewFade.pointWidthReferenceDepth, w0);
+            }
+            float units = min((rimEdgePx + kTileDeferredRibbonFeatherPx) / pixelsPerUnit,
                               kTileDeferredRibbonMaximumUnits);
             localPosition += normal * units;
         }
@@ -265,9 +274,24 @@ static inline half4 tileFragmentColor(FragmentIn in,
     // style index right here.
     half4 color;
     if (kTileLineFields) {
+        // The point-locked width at this pixel's depth (the vertex stage
+        // moved the rim by the same rule). `position.w` is one over the
+        // view depth.
+        float deferredEdgePx = in.deferredEdgePx;
+        if (deferredEdgePx > 0.0 && lineStyles[in.styleIndex].widthPoints > 0.0) {
+            deferredEdgePx *= tilePointWidthPerspectiveScale(overviewFade.pointWidthReferenceDepth,
+                                                             1.0 / max(in.position.w, 1e-6));
+        }
         color = tileLineFragmentColor(in.styleIndex, in.lineDistance, in.lineParameterRaw,
                                       styles, lowZoomFadeMasks, lineStyles,
-                                      overviewFade, lineDash, in.deferredEdgePx);
+                                      overviewFade, lineDash, deferredEdgePx);
+        // The roads (the deferred ribbons) fade as they get thinner on
+        // screen: the visible width is twice the resolved half-width.
+        if (in.deferredEdgePx > 0.0) {
+            color.a *= half(tileRoadThinnessFade(deferredEdgePx * 2.0,
+                                                 overviewFade.roadFadeGoneWidthPx,
+                                                 overviewFade.roadFadeOpaqueWidthPx));
+        }
     } else {
         color = in.color;
         // The footprint fade: where this pixel covers more of the source
