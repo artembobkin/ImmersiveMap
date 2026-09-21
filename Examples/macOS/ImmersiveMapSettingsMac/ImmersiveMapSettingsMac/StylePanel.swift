@@ -11,6 +11,12 @@ import ImmersiveMap
 /// baked into prepared tiles and into their disk-cache identity (the
 /// configuration's `cacheFingerprint`), so a new palette re-prepares everything.
 ///
+/// The road metrics are the same theme's other half: not what colour a road
+/// is but how wide it draws and from which zoom. A road is a symbol, as wide
+/// in points as its class says, up to the world lock zoom, and keeps that
+/// width on the ground from there on, so it grows with the map at street
+/// level. They are baked into the tiles as well, and a palette keeps them.
+///
 /// The attribution badge is chrome drawn over the map, so it restyles for free.
 /// It is also the one piece here that is not a matter of taste: the data
 /// license requires the credit to be visible, and hiding the badge only makes
@@ -50,12 +56,41 @@ struct StylePanel: View {
                 .frame(width: 190)
             }
 
-            DeferredNote(text: "A palette re-parses every tile; the badge is redrawn with the next frame.")
+            PanelRow {
+                ValueSlider("Road world lock zoom",
+                            value: roadMetric(\.worldLockZoom.doubleValue),
+                            range: 0...18,
+                            step: 0.5,
+                            format: "%.1f")
+                ValueSlider("Minor road width, pt",
+                            value: roadMetric(\.symbolWidthPoints.minor.doubleValue),
+                            range: 1...10,
+                            step: 0.5,
+                            format: "%.1f")
+                ValueSlider("Minor roads from zoom",
+                            value: roadMetric(\.minimumTileZoom.minor.doubleValue),
+                            range: 10...16,
+                            step: 1,
+                            format: "%.0f")
+            }
+
+            DeferredNote(text: "A palette or a road metric re-parses every tile; the badge is redrawn with the next frame.")
         }
     }
 
     /// Read back out of the settings rather than kept in `@State`, so leaving
     /// the section and coming back cannot show a palette the map is not using.
+    /// A road metric of the built-in theme, read back out of the map style
+    /// and written by re-applying the style with the changed theme.
+    private func roadMetric(_ keyPath: WritableKeyPath<ImmersiveMapTilesTheme.RoadMetrics, Double>) -> Binding<Double> {
+        Binding(get: {
+            settings.mapStyle.tilesTheme?.roadMetrics[keyPath: keyPath] ?? 0
+        }, set: { newValue in
+            guard let theme = settings.mapStyle.tilesTheme else { return }
+            settings = settings.mapStyle(ImmersiveMapTilesMapStyle(theme: theme.roadMetrics { $0[keyPath: keyPath] = newValue }))
+        })
+    }
+
     private var paletteSelection: Binding<StylePalette> {
         Binding(get: { StylePalette.allCases.first { $0.isApplied(to: settings) } ?? .day },
                 set: { $0.apply(to: &settings) })
@@ -82,17 +117,22 @@ enum StylePalette: String, CaseIterable, Identifiable {
     }
 
     func apply(to settings: inout ImmersiveMapSettings) {
-        settings = settings.mapStyle(mapStyle)
+        settings = settings.mapStyle(mapStyle(keepingRoadMetricsOf: settings))
     }
 
     /// Map styles compare by their configuration fingerprint, which is what the
     /// disk caches are keyed on as well.
     func isApplied(to settings: ImmersiveMapSettings) -> Bool {
-        settings.mapStyle == AnyImmersiveMapMapStyle(mapStyle)
+        settings.mapStyle == AnyImmersiveMapMapStyle(mapStyle(keepingRoadMetricsOf: settings))
     }
 
-    private var mapStyle: ImmersiveMapTilesMapStyle {
-        ImmersiveMapTilesMapStyle(theme: configuration)
+    /// A palette is colours: the road metrics the map is drawn with stay.
+    private func mapStyle(keepingRoadMetricsOf settings: ImmersiveMapSettings) -> ImmersiveMapTilesMapStyle {
+        var theme = configuration
+        if let current = settings.mapStyle.tilesTheme {
+            theme.roadMetrics = current.roadMetrics
+        }
+        return ImmersiveMapTilesMapStyle(theme: theme)
     }
 
     private var configuration: ImmersiveMapTilesTheme {
@@ -190,5 +230,19 @@ enum StylePalette: String, CaseIterable, Identifiable {
         labels.water.strokeColor = stroke
         labels.road.fillColor = fill
         labels.road.strokeColor = stroke
+    }
+}
+
+private extension Float {
+    var doubleValue: Double {
+        get { Double(self) }
+        set { self = Float(newValue) }
+    }
+}
+
+private extension Int {
+    var doubleValue: Double {
+        get { Double(self) }
+        set { self = Int(newValue.rounded()) }
     }
 }

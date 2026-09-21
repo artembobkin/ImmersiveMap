@@ -15,7 +15,12 @@ struct RoadThinnessFade: Hashable {
 
     static let goneRange: ClosedRange<Double> = 0 ... 8
     static let opaqueRange: ClosedRange<Double> = 0 ... 16
-    static let `default` = RoadThinnessFade(goneWidthPixels: 4, opaqueWidthPixels: 16)
+    /// Under every symbol width of the built-in style on a 1x display (the
+    /// thinnest class is two points wide), so a road at the width its style
+    /// states is opaque, and the fade takes only what the perspective has
+    /// thinned toward a hairline. A default above the symbol widths left
+    /// every road translucent up close and the thin classes gone outright.
+    static let `default` = RoadThinnessFade(goneWidthPixels: 1.5, opaqueWidthPixels: 3.5)
     /// No fade: what a rasterized tile's picture is drawn with, where a
     /// pixel is a texel of the picture and not of the screen.
     static let off = RoadThinnessFade(goneWidthPixels: 0, opaqueWidthPixels: 0)

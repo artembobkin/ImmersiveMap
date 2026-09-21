@@ -35,9 +35,46 @@ one colour per road class plus the casing), `features` (the building fill,
 and whether buildings rise at all and raise their shaped roofs:
 `buildingExtrusion`, on by default, and `buildingRoofShapes`, off by
 default), `labels` (fill
-and stroke colour, halo, size and weight per label class) and
-`labelVisibility`. Every value feeds the style's cache fingerprint, so a
-changed colour rebakes the prepared tiles by itself.
+and stroke colour, halo, size and weight per label class),
+`labelVisibility` and `roadMetrics`. Every value feeds the style's cache
+fingerprint, so a changed value rebakes the prepared tiles by itself.
+
+### Road widths and zooms
+
+`roadMetrics` is how wide the roads draw and from where, one value per road
+class (`motorway`, `trunk`, `primary`, `secondary`, `tertiary`, `minor`,
+`service`, `path`, and `other` for every class the style does not name):
+
+```swift
+let style = ImmersiveMapTilesMapStyle.default.apply { theme in
+    theme.roadMetrics.symbolWidthPoints.minor = 3
+    theme.roadMetrics.worldLockZoom = 15
+    theme.roadMetrics.minimumTileZoom.service = 13
+}
+```
+
+- `symbolWidthPoints`: the width of a class on screen, in points, from
+  `symbolZoom` (default 14) up to the world lock zoom, the same on screen at
+  every zoom between the two.
+- `overviewWidthPoints`, `overviewZoom` (default 6) and `overviewOpacity`
+  (default 0.6): the hairline a class is over a country view, and how much of
+  its colour it carries there. Between `overviewZoom` and `symbolZoom` the
+  width grows from the overview stroke to the symbol by the same ratio per
+  zoom level, and the opacity to one, both continuous in camera zoom, so a
+  road never steps in width, neither with the camera nor when the engine
+  swaps the tile level that serves it.
+- `worldLockZoom` (default 15): the camera zoom from which a road's width is
+  fixed on the ground instead. The road keeps the ground width its symbol had
+  at this zoom, so it doubles on screen with every zoom level past it, like
+  the blocks around it, and never thins into a hairline at street level. The
+  handover is continuous. Zero keeps every road a symbol at every zoom.
+- `minimumTileZoom`: the tile zoom a class first draws at. A value under the
+  zoom the tile source first ships the class at changes nothing.
+
+Roads that overlap (two streets at a junction, the pieces of one street, the
+margins of two tiles) draw as one sheet, every pixel blended once, so a
+translucent road colour stays even across junctions instead of doubling
+where the ribbons cross.
 
 What no tile paints follows the theme too: the ground where no tile has
 arrived yet is the land colour, the northern polar cap the water and the

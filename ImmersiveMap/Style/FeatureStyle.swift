@@ -111,6 +111,34 @@ public struct LabelTextStyle: Sendable {
 /// order: the ground geometry of a tile draws in ascending key, and every
 /// feature with the same key shares one style table entry.
 public struct LinePass: Sendable {
+    /// How a point-locked width comes in with the camera: `startWidthPoints`
+    /// wide, at `startAlpha` of the colour's alpha, up to `startZoom`, and
+    /// the stroke's own `lineWidthPoints` and alpha from `endZoom`. Between
+    /// the two the width grows by the same ratio per zoom level and the
+    /// alpha linearly, both continuous in camera zoom. The ramp is a
+    /// function of the camera alone, so two tile levels that state the same
+    /// ramp draw the same stroke, and the swap between them shows nothing.
+    public struct WidthRamp: Sendable, Equatable {
+        public var startWidthPoints: Float
+        public var startZoom: Float
+        public var endZoom: Float
+        public var startAlpha: Float
+
+        public init(startWidthPoints: Float, startZoom: Float, endZoom: Float, startAlpha: Float = 1) {
+            self.startWidthPoints = startWidthPoints
+            self.startZoom = startZoom
+            self.endZoom = endZoom
+            self.startAlpha = startAlpha
+        }
+
+        /// The width at a camera zoom, for a stroke `endWidthPoints` wide.
+        public func widthPoints(atZoom zoom: Float, endWidthPoints: Float) -> Float {
+            guard endZoom > startZoom, startWidthPoints > 0, endWidthPoints > 0 else { return endWidthPoints }
+            let progress = min(max((zoom - startZoom) / (endZoom - startZoom), 0), 1)
+            return startWidthPoints * Float(pow(Double(endWidthPoints / startWidthPoints), Double(progress)))
+        }
+    }
+
     public var key: UInt8
     public var color: SIMD4<Float>
     public var lowZoomFadeMask: Float
@@ -138,6 +166,17 @@ public struct LinePass: Sendable {
     /// Symbol ceiling for a world-locked width; see
     /// `TileLineStyle.maximumWidthPoints`.
     public var maximumWidthPoints: Float
+    /// The camera zoom from which a point-locked width (`lineWidthPoints`)
+    /// is fixed on the ground instead of on screen. Up to this zoom the
+    /// stroke is a symbol, as wide in points as the style says. Past it the
+    /// stroke keeps the ground width those points had at this zoom, so it
+    /// grows on screen with the map and never thins into a hairline against
+    /// the buildings around it. Continuous in camera zoom by construction.
+    /// Zero keeps the width in points at every zoom.
+    public var pointWidthWorldLockZoom: Float
+    /// The zoom ramp `lineWidthPoints` comes in over; nil holds the width at
+    /// every zoom up to the world lock.
+    public var pointWidthRamp: WidthRamp?
     public var lineGeometry: LineGeometryStyle
 
     public init(key: UInt8,
@@ -149,6 +188,8 @@ public struct LinePass: Sendable {
                 dashInTileUnits: Bool = false,
                 minimumWidthPoints: Float = 0.0,
                 maximumWidthPoints: Float = 0.0,
+                pointWidthWorldLockZoom: Float = 0.0,
+                pointWidthRamp: WidthRamp? = nil,
                 lineGeometry: LineGeometryStyle) {
         self.key = key
         self.color = color
@@ -159,6 +200,8 @@ public struct LinePass: Sendable {
         self.dashInTileUnits = dashInTileUnits
         self.minimumWidthPoints = minimumWidthPoints
         self.maximumWidthPoints = maximumWidthPoints
+        self.pointWidthWorldLockZoom = pointWidthWorldLockZoom
+        self.pointWidthRamp = pointWidthRamp
         self.lineGeometry = lineGeometry
     }
 }

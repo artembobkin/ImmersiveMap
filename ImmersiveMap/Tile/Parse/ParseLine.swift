@@ -713,9 +713,17 @@ class ParseLine {
             for step in 0..<stepCount {
                 let rim0 = base + 1 + UInt32(step)
                 let rim1 = base + 2 + UInt32(step)
-                polygon.indices.append(base)
+                // The hub comes last: the first vertex of a triangle is the
+                // provoking one, whose flat outputs the whole triangle reads,
+                // and a deferred ribbon's width on screen is one of them
+                // (Tile.metal, deferredEdgePx). The hub has no extrusion
+                // direction and resolves no width, so a fan led by it drew
+                // as a pre-extruded one: a disc of the unscaled point width
+                // that skipped the thinness fade, a dark dot at every node
+                // of a translucent road. Same winding, rotated.
                 polygon.indices.append(innerIsLeft ? rim1 : rim0)
                 polygon.indices.append(innerIsLeft ? rim0 : rim1)
+                polygon.indices.append(base)
             }
         }
     }
@@ -746,9 +754,10 @@ class ParseLine {
         }
 
         for index in 1..<Self.capUnitSemicircle.count {
-            polygon.indices.append(base)
+            // The hub last, a rim vertex provoking: see the join fans.
             polygon.indices.append(base + UInt32(index))
             polygon.indices.append(base + UInt32(index + 1))
+            polygon.indices.append(base)
         }
     }
 

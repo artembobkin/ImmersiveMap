@@ -25,6 +25,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     private let groundOwnerState: MTLDepthStencilState
     private let tileStencilTestState: MTLDepthStencilState
     private let groundOutlineState: MTLDepthStencilState
+    private let roadSheetStates: RoadSheetStates
     private let depthDisabledState: MTLDepthStencilState
     private let debugOverlayControls: DebugOverlayControlState
     private let groundShadowMaskTextureProvider: () -> MTLTexture?
@@ -49,6 +50,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
          groundOwnerState: MTLDepthStencilState,
          tileStencilTestState: MTLDepthStencilState,
          groundOutlineState: MTLDepthStencilState,
+         roadSheetStates: RoadSheetStates,
          depthDisabledState: MTLDepthStencilState,
          debugOverlayControls: DebugOverlayControlState,
          groundShadowMaskTextureProvider: @escaping () -> MTLTexture?,
@@ -58,6 +60,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         self.groundOwnerState = groundOwnerState
         self.tileStencilTestState = tileStencilTestState
         self.groundOutlineState = groundOutlineState
+        self.roadSheetStates = roadSheetStates
         self.depthDisabledState = depthDisabledState
         self.debugOverlayControls = debugOverlayControls
         self.groundShadowMaskTextureProvider = groundShadowMaskTextureProvider
@@ -175,6 +178,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                       groundOwnerState: groundOwnerState,
                                       tileStencilTestState: tileStencilTestState,
                                       groundOutlineState: groundOutlineState,
+                                      roadSheetStates: roadSheetStates,
                                       isWireframeEnabled: isWireframeEnabled,
                                       // The target zoom's tiles keep the rank depth in
                                       // the vertex z, every coarser band writes it

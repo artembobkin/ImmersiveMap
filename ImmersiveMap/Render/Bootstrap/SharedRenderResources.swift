@@ -83,6 +83,8 @@ final class SharedRenderResources {
     /// fill's own layer order puts it), never written, plus the non-owning
     /// tile-priority test.
     let groundOutlineState: MTLDepthStencilState
+    /// The flat road sheet's two stages (`RoadSheetStates`).
+    let roadSheetStates: RoadSheetStates
     /// The tile-ownership prepass: no depth interaction at all, only the
     /// owning stencil write, so the quads mark every pixel of their source's
     /// extent (buildings included) before anything draws.
@@ -241,6 +243,7 @@ final class SharedRenderResources {
         let groundOwnerState: MTLDepthStencilState
         let tileStencilTestState: MTLDepthStencilState
         let groundOutlineState: MTLDepthStencilState
+        let roadSheetStates: RoadSheetStates
         let tileOwnershipWriteState: MTLDepthStencilState
         let extrudedStencilTestState: MTLDepthStencilState
         let sceneModelSurfaceMaskState: MTLDepthStencilState
@@ -269,6 +272,9 @@ final class SharedRenderResources {
                      groundOwnerState: device.makeDepthStencilState(descriptor: Self.makeGroundOwnerDescriptor())!,
                      tileStencilTestState: device.makeDepthStencilState(descriptor: Self.makeTileStencilTestDescriptor())!,
                      groundOutlineState: device.makeDepthStencilState(descriptor: Self.makeGroundOutlineDescriptor())!,
+                     roadSheetStates: RoadSheetStates(
+                        depthStage: device.makeDepthStencilState(descriptor: Self.makeRoadSheetDepthDescriptor())!,
+                        colorStage: device.makeDepthStencilState(descriptor: Self.makeRoadSheetColorDescriptor())!),
                      tileOwnershipWriteState: device.makeDepthStencilState(descriptor: Self.makeTileOwnershipWriteDescriptor())!,
                      extrudedStencilTestState: device.makeDepthStencilState(descriptor: Self.makeExtrudedStencilTestDescriptor())!,
                      sceneModelSurfaceMaskState: device.makeDepthStencilState(descriptor: Self.makeSceneModelSurfaceMaskDescriptor())!,
@@ -292,6 +298,7 @@ final class SharedRenderResources {
         self.groundOwnerState = built.groundOwnerState
         self.tileStencilTestState = built.tileStencilTestState
         self.groundOutlineState = built.groundOutlineState
+        self.roadSheetStates = built.roadSheetStates
         self.tileOwnershipWriteState = built.tileOwnershipWriteState
         self.extrudedStencilTestState = built.extrudedStencilTestState
         self.sceneModelSurfaceMaskState = built.sceneModelSurfaceMaskState
@@ -631,6 +638,41 @@ final class SharedRenderResources {
         let descriptor = makeGroundDepthDescriptor()
         descriptor.frontFaceStencil = makeTilePriorityStencil(writes: false)
         descriptor.backFaceStencil = makeTilePriorityStencil(writes: false)
+        return descriptor
+    }
+
+    /// The road sheet's depth stage: the ground depth test, WRITING the
+    /// nearest body rank of the group per pixel, under the tile-priority
+    /// test. Every fragment that gets past that test clears the sheet's
+    /// bit, whether its depth passes or not (a fringe and a lower rank
+    /// fail it by design), so the colour stage starts from a clean bit
+    /// exactly where the group has geometry.
+    private nonisolated static func makeRoadSheetDepthDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = makeGroundDepthDescriptor()
+        descriptor.isDepthWriteEnabled = true
+        let stencil = makeTilePriorityStencil(writes: false)
+        stencil.depthFailureOperation = .zero
+        stencil.depthStencilPassOperation = .zero
+        stencil.writeMask = TileSourceStencilPriority.roadSheetBit
+        descriptor.frontFaceStencil = stencil
+        descriptor.backFaceStencil = stencil
+        return descriptor
+    }
+
+    /// The road sheet's colour stage: lessEqual against the ranks the depth
+    /// stage wrote, no depth write. The stencil reads the priority and the
+    /// sheet's bit together: the reference is a priority, under the bit, so
+    /// greaterEqual fails wherever the bit is raised and is the priority
+    /// test everywhere else. A fragment that passes raises the bit.
+    private nonisolated static func makeRoadSheetColorDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = makeGroundDepthDescriptor()
+        descriptor.depthCompareFunction = .lessEqual
+        let stencil = makeTilePriorityStencil(writes: false)
+        stencil.depthStencilPassOperation = .invert
+        stencil.readMask = TileSourceStencilPriority.priorityMask | TileSourceStencilPriority.roadSheetBit
+        stencil.writeMask = TileSourceStencilPriority.roadSheetBit
+        descriptor.frontFaceStencil = stencil
+        descriptor.backFaceStencil = stencil
         return descriptor
     }
 

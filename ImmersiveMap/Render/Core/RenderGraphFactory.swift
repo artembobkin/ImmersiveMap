@@ -57,6 +57,7 @@ enum RenderGraphFactory {
                                                                     groundOwnerState: context.groundOwnerState,
                                                                     tileStencilTestState: context.tileStencilTestState,
                                                                     groundOutlineState: context.groundOutlineState,
+                                                                    roadSheetStates: context.roadSheetStates,
                                                                     depthDisabledState: context.depthDisabledState,
                                                                     debugOverlayControls: debugOverlayControls,
                                                                     groundShadowMaskTextureProvider: groundShadowMaskTextureProvider,

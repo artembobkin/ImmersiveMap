@@ -236,7 +236,9 @@ enum TileUnificationStage {
                              minimumWidthPoints: pass.minimumWidthPoints,
                              dashInTileUnits: pass.dashInTileUnits,
                              maximumWidthPoints: pass.maximumWidthPoints,
-                             halfWidthUnits: halfWidth)
+                             halfWidthUnits: halfWidth,
+                             worldLockZoom: pass.pointWidthWorldLockZoom,
+                             widthRamp: pass.pointWidthRamp)
     }
 
     /// Expects the polygons already sorted by `OrderedRoadPolygon.sort`; the

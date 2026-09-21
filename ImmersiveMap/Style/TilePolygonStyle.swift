@@ -60,6 +60,18 @@ struct TileLineStyle {
     /// The styled half-width in tile units, what a deferred ribbon's vertex
     /// shader extrudes a world-locked style by (`TileVertexIn.normal`).
     var halfWidthUnits: Float
+    /// The camera zoom a point-locked width is frozen on the ground from:
+    /// up to it the width holds in points, past it the width is what those
+    /// points covered on the ground at that zoom, so it doubles on screen
+    /// with every zoom level like the map around it. Zero: the points hold
+    /// at every zoom. See `LinePass.pointWidthWorldLockZoom`.
+    var worldLockZoom: Float
+    /// The zoom ramp of a point-locked width; see `LinePass.WidthRamp`. An
+    /// end zoom of zero is no ramp, and the start alpha is then one.
+    var rampStartWidthPoints: Float
+    var rampStartZoom: Float
+    var rampEndZoom: Float
+    var rampStartAlpha: Float
 
     init(widthPoints: Float,
          dashLengthPoints: Float,
@@ -68,8 +80,15 @@ struct TileLineStyle {
          minimumWidthPoints: Float = 0,
          dashInTileUnits: Bool = false,
          maximumWidthPoints: Float = 0,
-         halfWidthUnits: Float = 0) {
+         halfWidthUnits: Float = 0,
+         worldLockZoom: Float = 0,
+         widthRamp: LinePass.WidthRamp? = nil) {
+        self.rampStartWidthPoints = widthRamp?.startWidthPoints ?? 0
+        self.rampStartZoom = widthRamp?.startZoom ?? 0
+        self.rampEndZoom = widthRamp?.endZoom ?? 0
+        self.rampStartAlpha = widthRamp?.startAlpha ?? 1
         self.halfWidthUnits = halfWidthUnits
+        self.worldLockZoom = worldLockZoom
         self.widthPoints = widthPoints
         self.dashLengthPoints = dashLengthPoints
         self.dashGapPoints = dashGapPoints

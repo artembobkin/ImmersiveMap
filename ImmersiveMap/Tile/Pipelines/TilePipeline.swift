@@ -36,6 +36,11 @@ class TilePipeline {
     let flatExactFillsPipelineState: MTLRenderPipelineState?
     let flatExactOpaquePipelineState: MTLRenderPipelineState?
     let flatExactFillOutlinePipelineState: MTLRenderPipelineState?
+    /// Flat surface only: the road sheet's two stages over the line-fields
+    /// vertex stage (Tile.metal, the road sheet). The depth stage writes no
+    /// colour, the colour stage blends like every other line.
+    let flatRoadSheetDepthPipelineState: MTLRenderPipelineState?
+    let flatRoadSheetColorPipelineState: MTLRenderPipelineState?
     /// Sphere surface only: the resting-sphere fills class, blended (the
     /// translucent fill layers). Carries no line fields. The morph keeps
     /// `pipelineState` (tileSphereMorphVertexShader), the only sphere
@@ -82,6 +87,8 @@ class TilePipeline {
         var flatExactFillsFragmentFunction: MTLFunction?
         var flatExactFillOutlineVertexFunction: MTLFunction?
         var flatExactFillOutlineFragmentFunction: MTLFunction?
+        var flatRoadSheetDepthFragmentFunction: MTLFunction?
+        var flatRoadSheetColorFragmentFunction: MTLFunction?
         switch surface {
         case .flat:
             func flatFunction(_ name: String,
@@ -113,6 +120,8 @@ class TilePipeline {
                                                               exactRankDepth: true)
             flatExactFillOutlineFragmentFunction = flatFunction("tileExactDepthFragmentShader", lineFields: false,
                                                                 fillOutline: true, exactRankDepth: true)
+            flatRoadSheetDepthFragmentFunction = flatFunction("tileRoadSheetDepthFragmentShader", lineFields: true)
+            flatRoadSheetColorFragmentFunction = flatFunction("tileRoadSheetFragmentShader", lineFields: true)
         case .sphere:
             func sphereFunction(_ name: String, fog: Bool, lineFields: Bool) -> MTLFunction {
                 let values = MTLFunctionConstantValues()
@@ -252,9 +261,20 @@ class TilePipeline {
             pipelineDescriptor.vertexFunction = flatExactFillOutlineVertexFunction
             pipelineDescriptor.fragmentFunction = flatExactFillOutlineFragmentFunction
             self.flatExactFillOutlinePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+            // The road sheet: the line-fields vertex stage under the two
+            // sheet fragment entries.
+            pipelineDescriptor.vertexFunction = vertexFunction
+            pipelineDescriptor.fragmentFunction = flatRoadSheetColorFragmentFunction
+            self.flatRoadSheetColorPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+            pipelineDescriptor.fragmentFunction = flatRoadSheetDepthFragmentFunction
+            pipelineDescriptor.colorAttachments[0].writeMask = []
+            self.flatRoadSheetDepthPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+            pipelineDescriptor.colorAttachments[0].writeMask = .all
             pipelineDescriptor.vertexFunction = vertexFunction
             pipelineDescriptor.fragmentFunction = fragmentFunction
         } else {
+            self.flatRoadSheetDepthPipelineState = nil
+            self.flatRoadSheetColorPipelineState = nil
             self.flatFillsPipelineState = nil
             self.flatOpaquePipelineState = nil
             self.flatFillOutlinePipelineState = nil
@@ -278,6 +298,20 @@ class TilePipeline {
             return
         }
         selectPipeline(renderEncoder: renderEncoder)
+    }
+
+    /// The road sheet's stage pipeline; false when the pipeline has none (a
+    /// sphere pipeline), and the caller draws the roads the plain way.
+    @discardableResult
+    func selectFlatRoadSheetPipeline(renderEncoder: MTLRenderCommandEncoder, stage: RoadSheetDepth.Stage) -> Bool {
+        let state: MTLRenderPipelineState?
+        switch stage {
+        case .depth: state = flatRoadSheetDepthPipelineState
+        case .color: state = flatRoadSheetColorPipelineState
+        }
+        guard let state else { return false }
+        renderEncoder.setRenderPipelineState(state)
+        return true
     }
 
     /// The flat translucent fills variant (no line fields); falls back to

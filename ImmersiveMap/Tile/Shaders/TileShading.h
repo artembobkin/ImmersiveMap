@@ -78,7 +78,56 @@ struct LineStyle {
     float maximumWidthPoints;
     // The styled half-width in tile units, for the deferred extrusion.
     float halfWidthUnits;
+    // The camera zoom a point-locked width is frozen on the ground from
+    // (zero: never); see the Swift TileLineStyle.worldLockZoom.
+    float worldLockZoom;
+    // The zoom ramp of a point-locked width: `rampStartWidthPoints` wide and
+    // at `rampStartAlpha` of the colour's alpha up to `rampStartZoom`, the
+    // style's own width and alpha from `rampEndZoom`, continuous in camera
+    // zoom between. An end zoom of zero: no ramp. See the Swift
+    // TileLineStyle.
+    float rampStartWidthPoints;
+    float rampStartZoom;
+    float rampEndZoom;
+    float rampStartAlpha;
 };
+
+/// How far a style's zoom ramp has come, 0...1; one for a style without.
+static inline float tilePointWidthRampProgress(LineStyle lineStyle, float cameraZoom) {
+    if (lineStyle.rampEndZoom <= lineStyle.rampStartZoom) {
+        return 1.0;
+    }
+    return clamp((cameraZoom - lineStyle.rampStartZoom) / (lineStyle.rampEndZoom - lineStyle.rampStartZoom),
+                 0.0, 1.0);
+}
+
+/// The point-locked width of a style at a camera zoom: the ramp runs in
+/// ratios, the same growth per zoom level all the way, so nothing about
+/// the width steps when the engine swaps the tile level serving the line.
+static inline float tilePointWidthPoints(LineStyle lineStyle, float cameraZoom) {
+    float progress = tilePointWidthRampProgress(lineStyle, cameraZoom);
+    if (progress >= 1.0 || lineStyle.rampStartWidthPoints <= 0.0) {
+        return lineStyle.widthPoints;
+    }
+    return lineStyle.rampStartWidthPoints
+        * pow(lineStyle.widthPoints / lineStyle.rampStartWidthPoints, progress);
+}
+
+/// The share of the colour's alpha the ramp leaves at a camera zoom.
+static inline float tilePointWidthRampAlpha(LineStyle lineStyle, float cameraZoom) {
+    return mix(lineStyle.rampStartAlpha, 1.0, tilePointWidthRampProgress(lineStyle, cameraZoom));
+}
+
+/// How much wider than its points a point-locked width draws: one up to
+/// the style's world lock zoom, doubling with every zoom level past it,
+/// which is the width staying put on the ground while the camera descends.
+/// Continuous in camera zoom. One for a style without a lock.
+static inline float tilePointWidthWorldScale(float worldLockZoom, float cameraZoom) {
+    if (worldLockZoom <= 0.0) {
+        return 1.0;
+    }
+    return exp2(max(cameraZoom - worldLockZoom, 0.0));
+}
 
 /// The visible half-width of a line on screen, in pixels, from its style
 /// and the pixels one tile unit spans where it is drawn: the point-locked
@@ -89,9 +138,11 @@ struct LineStyle {
 static inline float tileLineEdgePixels(LineStyle lineStyle,
                                        float pixelsPerUnit,
                                        float pixelsPerPoint,
-                                       float roadSurfaceBlend) {
+                                       float roadSurfaceBlend,
+                                       float cameraZoom) {
     if (lineStyle.widthPoints > 0.0) {
-        return lineStyle.widthPoints * 0.5 * pixelsPerPoint;
+        return tilePointWidthPoints(lineStyle, cameraZoom) * 0.5 * pixelsPerPoint
+            * tilePointWidthWorldScale(lineStyle.worldLockZoom, cameraZoom);
     }
     float edgePx = lineStyle.halfWidthUnits * pixelsPerUnit;
     if (lineStyle.maximumWidthPoints > 0.0) {
@@ -181,12 +232,15 @@ static inline float tileFootprintAlpha(float2 packedRadius,
 /// follows the perspective from there, thinner toward the horizon and
 /// wider in the foreground, the way a width on the ground would. The
 /// foreground growth is capped so a road under a low camera stays a symbol.
+/// A width frozen on the ground (`worldScale` above one, see
+/// tilePointWidthWorldScale) is no symbol any more: the cap lifts with the
+/// scale, so the foreground of a street view follows the true perspective.
 constant float kTilePointWidthPerspectiveMaximum = 2.0;
-static inline float tilePointWidthPerspectiveScale(float referenceDepth, float viewDepth) {
+static inline float tilePointWidthPerspectiveScale(float referenceDepth, float viewDepth, float worldScale) {
     if (referenceDepth <= 0.0) {
         return 1.0;
     }
-    return min(referenceDepth / max(viewDepth, 1e-6), kTilePointWidthPerspectiveMaximum);
+    return min(referenceDepth / max(viewDepth, 1e-6), kTilePointWidthPerspectiveMaximum * worldScale);
 }
 
 /// How much of a road is left at its width on screen: a road thinner than
@@ -406,6 +460,43 @@ static inline half tileStyleFade(half lowZoomFadeMask, constant OverviewFadeUnif
     return 1.0h;
 }
 
+/// The analytic coverage of a lines-class fragment from the flat style
+/// index, apart from the colour: what the road sheet's depth stage reads to
+/// tell a ribbon's body from its antialiasing fringe (Tile.metal).
+static inline half tileLineFragmentCoverage(uint styleIndex,
+                                            float lineDistance,
+                                            float lineParameterRaw,
+                                            constant LineStyle* lineStyles,
+                                            constant OverviewFadeUniform& overviewFade,
+                                            constant LineDashUniform& lineDash,
+                                            float deferredEdgePx) {
+    LineStyle lineStyle = lineStyles[styleIndex];
+    // Same decode as tileVertexStyle: arc length in half tile units for a
+    // dashed style, the normalized end-feather distance otherwise.
+    float lineParameter = lineStyle.dashLengthPoints > 0.0
+        ? lineParameterRaw * 0.5
+        : lineParameterRaw / 32767.0;
+    // The point width at this camera zoom (a pre-extruded ribbon resolves
+    // its edge from it right here, a deferred one did in its vertex stage).
+    float widthPoints = lineStyle.widthPoints > 0.0
+        ? tilePointWidthPoints(lineStyle, overviewFade.cameraZoom)
+        : 0.0;
+    half4 packedLineStyle = half4(lineStyle.edgeThreshold,
+                                  widthPoints,
+                                  lineStyle.dashLengthPoints,
+                                  lineStyle.dashGapPoints);
+    return tileLineCoverage(lineDistance,
+                            lineParameter,
+                            packedLineStyle,
+                            half(lineStyle.minimumWidthPoints),
+                            half(lineStyle.maximumWidthPoints),
+                            lineStyle.dashInTileUnits > 0.0 ? 1.0h : 0.0h,
+                            overviewFade.pixelsPerPoint,
+                            overviewFade.roadSurfaceBlend,
+                            lineDash.unitsPerPoint,
+                            deferredEdgePx);
+}
+
 /// The lines-class fragment resolves its whole style from the flat style
 /// index: the palette-blended colour with the zoom fade, times the analytic
 /// line coverage. The vertex stage exports only the index and the two truly
@@ -424,28 +515,11 @@ static inline half4 tileLineFragmentColor(uint styleIndex,
                                           constant LineDashUniform& lineDash,
                                           float deferredEdgePx) {
     Style style = styles[styleIndex];
-    LineStyle lineStyle = lineStyles[styleIndex];
     half4 color = half4(style.color);
     color.a *= tileStyleFade(half(lowZoomFadeMasks[styleIndex]), overviewFade);
-    // Same decode as tileVertexStyle: arc length in half tile units for a
-    // dashed style, the normalized end-feather distance otherwise.
-    float lineParameter = lineStyle.dashLengthPoints > 0.0
-        ? lineParameterRaw * 0.5
-        : lineParameterRaw / 32767.0;
-    half4 packedLineStyle = half4(lineStyle.edgeThreshold,
-                                  lineStyle.widthPoints,
-                                  lineStyle.dashLengthPoints,
-                                  lineStyle.dashGapPoints);
-    color.a *= tileLineCoverage(lineDistance,
-                                lineParameter,
-                                packedLineStyle,
-                                half(lineStyle.minimumWidthPoints),
-                                half(lineStyle.maximumWidthPoints),
-                                lineStyle.dashInTileUnits > 0.0 ? 1.0h : 0.0h,
-                                overviewFade.pixelsPerPoint,
-                                overviewFade.roadSurfaceBlend,
-                                lineDash.unitsPerPoint,
-                                deferredEdgePx);
+    color.a *= half(tilePointWidthRampAlpha(lineStyles[styleIndex], overviewFade.cameraZoom));
+    color.a *= tileLineFragmentCoverage(styleIndex, lineDistance, lineParameterRaw,
+                                        lineStyles, overviewFade, lineDash, deferredEdgePx);
     return color;
 }
 

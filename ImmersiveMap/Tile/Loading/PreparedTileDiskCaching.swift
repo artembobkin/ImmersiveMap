@@ -740,7 +740,15 @@ final class PreparedTileDiskCaching {
     // polygon's footprint radius in the vertices' normal bytes
     // (TileVertexIn.footprintRadiusNormal); a v98 entry carries zeros there
     // and the old mask, so its buildings would never fade.
-    static let preparedFormatVersion: UInt32 = 99
+    // 100: TileLineStyle widened to thirteen floats, adding the zoom a
+    // point-locked width is frozen on the ground from (worldLockZoom) and
+    // the zoom ramp it comes in over, and the built-in style's overview
+    // strokes state their class symbol under that ramp; a v99 entry has the
+    // narrower span stride and the stepped overview widths.
+    // 101: the join and cap fans of a line lead every triangle with a rim
+    // vertex instead of the hub, so a deferred ribbon's fans resolve their
+    // width on screen; a v100 entry draws a dot at every node of a road.
+    static let preparedFormatVersion: UInt32 = 101
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

@@ -12,7 +12,7 @@ import XCTest
 /// position as well as by name.
 final class TileLineStyleDashUnitsContractTests: XCTestCase {
     func testSwiftAndMetalStructsAgreeOnTheFlagSlot() throws {
-        XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 32)
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 52)
         XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.dashInTileUnits), 20,
                        "The flag is the sixth float, the slot that was reserved0")
 
@@ -29,6 +29,20 @@ final class TileLineStyleDashUnitsContractTests: XCTestCase {
         XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.maximumWidthPoints), 24)
         let ceiling = try XCTUnwrap(body.range(of: "float maximumWidthPoints;"))
         XCTAssertLessThan(flag.lowerBound, ceiling.lowerBound)
+        // The world lock zoom is the ninth float, after the half-width.
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.worldLockZoom), 32)
+        let halfWidth = try XCTUnwrap(body.range(of: "float halfWidthUnits;"))
+        let worldLock = try XCTUnwrap(body.range(of: "float worldLockZoom;"))
+        XCTAssertLessThan(halfWidth.lowerBound, worldLock.lowerBound)
+        // The zoom ramp follows, four floats in the mirror's order.
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.rampStartWidthPoints), 36)
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.rampStartAlpha), 48)
+        var cursor = worldLock.upperBound
+        for field in ["float rampStartWidthPoints;", "float rampStartZoom;", "float rampEndZoom;",
+                      "float rampStartAlpha;"] {
+            let range = try XCTUnwrap(body.range(of: field, range: cursor ..< body.endIndex), field)
+            cursor = range.upperBound
+        }
     }
 
     func testShaderSkipsThePointConversionForWorldLockedDashes() throws {

@@ -181,7 +181,8 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                 * overviewFade.viewportSizePx * 0.5;
             float pixelsPerUnit = max(length(screenSpan), 1e-4);
             deferredEdgePx = tileLineEdgePixels(lineStyle, pixelsPerUnit,
-                                                overviewFade.pixelsPerPoint, overviewFade.roadSurfaceBlend);
+                                                overviewFade.pixelsPerPoint, overviewFade.roadSurfaceBlend,
+                                                overviewFade.cameraZoom);
             // A point-locked width is stated at the centre of the screen
             // and follows the perspective from there. The rim moves by the
             // width at this vertex; the fragment stage scales the flat
@@ -189,7 +190,9 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
             // pixel whatever depth range the triangle spans.
             float rimEdgePx = deferredEdgePx;
             if (lineStyle.widthPoints > 0.0) {
-                rimEdgePx *= tilePointWidthPerspectiveScale(overviewFade.pointWidthReferenceDepth, w0);
+                rimEdgePx *= tilePointWidthPerspectiveScale(
+                    overviewFade.pointWidthReferenceDepth, w0,
+                    tilePointWidthWorldScale(lineStyle.worldLockZoom, overviewFade.cameraZoom));
             }
             float units = min((rimEdgePx + kTileDeferredRibbonFeatherPx) / pixelsPerUnit,
                               kTileDeferredRibbonMaximumUnits);
@@ -243,6 +246,22 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     return out;
 }
 
+/// The point-locked width of a deferred ribbon at this pixel's depth (the
+/// vertex stage moved the rim by the same rule). `position.w` is one over
+/// the view depth.
+static inline float tileFragmentDeferredEdgePx(FragmentIn in,
+                                               constant LineStyle* lineStyles,
+                                               constant OverviewFadeUniform& overviewFade) {
+    float deferredEdgePx = in.deferredEdgePx;
+    if (deferredEdgePx > 0.0 && lineStyles[in.styleIndex].widthPoints > 0.0) {
+        deferredEdgePx *= tilePointWidthPerspectiveScale(
+            overviewFade.pointWidthReferenceDepth,
+            1.0 / max(in.position.w, 1e-6),
+            tilePointWidthWorldScale(lineStyles[in.styleIndex].worldLockZoom, overviewFade.cameraZoom));
+    }
+    return deferredEdgePx;
+}
+
 // Nothing here discards: a retained substitute is kept out of covered
 // slots by the tile-priority stencil test (early, before shading), so the
 // GPU can resolve visibility before the fragment runs. The body is shared
@@ -278,14 +297,7 @@ static inline half4 tileFragmentColor(FragmentIn in,
     // style index right here.
     half4 color;
     if (kTileLineFields) {
-        // The point-locked width at this pixel's depth (the vertex stage
-        // moved the rim by the same rule). `position.w` is one over the
-        // view depth.
-        float deferredEdgePx = in.deferredEdgePx;
-        if (deferredEdgePx > 0.0 && lineStyles[in.styleIndex].widthPoints > 0.0) {
-            deferredEdgePx *= tilePointWidthPerspectiveScale(overviewFade.pointWidthReferenceDepth,
-                                                             1.0 / max(in.position.w, 1e-6));
-        }
+        float deferredEdgePx = tileFragmentDeferredEdgePx(in, lineStyles, overviewFade);
         color = tileLineFragmentColor(in.styleIndex, in.lineDistance, in.lineParameterRaw,
                                       styles, lowZoomFadeMasks, lineStyles,
                                       overviewFade, lineDash, deferredEdgePx);
@@ -368,5 +380,123 @@ fragment TileExactDepthFragmentOut tileExactDepthFragmentShader(FragmentIn in [[
     out.color = tileFragmentColor(in, overviewFade, shadow, lineDash, styles, lowZoomFadeMasks, lineStyles,
                                   fillOutline, footprintFade, shadowMap, groundShadowMask);
     out.depth = in.rankDepth;
+    return out;
+}
+
+// The road sheet: the roads drawn as one sheet, every pixel blended once,
+// whatever overlaps there: the segments and the join fan of a bend, two
+// streets at a junction, a flyover across the road under it, the stitching
+// margins of two tiles, a cap over the next piece. A translucent road (a
+// tunnel, a road the thinness fade has taken part of, a translucent theme
+// colour) otherwise composites twice in every overlap and stamps a darker
+// patch there. A sheet is one role of the roads that read as one network
+// (FlatMapSurfaceDrawer decides: the carriageways of the ground and of the
+// bridges together, whatever their class).
+//
+// Two draws per sheet over the same geometry, both writing the fragment's
+// depth as a constant. A fragment inside a ribbon's body (full coverage)
+// takes a rank in the sheet's band from its alpha, the more opaque the
+// nearer, a fragment of the antialiasing fringe takes the band's far end,
+// and a fragment outside the visible line takes the far plane, which fails
+// every test.
+// - The depth stage (no colour) writes the nearest body rank per pixel, so
+//   the pixel belongs to the most opaque road that covers it with a body:
+//   a faded side street never punches a lighter hole in the avenue it
+//   meets, and a fringe never takes a pixel from the body of another road.
+// - The colour stage tests lessEqual without writing, one rank nearer than
+//   its alpha says, so the two stages, compiled apart, may round an alpha
+//   to neighbouring ranks and the pixel's owner still draws. A fringe draws
+//   only where no body of the sheet is. The sheet's stencil bit lets one
+//   fragment through per pixel (TileSourceStencilPriority.roadSheetBit),
+//   which settles equal and neighbouring ranks.
+// Every depth is an integer count of power-of-two steps under a base that
+// is a multiple of the step, so both stages compute the same bits.
+struct RoadSheetUniform {
+    // The far end of the sheet's band: the fringe's depth in the colour
+    // stage.
+    float baseDepth;
+    float depthStep;
+    // What a fringe fragment writes: the base in the colour stage, the far
+    // plane in the depth stage, where a fringe claims nothing.
+    float fringeDepth;
+    // The alpha ranks of the band: an alpha of one is this rank.
+    float maximumRank;
+    // The coverage a fragment is a body from. The depth stage asks for a
+    // little more than the colour stage, so a fragment the two stages round
+    // differently at the threshold is a body in the colour stage whenever
+    // it was one in the depth stage, and never a hole in its own road.
+    float bodyCoverage;
+    // The ranks the colour stage tests nearer than its alpha says: zero in
+    // the depth stage, one in the colour stage.
+    float rankBias;
+};
+
+/// A road fragment's alpha apart from its coverage: the style's, the zoom
+/// fades and the thinness fade, the factors tileFragmentColor applies.
+static inline float tileRoadSheetAlpha(FragmentIn in,
+                                       constant Style* styles,
+                                       constant float* lowZoomFadeMasks,
+                                       constant LineStyle* lineStyles,
+                                       constant OverviewFadeUniform& overviewFade,
+                                       float deferredEdgePx) {
+    float alpha = styles[in.styleIndex].color.a
+        * float(tileStyleFade(half(lowZoomFadeMasks[in.styleIndex]), overviewFade))
+        * tilePointWidthRampAlpha(lineStyles[in.styleIndex], overviewFade.cameraZoom);
+    if (in.deferredEdgePx > 0.0) {
+        alpha *= tileRoadThinnessFade(deferredEdgePx * 2.0,
+                                      overviewFade.roadFadeGoneWidthPx,
+                                      overviewFade.roadFadeOpaqueWidthPx);
+    }
+    return clamp(alpha, 0.0, 1.0);
+}
+
+static inline float tileRoadSheetDepth(half coverage, float alpha, constant RoadSheetUniform& roadSheet) {
+    if (float(coverage) >= roadSheet.bodyCoverage) {
+        float rank = floor(alpha * roadSheet.maximumRank) + 1.0 + roadSheet.rankBias;
+        return roadSheet.baseDepth - rank * roadSheet.depthStep;
+    }
+    return coverage > 0.001h ? roadSheet.fringeDepth : 1.0;
+}
+
+struct TileRoadSheetDepthOut {
+    float depth [[depth(any)]];
+};
+
+fragment TileRoadSheetDepthOut tileRoadSheetDepthFragmentShader(FragmentIn in [[stage_in]],
+                                                                constant OverviewFadeUniform& overviewFade [[buffer(0)]],
+                                                                constant LineDashUniform& lineDash [[buffer(4)]],
+                                                                constant Style* styles [[buffer(5)]],
+                                                                constant float* lowZoomFadeMasks [[buffer(6)]],
+                                                                constant LineStyle* lineStyles [[buffer(7)]],
+                                                                constant RoadSheetUniform& roadSheet [[buffer(11)]]) {
+    float deferredEdgePx = tileFragmentDeferredEdgePx(in, lineStyles, overviewFade);
+    half coverage = tileLineFragmentCoverage(in.styleIndex, in.lineDistance, in.lineParameterRaw,
+                                             lineStyles, overviewFade, lineDash, deferredEdgePx);
+    float alpha = tileRoadSheetAlpha(in, styles, lowZoomFadeMasks, lineStyles, overviewFade, deferredEdgePx);
+    TileRoadSheetDepthOut out;
+    out.depth = tileRoadSheetDepth(coverage, alpha, roadSheet);
+    return out;
+}
+
+fragment TileExactDepthFragmentOut tileRoadSheetFragmentShader(FragmentIn in [[stage_in]],
+                                                               constant OverviewFadeUniform& overviewFade [[buffer(0)]],
+                                                               constant Shadow& shadow [[buffer(3)]],
+                                                               constant LineDashUniform& lineDash [[buffer(4)]],
+                                                               constant Style* styles [[buffer(5)]],
+                                                               constant float* lowZoomFadeMasks [[buffer(6)]],
+                                                               constant LineStyle* lineStyles [[buffer(7)]],
+                                                               constant FillOutlineUniform& fillOutline [[buffer(9), function_constant(kTileFillOutline)]],
+                                                               constant FootprintFadeUniform& footprintFade [[buffer(10), function_constant(kTileFillFields)]],
+                                                               constant RoadSheetUniform& roadSheet [[buffer(11)]],
+                                                               depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
+                                                               texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
+    float deferredEdgePx = tileFragmentDeferredEdgePx(in, lineStyles, overviewFade);
+    half coverage = tileLineFragmentCoverage(in.styleIndex, in.lineDistance, in.lineParameterRaw,
+                                             lineStyles, overviewFade, lineDash, deferredEdgePx);
+    float alpha = tileRoadSheetAlpha(in, styles, lowZoomFadeMasks, lineStyles, overviewFade, deferredEdgePx);
+    TileExactDepthFragmentOut out;
+    out.color = tileFragmentColor(in, overviewFade, shadow, lineDash, styles, lowZoomFadeMasks, lineStyles,
+                                  fillOutline, footprintFade, shadowMap, groundShadowMask);
+    out.depth = tileRoadSheetDepth(coverage, alpha, roadSheet);
     return out;
 }

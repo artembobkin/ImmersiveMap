@@ -54,6 +54,7 @@ final class RenderPersistentContext {
     let groundOwnerState: MTLDepthStencilState
     let tileStencilTestState: MTLDepthStencilState
     let groundOutlineState: MTLDepthStencilState
+    let roadSheetStates: RoadSheetStates
     let tileOwnershipWriteState: MTLDepthStencilState
     let extrudedStencilTestState: MTLDepthStencilState
     /// See `SharedRenderResources.sceneModelSurfaceMaskState`.
@@ -124,6 +125,7 @@ final class RenderPersistentContext {
         self.sceneModelSurfaceMaskState = shared.sceneModelSurfaceMaskState
         self.tileStencilTestState = shared.tileStencilTestState
         self.groundOutlineState = shared.groundOutlineState
+        self.roadSheetStates = shared.roadSheetStates
         self.shadowFallbackTexture = shared.shadowFallbackTexture
         self.groundShadowMaskFallbackTexture = shared.groundShadowMaskFallbackTexture
 

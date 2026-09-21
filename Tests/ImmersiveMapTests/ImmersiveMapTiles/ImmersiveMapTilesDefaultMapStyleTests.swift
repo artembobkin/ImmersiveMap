@@ -129,8 +129,8 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         // it can carry meaning.
         for (className, minimumZoom) in [("motorway", 5), ("trunk", 5),
                                          ("primary", 7), ("ferry", 8), ("secondary", 9),
-                                         ("tertiary", 10), ("rail", 10), ("minor", 12),
-                                         ("service", 13), ("path", 14)] {
+                                         ("tertiary", 10), ("rail", 10), ("minor", 14),
+                                         ("service", 14), ("path", 14)] {
             XCTAssertEqual(key(className, zoom: minimumZoom - 1), 0,
                            "\(className) must hide below z\(minimumZoom)")
             XCTAssertNotEqual(key(className, zoom: minimumZoom), 0,
@@ -173,7 +173,7 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         }
     }
 
-    func testOverviewRoadsAreOneAsphaltGreyWithSeamlessJoins() {
+    func testOverviewRoadsAreOneAsphaltGreyWithSeamlessJoins() throws {
         let configuration = ImmersiveMapTilesTheme.default
         let style = ImmersiveMapTilesDefaultMapStyle(theme: configuration)
 
@@ -186,31 +186,43 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         let motorway = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 7)
         XCTAssertEqual(motorway.resolvedLineRenderPasses.map(\.roadPassRole), [.fill])
         let fill = motorway.resolvedLineRenderPasses[0]
-        XCTAssertEqual(fill.lineWidthPoints, 1.6)
+        // The stroke is the class's symbol under the theme's ramp: the
+        // hairline and the veil of a country view are the ramp's start, and
+        // the width at a camera zoom is the ramp's, whatever tile serves it.
+        let metrics = configuration.roadMetrics
+        XCTAssertEqual(fill.lineWidthPoints, metrics.symbolWidthPoints.motorway)
+        let ramp = try XCTUnwrap(fill.pointWidthRamp)
+        XCTAssertEqual(ramp, LinePass.WidthRamp(startWidthPoints: metrics.overviewWidthPoints.motorway,
+                                                startZoom: metrics.overviewZoom,
+                                                endZoom: metrics.symbolZoom,
+                                                startAlpha: metrics.overviewOpacity))
         XCTAssertEqual(fill.lowZoomFadeMask, LowZoomOverviewFade.classFadeMask(startZoom: 5),
                        "Overview roads fade in per class, never on the shared road band")
         XCTAssertTrue(fill.lineGeometry.lineCapRound)
         XCTAssertTrue(fill.lineGeometry.lineJoinRound)
         XCTAssertEqual(fill.lineGeometry.lineWidth,
-                       Double(fill.lineWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint,
+                       Double(ramp.widthPoints(atZoom: 8, endWidthPoints: fill.lineWidthPoints))
+                           * FeatureStyle.pointLockedRibbonUnitsPerPoint,
                        accuracy: 0.01,
-                       "The ribbon must host the point width")
+                       "The ribbon must host the widest the stroke gets while a z7 tile serves it")
 
         // The stroke is the street grey of its class, at every zoom: the
         // colour never changes on the way down.
         let expected = configuration.layers.roads.motorway
-        XCTAssertEqual(fill.color, SIMD4<Float>(expected.x, expected.y, expected.z, 0.6))
+        XCTAssertEqual(fill.color, expected, "the veil is the ramp's, not the colour's")
         let primary = makeStyle(style, layerName: "transportation", className: "primary", zoom: 8)
         let primaryFill = primary.resolvedLineRenderPasses[0]
         let expectedPrimary = configuration.layers.roads.primary
-        XCTAssertEqual(primaryFill.color, SIMD4<Float>(expectedPrimary.x, expectedPrimary.y, expectedPrimary.z, 0.6))
+        XCTAssertEqual(primaryFill.color, expectedPrimary)
 
-        // Width steps up with the zoom band: a country view, a region view,
-        // a city view.
-        let countryFill = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 5).resolvedLineRenderPasses[0]
+        // The width grows with the camera, not with the tile level: every
+        // tile level states the same ramp, and the ramp is monotonic.
         let cityFill = makeStyle(style, layerName: "transportation", className: "motorway", zoom: 10).resolvedLineRenderPasses[0]
-        XCTAssertLessThan(countryFill.lineWidthPoints, fill.lineWidthPoints)
-        XCTAssertLessThan(fill.lineWidthPoints, cityFill.lineWidthPoints)
+        XCTAssertEqual(cityFill.pointWidthRamp, ramp)
+        XCTAssertEqual(cityFill.lineWidthPoints, fill.lineWidthPoints)
+        XCTAssertEqual(ramp.widthPoints(atZoom: 5, endWidthPoints: 7), metrics.overviewWidthPoints.motorway)
+        XCTAssertLessThan(ramp.widthPoints(atZoom: 8, endWidthPoints: 7), ramp.widthPoints(atZoom: 11, endWidthPoints: 7))
+        XCTAssertEqual(ramp.widthPoints(atZoom: 15, endWidthPoints: 7), 7)
         for (className, zoom) in [("trunk", 6), ("secondary", 9), ("tertiary", 11)] {
             let road = makeStyle(style, layerName: "transportation", className: className, zoom: zoom)
             XCTAssertGreaterThan(road.resolvedLineRenderPasses[0].lineWidthPoints, 0, "\(className) at z\(zoom)")
@@ -224,6 +236,8 @@ final class ImmersiveMapTilesDefaultMapStyleTests: XCTestCase {
         XCTAssertEqual(streetFill.lineWidthPoints, 7.0)
         XCTAssertEqual(streetFill.minimumWidthPoints, 0)
         XCTAssertEqual(streetFill.color, configuration.layers.roads.motorway)
+        XCTAssertEqual(streetFill.pointWidthRamp, ramp,
+                       "the street era states the overview era's ramp, so z11 to z12 shows no step")
         let streetPrimary = makeStyle(style, layerName: "transportation", className: "primary", zoom: 12)
         XCTAssertEqual(streetPrimary.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!.lineWidthPoints, 6.0)
 

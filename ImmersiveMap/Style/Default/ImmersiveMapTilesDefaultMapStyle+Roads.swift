@@ -21,15 +21,13 @@ extension ImmersiveMapTilesDefaultMapStyle {
     /// a palette wants the kerb back.
     static let drawsAutomobileKerb = false
 
-    /// Experiment: every road past the overview era keeps one width on
-    /// screen, in points per class, at every zoom and every distance from
-    /// the camera, instead of a width on the ground. The class's symbol
-    /// width (its old point ceiling) is the width.
+    /// Every road past the overview era is a symbol: one width on screen,
+    /// in points per class (`RoadMetrics.symbolWidthPoints`), up to the
+    /// theme's world lock zoom, and from there the ground width the symbol
+    /// had at that zoom (`RoadMetrics.worldLockZoom`,
+    /// `LinePass.pointWidthWorldLockZoom`), instead of the carriageway's
+    /// width in metres.
     static let roadsAreScreenFixed = true
-
-    /// The screen-fixed width of a class that states no symbol width (paths
-    /// and the unclassified fallback).
-    static let screenFixedFallbackWidthPoints: Float = 2.0
 
     /// Markings fade on their own band (see `LowZoomOverviewFade`), so they
     /// carry the mask that selects it instead of the roads' one.
@@ -68,7 +66,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // country or regional view every road the tile ships is a sub-pixel
         // hairline, and drawing all of them just greys the map. Majors appear
         // first, the minor network fills in toward street level.
-        guard tileZoom >= Self.roadClassMinimumZoom(effectiveClass) else {
+        guard tileZoom >= roadClassMinimumZoom(effectiveClass) else {
             return hiddenStyle
         }
         // A marked pedestrian crossing: the line the tiles ship across the
@@ -167,6 +165,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         if tileZoom <= Self.overviewRoadMaximumTileZoom,
            let stroke = Self.overviewRoadStroke(cls: effectiveClass, tileZoom: tileZoom) {
             return overviewRoadStyle(stroke,
+                                     cls: effectiveClass,
                                      color: Self.streetRoadColor(cls: effectiveClass, roads: roads),
                                      fadeStartZoom: Self.overviewRoadFadeStartZoom(cls: effectiveClass),
                                      tileZoom: tileZoom,
@@ -256,28 +255,30 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // is close enough for the true carriageway to take over
         // (LowZoomOverviewFade.roadSurfaceBlend, z14 to z16). Constant in
         // points, so a street keeps one readable weight across the region
-        // zooms instead of doubling with every tile level.
+        // zooms instead of doubling with every tile level. The theme states
+        // them (`RoadMetrics.symbolWidthPoints`).
+        let symbolWidthPoints = theme.roadMetrics.symbolWidthPoints.value(forClass: effectiveClass)
         switch effectiveClass {
         case "motorway":
             return roadStyle(fillKey: 56, color: roads.motorway, width: widthMetres, priority: 95, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 2.2, maximumWidthPoints: 7.0, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes,
+                             minimumWidthPoints: 2.2, maximumWidthPoints: symbolWidthPoints, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes,
                              markings: markings, construction: isConstruction)
         case "trunk":
             return roadStyle(fillKey: 54, color: roads.trunk, width: widthMetres, priority: 90, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 2.0, maximumWidthPoints: 6.5, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes,
+                             minimumWidthPoints: 2.0, maximumWidthPoints: symbolWidthPoints, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes,
                              markings: markings, construction: isConstruction)
         case "primary":
             return roadStyle(fillKey: 52, color: roads.primary, width: widthMetres, priority: 80, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.6, maximumWidthPoints: 6.0, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes, markings: markings, construction: isConstruction)
+                             minimumWidthPoints: 1.6, maximumWidthPoints: symbolWidthPoints, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes, markings: markings, construction: isConstruction)
         case "secondary":
             return roadStyle(fillKey: 50, color: roads.secondary, width: widthMetres, priority: 78, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.2, maximumWidthPoints: 5.0, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes, markings: markings, construction: isConstruction)
+                             minimumWidthPoints: 1.2, maximumWidthPoints: symbolWidthPoints, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes, markings: markings, construction: isConstruction)
         case "tertiary":
             return roadStyle(fillKey: 48, color: roads.tertiary, width: widthMetres, priority: 74, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.0, maximumWidthPoints: 4.5, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes, markings: markings, construction: isConstruction)
+                             minimumWidthPoints: 1.0, maximumWidthPoints: symbolWidthPoints, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes, markings: markings, construction: isConstruction)
         case "minor":
             return roadStyle(fillKey: 44, color: roads.minor, width: widthMetres, priority: 50, casing: tileZoom >= 13, tunnel: isTunnel,
-                             minimumWidthPoints: 0.9, maximumWidthPoints: 4.0, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes, markings: markings)
+                             minimumWidthPoints: 0.9, maximumWidthPoints: symbolWidthPoints, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes, markings: markings)
         case "service":
             // A service road is one lane wide and has nothing to divide, so
             // it carries no markings. A parking aisle sits one step below
@@ -286,7 +287,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
             // pass along it, a bus lane mapped as its own way among them.
             let isParkingAisle = props["service"]?.stringValue == "parking_aisle"
             return roadStyle(fillKey: 42, color: roads.service, width: widthMetres, priority: isParkingAisle ? 45 : 46, casing: tileZoom >= 14, tunnel: isTunnel,
-                             minimumWidthPoints: 0.7, maximumWidthPoints: 2.5, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes)
+                             minimumWidthPoints: 0.7, maximumWidthPoints: symbolWidthPoints, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes)
         case "path", "track":
             // Park alleys and walkways (footway/path/track): a plain strip of
             // the ground color, no kerb and no dashes. Over land it is the
@@ -295,7 +296,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
             // route across the surface. A kerb on a ground-colored strip
             // turned every path into a grey band wider than its interior.
             return roadStyle(fillKey: 40, color: roads.path, width: widthMetres, priority: 35, casing: false, tunnel: isTunnel,
-                             minimumWidthPoints: 0.5, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes)
+                             minimumWidthPoints: 0.5, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes)
         case "rail", "transit":
             // Railways are skipped for now: not drawn at any zoom, on any
             // surface. `railStyle` stays for when they come back.
@@ -304,35 +305,22 @@ extension ImmersiveMapTilesDefaultMapStyle {
             return line(key: 41, color: theme.layers.water, width: 4 * s, dashLength: 8, dashGap: 8)
         default:
             return roadStyle(fillKey: 43, color: roads.minor, width: widthMetres, priority: 40, casing: tileZoom >= 13, tunnel: isTunnel,
-                             minimumWidthPoints: 0.9, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes)
+                             minimumWidthPoints: 0.9, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes)
         }
     }
 
     /// The tile zoom a road class first draws at. Majors carry a country
     /// view; the minor network only means something near street level. The
-    /// OpenMapTiles source ships most classes far earlier than they can read.
-    static func roadClassMinimumZoom(_ cls: String?) -> Int {
+    /// road classes read the theme (`RoadMetrics.minimumTileZoom`); the
+    /// ferry and the rail classes are not roads and keep their own.
+    func roadClassMinimumZoom(_ cls: String?) -> Int {
         switch cls {
-        case "motorway", "trunk":
-            // The motorway skeleton starts at z5 by design choice, knowing
-            // the source adds trunk-class geometry only from z6: a corridor
-            // whose tagging changes to trunk shows cut until then.
-            return 5
-        case "primary":
-            return 7
         case "ferry":
             return 8
-        case "secondary":
-            return 9
-        case "tertiary", "rail", "transit":
+        case "rail", "transit":
             return 10
-        case "service", "path", "track":
-            return 14
         default:
-            // minor (residential, living street, unclassified) and unknown
-            // classes: the small automobile network joins at street zoom,
-            // together with the service roads.
-            return 14
+            return theme.roadMetrics.minimumTileZoom.value(forClass: cls)
         }
     }
 
@@ -404,10 +392,6 @@ extension ImmersiveMapTilesDefaultMapStyle {
     struct OverviewRoadStroke: Equatable {
         let fillKey: UInt8
         let priority: Int
-        /// Visible width in layout points.
-        let widthPoints: Float
-        /// Opacity of the stroke; 1 is the opaque street asphalt.
-        let opacity: Float
     }
 
     /// The camera zoom a class fades in from, over the following zoom level
@@ -438,37 +422,46 @@ extension ImmersiveMapTilesDefaultMapStyle {
         }
     }
 
-    /// The overview ladder: one asphalt grey, rank read as width alone, the
-    /// principle the street era already follows, drawn as a veil: the
-    /// stroke is the street grey at a little over half opacity and a step
-    /// narrower than a full symbol, so the network sits in the land rather
-    /// than on it and the ground colours stay the picture. The widths grow
-    /// in three steps (country, region, city view). Where two pieces of a
-    /// corridor overlap (the inner side of a bend, the round cap of one
-    /// piece over the next) the veil doubles, which is the price of a
-    /// translucent stroke; the street era from z12 draws opaque.
+    /// The classes the overview era draws, with the key and the priority of
+    /// each: one asphalt grey, rank read as width alone, the principle the
+    /// street era follows. How wide and how opaque the stroke is at a camera
+    /// zoom is the theme's ramp (`roadWidthRamp`), the same one the street
+    /// era states, so the handover between the eras at a tile level shows
+    /// nothing on screen.
     static func overviewRoadStroke(cls: String?, tileZoom: Int) -> OverviewRoadStroke? {
-        let band: Int
-        switch tileZoom {
-        case ...6: band = 0
-        case 7...9: band = 1
-        default: band = 2
-        }
-        let veil: Float = 0.6
         switch cls {
         case "motorway":
-            return OverviewRoadStroke(fillKey: 56, priority: 95, widthPoints: [1.3, 1.6, 2.2][band], opacity: veil)
+            return OverviewRoadStroke(fillKey: 56, priority: 95)
         case "trunk":
-            return OverviewRoadStroke(fillKey: 54, priority: 90, widthPoints: [1.1, 1.4, 1.9][band], opacity: veil)
+            return OverviewRoadStroke(fillKey: 54, priority: 90)
         case "primary":
-            return OverviewRoadStroke(fillKey: 52, priority: 80, widthPoints: [0.9, 1.0, 1.4][band], opacity: veil)
+            return OverviewRoadStroke(fillKey: 52, priority: 80)
         case "secondary":
-            return OverviewRoadStroke(fillKey: 50, priority: 78, widthPoints: [0.8, 0.8, 1.1][band], opacity: veil)
+            return OverviewRoadStroke(fillKey: 50, priority: 78)
         case "tertiary":
-            return OverviewRoadStroke(fillKey: 48, priority: 74, widthPoints: 0.9, opacity: veil)
+            return OverviewRoadStroke(fillKey: 48, priority: 74)
         default:
             return nil
         }
+    }
+
+    /// The ramp a road class's symbol comes in over, from the theme: the
+    /// overview stroke and its veil up to the overview zoom, the full symbol
+    /// from the symbol zoom.
+    func roadWidthRamp(cls: String?, extraWidthPoints: Float = 0) -> LinePass.WidthRamp {
+        let metrics = theme.roadMetrics
+        return LinePass.WidthRamp(startWidthPoints: metrics.overviewWidthPoints.value(forClass: cls) + extraWidthPoints,
+                                  startZoom: metrics.overviewZoom,
+                                  endZoom: metrics.symbolZoom,
+                                  startAlpha: metrics.overviewOpacity)
+    }
+
+    /// The ribbon a pre-extruded tile bakes to host a ramped point width:
+    /// the widest the stroke gets while the tile is the one on screen, which
+    /// is at the end of its zoom level.
+    static func rampedRibbonWidth(_ ramp: LinePass.WidthRamp, widthPoints: Float, tileZoom: Int) -> Double {
+        Double(ramp.widthPoints(atZoom: Float(tileZoom + 1), endWidthPoints: widthPoints))
+            * FeatureStyle.pointLockedRibbonUnitsPerPoint
     }
 
     /// A road over a country or region view: a symbolic stroke, drawn
@@ -492,6 +485,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
     static let casingMinimumCameraZoom = 16
 
     func overviewRoadStyle(_ stroke: OverviewRoadStroke,
+                           cls: String?,
                            color: SIMD4<Float>,
                            fadeStartZoom: Int,
                            tileZoom: Int,
@@ -499,12 +493,15 @@ extension ImmersiveMapTilesDefaultMapStyle {
                            construction: Bool) -> FeatureStyle {
         let dashed = construction && tunnel == false
         let fillKey = tunnel ? Self.roadTunnelKey(forFillKey: stroke.fillKey) : stroke.fillKey
-        let veiled = SIMD4<Float>(color.x, color.y, color.z, color.w * stroke.opacity)
-        let fillColor = tunnel ? Self.tunnelTone(veiled) : veiled
+        // The stroke is the class's symbol under the theme's ramp: the veil
+        // and the hairline width of a country view are the ramp's start.
+        let widthPoints = theme.roadMetrics.symbolWidthPoints.value(forClass: cls)
+        let ramp = roadWidthRamp(cls: cls)
+        let fillColor = tunnel ? Self.tunnelTone(color) : color
         // A dashed stroke keeps butt ends: a round cap would lay a disc past
         // the last dash of a corridor.
         let geometry = LineGeometryStyle(
-            lineWidth: Double(stroke.widthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint,
+            lineWidth: Self.rampedRibbonWidth(ramp, widthPoints: widthPoints, tileZoom: tileZoom),
             lineCapRound: dashed == false,
             lineJoinRound: true
         )
@@ -515,9 +512,11 @@ extension ImmersiveMapTilesDefaultMapStyle {
             // ships, continuous with the camera, instead of popping with
             // the tile.
             lowZoomFadeMask: LowZoomOverviewFade.classFadeMask(startZoom: fadeStartZoom),
-            lineWidthPoints: stroke.widthPoints,
+            lineWidthPoints: widthPoints,
             dashLengthPoints: dashed ? 4.0 : 0,
             dashGapPoints: dashed ? 2.5 : 0,
+            pointWidthWorldLockZoom: theme.roadMetrics.worldLockZoom,
+            pointWidthRamp: ramp,
             lineGeometry: geometry
         )
         // A ground line at the coarse zooms, a road from
@@ -537,6 +536,8 @@ extension ImmersiveMapTilesDefaultMapStyle {
                    tunnel: Bool,
                    minimumWidthPoints: Float = 0,
                    maximumWidthPoints: Float = 0,
+                   symbolWidthPoints: Float = 0,
+                   roadClass: String? = nil,
                    unitsPerMetre: Double = 0,
                    kerbUnitsPerSide: Double? = nil,
                    strokes: Bool = false,
@@ -555,9 +556,17 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // that many pixels at every vertex, and the ground width plays no
         // part in the fill or the casing. The ribbon the parser sees is the
         // point-locked host, as for the overview strokes.
-        let fixedWidthPoints: Float = Self.roadsAreScreenFixed
-            ? (maximumWidthPoints > 0 ? maximumWidthPoints : Self.screenFixedFallbackWidthPoints)
-            : 0
+        let fixedWidthPoints: Float = Self.roadsAreScreenFixed ? symbolWidthPoints : 0
+        // Past the lock zoom the symbol stays put on the ground; the casing
+        // rides the same lock, so the kerb keeps its proportion.
+        let worldLockZoom: Float = Self.roadsAreScreenFixed ? theme.roadMetrics.worldLockZoom : 0
+        // The same ramp the overview era states for the class, so the tile
+        // level where the eras hand over changes nothing on screen.
+        let casingMarginPoints = 2 * Float(Self.streetStrokeCasingPointsPerSide)
+        let fillRamp: LinePass.WidthRamp? = Self.roadsAreScreenFixed ? roadWidthRamp(cls: roadClass) : nil
+        let casingRamp: LinePass.WidthRamp? = Self.roadsAreScreenFixed
+            ? roadWidthRamp(cls: roadClass, extraWidthPoints: casingMarginPoints)
+            : nil
         let fillRibbonWidth = Self.roadsAreScreenFixed
             ? Double(fixedWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint
             : width
@@ -589,7 +598,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
             // casing is the same margin measured in points.
             // A screen-fixed casing is the fill's points plus a fixed margin
             // of points on each side.
-            let casingWidthPoints = fixedWidthPoints + 2 * Float(Self.streetStrokeCasingPointsPerSide)
+            let casingWidthPoints = fixedWidthPoints + casingMarginPoints
             let casingWidth = Self.roadsAreScreenFixed
                 ? Double(casingWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint
                 : width + 2 * (kerbUnitsPerSide ?? Self.roadCasingMetresPerSide * unitsPerMetre)
@@ -599,6 +608,8 @@ extension ImmersiveMapTilesDefaultMapStyle {
                                   lineWidthPoints: Self.roadsAreScreenFixed ? casingWidthPoints : 0,
                                   minimumWidthPoints: Self.roadsAreScreenFixed ? 0 : casingFloor,
                                   maximumWidthPoints: symbolCeilingPoints > 0 ? symbolCeilingPoints + 1.0 : 0,
+                                  pointWidthWorldLockZoom: worldLockZoom,
+                                  pointWidthRamp: casingRamp,
                                   lineGeometry: makeRoadGeometry(width: casingWidth))
         }
         let fillPass = LinePass(key: fillPassKey,
@@ -609,6 +620,8 @@ extension ImmersiveMapTilesDefaultMapStyle {
                                 dashGapPoints: constructionDash?.gap ?? 0,
                                 minimumWidthPoints: Self.roadsAreScreenFixed ? 0 : minimumWidthPoints,
                                 maximumWidthPoints: symbolCeilingPoints,
+                                pointWidthWorldLockZoom: worldLockZoom,
+                                pointWidthRamp: fillRamp,
                                 lineGeometry: fillGeometry)
         var paint: [LinePass] = []
         // Each marking is one dashed hairline pass, offset sideways from the

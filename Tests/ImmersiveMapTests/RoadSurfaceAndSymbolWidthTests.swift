@@ -78,6 +78,46 @@ final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
         XCTAssertGreaterThan(fill.lineGeometry.lineWidth, 0, "the ribbon hosts the point width")
     }
 
+    func testTheThemeStatesTheSymbolWidthTheWorldLockAndTheFirstZoomOfAClass() {
+        func v(_ s: String) -> MvtValue { .string(s) }
+        func fill(_ theme: ImmersiveMapTilesTheme, cls: String, z: Int) -> TestRoadPass? {
+            ImmersiveMapTilesDefaultMapStyle(theme: theme)
+                .makeStyle(data: DetFeatureStyleData(layerName: "transportation",
+                                                     properties: ["class": v(cls)],
+                                                     tile: Tile(x: 0, y: 0, z: z)))
+                .resolvedLineRenderPasses.first { $0.roadPassRole == .fill }
+        }
+        let standard = ImmersiveMapTilesTheme.default
+        XCTAssertEqual(fill(standard, cls: "minor", z: 14)?.pointWidthWorldLockZoom, 15,
+                       "a road keeps its width on the ground from camera zoom 15")
+        XCTAssertNil(fill(standard, cls: "minor", z: 13), "the small network joins at street zoom")
+
+        let changed = standard.roadMetrics { metrics in
+            metrics.worldLockZoom = 15.5
+            metrics.symbolWidthPoints.minor = 3
+            metrics.minimumTileZoom.minor = 13
+        }
+        XCTAssertEqual(fill(changed, cls: "minor", z: 14)?.pointWidthWorldLockZoom, 15.5)
+        XCTAssertEqual(fill(changed, cls: "minor", z: 14)?.lineWidthPoints, 3)
+        XCTAssertNotNil(fill(changed, cls: "minor", z: 13))
+        XCTAssertNotEqual(changed.cacheFingerprint, standard.cacheFingerprint,
+                          "the metrics are baked into the tiles, so they are part of the cache identity")
+    }
+
+    func testTheWorldLockZoomReachesTheShaderStyle() {
+        let pass = LinePass(key: 1, color: .one, lineWidthPoints: 4, pointWidthWorldLockZoom: 14,
+                            lineGeometry: LineGeometryStyle(lineWidth: 48))
+        XCTAssertEqual(TileUnificationStage.makeTileLineStyle(from: pass).worldLockZoom, 14)
+    }
+
+    func testARoadAtItsSymbolWidthIsOpaqueUnderTheDefaultThinnessFade() {
+        // The thinnest symbol is two points, which is two pixels on a 1x
+        // display: the fade must leave it whole and only take hairlines.
+        let thinnest = ImmersiveMapTilesTheme.RoadMetrics.defaultSymbolWidthPoints.all.min()!
+        XCTAssertEqual(RoadThinnessFade.default.alpha(widthPixels: thinnest), 1)
+        XCTAssertEqual(RoadThinnessFade.default.alpha(widthPixels: 0.5), 0)
+    }
+
     func testTheSurfaceBlendIsContinuousAcrossTheHandoverZooms() {
         // Symbol below z14, surface from z16, smooth between: no step anywhere.
         XCTAssertEqual(LowZoomOverviewFade.roadSurfaceBlend(for: 13.0), 0)

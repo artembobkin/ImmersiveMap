@@ -58,6 +58,10 @@ enum FlatMapSurfaceDrawer {
     ///   (`GroundLayerGroups`), every one of them for a source not named.
     ///   The raster zone splits a tile's ground between the draw under its
     ///   picture and the draw over it this way (`RasterZone`).
+    /// - Parameter roadSheetStates: the road sheet's states. With them each
+    ///   road group draws as one sheet, every pixel blended once (the road
+    ///   sheet in Tile.metal); without them the groups draw the plain way,
+    ///   in painter's order.
     /// - Parameter drawsRoads: whether the road buckets and the bridge
     ///   overlay draw. Off for the draw under the pictures and for a
     ///   picture itself: a road is never part of a picture.
@@ -73,6 +77,7 @@ enum FlatMapSurfaceDrawer {
                      groundOwnerState: MTLDepthStencilState,
                      tileStencilTestState: MTLDepthStencilState,
                      groundOutlineState: MTLDepthStencilState,
+                     roadSheetStates: RoadSheetStates? = nil,
                      isWireframeEnabled: Bool,
                      exactRankDepthBelowZoom: Int,
                      opaqueFillsOnly: Bool = false,
@@ -169,7 +174,11 @@ enum FlatMapSurfaceDrawer {
             case fillOutline
         }
         var selectedPipeline: (GroundPipeline, Bool)?
+        // Set while a road group draws as a sheet: the stage has bound its
+        // own pipeline, and the per-source selection stands aside.
+        var roadSheetStage: RoadSheetDepth.Stage?
         func selectPipeline(_ pipeline: GroundPipeline, exactRankDepth: Bool) {
+            if roadSheetStage != nil { return }
             if let selectedPipeline, selectedPipeline == (pipeline, exactRankDepth) { return }
             selectedPipeline = (pipeline, exactRankDepth)
             switch pipeline {
@@ -288,27 +297,71 @@ enum FlatMapSurfaceDrawer {
         // The road buckets: whatever the tiles carry. A tile whose roads the
         // style drew as ground lines carries none, and the casing's zoom is
         // the style's too, baked as the pass's fade band.
-        func drawRoadGroup(_ structureKind: RoadStructureKind) {
+        func drawRoadLayer(_ structureKind: RoadStructureKind, role: RoadPassRole) {
+            for source in linedSources {
+                selectPipeline(.lines, exactRankDepth: source.exactRankDepth)
+                let structureBucket = source.metalTile.tileBuffers.roads.bucket(for: structureKind)
+                drawFlatGeometryLayer(renderEncoder: renderEncoder,
+                                      buffers: structureBucket.layer(for: role),
+                                      tile: source.metalTile.tile,
+                                      worldWrap: source.worldWrap,
+                                      flatRenderState: flatRenderState,
+                                      pixelsPerPoint: pixelsPerPoint,
+                                      drawableHeightPx: drawableSizePx.y,
+                                      overviewFade: overviewFadeUniform,
+                                      bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
+                                      cameraEye: cameraUniform.eye,
+                                      markingCutoffWorldDistance: markingCutoffWorldDistance,
+                                      // The detail role is road paint through and
+                                      // through (every detail pass carries the
+                                      // marking fade band), so past the cutoff the
+                                      // whole layer skips.
+                                      skipsWholeLayerBeyondMarkingCutoff: role == .detail)
+            }
+        }
+        func roadLayerIsEmpty(_ structureKind: RoadStructureKind, role: RoadPassRole) -> Bool {
+            linedSources.allSatisfy {
+                $0.metalTile.tileBuffers.roads.bucket(for: structureKind).layer(for: role).indicesCount == 0
+            }
+        }
+
+        // One group of roads as one sheet: the depth stage, then the colour
+        // stage, over the same draws (the road sheet in Tile.metal). Each
+        // group takes the next band of the sheet's depths, so it paints
+        // over the groups before it, the order the groups are drawn in.
+        var roadSheetGroup = 0
+        func drawRoadSheet(isEmpty: Bool, _ drawGroup: () -> Void) {
+            guard isEmpty == false else { return }
+            guard let roadSheetStates else {
+                drawGroup()
+                return
+            }
+            for stage in [RoadSheetDepth.Stage.depth, .color] {
+                guard tilePipeline.selectFlatRoadSheetPipeline(renderEncoder: renderEncoder, stage: stage) else {
+                    drawGroup()
+                    return
+                }
+                roadSheetStage = stage
+                renderEncoder.setDepthStencilState(stage == .depth
+                    ? roadSheetStates.depthStage
+                    : roadSheetStates.colorStage)
+                var sheetUniform = RoadSheetDepth.uniform(group: roadSheetGroup, stage: stage)
+                renderEncoder.setFragmentBytes(&sheetUniform,
+                                               length: MemoryLayout<RoadSheetUniform>.stride,
+                                               index: 11)
+                drawGroup()
+            }
+            roadSheetStage = nil
+            selectedPipeline = nil
+            roadSheetGroup += 1
+        }
+        // One sheet per role over the structures that read as one network.
+        func drawRoadSheets(_ structureKinds: [RoadStructureKind]) {
             for role in [RoadPassRole.shadow, .casing, .fill, .detail] {
-                for source in linedSources {
-                    selectPipeline(.lines, exactRankDepth: source.exactRankDepth)
-                    let structureBucket = source.metalTile.tileBuffers.roads.bucket(for: structureKind)
-                    drawFlatGeometryLayer(renderEncoder: renderEncoder,
-                                          buffers: structureBucket.layer(for: role),
-                                          tile: source.metalTile.tile,
-                                          worldWrap: source.worldWrap,
-                                          flatRenderState: flatRenderState,
-                                          pixelsPerPoint: pixelsPerPoint,
-                                          drawableHeightPx: drawableSizePx.y,
-                                          overviewFade: overviewFadeUniform,
-                                          bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
-                                          cameraEye: cameraUniform.eye,
-                                          markingCutoffWorldDistance: markingCutoffWorldDistance,
-                                          // The detail role is road paint through and
-                                          // through (every detail pass carries the
-                                          // marking fade band), so past the cutoff the
-                                          // whole layer skips.
-                                          skipsWholeLayerBeyondMarkingCutoff: role == .detail)
+                drawRoadSheet(isEmpty: structureKinds.allSatisfy { roadLayerIsEmpty($0, role: role) }) {
+                    for structureKind in structureKinds {
+                        drawRoadLayer(structureKind, role: role)
+                    }
                 }
             }
         }
@@ -322,29 +375,25 @@ enum FlatMapSurfaceDrawer {
             return
         }
         renderEncoder.pushDebugGroup("roads")
-        drawRoadGroup(.tunnel)
-        drawRoadGroup(.ground)
-        drawRoadGroup(.automobileGround)
+        drawRoadSheets([.tunnel])
+        drawRoadSheets([.ground])
+        // The carriageways of the ground and of the bridges are one sheet
+        // per role: a flyover over an avenue, a ramp leaving it and the
+        // avenue itself are one network on screen, and a translucent road
+        // must not darken where one of them passes over another. The
+        // bridges follow the ground inside the sheet, so where the alphas
+        // tie, the ground's pixel is the one that draws. The price is the
+        // kerb of a bridge, which no longer cuts across the road under it.
+        drawRoadSheets([.automobileGround, .bridge])
         // Road geometry, so no ground family decides it.
-        drawLayer(\.bridgeOverlay, pipeline: .lines, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
-                  linesOnly: true, appliesGroups: false)
-        drawRoadGroup(.bridge)
+        drawRoadSheet(isEmpty: linedSources.allSatisfy { $0.metalTile.tileBuffers.bridgeOverlay.indicesCount == 0 }) {
+            drawLayer(\.bridgeOverlay, pipeline: .lines, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
+                      linesOnly: true, appliesGroups: false)
+        }
 
-        for structureKind in RoadStructureKind.drawOrder {
-            for source in linedSources {
-                selectPipeline(.lines, exactRankDepth: source.exactRankDepth)
-                let structureBucket = source.metalTile.tileBuffers.roads.bucket(for: structureKind)
-                drawFlatGeometryLayer(renderEncoder: renderEncoder,
-                                      buffers: structureBucket.layer(for: .overlay),
-                                      tile: source.metalTile.tile,
-                                      worldWrap: source.worldWrap,
-                                      flatRenderState: flatRenderState,
-                                      pixelsPerPoint: pixelsPerPoint,
-                                      drawableHeightPx: drawableSizePx.y,
-                                      overviewFade: overviewFadeUniform,
-                                      bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
-                                      cameraEye: cameraUniform.eye,
-                                      markingCutoffWorldDistance: markingCutoffWorldDistance)
+        drawRoadSheet(isEmpty: RoadStructureKind.drawOrder.allSatisfy { roadLayerIsEmpty($0, role: .overlay) }) {
+            for structureKind in RoadStructureKind.drawOrder {
+                drawRoadLayer(structureKind, role: .overlay)
             }
         }
         renderEncoder.popDebugGroup()

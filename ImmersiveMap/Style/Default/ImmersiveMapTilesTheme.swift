@@ -139,6 +139,160 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
         }
     }
 
+    /// One value per road class of the hosted tiles' `transportation`
+    /// layer, `other` standing for every class the style does not name.
+    public struct RoadClassValues<Value: Equatable & Sendable>: Equatable, Sendable {
+        public var motorway: Value
+        public var trunk: Value
+        public var primary: Value
+        public var secondary: Value
+        public var tertiary: Value
+        public var minor: Value
+        public var service: Value
+        public var path: Value
+        public var other: Value
+
+        public init(motorway: Value,
+                    trunk: Value,
+                    primary: Value,
+                    secondary: Value,
+                    tertiary: Value,
+                    minor: Value,
+                    service: Value,
+                    path: Value,
+                    other: Value) {
+            self.motorway = motorway
+            self.trunk = trunk
+            self.primary = primary
+            self.secondary = secondary
+            self.tertiary = tertiary
+            self.minor = minor
+            self.service = service
+            self.path = path
+            self.other = other
+        }
+
+        /// The value of a `class` as the tiles spell it (`track` reads as
+        /// `path`).
+        public func value(forClass cls: String?) -> Value {
+            switch cls {
+            case "motorway": return motorway
+            case "trunk": return trunk
+            case "primary": return primary
+            case "secondary": return secondary
+            case "tertiary": return tertiary
+            case "minor": return minor
+            case "service": return service
+            case "path", "track": return path
+            default: return other
+            }
+        }
+
+        var all: [Value] {
+            [motorway, trunk, primary, secondary, tertiary, minor, service, path, other]
+        }
+    }
+
+    /// How wide the roads of the street era draw and from where, as opposed
+    /// to `RoadLayerStyles`, which is only their colours.
+    public struct RoadMetrics: Equatable, Sendable {
+        /// The width of a class as a symbol, in points: what it draws at on
+        /// screen from `symbolZoom` up to `worldLockZoom`.
+        public var symbolWidthPoints: RoadClassValues<Float>
+
+        /// The width of a class over a country view, in points: what it
+        /// draws at up to `overviewZoom`. Between `overviewZoom` and
+        /// `symbolZoom` the width grows from this to `symbolWidthPoints` by
+        /// the same ratio per zoom level, continuous in camera zoom, so a
+        /// road never steps in width, neither with the camera nor when the
+        /// engine swaps the tile level serving it.
+        public var overviewWidthPoints: RoadClassValues<Float>
+
+        /// The camera zoom up to which a road is its overview stroke.
+        public var overviewZoom: Float
+
+        /// The camera zoom from which a road is its full symbol.
+        public var symbolZoom: Float
+
+        /// The opacity of the overview stroke, a veil that lets the ground
+        /// colours stay the picture over a country view. It grows to one
+        /// along with the width, by `symbolZoom`.
+        public var overviewOpacity: Float
+
+        /// The camera zoom from which a road's width is fixed on the ground
+        /// instead of on screen. Up to it a road is a symbol of
+        /// `symbolWidthPoints`. Past it the road keeps the ground width the
+        /// symbol had at this zoom, so it doubles on screen with every zoom
+        /// level, like the blocks and the buildings around it, and never
+        /// thins into a hairline at street level. The handover is continuous
+        /// in camera zoom. Zero keeps every road a symbol at every zoom.
+        public var worldLockZoom: Float
+
+        /// The tile zoom a class first draws at. The street era draws what
+        /// the tiles carry from this zoom on. A value under the zoom the
+        /// source first ships the class at changes nothing.
+        public var minimumTileZoom: RoadClassValues<Int>
+
+        public init(symbolWidthPoints: RoadClassValues<Float> = RoadMetrics.defaultSymbolWidthPoints,
+                    overviewWidthPoints: RoadClassValues<Float> = RoadMetrics.defaultOverviewWidthPoints,
+                    overviewZoom: Float = 6,
+                    symbolZoom: Float = 14,
+                    overviewOpacity: Float = 0.6,
+                    worldLockZoom: Float = 15,
+                    minimumTileZoom: RoadClassValues<Int> = RoadMetrics.defaultMinimumTileZoom) {
+            self.symbolWidthPoints = symbolWidthPoints
+            self.overviewWidthPoints = overviewWidthPoints
+            self.overviewZoom = overviewZoom
+            self.symbolZoom = symbolZoom
+            self.overviewOpacity = overviewOpacity
+            self.worldLockZoom = worldLockZoom
+            self.minimumTileZoom = minimumTileZoom
+        }
+
+        /// With every drive tier sharing one asphalt grey, width is the
+        /// whole hierarchy, so the ramp is spread wide.
+        public static let defaultSymbolWidthPoints = RoadClassValues<Float>(
+            motorway: 7.0,
+            trunk: 6.5,
+            primary: 6.0,
+            secondary: 5.0,
+            tertiary: 4.5,
+            minor: 4.0,
+            service: 2.5,
+            path: 2.0,
+            other: 2.0
+        )
+
+        /// The country view's ladder: hairlines whose rank still reads as
+        /// width alone.
+        public static let defaultOverviewWidthPoints = RoadClassValues<Float>(
+            motorway: 1.3,
+            trunk: 1.1,
+            primary: 0.9,
+            secondary: 0.8,
+            tertiary: 0.7,
+            minor: 0.6,
+            service: 0.5,
+            path: 0.4,
+            other: 0.4
+        )
+
+        /// Majors carry a country view. The small automobile network, the
+        /// service roads and the paths join together at street zoom: over a
+        /// city view they only grey the map.
+        public static let defaultMinimumTileZoom = RoadClassValues<Int>(
+            motorway: 5,
+            trunk: 5,
+            primary: 7,
+            secondary: 9,
+            tertiary: 10,
+            minor: 14,
+            service: 14,
+            path: 14,
+            other: 14
+        )
+    }
+
     public struct LayerStyles: Equatable, Sendable {
         public var land: SIMD4<Float>
         public var water: SIMD4<Float>
@@ -211,15 +365,18 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
     public var labelVisibility: LabelVisibility
     public var layers: LayerStyles
     public var features: FeatureStyles
+    public var roadMetrics: RoadMetrics
 
     public init(labels: LabelStyles = .default,
                 labelVisibility: LabelVisibility = LabelVisibility(),
                 layers: LayerStyles = .default,
-                features: FeatureStyles = .default) {
+                features: FeatureStyles = .default,
+                roadMetrics: RoadMetrics = RoadMetrics()) {
         self.labels = labels
         self.labelVisibility = labelVisibility
         self.layers = layers
         self.features = features
+        self.roadMetrics = roadMetrics
     }
 
     public static let `default` = ImmersiveMapTilesTheme()
@@ -264,6 +421,12 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
         return copy
     }
 
+    public func roadMetrics(_ update: (inout RoadMetrics) -> Void) -> ImmersiveMapTilesTheme {
+        var copy = self
+        update(&copy.roadMetrics)
+        return copy
+    }
+
     /// FNV-1a over every palette component so a recolor changes disk-cache identity.
     var cacheFingerprint: UInt32 {
         var hash: UInt64 = 1469598103934665603
@@ -305,6 +468,13 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
         out.append(Float(labelVisibility.poiIconlessMinimumZoom))
         out.append(Float(labelVisibility.poiMinimumZoom))
         out.append(labelVisibility.poiRequiresIcon ? 1 : 0)
+        // The road metrics are baked into the tiles' line styles and decide
+        // which classes a tile carries at all.
+        out.append(contentsOf: roadMetrics.symbolWidthPoints.all)
+        out.append(contentsOf: roadMetrics.overviewWidthPoints.all)
+        out.append(contentsOf: [roadMetrics.overviewZoom, roadMetrics.symbolZoom, roadMetrics.overviewOpacity])
+        out.append(roadMetrics.worldLockZoom)
+        out.append(contentsOf: roadMetrics.minimumTileZoom.all.map(Float.init))
         return out
     }
 }
