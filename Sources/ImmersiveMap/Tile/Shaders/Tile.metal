@@ -181,9 +181,10 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
             LineStyle lineStyle = lineStyles[vertexIn.styleIndex];
             float4 clipCentre = camera.matrix * (modelMatrix * float4(localPosition, 0.0, 1.0));
             float4 clipAlong = camera.matrix * (modelMatrix * float4(normal, 0.0, 0.0));
-            // Behind the near plane the span is meaningless and the vertex
-            // is cut anyway: the depths are floored so the width stays
-            // finite there.
+            // Behind the near plane the span is meaningless: the depths are
+            // floored so the width stays finite there. The vertex is cut,
+            // but it still shapes its triangles (see the ground width
+            // below), so only the feather may come from the span.
             float w0 = max(clipCentre.w, kFlatCameraNearPlane);
             float w1 = max(clipCentre.w + clipAlong.w, kFlatCameraNearPlane);
             float2 screenSpan = ((clipCentre.xy + clipAlong.xy) / w1 - clipCentre.xy / w0)
@@ -192,17 +193,48 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
             deferredEdgePx = tileLineEdgePixels(lineStyle, pixelsPerUnit,
                                                 overviewFade.pixelsPerPoint, overviewFade.roadSurfaceBlend,
                                                 overviewFade.cameraZoom);
-            // A point-locked width is stated at the centre of the screen
-            // and follows the perspective from there. The rim moves by the
-            // width at this vertex; the fragment stage scales the flat
-            // unscaled width by its own depth, so the edge is exact per
-            // pixel whatever depth range the triangle spans.
-            float rimEdgePx = deferredEdgePx;
-            if (lineStyle.widthPoints > 0.0) {
-                rimEdgePx *= tilePointWidthPerspectiveScale(overviewFade, w0, normal, clipCentre.xy / w0);
+            float units;
+            if (lineStyle.widthPoints > 0.0
+                && overviewFade.pointWidthReferenceDepth > 0.0
+                && overviewFade.pointWidthCentrePixelsPerWorldUnit > 0.0) {
+                // A point-locked width lies on the ground
+                // (tilePointWidthPerspectiveScale): one ground half-width
+                // per style, the same at every vertex of every ribbon of
+                // it, so the rim is stated as that width directly, the
+                // pixels at the centre of the screen over the pixels a
+                // world unit spans there, in tile units through the
+                // model's scale. The fragment stage scales the flat
+                // unscaled width by its own depth and direction, so the
+                // edge is exact per pixel whatever depth range the
+                // triangle spans. Resolving the rim through the screen
+                // span gives the same number for a vertex in front of the
+                // camera and a meaningless one for a vertex behind the
+                // near plane, whose screen point is nowhere. That vertex
+                // is cut, but it still shapes its triangles: a ribbon
+                // extruded wider at one row than at the other is a
+                // trapezoid, and the distance field a trapezoid cut into
+                // two triangles interpolates bends at the diagonal, so the
+                // visible part of every segment that began behind the
+                // camera drew veering off its centreline, by more the
+                // closer it came, the whole road swinging with the
+                // camera's bearing (a straight bridge kinked at the tile
+                // seam under a street tilt).
+                float unitsPerWorld = 1.0 / max(length(modelMatrix[0].xyz), 1e-9);
+                units = deferredEdgePx / overviewFade.pointWidthCentrePixelsPerWorldUnit * unitsPerWorld;
+            } else {
+                // A width on screen: the rim moves by the width at this
+                // vertex's own scale.
+                float rimEdgePx = deferredEdgePx;
+                if (lineStyle.widthPoints > 0.0) {
+                    rimEdgePx *= tilePointWidthPerspectiveScale(overviewFade, w0, normal, clipCentre.xy / w0);
+                }
+                units = rimEdgePx / pixelsPerUnit;
             }
-            float units = min((rimEdgePx + kTileDeferredRibbonFeatherPx) / pixelsPerUnit,
-                              kTileDeferredRibbonMaximumUnits);
+            // The feather at this vertex's scale on screen. Behind the
+            // near plane the floored span is far too many pixels a unit
+            // and the feather vanishes, which the cut vertex never shows.
+            units = min(units + kTileDeferredRibbonFeatherPx / pixelsPerUnit,
+                        kTileDeferredRibbonMaximumUnits);
             localPosition += normal * units;
         }
     }
