@@ -4,6 +4,9 @@
    <FileRef
       location = "container:">
    </FileRef>
+   <FileRef
+      location = "group:.claude">
+   </FileRef>
    <Group
       location = "container:"
       name = "Examples">

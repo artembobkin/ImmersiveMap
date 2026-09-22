@@ -1,8 +1,8 @@
 .DS_Store
-# AI assistant configuration and instructions: local tooling, not part of the
-# package. Kept out of the repository entirely.
-.claude/
-CLAUDE.md
+# Claude Code setup: CLAUDE.md, the path-scoped rules and the shared settings
+# are committed. A person's own permissions and the worktrees stay local.
+/.claude/settings.local.json
+/.claude/worktrees/
 # playwright-mcp browser-automation artifacts (console logs, screenshots)
 /.playwright-mcp/
 /.build/
