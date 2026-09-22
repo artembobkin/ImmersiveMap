@@ -49,7 +49,6 @@ extension FeatureStyle {
     var dashGapPoints: Float { primaryPass?.dashGapPoints ?? 0 }
     var dashInTileUnits: Bool { primaryPass?.dashInTileUnits ?? false }
     var minimumWidthPoints: Float { primaryPass?.minimumWidthPoints ?? 0 }
-    var maximumWidthPoints: Float { primaryPass?.maximumWidthPoints ?? 0 }
     var lineGeometry: LineGeometryStyle { primaryPass?.lineGeometry ?? LineGeometryStyle(lineWidth: 0) }
     var suppressPolygonFill: Bool { lineStyle.map { $0.fillsAreas == false } ?? false }
     var fillOutlineAntialiasing: Bool { fillStyle?.outlineAntialiasing ?? false }

@@ -11,17 +11,14 @@ import XCTest
 /// pass's fade band).
 final class RoadPathAndCasingStyleTests: XCTestCase {
     private let style = ImmersiveMapTilesDefaultMapStyle()
-    /// The same style with the theme's stroke casing switched on.
+    /// The same style with the theme's casing switched on.
     private let casedStyle = ImmersiveMapTilesDefaultMapStyle(
         theme: ImmersiveMapTilesTheme.default.roadMetrics { $0.drawsCasing = true })
 
     private func roadStyle(cls: String, zoom: Int, cased: Bool = false) -> FeatureStyle {
-        // A street map's layer, without the streetscape: the road is a
-        // stroke with a casing, not a measured carriageway.
         (cased ? casedStyle : style).makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                   properties: ["class": .string(cls)],
                                                   tile: Tile(x: 0, y: 0, z: zoom),
-                                                  layerCarriesStreetscape: false,
                                                   geometryType: .linestring))
     }
 

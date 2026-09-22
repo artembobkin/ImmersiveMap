@@ -68,8 +68,8 @@ let style = ImmersiveMapTilesMapStyle.default.apply { theme in
   at this zoom, so it doubles on screen with every zoom level past it, like
   the blocks around it, and never thins into a hairline at street level. The
   handover is continuous. Zero keeps every road a symbol at every zoom.
-- `drawsCasing` (default off): whether a street map's road stroke wears an
-  outline a point wide on each side at street zoom.
+- `drawsCasing` (default off): whether the automobile roads wear an outline
+  a point wide on each side at street zoom.
 - `minimumTileZoom`: the tile zoom a class first draws at. A value under the
   zoom the tile source first ships the class at changes nothing.
 

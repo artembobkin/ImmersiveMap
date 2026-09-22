@@ -245,7 +245,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
         let kerbWidth = 2 * Self.roadCasingMetresPerSide * unitsPerMetre
         var kerb: LinePass?
-        if tunnel == false, Self.drawsAutomobileKerb {
+        if tunnel == false, theme.roadMetrics.drawsCasing {
             kerb = LinePass(key: Self.roadCasingKey(forFillKey: fillKey),
                             color: roadCasingColor(from: classColor),
                             lowZoomFadeMask: roadLowZoomFadeMask,

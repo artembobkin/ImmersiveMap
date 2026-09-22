@@ -8,9 +8,8 @@ import simd
 
 /// Three contracts of the street-level road picture: a ribbon inside a
 /// carriageway surface is clipped away (the surface owns that ground), lane
-/// lines are the centreline offset sideways, and a road's width morphs from a
-/// symbol to its true surface continuously with the camera rather than
-/// doubling at every tile level.
+/// lines are the centreline offset sideways, and a road is a symbol of a
+/// width in points, frozen on the ground from the theme's world lock zoom.
 final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
     private func area(_ ring: [SIMD2<Float>], priority: Int = 80) -> RoadSurfaceArea {
         var lower = ring[0], upper = ring[0]
@@ -62,7 +61,7 @@ final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
         XCTAssertEqual(RoadPolylineMath.offsetPolyline(line, by: 0), line)
     }
 
-    // MARK: - Symbol to surface
+    // MARK: - The symbol
 
     func testRoadsAreSymbolsOfAFixedWidthOnScreen() {
         let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
@@ -71,8 +70,9 @@ final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
                                                                 properties: ["class": v("primary")],
                                                                 tile: Tile(x: 39615, y: 20486, z: 16)))
         let fill = primary.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
-        XCTAssertEqual(fill.lineWidthPoints, 6.0, "a primary is a 6-point symbol at every zoom")
-        XCTAssertEqual(fill.maximumWidthPoints, 0, "a point-locked width has no ceiling to release")
+        XCTAssertEqual(fill.lineWidthPoints,
+                       ImmersiveMapTilesTheme.RoadMetrics.defaultSymbolWidthPoints.primary,
+                       "a primary is the theme's symbol in points at every zoom")
         XCTAssertNil(primary.resolvedLineRenderPasses.first { $0.roadPassRole == .casing },
                      "the symbol draws kerbless like the rest of the automobile tier")
         XCTAssertGreaterThan(fill.lineGeometry.lineWidth, 0, "the ribbon hosts the point width")
@@ -129,22 +129,6 @@ final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
         XCTAssertTrue(source.contains("float widthShare = clamp(requestedEdgePx / kTileLineMinimumEdgePx, 0.0, 1.0);"))
         XCTAssertTrue(source.contains("smoothstep(-0.5, 0.5, sideDistancePx) * widthShare;"),
                       "a sub-pixel line is not forced into a solid pixel-wide one")
-    }
-
-    func testTheSurfaceBlendIsContinuousAcrossTheHandoverZooms() {
-        // Symbol below z14, surface from z16, smooth between: no step anywhere.
-        XCTAssertEqual(LowZoomOverviewFade.roadSurfaceBlend(for: 13.0), 0)
-        XCTAssertEqual(LowZoomOverviewFade.roadSurfaceBlend(for: 16.0), 1)
-        var previous: Float = 0
-        var zoom = 13.0
-        while zoom <= 17.0 {
-            let value = LowZoomOverviewFade.roadSurfaceBlend(for: zoom)
-            XCTAssertGreaterThanOrEqual(value, previous)
-            XCTAssertLessThan(value - previous, 0.06, "no jump at z\(zoom)")
-            previous = value
-            zoom += 0.05
-        }
-        XCTAssertEqual(LowZoomOverviewFade.roadSurfaceBlend(for: 15.0), 0.5, accuracy: 0.01)
     }
 
     func testRoadMarkingsDrawNothingBelowCameraZoomFifteen() {

@@ -13,12 +13,9 @@ struct TileOverviewFadeUniform {
     /// Converts the per-style point-locked line widths into the pixels the
     /// shader's coverage math runs in.
     var pixelsPerPoint: Float
-    /// See `LowZoomOverviewFade.roadSurfaceBlend`. Zero on the globe and in
-    /// the atlas: at overview zooms every road is a symbol.
-    var roadSurfaceBlend: Float = 0
     /// See `LowZoomOverviewFade.roadMarkingAlpha`: road markings come in
-    /// over their own camera-zoom band, above the one the carriageway widths
-    /// morph over. Zero on the globe and in the atlas: no road is painted yet.
+    /// over their own camera-zoom band. Zero on the globe and in the atlas:
+    /// no road is painted yet.
     var roadMarkingAlpha: Float = 0
     /// See `LowZoomOverviewFade.classFadeMask`: the live camera zoom the
     /// per-class road fade is evaluated against.
@@ -59,7 +56,6 @@ struct TileOverviewFadeUniform {
          roadAlpha: Float,
          landuseAlpha: Float,
          pixelsPerPoint: Float,
-         roadSurfaceBlend: Float = 0,
          roadMarkingAlpha: Float = 0,
          cameraZoom: Float,
          viewportSizePx: SIMD2<Float> = .zero,
@@ -72,7 +68,6 @@ struct TileOverviewFadeUniform {
         self.roadAlpha = roadAlpha
         self.landuseAlpha = landuseAlpha
         self.pixelsPerPoint = pixelsPerPoint
-        self.roadSurfaceBlend = roadSurfaceBlend
         self.roadMarkingAlpha = roadMarkingAlpha
         self.cameraZoom = cameraZoom
         self.viewportSizePx = viewportSizePx

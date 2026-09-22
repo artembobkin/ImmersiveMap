@@ -179,20 +179,22 @@ final class RoadTierAndMarkingInsetTests: XCTestCase {
         XCTAssertEqual(untouched[0].points, line)
     }
 
-    func testMarkingsStateAHalfCarriagewayInset() throws {
+    func testMarkingsStateAHalfSymbolInset() throws {
         let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
+        let tile = Tile(x: 39616, y: 20486, z: 16)
         var props: [String: MvtValue] = [:]
         let c = MvtValue.string("primary"); props["class"] = c
         let l = MvtValue.int(6); props["lanes"] = l
         let featureStyle = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                                      properties: props,
-                                                                     tile: Tile(x: 39616, y: 20486, z: 16)))
+                                                                     tile: tile))
         let passes = featureStyle.resolvedLineRenderPasses
         let fill = try XCTUnwrap(passes.first { $0.roadPassRole == .fill })
         let marking = try XCTUnwrap(passes.first { $0.roadPassRole == .detail })
-        XCTAssertEqual(marking.lineGeometry.endInset, fill.lineGeometry.lineWidth * 0.5,
+        XCTAssertEqual(marking.lineGeometry.endInset,
+                       style.symbolGroundWidthUnits(cls: "primary", tile: tile) * 0.5,
                        accuracy: 0.001,
-                       "Paint stops half a carriageway short of the road's ends and junctions")
-        XCTAssertEqual(fill.lineGeometry.endInset, 0, "The carriageway itself runs to its ends")
+                       "Paint stops half the symbol's ground width short of the road's ends and junctions")
+        XCTAssertEqual(fill.lineGeometry.endInset, 0, "The road itself runs to its ends")
     }
 }

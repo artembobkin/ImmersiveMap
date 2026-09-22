@@ -7,9 +7,9 @@ import Mvt
 import XCTest
 
 /// The streetscape is what a tile carries: where the road layer ships
-/// reconstructed carriageway surfaces and measured paint, the roads draw as
-/// carriageways with their paint on them; where it does not, the map is a
-/// street map, strokes by class with nothing painted on the asphalt.
+/// reconstructed carriageway surfaces and measured paint, they draw on the
+/// roads' symbols with the crossings striped; where it does not, the map is
+/// the symbols alone, with no carriageway to stripe.
 final class StreetscapeTests: XCTestCase {
     private let tile = Tile(x: 39615, y: 20486, z: 16)
 
@@ -108,67 +108,6 @@ final class StreetscapeTests: XCTestCase {
         let painted = try parse(withStreetscape: [markedCrossing]).drawingRoadPhases.automobileGround
         XCTAssertGreaterThan(painted.detail.drawing.indices.count, 0,
                              "With the streetscape the tagged crossing is striped")
-    }
-
-    // MARK: - A street map's strokes, width by class
-
-    private func roadStyle(_ properties: [String: String],
-                           tile: Tile,
-                           streetscape: Bool,
-                           cased: Bool = false) -> FeatureStyle {
-        let theme = ImmersiveMapTilesTheme.default.roadMetrics { $0.drawsCasing = cased }
-        let style = ImmersiveMapTilesDefaultMapStyle(theme: theme)
-        return style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
-                                                         properties: properties.mapValues { MvtValue.string($0) },
-                                                         tile: tile,
-                                                         layerCarriesStreetscape: streetscape))
-    }
-
-    func testAStrokeWidthIsTheClassesAloneNotTheLaneCount() {
-        let twoLanes = roadStyle(["class": "primary", "lanes": "2", "lanes_src": "tagged"], tile: tile, streetscape: false)
-        let eightLanes = roadStyle(["class": "primary", "lanes": "8", "lanes_src": "tagged"], tile: tile, streetscape: false)
-        XCTAssertEqual(twoLanes.lineGeometry.lineWidth, eightLanes.lineGeometry.lineWidth,
-                       "Without the streetscape the lane count says nothing about the width")
-        XCTAssertEqual(twoLanes.lineGeometry.lineWidth,
-                       ImmersiveMapTilesDefaultMapStyle.streetStrokeWidthUnits(cls: "primary", tile: tile))
-
-        let carriageway2 = roadStyle(["class": "primary", "lanes": "2", "lanes_src": "tagged"], tile: tile, streetscape: true)
-        let carriageway8 = roadStyle(["class": "primary", "lanes": "8", "lanes_src": "tagged"], tile: tile, streetscape: true)
-        XCTAssertGreaterThan(carriageway8.lineGeometry.lineWidth, carriageway2.lineGeometry.lineWidth,
-                             "With the streetscape on the road is its real carriageway")
-    }
-
-    func testTheStrokeLadderReadsRankAsWidth() {
-        let widths = ["motorway", "primary", "secondary", "tertiary", "minor", "service", "path"].map {
-            ImmersiveMapTilesDefaultMapStyle.streetStrokeWidthPoints(cls: $0)
-        }
-        XCTAssertEqual(widths, widths.sorted(by: >), "A motorway is the widest stroke, a path the narrowest")
-    }
-
-    func testAStrokeIsWorldLockedAcrossTheTileLevelsThatServeIt() {
-        let z16 = ImmersiveMapTilesDefaultMapStyle.streetStrokeWidthUnits(cls: "primary", tile: tile)
-        let z15 = ImmersiveMapTilesDefaultMapStyle.streetStrokeWidthUnits(cls: "primary", tile: Tile(x: 19807, y: 10243, z: 15))
-        XCTAssertEqual(z15 * 2, z16, accuracy: 1e-9,
-                       "The same ground width in a tile a level coarser is half the units, so nothing steps at a tile swap")
-        XCTAssertEqual(z16, 12 * 8, accuracy: 1e-9, "A primary is twelve nominal points at street zoom")
-    }
-
-    func testAStrokeWearsACasingAndNoCeilingAndNoPaint() {
-        let plain = roadStyle(["class": "primary", "lanes": "4", "lanes_src": "tagged"], tile: tile, streetscape: false)
-        XCTAssertFalse(plain.lineRenderPasses.contains { $0.roadPassRole == .casing },
-                       "A road draws without an outline unless the theme asks for one")
-        let stroke = roadStyle(["class": "primary", "lanes": "4", "lanes_src": "tagged"], tile: tile,
-                               streetscape: false, cased: true)
-        let casing = stroke.lineRenderPasses.first { $0.roadPassRole == .casing }
-        XCTAssertNotNil(casing, "With the theme's switch on, a street map's road has a casing")
-        let strokeUnitsPerPoint = ImmersiveMapTilesDefaultMapStyle.streetStrokeUnitsPerPoint(tile: tile)
-        XCTAssertEqual(casing?.lineGeometry.lineWidth ?? 0,
-                       stroke.lineGeometry.lineWidth + 2 * strokeUnitsPerPoint,
-                       accuracy: 1e-9,
-                       "a point wide on each side")
-        let fill = stroke.lineRenderPasses.first { $0.roadPassRole == .fill }
-        XCTAssertEqual(fill?.maximumWidthPoints, 0, "and no symbol ceiling: the stroke keeps growing under a closing camera")
-        XCTAssertFalse(stroke.lineRenderPasses.contains { $0.roadPassRole == .detail }, "and nothing painted on it")
     }
 
     // MARK: - The streetscape layer merges into the road layer

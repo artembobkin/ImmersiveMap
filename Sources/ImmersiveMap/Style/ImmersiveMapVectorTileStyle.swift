@@ -26,11 +26,9 @@ public struct ImmersiveMapFeatureStyleContext {
     /// The feature's layer carries the measured streetscape: carriageway
     /// surfaces reconstructed from the road graph, or lines of measured
     /// paint. A fact about the layer the parser derives from the reading
-    /// before any feature is styled. A road style reads it to decide
-    /// between the measured carriageway and a street map's stroke: with the
-    /// streetscape in the tile, a road is drawn at its real width so the
-    /// surfaces and paint sit flush on it; without it, a road is a stroke
-    /// whose width is the class's alone.
+    /// before any feature is styled. A road style reads it to decide what
+    /// is painted on the asphalt: a crossing is stripes on a carriageway,
+    /// and a tile without the streetscape has no carriageway to stripe.
     public let layerCarriesStreetscape: Bool
     /// The feature's layer carries measured, marked crossings
     /// (`ImmersiveMapRoadPaint.Kind.crossing`): a fact about the layer the

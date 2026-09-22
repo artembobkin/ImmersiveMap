@@ -228,8 +228,9 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
         /// in camera zoom. Zero keeps every road a symbol at every zoom.
         public var worldLockZoom: Float
 
-        /// Whether a street map's road stroke wears a casing, an outline a
-        /// point wide on each side that eases in at street zoom. Off by
+        /// Whether the automobile roads wear a casing: an outline a point
+        /// wide on each side of a road's symbol that eases in at street
+        /// zoom, and the kerb of a measured junction surface. Off by
         /// default: the roads read as one sheet of asphalt against the
         /// ground, and an outline around every street turns the sheet back
         /// into separate ribbons.
@@ -261,9 +262,9 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
         /// With every drive tier sharing one asphalt grey, width is the
         /// whole hierarchy, so the ramp is spread wide.
         public static let defaultSymbolWidthPoints = RoadClassValues<Float>(
-            motorway: 7.0,
-            trunk: 6.5,
-            primary: 6.0,
+            motorway: 10.5,
+            trunk: 9.75,
+            primary: 9.0,
             secondary: 5.0,
             tertiary: 4.5,
             minor: 4.0,

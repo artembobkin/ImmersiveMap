@@ -163,9 +163,6 @@ public struct LinePass: Sendable {
     public var dashInTileUnits: Bool
     /// Floor for a world-locked width; see `TileLineStyle.minimumWidthPoints`.
     public var minimumWidthPoints: Float
-    /// Symbol ceiling for a world-locked width; see
-    /// `TileLineStyle.maximumWidthPoints`.
-    public var maximumWidthPoints: Float
     /// The camera zoom from which a point-locked width (`lineWidthPoints`)
     /// is fixed on the ground instead of on screen. Up to this zoom the
     /// stroke is a symbol, as wide in points as the style says. Past it the
@@ -187,7 +184,6 @@ public struct LinePass: Sendable {
                 dashGapPoints: Float = 0.0,
                 dashInTileUnits: Bool = false,
                 minimumWidthPoints: Float = 0.0,
-                maximumWidthPoints: Float = 0.0,
                 pointWidthWorldLockZoom: Float = 0.0,
                 pointWidthRamp: WidthRamp? = nil,
                 lineGeometry: LineGeometryStyle) {
@@ -199,7 +195,6 @@ public struct LinePass: Sendable {
         self.dashGapPoints = dashGapPoints
         self.dashInTileUnits = dashInTileUnits
         self.minimumWidthPoints = minimumWidthPoints
-        self.maximumWidthPoints = maximumWidthPoints
         self.pointWidthWorldLockZoom = pointWidthWorldLockZoom
         self.pointWidthRamp = pointWidthRamp
         self.lineGeometry = lineGeometry

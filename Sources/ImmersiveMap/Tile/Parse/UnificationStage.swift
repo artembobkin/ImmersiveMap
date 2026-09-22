@@ -235,7 +235,6 @@ enum TileUnificationStage {
                              edgeThreshold: edgeThreshold,
                              minimumWidthPoints: pass.minimumWidthPoints,
                              dashInTileUnits: pass.dashInTileUnits,
-                             maximumWidthPoints: pass.maximumWidthPoints,
                              halfWidthUnits: halfWidth,
                              worldLockZoom: pass.pointWidthWorldLockZoom,
                              widthRamp: pass.pointWidthRamp)

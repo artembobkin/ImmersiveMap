@@ -108,7 +108,6 @@ enum FlatMapSurfaceDrawer {
             roadAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .roads),
             landuseAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .landuse),
             pixelsPerPoint: pixelsPerPoint * LineWidthZoomTaper.scale(for: cameraZoom),
-            roadSurfaceBlend: LowZoomOverviewFade.roadSurfaceBlend(for: cameraZoom),
             roadMarkingAlpha: LowZoomOverviewFade.roadMarkingAlpha(for: cameraZoom),
             cameraZoom: Float(cameraZoom),
             viewportSizePx: drawableSizePx,

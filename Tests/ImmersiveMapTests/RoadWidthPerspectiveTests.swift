@@ -69,9 +69,9 @@ final class RoadWidthPerspectiveTests: XCTestCase {
     }
 
     func testSwiftAndMetalUniformsAgreeOnTheTail() throws {
-        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.pointWidthCentrePixelsPerWorldUnit), 56)
-        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.groundAxisXClipX), 60)
-        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.groundAxisYClipX), 72)
+        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.pointWidthCentrePixelsPerWorldUnit), 48)
+        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.groundAxisXClipX), 52)
+        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.groundAxisYClipX), 64)
 
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

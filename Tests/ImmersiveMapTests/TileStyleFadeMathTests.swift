@@ -14,7 +14,6 @@ final class TileStyleFadeMathTests: XCTestCase {
                                 roadAlpha: road,
                                 landuseAlpha: landuse,
                                 pixelsPerPoint: 2,
-                                roadSurfaceBlend: 0,
                                 roadMarkingAlpha: marking,
                                 cameraZoom: cameraZoom)
     }

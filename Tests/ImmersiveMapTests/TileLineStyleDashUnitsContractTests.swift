@@ -12,7 +12,7 @@ import XCTest
 /// position as well as by name.
 final class TileLineStyleDashUnitsContractTests: XCTestCase {
     func testSwiftAndMetalStructsAgreeOnTheFlagSlot() throws {
-        XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 52)
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 48)
         XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.dashInTileUnits), 20,
                        "The flag is the sixth float, the slot that was reserved0")
 
@@ -25,18 +25,20 @@ final class TileLineStyleDashUnitsContractTests: XCTestCase {
         XCTAssertLessThan(minimum.lowerBound, flag.lowerBound)
         XCTAssertNil(body[..<flag.lowerBound].range(of: "float reserved"),
                      "No reserved slot may precede the flag: it took reserved0's position")
-        // The symbol ceiling took reserved1's slot, right after the flag.
-        XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.maximumWidthPoints), 24)
-        let ceiling = try XCTUnwrap(body.range(of: "float maximumWidthPoints;"))
-        XCTAssertLessThan(flag.lowerBound, ceiling.lowerBound)
-        // The world lock zoom is the ninth float, after the half-width.
-        XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.worldLockZoom), 32)
+        // The half-width follows the flag directly (the slot that once held
+        // the symbol ceiling is gone), and the world lock zoom is the eighth
+        // float, after the half-width.
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.halfWidthUnits), 24)
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.worldLockZoom), 28)
         let halfWidth = try XCTUnwrap(body.range(of: "float halfWidthUnits;"))
         let worldLock = try XCTUnwrap(body.range(of: "float worldLockZoom;"))
+        XCTAssertLessThan(flag.lowerBound, halfWidth.lowerBound)
         XCTAssertLessThan(halfWidth.lowerBound, worldLock.lowerBound)
+        XCTAssertNil(body[flag.upperBound ..< halfWidth.lowerBound].range(of: "float "),
+                     "No field sits between the flag and the half-width")
         // The zoom ramp follows, four floats in the mirror's order.
-        XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.rampStartWidthPoints), 36)
-        XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.rampStartAlpha), 48)
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.rampStartWidthPoints), 32)
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.rampStartAlpha), 44)
         var cursor = worldLock.upperBound
         for field in ["float rampStartWidthPoints;", "float rampStartZoom;", "float rampEndZoom;",
                       "float rampStartAlpha;"] {

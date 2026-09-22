@@ -73,9 +73,6 @@ struct LineStyle {
     // pattern is cut from arc length without the point-to-unit conversion
     // (world-locked paint such as a lane divider).
     float dashInTileUnits;
-    // Ceiling for a world-locked width in points (zero: none); see the
-    // Swift TileLineStyle.maximumWidthPoints.
-    float maximumWidthPoints;
     // The styled half-width in tile units, for the deferred extrusion.
     float halfWidthUnits;
     // The camera zoom a point-locked width is frozen on the ground from
@@ -131,24 +128,18 @@ static inline float tilePointWidthWorldScale(float worldLockZoom, float cameraZo
 
 /// The visible half-width of a line on screen, in pixels, from its style
 /// and the pixels one tile unit spans where it is drawn: the point-locked
-/// width as is, the world-locked width under its symbol ceiling and its
-/// floor (the same resolution `tileLineCoverage` reaches through the
-/// distance field). The deferred ribbons' vertex stage extrudes to this
-/// plus one pixel of feather.
+/// width as is, the world-locked width over its floor (the same resolution
+/// `tileLineCoverage` reaches through the distance field). The deferred
+/// ribbons' vertex stage extrudes to this plus one pixel of feather.
 static inline float tileLineEdgePixels(LineStyle lineStyle,
                                        float pixelsPerUnit,
                                        float pixelsPerPoint,
-                                       float roadSurfaceBlend,
                                        float cameraZoom) {
     if (lineStyle.widthPoints > 0.0) {
         return tilePointWidthPoints(lineStyle, cameraZoom) * 0.5 * pixelsPerPoint
             * tilePointWidthWorldScale(lineStyle.worldLockZoom, cameraZoom);
     }
     float edgePx = lineStyle.halfWidthUnits * pixelsPerUnit;
-    if (lineStyle.maximumWidthPoints > 0.0) {
-        float symbolPx = min(edgePx, lineStyle.maximumWidthPoints * 0.5 * pixelsPerPoint);
-        edgePx = mix(symbolPx, edgePx, roadSurfaceBlend);
-    }
     if (lineStyle.minimumWidthPoints > 0.0) {
         edgePx = max(edgePx, lineStyle.minimumWidthPoints * 0.5 * pixelsPerPoint);
     }
@@ -164,13 +155,10 @@ struct OverviewFadeUniform {
     float roadAlpha;
     float landuseAlpha;
     float pixelsPerPoint;
-    // 0: roads are symbols (point ceiling holds); 1: true surfaces. Morphs
-    // continuously with the camera, see LowZoomOverviewFade.roadSurfaceBlend.
-    float roadSurfaceBlend;
-    // How far road markings have come in, over their own camera-zoom band
-    // above the width morph: paint is a length on the ground and only
-    // resolves as paint once a three-metre dash is more than a point or two
-    // across. See LowZoomOverviewFade.roadMarkingAlpha.
+    // How far road markings have come in, over their own camera-zoom band:
+    // paint is a length on the ground and only resolves as paint once a
+    // three-metre dash is more than a point or two across. See
+    // LowZoomOverviewFade.roadMarkingAlpha.
     float roadMarkingAlpha;
     // The live camera zoom, for the per-class fade: a mask of 10 or more
     // carries the zoom a road class fades in from (see
@@ -311,7 +299,6 @@ struct TileVertexStyle {
     float lineParameter;
     half4 lineStyle;
     half lineMinimumWidthPoints;
-    half lineMaximumWidthPoints;
     half lineDashInTileUnits;
 };
 
@@ -338,7 +325,6 @@ static inline TileVertexStyle tileVertexStyle(VertexIn vertexIn,
                           lineStyle.dashLengthPoints,
                           lineStyle.dashGapPoints);
     out.lineMinimumWidthPoints = half(lineStyle.minimumWidthPoints);
-    out.lineMaximumWidthPoints = half(lineStyle.maximumWidthPoints);
     out.lineDashInTileUnits = lineStyle.dashInTileUnits > 0.0 ? 1.0h : 0.0h;
     return out;
 }
@@ -381,10 +367,8 @@ static inline half tileLineCoverage(float lineDistance,
                                     float lineParameter,
                                     half4 lineStyle,
                                     half minimumWidthPoints,
-                                    half maximumWidthPoints,
                                     half dashInTileUnits,
                                     float pixelsPerPoint,
-                                    float roadSurfaceBlend,
                                     float dashUnitsPerPoint,
                                     float deferredEdgePx) {
     // The derivatives are taken before the threshold test: fwidth needs the
@@ -409,19 +393,6 @@ static inline half tileLineCoverage(float lineDistance,
         // into an unreadable hairline at region zooms, yet keeps its natural
         // world growth once wider than the floor.
         edgePx = float(edgeThreshold) * rimPx;
-        // The ceiling first: at region zooms the world width is far wider on
-        // screen than a readable road symbol, and the road draws at the
-        // symbol until the world catches down to it, continuously with the
-        // camera (the ribbon is tessellated at the world width, so the
-        // ceiling only ever pulls the edge inward; it never clamps to the
-        // rim the way the floor has to).
-        if (maximumWidthPoints > 0.0h) {
-            // Symbol to surface: at region zooms the road draws at its
-            // symbol width (the ceiling), and morphs into its true width as
-            // the camera descends, so the width never steps at a tile level.
-            float symbolPx = min(edgePx, float(maximumWidthPoints) * 0.5 * pixelsPerPoint);
-            edgePx = mix(symbolPx, edgePx, roadSurfaceBlend);
-        }
         if (minimumWidthPoints > 0.0h) {
             float floorPx = min(float(minimumWidthPoints) * 0.5 * pixelsPerPoint, rimPx - 0.5);
             edgePx = max(edgePx, floorPx);
@@ -531,10 +502,8 @@ static inline half tileLineFragmentCoverage(uint styleIndex,
                             lineParameter,
                             packedLineStyle,
                             half(lineStyle.minimumWidthPoints),
-                            half(lineStyle.maximumWidthPoints),
                             lineStyle.dashInTileUnits > 0.0 ? 1.0h : 0.0h,
                             overviewFade.pixelsPerPoint,
-                            overviewFade.roadSurfaceBlend,
                             lineDash.unitsPerPoint,
                             deferredEdgePx);
 }
@@ -578,10 +547,8 @@ static inline half4 tileGroundColor(TileVertexStyle style,
                                          style.lineParameter,
                                          style.lineStyle,
                                          style.lineMinimumWidthPoints,
-                                         style.lineMaximumWidthPoints,
                                          style.lineDashInTileUnits,
                                          overviewFade.pixelsPerPoint,
-                                         overviewFade.roadSurfaceBlend,
                                          lineDash.unitsPerPoint,
                                          0.0);
     half4 color = style.color;

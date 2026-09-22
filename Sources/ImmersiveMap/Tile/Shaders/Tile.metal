@@ -191,8 +191,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                 * overviewFade.viewportSizePx * 0.5;
             float pixelsPerUnit = max(length(screenSpan), 1e-4);
             deferredEdgePx = tileLineEdgePixels(lineStyle, pixelsPerUnit,
-                                                overviewFade.pixelsPerPoint, overviewFade.roadSurfaceBlend,
-                                                overviewFade.cameraZoom);
+                                                overviewFade.pixelsPerPoint, overviewFade.cameraZoom);
             float units;
             if (lineStyle.widthPoints > 0.0
                 && overviewFade.pointWidthReferenceDepth > 0.0

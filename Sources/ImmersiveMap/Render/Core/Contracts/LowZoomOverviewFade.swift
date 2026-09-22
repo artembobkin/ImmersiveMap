@@ -24,16 +24,6 @@ enum LowZoomOverviewFade {
     static let landuseStartZoom: Double = 13.0
     static let landuseEndZoom: Double = 14.0
 
-    /// How far a road has become its true surface rather than a symbol, in
-    /// camera zoom. Below the start a road draws at its symbol width (the
-    /// style's point ceiling, constant on screen); above the end at its real
-    /// carriageway width on the ground; between, the edge morphs from one to
-    /// the other. Continuous in camera zoom by construction, so the width never
-    /// steps at a tile level: the tile level swap changes nothing about what
-    /// is drawn, only the geometry it is drawn from.
-    static let roadSurfaceStartZoom: Double = 14.0
-    static let roadSurfaceEndZoom: Double = 16.0
-
     /// Where road markings fade in, in camera zoom.
     ///
     /// Paint is a length on the ground, so the band decides how small a dash
@@ -44,24 +34,16 @@ enum LowZoomOverviewFade {
     /// continuous in camera zoom so nothing pops when the engine swaps the
     /// tile level serving a street.
     ///
-    /// The band sits inside the width morph (`roadSurfaceStartZoom`), which
-    /// means the paint arrives while the widest carriageways can still be
-    /// drawn under their symbol ceiling: the lateral offsets of the lane
-    /// lines are measured against the true carriageway, so on a road whose
-    /// true width is well past the ceiling the outer lines sit a little
-    /// outside the drawn edge until the morph catches up. A centre divider
-    /// is on the centreline and is unaffected.
+    /// The band starts at the zoom the roads' symbols are frozen on the
+    /// ground by default (the theme's world lock), so the paint arrives on
+    /// a road that is already a width on the ground: the lane lines are
+    /// laid across the symbol's ground width, and from here the road and
+    /// its paint grow together.
     static let roadMarkingStartZoom: Double = 15.0
     static let roadMarkingEndZoom: Double = 15.4
 
     static func roadMarkingAlpha(for zoom: Double) -> Float {
         let progress = Float((zoom - roadMarkingStartZoom) / (roadMarkingEndZoom - roadMarkingStartZoom))
-        let clamped = simd_clamp(progress, 0.0, 1.0)
-        return clamped * clamped * (3.0 - 2.0 * clamped)
-    }
-
-    static func roadSurfaceBlend(for zoom: Double) -> Float {
-        let progress = Float((zoom - roadSurfaceStartZoom) / (roadSurfaceEndZoom - roadSurfaceStartZoom))
         let clamped = simd_clamp(progress, 0.0, 1.0)
         return clamped * clamped * (3.0 - 2.0 * clamped)
     }

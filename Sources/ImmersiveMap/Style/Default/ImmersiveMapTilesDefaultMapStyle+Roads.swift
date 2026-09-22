@@ -10,25 +10,6 @@ import simd
 /// them. How wide a road is lives in the `RoadWidths` extension, and the
 /// surfaces and paint the streetscape ships in `Streetscape`.
 extension ImmersiveMapTilesDefaultMapStyle {
-    /// The automobile tier draws without a grey kerb: the roadway is held
-    /// by its fill against the ground and by the paint on it, the way the
-    /// lane-level modes of commercial engines draw carriageways. The kerb
-    /// doubled every painted edge into two parallel strokes and outlined
-    /// roads that on the ground shade straight into the pavement. Gates the
-    /// casing pass of every drive-tier ribbon and of the reconstructed
-    /// surfaces; parking lots keep their kerb (a lot boundary, not a road
-    /// edge), tunnels and paths never had one. The switch stays for the day
-    /// a palette wants the kerb back.
-    static let drawsAutomobileKerb = false
-
-    /// Every road past the overview era is a symbol: one width on screen,
-    /// in points per class (`RoadMetrics.symbolWidthPoints`), up to the
-    /// theme's world lock zoom, and from there the ground width the symbol
-    /// had at that zoom (`RoadMetrics.worldLockZoom`,
-    /// `LinePass.pointWidthWorldLockZoom`), instead of the carriageway's
-    /// width in metres.
-    static let roadsAreScreenFixed = true
-
     /// Markings fade on their own band (see `LowZoomOverviewFade`), so they
     /// carry the mask that selects it instead of the roads' one.
     static let roadMarkingLowZoomFadeMask: Float = 4.0
@@ -86,9 +67,8 @@ extension ImmersiveMapTilesDefaultMapStyle {
             return crosswalkStyle(marked: crossing, tile: tile)
         }
         // Without the streetscape the roads are lines and nothing else: no
-        // surface polygon, no parking lot. A street map draws its roads as
-        // strokes by class (below), and an asphalt polygon among strokes
-        // reads as a hole in the map rather than as a road.
+        // surface polygon, no parking lot. An asphalt polygon among the
+        // symbol strokes reads as a hole in the map rather than as a road.
         if layerCarriesStreetscape == false {
             switch road.kind {
             case .surface, .parkingLot:
@@ -135,18 +115,9 @@ extension ImmersiveMapTilesDefaultMapStyle {
         if subclass == "bus_lane_area" {
             return hiddenStyle
         }
-        // Road widths grow with zoom: hairlines at country/regional zooms, full
-        // width at street level. Base widths below are the z14+ (full) values.
-        // With every drive tier sharing one asphalt grey, width is the whole
-        // hierarchy, so the ramp is spread wide: majors gain width over what
-        // color used to say for them, minors give a little back.
-        let s = roadWidthScale(tileZoom: tileZoom)
-
         // Casing joins a class only from the zoom where the fill is wide
         // enough (about two points) for an edge to render; below that a
-        // sub-pixel casing just muddies the fill's antialiasing. The width
-        // floors keep the majors readable strokes instead of hairlines at
-        // region zooms.
+        // sub-pixel casing just muddies the fill's antialiasing.
         let casingZoom = tileZoom >= 12 && isConstruction == false
         // Over a country or region view a road is a symbol, not a surface,
         // and it draws on the same principle as the country borders: one
@@ -157,11 +128,10 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // Joins and caps are round: the tiles chop a corridor into many short
         // features, and butt ends with plain joins tore the stroke open at
         // every bend and every feature boundary; on an opaque stroke the
-        // overlaps of round geometry are invisible. The symbol era runs
-        // through tile z11: the world width only starts to carry meaning
-        // past z12, and until then a road drawn from the tile scale is a
-        // uniform hairline that says nothing about its rank. See
-        // `overviewRoadStroke` for the ladder.
+        // overlaps of round geometry are invisible. The overview era runs
+        // through tile z11; from z12 the same symbol draws by the street
+        // era's rules below, with its casing and its paint. See
+        // `overviewRoadStroke` for the classes.
         if tileZoom <= Self.overviewRoadMaximumTileZoom,
            let stroke = Self.overviewRoadStroke(cls: effectiveClass, tileZoom: tileZoom) {
             return overviewRoadStyle(stroke,
@@ -172,26 +142,11 @@ extension ImmersiveMapTilesDefaultMapStyle {
                                      tunnel: isTunnel,
                                      construction: isConstruction)
         }
-        // From here the width is the road's real carriageway, in metres
-        // converted to this tile's units: at street zoom a six-lane avenue is
-        // drawn six lanes wide, and the point floors below carry the class
-        // through the zooms where that width is sub-pixel. Markings ride the
-        // same fact, so they only appear where the surface can hold them.
-        //
-        // That is the streetscape's road, drawn to carry the measured
-        // surfaces and paint where the tile ships them. In a tile without
-        // the streetscape the road is a street map's stroke instead: a
-        // width the class alone decides, the same on every street of the
-        // class whatever the tiles say about lanes, a casing a point wide,
-        // nothing painted on it. See `streetStrokeWidthUnits`.
-        let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
-        let drawsStrokes = layerCarriesStreetscape == false
-        let widthMetres = drawsStrokes
-            ? Self.streetStrokeWidthUnits(cls: effectiveClass, tile: tile)
-            : roadWidthUnits(cls: effectiveClass, props: props, tile: tile)
-        let kerbUnitsPerSide = drawsStrokes
-            ? Self.streetStrokeCasingPointsPerSide * Self.streetStrokeUnitsPerPoint(tile: tile)
-            : Self.roadCasingMetresPerSide * unitsPerMetre
+        // From here the road is the street era's symbol: the class's width
+        // in points from the theme (`roadStyle`), the casing the theme asks
+        // for, and the paint the tiles give evidence of. The width never
+        // reads the lane count: a symbol is the same on every street of its
+        // class, and the paint is laid across the symbol.
         // A centre divider separates two directions of travel. A one-way
         // carriageway (one half of a dual carriageway, a one-way street) has
         // none; where the tiles carry `oneway` it decides, and a tile that
@@ -221,7 +176,6 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // not classify says nothing either way and is left painted.
         let isUnpaved = props["surface"]?.stringValue == "unpaved"
         let marked = isConstruction == false
-            && drawsStrokes == false
             && tileZoom >= Self.roadMarkingsMinimumTileZoom
             && Self.roadClassCarriesMarkings(effectiveClass)
             && laneCountIsMapped
@@ -251,34 +205,37 @@ extension ImmersiveMapTilesDefaultMapStyle {
         } else {
             markings = .none
         }
-        // Symbol widths: what the class draws at on screen until the camera
-        // is close enough for the true carriageway to take over
-        // (LowZoomOverviewFade.roadSurfaceBlend, z14 to z16). Constant in
-        // points, so a street keeps one readable weight across the region
-        // zooms instead of doubling with every tile level. The theme states
-        // them (`RoadMetrics.symbolWidthPoints`).
+        // The symbol's width: what the class draws at on screen up to the
+        // theme's world lock zoom, and the ground width it had there past
+        // it. Constant in points, so a street keeps one readable weight
+        // across the region zooms instead of doubling with every tile
+        // level. The theme states it (`RoadMetrics.symbolWidthPoints`).
         let symbolWidthPoints = theme.roadMetrics.symbolWidthPoints.value(forClass: effectiveClass)
         switch effectiveClass {
         case "motorway":
-            return roadStyle(fillKey: 56, color: roads.motorway, width: widthMetres, priority: 95, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 2.2, maximumWidthPoints: symbolWidthPoints, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes,
+            return roadStyle(fillKey: 56, color: roads.motorway, priority: 95, casing: casingZoom, tunnel: isTunnel,
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile,
                              markings: markings, construction: isConstruction)
         case "trunk":
-            return roadStyle(fillKey: 54, color: roads.trunk, width: widthMetres, priority: 90, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 2.0, maximumWidthPoints: symbolWidthPoints, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes,
+            return roadStyle(fillKey: 54, color: roads.trunk, priority: 90, casing: casingZoom, tunnel: isTunnel,
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile,
                              markings: markings, construction: isConstruction)
         case "primary":
-            return roadStyle(fillKey: 52, color: roads.primary, width: widthMetres, priority: 80, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.6, maximumWidthPoints: symbolWidthPoints, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes, markings: markings, construction: isConstruction)
+            return roadStyle(fillKey: 52, color: roads.primary, priority: 80, casing: casingZoom, tunnel: isTunnel,
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile,
+                             markings: markings, construction: isConstruction)
         case "secondary":
-            return roadStyle(fillKey: 50, color: roads.secondary, width: widthMetres, priority: 78, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.2, maximumWidthPoints: symbolWidthPoints, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes, markings: markings, construction: isConstruction)
+            return roadStyle(fillKey: 50, color: roads.secondary, priority: 78, casing: casingZoom, tunnel: isTunnel,
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile,
+                             markings: markings, construction: isConstruction)
         case "tertiary":
-            return roadStyle(fillKey: 48, color: roads.tertiary, width: widthMetres, priority: 74, casing: casingZoom, tunnel: isTunnel,
-                             minimumWidthPoints: 1.0, maximumWidthPoints: symbolWidthPoints, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes, markings: markings, construction: isConstruction)
+            return roadStyle(fillKey: 48, color: roads.tertiary, priority: 74, casing: casingZoom, tunnel: isTunnel,
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile,
+                             markings: markings, construction: isConstruction)
         case "minor":
-            return roadStyle(fillKey: 44, color: roads.minor, width: widthMetres, priority: 50, casing: tileZoom >= 13, tunnel: isTunnel,
-                             minimumWidthPoints: 0.9, maximumWidthPoints: symbolWidthPoints, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes, markings: markings)
+            return roadStyle(fillKey: 44, color: roads.minor, priority: 50, casing: tileZoom >= 13, tunnel: isTunnel,
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile,
+                             markings: markings)
         case "service":
             // A service road is one lane wide and has nothing to divide, so
             // it carries no markings. A parking aisle sits one step below
@@ -286,8 +243,8 @@ extension ImmersiveMapTilesDefaultMapStyle {
             // their ribbons), but must not eat the service roads that merely
             // pass along it, a bus lane mapped as its own way among them.
             let isParkingAisle = props["service"]?.stringValue == "parking_aisle"
-            return roadStyle(fillKey: 42, color: roads.service, width: widthMetres, priority: isParkingAisle ? 45 : 46, casing: tileZoom >= 14, tunnel: isTunnel,
-                             minimumWidthPoints: 0.7, maximumWidthPoints: symbolWidthPoints, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes)
+            return roadStyle(fillKey: 42, color: roads.service, priority: isParkingAisle ? 45 : 46, casing: tileZoom >= 14, tunnel: isTunnel,
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile)
         case "path", "track":
             // Park alleys and walkways (footway/path/track): a plain strip of
             // the ground color, no kerb and no dashes. Over land it is the
@@ -295,19 +252,32 @@ extension ImmersiveMapTilesDefaultMapStyle {
             // system), and over a park, a square or water it reads as a pale
             // route across the surface. A kerb on a ground-colored strip
             // turned every path into a grey band wider than its interior.
-            return roadStyle(fillKey: 40, color: roads.path, width: widthMetres, priority: 35, casing: false, tunnel: isTunnel,
-                             minimumWidthPoints: 0.5, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes)
+            return roadStyle(fillKey: 40, color: roads.path, priority: 35, casing: false, tunnel: isTunnel,
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile)
         case "rail", "transit":
             // Railways are skipped for now: not drawn at any zoom, on any
             // surface. `railStyle` stays for when they come back.
             return hiddenStyle
         case "ferry":
-            return line(key: 41, color: theme.layers.water, width: 4 * s, dashLength: 8, dashGap: 8)
+            // A ferry route is a symbolic line like a border: a thin dashed
+            // stroke in the water's colour, stated in points and held there
+            // at every zoom.
+            return FeatureStyle.pointLockedLine(key: 41,
+                                                color: theme.layers.water,
+                                                widthPoints: Self.ferryWidthPoints,
+                                                dashLengthPoints: Self.ferryDashPoints,
+                                                dashGapPoints: Self.ferryGapPoints)
         default:
-            return roadStyle(fillKey: 43, color: roads.minor, width: widthMetres, priority: 40, casing: tileZoom >= 13, tunnel: isTunnel,
-                             minimumWidthPoints: 0.9, symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, unitsPerMetre: unitsPerMetre, kerbUnitsPerSide: kerbUnitsPerSide, strokes: drawsStrokes)
+            return roadStyle(fillKey: 43, color: roads.minor, priority: 40, casing: tileZoom >= 13, tunnel: isTunnel,
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile)
         }
     }
+
+    /// The ferry route's stroke: a dashed line a little heavier than a
+    /// regional border, in points.
+    static let ferryWidthPoints: Float = 1.2
+    static let ferryDashPoints: Float = 6.0
+    static let ferryGapPoints: Float = 4.0
 
     /// The tile zoom a road class first draws at. Majors carry a country
     /// view; the minor network only means something near street level. The
@@ -380,10 +350,10 @@ extension ImmersiveMapTilesDefaultMapStyle {
         SIMD4<Float>(color.x, color.y, color.z, tunnelFillOpacity)
     }
 
-    /// The last tile zoom at which a road is a symbol: through it every
-    /// drive tier that draws is a point-locked stroke (see
-    /// `overviewRoadStroke`); from the next tile level the world width takes
-    /// over with the point floors as a safety net.
+    /// The last tile zoom of the overview era: through it a road is the bare
+    /// overview stroke (see `overviewRoadStroke`); from the next tile level
+    /// the same symbol draws by the street era's rules, with its casing and
+    /// its paint.
     static let overviewRoadMaximumTileZoom = 11
 
     /// One class's stroke over a country or region view, in on-screen
@@ -530,19 +500,26 @@ extension ImmersiveMapTilesDefaultMapStyle {
 
     func roadStyle(fillKey: UInt8,
                    color: SIMD4<Float>,
-                   width: Double,
                    priority: Int,
                    casing: Bool,
                    tunnel: Bool,
-                   minimumWidthPoints: Float = 0,
-                   maximumWidthPoints: Float = 0,
-                   symbolWidthPoints: Float = 0,
-                   roadClass: String? = nil,
-                   unitsPerMetre: Double = 0,
-                   kerbUnitsPerSide: Double? = nil,
-                   strokes: Bool = false,
+                   symbolWidthPoints: Float,
+                   roadClass: String?,
+                   tile: Tile,
                    markings: RoadMarkings = .none,
                    construction: Bool = false) -> FeatureStyle {
+        // The road is a symbol: the class states a width in points, the
+        // shader extrudes the centreline to exactly that many points at
+        // every vertex up to the theme's world lock zoom, and to the ground
+        // width those points had there past it. The ribbon the parser sees
+        // is the point-locked host, as for the overview strokes, and the
+        // same ramp the overview era states brings the symbol in, so the
+        // tile level where the eras hand over changes nothing on screen.
+        let worldLockZoom = theme.roadMetrics.worldLockZoom
+        let casingMarginPoints = 2 * Float(Self.roadCasingPointsPerSide)
+        let fillRamp = roadWidthRamp(cls: roadClass)
+        let casingRamp = roadWidthRamp(cls: roadClass, extraWidthPoints: casingMarginPoints)
+        let fillRibbonWidth = Double(symbolWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint
         // A tunnel is the plain ribbon at the tunnel opacity: no dash, no
         // kerb, no paint (both are skipped below), and butt ends. Where the
         // tiles ship the tunnel's surface the centreline runs a few units
@@ -551,25 +528,6 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // cap on the cut end bulged half a carriageway back over the
         // translucent surface as a darker semicircle. The construction
         // point-dash only applies to surface segments.
-        // A screen-fixed road is a symbol at every zoom: the class states a
-        // width in points, the shader extrudes the centreline to exactly
-        // that many pixels at every vertex, and the ground width plays no
-        // part in the fill or the casing. The ribbon the parser sees is the
-        // point-locked host, as for the overview strokes.
-        let fixedWidthPoints: Float = Self.roadsAreScreenFixed ? symbolWidthPoints : 0
-        // Past the lock zoom the symbol stays put on the ground; the casing
-        // rides the same lock, so the kerb keeps its proportion.
-        let worldLockZoom: Float = Self.roadsAreScreenFixed ? theme.roadMetrics.worldLockZoom : 0
-        // The same ramp the overview era states for the class, so the tile
-        // level where the eras hand over changes nothing on screen.
-        let casingMarginPoints = 2 * Float(Self.streetStrokeCasingPointsPerSide)
-        let fillRamp: LinePass.WidthRamp? = Self.roadsAreScreenFixed ? roadWidthRamp(cls: roadClass) : nil
-        let casingRamp: LinePass.WidthRamp? = Self.roadsAreScreenFixed
-            ? roadWidthRamp(cls: roadClass, extraWidthPoints: casingMarginPoints)
-            : nil
-        let fillRibbonWidth = Self.roadsAreScreenFixed
-            ? Double(fixedWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint
-            : width
         let fillGeometry = tunnel
             ? LineGeometryStyle(lineWidth: fillRibbonWidth, lineCapRound: false, lineJoinRound: true)
             : makeRoadGeometry(width: fillRibbonWidth)
@@ -578,38 +536,19 @@ extension ImmersiveMapTilesDefaultMapStyle {
             : nil
         let fillColor = tunnel ? Self.tunnelTone(color) : color
         let fillPassKey = tunnel ? Self.roadTunnelKey(forFillKey: fillKey) : fillKey
-        // The floor stops mattering once the world width exceeds it, so the
-        // casing keeps its proportion by flooring half a point above the fill.
-        let casingFloor = minimumWidthPoints > 0 ? minimumWidthPoints + 0.5 : 0
-
-        // A stroke has no symbol ceiling: its world width IS the symbol,
-        // chosen per class to read at street zoom, and it grows with the
-        // camera past that the way a street map's roads do. The ceiling
-        // exists for the carriageway, whose true width is far wider than a
-        // readable symbol at region zooms.
-        let symbolCeilingPoints: Float = strokes || Self.roadsAreScreenFixed ? 0 : maximumWidthPoints
 
         var casingPass: LinePass?
-        // A carriageway's kerb is the style's own switch, a stroke's casing
-        // the theme's (`RoadMetrics.drawsCasing`).
-        if casing, tunnel == false, Self.drawsAutomobileKerb || (strokes && theme.roadMetrics.drawsCasing) {
-            // The casing is a kerb: a fixed margin of ground on each side of
-            // the carriageway, not a fraction of it. As a fraction it was a
-            // few units on a symbolic width and metres wide on a true one,
-            // which turns every street into a dark-edged ribbon. A stroke's
-            // casing is the same margin measured in points.
-            // A screen-fixed casing is the fill's points plus a fixed margin
-            // of points on each side.
-            let casingWidthPoints = fixedWidthPoints + casingMarginPoints
-            let casingWidth = Self.roadsAreScreenFixed
-                ? Double(casingWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint
-                : width + 2 * (kerbUnitsPerSide ?? Self.roadCasingMetresPerSide * unitsPerMetre)
+        // The casing is the theme's switch (`RoadMetrics.drawsCasing`): the
+        // symbol's points plus a fixed margin of points on each side, under
+        // the same lock and the same ramp as the fill, so the kerb keeps its
+        // proportion at every zoom.
+        if casing, tunnel == false, theme.roadMetrics.drawsCasing {
+            let casingWidthPoints = symbolWidthPoints + casingMarginPoints
+            let casingWidth = Double(casingWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint
             casingPass = LinePass(key: Self.roadCasingKey(forFillKey: fillKey),
                                   color: roadCasingColor(from: fillColor),
                                   lowZoomFadeMask: LowZoomOverviewFade.classFadeMask(startZoom: Self.casingMinimumCameraZoom),
-                                  lineWidthPoints: Self.roadsAreScreenFixed ? casingWidthPoints : 0,
-                                  minimumWidthPoints: Self.roadsAreScreenFixed ? 0 : casingFloor,
-                                  maximumWidthPoints: symbolCeilingPoints > 0 ? symbolCeilingPoints + 1.0 : 0,
+                                  lineWidthPoints: casingWidthPoints,
                                   pointWidthWorldLockZoom: worldLockZoom,
                                   pointWidthRamp: casingRamp,
                                   lineGeometry: makeRoadGeometry(width: casingWidth))
@@ -617,11 +556,9 @@ extension ImmersiveMapTilesDefaultMapStyle {
         let fillPass = LinePass(key: fillPassKey,
                                 color: fillColor,
                                 lowZoomFadeMask: roadLowZoomFadeMask,
-                                lineWidthPoints: fixedWidthPoints,
+                                lineWidthPoints: symbolWidthPoints,
                                 dashLengthPoints: constructionDash?.length ?? 0,
                                 dashGapPoints: constructionDash?.gap ?? 0,
-                                minimumWidthPoints: Self.roadsAreScreenFixed ? 0 : minimumWidthPoints,
-                                maximumWidthPoints: symbolCeilingPoints,
                                 pointWidthWorldLockZoom: worldLockZoom,
                                 pointWidthRamp: fillRamp,
                                 lineGeometry: fillGeometry)
@@ -630,7 +567,11 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // centreline. A one-way carriageway gets a line on every boundary
         // between its lanes; a two-way street gets the divider down the
         // middle and nothing else, because which of its lanes run each way is
-        // not something the tiles know.
+        // not something the tiles know. The lines are laid across the
+        // symbol: its ground width at the zoom it is frozen there is what
+        // the lane boundaries divide and what the paint stops short of at a
+        // junction (`symbolGroundWidthUnits`).
+        let symbolWidth = symbolGroundWidthUnits(cls: roadClass, tile: tile)
         var markingOffsets: [Double] = []
         if tunnel == false {
             switch markings {
@@ -639,9 +580,10 @@ extension ImmersiveMapTilesDefaultMapStyle {
             case .centreDivider:
                 markingOffsets = [0]
             case .laneLines(let laneCount):
-                markingOffsets = Self.laneBoundaryOffsets(width: width, laneCount: laneCount)
+                markingOffsets = Self.laneBoundaryOffsets(width: symbolWidth, laneCount: laneCount)
             }
         }
+        let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
         for markingOffset in markingOffsets {
             // The lane divider down an automobile road. It is paint on the
             // surface, so it is world-locked in both dimensions that matter:
@@ -662,13 +604,13 @@ extension ImmersiveMapTilesDefaultMapStyle {
             // Round caps are deliberately off: at a free end the dash pattern
             // must stop on the road, not lay a translucent disc past it.
             let markingRibbonUnits = Double(Self.roadMarkingWidthPoints) * Self.roadMarkingRibbonUnitsPerPoint
-            // Paint stops half a carriageway short of the road's ends and of
-            // every junction, as it does on the ground: the last dash never
-            // pokes past the fill at a dead end, and the divider never runs
-            // across the street it meets. A tile-seam cut is not an end and
-            // keeps running flush into the neighbour (the parser tells them
+            // Paint stops half a road short of the road's ends and of every
+            // junction, as it does on the ground: the last dash never pokes
+            // past the fill at a dead end, and the divider never runs across
+            // the street it meets. A tile-seam cut is not an end and keeps
+            // running flush into the neighbour (the parser tells them
             // apart).
-            let markingEndInset = width * 0.5
+            let markingEndInset = symbolWidth * 0.5
             // Every stroke of a broken line is the same length. The line does
             // go solid before a junction on the ground, but drawn here it was
             // a twelve-metre stroke among three-metre ones, in the same
@@ -700,6 +642,12 @@ extension ImmersiveMapTilesDefaultMapStyle {
                                classPriority: priority))
     }
 
+    /// The railway's stroke, when railways come back: a dashed symbol in
+    /// points, like every road, held on screen at every zoom.
+    static let railWidthPoints: Float = 1.5
+    static let railDashPoints: Float = 6.0
+    static let railGapPoints: Float = 6.0
+
     func railStyle(subclass: String?, tileZoom: Int) -> FeatureStyle {
         // Subway lines (railway=subway) run in tunnels under buildings/parks and
         // read as a confusing dashed line, so we hide them. Surface rail (rail,
@@ -707,13 +655,15 @@ extension ImmersiveMapTilesDefaultMapStyle {
         if subclass == "subway" {
             return hiddenStyle
         }
-        let s = roadWidthScale(tileZoom: tileZoom)
+        let ribbonWidth = Double(Self.railWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint
         return .road(RoadStyle(
             fill: LinePass(key: 46,
                            color: theme.layers.roads.rail,
                            lowZoomFadeMask: roadLowZoomFadeMask,
-                           minimumWidthPoints: 0.7,
-                           lineGeometry: makeDashedRoadGeometry(width: 4.0 * s, dashLength: 8, dashGap: 8)),
+                           lineWidthPoints: Self.railWidthPoints,
+                           dashLengthPoints: Self.railDashPoints,
+                           dashGapPoints: Self.railGapPoints,
+                           lineGeometry: LineGeometryStyle(lineWidth: ribbonWidth)),
             classPriority: 30
         ))
     }

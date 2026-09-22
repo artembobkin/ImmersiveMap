@@ -751,7 +751,14 @@ final class PreparedTileDiskCaching {
     // 102: z8 and z9 tiles are flat-era (no sphere grid, deferred road
     // ribbons), so their roads take the same path as z10; a v101 entry
     // keeps them as baked sphere-era ribbons.
-    static let preparedFormatVersion: UInt32 = 102
+    // 103: TileLineStyle narrowed to twelve floats (the symbol ceiling,
+    // maximumWidthPoints, is gone with the world-width road model), every
+    // road past the overview era is the theme's point symbol whatever the
+    // tile carries, its lane lines and their junction inset are laid across
+    // the symbol's ground width instead of a width read off the lane count,
+    // and the ferry is a point-locked dashed stroke; a v102 entry has the
+    // wider span stride, the carriageway-width paint and a sub-pixel ferry.
+    static let preparedFormatVersion: UInt32 = 103
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
