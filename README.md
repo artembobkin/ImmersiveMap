@@ -32,6 +32,8 @@ ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps
 
 iPhone 15 Pro Max, iOS 26.5, 120 Hz. Scripted session: city flights at zoom 14 to 16.5
 with tilt, a 20 second pan, an idle map. Mapbox Maps SDK 11.26.0 in its Standard style.
+The bench apps, the run script and the method are in
+[ImmersiveMapPerformance](https://github.com/artembobkin/ImmersiveMapPerformance).
 
 | Metric | ImmersiveMap | Mapbox Standard |
 |---|---:|---:|
