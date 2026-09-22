@@ -88,7 +88,7 @@ final class GlobeSphereVertexPathTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let shaderURL = packageRootURL.appendingPathComponent("ImmersiveMap/" + relativePath)
+        let shaderURL = packageRootURL.appendingPathComponent("Sources/ImmersiveMap/" + relativePath)
         return try String(contentsOf: shaderURL, encoding: .utf8)
     }
 }

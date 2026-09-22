@@ -9,8 +9,8 @@ import XCTest
 /// The viewport in tests is 1000x1000: NDC x/y = -1..1 map to 0..1000 px.
 final class RoadLabelNearCameraFilterTests: XCTestCase {
     func testRoadLabelNearCameraFilterDoesNotUsePathOrAnchorCulling() throws {
-        let filterSource = try productionSource("ImmersiveMap/Labels/Road/RoadLabelNearCameraFilter.swift")
-        let prepareSource = try productionSource("ImmersiveMap/Labels/Subsystems/BaseLabelPrepareSubsystem.swift")
+        let filterSource = try productionSource("Sources/ImmersiveMap/Labels/Road/RoadLabelNearCameraFilter.swift")
+        let prepareSource = try productionSource("Sources/ImmersiveMap/Labels/Subsystems/BaseLabelPrepareSubsystem.swift")
 
         XCTAssertFalse(filterSource.contains("shouldKeepPath"))
         XCTAssertFalse(filterSource.contains("shouldKeepAnchor"))

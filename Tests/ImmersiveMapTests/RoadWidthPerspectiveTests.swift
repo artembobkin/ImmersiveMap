@@ -75,7 +75,7 @@ final class RoadWidthPerspectiveTests: XCTestCase {
 
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("ImmersiveMap/Tile/Shaders/TileShading.h")
+            .appendingPathComponent("Sources/ImmersiveMap/Tile/Shaders/TileShading.h")
         let source = try String(contentsOf: url, encoding: .utf8)
         let structRange = try XCTUnwrap(source.range(of: "struct OverviewFadeUniform {"))
         let body = source[structRange.upperBound...]

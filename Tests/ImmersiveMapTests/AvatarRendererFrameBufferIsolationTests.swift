@@ -10,7 +10,7 @@ final class AvatarRendererFrameBufferIsolationTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("ImmersiveMap/Avatars/AvatarsRenderer.swift")
+            .appendingPathComponent("Sources/ImmersiveMap/Avatars/AvatarsRenderer.swift")
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
 
         let perFrameStores = [

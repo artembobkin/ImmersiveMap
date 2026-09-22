@@ -15,7 +15,7 @@ Options:
   --charset PATH           Charset file. Defaults to
                            Tools/TextAtlas/charsets/labels-basic.txt.
   --output-dir PATH        Output resource directory. Defaults to
-                           ImmersiveMap/Text/Resources.
+                           Sources/ImmersiveMap/Text/Resources.
   --msdf-atlas-gen PATH    msdf-atlas-gen executable. Defaults to PATH lookup.
   --pxrange PIXELS         MSDF distance range. Defaults to 24.
   --width PIXELS           Fixed atlas width. Defaults to 2048.
@@ -136,7 +136,7 @@ repo_root="$(cd "$script_dir/../.." && pwd -P)"
 font_path=""
 thin_font_path=""
 charset_path="$repo_root/Tools/TextAtlas/charsets/labels-basic.txt"
-output_dir="$repo_root/ImmersiveMap/Text/Resources"
+output_dir="$repo_root/Sources/ImmersiveMap/Text/Resources"
 generator="msdf-atlas-gen"
 atlas_pxrange="24"
 atlas_width="2048"

@@ -20,9 +20,7 @@ let package = Package(
         // engine reaches it through one entry point at `package` access,
         // so nothing of it leaks to an app that links the product.
         .target(
-            name: "Earcut",
-            path: "Earcut",
-            exclude: ["Tests"]
+            name: "Earcut"
         ),
         // The Mapbox Vector Tile decoder: the wire format, the decoded model
         // and the tile-space geometry it produces. Its own module for the same
@@ -30,19 +28,15 @@ let package = Package(
         // test-side encoder and fixture tiles both test targets share; it is
         // a regular target because test targets cannot share sources.
         .target(
-            name: "Mvt",
-            path: "Mvt",
-            exclude: ["Tests", "TestSupport"]
+            name: "Mvt"
         ),
         .target(
             name: "MvtTestSupport",
-            dependencies: ["Mvt"],
-            path: "Mvt/TestSupport"
+            dependencies: ["Mvt"]
         ),
         .target(
             name: "ImmersiveMap",
             dependencies: ["Earcut", "Mvt"],
-            path: "ImmersiveMap",
             resources: [
                 .process("Avatars/Resources/avatar_marker_sdf.json"),
                 .process("Avatars/Resources/avatar_marker_sdf.png"),
@@ -65,18 +59,15 @@ let package = Package(
         .testTarget(
             name: "EarcutTests",
             dependencies: ["Earcut"],
-            path: "Earcut/Tests",
             resources: [.copy("Fixtures")]
         ),
         .testTarget(
             name: "MvtTests",
-            dependencies: ["Mvt", "MvtTestSupport"],
-            path: "Mvt/Tests"
+            dependencies: ["Mvt", "MvtTestSupport"]
         ),
         .testTarget(
             name: "ImmersiveMapTests",
-            dependencies: ["ImmersiveMap", "Mvt", "MvtTestSupport"],
-            path: "Tests/ImmersiveMapTests"
+            dependencies: ["ImmersiveMap", "Mvt", "MvtTestSupport"]
         )
     ],
     swiftLanguageModes: [.v6]

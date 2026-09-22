@@ -89,7 +89,7 @@ final class TileLineStyleDashUnitsContractTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let url = packageRootURL.appendingPathComponent("ImmersiveMap").appendingPathComponent(relativePath)
+        let url = packageRootURL.appendingPathComponent("Sources/ImmersiveMap").appendingPathComponent(relativePath)
         return try String(contentsOf: url, encoding: .utf8)
     }
 }

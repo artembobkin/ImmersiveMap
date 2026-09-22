@@ -63,7 +63,7 @@ final class AvatarRenderShaderShapeTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let shaderURL = packageRootURL.appendingPathComponent("ImmersiveMap/Avatars/Shaders/\(name)")
+        let shaderURL = packageRootURL.appendingPathComponent("Sources/ImmersiveMap/Avatars/Shaders/\(name)")
         return try String(contentsOf: shaderURL, encoding: .utf8)
     }
 }

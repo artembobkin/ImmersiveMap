@@ -125,7 +125,7 @@ final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
     func testALineUnderAPixelDrawsAtTheShareOfThePixelItCovers() throws {
         let source = try String(contentsOf: URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("ImmersiveMap/Tile/Shaders/TileShading.h"), encoding: .utf8)
+            .appendingPathComponent("Sources/ImmersiveMap/Tile/Shaders/TileShading.h"), encoding: .utf8)
         XCTAssertTrue(source.contains("float widthShare = clamp(requestedEdgePx / kTileLineMinimumEdgePx, 0.0, 1.0);"))
         XCTAssertTrue(source.contains("smoothstep(-0.5, 0.5, sideDistancePx) * widthShare;"),
                       "a sub-pixel line is not forced into a solid pixel-wide one")

@@ -27,7 +27,7 @@ final class RendererLabelDrawerPassTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let sourceURL = packageRootURL.appendingPathComponent("ImmersiveMap/Labels/Drawers/RendererLabelDrawer.swift")
+        let sourceURL = packageRootURL.appendingPathComponent("Sources/ImmersiveMap/Labels/Drawers/RendererLabelDrawer.swift")
         return try String(contentsOf: sourceURL, encoding: .utf8)
     }
 }

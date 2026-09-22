@@ -196,6 +196,6 @@ final class TileClipDistanceContractTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        return try String(contentsOf: root.appendingPathComponent("ImmersiveMap/\(relativePath)"), encoding: .utf8)
+        return try String(contentsOf: root.appendingPathComponent("Sources/ImmersiveMap/\(relativePath)"), encoding: .utf8)
     }
 }

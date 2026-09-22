@@ -33,9 +33,9 @@
 			path = ../../Tests/ImmersiveMapTests;
 			sourceTree = "<group>";
 		};
-		D40000000000000000000020 /* ../../Mvt/TestSupport */ = {
+		D40000000000000000000020 /* ../../Sources/MvtTestSupport */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = ../../Mvt/TestSupport;
+			path = ../../Sources/MvtTestSupport;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -64,7 +64,7 @@
 			children = (
 				D40000000000000000000007 /* Host */,
 				D4000000000000000000001F /* ../../Tests/ImmersiveMapTests */,
-				D40000000000000000000020 /* ../../Mvt/TestSupport */,
+				D40000000000000000000020 /* ../../Sources/MvtTestSupport */,
 				D40000000000000000000006 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -121,7 +121,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				D4000000000000000000001F /* ../../Tests/ImmersiveMapTests */,
-				D40000000000000000000020 /* ../../Mvt/TestSupport */,
+				D40000000000000000000020 /* ../../Sources/MvtTestSupport */,
 			);
 			name = ImmersiveMapDeviceTests;
 			packageProductDependencies = (

@@ -44,7 +44,7 @@ final class StarfieldTransitionFadeTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let shaderURL = packageRootURL.appendingPathComponent("ImmersiveMap/Starfield/Shaders/StarfieldStars.metal")
+        let shaderURL = packageRootURL.appendingPathComponent("Sources/ImmersiveMap/Starfield/Shaders/StarfieldStars.metal")
         return try String(contentsOf: shaderURL, encoding: .utf8)
     }
 }
