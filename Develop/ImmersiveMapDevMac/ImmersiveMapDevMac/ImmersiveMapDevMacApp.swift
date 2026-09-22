@@ -29,10 +29,16 @@ private struct MapScreen: View {
     var body: some View {
         ImmersiveMapView()
             .tileURLTemplate(devTileTemplate)
-            .buildingRoofShapes()
+            .mapStyle(.default.apply { theme in
+                theme.features.buildingRoofShapes = false
+                theme.features.buildingExtrusion = false
+            })
+            .shadows(isEnabled: false)
             // The controls are drawn only when a camera controller is attached:
             // they drive it, so without one the modifier does nothing.
             .camera(camera, position: Self.start)
+            .labels(isEnabled: false)
+            .msaa(isEnabled: true)
             .enableCameraUIControls()
             // A tileset under development is rebuilt and re-served under the
             // same coordinates, so a warm disk cache would keep showing the
@@ -42,6 +48,7 @@ private struct MapScreen: View {
             // chrome above the map. A development aid, off by default.
             .debugPanel()
             .ignoresSafeArea()
+
     }
 
     /// Moscow at street level, which is inside the coverage the test tileset is

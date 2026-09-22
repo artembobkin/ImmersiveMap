@@ -53,7 +53,17 @@
       </BuildableProductRunnable>
       <EnvironmentVariables>
          <EnvironmentVariable
+            key = "IMMERSIVEMAP_API_KEY"
+            value = ""
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
             key = "IMMERSIVEMAP_DEV_TILE_TEMPLATE"
+            value = ""
+            isEnabled = "YES">
+         </EnvironmentVariable>
+         <EnvironmentVariable
+            key = "IMMERSIVEMAP_DEV_STREETSCAPE_TEMPLATE"
             value = ""
             isEnabled = "YES">
          </EnvironmentVariable>
