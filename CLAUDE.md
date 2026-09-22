@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ImmersiveMap is a Swift + Metal vector-tile map engine for SwiftUI: globe/flat presentation, labels, starfield, extruded buildings with directional shadows, SwiftUI markers, avatar markers, routes, 3D scene models, offline regions, and video/still export. It is the **public** Swift Package `artembobkin/ImmersiveMap` (library product `ImmersiveMap`), Swift 6 tools with language mode v6 (strict concurrency), platforms iOS 18 (UIKit) and native macOS 15 (AppKit), no Mac Catalyst, and no package dependencies.
+ImmersiveMap is a Swift + Metal vector-tile map engine for SwiftUI: globe/flat presentation, labels, starfield, extruded buildings with directional shadows, SwiftUI markers, avatar markers, routes, 3D scene models, offline regions, and video/still export. It is the **public** Swift Package `artembobkin/ImmersiveMap` (library product `ImmersiveMap`), Swift 6 tools with language mode v6 (strict concurrency), platforms iOS 18 (UIKit) and native macOS 15 (AppKit)
 
 Because the repo is public: never commit tile-provider API keys, bearer tokens, credentials, `LocalSecrets.plist`-style files, or build artifacts (`.build/`, `DerivedData/`, `Traces/`).
 
