@@ -17,7 +17,7 @@ import Foundation
 /// sag = R theta^2 / 8, with the sphere's screen radius doubling per zoom):
 /// a 64x64 grid on a whole tile for the fills, and half that density for
 /// the line ribbons (see `ribbonStep`).
-/// Tiles from z10 are never on the sphere: the surface has unfurled by then.
+/// Tiles from z8 are never on the sphere: the surface has unfurled by then.
 ///
 /// Attributes ride along linearly (the signed line distance is a linear
 /// field across a ribbon, the arc length linear along it), so the analytic
@@ -28,15 +28,16 @@ import Foundation
 /// of `PreparedTileDiskCaching.preparedFormatVersion`.
 enum GroundGeometrySubdivider {
     /// Grid step in tile units for the tile zoom, nil where no split is
-    /// needed. z8 and z9 are insurance for a finer tile retained on the
-    /// sphere while the surface unfurls.
+    /// needed. The surface has unfurled by the end of the default
+    /// transition window (zoom 7), so z7 is the last tile level the sphere
+    /// shows. A forced spherical mode at a deeper zoom (the debug panel)
+    /// puts unsplit tiles on the globe, an accepted limit of debugging.
     static func step(forTileZoom zoom: Int) -> Int? {
         switch zoom {
         case ...1: return 64
         case 2...3: return 128
         case 4...5: return 256
         case 6...7: return 512
-        case 8...9: return 1024
         default: return nil
         }
     }

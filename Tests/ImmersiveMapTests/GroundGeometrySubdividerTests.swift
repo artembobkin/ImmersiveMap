@@ -15,9 +15,10 @@ final class GroundGeometrySubdividerTests: XCTestCase {
         XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 3), 128)
         XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 4), 256)
         XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 6), 512)
-        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 9), 1024)
-        XCTAssertNil(GroundGeometrySubdivider.step(forTileZoom: 10),
-                     "From z10 the surface has unfurled: nothing is drawn on the sphere")
+        XCTAssertEqual(GroundGeometrySubdivider.step(forTileZoom: 7), 512)
+        XCTAssertNil(GroundGeometrySubdivider.step(forTileZoom: 8),
+                     "From z8 the surface has unfurled: nothing is drawn on the sphere")
+        XCTAssertNil(GroundGeometrySubdivider.step(forTileZoom: 10))
     }
 
     func testRibbonsSplitOnAQuadrupleStepGrid() {

@@ -748,7 +748,10 @@ final class PreparedTileDiskCaching {
     // 101: the join and cap fans of a line lead every triangle with a rim
     // vertex instead of the hub, so a deferred ribbon's fans resolve their
     // width on screen; a v100 entry draws a dot at every node of a road.
-    static let preparedFormatVersion: UInt32 = 101
+    // 102: z8 and z9 tiles are flat-era (no sphere grid, deferred road
+    // ribbons), so their roads take the same path as z10; a v101 entry
+    // keeps them as baked sphere-era ribbons.
+    static let preparedFormatVersion: UInt32 = 102
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
