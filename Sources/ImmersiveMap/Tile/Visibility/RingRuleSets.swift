@@ -105,16 +105,12 @@ struct RingRuleSets: Hashable {
 }
 
 extension FlatRingRules {
-    /// The globe's zooms: the exact tiles with their lines to ring 1, then
-    /// without lines two levels coarser to ring 6 and three levels coarser
-    /// to ring 32, which is half way around the world at zoom 6. Every rule
-    /// is rasterizable, so where the sphere turns into
-    /// pictures is the raster zone's distance alone. Ground past the last rule is
-    /// the pinned world cover (`GlobeTileCoverage`).
+    /// The globe's zooms: the exact tiles with their lines to ring 1,
+    /// pictured past the raster zone's start, then two levels coarser to
+    /// ring 3, without lines and as geometry at every distance. Ground
+    /// past ring 3 is the pinned world cover (`GlobeTileCoverage`).
     static let globeDefault = FlatRingRules(rules: [
         FlatRingRule(zoomDrop: 0, distance: 1, rasterized: true),
-        FlatRingRule(zoomDrop: 2, distance: 3, rasterized: true, drawsLines: false),
-        FlatRingRule(zoomDrop: 2, distance: 6, rasterized: true, drawsLines: false),
-        FlatRingRule(zoomDrop: 3, distance: 32, rasterized: true, drawsLines: false)
+        FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false)
     ])
 }

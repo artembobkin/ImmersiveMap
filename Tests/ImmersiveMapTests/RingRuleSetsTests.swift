@@ -57,12 +57,13 @@ final class RingRuleSetsTests: XCTestCase {
         XCTAssertEqual(sets.sets.map(\.firstZoom), [0, 7])
         XCTAssertEqual(sets.rules(forTargetZoom: 6), FlatRingRules.globeDefault)
         XCTAssertEqual(sets.rules(forTargetZoom: 7), FlatRingRules.default)
-        XCTAssertTrue(FlatRingRules.globeDefault.rules.allSatisfy(\.rasterized), "the zone alone says where the pictures start")
-        XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.rasterResolution), [256, 256, 256, 256])
-        XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.zoomDrop), [0, 2, 2, 3])
-        XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.distance), [1, 3, 6, 32])
+        XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.rasterized), [true, false],
+                       "the exact tiles turn into pictures where the zone says, the coarse band stays geometry")
+        XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.rasterResolution), [256, 256])
+        XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.zoomDrop), [0, 2])
+        XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.distance), [1, 3])
         XCTAssertEqual(sets.tuning(forTargetZoom: 6).rasterZone.startCameraDistances, 0.72)
         XCTAssertEqual(sets.tuning(forTargetZoom: 7).rasterZone, .default)
-        XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.drawsLines), [true, false, false, false])
+        XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.drawsLines), [true, false])
     }
 }
