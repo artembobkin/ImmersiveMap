@@ -7,7 +7,7 @@ import simd
 /// The second stage of a parse: packs what the readers accumulated into the
 /// tile's streams, one `DrawingGeometryLayer` per bucket, with the style
 /// tables the vertices index into. The ground layer is class-split (fills,
-/// then ribbons, then the fills' outlines), the roads are bucketed by
+/// then ribbons), the roads are bucketed by
 /// structure and pass role and sorted, the buildings are one mesh.
 enum TileUnificationStage {
     /// Bulk-appends one tessellated polygon into the unified vertex/index
@@ -15,7 +15,6 @@ enum TileUnificationStage {
     /// are raw pointer stores without per-append growth or uniqueness checks.
     static func appendPolygon(_ polygon: ParsedPolygon,
                               styleBufferIndex: UInt8,
-                              bakesFootprintRadius: Bool = false,
                               vertices: inout UnsafeMutableBufferPointer<TileVertexIn>,
                               indices: inout UnsafeMutableBufferPointer<UInt32>,
                               vertexCount: inout Int,
@@ -35,11 +34,6 @@ enum TileUnificationStage {
         let hasLineAttributes = polygon.lineDistances.count == polygon.vertices.count
             && polygon.lineParameters.count == polygon.vertices.count
         let hasLineNormals = hasLineAttributes && polygon.lineNormals.count == polygon.vertices.count
-        // A fill of the footprint fade band carries its polygon's radius in
-        // the bytes a ribbon keeps its direction in.
-        let footprintNormal: SIMD2<Int8> = bakesFootprintRadius && hasLineAttributes == false
-            ? TileVertexIn.footprintRadiusNormal(radiusUnits: Self.footprintRadius(of: polygon))
-            : .zero
         for (index, position) in polygon.vertices.enumerated() {
             // Attribute-less polygons default to the saturated line interior
             // (see TileVertexIn), so decoration polygons that share a line
@@ -49,7 +43,7 @@ enum TileUnificationStage {
                                                         styleIndex: styleBufferIndex,
                                                         lineDistance: hasLineAttributes ? polygon.lineDistances[index] : 0,
                                                         lineParameter: hasLineAttributes ? polygon.lineParameters[index] : Int16.max,
-                                                        normal: hasLineNormals ? polygon.lineNormals[index] : footprintNormal))
+                                                        normal: hasLineNormals ? polygon.lineNormals[index] : .zero))
             vertexCount += 1
         }
         for index in polygon.indices {
@@ -58,28 +52,12 @@ enum TileUnificationStage {
         }
     }
 
-    /// Half the diagonal of a ground polygon's bounding box, in tile units:
-    /// the radius its footprint on screen is sized from.
-    static func footprintRadius(of polygon: ParsedPolygon) -> Float {
-        guard let first = polygon.vertices.first else { return 0 }
-        var lower = SIMD2<Float>(Float(first.x), Float(first.y))
-        var upper = lower
-        for vertex in polygon.vertices {
-            let point = SIMD2<Float>(Float(vertex.x), Float(vertex.y))
-            lower = simd_min(lower, point)
-            upper = simd_max(upper, point)
-        }
-        return simd_length(upper - lower) * 0.5
-    }
-
-    /// - Parameter splitLinesClass: orders the unified indices as three class
-    ///   segments, fills first, then line ribbons, then the fills' outlines
-    ///   (each by ascending style), and records the boundaries in
-    ///   `DrawingPolygonBytes.fillsIndexCount` and `fillOutlinesIndexStart`.
+    /// - Parameter splitLinesClass: orders the unified indices as two class
+    ///   segments, fills first, then line ribbons (each by ascending style),
+    ///   and records the boundary in `DrawingPolygonBytes.fillsIndexCount`.
     ///   The sphere's ground passes then draw one class without touching the
     ///   other's vertices; the paint order becomes "every ribbon above every
-    ///   fill", which is also how the split flat/morph draws paint. The
-    ///   outline segment is a line list the flat drawer alone reads.
+    ///   fill", which is also how the split flat/morph draws paint.
     private static func unifyPolygonLayer(polygonByStyle: [UInt8: [ParsedPolygon]],
                                           stylesByKey: [UInt8: BakedStyle],
                                           splitLinesClass: Bool = false) -> (drawing: DrawingPolygonBytes,
@@ -95,16 +73,9 @@ enum TileUnificationStage {
                 polygonPartial + polygon.vertices.count
             }
         }
-        // The fill outlines are the split layer's third class segment: the
-        // ring edges of every fill whose style asks for them, as a line
-        // list over the fill's own vertices (no vertex is added).
-        func emitsFillOutline(_ styleKey: UInt8) -> Bool {
-            splitLinesClass && stylesByKey[styleKey]?.outlineAntialiasing == true
-        }
-        let totalPolygonIndexCount = polygonByStyle.reduce(0) { partial, entry in
-            let outlines = emitsFillOutline(entry.key)
-            return partial + entry.value.reduce(0) { polygonPartial, polygon in
-                polygonPartial + polygon.indices.count + (outlines ? polygon.outlineIndices.count : 0)
+        let totalPolygonIndexCount = polygonByStyle.values.reduce(0) { partial, polygons in
+            partial + polygons.reduce(0) { polygonPartial, polygon in
+                polygonPartial + polygon.indices.count
             }
         }
 
@@ -125,7 +96,6 @@ enum TileUnificationStage {
 
         var unifiedIndices: [UInt32] = []
         var fillsIndexCount: Int?
-        var fillOutlinesIndexStart: Int?
         let unifiedVertices = [TileVertexIn](
             unsafeUninitializedCapacity: totalPolygonVertexCount
         ) { vertexBuffer, initializedVertexCount in
@@ -134,9 +104,6 @@ enum TileUnificationStage {
             ) { indexBuffer, initializedIndexCount in
                 var vertexCount = 0
                 var indexCount = 0
-                // The fills sweep remembers where each outlined fill's
-                // vertices landed, so the outline segment can index them.
-                var outlinedFills: [(polygon: ParsedPolygon, vertexOffset: UInt32)] = []
                 // One sweep for the unsplit layer; the split layer sweeps
                 // twice, fills then ribbons, each in ascending style order.
                 let classSweeps: [((ParsedPolygon) -> Bool)] = splitLinesClass
@@ -149,32 +116,13 @@ enum TileUnificationStage {
                     for styleKey in styleKeys {
                         let styleBufferIndex = styleIndexByKey[styleKey] ?? 0
                         guard let polygons = polygonByStyle[styleKey] else { continue }
-                        let recordsOutline = sweep == 0 && emitsFillOutline(styleKey)
-                        let bakesFootprintRadius = stylesByKey[styleKey].map {
-                            LowZoomOverviewFade.isFootprintFadeBand(mask: $0.pass.lowZoomFadeMask)
-                        } ?? false
                         for polygon in polygons where includesPolygon(polygon) {
-                            if recordsOutline, polygon.outlineIndices.isEmpty == false {
-                                outlinedFills.append((polygon, UInt32(vertexCount)))
-                            }
                             Self.appendPolygon(polygon,
                                                styleBufferIndex: styleBufferIndex,
-                                               bakesFootprintRadius: bakesFootprintRadius,
                                                vertices: &vertexBuffer,
                                                indices: &indexBuffer,
                                                vertexCount: &vertexCount,
                                                indexCount: &indexCount)
-                        }
-                    }
-                }
-                if splitLinesClass {
-                    // The third segment: the outlines in the fills' order,
-                    // which is ascending style, as index pairs.
-                    fillOutlinesIndexStart = indexCount
-                    for (polygon, vertexOffset) in outlinedFills {
-                        for index in polygon.outlineIndices {
-                            indexBuffer.initializeElement(at: indexCount, to: index &+ vertexOffset)
-                            indexCount += 1
                         }
                     }
                 }
@@ -185,7 +133,7 @@ enum TileUnificationStage {
 
         for styleKey in styleKeys {
             if let style = stylesByKey[styleKey] {
-                styles.append(TilePolygonStyle(color: style.color, farColor: style.farColor))
+                styles.append(TilePolygonStyle(color: style.color))
                 overviewStyleMasks.append(style.lowZoomFadeMask)
                 lineStyles.append(Self.makeTileLineStyle(from: style.pass))
             }
@@ -193,31 +141,10 @@ enum TileUnificationStage {
 
         return (drawing: DrawingPolygonBytes(vertices: unifiedVertices,
                                              indices: unifiedIndices,
-                                             fillsIndexCount: fillsIndexCount,
-                                             fillOutlinesIndexStart: fillOutlinesIndexStart),
+                                             fillsIndexCount: fillsIndexCount),
                 styles: styles,
                 overviewStyleMasks: overviewStyleMasks,
                 lineStyles: lineStyles)
-    }
-
-    /// The radius of the circle about the mesh's ground centre that holds
-    /// every vertex's ground position, in tile units: half the building's
-    /// extent, whatever its shape.
-    static func footprintRadius(of mesh: ParsedExtrudedMesh) -> Float {
-        guard mesh.vertices.isEmpty == false else { return 0 }
-        var lower = SIMD2<Float>(repeating: .greatestFiniteMagnitude)
-        var upper = SIMD2<Float>(repeating: -.greatestFiniteMagnitude)
-        for vertex in mesh.vertices {
-            let ground = SIMD2<Float>(vertex.position.x, vertex.position.y)
-            lower = simd_min(lower, ground)
-            upper = simd_max(upper, ground)
-        }
-        let centre = (lower + upper) * 0.5
-        var radius: Float = 0
-        for vertex in mesh.vertices {
-            radius = max(radius, simd_length(SIMD2<Float>(vertex.position.x, vertex.position.y) - centre))
-        }
-        return radius
     }
 
     /// The GPU-side line parameters of one style. The edge threshold derives
@@ -271,7 +198,7 @@ enum TileUnificationStage {
             }
             styleIndexByKey[styleKey] = UInt8(index)
             if let style = stylesByKey[styleKey] {
-                styles.append(TilePolygonStyle(color: style.color, farColor: style.farColor))
+                styles.append(TilePolygonStyle(color: style.color))
                 overviewStyleMasks.append(style.lowZoomFadeMask)
                 lineStyles.append(Self.makeTileLineStyle(from: style.pass))
             }
@@ -443,14 +370,10 @@ enum TileUnificationStage {
             let styleBufferIndex = styleIndexByKey[styleKey] ?? 0
             if let extrudedMeshes = extrudedByStyle[styleKey] {
                 for extrudedMesh in extrudedMeshes {
-                    // One mesh is one building: its footprint radius is
-                    // the same on every vertex (`ExtrudedVertexIn.footprintRadius`).
-                    let footprintRadius = Self.footprintRadius(of: extrudedMesh)
                     for vertex in extrudedMesh.vertices {
                         unifiedExtrudedVertices.append(ExtrudedVertexIn(position: vertex.position,
                                                                         normal: vertex.normal,
-                                                                        styleIndex: styleBufferIndex,
-                                                                        footprintRadius: footprintRadius))
+                                                                        styleIndex: styleBufferIndex))
                     }
                     for index in extrudedMesh.indices {
                         unifiedExtrudedIndices.append(index + currentExtrudedVertexOffset)

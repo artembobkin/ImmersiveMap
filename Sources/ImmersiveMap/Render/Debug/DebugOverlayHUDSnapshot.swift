@@ -102,14 +102,12 @@ struct DebugOverlayHUDSnapshot: Equatable {
     }
 
     /// The ring rules as the frame resolved them on either surface,
-    /// nearest first: each band's zoom, last ring and tile count, and the
-    /// raster resolution where the plane pictures the band. "rules: none"
-    /// for a frame with no coverage.
+    /// nearest first: each band's zoom, last ring and tile count. "rules:
+    /// none" for a frame with no coverage.
     static func ringRulesLine(_ bands: [FlatRingBand]) -> String {
         guard bands.isEmpty == false else { return "rules: none" }
         let entries = bands.map { band in
-            let raster = band.rasterResolution.map { " raster \($0)" } ?? ""
-            return "z\(band.zoom) \u{2264}\(band.distance) (\(band.tileCount))" + raster
+            "z\(band.zoom) \u{2264}\(band.distance) (\(band.tileCount))"
         }
         return "rules: " + entries.joined(separator: " / ")
     }

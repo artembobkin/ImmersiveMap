@@ -30,9 +30,6 @@ struct GlobeCoverageResolution {
     /// nearer band's answer, and the cover past the last rule the last
     /// rule's.
     let linelessTargets: Set<VisibleTile>
-    /// The targets a rasterizable rule placed, with the rule's resolution
-    /// (`FlatRingRule.rasterized`), by the same nearer band.
-    let rasterizedTargets: [VisibleTile: Int]
     let metrics: GlobeCullingMetrics
 }
 
@@ -80,8 +77,6 @@ enum GlobeTileCoverage {
         let lastRing: Int
         let zoom: Int
         let drawsLines: Bool
-        /// Texels a side of the band's pictures, nil for a vector band.
-        let rasterResolution: Int?
         var tileCount = 0
     }
 
@@ -94,22 +89,20 @@ enum GlobeTileCoverage {
         var targets: [VisibleTile] = []
         var placed: Set<Tile> = []
         var lineless: Set<VisibleTile> = []
-        var rasterized: [VisibleTile: Int] = [:]
         var metrics = GlobeCullingMetrics.zero
     }
 
     static func targets(targetZoom: Int, inputs: GlobeCoverageInputs, frustum: Frustum?) -> GlobeCoverageResolution {
         let startTime = CACurrentMediaTime()
         guard targetZoom >= 0, let frustum else {
-            return GlobeCoverageResolution(targets: [], bands: [], linelessTargets: [], rasterizedTargets: [:], metrics: .zero)
+            return GlobeCoverageResolution(targets: [], bands: [], linelessTargets: [], metrics: .zero)
         }
         var bands: [Band] = []
         for rule in inputs.rules.normalized().rules {
             bands.append(Band(firstRing: bands.last.map { $0.lastRing + 1 } ?? 0,
                               lastRing: rule.distance,
                               zoom: min(targetZoom, max(Self.floorZoom, targetZoom - rule.zoomDrop)),
-                              drawsLines: rule.drawsLines,
-                              rasterResolution: rule.rasterized ? rule.rasterResolution : nil))
+                              drawsLines: rule.drawsLines))
         }
         var walk = Walk(targetZoom: targetZoom,
                         frustum: frustum,
@@ -120,11 +113,9 @@ enum GlobeTileCoverage {
         walk.metrics.duration = CACurrentMediaTime() - startTime
         return GlobeCoverageResolution(targets: FlatTileCoverage.sorted(walk.targets),
                                        bands: walk.bands.map {
-                                           FlatRingBand(zoom: $0.zoom, distance: $0.lastRing, tileCount: $0.tileCount,
-                                                        rasterResolution: $0.rasterResolution)
+                                           FlatRingBand(zoom: $0.zoom, distance: $0.lastRing, tileCount: $0.tileCount)
                                        },
                                        linelessTargets: walk.lineless,
-                                       rasterizedTargets: walk.rasterized,
                                        metrics: walk.metrics)
     }
 
@@ -159,7 +150,6 @@ enum GlobeTileCoverage {
         let rings = GlobeRingMath.ringRange(of: tile, targetZoom: walk.targetZoom, lookAt: walk.lookAtTile)
         var placesTile = false
         var drawsLines = true
-        var rasterResolution: Int?
         var finestWanted = Self.floorZoom
         for index in walk.bands.indices {
             let band = walk.bands[index]
@@ -168,7 +158,6 @@ enum GlobeTileCoverage {
             if band.zoom == tile.z, placesTile == false {
                 placesTile = true
                 drawsLines = band.drawsLines
-                rasterResolution = band.rasterResolution
                 if walk.placed.contains(tile) == false {
                     walk.bands[index].tileCount += 1
                 }
@@ -178,15 +167,11 @@ enum GlobeTileCoverage {
         if placesTile == false, tile.z == Self.floorZoom, rings.upperBound > (walk.bands.last?.lastRing ?? -1) {
             placesTile = true
             drawsLines = walk.bands.last?.drawsLines ?? true
-            rasterResolution = walk.bands.last?.rasterResolution
         }
         if placesTile {
             if walk.placed.contains(tile) == false {
                 if drawsLines == false {
                     walk.lineless.insert(VisibleTile(tile: tile))
-                }
-                if let rasterResolution {
-                    walk.rasterized[VisibleTile(tile: tile)] = rasterResolution
                 }
             }
             place(tile, walk: &walk)

@@ -25,14 +25,6 @@ struct ParsedPolygon {
     /// join's or a cap's hub). Empty for pre-extruded ribbons and fills,
     /// whose vertices are final. Lockstep with `vertices` when non-empty.
     var lineNormals: [SIMD2<Int8>] = []
-    /// The polygon's ring edges as a line list (pairs of indices into
-    /// `vertices`), for the fill-outline antialiasing pass: the flat
-    /// drawer rasterizes them as one-pixel line primitives in the fill's
-    /// colour over the fill's own staircase edge (the `fill-antialias`
-    /// construction of Mapbox GL). Edges lying on the tile boundary are
-    /// left out, since the polygon continues in the neighbour. Empty for
-    /// line ribbons and for every polygon that is not a plain fill.
-    var outlineIndices: [UInt32] = []
 
     /// A line ribbon carries per-vertex line attributes (extruded stroke
     /// geometry); a fill does not, including the decoration polygons that

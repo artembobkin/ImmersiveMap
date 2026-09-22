@@ -5,8 +5,8 @@ import MetalKit
 import Metal
 
 class RenderCamera {
-    /// The fixed vertical field of view of the render camera; shared with
-    /// the screen-resolvability math (RoadMarkingDistanceLOD).
+    /// The fixed vertical field of view of the render camera, read by the
+    /// horizon frame resolver as well (HorizonRenderSubsystem).
     static let verticalFovRadians = Float.pi / 4
     /// The near plane, in view units. The flat surface's rank depth
     /// bypasses the z clip, so Tile.metal cuts at this distance itself

@@ -23,7 +23,7 @@ final class StreetscapeTests: XCTestCase {
     }
 
     private func street(lanes: String = "4", extra: [String: String] = [:]) -> VectorTileFixture.Feature {
-        var properties = ["class": "primary", "lanes": lanes, "lanes_src": "tagged", "name": "Tverskaya Street"]
+        var properties = ["class": "primary", "lanes": lanes, "name": "Tverskaya Street"]
         for (key, value) in extra { properties[key] = value }
         return .init(id: 2, geometry: .line(points: [(1200, 1050), (2900, 1050)]), properties: properties)
     }
@@ -52,18 +52,16 @@ final class StreetscapeTests: XCTestCase {
               properties: ["class": "path", "subclass": "footway", "crossing": "marked"])
     }
 
-    // MARK: - A tile without the streetscape is a street map
+    // MARK: - A street is its symbol, painted only by what the tiles measured
 
-    func testAStreetAloneIsCasingAndFillWithoutLanePaint() throws {
-        let data = VectorTileFixture.layerTile(layerName: "transportation", features: [street()])
-        let bare = try parse(data).drawingRoadPhases.automobileGround
-        XCTAssertGreaterThan(bare.fill.drawing.indices.count, 0, "The asphalt draws")
-        XCTAssertEqual(bare.detail.drawing.indices.count, 0,
-                       "and no centre divider is synthesized from the lane count")
-
-        let painted = try parse(withStreetscape: [street()]).drawingRoadPhases.automobileGround
-        XCTAssertGreaterThan(painted.detail.drawing.indices.count, 0,
-                             "In a tile with the streetscape, the four-lane two-way street is painted down the middle")
+    func testAStreetAloneIsFillWithoutPaint() throws {
+        for data in [VectorTileFixture.layerTile(layerName: "transportation", features: [street()]),
+                     VectorTileFixture.layerTile(layerName: "transportation", features: [street(), .streetscapeMarker])] {
+            let phases = try parse(data).drawingRoadPhases.automobileGround
+            XCTAssertGreaterThan(phases.fill.drawing.indices.count, 0, "The asphalt draws")
+            XCTAssertEqual(phases.detail.drawing.indices.count, 0,
+                           "and nothing is painted on it from the lane count, with or without the streetscape")
+        }
     }
 
     func testAParkingLotIsAStreetscapeFigure() throws {

@@ -28,7 +28,6 @@ struct FrameContext {
     let mapCameraState: ImmersiveMapCameraState
     let resolvedPresentation: ResolvedPresentationState
     let visibleContent: VisibleContentState
-    let qualityTier: RenderQualityTier
     let commandBuffer: MTLCommandBuffer?
     let services: FrameContextServices
     let sharedState: FrameContextSharedState
@@ -101,7 +100,6 @@ struct FrameContext {
          viewport: SIMD2<Float>,
          cameraMatrices: FrameCameraMatrices,
          cameraEye: SIMD3<Float>,
-         qualityTier: RenderQualityTier,
          commandBuffer: MTLCommandBuffer?,
          services: FrameContextServices,
          mapCameraState: ImmersiveMapCameraState = .default,
@@ -126,7 +124,6 @@ struct FrameContext {
         self.mapCameraState = fallbackResolvedPresentation.semanticWorldState.cameraState
         self.resolvedPresentation = fallbackResolvedPresentation
         self.visibleContent = visibleContent
-        self.qualityTier = qualityTier
         self.commandBuffer = commandBuffer
         self.services = services
         self.sharedState = sharedState

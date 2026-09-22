@@ -6,11 +6,8 @@ import simd
 
 /// One rule of the flat map's coverage: the ground up to `distance` rings
 /// of tiles from the look-at tile (and past the previous rule's rings) is
-/// drawn `zoomDrop` levels below the target zoom. With `rasterized`, the
-/// part of the band past the raster zone's start (`RasterZone`) draws as
-/// each tile's picture, rendered once into a texture of `rasterResolution`
-/// texels a side (`TileRasterizer`). Without it the band is geometry at
-/// every distance.
+/// drawn `zoomDrop` levels below the target zoom, as geometry at every
+/// distance.
 struct FlatRingRule: Hashable {
     var zoomDrop: Int
     /// In tiles of the target zoom, counted on the grid from the look-at
@@ -18,25 +15,16 @@ struct FlatRingRule: Hashable {
     /// and so on. A ring number, not a radius, so a rule's edge runs along
     /// tile edges.
     var distance: Int
-    /// The band's tiles may draw as pictures, where the raster zone says.
-    var rasterized: Bool = false
-    /// Texels a side of a rasterized tile, one of
-    /// `FlatRingRules.rasterResolutions`.
-    var rasterResolution: Int = FlatRingRules.defaultRasterResolution
     /// Whether the band's tiles draw their lines: the ground line ribbons
     /// (rivers, borders) and every road bucket. Off, the band is fills
-    /// only, in a vector tile and in a rasterized tile's picture alike.
+    /// only.
     var drawsLines: Bool = true
 
     init(zoomDrop: Int,
          distance: Int,
-         rasterized: Bool = false,
-         rasterResolution: Int = FlatRingRules.defaultRasterResolution,
          drawsLines: Bool = true) {
         self.zoomDrop = zoomDrop
         self.distance = distance
-        self.rasterized = rasterized
-        self.rasterResolution = rasterResolution
         self.drawsLines = drawsLines
     }
 }
@@ -50,34 +38,15 @@ struct FlatRingRules: Hashable {
 
     static let zoomDropRange = 0 ... 8
     static let distanceRange = 0 ... 256
-    /// The raster resolutions a rule can have, texels a side of one tile:
-    /// the one size. A picture is kept per pictured tile with its mip
-    /// chain, and a frame pictures dozens of tiles, so anything larger
-    /// multiplies into memory the map cannot spend on its far ground. The
-    /// far ground does not need more either: past the raster zone's start
-    /// a tile is minified on screen.
-    static let rasterResolutions = [256]
-    static let defaultRasterResolution = 256
-
-    /// The nearest of `rasterResolutions` to `resolution`.
-    static func clampedRasterResolution(_ resolution: Int) -> Int {
-        rasterResolutions.min { abs($0 - resolution) < abs($1 - resolution) } ?? defaultRasterResolution
-    }
 
     /// The exact tiles to one ring around the look-at tile and one level
     /// coarser to ring 2, both with their lines, then two levels coarser
-    /// to ring 3 and four levels coarser to ring 20, both without lines,
+    /// to ring 3 and four levels coarser to ring 9, both without lines,
     /// nothing beyond.
-    /// Every rule is rasterizable, so where the ground turns into pictures
-    /// is the raster zone's distance alone and no rule's edge. The roads
-    /// fade out by their width on screen inside the lined rings
-    /// (`RoadThinnessFade`).
-    static let `default` = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1, rasterized: true),
-                                                 FlatRingRule(zoomDrop: 1, distance: 2, rasterized: true),
-                                                 FlatRingRule(zoomDrop: 2, distance: 3, rasterized: true,
-                                                              drawsLines: false),
-                                                 FlatRingRule(zoomDrop: 4, distance: 20, rasterized: true,
-                                                              drawsLines: false)])
+    static let `default` = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1),
+                                                 FlatRingRule(zoomDrop: 1, distance: 2),
+                                                 FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false),
+                                                 FlatRingRule(zoomDrop: 4, distance: 9, drawsLines: false)])
 
     /// The rules as the coverage reads them: every value inside its range,
     /// sorted by distance, one rule per distance, at least one rule.
@@ -88,8 +57,6 @@ struct FlatRingRules: Hashable {
             let drop = min(max(rule.zoomDrop, Self.zoomDropRange.lowerBound), Self.zoomDropRange.upperBound)
             cleaned.append(FlatRingRule(zoomDrop: drop,
                                         distance: distance,
-                                        rasterized: rule.rasterized,
-                                        rasterResolution: Self.clampedRasterResolution(rule.rasterResolution),
                                         drawsLines: rule.drawsLines))
         }
         cleaned.sort { $0.distance < $1.distance }
@@ -104,28 +71,23 @@ struct FlatRingRules: Hashable {
     }
 }
 
-/// One rule's band as the frame resolved it: its zoom, its last ring,
-/// how many tiles it placed and, for a rasterized rule, the resolution.
+/// One rule's band as the frame resolved it: its zoom, its last ring and
+/// how many tiles it placed.
 struct FlatRingBand: Hashable {
     let zoom: Int
     let distance: Int
     let tileCount: Int
-    var rasterResolution: Int? = nil
 }
 
 struct FlatRingRuleCoverageResolution {
-    static let empty = FlatRingRuleCoverageResolution(targets: [], bands: [], rasterizedTargets: [:],
+    static let empty = FlatRingRuleCoverageResolution(targets: [], bands: [],
                                                       linelessTargets: [], visitedNodeCount: 0)
 
     let targets: [VisibleTile]
     let bands: [FlatRingBand]
-    /// The targets a rasterized rule placed, with the rule's resolution. A
-    /// tile two bands share takes the nearer band's answer, so a tile of a
-    /// vector band that reaches under a rasterized one stays vector.
-    let rasterizedTargets: [VisibleTile: Int]
     /// The targets placed by a rule that draws no lines
     /// (`FlatRingRule.drawsLines`). A tile two bands share takes the nearer
-    /// band's answer here too.
+    /// band's answer.
     let linelessTargets: Set<VisibleTile>
     /// How many tiles the enumeration looked at, for the diagnostics.
     let visitedNodeCount: Int
@@ -173,7 +135,6 @@ enum FlatRingRuleCoverage {
         let floorZoom = min(backdropZoom.map { $0 + 1 } ?? 0, targetZoom)
 
         var placed = Set<VisibleTile>()
-        var rasterizedTargets: [VisibleTile: Int] = [:]
         var linelessTargets = Set<VisibleTile>()
         var bands: [FlatRingBand] = []
         var visited = 0
@@ -189,24 +150,17 @@ enum FlatRingRuleCoverage {
                                                        flatRenderState: flatRenderState,
                                                        visited: &visited))
             }
-            if rule.rasterized {
-                for tile in tiles where placed.contains(tile) == false {
-                    rasterizedTargets[tile] = rule.rasterResolution
-                }
-            }
             if rule.drawsLines == false {
                 linelessTargets.formUnion(tiles.subtracting(placed))
             }
             placed.formUnion(tiles)
             bands.append(FlatRingBand(zoom: zoom,
                                       distance: rule.distance,
-                                      tileCount: tiles.count,
-                                      rasterResolution: rule.rasterized ? rule.rasterResolution : nil))
+                                      tileCount: tiles.count))
             innerSquare = square
         }
         return FlatRingRuleCoverageResolution(targets: FlatTileCoverage.sorted(Array(placed)),
                                               bands: bands,
-                                              rasterizedTargets: rasterizedTargets,
                                               linelessTargets: linelessTargets,
                                               visitedNodeCount: visited)
     }

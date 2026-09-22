@@ -92,10 +92,7 @@ final class FlatRingRuleCoverageTests: XCTestCase {
         XCTAssertEqual(FlatRingRules(rules: []).normalized(), FlatRingRules.default, "at least one rule")
         XCTAssertEqual(FlatRingRules.default.normalized(), FlatRingRules.default, "the default is already normal")
         XCTAssertEqual(FlatRingRules.default.rules.map(\.zoomDrop), [0, 1, 2, 4])
-        XCTAssertEqual(FlatRingRules.default.rules.map(\.distance), [1, 2, 3, 20])
-        XCTAssertEqual(FlatRingRules.default.rules.map(\.rasterized), [true, true, true, true])
-        XCTAssertEqual(FlatRingRules.default.rules.map(\.rasterResolution), [256, 256, 256, 256])
-        XCTAssertEqual(FlatRingRules.rasterResolutions, [256], "one size: a larger picture per tile is memory the far ground cannot have")
+        XCTAssertEqual(FlatRingRules.default.rules.map(\.distance), [1, 2, 3, 9])
         XCTAssertEqual(FlatRingRules.default.rules.map(\.drawsLines), [true, true, false, false])
     }
 
@@ -284,45 +281,10 @@ final class FlatRingRuleCoverageTests: XCTestCase {
     func testTheRulesReadoutLine() {
         let bands = [FlatRingBand(zoom: 16, distance: 0, tileCount: 1),
                      FlatRingBand(zoom: 14, distance: 3, tileCount: 3),
-                     FlatRingBand(zoom: 11, distance: 40, tileCount: 2, rasterResolution: 512)]
+                     FlatRingBand(zoom: 11, distance: 40, tileCount: 2)]
         XCTAssertEqual(DebugOverlayHUDSnapshot.ringRulesLine(bands),
-                       "rules: z16 \u{2264}0 (1) / z14 \u{2264}3 (3) / z11 \u{2264}40 (2) raster 512")
+                       "rules: z16 \u{2264}0 (1) / z14 \u{2264}3 (3) / z11 \u{2264}40 (2)")
         XCTAssertEqual(DebugOverlayHUDSnapshot.ringRulesLine([]), "rules: none")
-    }
-
-    // MARK: - Rasterized rules
-
-    func testARasterResolutionIsOneOfTheOptions() {
-        let rules = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1, rasterized: true, rasterResolution: 700),
-                                          FlatRingRule(zoomDrop: 2, distance: 2, rasterized: false, rasterResolution: 9000)])
-        let normalized = rules.normalized().rules
-        XCTAssertEqual(normalized.map(\.rasterResolution), [256, 256], "the one size")
-        XCTAssertEqual(normalized.map(\.rasterized), [true, false])
-        XCTAssertEqual(FlatRingRules.clampedRasterResolution(0), 256)
-        XCTAssertEqual(FlatRingRule(zoomDrop: 0, distance: 1).rasterized, false, "vector unless asked")
-    }
-
-    /// A rasterized rule's tiles are the raster targets at its resolution.
-    /// A tile the nearer vector band already placed stays vector, so the
-    /// nearer band's answer wins where two bands share a tile.
-    func testARasterizedRulesTilesAreTheRasterTargets() throws {
-        let fixture = try Self.makeFixture(zoom: 16, pitchDegrees: 75)
-        let rules = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1),
-                                          FlatRingRule(zoomDrop: 2, distance: 6, rasterized: true),
-                                          FlatRingRule(zoomDrop: 5, distance: 60)])
-        let resolution = Self.resolve(fixture, targetZoom: 16, rules: rules)
-        let rasterized = resolution.rasterizedTargets
-        XCTAssertFalse(rasterized.isEmpty, "The second band has tiles")
-        XCTAssertTrue(rasterized.values.allSatisfy { $0 == 256 })
-        XCTAssertTrue(rasterized.keys.allSatisfy { $0.z == 14 }, "Only the rasterized band's tiles")
-        XCTAssertTrue(rasterized.keys.allSatisfy { resolution.targets.contains($0) })
-        XCTAssertEqual(resolution.bands.map(\.rasterResolution), [nil, 256, nil])
-
-        let vectorOnly = Self.resolve(fixture, targetZoom: 16, rules: FlatRingRules(rules: rules.rules.map {
-            FlatRingRule(zoomDrop: $0.zoomDrop, distance: $0.distance)
-        }))
-        XCTAssertTrue(vectorOnly.rasterizedTargets.isEmpty)
-        XCTAssertEqual(vectorOnly.targets, resolution.targets, "Rasterizing changes how a band draws, not what it places")
     }
 
     func testTheRulesAreTheDebugPanels() {

@@ -44,8 +44,7 @@ enum GlobeVectorSurfaceDrawer {
                      isWireframeEnabled: Bool,
                      pureSphere: Bool,
                      globeFrame: GlobeFrameConstantsUniform,
-                     linelessTiles: Set<VisibleTile> = [],
-                     sourceGroups: [Tile: GroundLayerGroups] = [:]) {
+                     linelessTiles: Set<VisibleTile> = []) {
         guard placeTilesContext.tilePlacements.isEmpty == false else {
             return
         }
@@ -64,15 +63,13 @@ enum GlobeVectorSurfaceDrawer {
 
         var cameraUniformValue = cameraUniform
         var globeValue = globe
-        // Point-locked widths resolve against the real screen gradient of the
-        // line field (fwidth in the coverage), so the taper is all the sphere
-        // needs. Every road is a symbol at these zooms and no road is painted
-        // yet: the surface blend and the marking alpha stay zero.
+        // Every road is a symbol at these zooms and no road is painted yet:
+        // the marking alpha stays zero.
         let overviewFadeUniform = TileOverviewFadeUniform(
             overviewAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .overviewFeatures),
             roadAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .roads),
             landuseAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .landuse),
-            pixelsPerPoint: pixelsPerPoint * LineWidthZoomTaper.scale(for: cameraZoom),
+            pixelsPerPoint: pixelsPerPoint,
             cameraZoom: Float(cameraZoom)
         )
         var overviewFadeValue = overviewFadeUniform
@@ -115,16 +112,7 @@ enum GlobeVectorSurfaceDrawer {
             for placement in placeTilesContext.tilePlacements where linelessTiles.contains(placement.placeIn) == false {
                 linedSourceTiles.insert(placement.metalTile)
             }
-            // The ground families a source draws in this call, every one
-            // for a source not named: the raster zone splits a pictured
-            // tile's ground between the draw under its picture and the
-            // draw over it (`GlobeVectorSurfaceRenderSubsystem`). On the
-            // sphere a picture holds every fill, so the fills go together.
-            func draws(_ group: GroundLayerGroups, _ source: MetalTile) -> Bool {
-                sourceGroups[source.tile]?.contains(group) ?? true
-            }
-            let fillSources = uniqueSources.filter { draws(.landFills, $0) }
-            let linedSources = uniqueSources.filter { linedSourceTiles.contains($0) && draws(.groundLines, $0) }
+            let linedSources = uniqueSources.filter { linedSourceTiles.contains($0) }
 
             // The opaque fill layers, depth-written and unblended.
             renderEncoder.pushDebugGroup("ground.opaqueFills")
@@ -134,7 +122,7 @@ enum GlobeVectorSurfaceDrawer {
                 run.isFillsClass && isOpaque(run, overviewFade: overviewFadeUniform)
             }
             forEachSource(renderEncoder: renderEncoder,
-                          sources: fillSources,
+                          sources: uniqueSources,
                           renderMapSize: renderMapSize,
                           pixelsPerPoint: pixelsPerPoint,
                           drawableHeightPx: drawableHeightPx,
@@ -159,7 +147,7 @@ enum GlobeVectorSurfaceDrawer {
                     && TileStyleFadeMath.fadeIsZero(mask: run.fadeMask, overviewFade: overviewFadeUniform) == false
             }
             forEachSource(renderEncoder: renderEncoder,
-                          sources: fillSources,
+                          sources: uniqueSources,
                           renderMapSize: renderMapSize,
                           pixelsPerPoint: pixelsPerPoint,
                           drawableHeightPx: drawableHeightPx,

@@ -186,10 +186,9 @@ class ParseLine {
     static let featherTileUnits: Float = 2.0
     /// The narrowest ribbon, in tile units from the centreline: a pixel a
     /// side at the tile's own scale (4096 units over about 512 points),
-    /// so a hairline's geometry always covers the pixel centres its
-    /// pixel-wide coverage needs (`tileLineCoverage`), instead of a
-    /// sub-pixel sliver that the rasterizer hits and misses from frame to
-    /// frame. The styled edge stays where the style put it: the edge
+    /// so a hairline's geometry always has fragments under the pixel-wide
+    /// antialiasing band (`tileLineCoverage`), instead of a sub-pixel
+    /// sliver that the rasterizer hits and misses from frame to frame. The styled edge stays where the style put it: the edge
     /// threshold is derived from the same extrusion.
     static let minimumExtrudedHalfWidth: Float = 8.0
 
@@ -284,7 +283,6 @@ class ParseLine {
                featherStart: Bool = false,
                featherEnd: Bool = false,
                emitsArcLength: Bool = false,
-               arcLengthOrigin: Float = 0,
                extendClippedStart: Bool = false,
                extendClippedEnd: Bool = false,
                clipPadding: Float = 0,
@@ -304,8 +302,7 @@ class ParseLine {
                                                 extendStart: extendClippedStart,
                                                 extendEnd: extendClippedEnd)
         let precomputed = precompute(points: effectivePoints,
-                                     tileExtent: tileExtent,
-                                     arcLengthOrigin: arcLengthOrigin)
+                                     tileExtent: tileExtent)
         guard precomputed.validSegmentCount > 0 else { return nil }
 
         var polygon = GeneratedPolygon()
@@ -479,8 +476,7 @@ class ParseLine {
     }
 
     private func precompute(points sourcePoints: [SIMD2<Float>],
-                            tileExtent: Float,
-                            arcLengthOrigin: Float = 0) -> PrecomputedLine {
+                            tileExtent: Float) -> PrecomputedLine {
         var points: [SIMD2<Float>] = []
         points.reserveCapacity(sourcePoints.count)
         for point in sourcePoints {
@@ -513,12 +509,7 @@ class ParseLine {
             lastValidSegmentIndex = index
         }
 
-        // Arc length runs from `arcLengthOrigin`, not from zero: a dash
-        // pattern is cut from it, so a piece that continues another one has
-        // to carry on counting where that one stopped. Without it the
-        // pattern restarts at every cut, and a street broken at each junction
-        // comes out as strokes of assorted lengths.
-        var pointArcLengths = [Float](repeating: arcLengthOrigin, count: points.count)
+        var pointArcLengths = [Float](repeating: 0, count: points.count)
         for index in 0..<segmentCount {
             pointArcLengths[index + 1] = pointArcLengths[index] + segmentLengths[index]
         }
@@ -718,9 +709,9 @@ class ParseLine {
                 // and a deferred ribbon's width on screen is one of them
                 // (Tile.metal, deferredEdgePx). The hub has no extrusion
                 // direction and resolves no width, so a fan led by it drew
-                // as a pre-extruded one: a disc of the unscaled point width
-                // that skipped the thinness fade, a dark dot at every node
-                // of a translucent road. Same winding, rotated.
+                // as a pre-extruded one: a disc of the unscaled point width,
+                // a dark dot at every node of a translucent road. Same
+                // winding, rotated.
                 polygon.indices.append(innerIsLeft ? rim1 : rim0)
                 polygon.indices.append(innerIsLeft ? rim0 : rim1)
                 polygon.indices.append(base)

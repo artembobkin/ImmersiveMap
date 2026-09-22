@@ -76,13 +76,6 @@ final class SharedRenderResources {
     let sphereOpaqueOwnerState: MTLDepthStencilState
     let groundOwnerState: MTLDepthStencilState
     let tileStencilTestState: MTLDepthStencilState
-    /// The flat ground's fill-outline pass: the rank-band depth tested
-    /// lessEqual (an outline sits at its own fill's rank, so it passes over
-    /// that fill and over every lower opaque layer and fails under every
-    /// higher one, which composites each edge's fringe exactly where the
-    /// fill's own layer order puts it), never written, plus the non-owning
-    /// tile-priority test.
-    let groundOutlineState: MTLDepthStencilState
     /// The flat road sheet's two stages (`RoadSheetStates`).
     let roadSheetStates: RoadSheetStates
     /// The tile-ownership prepass: no depth interaction at all, only the
@@ -114,8 +107,6 @@ final class SharedRenderResources {
     let extrudedTilePipeline: ExtrudedTilePipeline
     /// The tile-ownership stencil prepass of the flat passes.
     let tileOwnershipPipeline: TileOwnershipPipeline
-    let tileRasterPipeline: TileRasterPipeline
-    let tileSphereRasterPipeline: TileSphereRasterPipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
     let fxaaPipeline: FXAAPipeline
     let starfieldPipeline: StarfieldPipeline
@@ -242,7 +233,6 @@ final class SharedRenderResources {
         let sphereOpaqueOwnerState: MTLDepthStencilState
         let groundOwnerState: MTLDepthStencilState
         let tileStencilTestState: MTLDepthStencilState
-        let groundOutlineState: MTLDepthStencilState
         let roadSheetStates: RoadSheetStates
         let tileOwnershipWriteState: MTLDepthStencilState
         let extrudedStencilTestState: MTLDepthStencilState
@@ -271,7 +261,6 @@ final class SharedRenderResources {
                      sphereOpaqueOwnerState: device.makeDepthStencilState(descriptor: Self.makeSphereOpaqueOwnerDescriptor())!,
                      groundOwnerState: device.makeDepthStencilState(descriptor: Self.makeGroundOwnerDescriptor())!,
                      tileStencilTestState: device.makeDepthStencilState(descriptor: Self.makeTileStencilTestDescriptor())!,
-                     groundOutlineState: device.makeDepthStencilState(descriptor: Self.makeGroundOutlineDescriptor())!,
                      roadSheetStates: RoadSheetStates(
                         depthStage: device.makeDepthStencilState(descriptor: Self.makeRoadSheetDepthDescriptor())!,
                         colorStage: device.makeDepthStencilState(descriptor: Self.makeRoadSheetColorDescriptor())!),
@@ -297,7 +286,6 @@ final class SharedRenderResources {
         self.sphereOpaqueOwnerState = built.sphereOpaqueOwnerState
         self.groundOwnerState = built.groundOwnerState
         self.tileStencilTestState = built.tileStencilTestState
-        self.groundOutlineState = built.groundOutlineState
         self.roadSheetStates = built.roadSheetStates
         self.tileOwnershipWriteState = built.tileOwnershipWriteState
         self.extrudedStencilTestState = built.extrudedStencilTestState
@@ -311,8 +299,6 @@ final class SharedRenderResources {
         self.globeVectorSurfacePipeline = compiled.globeVectorSurfacePipeline
         self.extrudedTilePipeline = compiled.extrudedTilePipeline
         self.tileOwnershipPipeline = compiled.tileOwnershipPipeline
-        self.tileRasterPipeline = compiled.tileRasterPipeline
-        self.tileSphereRasterPipeline = compiled.tileSphereRasterPipeline
         self.groundShadowMaskPipeline = compiled.groundShadowMaskPipeline
         self.fxaaPipeline = compiled.fxaaPipeline
         self.starfieldPipeline = compiled.starfieldPipeline
@@ -339,8 +325,6 @@ final class SharedRenderResources {
         let globeVectorSurfacePipeline: TilePipeline
         let extrudedTilePipeline: ExtrudedTilePipeline
         let tileOwnershipPipeline: TileOwnershipPipeline
-        let tileRasterPipeline: TileRasterPipeline
-        let tileSphereRasterPipeline: TileSphereRasterPipeline
         let groundShadowMaskPipeline: GroundShadowMaskPipeline
         let fxaaPipeline: FXAAPipeline
         let starfieldPipeline: StarfieldPipeline
@@ -372,8 +356,6 @@ final class SharedRenderResources {
         var globeVectorSurfacePipeline: TilePipeline?
         var extrudedTilePipeline: ExtrudedTilePipeline?
         var tileOwnershipPipeline: TileOwnershipPipeline?
-        var tileRasterPipeline: TileRasterPipeline?
-        var tileSphereRasterPipeline: TileSphereRasterPipeline?
         var groundShadowMaskPipeline: GroundShadowMaskPipeline?
         var fxaaPipeline: FXAAPipeline?
         var starfieldPipeline: StarfieldPipeline?
@@ -416,15 +398,6 @@ final class SharedRenderResources {
                                                             pixelFormat: pixelFormat,
                                                             library: library,
                                                             sampleCount: sampleCount) },
-            { tileRasterPipeline = TileRasterPipeline(metalDevice: device,
-                                                      pixelFormat: pixelFormat,
-                                                      library: library,
-                                                      sampleCount: sampleCount,
-                                                      readsGroundShadowMask: true) },
-            { tileSphereRasterPipeline = TileSphereRasterPipeline(metalDevice: device,
-                                                                  pixelFormat: pixelFormat,
-                                                                  library: library,
-                                                                  sampleCount: sampleCount) },
             { globeVectorSurfacePipeline = TilePipeline(metalDevice: device,
                                                         pixelFormat: pixelFormat,
                                                         library: library,
@@ -456,8 +429,6 @@ final class SharedRenderResources {
             globeVectorSurfacePipeline: globeVectorSurfacePipeline!,
             extrudedTilePipeline: extrudedTilePipeline!,
             tileOwnershipPipeline: tileOwnershipPipeline!,
-            tileRasterPipeline: tileRasterPipeline!,
-            tileSphereRasterPipeline: tileSphereRasterPipeline!,
             groundShadowMaskPipeline: groundShadowMaskPipeline!,
             fxaaPipeline: fxaaPipeline!,
             starfieldPipeline: starfieldPipeline!,
@@ -673,15 +644,6 @@ final class SharedRenderResources {
         stencil.writeMask = TileSourceStencilPriority.roadSheetBit
         descriptor.frontFaceStencil = stencil
         descriptor.backFaceStencil = stencil
-        return descriptor
-    }
-
-    /// The flat fill outlines: lessEqual against the rank band the opaque
-    /// fills wrote (see `groundOutlineState`), no writes, the non-owning
-    /// tile-priority test.
-    private nonisolated static func makeGroundOutlineDescriptor() -> MTLDepthStencilDescriptor {
-        let descriptor = makeTileStencilTestDescriptor()
-        descriptor.depthCompareFunction = .lessEqual
         return descriptor
     }
 

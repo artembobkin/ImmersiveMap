@@ -98,7 +98,6 @@ final class GlobeTileCoverageTests: XCTestCase {
         XCTAssertEqual(resolution.bands.map(\.zoom), [6, 5, 4, 2])
         XCTAssertEqual(resolution.bands.map(\.distance), [1, 2, 3, 20])
         XCTAssertEqual(resolution.bands.first?.tileCount, 9, "the look-at tile and ring 1, all in view")
-        XCTAssertEqual(resolution.bands.map(\.rasterResolution), [256, 256, 256, 256], "the plane's default pictures every band")
         let banded = resolution.bands.reduce(0) { $0 + $1.tileCount }
         XCTAssertLessThanOrEqual(banded, resolution.targets.count)
     }
@@ -174,22 +173,6 @@ final class GlobeTileCoverageTests: XCTestCase {
         XCTAssertTrue(resolution.linelessTargets.contains(VisibleTile(x: 0, y: 0, z: GlobeTileCoverage.floorZoom)))
         XCTAssertFalse(resolution.linelessTargets.contains(VisibleTile(x: 32, y: 32, z: 6)))
         XCTAssertTrue(Self.resolve().linelessTargets.allSatisfy { $0.z < 5 }, "the default's lined rings stay lined")
-    }
-
-    /// A rasterizable rule names its tiles with its resolution, the nearer
-    /// band's answer for a tile two bands ask for, and a vector rule none.
-    func testARasterizableRuleNamesItsTiles() {
-        let rules = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1),
-                                          FlatRingRule(zoomDrop: 2, distance: 6, rasterized: true)])
-        let resolution = Self.resolve(rules: rules)
-        XCTAssertFalse(resolution.rasterizedTargets.isEmpty)
-        XCTAssertTrue(resolution.rasterizedTargets.values.allSatisfy { $0 == FlatRingRules.defaultRasterResolution })
-        XCTAssertTrue(resolution.rasterizedTargets.keys.allSatisfy { $0.z == 4 || $0.z == GlobeTileCoverage.floorZoom },
-                      "the rasterizable band and the cover past it: \(resolution.rasterizedTargets.keys)")
-        XCTAssertNil(resolution.rasterizedTargets[VisibleTile(x: 32, y: 32, z: 6)], "the vector band stays vector")
-        XCTAssertTrue(resolution.rasterizedTargets.keys.allSatisfy { resolution.targets.contains($0) })
-        let vector = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1), FlatRingRule(zoomDrop: 2, distance: 6)])
-        XCTAssertTrue(Self.resolve(rules: vector).rasterizedTargets.isEmpty)
     }
 
     /// The rules are read frame by frame, with nothing carried over: the

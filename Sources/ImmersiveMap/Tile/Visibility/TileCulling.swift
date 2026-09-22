@@ -8,17 +8,15 @@ import simd
 /// or the sphere's walk (`GlobeTileCoverage`) over the same rules, both
 /// counted from the tile the camera looks at.
 class TileCulling {
-    /// Zoom of the flat-mode horizon backdrop: the pinned world cover's,
-    /// so the footprint is covered by the one z0 tile per world copy it
-    /// meets, always resident, and after warm-up the backdrop costs
-    /// nothing.
+    /// The floor zoom of the flat placements: the pinned world cover's, so
+    /// no band and no stand-in goes below the tiles that are always
+    /// resident.
     static let flatBackdropZoomLevel = TileWorkingSetStore.pinnedWorldCoverMaxZoomLevel
 
-    /// Moves when the targets or the backdrop differ from the last frame's,
-    /// not when the walk merely ran again: the working set gates on it.
+    /// Moves when the targets differ from the last frame's, not when the
+    /// walk merely ran again: the working set gates on it.
     private var coverageVersion: UInt64 = 0
     private var previousVisibleTiles: [VisibleTile] = []
-    private var previousBackdropTiles: [VisibleTile] = []
 
     init() {}
 
@@ -36,9 +34,7 @@ class TileCulling {
         let center = Self.makeCenter(centerWorldMercator: semanticCenterWorldMercator,
                                      targetZoom: targetZoom)
         let visibleTiles: [VisibleTile]
-        let backdropTiles: [VisibleTile]
         var flatRingBands: [FlatRingBand] = []
-        var rasterizedTiles: [VisibleTile: Int] = [:]
         var linelessTiles = Set<VisibleTile>()
 
         switch resolvedPresentation.renderSurfaceMode {
@@ -51,17 +47,14 @@ class TileCulling {
             visibleTiles = resolution.targets
             flatRingBands = resolution.bands
             linelessTiles = resolution.linelessTargets
-            rasterizedTiles = resolution.rasterizedTargets
-            backdropTiles = []
             recordGlobeMetrics(resolution.metrics, diagnostics: diagnostics)
         case .flat:
             let flatRenderState = resolvedPresentation.flatRenderState
             if let polygon = CoveragePolygonBuilder.make(cameraMatrix: cameraMatrix) {
-                // No horizon backdrop: the flat map draws the rules' bands
-                // and nothing under them, and the world cover's zoom stays
-                // the floor no band and no stand-in goes down to. Beyond
-                // the last rule the haze paints the horizon over the clear
-                // colour.
+                // The flat map draws the rules' bands and nothing under
+                // them, and the world cover's zoom stays the floor no band
+                // and no stand-in goes down to. Beyond the last rule the
+                // haze paints the horizon over the clear colour.
                 let resolution = FlatRingRuleCoverage.resolve(flatRenderState: flatRenderState,
                                                               targetZoom: targetZoom,
                                                               backdropZoom: Self.flatBackdropZoomLevel,
@@ -69,29 +62,23 @@ class TileCulling {
                                                               polygon: polygon)
                 visibleTiles = resolution.targets
                 flatRingBands = resolution.bands
-                rasterizedTiles = resolution.rasterizedTargets
                 linelessTiles = resolution.linelessTargets
-                backdropTiles = []
                 diagnostics?.setCounter(.globeCullingVisitedNodes, value: resolution.visitedNodeCount)
             } else {
                 visibleTiles = []
-                backdropTiles = []
             }
         }
 
-        if visibleTiles != previousVisibleTiles || backdropTiles != previousBackdropTiles {
+        if visibleTiles != previousVisibleTiles {
             coverageVersion &+= 1
             previousVisibleTiles = visibleTiles
-            previousBackdropTiles = backdropTiles
         }
         return VisibleContentState(centerWorldMercator: semanticCenterWorldMercator,
                                    center: center,
                                    visibleTiles: visibleTiles,
-                                   backdropTiles: backdropTiles,
                                    tileZoomLevel: targetZoom,
                                    coverageVersion: coverageVersion,
                                    flatRingBands: flatRingBands,
-                                   rasterizedTiles: rasterizedTiles,
                                    linelessTiles: linelessTiles)
     }
 

@@ -20,7 +20,6 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
     private let tileTraceRecorder: TileTraceRecorder
 
     private var placeTilesContext: PlaceTilesContext = .empty
-    private var backdropPlaceTilesContext: PlaceTilesContext = .empty
     private var buildingPlaceTilesContext: PlaceTilesContext = .empty
     private var placementVersion: UInt64 = 0
     /// The coverage and the working set the last placements were planned
@@ -38,16 +37,15 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
 
     func update(frameContext: FrameContext) {
         // The coverage: the frame's targets, every tile at the zoom its
-        // place on screen wants (`TileCulling`), and the horizon backdrop
-        // under them on the plane.
+        // place on screen wants (`TileCulling`).
         let visibleContent = frameContext.visibleContent
         let center = visibleContent.center
         let targets = visibleContent.visibleTiles
         let tileZoomLevel = visibleContent.tileZoomLevel
 
         // The gate: the demand, the loads and the placements depend on the
-        // coverage (its version moves when the targets or the backdrop
-        // change) and on the working set's contents (its version moves
+        // coverage (its version moves when the targets change) and on the
+        // working set's contents (its version moves
         // when a tile lands and when memory pressure releases one; the
         // releases the demand itself causes touch only tiles it stopped
         // asking about), on nothing else. Both as they were when the
@@ -65,28 +63,24 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
             return
         }
 
-        // The backdrop's demand and placements are shared with the coverage.
-        let backdropTiles = visibleContent.backdropTiles
-        // The plane draws no backdrop, but the world cover's zoom is still
-        // the floor of the planner's stand-ins: a target still loading is
-        // never covered by the pinned world tile, which at a street zoom
-        // is a plain of one colour with nothing on it. The globe keeps its
-        // cover as a stand-in.
+        // On the plane the world cover's zoom is the floor of the planner's
+        // stand-ins: a target still loading is never covered by the pinned
+        // world tile, which at a street zoom is a plain of one colour with
+        // nothing on it. The globe keeps its cover as a stand-in.
         let backdropZoomLevel: Int? = frameContext.renderSurfaceMode == .flat ? TileCulling.flatBackdropZoomLevel : nil
-        // The demand is the targets and the backdrop, nothing else: no
-        // stand-in is asked for. What covers a loading target is what is
-        // resident already (the working set keeps the tiles that stand in
-        // for one, see `TileWorkingSetStore`), and beneath it the backdrop
-        // or the pinned world cover. `VisibleTile` includes `worldWrap`, so
-        // flat-mode wrapped copies share one content tile (`Tile`); the
-        // list is deduplicated.
-        let demandedSourceTiles = Self.uniqueSourceTiles(of: targets + backdropTiles)
+        // The demand is the targets, nothing else: no stand-in is asked
+        // for. What covers a loading target is what is resident already
+        // (the working set keeps the tiles that stand in for one, see
+        // `TileWorkingSetStore`), and beneath it the pinned world cover.
+        // `VisibleTile` includes `worldWrap`, so flat-mode wrapped copies
+        // share one content tile (`Tile`); the list is deduplicated.
+        let demandedSourceTiles = Self.uniqueSourceTiles(of: targets)
         // Demand order = network and parsing priority: tiles closest to the
         // camera start first.
         let prioritizedTargets = TileDemandPriorityMath.sortedByCameraProximity(targets,
                                                                                 centerWorldMercator: visibleContent.centerWorldMercator,
                                                                                 renderSurfaceMode: frameContext.renderSurfaceMode)
-        let prioritizedDemand = Self.uniqueSourceTiles(of: prioritizedTargets + backdropTiles)
+        let prioritizedDemand = Self.uniqueSourceTiles(of: prioritizedTargets)
         // The store keeps the demand and releases the rest.
         let tileRequestResult = tileRenderStore.requestTiles(prioritizedDemand,
                                                              frameIndex: frameContext.frameIndex)
@@ -102,10 +96,6 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
                                                                      resident: resident,
                                                                      zoom: tileZoomLevel,
                                                                      backdropZoomLevel: backdropZoomLevel)
-            backdropPlaceTilesContext = TilePlacementPlanner.buildPlacements(targets: backdropTiles,
-                                                                             resident: resident,
-                                                                             zoom: tileZoomLevel,
-                                                                             descendantSearchDepth: 0)
             // The buildings: a partition of the near field over the resident
             // tiles, never a substitute (see the planner).
             let eyeGroundCell: SIMD2<Double>? = frameContext.renderSurfaceMode == .flat
@@ -170,7 +160,6 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
         let renderedTilesCount = placeTilesContext.tilePlacements.count
         frameContext.sharedState.tilePlacementState = TilePlacementState(
             placeTilesContext: placeTilesContext,
-            backdropPlaceTilesContext: backdropPlaceTilesContext,
             buildingPlaceTilesContext: buildingPlaceTilesContext,
             placementVersion: placementVersion,
             visibleTilesCount: visibleTilesCount,
@@ -202,7 +191,6 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
     func evict() {
         tileRenderStore.evict()
         placeTilesContext = .empty
-        backdropPlaceTilesContext = .empty
         buildingPlaceTilesContext = .empty
         plannedCoverageVersion = nil
         plannedContentVersion = nil

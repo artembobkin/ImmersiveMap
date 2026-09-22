@@ -68,17 +68,9 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
     /// 45 and paths at 35 with rail between.
     static let automobileTierPriority = 45
 
-    /// From this class priority up a road makes a junction for the paint on
-    /// another one: `minor`, the lowest class that is a street rather than a
-    /// way onto a plot. A service driveway, a parking aisle and a footway
-    /// meeting an avenue leave its markings running, because on the ground
-    /// they do.
-    static let junctionMakingPriority = 50
-
     /// The road policy every road of this style carries, stated once for
-    /// the two branches that produce roads: where it draws, which tier it
-    /// belongs to, and whether it makes a junction for the paint on
-    /// another road. A style that is no road (a hidden class, a ferry's
+    /// the two branches that produce roads: where it draws and which tier
+    /// it belongs to. A style that is no road (a hidden class, a ferry's
     /// plain line) passes through.
     func roadPolicy(applying facts: ImmersiveMapRoadFacts, to style: FeatureStyle) -> FeatureStyle {
         guard case .road(var road) = style else {
@@ -86,8 +78,6 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
         }
         road.level = Self.roadLevel(facts)
         road.tier = road.classPriority >= Self.automobileTierPriority ? .automobile : .pedestrian
-        road.makesJunctions = facts.isShippedPaint == false
-            && road.classPriority >= Self.junctionMakingPriority
         return .road(road)
     }
 
@@ -171,42 +161,8 @@ public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
         .hidden
     }
 
-    /// - Parameter far: the footprint fade target (globe and street
-    ///   palette) and its strength: where a pixel covers more ground than
-    ///   the fill's detail resolves, the colour converges on this tone. nil
-    ///   keeps the fill at full contrast at every distance (water, ice).
-    func polygon(key: UInt8,
-                 color: SIMD4<Float>,
-                 far: FarTone? = nil) -> FeatureStyle {
-        // Every ground fill gets the fill-outline antialiasing: its ring
-        // edges draw once more as one-pixel lines with alpha by distance to
-        // the edge, so a staircase edge stops crawling under camera motion.
-        .fill(FillStyle(
-            key: key,
-            color: color,
-            farColor: far.map { SIMD4<Float>($0.color.x, $0.color.y, $0.color.z, $0.strength) },
-            outlineAntialiasing: true
-        ))
-    }
-
-    /// The tone a class of ground converges on at distance.
-    struct FarTone {
-        let color: SIMD4<Float>
-        let strength: Float
-    }
-
-    /// The vegetation base is where the land classes meet at distance: a
-    /// far pixel covering fields, meadows, woods and villages together is
-    /// mostly green, so every one of them fades to that green and the
-    /// blotches that were flickering between samples become one plain.
-    /// Settlements keep a quarter of their distance, so a city stays a faint
-    /// warm patch under its label instead of vanishing.
-    var farVegetation: FarTone {
-        FarTone(color: theme.layers.grass, strength: 1.0)
-    }
-
-    var farSettlement: FarTone {
-        FarTone(color: theme.layers.grass, strength: 0.75)
+    func polygon(key: UInt8, color: SIMD4<Float>) -> FeatureStyle {
+        .fill(FillStyle(key: key, color: color))
     }
 
     func line(key: UInt8,

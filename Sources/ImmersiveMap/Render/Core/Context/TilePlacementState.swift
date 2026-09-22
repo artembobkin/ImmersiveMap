@@ -10,7 +10,6 @@ import Foundation
 
 struct TilePlacementState {
     nonisolated(unsafe) static let empty = TilePlacementState(placeTilesContext: .empty,
-                                          backdropPlaceTilesContext: .empty,
                                           buildingPlaceTilesContext: .empty,
                                           placementVersion: 0,
                                           visibleTilesCount: 0,
@@ -19,9 +18,6 @@ struct TilePlacementState {
                                           renderedTilesCount: 0)
 
     let placeTilesContext: PlaceTilesContext
-    /// Placements of the flat-mode horizon backdrop: drawn under the main
-    /// coverage and excluded from labels/projections. Empty on the globe.
-    let backdropPlaceTilesContext: PlaceTilesContext
     /// The tiles that draw their buildings this frame, a partition of the
     /// near field with no overlaps (`BuildingCoveragePlanner`): what the
     /// building and shadow passes draw, by the depth test alone. Empty on

@@ -28,7 +28,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         // above the beige landuse (key 9) and below water (20).
         switch cls {
         case "wood", "forest":
-            return polygon(key: 11, color: theme.layers.wood, far: farVegetation)
+            return polygon(key: 11, color: theme.layers.wood)
         case "grass":
             // OSM tags countless small courtyards/verges as generic grass; at city
             // zooms suppress those (keep only real green-space subclasses) so they
@@ -37,16 +37,13 @@ extension ImmersiveMapTilesDefaultMapStyle {
                 return hiddenStyle
             }
             return polygon(key: 12,
-                           color: theme.layers.grass,
-                           far: farVegetation)
+                           color: theme.layers.grass)
         case "farmland":
             return polygon(key: 13,
-                           color: theme.layers.farmland,
-                           far: farVegetation)
+                           color: theme.layers.farmland)
         case "wetland":
             return polygon(key: 14,
-                           color: theme.layers.wetland,
-                           far: farVegetation)
+                           color: theme.layers.wetland)
         case "ice":
             return polygon(key: 17,
                            color: theme.layers.ice)
@@ -100,31 +97,27 @@ extension ImmersiveMapTilesDefaultMapStyle {
         switch cls {
         case "land":
             return polygon(key: 2,
-                           color: blend(colors.land, toward: vegetationBase, amount: amount),
-                           far: farVegetation)
+                           color: blend(colors.land, toward: vegetationBase, amount: amount))
         case "barren":
             return polygon(key: 3, color: colors.sand)
         case "grass", "shrub", "moss":
-            return polygon(key: 4, color: colors.grass, far: farVegetation)
+            return polygon(key: 4, color: colors.grass)
         case "crop":
             return polygon(key: 5,
-                           color: blend(colors.farmland, toward: vegetationBase, amount: amount),
-                           far: farVegetation)
+                           color: blend(colors.farmland, toward: vegetationBase, amount: amount))
         case "forest":
             return polygon(key: 6,
-                           color: blend(colors.wood, toward: vegetationBase, amount: amount * 0.75),
-                           far: farVegetation)
+                           color: blend(colors.wood, toward: vegetationBase, amount: amount * 0.75))
         case "wetland", "mangroves":
             return polygon(key: 7,
-                           color: blend(colors.wetland, toward: vegetationBase, amount: amount),
-                           far: farVegetation)
+                           color: blend(colors.wetland, toward: vegetationBase, amount: amount))
         case "snow":
             return polygon(key: 8, color: colors.ice)
         case "urban":
             // Cities are the one thing a region view exists to show: the
             // residential tone, clearly apart from the greens, the same the
             // street map's residential landuse wears from z10.
-            return polygon(key: 10, color: colors.residential, far: farSettlement)
+            return polygon(key: 10, color: colors.residential)
         default:
             // water: left to the background and water layers.
             return hiddenStyle
@@ -166,13 +159,13 @@ extension ImmersiveMapTilesDefaultMapStyle {
         case "residential", "suburb", "neighbourhood", "quarter", "allotments":
             // Beige residential/block fills go to the very bottom (key 9), below
             // greenery, otherwise they cover parks (landcover) inside residential polygons.
-            return polygon(key: 9, color: theme.layers.residential, far: farSettlement)
+            return polygon(key: 9, color: theme.layers.residential)
         case "industrial", "commercial", "retail", "railway", "quarry":
-            return polygon(key: 9, color: theme.layers.industrial, far: farSettlement)
+            return polygon(key: 9, color: theme.layers.industrial)
         case "cemetery", "grass", "park", "recreation_ground", "garden":
             // One green color for all urban greenery (matches landcover grass)
             // to avoid a two-tone seam where the layers meet.
-            return polygon(key: 15, color: theme.layers.grass, far: farVegetation)
+            return polygon(key: 15, color: theme.layers.grass)
         default:
             // Unknown landuse: blend into the land base instead of the red fallback.
             return hiddenStyle
@@ -262,7 +255,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         let kind = "\(cls ?? "") \(subclass ?? "")"
         let greenKeywords = ["park", "парк", "garden", "сад", "reserve", "заповедник", "nature"]
         if greenKeywords.contains(where: { kind.contains($0) }) {
-            return polygon(key: 16, color: theme.layers.grass, far: farVegetation)
+            return polygon(key: 16, color: theme.layers.grass)
         }
         return hiddenStyle
     }

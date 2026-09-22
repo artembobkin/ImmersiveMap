@@ -35,7 +35,7 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
                           clipGeometryToTileBounds: clipGeometryToTileBounds)
     }
 
-    func testVertexLayoutMatchesThePipelineContract() {
+    func testVertexLayoutMatchesThePipelineContract() throws {
         // TilePipeline's vertex descriptor and the arena image format both
         // hard-code these offsets; a layout drift is a rendering bug.
         XCTAssertEqual(MemoryLayout<TileVertexIn>.stride, 12)
@@ -46,6 +46,20 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
         XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.normal), 8)
         // The per-style line parameters are an arena span and a shader struct.
         XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 32)
+        // The per-style colour is one float4, in the arena span and in the
+        // Style struct of both shaders that read the style buffer.
+        XCTAssertEqual(MemoryLayout<TilePolygonStyle>.stride, 16)
+        let shaders = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/ImmersiveMap/Tile/Shaders")
+        for file in ["TileShading.h", "TileExtruded.metal"] {
+            let source = try String(contentsOf: shaders.appendingPathComponent(file), encoding: .utf8)
+            let structRange = try XCTUnwrap(source.range(of: "struct Style {"), file)
+            let closing = try XCTUnwrap(source.range(of: "};", range: structRange.upperBound ..< source.endIndex), file)
+            let body = source[structRange.upperBound ..< closing.lowerBound]
+            XCTAssertEqual(body.components(separatedBy: "float4").count - 1, 1, "\(file): one float4 per style")
+            XCTAssertTrue(body.contains("float4 color;"), file)
+        }
     }
 
     func testStraightSegmentIsExtrudedByTheFeatherAndCarriesTheRimDistances() throws {
@@ -75,10 +89,9 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
     }
 
     /// A hairline's ribbon is never narrower than the minimum: a pixel a
-    /// side at the tile's own scale, so the pixel-wide coverage the shader
-    /// draws for it has geometry under it. The styled edge stays where the
-    /// style put it, through the edge threshold derived from the same
-    /// extrusion.
+    /// side at the tile's own scale, so the shader's pixel-wide antialiasing
+    /// band has geometry under it. The styled edge stays where the style put
+    /// it, through the edge threshold derived from the same extrusion.
     func testAHairlineIsExtrudedToTheMinimumAndKeepsItsStyledEdge() throws {
         let width = 1.0
         let polygon = try XCTUnwrap(parseLine(points: [SIMD2(100, 100), SIMD2(200, 100)], width: width))

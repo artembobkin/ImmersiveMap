@@ -12,7 +12,6 @@ struct CameraFrameState {
     let cameraEye: SIMD3<Float>
     let cameraFrustum: Frustum?
     let mapCameraState: ImmersiveMapCameraState
-    let qualityTier: RenderQualityTier
 }
 
 /// Responsible for preparing the camera state for a render frame:
@@ -78,8 +77,7 @@ final class FrameCameraStateResolver {
                                 cameraMatrices: matrices,
                                 cameraEye: camera.eye,
                                 cameraFrustum: camera.frustrum,
-                                mapCameraState: cameraStateController.cameraState,
-                                qualityTier: RenderQualityTier.from(zoom: cameraStateController.zoom))
+                                mapCameraState: cameraStateController.cameraState)
     }
 
     func rotateCameraYaw(delta: Float) {

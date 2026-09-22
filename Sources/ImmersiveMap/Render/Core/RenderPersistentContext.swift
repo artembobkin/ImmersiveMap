@@ -22,8 +22,6 @@ final class RenderPersistentContext {
     let globeVectorSurfacePipeline: TilePipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
     let tileOwnershipPipeline: TileOwnershipPipeline
-    let tileRasterPipeline: TileRasterPipeline
-    let tileSphereRasterPipeline: TileSphereRasterPipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
     let fxaaPipeline: FXAAPipeline
     let tilePointScreenPipelines: TilePointScreenPipelines
@@ -53,7 +51,6 @@ final class RenderPersistentContext {
     let sphereOpaqueOwnerState: MTLDepthStencilState
     let groundOwnerState: MTLDepthStencilState
     let tileStencilTestState: MTLDepthStencilState
-    let groundOutlineState: MTLDepthStencilState
     let roadSheetStates: RoadSheetStates
     let tileOwnershipWriteState: MTLDepthStencilState
     let extrudedStencilTestState: MTLDepthStencilState
@@ -124,7 +121,6 @@ final class RenderPersistentContext {
         self.extrudedStencilTestState = shared.extrudedStencilTestState
         self.sceneModelSurfaceMaskState = shared.sceneModelSurfaceMaskState
         self.tileStencilTestState = shared.tileStencilTestState
-        self.groundOutlineState = shared.groundOutlineState
         self.roadSheetStates = shared.roadSheetStates
         self.shadowFallbackTexture = shared.shadowFallbackTexture
         self.groundShadowMaskFallbackTexture = shared.groundShadowMaskFallbackTexture
@@ -136,8 +132,6 @@ final class RenderPersistentContext {
         self.globeVectorSurfacePipeline = shared.globeVectorSurfacePipeline
         self.extrudedTilePipeline = shared.extrudedTilePipeline
         self.tileOwnershipPipeline = shared.tileOwnershipPipeline
-        self.tileRasterPipeline = shared.tileRasterPipeline
-        self.tileSphereRasterPipeline = shared.tileSphereRasterPipeline
         self.groundShadowMaskPipeline = shared.groundShadowMaskPipeline
         self.fxaaPipeline = shared.fxaaPipeline
         self.tilePointScreenPipelines = shared.tilePointScreenPipelines

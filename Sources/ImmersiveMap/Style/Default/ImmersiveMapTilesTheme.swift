@@ -262,9 +262,9 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
         /// With every drive tier sharing one asphalt grey, width is the
         /// whole hierarchy, so the ramp is spread wide.
         public static let defaultSymbolWidthPoints = RoadClassValues<Float>(
-            motorway: 10.5,
-            trunk: 9.75,
-            primary: 9.0,
+            motorway: 13.65,
+            trunk: 12.7,
+            primary: 11.7,
             secondary: 5.0,
             tertiary: 4.5,
             minor: 4.0,

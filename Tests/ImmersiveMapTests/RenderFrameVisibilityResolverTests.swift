@@ -43,8 +43,7 @@ final class RenderFrameVisibilityResolverTests: XCTestCase {
                                 cameraMatrices: .identity,
                                 cameraEye: SIMD3<Float>(0, 0, 1),
                                 cameraFrustum: nil,
-                                mapCameraState: cameraState,
-                                qualityTier: .standard)
+                                mapCameraState: cameraState)
     }
 
     private func makePresentation(renderSurfaceMode: ViewMode) -> ResolvedPresentationState {
@@ -84,7 +83,6 @@ private final class RecordingTileCulling: TileCulling {
         return VisibleContentState(centerWorldMercator: cameraState.centerWorldMercator,
                                    center: Center(tileX: 0, tileY: 0),
                                    visibleTiles: [VisibleTile(x: targetZoom, y: targetZoom, z: targetZoom)],
-                                   backdropTiles: [],
                                    tileZoomLevel: targetZoom,
                                    coverageVersion: UInt64(targetZoom))
     }

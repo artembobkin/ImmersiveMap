@@ -758,7 +758,19 @@ final class PreparedTileDiskCaching {
     // the symbol's ground width instead of a width read off the lane count,
     // and the ferry is a point-locked dashed stroke; a v102 entry has the
     // wider span stride, the carriageway-width paint and a sub-pixel ferry.
-    static let preparedFormatVersion: UInt32 = 103
+    // 104: the lane paint the style synthesized from a road's lane count
+    // (centre dividers, lane lines, their junction cuts and insets) is
+    // gone; a v103 entry carries that paint in its detail passes.
+    // 105: the fill outline segment is gone from the ground index buffer
+    // (two class segments again, fills then ribbons, and the style runs
+    // carry no outline flag), the ground style is one colour (the far
+    // colour is gone, the style stride halves to 16 bytes), the building
+    // fills carry no footprint fade mask or footprint radius in their
+    // normal bytes, and the building vertex's last two bytes are padding
+    // again. A v104 entry has the wider style stride, a trailing line list
+    // the drawer would read as triangles, and building fills baked on
+    // mask 5.
+    static let preparedFormatVersion: UInt32 = 105
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

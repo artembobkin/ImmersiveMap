@@ -81,6 +81,6 @@ struct MapStyleRuntime {
     /// ask for the debug borders: the engine's, in a debug red, whatever
     /// the style.
     func debugBorderStyle() -> FillStyle {
-        FillStyle(key: 0, color: SIMD4<Float>(1, 0, 0, 1), outlineAntialiasing: false)
+        FillStyle(key: 0, color: SIMD4<Float>(1, 0, 0, 1))
     }
 }

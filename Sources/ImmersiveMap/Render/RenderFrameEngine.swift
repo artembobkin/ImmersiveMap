@@ -365,7 +365,6 @@ final class RenderFrameEngine {
                             viewport: cameraFrameState.viewport,
                             cameraMatrices: cameraFrameState.cameraMatrices,
                             cameraEye: cameraFrameState.cameraEye,
-                            qualityTier: cameraFrameState.qualityTier,
                             commandBuffer: commandBuffer,
                             services: services,
                             mapCameraState: cameraFrameState.mapCameraState,
@@ -425,11 +424,7 @@ final class RenderFrameEngine {
         guard let tileLoadingStatusReporter = persistentContext.tileLoadingStatusReporter else {
             return
         }
-        // The horizon backdrop is not among the ground placements (labels and
-        // the projection index never see it), yet it is on screen: without it the
-        // HUD looks as if the backdrop does not exist at all.
-        let backdropPlacements = frameContext.sharedState.tilePlacementState.backdropPlaceTilesContext.tilePlacements
-        let displayedTiles = (frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements + backdropPlacements)
+        let displayedTiles = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
             .map(\.metalTile.tile)
         tileLoadingStatusReporter.recordDisplayedTiles(displayedTiles)
     }

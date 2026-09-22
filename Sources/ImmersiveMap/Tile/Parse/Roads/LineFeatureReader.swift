@@ -143,28 +143,10 @@ struct LineFeatureReader {
                                            padding: padding)
 
                     for fragment in paddedFragments {
-                        // Paint stops at a junction, as it does on the
-                        // ground: a street's centre line does not run
-                        // across the street it meets. The tiles ship a
-                        // through street as one line with the junctions
-                        // as interior vertices, so the inset at the two
-                        // ends is not enough; the line is cut at every
-                        // interior point another carriageway touches,
-                        // and each piece is inset from its own new
-                        // ends. Only marking passes are cut: the
-                        // carriageway and its kerb run through.
-                        let junctionSplit = lineRenderPass.lineGeometry.endInset > 0
-                            && usesSeparateRoadRendering
-                            ? RoadPolylineMath.splitAtJunctionsWithOrigins(fragment: fragment,
-                                                                            automobilePointCounts: precomputation.automobilePointCounts)
-                            : [(fragment: fragment, arcLengthOrigin: Float(0))]
-                        let renderFragments = junctionSplit.flatMap { piece in
-                            RoadDashPattern.fragments(for: piece.fragment,
-                                                      styleData: lineRenderPass.lineGeometry)
-                                .map { (fragment: $0, arcLengthOrigin: piece.arcLengthOrigin) }
-                        }
+                        let renderFragments = RoadDashPattern.fragments(for: fragment,
+                                                                        styleData: lineRenderPass.lineGeometry)
 
-                        for (renderFragment, pieceArcLengthOrigin) in renderFragments {
+                        for renderFragment in renderFragments {
                             let startConnected = usesSeparateRoadRendering
                                 && renderFragment.points.first.map {
                                     (precomputation.sharedPointCounts[RoadConnectionPointKey(point: $0)] ?? 0) > 1
@@ -201,47 +183,9 @@ struct LineFeatureReader {
                                 && renderFragment.points.last.map { isPointStrictlyInsideTile($0) } == true
                             let startCapRound = lineRenderPass.lineGeometry.lineCapRound && startFree
                             let endCapRound = lineRenderPass.lineGeometry.lineCapRound && endFree
-
-                            // An inset pulls the line back from a genuine end or a
-                            // junction; a tile-seam cut keeps its point so the line
-                            // continues flush in the neighbour. The room a marking
-                            // leaves at a junction is the widest carriageway that
-                            // meets it, not its own: a lane line running into a
-                            // six-lane avenue has to clear the avenue.
                             let styleData = lineRenderPass.lineGeometry
-                            func junctionInset(_ point: SIMD2<Float>?, isContinuation: Bool) -> Float {
-                                guard styleData.endInset > 0, isContinuation == false, let point else { return 0 }
-                                // An end the crossing's surface cut already
-                                // stands at the edge of the gap: backing off
-                                // by the inset too ate the whole stroke on a
-                                // street crossed by a chain of junctions.
-                                if preparedLine.paintCutAtStart, point == preparedLine.points.first {
-                                    return 0
-                                }
-                                if preparedLine.paintCutAtEnd, point == preparedLine.points.last {
-                                    return 0
-                                }
-                                return max(Float(styleData.endInset),
-                                           precomputation.junctionHalfWidths[RoadConnectionPointKey(point: point)] ?? 0)
-                            }
-                            // The inset is length the paint gives up at
-                            // the start of the piece, so the pattern has
-                            // to count it too.
-                            let startInset = junctionInset(renderFragment.points.first, isContinuation: startContinuation)
-                            let insetPoints = RoadPolylineMath.insetLineEnds(
-                                renderFragment.points,
-                                startInset: startInset,
-                                endInset: junctionInset(renderFragment.points.last, isContinuation: endContinuation)
-                            )
-                            guard let insetPoints else {
-                                continue
-                            }
-                            let passPoints = RoadPolylineMath.offsetPolyline(
-                                insetPoints,
-                                by: Float(styleData.lateralOffset)
-                            )
 
-                            if let linePolygon = tools.parseLine.parse(points: passPoints,
+                            if let linePolygon = tools.parseLine.parse(points: renderFragment.points,
                                                                        width: lineRenderPass.lineGeometry.lineWidth,
                                                                        tileExtent: tileExtent,
                                                                        startCapRound: startCapRound,
@@ -250,7 +194,6 @@ struct LineFeatureReader {
                                                                        featherStart: startFree,
                                                                        featherEnd: endFree,
                                                                        emitsArcLength: lineRenderPass.dashLengthPoints > 0,
-                                                                       arcLengthOrigin: pieceArcLengthOrigin + startInset,
                                                                        extendClippedStart: shouldExtendStart,
                                                                        extendClippedEnd: shouldExtendEnd,
                                                                        clipPadding: usesSeparateRoadRendering ? sharedRoadPadding : 0,
@@ -418,6 +361,18 @@ struct LineFeatureReader {
             return true
         }
 
-        return RoadPolylineMath.length(of: fragment.points) >= Self.minClippedRoadLabelFragmentLength
+        return Self.polylineLength(fragment.points) >= Self.minClippedRoadLabelFragmentLength
+    }
+
+    /// The length of a polyline in tile units.
+    private static func polylineLength(_ points: [SIMD2<Float>]) -> Float {
+        guard points.count >= 2 else {
+            return 0
+        }
+        var totalLength: Float = 0
+        for index in 1..<points.count {
+            totalLength += simd_length(points[index] - points[index - 1])
+        }
+        return totalLength
     }
 }

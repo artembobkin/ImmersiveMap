@@ -6,11 +6,10 @@ import CoreGraphics
 import simd
 import XCTest
 
-/// The flat map draws no horizon backdrop: the rules' bands are the whole
-/// coverage, nothing is placed under them, and no band goes down to the
-/// world cover's zoom. The globe never had one.
+/// The rules' bands are the whole coverage of the flat map: nothing is
+/// placed under them, and no band goes down to the world cover's zoom.
 final class TileCullingBackdropTests: XCTestCase {
-    func testFlatModeResolvesNoBackdropTiles() throws {
+    func testFlatModeStaysAboveTheFloorZoom() throws {
         let fixture = try makeFixture(zoom: 9.0, renderSurfaceMode: .flat)
 
         let content = TileCulling().resolveVisibleContent(cameraState: fixture.cameraState,
@@ -20,40 +19,13 @@ final class TileCullingBackdropTests: XCTestCase {
                                                           cameraFrustum: fixture.cameraFrustum,
                                                           cameraEye: fixture.cameraEye)
 
-        XCTAssertTrue(content.backdropTiles.isEmpty, "nothing under the bands")
         XCTAssertTrue(content.visibleTiles.allSatisfy { $0.z == 9 }, "straight down: the first rule at the target zoom")
         XCTAssertTrue(content.visibleTiles.allSatisfy { $0.z > TileCulling.flatBackdropZoomLevel })
     }
 
-    func testGlobeModeHasNoBackdropTiles() throws {
-        let fixture = try makeFixture(zoom: 4.0, renderSurfaceMode: .spherical)
-
-        let content = TileCulling().resolveVisibleContent(cameraState: fixture.cameraState,
-                                                          resolvedPresentation: fixture.resolvedPresentation,
-                                                          targetZoom: 4,
-                                                          cameraMatrix: fixture.cameraMatrix,
-                                                          cameraFrustum: fixture.cameraFrustum,
-                                                          cameraEye: fixture.cameraEye)
-
-        XCTAssertTrue(content.backdropTiles.isEmpty)
-    }
-
-    func testBackdropSkippedWhenTargetZoomNotAboveBackdropZoom() throws {
-        let fixture = try makeFixture(zoom: Double(TileCulling.flatBackdropZoomLevel), renderSurfaceMode: .flat)
-
-        let content = TileCulling().resolveVisibleContent(cameraState: fixture.cameraState,
-                                                          resolvedPresentation: fixture.resolvedPresentation,
-                                                          targetZoom: TileCulling.flatBackdropZoomLevel,
-                                                          cameraMatrix: fixture.cameraMatrix,
-                                                          cameraFrustum: fixture.cameraFrustum,
-                                                          cameraEye: fixture.cameraEye)
-
-        XCTAssertTrue(content.backdropTiles.isEmpty)
-    }
-
     /// The coverage version is the working set's gate: it moves when the
-    /// targets or the backdrop differ from the last frame's, and not when
-    /// the walk merely ran again over the same pose.
+    /// targets differ from the last frame's, and not when the walk merely
+    /// ran again over the same pose.
     func testTheCoverageVersionMovesOnlyWithTheCoverage() throws {
         let culling = TileCulling()
         let fixture = try makeFixture(zoom: 9.0, renderSurfaceMode: .flat)

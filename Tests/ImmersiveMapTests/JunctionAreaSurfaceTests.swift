@@ -135,62 +135,6 @@ final class JunctionAreaSurfaceTests: XCTestCase {
         }
     }
 
-    /// The clip against a surface happens in the space the road lines are
-    /// in: raw tile coordinates, y down.
-    ///
-    /// The rings used to be flipped to render space before the cut, so every
-    /// road was clipped against a MIRROR IMAGE of the area: lane lines
-    /// survived inside real junction areas (a pile of dashes across every
-    /// crossing), and roads at the mirrored spot were phantom-clipped. The
-    /// fixture here is deliberately OFF-CENTRE: the original test's square
-    /// sat near the tile middle and mirrored onto itself, which is how the
-    /// bug shipped.
-    func testMarkingsVanishInsideAnAreaAndSurviveAtItsMirror() throws {
-        let tileData = VectorTileFixture.layerTile(layerName: "transportation", features: [
-            // The crossing near the TOP of the tile (raw y 300...800).
-            .init(id: 1,
-                  geometry: .polygon(ring: [(1800, 300), (2300, 300), (2300, 800), (1800, 800)]),
-                  properties: ["class": "primary", "subclass": "junction_area", "origin": "graph"]),
-            // A marked one-way through it.
-            .init(id: 2,
-                  geometry: .line(points: [(200, 550), (3900, 550)]),
-                  properties: ["class": "primary", "lanes": "4", "oneway": "1", "name": "Through Street"]),
-            // A second marked one-way at the mirrored raw y: nothing may cut it.
-            .init(id: 3,
-                  geometry: .line(points: [(200, 3546), (3900, 3546)]),
-                  properties: ["class": "primary", "lanes": "4", "oneway": "1", "name": "Mirror Street"]),
-        ])
-        let parsed = try makeParser().parse(tile: Tile(x: 39615, y: 20486, z: 16), mvtData: tileData)
-        let detail = parsed.drawingRoadPhases.automobileGround.detail.drawing
-
-        func detailTriangles(inX xRange: ClosedRange<Float>, y yRange: ClosedRange<Float>) -> Int {
-            var count = 0
-            var index = 0
-            while index + 2 < detail.indices.count {
-                let a = detail.vertices[Int(detail.indices[index])]
-                let b = detail.vertices[Int(detail.indices[index + 1])]
-                let c = detail.vertices[Int(detail.indices[index + 2])]
-                let x = (Float(a.position.x) + Float(b.position.x) + Float(c.position.x)) / 3
-                let y = (Float(a.position.y) + Float(b.position.y) + Float(c.position.y)) / 3
-                if xRange.contains(x), yRange.contains(y) { count += 1 }
-                index += 3
-            }
-            return count
-        }
-
-        // Render space flips y: the area is at y 3296...3796 there, and the
-        // mirror street runs at y 550.
-        XCTAssertEqual(detailTriangles(inX: 1810...2290, y: 3306...3786), 0,
-                       "Paint does not run across a junction area")
-        XCTAssertGreaterThan(detailTriangles(inX: 500...1500, y: 3400...3700), 0,
-                             "and resumes on the road outside it")
-        // The mirror street is one long ribbon, so its triangle centroids sit
-        // near the thirds of its span, not under the area: sample the whole
-        // strip.
-        XCTAssertGreaterThan(detailTriangles(inX: 300...3800, y: 450...650), 0,
-                             "The road at the area's mirror image is untouched")
-    }
-
     /// A hand-mapped carriageway area is invisible: the tile still ships it,
     /// and the frame is exactly what it would be without it, so the street
     /// keeps its ribbon, its kerbs and its paint.
@@ -215,48 +159,6 @@ final class JunctionAreaSurfaceTests: XCTestCase {
                            bare.drawingRoadPhases.automobileGround[keyPath: role].drawing.indices.count,
                            "The hand-mapped area neither draws nor clips anything")
         }
-    }
-
-    /// A street crossed by a chain of small junctions keeps paint between
-    /// them. The cut end already stands at the edge of the crossing's gap;
-    /// backing off by the half-carriageway inset too ate every short piece,
-    /// which is how Mokhovaya lost its markings for three hundred metres.
-    func testPaintSurvivesBetweenAChainOfCrossings() throws {
-        let tileData = VectorTileFixture.layerTile(layerName: "transportation", features: [
-            .init(id: 1,
-                  geometry: .polygon(ring: [(1000, 400), (1200, 400), (1200, 700), (1000, 700)]),
-                  properties: ["class": "primary", "subclass": "junction_area", "origin": "graph"]),
-            .init(id: 2,
-                  geometry: .polygon(ring: [(1320, 400), (1520, 400), (1520, 700), (1320, 700)]),
-                  properties: ["class": "primary", "subclass": "junction_area", "origin": "graph"]),
-            .init(id: 3,
-                  geometry: .line(points: [(200, 550), (3900, 550)]),
-                  properties: ["class": "primary", "lanes": "4", "oneway": "1", "name": "Chained Street"]),
-        ])
-        let parsed = try makeParser().parse(tile: Tile(x: 39615, y: 20486, z: 16), mvtData: tileData)
-        let detail = parsed.drawingRoadPhases.automobileGround.detail.drawing
-        // The piece between the crossings is 120 units, just under 18 m:
-        // shorter than two ten-metre insets, so without the suppression the
-        // inset maths returns nil and the piece is dropped entirely.
-        var betweenCrossings = 0
-        var index = 0
-        while index + 2 < detail.indices.count {
-            let a = detail.vertices[Int(detail.indices[index])]
-            let b = detail.vertices[Int(detail.indices[index + 1])]
-            let c = detail.vertices[Int(detail.indices[index + 2])]
-            let xs = [Float(a.position.x), Float(b.position.x), Float(c.position.x)]
-            let ys = [Float(a.position.y), Float(b.position.y), Float(c.position.y)]
-            // The piece's vertices sit exactly at the crossings' outlines
-            // (1200 and 1320): test that a triangle spans the middle of the
-            // gap, not that a vertex falls strictly inside it.
-            if xs.min()! < 1260, xs.max()! > 1260, ys.allSatisfy({ $0 > 3396 && $0 < 3696 }),
-               xs.max()! - xs.min()! < 400 {
-                betweenCrossings += 1
-            }
-            index += 3
-        }
-        XCTAssertGreaterThan(betweenCrossings, 0,
-                             "Paint runs from one crossing's edge to the next")
     }
 
     func testATunnelJunctionAreaHasNoKerb() throws {

@@ -5,12 +5,10 @@ import simd
 
 /// What the parser bakes of a style into a tile's style table: the colours
 /// of one stroke or fill and its line parameters, keyed by the style's key.
-/// A fill is baked as a stroke of the fill's colours on the standard fill
-/// ribbon width; the far colour and the outline flag are a fill's alone.
+/// A fill is baked as a stroke of the fill's colour on the standard fill
+/// ribbon width.
 struct BakedStyle {
     let pass: LinePass
-    let farColor: SIMD4<Float>?
-    let outlineAntialiasing: Bool
 
     /// The ribbon width every fill is baked with: the edge threshold it
     /// yields is what the fill shaders have always read.
@@ -18,8 +16,6 @@ struct BakedStyle {
 
     init(pass: LinePass) {
         self.pass = pass
-        self.farColor = nil
-        self.outlineAntialiasing = false
     }
 
     init(fill: FillStyle) {
@@ -27,19 +23,12 @@ struct BakedStyle {
                              color: fill.color,
                              lowZoomFadeMask: fill.lowZoomFadeMask,
                              lineGeometry: LineGeometryStyle(lineWidth: Self.fillRibbonWidth))
-        self.farColor = fill.farColor
-        self.outlineAntialiasing = fill.outlineAntialiasing
     }
 
     init(extrusion: ExtrusionStyle) {
-        // The fill under an extrusion fades with its footprint on screen,
-        // like the building above it.
         self.pass = LinePass(key: extrusion.key,
                              color: extrusion.color,
-                             lowZoomFadeMask: LowZoomOverviewFade.footprintFadeMask,
                              lineGeometry: LineGeometryStyle(lineWidth: Self.fillRibbonWidth))
-        self.farColor = nil
-        self.outlineAntialiasing = false
     }
 
     var color: SIMD4<Float> { pass.color }

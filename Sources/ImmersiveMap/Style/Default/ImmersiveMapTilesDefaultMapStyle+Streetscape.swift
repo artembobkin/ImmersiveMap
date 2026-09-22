@@ -180,7 +180,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         }
         let widthPoints = dashed ? Self.roadMarkingWidthPoints : Self.solidMarkingWidthPoints
         let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
-        // Same construction as the synthesized lane paint: a point-locked
+        // A point-locked
         // stroke on a tight ribbon, the dash period a length in metres
         // converted to this tile's units so the dashes sit still on the
         // asphalt. No end inset and no lateral offset: the polyline IS the
@@ -258,7 +258,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
                            lowZoomFadeMask: roadLowZoomFadeMask,
                            lineGeometry: LineGeometryStyle(lineWidth: 100)),
             classPriority: priority,
-            surfacePaint: tunnel ? .cutsAll : reconstructed ? .cutsSynthesized : .keeps
+            surfacePaint: tunnel ? .cutsAll : reconstructed ? .cutsStyled : .keeps
         ))
     }
 

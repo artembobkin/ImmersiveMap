@@ -21,21 +21,15 @@ class TilePipeline {
     /// buckets, bridge overlay).
     let flatFillsPipelineState: MTLRenderPipelineState?
     let flatOpaquePipelineState: MTLRenderPipelineState?
-    /// Flat surface only: the fill-outline variant of the fills class, the
-    /// fills' ring edges as one-pixel LINE primitives with alpha by
-    /// distance to the edge (Tile.metal, kTileFillOutline), blended. Drawn
-    /// with `.line` primitives from the ground's outline index segment.
-    let flatFillOutlinePipelineState: MTLRenderPipelineState?
-    /// Flat surface only: the exact rank depth variants of the four flat
+    /// Flat surface only: the exact rank depth variants of the three flat
     /// pipelines above (Tile.metal, kTileExactRankDepth): the fragment
     /// stage writes the layer's rank as the depth, a constant the near
     /// cut cannot move. For the sources whose triangles are too large for
-    /// the vertex band, the coarse bands and the horizon backdrop
-    /// (FlatMapSurfaceDrawer decides by zoom).
+    /// the vertex band, the coarse bands (FlatMapSurfaceDrawer decides by
+    /// zoom).
     let flatExactPipelineState: MTLRenderPipelineState?
     let flatExactFillsPipelineState: MTLRenderPipelineState?
     let flatExactOpaquePipelineState: MTLRenderPipelineState?
-    let flatExactFillOutlinePipelineState: MTLRenderPipelineState?
     /// Flat surface only: the road sheet's two stages over the line-fields
     /// vertex stage (Tile.metal, the road sheet). The depth stage writes no
     /// colour, the colour stage blends like every other line.
@@ -77,32 +71,25 @@ class TilePipeline {
         var sphereMorphFragmentFunctions: [Bool: MTLFunction] = [:]
         var flatFillsVertexFunction: MTLFunction?
         var flatFillsFragmentFunction: MTLFunction?
-        var flatFillOutlineVertexFunction: MTLFunction?
-        var flatFillOutlineFragmentFunction: MTLFunction?
-        // The exact rank depth variants: the same three flat classes with
-        // the exact-depth fragment entry.
+        // The exact rank depth variants: the same flat classes with the
+        // exact-depth fragment entry.
         var flatExactVertexFunction: MTLFunction?
         var flatExactFragmentFunction: MTLFunction?
         var flatExactFillsVertexFunction: MTLFunction?
         var flatExactFillsFragmentFunction: MTLFunction?
-        var flatExactFillOutlineVertexFunction: MTLFunction?
-        var flatExactFillOutlineFragmentFunction: MTLFunction?
         var flatRoadSheetDepthFragmentFunction: MTLFunction?
         var flatRoadSheetColorFragmentFunction: MTLFunction?
         switch surface {
         case .flat:
             func flatFunction(_ name: String,
                               lineFields: Bool,
-                              fillOutline: Bool = false,
                               exactRankDepth: Bool = false) -> MTLFunction {
                 let values = MTLFunctionConstantValues()
                 var readsMask = readsGroundShadowMask
                 var lineFieldsValue = lineFields
-                var fillOutlineValue = fillOutline
                 var exactRankDepthValue = exactRankDepth
                 values.setConstantValue(&readsMask, type: .bool, index: 0)
                 values.setConstantValue(&lineFieldsValue, type: .bool, index: 1)
-                values.setConstantValue(&fillOutlineValue, type: .bool, index: 2)
                 values.setConstantValue(&exactRankDepthValue, type: .bool, index: 3)
                 return try! library.makeFunction(name: name, constantValues: values)
             }
@@ -110,16 +97,10 @@ class TilePipeline {
             fragmentFunction = flatFunction("tileFragmentShader", lineFields: true)
             flatFillsVertexFunction = flatFunction("tileVertexShader", lineFields: false)
             flatFillsFragmentFunction = flatFunction("tileFragmentShader", lineFields: false)
-            flatFillOutlineVertexFunction = flatFunction("tileVertexShader", lineFields: false, fillOutline: true)
-            flatFillOutlineFragmentFunction = flatFunction("tileFragmentShader", lineFields: false, fillOutline: true)
             flatExactVertexFunction = flatFunction("tileVertexShader", lineFields: true, exactRankDepth: true)
             flatExactFragmentFunction = flatFunction("tileExactDepthFragmentShader", lineFields: true, exactRankDepth: true)
             flatExactFillsVertexFunction = flatFunction("tileVertexShader", lineFields: false, exactRankDepth: true)
             flatExactFillsFragmentFunction = flatFunction("tileExactDepthFragmentShader", lineFields: false, exactRankDepth: true)
-            flatExactFillOutlineVertexFunction = flatFunction("tileVertexShader", lineFields: false, fillOutline: true,
-                                                              exactRankDepth: true)
-            flatExactFillOutlineFragmentFunction = flatFunction("tileExactDepthFragmentShader", lineFields: false,
-                                                                fillOutline: true, exactRankDepth: true)
             flatRoadSheetDepthFragmentFunction = flatFunction("tileRoadSheetDepthFragmentShader", lineFields: true)
             flatRoadSheetColorFragmentFunction = flatFunction("tileRoadSheetFragmentShader", lineFields: true)
         case .sphere:
@@ -236,18 +217,14 @@ class TilePipeline {
             self.sphereMorphRibbonsPipelineState = nil
         }
 
-        if surface == .flat, let flatFillsVertexFunction, let flatFillsFragmentFunction,
-           let flatFillOutlineVertexFunction, let flatFillOutlineFragmentFunction {
+        if surface == .flat, let flatFillsVertexFunction, let flatFillsFragmentFunction {
             pipelineDescriptor.vertexFunction = flatFillsVertexFunction
             pipelineDescriptor.fragmentFunction = flatFillsFragmentFunction
             self.flatFillsPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
             pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
             self.flatOpaquePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
             pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
-            pipelineDescriptor.vertexFunction = flatFillOutlineVertexFunction
-            pipelineDescriptor.fragmentFunction = flatFillOutlineFragmentFunction
-            self.flatFillOutlinePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
-            // The exact rank depth variants, the same four states over the
+            // The exact rank depth variants, the same three states over the
             // exact-depth fragment entry.
             pipelineDescriptor.vertexFunction = flatExactVertexFunction
             pipelineDescriptor.fragmentFunction = flatExactFragmentFunction
@@ -258,9 +235,6 @@ class TilePipeline {
             pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
             self.flatExactOpaquePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
             pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
-            pipelineDescriptor.vertexFunction = flatExactFillOutlineVertexFunction
-            pipelineDescriptor.fragmentFunction = flatExactFillOutlineFragmentFunction
-            self.flatExactFillOutlinePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
             // The road sheet: the line-fields vertex stage under the two
             // sheet fragment entries.
             pipelineDescriptor.vertexFunction = vertexFunction
@@ -277,11 +251,9 @@ class TilePipeline {
             self.flatRoadSheetColorPipelineState = nil
             self.flatFillsPipelineState = nil
             self.flatOpaquePipelineState = nil
-            self.flatFillOutlinePipelineState = nil
             self.flatExactPipelineState = nil
             self.flatExactFillsPipelineState = nil
             self.flatExactOpaquePipelineState = nil
-            self.flatExactFillOutlinePipelineState = nil
         }
     }
 
@@ -327,26 +299,6 @@ class TilePipeline {
         }
         selectPipeline(renderEncoder: renderEncoder)
     }
-
-    /// The flat fill-outline variant (the fills' ring edges as one-pixel
-    /// lines, blended). nil-safe for the caller: absent on a sphere
-    /// pipeline, where the outline pass does not exist.
-    @discardableResult
-    func selectFlatFillOutlinePipeline(renderEncoder: MTLRenderCommandEncoder, exactRankDepth: Bool = false) -> Bool {
-        if exactRankDepth, let flatExactFillOutlinePipelineState {
-            renderEncoder.setRenderPipelineState(flatExactFillOutlinePipelineState)
-            return true
-        }
-        if let flatFillOutlinePipelineState {
-            renderEncoder.setRenderPipelineState(flatFillOutlinePipelineState)
-            return true
-        }
-        return false
-    }
-
-    /// Whether the flat fill-outline pass exists on this pipeline (absent
-    /// on a sphere pipeline).
-    var hasFlatFillOutlinePipeline: Bool { flatFillOutlinePipelineState != nil }
 
     /// The flat opaque ground variant (no line fields, blending off); falls
     /// back to the blended pipeline when absent.

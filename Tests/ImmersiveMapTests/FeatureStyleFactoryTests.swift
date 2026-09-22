@@ -90,6 +90,5 @@ final class FeatureStyleFactoryTests: XCTestCase {
 
     func testHiddenIsKeyZero() {
         XCTAssertEqual(FeatureStyle.hidden.key, 0, "Key 0 is what the parser skips")
-        XCTAssertEqual(FeatureStyle.polygon(key: 20, color: SIMD4<Float>(0, 0, 1, 1)).fillOutlineAntialiasing, true)
     }
 }

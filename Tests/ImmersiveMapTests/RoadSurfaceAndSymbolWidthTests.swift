@@ -6,10 +6,10 @@ import Mvt
 import XCTest
 import simd
 
-/// Three contracts of the street-level road picture: a ribbon inside a
-/// carriageway surface is clipped away (the surface owns that ground), lane
-/// lines are the centreline offset sideways, and a road is a symbol of a
-/// width in points, frozen on the ground from the theme's world lock zoom.
+/// Two contracts of the street-level road picture: a ribbon inside a
+/// carriageway surface is clipped away (the surface owns that ground), and
+/// a road is a symbol of a width in points, frozen on the ground from the
+/// theme's world lock zoom.
 final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
     private func area(_ ring: [SIMD2<Float>], priority: Int = 80) -> RoadSurfaceArea {
         var lower = ring[0], upper = ring[0]
@@ -45,20 +45,6 @@ final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
         let primaryPriority = 80
         let owners = [serviceArea].filter { $0.classPriority >= primaryPriority }
         XCTAssertTrue(owners.isEmpty, "a lower-class surface does not own a higher-class ribbon")
-    }
-
-    // MARK: - Lane-line offset
-
-    func testOffsetPolylineStaysParallelAndMitersCorners() {
-        let line: [SIMD2<Float>] = [SIMD2(0, 0), SIMD2(100, 0), SIMD2(100, 100)]
-        let shifted = RoadPolylineMath.offsetPolyline(line, by: 10)
-        // Left of eastbound travel is +y; left of northbound is -x.
-        XCTAssertEqual(shifted[0], SIMD2<Float>(0, 10))
-        XCTAssertEqual(shifted[2], SIMD2<Float>(90, 100))
-        // The corner miters: shifted by 10 in both normals.
-        XCTAssertEqual(shifted[1].x, 90, accuracy: 0.01)
-        XCTAssertEqual(shifted[1].y, 10, accuracy: 0.01)
-        XCTAssertEqual(RoadPolylineMath.offsetPolyline(line, by: 0), line)
     }
 
     // MARK: - The symbol
@@ -108,27 +94,6 @@ final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
         let pass = LinePass(key: 1, color: .one, lineWidthPoints: 4, pointWidthWorldLockZoom: 14,
                             lineGeometry: LineGeometryStyle(lineWidth: 48))
         XCTAssertEqual(TileUnificationStage.makeTileLineStyle(from: pass).worldLockZoom, 14)
-    }
-
-    func testTheThinnessFadeRunsFromNoWidthToItsOpaqueWidth() {
-        let fade = RoadThinnessFade.default
-        XCTAssertEqual(fade.opaqueWidthPixels, 10)
-        XCTAssertEqual(fade.alpha(widthPixels: 10), 1)
-        XCTAssertEqual(fade.alpha(widthPixels: 24), 1)
-        XCTAssertEqual(fade.alpha(widthPixels: 5), 0.5, accuracy: 1e-6, "half the width is half way up the ramp")
-        // The fade runs all the way down: a road of no width is gone.
-        XCTAssertEqual(fade.alpha(widthPixels: 0), 0)
-        XCTAssertLessThan(fade.alpha(widthPixels: 0.2), fade.alpha(widthPixels: 1))
-        XCTAssertEqual(RoadThinnessFade.off.alpha(widthPixels: 0.2), 1)
-    }
-
-    func testALineUnderAPixelDrawsAtTheShareOfThePixelItCovers() throws {
-        let source = try String(contentsOf: URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Sources/ImmersiveMap/Tile/Shaders/TileShading.h"), encoding: .utf8)
-        XCTAssertTrue(source.contains("float widthShare = clamp(requestedEdgePx / kTileLineMinimumEdgePx, 0.0, 1.0);"))
-        XCTAssertTrue(source.contains("smoothstep(-0.5, 0.5, sideDistancePx) * widthShare;"),
-                      "a sub-pixel line is not forced into a solid pixel-wide one")
     }
 
     func testRoadMarkingsDrawNothingBelowCameraZoomFifteen() {

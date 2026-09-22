@@ -69,9 +69,9 @@ final class RoadWidthPerspectiveTests: XCTestCase {
     }
 
     func testSwiftAndMetalUniformsAgreeOnTheTail() throws {
-        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.pointWidthCentrePixelsPerWorldUnit), 48)
-        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.groundAxisXClipX), 52)
-        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.groundAxisYClipX), 64)
+        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.pointWidthCentrePixelsPerWorldUnit), 36)
+        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.groundAxisXClipX), 40)
+        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.groundAxisYClipX), 52)
 
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -80,7 +80,7 @@ final class RoadWidthPerspectiveTests: XCTestCase {
         let structRange = try XCTUnwrap(source.range(of: "struct OverviewFadeUniform {"))
         let body = source[structRange.upperBound...]
         var cursor = body.startIndex
-        for field in ["float footprintOpaqueAreaPx;", "float pointWidthCentrePixelsPerWorldUnit;",
+        for field in ["float pointWidthReferenceDepth;", "float pointWidthCentrePixelsPerWorldUnit;",
                       "packed_float3 groundAxisXClip;", "packed_float3 groundAxisYClip;"] {
             let range = try XCTUnwrap(body.range(of: field, range: cursor ..< body.endIndex), field)
             cursor = range.upperBound

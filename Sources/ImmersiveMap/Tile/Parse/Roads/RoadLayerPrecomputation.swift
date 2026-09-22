@@ -11,14 +11,6 @@ import simd
 struct PreparedRoadLine {
     let points: [SIMD2<Float>]
     let exactFragments: [ClippedLineFragment]
-    /// Set on the PAINT track only: this end of the line was created by
-    /// cutting the street against a crossing's surface. The surface is
-    /// the gap, so the paint runs right up to its edge instead of also
-    /// backing off by its own half-carriageway: with both, a street
-    /// crossed by a chain of small junctions lost its markings entirely,
-    /// each short piece eaten by two ten-metre insets.
-    var paintCutAtStart: Bool = false
-    var paintCutAtEnd: Bool = false
 }
 
 /// A carriageway-surface polygon (a junction area) of a road layer, as a
@@ -39,47 +31,31 @@ struct RoadSurfaceArea {
     /// The surface cuts the shipped paint inside it too
     /// (`RoadSurfacePaintRule.cutsAll`): a tunnel's roof is a bare fill.
     var cutsShippedPaint: Bool = false
-    /// The surface cuts the synthesized paint of the roads inside it
-    /// (`RoadSurfacePaintRule.cutsSynthesized` or `cutsAll`).
+    /// The surface cuts the styled paint of the roads inside it
+    /// (`RoadSurfacePaintRule.cutsStyled` or `cutsAll`).
     var cutsPaint: Bool = false
     /// The street identity of the piece as the style read it, empty when
     /// the source ships none. Only the gap bridger reads it: a slit is
     /// paved only between two pieces of the SAME street.
     var street: String = ""
-    /// The feature the surface was decoded from, -1 for a synthesized
-    /// quad: the bridger's paving inherits this feature's style.
+    /// The feature the surface was decoded from, -1 for a paving quad
+    /// the bridger made: the paving inherits this feature's style.
     var featureIndex: Int = -1
 }
 
 /// What the separate-road path knows about a whole road layer before any
 /// of its features is read: every line clipped by the carriageway surfaces
-/// and stitched into streets, the junctions counted, the slits between
+/// and stitched into streets, the connections counted, the slits between
 /// surface pieces paved. Built once per road layer at street zooms, and
 /// `empty` for every other layer.
 struct RoadLayerPrecomputation {
     let sharedPointCounts: [RoadConnectionPointKey: Int]
-    /// How many distinct STREETS touch each point, counted over the
-    /// classes that make a junction for the paint down a carriageway:
-    /// `minor` and above.
-    ///
-    /// A street is its name, so the two sides of a seam the stitcher
-    /// could not close (a piece whose lane count or oneway differs)
-    /// count once between them: the paint runs through, because on the
-    /// ground the street does. A footpath crossing the line is not a
-    /// junction either, and neither is a service driveway or a parking
-    /// aisle meeting a street: paint does not break for a gateway.
-    let automobilePointCounts: [RoadConnectionPointKey: Int]
     /// The lines a feature's PAINT is built from: the same raw lines,
     /// but clipped only by the surfaces that cut paint (junctions
     /// reconstructed from the graph), not by every surface. A hand-mapped
     /// carriageway area covers a whole street, and a street inside one
-    /// keeps its markings; a crossing does not.
+    /// keeps its paint; a crossing does not.
     let paintLinesByFeatureIndex: [[PreparedRoadLine]]
-    /// Half the widest carriageway that meets each point, in tile units.
-    /// The gap a marking leaves at a junction is the room the crossing
-    /// road takes, not the room its own road takes: a lane line running
-    /// into a six-lane avenue has to clear the avenue.
-    let junctionHalfWidths: [RoadConnectionPointKey: Float]
     let linesByFeatureIndex: [[PreparedRoadLine]]
     /// The layer's carriageway surfaces, the paving quads included.
     let surfaceAreas: [RoadSurfaceArea]
@@ -91,9 +67,7 @@ struct RoadLayerPrecomputation {
     let surfaceBridges: [RoadSurfaceGapBridger.Bridge]
 
     static let empty = RoadLayerPrecomputation(sharedPointCounts: [:],
-                                               automobilePointCounts: [:],
                                                paintLinesByFeatureIndex: [],
-                                               junctionHalfWidths: [:],
                                                linesByFeatureIndex: [],
                                                surfaceAreas: [],
                                                surfaceBridges: [])
@@ -257,27 +231,6 @@ struct RoadLayerPrecomputation {
         let paintStitched = RoadStreetStitcher.stitch(linesByFeatureIndex: paintRawLinesByFeatureIndex,
                                                       featureFacts: featureFacts,
                                                       featureStyles: featureStyles)
-        // An endpoint that lies on a crossing's outline is a cut the clipper
-        // made, not an end of the street: recognised geometrically after the
-        // stitcher has run, because stitching rearranges which piece carries
-        // which end.
-        let paintCutRings = surfaceAreas.filter(\.cutsPaint).map(\.exterior)
-        func liesOnACrossingOutline(_ point: SIMD2<Float>) -> Bool {
-            for ring in paintCutRings {
-                for index in 0..<ring.count {
-                    let a = ring[index]
-                    let b = ring[(index + 1) % ring.count]
-                    let ab = b - a
-                    let lengthSquared = simd_length_squared(ab)
-                    guard lengthSquared > 0 else { continue }
-                    let t = simd_clamp(simd_dot(point - a, ab) / lengthSquared, 0, 1)
-                    if simd_distance_squared(point, a + ab * t) < 0.25 {
-                        return true
-                    }
-                }
-            }
-            return false
-        }
         var paintLinesByFeatureIndex = Array(repeating: [PreparedRoadLine](), count: layer.features.count)
         for (featureIndex, lines) in paintStitched.enumerated() where lines.isEmpty == false {
             var prepared: [PreparedRoadLine] = []
@@ -285,82 +238,36 @@ struct RoadLayerPrecomputation {
             for points in lines {
                 prepared.append(PreparedRoadLine(points: points,
                                                  exactFragments: lineClipper.clip(points: points,
-                                                                                  tileExtent: tileExtent),
-                                                 paintCutAtStart: points.first.map(liesOnACrossingOutline) ?? false,
-                                                 paintCutAtEnd: points.last.map(liesOnACrossingOutline) ?? false))
+                                                                                  tileExtent: tileExtent)))
             }
             paintLinesByFeatureIndex[featureIndex] = prepared
         }
 
         var pointCounts: [RoadConnectionPointKey: Int] = [:]
-        // Distinct streets per point, not occurrences and not features: a
-        // street arrives cut into pieces the stitcher could not join, and
-        // both sides of such a seam carry the same point. Counting it twice
-        // there calls the seam a junction and breaks the paint on a street
-        // that simply continues.
-        //
-        // Which street a piece belongs to is the source's answer where it
-        // gives one (the street identity, an id assembled from the whole
-        // network before the tiles were cut, so it holds across a tile
-        // boundary and tells two same-named streets in different towns
-        // apart). A source without one falls back to the name, which is
-        // right within a tile and wrong only where two unrelated streets
-        // share one; a piece with neither answers only for itself.
-        var streetIdentifiers: [String: Int] = [:]
-        var streetIdentifierByFeature = [Int](repeating: -1, count: layer.features.count)
-        for index in 0..<layer.features.count {
-            let road = featureFacts[index].road ?? .ground
-            let identity = road.streetIdentity.isEmpty == false
-                ? "street=" + road.streetIdentity
-                : road.name.isEmpty == false ? "name=" + road.name : ""
-            if identity.isEmpty {
-                streetIdentifierByFeature[index] = Int.min + index
-            } else {
-                let next = streetIdentifiers.count
-                streetIdentifierByFeature[index] = streetIdentifiers[identity] ?? next
-                if streetIdentifiers[identity] == nil { streetIdentifiers[identity] = next }
-            }
-        }
-        var automobileStreetsAtPoint: [RoadConnectionPointKey: Set<Int>] = [:]
-        var junctionHalfWidths: [RoadConnectionPointKey: Float] = [:]
         var linesByFeatureIndex = Array(repeating: [PreparedRoadLine](), count: layer.features.count)
         for (featureIndex, lines) in stitched.enumerated() where lines.isEmpty == false {
             var preparedLines: [PreparedRoadLine] = []
             preparedLines.reserveCapacity(lines.count)
             // Shipped paint is not a street: its endpoints lie on the roads
             // it is painted on, and letting them count would fabricate a
-            // junction (or a connection) at every point a marking happens to
-            // share with a road vertex. Which roads make a junction for the
-            // paint on another is the style's decision.
+            // connection at every point a marking happens to share with a
+            // road vertex.
             let isShippedPaint = featureFacts[featureIndex].road?.isShippedPaint == true
-            let isJunctionMaking = roadStyles[featureIndex]?.makesJunctions == true
-            // The carriageway this feature draws at: the style's own geometry
-            // is the fill ribbon, so half of it is how far the road reaches
-            // from its centreline.
-            let halfWidth = Float(roadStyles[featureIndex]?.ownWidth ?? 0) * 0.5
             for points in lines {
                 let fragments = lineClipper.clip(points: points, tileExtent: tileExtent)
                 for fragment in fragments {
                     for point in fragment.points {
                         guard isShippedPaint == false else { break }
-                        let key = RoadConnectionPointKey(point: point)
-                        pointCounts[key, default: 0] += 1
-                        if isJunctionMaking {
-                            automobileStreetsAtPoint[key, default: []].insert(streetIdentifierByFeature[featureIndex])
-                            junctionHalfWidths[key] = max(junctionHalfWidths[key] ?? 0, halfWidth)
-                        }
+                        pointCounts[RoadConnectionPointKey(point: point), default: 0] += 1
                     }
                 }
                 preparedLines.append(PreparedRoadLine(points: points, exactFragments: fragments))
             }
             linesByFeatureIndex[featureIndex] = preparedLines
         }
-        let automobilePointCounts = automobileStreetsAtPoint.mapValues(\.count)
 
         return RoadLayerPrecomputation(sharedPointCounts: pointCounts,
-                                       automobilePointCounts: automobilePointCounts,
                                        paintLinesByFeatureIndex: paintLinesByFeatureIndex,
-                                       junctionHalfWidths: junctionHalfWidths,
                                        linesByFeatureIndex: linesByFeatureIndex,
                                        surfaceAreas: surfaceAreas,
                                        surfaceBridges: surfaceBridges)

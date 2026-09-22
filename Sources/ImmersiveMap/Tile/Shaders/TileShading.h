@@ -33,34 +33,10 @@ struct VertexIn {
 };
 
 
+/// Mirror of the Swift `TilePolygonStyle`: one colour per style.
 struct Style {
     float4 color;
-    /// The footprint fade target; alpha is the fade strength (0: the style
-    /// never fades). Mirror of TilePolygonStyle.
-    float4 farColor;
 };
-
-/// Per-draw footprint fade parameters (Tile.metal, fragment buffer 10):
-/// the source tile's units per world unit, and the footprint band in tile
-/// units per pixel over which a fill fades to its far colour. Mirror of
-/// TileFootprintFadeUniform.
-struct FootprintFadeUniform {
-    float unitsPerWorld;
-    float startUnits;
-    float endUnits;
-    float _padding;
-};
-
-/// How far a fill has faded to its far colour at a pixel: the pixel's
-/// ground footprint along its longer screen axis, in the source tile's
-/// units, against the fade band. Takes screen-space derivatives, so it must
-/// run in uniform control flow. Mirrored by GroundFootprintFade.amount.
-static inline float tileFootprintFadeAmount(float3 worldPos, constant FootprintFadeUniform& fade) {
-    float2 dx = dfdx(worldPos.xy);
-    float2 dy = dfdy(worldPos.xy);
-    float unitsPerPixel = max(length(dx), length(dy)) * fade.unitsPerWorld;
-    return smoothstep(fade.startUnits, fade.endUnits, unitsPerPixel);
-}
 
 /// Mirror of the Swift `TileLineStyle`; indexed per style alongside `Style`.
 struct LineStyle {
@@ -172,14 +148,6 @@ struct OverviewFadeUniform {
     // a point-locked deferred ribbon's width is stated at. Zero: the width
     // holds in pixels at every depth. See tilePointWidthPerspectiveScale.
     float pointWidthReferenceDepth;
-    // The roads' thinness fade, as a width on screen in pixels; see
-    // tileRoadThinnessFade. A zero opaque width turns it off.
-    float roadFadeOpaqueWidthPx;
-    // The footprint fade of the building fills, as footprint areas on
-    // screen in square pixels (BuildingFootprintFade). A zero opaque area
-    // turns it off. The extruded buildings do not fade.
-    float footprintGoneAreaPx;
-    float footprintOpaqueAreaPx;
     // The pixels one world unit of ground spans across the view at the
     // centre of the screen: what turns a width in pixels there into the
     // width on the ground every road of that style lies at. Zero: the
@@ -191,38 +159,6 @@ struct OverviewFadeUniform {
     packed_float3 groundAxisXClip;
     packed_float3 groundAxisYClip;
 };
-
-/// The alpha of a fill of the footprint fade band (mask 5, see
-/// LowZoomOverviewFade.footprintFadeMask) from its polygon's footprint on
-/// screen: the radius the parser packed into the normal bytes (two
-/// base-128 digits of quarter tile units), through the model's scale into
-/// world units, times the pixels a world unit spans at the vertex's view
-/// depth, as the area of the square inscribed in that disc. Gone at the
-/// gone area and under, whole at the opaque area and over. Mirrored by
-/// BuildingFootprintFade.swift.
-static inline float tileFootprintAlpha(float2 packedRadius,
-                                       float4x4 modelMatrix,
-                                       float4x4 cameraMatrix,
-                                       float viewDepth,
-                                       constant OverviewFadeUniform& overviewFade) {
-    if (overviewFade.footprintOpaqueAreaPx <= 0.0) {
-        return 1.0;
-    }
-    float quarterUnits = round(packedRadius.x * 127.0) * 128.0 + round(packedRadius.y * 127.0);
-    if (quarterUnits <= 0.0) {
-        return 1.0;
-    }
-    float radiusWorld = quarterUnits * 0.25 * length(modelMatrix[0].xyz);
-    // The projection's vertical focal length is the length of the camera
-    // matrix's y row (the view part is a rotation), on the perspective
-    // camera and on the rasterizer's straight-down one alike.
-    float focal = length(float3(cameraMatrix[0][1], cameraMatrix[1][1], cameraMatrix[2][1]));
-    float radiusPx = radiusWorld * overviewFade.viewportSizePx.y * 0.5 * focal / max(viewDepth, 1e-6);
-    float areaPx = 2.0 * radiusPx * radiusPx;
-    return smoothstep(overviewFade.footprintGoneAreaPx,
-                      max(overviewFade.footprintOpaqueAreaPx, overviewFade.footprintGoneAreaPx + 1e-3),
-                      areaPx);
-}
 
 /// The pixels one world unit of ground spans on screen along `axis` at a
 /// point of the screen: across the view the ground shrinks with the
@@ -263,23 +199,6 @@ static inline float tilePointWidthPerspectiveScale(constant OverviewFadeUniform&
     }
     return tileGroundPixelsPerWorldUnit(normalize(axis), ndc, viewDepth, overviewFade)
         / overviewFade.pointWidthCentrePixelsPerWorldUnit;
-}
-
-/// The narrowest antialiasing band a line is laid in: half a pixel each
-/// side of its centre. A thinner line draws in it at the share of it the
-/// line covers (tileLineCoverage).
-constant float kTileLineMinimumEdgePx = 0.5;
-
-/// How much of a road is left at its width on screen: a road thinner than
-/// `opaqueWidthPx` fades with its width, down to nothing at no width, so a
-/// road the perspective has thinned leaves the picture instead of staying
-/// a full-strength hairline. One when `opaqueWidthPx` is zero (off).
-/// Mirrored by RoadThinnessFade.alpha.
-static inline float tileRoadThinnessFade(float widthPx, float opaqueWidthPx) {
-    if (opaqueWidthPx <= 0.0) {
-        return 1.0;
-    }
-    return smoothstep(0.0, opaqueWidthPx, widthPx);
 }
 
 /// Per-draw dash scale: tile units per layout point at the tile's nominal
@@ -398,21 +317,13 @@ static inline half tileLineCoverage(float lineDistance,
             edgePx = max(edgePx, floorPx);
         }
     }
-    // A line under a pixel wide covers a fraction of the pixels it crosses,
-    // and draws as that: the antialiasing band is a pixel wide whatever the
-    // line is, so the band is laid a pixel wide and carries the share of
-    // it the line covers (Mapbox GL's rule). The line is not made a pixel
-    // wide: it keeps the light a line of its width has, and fades out as
-    // it thins instead of standing as a solid hairline. Without the share a
-    // line of no width at all would still draw at half strength, and one
-    // laid at its own width would flicker as its sub-pixel band crossed
-    // pixel centres. The rim still bounds the edge: the ribbon is
-    // tessellated wide enough for this (ParseLine.minimumExtrudedHalfWidth).
-    float requestedEdgePx = edgePx;
-    edgePx = max(edgePx, min(kTileLineMinimumEdgePx, rimPx - 0.5));
-    float widthShare = clamp(requestedEdgePx / kTileLineMinimumEdgePx, 0.0, 1.0);
+    // The visible edge is the edgePx isoline of the field, feathered over
+    // one pixel. The rim bounds the edge above, and the ribbon has geometry
+    // under the band: a pre-extruded one is never narrower than
+    // ParseLine.minimumExtrudedHalfWidth, a deferred one carries its
+    // feather (Tile.metal).
     float sideDistancePx = edgePx - abs(lineDistance) * rimPx;
-    float coverage = smoothstep(-0.5, 0.5, sideDistancePx) * widthShare;
+    float coverage = smoothstep(-0.5, 0.5, sideDistancePx);
 
     half dashLengthPoints = lineStyle.z;
     if (dashLengthPoints > 0.0h) {
@@ -457,10 +368,6 @@ static inline half tileStyleFade(half lowZoomFadeMask, constant OverviewFadeUnif
         float startZoom = float(lowZoomFadeMask) - 10.0;
         float t = clamp(overviewFade.cameraZoom - startZoom, 0.0, 1.0);
         return half(t * t * (3.0 - 2.0 * t));
-    } else if (lowZoomFadeMask >= 4.5h) {
-        // The footprint fade band: no zoom fade, the flat vertex stage
-        // resolves the alpha per polygon (tileFootprintAlpha).
-        return 1.0h;
     } else if (lowZoomFadeMask >= 3.5h) {
         return half(overviewFade.roadMarkingAlpha);
     } else if (lowZoomFadeMask >= 2.5h) {

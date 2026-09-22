@@ -16,8 +16,8 @@ import simd
 ///
 /// The layout is mirrored by `VertexIn` in `TileExtruded.metal` and by
 /// the vertex descriptor in `ExtrudedTilePipeline`. The last two bytes
-/// carry the building's footprint radius, which also keeps the stride a
-/// multiple of four, which Metal requires of a vertex buffer layout.
+/// are padding: they keep the stride a multiple of four, which Metal
+/// requires of a vertex buffer layout.
 struct ExtrudedVertexIn {
     static let positionScale: Float = 4
 
@@ -28,16 +28,10 @@ struct ExtrudedVertexIn {
     let normalY: Int8
     let normalZ: Int8
     let styleIndex: UInt8
-    /// The radius of the building's footprint (the circle about its centre
-    /// that holds every vertex), in the same 14.2 fixed point as the
-    /// positions, the same on every vertex of the building. No shader
-    /// reads it now: every building draws whole at every size on screen.
-    /// The bytes are the vertex's padding, kept so the prepared tile format
-    /// stands.
-    let footprintRadius: UInt16
+    /// Padding: Metal requires a vertex stride that is a multiple of four.
+    private let padding: UInt16 = 0
 
-    /// - Parameter footprintRadius: in tile units.
-    init(position: SIMD3<Float>, normal: SIMD3<Float>, styleIndex: UInt8, footprintRadius: Float = 0) {
+    init(position: SIMD3<Float>, normal: SIMD3<Float>, styleIndex: UInt8) {
         let scaled = position * Self.positionScale
         positionX = Self.quantizePosition(scaled.x)
         positionY = Self.quantizePosition(scaled.y)
@@ -46,12 +40,6 @@ struct ExtrudedVertexIn {
         normalY = Self.quantizeNormal(normal.y)
         normalZ = Self.quantizeNormal(normal.z)
         self.styleIndex = styleIndex
-        self.footprintRadius = UInt16(min(max((footprintRadius * Self.positionScale).rounded(), 0), Float(UInt16.max)))
-    }
-
-    /// The footprint radius in tile units.
-    var footprintRadiusUnits: Float {
-        Float(footprintRadius) / Self.positionScale
     }
 
     private static func quantizePosition(_ scaled: Float) -> Int16 {

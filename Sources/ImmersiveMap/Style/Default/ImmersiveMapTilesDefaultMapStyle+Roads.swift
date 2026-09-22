@@ -5,10 +5,10 @@ import Mvt
 import simd
 
 /// The roads: the `transportation` layer's lines, from the overview
-/// strokes of a country view to the measured carriageways of a street,
-/// with the casing, the fill and the lane paint the style synthesizes on
-/// them. How wide a road is lives in the `RoadWidths` extension, and the
-/// surfaces and paint the streetscape ships in `Streetscape`.
+/// strokes of a country view to the symbols of a street, with the casing
+/// and the fill of each. How wide a road is lives in the `RoadWidths`
+/// extension, and the surfaces and paint the streetscape ships in
+/// `Streetscape`.
 extension ImmersiveMapTilesDefaultMapStyle {
     /// Markings fade on their own band (see `LowZoomOverviewFade`), so they
     /// carry the mask that selects it instead of the roads' one.
@@ -143,68 +143,10 @@ extension ImmersiveMapTilesDefaultMapStyle {
                                      construction: isConstruction)
         }
         // From here the road is the street era's symbol: the class's width
-        // in points from the theme (`roadStyle`), the casing the theme asks
-        // for, and the paint the tiles give evidence of. The width never
-        // reads the lane count: a symbol is the same on every street of its
-        // class, and the paint is laid across the symbol.
-        // A centre divider separates two directions of travel. A one-way
-        // carriageway (one half of a dual carriageway, a one-way street) has
-        // none; where the tiles carry `oneway` it decides, and a tile that
-        // does not is taken as two-way.
-        let isOneWay = (parseIntValue(props["oneway"]).map { $0 != 0 } ?? false)
-            || props["oneway"]?.stringValue?.lowercased() == "yes"
-        // Markings are painted from what the tiles state, never from what a
-        // class suggests. `lanes` is the only marking evidence the schema
-        // carries, so a road that does not carry it stays bare asphalt: a
-        // default lane count is a guess about the ground, and paint invented
-        // from a guess is wrong in a way an empty carriageway never is. The
-        // classes below tertiary are bare whatever they carry, because a
-        // residential street or a service alley has no painted centre line
-        // to draw. Where the count is known: a two-way street gets a centre
-        // divider, a one-way carriageway the lines between its lanes (there
-        // is no centre to divide, but a four-lane one-way avenue is still
-        // painted).
-        let taggedLaneCount = parseIntValue(props["lanes"]).map { min(max($0, 1), 12) }
-        // The tiles state where the lane count came from: `tagged` is what a
-        // mapper put on the way, `assumed` is the profile's default for the
-        // class, shipped so that every road has a width to draw. Width takes
-        // either; paint takes only the mapped one. A source that ships no
-        // such field only ships `lanes` where it was mapped, so a missing
-        // field reads as mapped.
-        let laneCountIsMapped = props["lanes_src"].map { $0.stringValue == "tagged" } ?? true
-        // An unpaved road has no paint on it to draw. Anything the tiles do
-        // not classify says nothing either way and is left painted.
-        let isUnpaved = props["surface"]?.stringValue == "unpaved"
-        let marked = isConstruction == false
-            && tileZoom >= Self.roadMarkingsMinimumTileZoom
-            && Self.roadClassCarriesMarkings(effectiveClass)
-            && laneCountIsMapped
-            && isUnpaved == false
-        let markings: RoadMarkings
-        if marked, let taggedLaneCount, taggedLaneCount >= 2 {
-            if isOneWay {
-                // Every lane on a one-way carriageway runs the same way, so
-                // the boundary between two of them is fixed by the count
-                // alone: no knowledge of where each lane leads is needed.
-                markings = .laneLines(laneCount: taggedLaneCount)
-            } else if taggedLaneCount.isMultiple(of: 2) {
-                // A two-way street is painted down the middle, and the middle
-                // is a real boundary only when the lanes divide evenly. The
-                // tiles carry the total; which of them run each way is
-                // `lanes:forward`/`lanes:backward`, mapped on a few per cent
-                // of streets, so an odd total leaves the split unknown.
-                markings = .centreDivider
-            } else {
-                // An odd total: the centre of the carriageway falls inside a
-                // driving lane rather than between two, and a line drawn
-                // there is half a lane from where the paint is. Bare asphalt
-                // is the honest answer, and it costs about seven per cent of
-                // the painted streets in a city centre.
-                markings = .none
-            }
-        } else {
-            markings = .none
-        }
+        // in points from the theme (`roadStyle`) and the casing the theme
+        // asks for. The width never reads the lane count: a symbol is the
+        // same on every street of its class, and nothing is painted on it
+        // but what the streetscape measured.
         // The symbol's width: what the class draws at on screen up to the
         // theme's world lock zoom, and the ground width it had there past
         // it. Constant in points, so a street keeps one readable weight
@@ -214,37 +156,35 @@ extension ImmersiveMapTilesDefaultMapStyle {
         switch effectiveClass {
         case "motorway":
             return roadStyle(fillKey: 56, color: roads.motorway, priority: 95, casing: casingZoom, tunnel: isTunnel,
-                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile,
-                             markings: markings, construction: isConstruction)
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass,
+                             construction: isConstruction)
         case "trunk":
             return roadStyle(fillKey: 54, color: roads.trunk, priority: 90, casing: casingZoom, tunnel: isTunnel,
-                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile,
-                             markings: markings, construction: isConstruction)
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass,
+                             construction: isConstruction)
         case "primary":
             return roadStyle(fillKey: 52, color: roads.primary, priority: 80, casing: casingZoom, tunnel: isTunnel,
-                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile,
-                             markings: markings, construction: isConstruction)
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass,
+                             construction: isConstruction)
         case "secondary":
             return roadStyle(fillKey: 50, color: roads.secondary, priority: 78, casing: casingZoom, tunnel: isTunnel,
-                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile,
-                             markings: markings, construction: isConstruction)
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass,
+                             construction: isConstruction)
         case "tertiary":
             return roadStyle(fillKey: 48, color: roads.tertiary, priority: 74, casing: casingZoom, tunnel: isTunnel,
-                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile,
-                             markings: markings, construction: isConstruction)
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass,
+                             construction: isConstruction)
         case "minor":
             return roadStyle(fillKey: 44, color: roads.minor, priority: 50, casing: tileZoom >= 13, tunnel: isTunnel,
-                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile,
-                             markings: markings)
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass)
         case "service":
-            // A service road is one lane wide and has nothing to divide, so
-            // it carries no markings. A parking aisle sits one step below
+            // A parking aisle sits one step below
             // the rest of the tier: a parking lot owns its aisles (and eats
             // their ribbons), but must not eat the service roads that merely
             // pass along it, a bus lane mapped as its own way among them.
             let isParkingAisle = props["service"]?.stringValue == "parking_aisle"
             return roadStyle(fillKey: 42, color: roads.service, priority: isParkingAisle ? 45 : 46, casing: tileZoom >= 14, tunnel: isTunnel,
-                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile)
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass)
         case "path", "track":
             // Park alleys and walkways (footway/path/track): a plain strip of
             // the ground color, no kerb and no dashes. Over land it is the
@@ -253,7 +193,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
             // route across the surface. A kerb on a ground-colored strip
             // turned every path into a grey band wider than its interior.
             return roadStyle(fillKey: 40, color: roads.path, priority: 35, casing: false, tunnel: isTunnel,
-                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile)
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass)
         case "rail", "transit":
             // Railways are skipped for now: not drawn at any zoom, on any
             // surface. `railStyle` stays for when they come back.
@@ -269,7 +209,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
                                                 dashGapPoints: Self.ferryGapPoints)
         default:
             return roadStyle(fillKey: 43, color: roads.minor, priority: 40, casing: tileZoom >= 13, tunnel: isTunnel,
-                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass, tile: tile)
+                             symbolWidthPoints: symbolWidthPoints, roadClass: effectiveClass)
         }
     }
 
@@ -505,8 +445,6 @@ extension ImmersiveMapTilesDefaultMapStyle {
                    tunnel: Bool,
                    symbolWidthPoints: Float,
                    roadClass: String?,
-                   tile: Tile,
-                   markings: RoadMarkings = .none,
                    construction: Bool = false) -> FeatureStyle {
         // The road is a symbol: the class states a width in points, the
         // shader extrudes the centreline to exactly that many points at
@@ -521,7 +459,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         let casingRamp = roadWidthRamp(cls: roadClass, extraWidthPoints: casingMarginPoints)
         let fillRibbonWidth = Double(symbolWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint
         // A tunnel is the plain ribbon at the tunnel opacity: no dash, no
-        // kerb, no paint (both are skipped below), and butt ends. Where the
+        // kerb (skipped below), and butt ends. Where the
         // tiles ship the tunnel's surface the centreline runs a few units
         // past it into the portal quad; the surface clips the ribbon and the
         // stub that survives is a rectangle under the quad, whereas a round
@@ -562,83 +500,8 @@ extension ImmersiveMapTilesDefaultMapStyle {
                                 pointWidthWorldLockZoom: worldLockZoom,
                                 pointWidthRamp: fillRamp,
                                 lineGeometry: fillGeometry)
-        var paint: [LinePass] = []
-        // Each marking is one dashed hairline pass, offset sideways from the
-        // centreline. A one-way carriageway gets a line on every boundary
-        // between its lanes; a two-way street gets the divider down the
-        // middle and nothing else, because which of its lanes run each way is
-        // not something the tiles know. The lines are laid across the
-        // symbol: its ground width at the zoom it is frozen there is what
-        // the lane boundaries divide and what the paint stops short of at a
-        // junction (`symbolGroundWidthUnits`).
-        let symbolWidth = symbolGroundWidthUnits(cls: roadClass, tile: tile)
-        var markingOffsets: [Double] = []
-        if tunnel == false {
-            switch markings {
-            case .none:
-                break
-            case .centreDivider:
-                markingOffsets = [0]
-            case .laneLines(let laneCount):
-                markingOffsets = Self.laneBoundaryOffsets(width: symbolWidth, laneCount: laneCount)
-            }
-        }
-        let unitsPerMetre = Self.tileUnitsPerMetre(tile: tile)
-        for markingOffset in markingOffsets {
-            // The lane divider down an automobile road. It is paint on the
-            // surface, so it is world-locked in both dimensions that matter:
-            // the dash period is a length in metres (a city broken line,
-            // three on and six off), converted to this tile's units, so the
-            // dashes sit still on the asphalt and keep their count while the
-            // camera zooms or the engine swaps the tile level serving the
-            // road. Only the stroke width is point-locked, so a hairline of
-            // paint stays a hairline instead of becoming a second road. It
-            // draws in the `detail` role, above every fill.
-            //
-            // The ribbon is the narrowest that still hosts the point width:
-            // the shader places the edge inside it, and the wider it is, the
-            // longer the wedge the tessellator cuts out on the outside of
-            // every corner where two segment rectangles meet. Round joins
-            // fill that wedge with a fan carrying the join's own arc length,
-            // so a dash spanning the corner paints it instead of notching.
-            // Round caps are deliberately off: at a free end the dash pattern
-            // must stop on the road, not lay a translucent disc past it.
-            let markingRibbonUnits = Double(Self.roadMarkingWidthPoints) * Self.roadMarkingRibbonUnitsPerPoint
-            // Paint stops half a road short of the road's ends and of every
-            // junction, as it does on the ground: the last dash never pokes
-            // past the fill at a dead end, and the divider never runs across
-            // the street it meets. A tile-seam cut is not an end and keeps
-            // running flush into the neighbour (the parser tells them
-            // apart).
-            let markingEndInset = symbolWidth * 0.5
-            // Every stroke of a broken line is the same length. The line does
-            // go solid before a junction on the ground, but drawn here it was
-            // a twelve-metre stroke among three-metre ones, in the same
-            // colour and the same width, separated from the last dash by
-            // whatever the pattern left over: it read as paint of random
-            // length rather than as an approach, and on a junction where
-            // several carriageways fan in, as a thicket of them.
-            paint.append(
-                LinePass(key: Self.roadMarkingKey(forFillKey: fillKey),
-                         color: Self.roadMarkingColor,
-                         lowZoomFadeMask: Self.roadMarkingLowZoomFadeMask,
-                         lineWidthPoints: Self.roadMarkingWidthPoints,
-                         dashLengthPoints: Float(Self.roadMarkingDashMetres * unitsPerMetre),
-                         dashGapPoints: Float(Self.roadMarkingGapMetres * unitsPerMetre),
-                         dashInTileUnits: true,
-                         lineGeometry: LineGeometryStyle(
-                             lineWidth: markingRibbonUnits,
-                             lineCapRound: false,
-                             lineJoinRound: true,
-                             endInset: markingEndInset,
-                             lateralOffset: markingOffset
-                         ))
-            )
-        }
-
         return .road(RoadStyle(casing: casingPass,
                                fill: fillPass,
-                               paint: paint,
                                classPriority: priority))
     }
 
@@ -668,28 +531,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         ))
     }
 
-    /// From this tile zoom a drive-tier road is wide enough on screen to hold
-    /// lane markings: below it the dashes would be noise inside a road only a
-    /// few points across.
-    static let roadMarkingsMinimumTileZoom = 13
-
-    /// Whether a road class is painted at all.
-    ///
-    /// The through hierarchy is: an avenue carries a centre line and lane
-    /// lines, and a map that leaves them out reads as unfinished. Everything
-    /// below it does not: a residential street, a courtyard proezd, a service
-    /// alley, a track and a footway have bare asphalt, and painting them
-    /// covers the map in dashes that are not on the ground.
-    static func roadClassCarriesMarkings(_ cls: String?) -> Bool {
-        switch cls {
-        case "motorway", "trunk", "primary", "secondary", "tertiary":
-            return true
-        default:
-            return false
-        }
-    }
-
-    /// The paint of a lane divider: an off-white that reads on the asphalt
+    /// The paint of a measured line: an off-white that reads on the asphalt
     /// grey without glaring, and fully OPAQUE. Muting lives in the tone, not
     /// the alpha: a translucent marking washed out against the surface, and
     /// wherever two decoration quads of one colour overlapped (the strokes
@@ -698,22 +540,11 @@ extension ImmersiveMapTilesDefaultMapStyle {
     static let roadMarkingColor = SIMD4<Float>(0.97, 0.97, 0.96, 1.0)
     static let roadMarkingWidthPoints: Float = 0.9
 
-    /// A city broken lane line: three metres of paint, six of gap.
-    static let roadMarkingDashMetres: Double = 3.0
-    static let roadMarkingGapMetres: Double = 6.0
-
     /// Tile units of marking ribbon per point of stroke. Markings live on
     /// z15+ tiles, where a unit is a few centimetres, so a much tighter
     /// provisioning than the overview lines' 32 still hosts the stroke on a
     /// dense display, and a tighter ribbon is a shorter corner wedge.
     static let roadMarkingRibbonUnitsPerPoint: Double = 8
-
-    /// Markings sort one above their fill, out of the way of every other
-    /// key the style uses. The `detail` pass role is what actually puts them
-    /// over the carriageway; the key only has to stay unique.
-    static func roadMarkingKey(forFillKey fillKey: UInt8) -> UInt8 {
-        fillKey &+ 1
-    }
 
     /// Road border = the fill colour darkened and made fully opaque - a border of
     /// the same hue but darker, never see-through, drawn under the lighter fill.

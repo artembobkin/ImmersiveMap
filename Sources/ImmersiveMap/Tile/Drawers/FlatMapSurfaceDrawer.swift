@@ -52,19 +52,11 @@ enum FlatMapSurfaceDrawer {
 
     /// - Parameter exactRankDepthBelowZoom: the sources below this zoom
     ///   write their rank depth from the fragment stage
-    ///   (`usesExactRankDepth`). The main coverage passes the target zoom,
-    ///   the horizon backdrop `Int.max` for every source of it.
-    /// - Parameter sourceGroups: the ground families a source draws
-    ///   (`GroundLayerGroups`), every one of them for a source not named.
-    ///   The raster zone splits a tile's ground between the draw under its
-    ///   picture and the draw over it this way (`RasterZone`).
+    ///   (`usesExactRankDepth`). The main coverage passes the target zoom.
     /// - Parameter roadSheetStates: the road sheet's states. With them each
     ///   road group draws as one sheet, every pixel blended once (the road
     ///   sheet in Tile.metal); without them the groups draw the plain way,
     ///   in painter's order.
-    /// - Parameter drawsRoads: whether the road buckets and the bridge
-    ///   overlay draw. Off for the draw under the pictures and for a
-    ///   picture itself: a road is never part of a picture.
     static func draw(renderEncoder: MTLRenderCommandEncoder,
                      cameraUniform: CameraUniform,
                      cameraZoom: Double,
@@ -76,18 +68,10 @@ enum FlatMapSurfaceDrawer {
                      tilePipeline: TilePipeline,
                      groundOwnerState: MTLDepthStencilState,
                      tileStencilTestState: MTLDepthStencilState,
-                     groundOutlineState: MTLDepthStencilState,
                      roadSheetStates: RoadSheetStates? = nil,
                      isWireframeEnabled: Bool,
                      exactRankDepthBelowZoom: Int,
-                     opaqueFillsOnly: Bool = false,
-                     markingCutoffWorldDistance: Float = .infinity,
-                     linelessTiles: Set<VisibleTile> = [],
-                     sourceGroups: [FlatGroundSourceKey: GroundLayerGroups] = [:],
-                     drawsRoads: Bool = true,
-                     roadThinnessFade: RoadThinnessFade = .off,
-                     footprintGoneAreaPx: Float = 0,
-                     footprintOpaqueAreaPx: Float = 0) {
+                     linelessTiles: Set<VisibleTile> = []) {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder)
         // Every tile triangle (ground, road buckets, bridge overlay) is
         // counter-clockwise in render space, the parser's contract
@@ -101,21 +85,16 @@ enum FlatMapSurfaceDrawer {
             renderEncoder.setTriangleFillMode(.lines)
         }
         var cameraUniformValue = cameraUniform
-        // The taper thins point-locked widths toward planet zooms; continuous
-        // in camera zoom, so it cannot reintroduce integer-zoom width jumps.
         var overviewFadeUniform = TileOverviewFadeUniform(
             overviewAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .overviewFeatures),
             roadAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .roads),
             landuseAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .landuse),
-            pixelsPerPoint: pixelsPerPoint * LineWidthZoomTaper.scale(for: cameraZoom),
+            pixelsPerPoint: pixelsPerPoint,
             roadMarkingAlpha: LowZoomOverviewFade.roadMarkingAlpha(for: cameraZoom),
             cameraZoom: Float(cameraZoom),
             viewportSizePx: drawableSizePx,
             pointWidthReferenceDepth: screenCentreGroundDepth(cameraMatrix: cameraUniform.matrix),
-            roadThinnessFade: roadThinnessFade,
-            cameraMatrix: cameraUniform.matrix,
-            footprintGoneAreaPx: footprintGoneAreaPx,
-            footprintOpaqueAreaPx: footprintOpaqueAreaPx
+            cameraMatrix: cameraUniform.matrix
         )
         var shadowUniformValue = groundShadowMask.uniform
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
@@ -171,7 +150,6 @@ enum FlatMapSurfaceDrawer {
             case lines
             case fills
             case opaqueFills
-            case fillOutline
         }
         var selectedPipeline: (GroundPipeline, Bool)?
         // Set while a road group draws as a sheet: the stage has bound its
@@ -188,26 +166,15 @@ enum FlatMapSurfaceDrawer {
                 tilePipeline.selectFlatFillsPipeline(renderEncoder: renderEncoder, exactRankDepth: exactRankDepth)
             case .opaqueFills:
                 tilePipeline.selectFlatOpaquePipeline(renderEncoder: renderEncoder, exactRankDepth: exactRankDepth)
-            case .fillOutline:
-                tilePipeline.selectFlatFillOutlinePipeline(renderEncoder: renderEncoder, exactRankDepth: exactRankDepth)
             }
         }
 
         func drawLayer(_ keyPath: KeyPath<TileBuffers, TileBuffers.GeometryLayer>,
                        pipeline: GroundPipeline,
                        bandOffset: Float,
-                       primitiveType: MTLPrimitiveType = .triangle,
                        linesOnly: Bool = false,
-                       appliesGroups: Bool = true,
                        runFilter: ((GroundStyleRun) -> Bool)? = nil) {
             for source in linesOnly ? linedSources : uniqueSources {
-                var sourceRunFilter = runFilter
-                if appliesGroups,
-                   let groups = sourceGroups[SourceKey(tile: source.metalTile.tile, worldWrap: source.worldWrap)],
-                   groups != .all {
-                    guard groups.isEmpty == false else { continue }
-                    sourceRunFilter = { run in groups.contains(run.group) && runFilter?(run) != false }
-                }
                 selectPipeline(pipeline, exactRankDepth: source.exactRankDepth)
                 drawFlatGeometryLayer(renderEncoder: renderEncoder,
                                       buffers: source.metalTile.tileBuffers[keyPath: keyPath],
@@ -218,10 +185,7 @@ enum FlatMapSurfaceDrawer {
                                       drawableHeightPx: drawableSizePx.y,
                                       overviewFade: overviewFadeUniform,
                                       bandOffset: bandOffset,
-                                      cameraEye: cameraUniform.eye,
-                                      markingCutoffWorldDistance: markingCutoffWorldDistance,
-                                      primitiveType: primitiveType,
-                                      runFilter: sourceRunFilter)
+                                      runFilter: runFilter)
             }
         }
 
@@ -243,44 +207,6 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.setDepthStencilState(groundOwnerState)
         drawLayer(\.ground, pipeline: .opaqueFills, bandOffset: 0, runFilter: isOpaqueFillRun)
         renderEncoder.popDebugGroup()
-        // The horizon backdrop stops here: its job is the painted far band
-        // under the fog, where its coarse linework (rivers, borders, roads) is
-        // sub-pixel; skipping those sweeps also skips the tile's dense
-        // sphere-split ribbon mesh, whose vertices the flat pass would
-        // transform only to fog them away.
-        guard opaqueFillsOnly == false else {
-            if isWireframeEnabled {
-                renderEncoder.setTriangleFillMode(.fill)
-            }
-            renderEncoder.setCullMode(.none)
-            renderEncoder.setFrontFacing(.clockwise)
-            return
-        }
-        // The fill outlines of the layers that drew opaque just now: the
-        // fills' ring edges as one-pixel lines in the fill colour, alpha by
-        // distance to the edge, which is the edge antialiasing the triangle
-        // rasterizer does not give a fill. They sit at their own fill's rank
-        // depth under a lessEqual test against the band the opaque pass
-        // wrote, so an edge's fringe shows only over layers below its fill
-        // and never over an opaque layer above it; the translucent fills
-        // and the ribbons then paint over them in the usual order. A layer
-        // that is translucent this frame (mid-fade) gets no outline: its
-        // fill wrote no depth to test against, and the fringe would double
-        // blend along the edge.
-        if tilePipeline.hasFlatFillOutlinePipeline {
-            renderEncoder.pushDebugGroup("ground.fillOutlines")
-            renderEncoder.setDepthStencilState(groundOutlineState)
-            var fillOutlineUniform = TileFillOutlineUniform(viewportSizePx: drawableSizePx)
-            renderEncoder.setFragmentBytes(&fillOutlineUniform,
-                                           length: MemoryLayout<TileFillOutlineUniform>.stride,
-                                           index: 9)
-            drawLayer(\.ground, pipeline: .fillOutline, bandOffset: 0, primitiveType: .line, runFilter: { run in
-                run.isFillOutlineClass
-                    && run.isAlphaOpaque
-                    && TileStyleFadeMath.fadeIsOne(mask: run.fadeMask, overviewFade: overviewFadeUniform)
-            })
-            renderEncoder.popDebugGroup()
-        }
         // Everything after only tests the priority.
         renderEncoder.pushDebugGroup("ground.translucentFills")
         renderEncoder.setDepthStencilState(tileStencilTestState)
@@ -309,14 +235,7 @@ enum FlatMapSurfaceDrawer {
                                       pixelsPerPoint: pixelsPerPoint,
                                       drawableHeightPx: drawableSizePx.y,
                                       overviewFade: overviewFadeUniform,
-                                      bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
-                                      cameraEye: cameraUniform.eye,
-                                      markingCutoffWorldDistance: markingCutoffWorldDistance,
-                                      // The detail role is road paint through and
-                                      // through (every detail pass carries the
-                                      // marking fade band), so past the cutoff the
-                                      // whole layer skips.
-                                      skipsWholeLayerBeyondMarkingCutoff: role == .detail)
+                                      bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset)
             }
         }
         func roadLayerIsEmpty(_ structureKind: RoadStructureKind, role: RoadPassRole) -> Bool {
@@ -366,14 +285,6 @@ enum FlatMapSurfaceDrawer {
             }
         }
 
-        guard drawsRoads else {
-            if isWireframeEnabled {
-                renderEncoder.setTriangleFillMode(.fill)
-            }
-            renderEncoder.setCullMode(.none)
-            renderEncoder.setFrontFacing(.clockwise)
-            return
-        }
         renderEncoder.pushDebugGroup("roads")
         drawRoadSheets([.tunnel])
         drawRoadSheets([.ground])
@@ -385,10 +296,9 @@ enum FlatMapSurfaceDrawer {
         // tie, the ground's pixel is the one that draws. The price is the
         // kerb of a bridge, which no longer cuts across the road under it.
         drawRoadSheets([.automobileGround, .bridge])
-        // Road geometry, so no ground family decides it.
         drawRoadSheet(isEmpty: linedSources.allSatisfy { $0.metalTile.tileBuffers.bridgeOverlay.indicesCount == 0 }) {
             drawLayer(\.bridgeOverlay, pipeline: .lines, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
-                      linesOnly: true, appliesGroups: false)
+                      linesOnly: true)
         }
 
         drawRoadSheet(isEmpty: RoadStructureKind.drawOrder.allSatisfy { roadLayerIsEmpty($0, role: .overlay) }) {
@@ -414,10 +324,6 @@ enum FlatMapSurfaceDrawer {
                                               drawableHeightPx: Float,
                                               overviewFade: TileOverviewFadeUniform,
                                               bandOffset: Float,
-                                              cameraEye: SIMD3<Float>,
-                                              markingCutoffWorldDistance: Float,
-                                              skipsWholeLayerBeyondMarkingCutoff: Bool = false,
-                                              primitiveType: MTLPrimitiveType = .triangle,
                                               runFilter: ((GroundStyleRun) -> Bool)? = nil) {
         let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
                                                                          y: tile.y,
@@ -427,19 +333,6 @@ enum FlatMapSurfaceDrawer {
                                                                          renderMapSize: flatRenderState.renderMapSize)
         let scale = originAndSize.z / 4096.0
 
-        // Distance LOD for road paint: a tile whose nearest point is past
-        // the marking cutoff cannot resolve its world-locked paint on
-        // screen (RoadMarkingDistanceLOD). Its marking-band runs drop with
-        // the other invisible runs below, and a layer that is nothing but
-        // paint (the road buckets' detail role) skips wholesale.
-        let dropsMarkingRuns = RoadMarkingDistanceLOD.tileBeyondCutoff(
-            cameraEye: cameraEye,
-            tileOriginAndSize: originAndSize,
-            cutoffWorldDistance: markingCutoffWorldDistance)
-        if dropsMarkingRuns, skipsWholeLayerBeyondMarkingCutoff {
-            return
-        }
-
         // A run whose zoom fade is exactly 0 this frame would rasterize
         // with alpha 0: the ground bucket carries a run table (the road
         // buckets do not and draw whole, as before), so its invisible runs
@@ -447,7 +340,6 @@ enum FlatMapSurfaceDrawer {
         // visible spans coalesce, before any binding.
         let visibleSpans = visibleRunSpans(buffers: buffers,
                                            overviewFade: overviewFade,
-                                           dropsMarkingRuns: dropsMarkingRuns,
                                            runFilter: runFilter)
         guard buffers.indicesCount > 0,
               visibleSpans.isEmpty == false,
@@ -477,8 +369,7 @@ enum FlatMapSurfaceDrawer {
 
         // Anchors point-dashed patterns to the geometry: the scale depends on
         // the source tile's world size and the viewport, never on the live
-        // camera, so dashes hold still under camera motion (untapered on
-        // purpose: a pattern must not stretch with the zoom taper either).
+        // camera, so dashes hold still under camera motion.
         var lineDashUniform = LineDashUniform(
             unitsPerPoint: pixelsPerPoint * LineDashNominalScale.unitsPerPixel(
                 sourceTileWorldSize: originAndSize.z,
@@ -488,12 +379,6 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.setFragmentBytes(&lineDashUniform,
                                        length: MemoryLayout<LineDashUniform>.stride,
                                        index: 4)
-        // The footprint fade measures the pixel's ground patch in the
-        // source tile's own units, so the scale rides with the draw.
-        var footprintFadeUniform = TileFootprintFadeUniform(unitsPerWorld: 4096.0 / originAndSize.z)
-        renderEncoder.setFragmentBytes(&footprintFadeUniform,
-                                       length: MemoryLayout<TileFootprintFadeUniform>.stride,
-                                       index: 10)
 
         var modelMatrix = Matrix.translationMatrix(
             x: originAndSize.x,
@@ -504,7 +389,7 @@ enum FlatMapSurfaceDrawer {
 
         let indexByteWidth = buffers.indexType == .uint16 ? 2 : 4
         for span in visibleSpans {
-            renderEncoder.drawIndexedPrimitives(type: primitiveType,
+            renderEncoder.drawIndexedPrimitives(type: .triangle,
                                                 indexCount: span.count,
                                                 indexType: buffers.indexType,
                                                 indexBuffer: indices.buffer,
@@ -518,13 +403,11 @@ enum FlatMapSurfaceDrawer {
     /// paint order is the buffer order either way.
     private static func visibleRunSpans(buffers: TileBuffers.GeometryLayer,
                                         overviewFade: TileOverviewFadeUniform,
-                                        dropsMarkingRuns: Bool = false,
                                         runFilter: ((GroundStyleRun) -> Bool)? = nil) -> [(start: Int, count: Int)] {
         guard buffers.indicesCount > 0 else { return [] }
         let runs = buffers.styleRuns
-        // Without a run table the marking drop cannot pick its runs and the
-        // layer keeps its historical behavior: whole without a class filter,
-        // nothing with one.
+        // Without a run table the layer keeps its historical behavior: whole
+        // without a class filter, nothing with one.
         guard runs.isEmpty == false else { return runFilter == nil ? [(0, buffers.indicesCount)] : [] }
         var spans: [(start: Int, count: Int)] = []
         var spanStart = 0
@@ -532,7 +415,6 @@ enum FlatMapSurfaceDrawer {
         for run in runs {
             guard run.indexCount > 0,
                   runFilter?(run) != false,
-                  (dropsMarkingRuns && TileStyleFadeMath.isMarkingBand(mask: run.fadeMask)) == false,
                   TileStyleFadeMath.fadeIsZero(mask: run.fadeMask, overviewFade: overviewFade) == false else {
                 if spanCount > 0 { spans.append((spanStart, spanCount)) }
                 spanCount = 0

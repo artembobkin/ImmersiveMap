@@ -146,44 +146,18 @@ final class DebugOverlayHUDView: NSView {
                                                             action: nil)
     private let wireframeLabel = NSTextField(labelWithString: "")
     private let wireframeSwitch = NSSwitch()
-    /// The flat building fills' footprint fade, two footprint areas on
-    /// screen in square pixels (`BuildingFootprintFade`): gone under the
-    /// first, opaque from the second.
-    private let buildingCutLabel = NSTextField(labelWithString: "")
-    private let buildingCutSlider = NSSlider()
-    private let buildingFadeLabel = NSTextField(labelWithString: "")
-    private let buildingFadeSlider = NSSlider()
-    /// The roads' thinness fade, two widths on screen in pixels
-    /// (`RoadThinnessFade`).
-    private let roadFadeOpaqueLabel = NSTextField(labelWithString: "")
-    private let roadFadeOpaqueSlider = NSSlider()
-    /// The raster zone (`RasterZone`): whether the far ground turns into
-    /// pictures, where the turn starts and how long it takes in camera
-    /// distances, and which ground families the pictures hold.
-    private let rasterZoneLabel = NSTextField(labelWithString: "")
-    private let rasterZoneSwitch = NSSwitch()
-    private let rasterZoneStartLabel = NSTextField(labelWithString: "")
-    private let rasterZoneStartSlider = NSSlider()
-    private let rasterZoneTransitionLabel = NSTextField(labelWithString: "")
-    private let rasterZoneTransitionSlider = NSSlider()
-    private let rasterZoneFootprintsLabel = NSTextField(labelWithString: "")
-    private let rasterZoneFootprintsSwitch = NSSwitch()
-    private let rasterZoneLinesLabel = NSTextField(labelWithString: "")
-    private let rasterZoneLinesSwitch = NSSwitch()
-    /// One ring rule's editor: the drop picker, the distance slider, the
-    /// picture switch and the line switch, each with its named
-    /// row. Rebuilt when the number of rules changes.
+    /// One ring rule's editor: the drop picker, the distance slider and
+    /// the line switch, each with its named row. Rebuilt when the number
+    /// of rules changes.
     private struct RingRuleRow {
         let dropLabel: NSTextField
         let dropControl: NSSegmentedControl
         let distanceLabel: NSTextField
         let distanceSlider: NSSlider
-        let rasterLabel: NSTextField
-        let rasterSwitch: NSSwitch
         let linesLabel: NSTextField
         let linesSwitch: NSSwitch
         var views: [NSView] {
-            [dropLabel, dropControl, distanceLabel, distanceSlider, rasterLabel, rasterSwitch, linesLabel, linesSwitch]
+            [dropLabel, dropControl, distanceLabel, distanceSlider, linesLabel, linesSwitch]
         }
     }
     private var ringRuleRows: [RingRuleRow] = []
@@ -305,22 +279,6 @@ final class DebugOverlayHUDView: NSView {
         configureSwitch(tileLayersSwitch, action: #selector(tileLayersSwitchChanged))
         configureSwitch(tileGridSwitch, action: #selector(tileGridSwitchChanged))
         configureSwitch(wireframeSwitch, action: #selector(wireframeSwitchChanged))
-        configureControlLabel(buildingCutLabel, text: "")
-        configureControlLabel(buildingFadeLabel, text: "")
-        configureSlider(buildingCutSlider, range: BuildingFootprintFade.goneAreaRange, action: #selector(buildingLODSliderChanged))
-        configureSlider(buildingFadeSlider, range: BuildingFootprintFade.opaqueAreaRange, action: #selector(buildingLODSliderChanged))
-        configureControlLabel(roadFadeOpaqueLabel, text: "")
-        configureSlider(roadFadeOpaqueSlider, range: RoadThinnessFade.opaqueRange, action: #selector(roadThinnessFadeSliderChanged))
-        configureControlLabel(rasterZoneLabel, text: "Raster zone: far ground as pictures")
-        configureControlLabel(rasterZoneStartLabel, text: "")
-        configureControlLabel(rasterZoneTransitionLabel, text: "")
-        configureControlLabel(rasterZoneFootprintsLabel, text: "Raster zone: building footprints in pictures")
-        configureControlLabel(rasterZoneLinesLabel, text: "Raster zone: rivers and borders in pictures")
-        configureSwitch(rasterZoneSwitch, action: #selector(rasterZoneChanged))
-        configureSwitch(rasterZoneFootprintsSwitch, action: #selector(rasterZoneChanged))
-        configureSwitch(rasterZoneLinesSwitch, action: #selector(rasterZoneChanged))
-        configureSlider(rasterZoneStartSlider, range: RasterZone.startRange, action: #selector(rasterZoneChanged))
-        configureSlider(rasterZoneTransitionSlider, range: RasterZone.transitionRange, action: #selector(rasterZoneChanged))
         configureSwitch(roadLabelTilesSwitch, action: #selector(roadLabelTilesSwitchChanged))
         configureSwitch(baseLabelBoundsSwitch, action: #selector(baseLabelBoundsSwitchChanged))
         configureSwitch(roadLabelBoundsSwitch, action: #selector(roadLabelBoundsSwitchChanged))
@@ -467,11 +425,6 @@ final class DebugOverlayHUDView: NSView {
          controlsGroupLabel, axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch,
          tileGridLabel, tileGridSwitch, tileGridDensityControl,
          wireframeLabel, wireframeSwitch,
-         buildingCutLabel, buildingCutSlider, buildingFadeLabel, buildingFadeSlider,
-         roadFadeOpaqueLabel, roadFadeOpaqueSlider,
-         rasterZoneLabel, rasterZoneSwitch, rasterZoneStartLabel, rasterZoneStartSlider,
-         rasterZoneTransitionLabel, rasterZoneTransitionSlider,
-         rasterZoneFootprintsLabel, rasterZoneFootprintsSwitch, rasterZoneLinesLabel, rasterZoneLinesSwitch,
          ringRuleSetControl, ringRuleSetFirstZoomLabel, ringRuleSetFirstZoomSlider,
          ringRuleSetsAddButton, ringRuleSetsRemoveButton,
          ringRulesAddButton, ringRulesRemoveButton,
@@ -503,7 +456,6 @@ final class DebugOverlayHUDView: NSView {
         ringRuleSets = controls.ringRuleSets
         selectedRingRuleSetIndex = min(selectedRingRuleSetIndex, ringRuleSets.sets.count - 1)
         updateRingRuleSetControls()
-        showSelectedRingRuleSetTuning()
         if ringRuleRows.count != flatRingRules.rules.count {
             rebuildRingRuleRows()
         }
@@ -536,12 +488,6 @@ final class DebugOverlayHUDView: NSView {
             configureControlLabel(distanceLabel, text: "")
             let distanceSlider = NSSlider()
             configureSlider(distanceSlider, range: Self.ringRuleSliderRange, action: #selector(ringRuleDistanceSliderChanged(_:)))
-            let rasterLabel = NSTextField(labelWithString: "")
-            configureControlLabel(rasterLabel, text: "")
-            let rasterSwitch = NSSwitch()
-            rasterSwitch.target = self
-            rasterSwitch.action = #selector(ringRuleRasterSwitchChanged(_:))
-            refuseFocus(rasterSwitch)
             let linesLabel = NSTextField(labelWithString: "")
             configureControlLabel(linesLabel, text: "")
             let linesSwitch = NSSwitch()
@@ -550,7 +496,6 @@ final class DebugOverlayHUDView: NSView {
             refuseFocus(linesSwitch)
             return RingRuleRow(dropLabel: dropLabel, dropControl: dropControl,
                                 distanceLabel: distanceLabel, distanceSlider: distanceSlider,
-                                rasterLabel: rasterLabel, rasterSwitch: rasterSwitch,
                                 linesLabel: linesLabel, linesSwitch: linesSwitch)
         }
         for row in ringRuleRows {
@@ -565,8 +510,6 @@ final class DebugOverlayHUDView: NSView {
             row.dropControl.selectedSegment = rule.zoomDrop - FlatRingRules.zoomDropRange.lowerBound
             row.distanceSlider.doubleValue = Self.ringRuleSliderValue(distance: rule.distance)
             row.distanceLabel.stringValue = Self.ringRuleDistanceTitle(index: index, distance: rule.distance)
-            row.rasterLabel.stringValue = Self.ringRuleRasterTitle(index: index)
-            row.rasterSwitch.state = rule.rasterized ? .on : .off
             row.linesLabel.stringValue = Self.ringRuleLinesTitle(index: index)
             row.linesSwitch.state = rule.drawsLines ? .on : .off
         }
@@ -594,10 +537,6 @@ final class DebugOverlayHUDView: NSView {
         return min(max(distance, FlatRingRules.distanceRange.lowerBound), FlatRingRules.distanceRange.upperBound)
     }
 
-    static func ringRuleRasterTitle(index: Int) -> String {
-        "Rule \(index + 1): pictures in the raster zone"
-    }
-
     static func ringRuleLinesTitle(index: Int) -> String {
         "Rule \(index + 1): draw lines"
     }
@@ -606,13 +545,6 @@ final class DebugOverlayHUDView: NSView {
         guard let index = ringRuleRows.firstIndex(where: { $0.linesSwitch === sender }),
               index < flatRingRules.rules.count else { return }
         flatRingRules.rules[index].drawsLines = sender.state == .on
-        onRingRuleSetsChanged?(ringRuleSets)
-    }
-
-    @objc private func ringRuleRasterSwitchChanged(_ sender: NSSwitch) {
-        guard let index = ringRuleRows.firstIndex(where: { $0.rasterSwitch === sender }),
-              index < flatRingRules.rules.count else { return }
-        flatRingRules.rules[index].rasterized = sender.state == .on
         onRingRuleSetsChanged?(ringRuleSets)
     }
 
@@ -669,31 +601,8 @@ final class DebugOverlayHUDView: NSView {
         needsLayout = true
     }
 
-    /// The chosen set's tuning (`RingRuleSetTuning`), which the building,
-    /// road and raster zone rows edit.
-    private var selectedTuning: RingRuleSetTuning {
-        get { ringRuleSets.sets[min(selectedRingRuleSetIndex, ringRuleSets.sets.count - 1)].tuning }
-        set { ringRuleSets.sets[min(selectedRingRuleSetIndex, ringRuleSets.sets.count - 1)].tuning = newValue }
-    }
-
-    private func showSelectedRingRuleSetTuning() {
-        let tuning = selectedTuning
-        buildingCutSlider.doubleValue = Double(tuning.buildingGoneAreaPixels)
-        buildingFadeSlider.doubleValue = Double(tuning.buildingOpaqueAreaPixels)
-        updateBuildingLODLabels()
-        roadFadeOpaqueSlider.doubleValue = Double(tuning.roadThinnessFade.opaqueWidthPixels)
-        updateRoadThinnessFadeLabels()
-        rasterZoneSwitch.state = tuning.rasterZone.isEnabled ? .on : .off
-        rasterZoneStartSlider.doubleValue = Double(tuning.rasterZone.startCameraDistances)
-        rasterZoneTransitionSlider.doubleValue = Double(tuning.rasterZone.transitionCameraDistances)
-        rasterZoneFootprintsSwitch.state = tuning.rasterZone.rasterizesBuildingFootprints ? .on : .off
-        rasterZoneLinesSwitch.state = tuning.rasterZone.rasterizesGroundLines ? .on : .off
-        updateRasterZoneControls()
-    }
-
     private func showSelectedRingRuleSet() {
         updateRingRuleSetControls()
-        showSelectedRingRuleSetTuning()
         if ringRuleRows.count != flatRingRules.rules.count {
             rebuildRingRuleRows()
         }
@@ -722,7 +631,7 @@ final class DebugOverlayHUDView: NSView {
         onRingRuleSetsChanged?(ringRuleSets)
     }
 
-    /// Splits the chosen set: a new set with the same rules and tuning takes the upper
+    /// Splits the chosen set: a new set with the same rules takes the upper
     /// half of its zooms and becomes the chosen one.
     @objc private func ringRuleSetsAddButtonTapped() {
         let index = selectedRingRuleSetIndex
@@ -948,18 +857,9 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutControlRow(ringRuleSetFirstZoomLabel, ringRuleSetFirstZoomSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutFullWidthRow(ringRuleSetsAddButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutFullWidthRow(ringRuleSetsRemoveButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
-        cursor = layoutControlRow(buildingCutLabel, buildingCutSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(buildingFadeLabel, buildingFadeSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(roadFadeOpaqueLabel, roadFadeOpaqueSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutSwitchRow(rasterZoneLabel, rasterZoneSwitch, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(rasterZoneStartLabel, rasterZoneStartSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(rasterZoneTransitionLabel, rasterZoneTransitionSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutSwitchRow(rasterZoneFootprintsLabel, rasterZoneFootprintsSwitch, at: cursor, contentWidth: contentWidth)
-        cursor = layoutSwitchRow(rasterZoneLinesLabel, rasterZoneLinesSwitch, at: cursor, contentWidth: contentWidth)
         for row in ringRuleRows {
             cursor = layoutControlRow(row.dropLabel, row.dropControl, at: cursor, contentWidth: contentWidth)
             cursor = layoutControlRow(row.distanceLabel, row.distanceSlider, at: cursor, contentWidth: contentWidth)
-            cursor = layoutSwitchRow(row.rasterLabel, row.rasterSwitch, at: cursor, contentWidth: contentWidth)
             cursor = layoutSwitchRow(row.linesLabel, row.linesSwitch, at: cursor, contentWidth: contentWidth)
         }
         cursor = layoutFullWidthRow(ringRulesAddButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
@@ -1342,76 +1242,6 @@ final class DebugOverlayHUDView: NSView {
 
     @objc private func wireframeSwitchChanged() {
         onWireframeEnabledChanged?(wireframeSwitch.state == .on)
-    }
-
-    static func buildingCutTitle(pixels: Float) -> String {
-        String(format: "Building fills: gone under %.0f sq px", pixels)
-    }
-
-    static func buildingFadeTitle(pixels: Float) -> String {
-        String(format: "Building fills: opaque from %.0f sq px", pixels)
-    }
-
-    private func updateBuildingLODLabels() {
-        buildingCutLabel.stringValue = Self.buildingCutTitle(pixels: Float(buildingCutSlider.doubleValue))
-        buildingFadeLabel.stringValue = Self.buildingFadeTitle(pixels: Float(buildingFadeSlider.doubleValue))
-    }
-
-    @objc private func buildingLODSliderChanged() {
-        // The opaque area never sits under the gone area: the moved slider
-        // pushes the other.
-        if buildingFadeSlider.doubleValue < buildingCutSlider.doubleValue {
-            buildingFadeSlider.doubleValue = buildingCutSlider.doubleValue
-        }
-        updateBuildingLODLabels()
-        selectedTuning.buildingGoneAreaPixels = Float(buildingCutSlider.doubleValue)
-        selectedTuning.buildingOpaqueAreaPixels = Float(buildingFadeSlider.doubleValue)
-        onRingRuleSetsChanged?(ringRuleSets)
-    }
-
-    static func roadFadeOpaqueTitle(pixels: Float) -> String {
-        pixels > 0
-            ? String(format: "Roads: opaque from %.1f px wide", pixels)
-            : "Roads: thinness fade off"
-    }
-
-    private func updateRoadThinnessFadeLabels() {
-        roadFadeOpaqueLabel.stringValue = Self.roadFadeOpaqueTitle(pixels: Float(roadFadeOpaqueSlider.doubleValue))
-    }
-
-    @objc private func roadThinnessFadeSliderChanged() {
-        updateRoadThinnessFadeLabels()
-        selectedTuning.roadThinnessFade = RoadThinnessFade(opaqueWidthPixels: Float(roadFadeOpaqueSlider.doubleValue))
-        onRingRuleSetsChanged?(ringRuleSets)
-    }
-
-    static func rasterZoneStartTitle(cameraDistances: Float) -> String {
-        String(format: "Raster zone: vector up to %.2f camera distances", cameraDistances)
-    }
-
-    static func rasterZoneTransitionTitle(cameraDistances: Float) -> String {
-        String(format: "Raster zone: pictures fade in over %.2f", cameraDistances)
-    }
-
-    private func updateRasterZoneControls() {
-        rasterZoneStartLabel.stringValue = Self.rasterZoneStartTitle(cameraDistances: Float(rasterZoneStartSlider.doubleValue))
-        rasterZoneTransitionLabel.stringValue = Self.rasterZoneTransitionTitle(
-            cameraDistances: Float(rasterZoneTransitionSlider.doubleValue))
-        let isEnabled = rasterZoneSwitch.state == .on
-        for control in [rasterZoneStartSlider, rasterZoneTransitionSlider,
-                        rasterZoneFootprintsSwitch, rasterZoneLinesSwitch] as [NSControl] {
-            control.isEnabled = isEnabled
-        }
-    }
-
-    @objc private func rasterZoneChanged() {
-        updateRasterZoneControls()
-        selectedTuning.rasterZone = RasterZone(isEnabled: rasterZoneSwitch.state == .on,
-                                               startCameraDistances: Float(rasterZoneStartSlider.doubleValue),
-                                               transitionCameraDistances: Float(rasterZoneTransitionSlider.doubleValue),
-                                               rasterizesBuildingFootprints: rasterZoneFootprintsSwitch.state == .on,
-                                               rasterizesGroundLines: rasterZoneLinesSwitch.state == .on)
-        onRingRuleSetsChanged?(ringRuleSets)
     }
 
     @objc private func roadLabelTilesSwitchChanged() {

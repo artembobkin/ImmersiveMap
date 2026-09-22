@@ -53,11 +53,11 @@ public enum RoadSurfacePaintRule: Sendable {
     /// typically covers a whole street's carriageway, and the street
     /// keeps its markings.
     case keeps
-    /// The paint the engine synthesizes from a road's lane count ends at
-    /// the surface's edge: a junction reconstructed from the road graph
-    /// has no lane paint inside it, and the measured paint the source
-    /// ships is drawn instead.
-    case cutsSynthesized
+    /// The paint the style draws from a road's own tags (a crossing read
+    /// off a footway) ends at the surface's edge: a junction reconstructed
+    /// from the road graph ships the paint the source measured, and that
+    /// is drawn instead.
+    case cutsStyled
     /// Every line of paint inside the surface is cut, the measured paint
     /// too: a tunnel's roof seen from above is a bare fill.
     case cutsAll
@@ -205,15 +205,7 @@ public struct LinePass: Sendable {
 public struct FillStyle: Sendable {
     public var key: UInt8
     public var color: SIMD4<Float>
-    /// The footprint fade target, with the fade strength in the alpha; nil
-    /// never fades. See `TilePolygonStyle.farColor`.
-    public var farColor: SIMD4<Float>?
     public var lowZoomFadeMask: Float
-    /// The ring edges antialiased by the fill-outline pass: the parser
-    /// keeps them as a line list and the flat drawer rasterizes them as
-    /// one-pixel lines in the fill's colour, with alpha by distance to the
-    /// edge, over the fill's own staircase (`ParsedPolygon.outlineIndices`).
-    public var outlineAntialiasing: Bool
     /// A fill whose polygons with many holes (an ocean with its islands)
     /// are not tessellated as one polygon: the exterior draws as the fill
     /// and each hole as the background, so the tessellator never sees the
@@ -222,15 +214,11 @@ public struct FillStyle: Sendable {
 
     public init(key: UInt8,
                 color: SIMD4<Float>,
-                farColor: SIMD4<Float>? = nil,
                 lowZoomFadeMask: Float = 0.0,
-                outlineAntialiasing: Bool = true,
                 splitsComplexHoles: Bool = false) {
         self.key = key
         self.color = color
-        self.farColor = farColor
         self.lowZoomFadeMask = lowZoomFadeMask
-        self.outlineAntialiasing = outlineAntialiasing
         self.splitsComplexHoles = splitsComplexHoles
     }
 }
@@ -274,11 +262,6 @@ public struct RoadStyle: Sendable {
     public var level: RoadLevel
     /// The network the road draws in on the ground (see `RoadTier`).
     public var tier: RoadTier
-    /// Whether the road makes a junction for the paint on another road: a
-    /// lane line running into it stops short of the crossing. True for a
-    /// street, false for a way onto a plot (a driveway, a parking aisle, a
-    /// footway) and for shipped paint, which is not a street at all.
-    public var makesJunctions: Bool
     /// The figure stamped along the geometry instead of a plain stroke.
     public var decoration: RoadDecorationKind
     /// What a carriageway surface (`ImmersiveMapRoadFacts.Kind.surface`)
@@ -297,7 +280,6 @@ public struct RoadStyle: Sendable {
                 classPriority: Int = 0,
                 level: RoadLevel = .ground,
                 tier: RoadTier = .pedestrian,
-                makesJunctions: Bool = false,
                 decoration: RoadDecorationKind = .none,
                 surfacePaint: RoadSurfacePaintRule = .keeps,
                 label: LabelTextStyle? = nil,
@@ -310,7 +292,6 @@ public struct RoadStyle: Sendable {
         self.classPriority = classPriority
         self.level = level
         self.tier = tier
-        self.makesJunctions = makesJunctions
         self.decoration = decoration
         self.surfacePaint = surfacePaint
         self.label = label
@@ -338,13 +319,6 @@ public struct RoadStyle: Sendable {
     /// stroke's for a road that is paint alone.
     public var key: UInt8 {
         fill?.key ?? orderedPasses.first?.pass.key ?? 0
-    }
-
-    /// The width of the road's own geometry in tile units: the fill
-    /// ribbon's, or the one stroke's for paint. Half of it is how far the
-    /// road reaches from its centreline.
-    public var ownWidth: Double {
-        fill?.lineGeometry.lineWidth ?? orderedPasses.first?.pass.lineGeometry.lineWidth ?? 0
     }
 }
 
@@ -483,7 +457,7 @@ public enum FeatureStyle: Sendable {
 // MARK: - The common drawing modes
 
 public extension FeatureStyle {
-    /// A fill, with its ring edges antialiased.
+    /// A fill.
     static func polygon(key: UInt8, color: SIMD4<Float>) -> FeatureStyle {
         .fill(FillStyle(key: key, color: color))
     }

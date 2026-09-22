@@ -29,14 +29,6 @@ struct TileOverviewFadeUniform {
     /// (`tilePointWidthPerspectiveScale` in TileShading.h). Zero: the width
     /// holds in pixels at every depth.
     var pointWidthReferenceDepth: Float = 0
-    /// The roads' thinness fade (`RoadThinnessFade`), as a width on screen
-    /// in pixels. Zero turns it off.
-    var roadFadeOpaqueWidthPx: Float = 0
-    /// The footprint fade of the building fills (`tileFootprintAlpha`), the
-    /// debug panel's two footprint areas in square pixels. A zero opaque
-    /// area turns it off.
-    var footprintGoneAreaPx: Float = 0
-    var footprintOpaqueAreaPx: Float = 0
     /// The pixels one world unit of ground spans across the view at the
     /// centre of the screen: what turns a point width there into the width
     /// on the ground every road of the style lies at
@@ -60,10 +52,7 @@ struct TileOverviewFadeUniform {
          cameraZoom: Float,
          viewportSizePx: SIMD2<Float> = .zero,
          pointWidthReferenceDepth: Float = 0,
-         roadThinnessFade: RoadThinnessFade = .off,
-         cameraMatrix: matrix_float4x4? = nil,
-         footprintGoneAreaPx: Float = 0,
-         footprintOpaqueAreaPx: Float = 0) {
+         cameraMatrix: matrix_float4x4? = nil) {
         self.overviewAlpha = overviewAlpha
         self.roadAlpha = roadAlpha
         self.landuseAlpha = landuseAlpha
@@ -72,7 +61,6 @@ struct TileOverviewFadeUniform {
         self.cameraZoom = cameraZoom
         self.viewportSizePx = viewportSizePx
         self.pointWidthReferenceDepth = pointWidthReferenceDepth
-        self.roadFadeOpaqueWidthPx = roadThinnessFade.opaqueWidthPixels
         if let cameraMatrix {
             let xAxis = cameraMatrix.columns.0
             let yAxis = cameraMatrix.columns.1
@@ -81,8 +69,6 @@ struct TileOverviewFadeUniform {
             (groundAxisXClipX, groundAxisXClipY, groundAxisXClipW) = (xAxis.x, xAxis.y, xAxis.w)
             (groundAxisYClipX, groundAxisYClipY, groundAxisYClipW) = (yAxis.x, yAxis.y, yAxis.w)
         }
-        self.footprintGoneAreaPx = max(footprintGoneAreaPx, 0)
-        self.footprintOpaqueAreaPx = max(footprintOpaqueAreaPx, self.footprintGoneAreaPx)
     }
 }
 
@@ -112,31 +98,5 @@ extension TileOverviewFadeUniform {
 /// display scale (see `LineDashNominalScale`).
 struct LineDashUniform {
     var unitsPerPoint: Float
-}
-
-/// Mirror of `FillOutlineUniform` in Tile.metal (fragment buffer 9 of the
-/// flat fill-outline pipeline): the drawable size in pixels, which places
-/// the interpolated clip position of an outline edge in the fragment's
-/// pixel space.
-struct TileFillOutlineUniform {
-    var viewportSizePx: SIMD2<Float>
-}
-
-/// Mirror of `FootprintFadeUniform` in TileShading.h (fragment buffer 10 of
-/// the flat fills pipelines): the source tile's units per world unit and the
-/// footprint band of `GroundFootprintFade`.
-struct TileFootprintFadeUniform {
-    var unitsPerWorld: Float
-    var startUnits: Float
-    var endUnits: Float
-    var padding: Float = 0
-
-    init(unitsPerWorld: Float,
-         startUnits: Float = GroundFootprintFade.startUnits,
-         endUnits: Float = GroundFootprintFade.endUnits) {
-        self.unitsPerWorld = unitsPerWorld
-        self.startUnits = startUnits
-        self.endUnits = endUnits
-    }
 }
 

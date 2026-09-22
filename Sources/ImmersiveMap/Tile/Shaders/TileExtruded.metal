@@ -13,8 +13,6 @@ struct VertexIn {
     float3 position [[attribute(0)]];
     float3 normal [[attribute(1)]];
     unsigned char styleIndex [[attribute(2)]];
-    // The building's footprint radius, 14.2 fixed point like the position.
-    unsigned short footprintRadius [[attribute(3)]];
 };
 
 // The CPU quantizes positions to quarter tile units; see
@@ -41,12 +39,10 @@ struct FragmentIn {
     half4 color;
 };
 
+/// Mirror of TilePolygonStyle: the stride must match the shared style
+/// buffer.
 struct Style {
     float4 color;
-    /// Mirror of TilePolygonStyle. Unused here (the footprint fade is a
-    /// ground fill matter), but the stride must match the shared style
-    /// buffer.
-    float4 farColor;
 };
 
 // localClipBounds: (minX, minY, maxX, maxY) in the source tile's local

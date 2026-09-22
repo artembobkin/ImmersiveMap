@@ -5,10 +5,10 @@ import Foundation
 
 /// One contiguous run of ground indices belonging to one style and one
 /// geometry class, in paint order. The parser emits the ground bucket as
-/// three class segments, polygon fills first, line ribbons second and the
-/// fills' outlines third, each grouped by ascending style, so run order
-/// within a class is bottom-to-top layer order. POD with an explicit layout:
-/// the disk codec stores the array byte-wise.
+/// two class segments, polygon fills first and line ribbons second, each
+/// grouped by ascending style, so run order within a class is bottom-to-top
+/// layer order. POD with an explicit layout: the disk codec stores the
+/// array byte-wise.
 ///
 /// The runs are what lets the ground drawers draw the ground as class
 /// passes: the opaque fill layers under a depth write (their rank depth,
@@ -17,9 +17,7 @@ import Foundation
 /// fills blending bottom-to-top over the result, and the ribbons last
 /// through the line-field pipeline, without either class pass reading the
 /// other's vertices; adjacent runs headed for the same pass merge into one
-/// draw. The outline runs are a LINE list (index pairs), which only the flat
-/// drawer rasterizes, right after the opaque fills and only for the styles
-/// opaque that frame; the sphere never draws them.
+/// draw.
 struct GroundStyleRun: Equatable, Sendable {
     /// First index element of the run and its length, in index elements.
     var indexStart: UInt32
@@ -28,15 +26,13 @@ struct GroundStyleRun: Equatable, Sendable {
     /// it with the frame's fade alphas to decide whether the style is opaque
     /// this frame.
     var fadeMask: Float
-    /// Bit 0: both palette colours of the style carry alpha 1, so the run is
-    /// opaque whenever its fade is 1. Bit 1: the run is line ribbons and
-    /// draws through the line-field pipeline. Bit 2: the run is fill
-    /// outlines, a line list over the fill vertices.
+    /// Bit 0: the style's colour carries alpha 1, so the run is opaque
+    /// whenever its fade is 1. Bit 1: the run is line ribbons and draws
+    /// through the line-field pipeline.
     var flags: UInt32
 
     static let alphaOpaqueFlag: UInt32 = 1
     static let linesClassFlag: UInt32 = 2
-    static let fillOutlineClassFlag: UInt32 = 4
 
     var isAlphaOpaque: Bool {
         flags & Self.alphaOpaqueFlag != 0
@@ -46,32 +42,25 @@ struct GroundStyleRun: Equatable, Sendable {
         flags & Self.linesClassFlag != 0
     }
 
-    var isFillOutlineClass: Bool {
-        flags & Self.fillOutlineClassFlag != 0
-    }
-
-    /// The polygon fills: neither ribbons nor outlines.
+    /// The polygon fills: everything that is not a ribbon.
     var isFillsClass: Bool {
-        flags & (Self.linesClassFlag | Self.fillOutlineClassFlag) == 0
+        flags & Self.linesClassFlag == 0
     }
 }
 
 enum GroundStyleRunScanner {
     /// Splits the ground index buffer into per-style, per-class runs. The
-    /// parser's contract is three class segments, fills up to
-    /// `ground.fillsIndexCount`, ribbons up to `ground.fillOutlinesIndexStart`
-    /// and the fill outlines (index pairs) to the end, each one contiguous
+    /// parser's contract is two class segments, fills up to
+    /// `ground.fillsIndexCount` and ribbons to the end, each one contiguous
     /// run per style in ascending style order
     /// (`unifyPolygonLayer(splitLinesClass:)`); a violation falls back to a
     /// single ribbons-class run covering everything, which draws exactly
     /// like the unsplit combined path.
     static func scan(ground: PreparedTileCPU.GeometryLayer) -> [GroundStyleRun] {
         guard ground.indices.isEmpty == false else { return [] }
-        let outlinesStart = min(max(ground.fillOutlinesIndexStart, 0), ground.indices.count)
-        let boundary = min(max(ground.fillsIndexCount, 0), outlinesStart)
+        let boundary = min(max(ground.fillsIndexCount, 0), ground.indices.count)
         guard boundary % 3 == 0,
-              (outlinesStart - boundary) % 3 == 0,
-              (ground.indices.count - outlinesStart) % 2 == 0 else {
+              (ground.indices.count - boundary) % 3 == 0 else {
             return fallback(ground: ground)
         }
 
@@ -82,17 +71,12 @@ enum GroundStyleRunScanner {
                                       classFlags: 0),
               let ribbons = scanSegment(ground: ground,
                                         start: boundary,
-                                        end: outlinesStart,
+                                        end: ground.indices.count,
                                         primitiveIndexCount: 3,
-                                        classFlags: GroundStyleRun.linesClassFlag),
-              let outlines = scanSegment(ground: ground,
-                                         start: outlinesStart,
-                                         end: ground.indices.count,
-                                         primitiveIndexCount: 2,
-                                         classFlags: GroundStyleRun.fillOutlineClassFlag) else {
+                                        classFlags: GroundStyleRun.linesClassFlag) else {
             return fallback(ground: ground)
         }
-        return fills + ribbons + outlines
+        return fills + ribbons
     }
 
     private static func scanSegment(ground: PreparedTileCPU.GeometryLayer,
@@ -153,7 +137,7 @@ enum GroundStyleRunScanner {
     }
 
     private static func fallback(ground: PreparedTileCPU.GeometryLayer) -> [GroundStyleRun] {
-        assertionFailure("Ground indices are not three class segments grouped by ascending style")
+        assertionFailure("Ground indices are not two class segments grouped by ascending style")
         // The ribbons class draws through the line-field pipeline, under
         // which fills paint with coverage 1: one combined translucent run
         // paints exactly like the unsplit path.

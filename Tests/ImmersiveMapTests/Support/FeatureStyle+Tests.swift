@@ -42,7 +42,6 @@ extension FeatureStyle {
     }
 
     var color: SIMD4<Float> { primaryPass?.color ?? SIMD4<Float>(0, 0, 0, 0) }
-    var farColor: SIMD4<Float>? { fillStyle?.farColor }
     var lowZoomFadeMask: Float { primaryPass?.lowZoomFadeMask ?? 0 }
     var lineWidthPoints: Float { primaryPass?.lineWidthPoints ?? 0 }
     var dashLengthPoints: Float { primaryPass?.dashLengthPoints ?? 0 }
@@ -51,7 +50,6 @@ extension FeatureStyle {
     var minimumWidthPoints: Float { primaryPass?.minimumWidthPoints ?? 0 }
     var lineGeometry: LineGeometryStyle { primaryPass?.lineGeometry ?? LineGeometryStyle(lineWidth: 0) }
     var suppressPolygonFill: Bool { lineStyle.map { $0.fillsAreas == false } ?? false }
-    var fillOutlineAntialiasing: Bool { fillStyle?.outlineAntialiasing ?? false }
     var splitsComplexHoles: Bool { fillStyle?.splitsComplexHoles ?? false }
     var isExtruded: Bool { extrusionStyle != nil }
     var extrusionFallbackHeight: Float { extrusionStyle?.fallbackHeight ?? 0 }

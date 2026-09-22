@@ -36,9 +36,8 @@ enum LowZoomOverviewFade {
     ///
     /// The band starts at the zoom the roads' symbols are frozen on the
     /// ground by default (the theme's world lock), so the paint arrives on
-    /// a road that is already a width on the ground: the lane lines are
-    /// laid across the symbol's ground width, and from here the road and
-    /// its paint grow together.
+    /// a road that is already a width on the ground, and from here the
+    /// road and its paint grow together.
     static let roadMarkingStartZoom: Double = 15.0
     static let roadMarkingEndZoom: Double = 15.4
 
@@ -77,16 +76,6 @@ enum LowZoomOverviewFade {
     /// base keep their fixed bands (`Kind`, the markings).
     static let classFadeMaskBase: Float = 10.0
 
-    /// The footprint fade band: a fill carrying this mask takes its alpha
-    /// from its polygon's footprint on screen (`BuildingFootprintFade`, the
-    /// building fills), and the parser bakes the polygon's footprint radius
-    /// into its vertices for it (`TileVertexIn.footprintRadiusNormal`). No
-    /// zoom fade of its own.
-    static let footprintFadeMask: Float = 5.0
-
-    static func isFootprintFadeBand(mask: Float) -> Bool {
-        mask >= 4.5 && mask < 9.5
-    }
     static let classFadeBandZooms: Double = 1.0
 
     static func classFadeMask(startZoom: Int) -> Float {

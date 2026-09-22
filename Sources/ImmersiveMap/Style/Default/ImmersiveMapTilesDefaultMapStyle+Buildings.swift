@@ -14,11 +14,7 @@ extension ImmersiveMapTilesDefaultMapStyle {
         guard theme.features.buildingExtrusion else {
             // The same fill an extrusion draws under itself, and nothing
             // rises: how buildings draw on the globe, now on the plane too.
-            return .fill(FillStyle(key: 30,
-                                   color: theme.features.buildingFillColor,
-                                   // A small footprint on screen fades out.
-                                   lowZoomFadeMask: LowZoomOverviewFade.footprintFadeMask,
-                                   outlineAntialiasing: false))
+            return .fill(FillStyle(key: 30, color: theme.features.buildingFillColor))
         }
         return .extrusion(ExtrusionStyle(
             key: 30,

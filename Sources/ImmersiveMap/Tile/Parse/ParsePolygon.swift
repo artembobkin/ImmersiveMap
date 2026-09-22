@@ -99,7 +99,6 @@ class ParsePolygon {
         if clipped.interiors.isEmpty,
            var polygon = triangulateConvexExterior(exterior: renderExterior) {
             polygon.windCounterClockwise()
-            polygon.outlineIndices = Self.outlineIndices(rings: [renderExterior], tileExtent: tileExtent)
             return ParsedGeometry(clipped: clipped,
                                   parsedPolygon: polygon)
         }
@@ -110,48 +109,8 @@ class ParsePolygon {
         // The tessellators wind on the float ring; the rounded vertices are
         // what draws, so the winding is settled on them last.
         polygon.windCounterClockwise()
-        // Both tessellators keep the ring vertices in ring order (the
-        // exterior first, then each interior), which is what lets the
-        // outline index the fill's own vertices.
-        polygon.outlineIndices = Self.outlineIndices(rings: [renderExterior] + renderInteriors,
-                                                     tileExtent: tileExtent)
         return ParsedGeometry(clipped: clipped,
                               parsedPolygon: polygon)
-    }
-
-    /// The ring edges of a tessellated fill as a line list over the fill's
-    /// vertex order (`rings` concatenated). An edge that runs along the tile
-    /// boundary is the clip, not a feature edge: the polygon continues in
-    /// the neighbouring tile, so it gets no outline. Rings are render space,
-    /// where the boundary is still the four lines x = 0, x = extent, y = 0,
-    /// y = extent.
-    static func outlineIndices(rings: [[SIMD2<Float>]], tileExtent: Float) -> [UInt32] {
-        var outline: [UInt32] = []
-        outline.reserveCapacity(rings.reduce(0) { $0 + $1.count } * 2)
-        var base: UInt32 = 0
-        for ring in rings {
-            defer { base += UInt32(ring.count) }
-            guard ring.count >= 2 else { continue }
-            for index in 0..<ring.count {
-                let next = (index + 1) % ring.count
-                if isTileBoundaryEdge(ring[index], ring[next], tileExtent: tileExtent) {
-                    continue
-                }
-                outline.append(base + UInt32(index))
-                outline.append(base + UInt32(next))
-            }
-        }
-        return outline
-    }
-
-    private static func isTileBoundaryEdge(_ a: SIMD2<Float>, _ b: SIMD2<Float>, tileExtent: Float) -> Bool {
-        func onLine(_ value: Float, _ target: Float) -> Bool {
-            abs(value - target) <= epsilon
-        }
-        return (onLine(a.x, 0) && onLine(b.x, 0))
-            || (onLine(a.x, tileExtent) && onLine(b.x, tileExtent))
-            || (onLine(a.y, 0) && onLine(b.y, 0))
-            || (onLine(a.y, tileExtent) && onLine(b.y, tileExtent))
     }
 
     private func triangulateConvexExterior(exterior: [SIMD2<Float>]) -> ParsedPolygon? {

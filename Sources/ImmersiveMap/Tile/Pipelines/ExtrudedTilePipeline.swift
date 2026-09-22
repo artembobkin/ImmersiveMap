@@ -18,10 +18,11 @@ class ExtrudedTilePipeline {
         let vertexFunction = library.makeFunction(name: "tileExtrudedVertexShader")
         let fragmentFunction = library.makeFunction(name: "tileExtrudedFragmentShader")
 
-        // The 12-byte layout of ExtrudedVertexIn: quantized
-        // positions fed as raw Int16 triples (the fetch converts integer
-        // formats to float with the numeric value; the shader applies the
-        // inverse fixed-point scale), normals as char3Normalized.
+        // The 12-byte layout of ExtrudedVertexIn: quantized positions fed
+        // as raw Int16 triples (the fetch converts integer formats to float
+        // with the numeric value; the shader applies the inverse fixed-point
+        // scale), normals as char3Normalized, the style index, and two
+        // bytes of padding to the stride Metal requires.
         assert(MemoryLayout<ExtrudedVertexIn>.stride == 12,
                "The vertex descriptor mirrors ExtrudedVertexIn byte for byte")
         let vertexDescriptor = MTLVertexDescriptor()
@@ -34,10 +35,6 @@ class ExtrudedTilePipeline {
         vertexDescriptor.attributes[2].format = .uchar
         vertexDescriptor.attributes[2].offset = 9
         vertexDescriptor.attributes[2].bufferIndex = 0
-        // The building's footprint radius, 14.2 fixed point like the position.
-        vertexDescriptor.attributes[3].format = .ushort
-        vertexDescriptor.attributes[3].offset = 10
-        vertexDescriptor.attributes[3].bufferIndex = 0
         vertexDescriptor.layouts[0].stride = MemoryLayout<ExtrudedVertexIn>.stride
         vertexDescriptor.layouts[0].stepFunction = .perVertex
 

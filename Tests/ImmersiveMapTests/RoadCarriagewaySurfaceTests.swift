@@ -10,9 +10,9 @@ import simd
 /// `transportation`) is the surface of a stretch of street computed from the
 /// road graph, the same thing a junction area is for a junction. It draws as
 /// fill in the automobile tier (kerbless, like the whole tier), clips the
-/// ribbons of the streets it
-/// covers, and (being `origin=graph`) cuts their synthesized paint, so the
-/// paint the source measured can ship as its own lines instead. A surface
+/// ribbons of the streets it covers, and (being `origin=graph`) cuts the
+/// styled paint inside it, so the paint the source measured can ship as its
+/// own lines instead. A surface
 /// owns only roads of its own structure and layer: a bridge deck polygon
 /// leaves the street under it alone.
 final class RoadCarriagewaySurfaceTests: XCTestCase {
@@ -77,7 +77,7 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
                        .surface(reconstructed: true),
                        "A carriageway area is read as a reconstructed road surface")
         XCTAssertTrue(area.surfaceAreaCutsPaint,
-                      "A graph-built surface carries the measured paint itself, so the synthesized paint ends at its edge")
+                      "A graph-built surface carries the measured paint itself, so the styled paint ends at its edge")
         let primary = ImmersiveMapTilesTheme.default.layers.roads.primary
         XCTAssertEqual(area.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }?.color, primary,
                        "The surface is exactly the class colour")
@@ -109,15 +109,6 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
         }
     }
 
-    func testAGraphSurfaceSuppressesTheSynthesizedPaint() throws {
-        let covered = try parse([surface(coveringRing), street([(1900, 1050), (2500, 1050)])])
-        XCTAssertEqual(covered.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
-                       "The street's synthesized centre line ends where the measured surface begins")
-        let bare = try parse([street([(1900, 1050), (2500, 1050)])])
-        XCTAssertGreaterThan(bare.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
-                             "The same street alone paints its centre line as before")
-    }
-
     func testAPartlyCoveredStreetKeepsDrawingOutsideTheSurface() throws {
         let long = street([(200, 1050), (3800, 1050)])
         let partly = try parse([surface(coveringRing), long])
@@ -134,20 +125,20 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
 
     func testShippedPaintSurvivesInsideTheSurfacesItLiesOn() throws {
         // The measured centre line lies inside the graph surface on purpose:
-        // that is where the paint is. The surface clips the synthesized paint
+        // that is where the paint is. The surface clips the street's ribbon
         // and leaves the shipped line alone.
         let parsed = try parse([surface(coveringRing),
                                 street([(1900, 1050), (2500, 1050)]),
                                 marking([(1900, 1050), (2500, 1050)])])
         XCTAssertGreaterThan(parsed.drawingRoadPhases.automobileGround.detail.drawing.indices.count, 0,
-                             "The shipped line draws where the synthesized paint is gone")
+                             "The shipped line draws inside the surface")
     }
 
     func testShippedPaintNeitherJoinsNorCutsTheStreetsItTouches() throws {
         // A street with an interior vertex, and a marking ending exactly on
         // it. If the marking counted as a street, that point would become a
-        // junction and the street's own centre line would be cut and inset
-        // there; if the street's surface machinery touched the marking, its
+        // connection and the street's ribbon would lose its free end there;
+        // if the street's surface machinery touched the marking, its
         // geometry would change. Both stay exactly the sum of their parts.
         let bentStreet = street([(400, 2050), (2048, 2050), (3700, 2100)])
         let together = try parse([bentStreet, marking([(2048, 2050), (2048, 1200)])])
@@ -156,7 +147,7 @@ final class RoadCarriagewaySurfaceTests: XCTestCase {
         XCTAssertEqual(together.drawingRoadPhases.automobileGround.detail.drawing.indices.count,
                        streetAlone.drawingRoadPhases.automobileGround.detail.drawing.indices.count
                            + markingAlone.drawingRoadPhases.automobileGround.detail.drawing.indices.count,
-                       "Street paint and shipped paint coexist without splitting each other")
+                       "The street and the shipped paint coexist without splitting each other")
     }
 
     func testABridgeSurfaceDoesNotClipTheStreetUnderIt() throws {

@@ -22,14 +22,6 @@ constant bool kTileLineFields [[function_constant(1)]];
 /// flat style index and the fragment resolves the style itself
 /// (tileLineFragmentColor), cutting a line vertex's interpolants to a third.
 constant bool kTileFillFields = !kTileLineFields;
-/// The fill-outline variant of the fills class: the fill's ring edges drawn
-/// as one-pixel LINE primitives in the fill's colour, alpha by the
-/// fragment's distance to the projected edge (the fill-antialias
-/// construction of Mapbox GL). It softens the staircase the triangle
-/// rasterizer leaves on every fill edge, and under camera motion the
-/// fringe's alpha slides continuously instead of the edge jumping a pixel.
-/// Line fields never accompany it (a line primitive has no ribbon field).
-constant bool kTileFillOutline [[function_constant(2)]];
 /// The exact rank depth: the fragment stage writes the layer's rank as a
 /// constant ([[depth(any)]], tileExactDepthFragmentShader) instead of the
 /// rasterizer interpolating it from the vertex z. The vertex band below
@@ -48,11 +40,6 @@ constant bool kTileFillOutline [[function_constant(2)]];
 constant bool kTileExactRankDepth [[function_constant(3)]];
 constant bool kSamplesShadowCascades = !kGroundShadowMaskEnabled;
 
-/// The drawable size in pixels, what the outline needs to place the
-/// interpolated clip position in the fragment's pixel space.
-struct FillOutlineUniform {
-    float2 viewportSizePx;
-};
 // Mask pixels per drawable pixel; mirrors
 // GroundShadowMaskPipeline.resolutionScale. The mask is sampled bilinearly
 // at the pixel's position scaled by this, so a half-size mask upsamples
@@ -96,9 +83,6 @@ struct VertexOut {
     // uses. The one clip distance below is the road distance cut.
     float3 worldPos;
     half4 color [[function_constant(kTileFillFields)]];
-    // The footprint fade target with its strength in the alpha, palette
-    // blended like the colour (flat: one value per style).
-    half4 farColor [[flat, function_constant(kTileFillFields)]];
     // Lines classes: the style index rides flat and the fragment resolves
     // colour, fade and line style itself; only the two genuinely
     // per-vertex line fields interpolate (the longitudinal parameter raw,
@@ -116,12 +100,6 @@ struct VertexOut {
     // the centreline, and only the axis is read). Zero where nothing is
     // deferred.
     float2 widthAxis [[function_constant(kTileLineFields)]];
-    // The outline variant carries the clip position once more, as an
-    // ordinary (perspective-correct) interpolant: divided by w in the
-    // fragment it is the point of the projected edge the rasterizer paired
-    // with this fragment, and unlike a screen position computed per vertex
-    // it survives a segment clipped by the near plane.
-    float4 clipPosition [[function_constant(kTileFillOutline)]];
     // The exact variant: the layer's rank depth, flat, written by the
     // fragment stage as the fragment's depth.
     float rankDepth [[flat, function_constant(kTileExactRankDepth)]];
@@ -136,13 +114,11 @@ struct FragmentIn {
     float4 position [[position]];
     float3 worldPos;
     half4 color [[function_constant(kTileFillFields)]];
-    half4 farColor [[flat, function_constant(kTileFillFields)]];
     uint styleIndex [[flat, function_constant(kTileLineFields)]];
     float lineDistance [[function_constant(kTileLineFields)]];
     float lineParameterRaw [[function_constant(kTileLineFields)]];
     float deferredEdgePx [[flat, function_constant(kTileLineFields)]];
     float2 widthAxis [[function_constant(kTileLineFields)]];
-    float4 clipPosition [[function_constant(kTileFillOutline)]];
     float rankDepth [[flat, function_constant(kTileExactRankDepth)]];
 };
 
@@ -260,9 +236,6 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     // The near plane, in the clip space w (the view depth): what the z clip
     // would have cut had z been the projection's.
     out.clipDistance[0] = out.position.w - kFlatCameraNearPlane;
-    if (kTileFillOutline) {
-        out.clipPosition = out.position;
-    }
     if (kTileLineFields) {
         out.styleIndex = uint(vertexIn.styleIndex);
         out.lineDistance = float(vertexIn.lineDistance) / 127.0;
@@ -276,11 +249,6 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
         // and the frame only, so the fills fragment neither interpolates
         // the mask nor walks the fade bands.
         out.color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade);
-        if (style.lowZoomFadeMask >= 4.5h && style.lowZoomFadeMask < 9.5h) {
-            out.color.a *= half(tileFootprintAlpha(vertexIn.normal, modelMatrix, camera.matrix,
-                                                   out.position.w, overviewFade));
-        }
-        out.farColor = half4(styles[vertexIn.styleIndex].farColor);
     }
     return out;
 }
@@ -316,8 +284,6 @@ static inline half4 tileFragmentColor(FragmentIn in,
                                       constant Style* styles,
                                       constant float* lowZoomFadeMasks,
                                       constant LineStyle* lineStyles,
-                                      constant FillOutlineUniform& fillOutline,
-                                      constant FootprintFadeUniform& footprintFade,
                                       depth2d<float> shadowMap,
                                       texture2d<half> groundShadowMask) {
     float shadowFactor;
@@ -343,42 +309,8 @@ static inline half4 tileFragmentColor(FragmentIn in,
         color = tileLineFragmentColor(in.styleIndex, in.lineDistance, in.lineParameterRaw,
                                       styles, lowZoomFadeMasks, lineStyles,
                                       overviewFade, lineDash, deferredEdgePx);
-        // The roads (the deferred ribbons) fade as they get thinner on
-        // screen: the visible width is twice the resolved half-width.
-        if (in.deferredEdgePx > 0.0) {
-            color.a *= half(tileRoadThinnessFade(deferredEdgePx * 2.0,
-                                                 overviewFade.roadFadeOpaqueWidthPx));
-        }
     } else {
         color = in.color;
-        // The footprint fade: where this pixel covers more of the source
-        // tile than the fill's detail resolves (a tilted far range, a
-        // coarse tile minified), the colour converges on the style's far
-        // tone at the style's strength, so the blotches that flickered
-        // between samples become one plain. The derivatives are taken here,
-        // in uniform flow, before the outline branch.
-        float fade = tileFootprintFadeAmount(in.worldPos, footprintFade);
-        color.rgb = mix(color.rgb, in.farColor.rgb, half(fade) * in.farColor.a);
-        if (kTileFillOutline) {
-            // A fill too thin for a pixel would still draw its outline as a
-            // hairline the full width of the fill; past the fade the
-            // outline goes with the detail it was antialiasing.
-            color.a *= half(1.0 - fade);
-        }
-    }
-    if (kTileFillOutline) {
-        // The projected edge point paired with this fragment, in pixels of
-        // the drawable (origin top-left, like [[position]]), and its
-        // distance to the fragment centre: zero when the edge runs through
-        // the centre, about half a pixel when it grazes the pixel's side.
-        // The one-pixel line covers only the pixels along the edge, so the
-        // ramp is the edge's fringe: full colour on the edge, half a pixel
-        // out it is half, and the fill's own interior underneath is the
-        // same colour, so only the outside fringe is what shows.
-        float2 edgeNdc = in.clipPosition.xy / in.clipPosition.w;
-        float2 edgePx = (edgeNdc * float2(0.5, -0.5) + 0.5) * fillOutline.viewportSizePx;
-        float edgeDistancePx = length(edgePx - in.position.xy);
-        color.a *= half(1.0 - smoothstep(0.0, 1.0, edgeDistancePx));
     }
     // Zero normal (passed above): the ground always faces the sun and
     // keeps its tight contact (no normal-offset shift).
@@ -393,12 +325,10 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                                   constant Style* styles [[buffer(5), function_constant(kTileLineFields)]],
                                   constant float* lowZoomFadeMasks [[buffer(6), function_constant(kTileLineFields)]],
                                   constant LineStyle* lineStyles [[buffer(7), function_constant(kTileLineFields)]],
-                                  constant FillOutlineUniform& fillOutline [[buffer(9), function_constant(kTileFillOutline)]],
-                                  constant FootprintFadeUniform& footprintFade [[buffer(10), function_constant(kTileFillFields)]],
                                   depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
                                   texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
     return tileFragmentColor(in, overviewFade, shadow, lineDash, styles, lowZoomFadeMasks, lineStyles,
-                             fillOutline, footprintFade, shadowMap, groundShadowMask);
+                             shadowMap, groundShadowMask);
 }
 
 // The exact rank depth (kTileExactRankDepth): the same colour, and the
@@ -413,13 +343,11 @@ fragment TileExactDepthFragmentOut tileExactDepthFragmentShader(FragmentIn in [[
                                                                 constant Style* styles [[buffer(5), function_constant(kTileLineFields)]],
                                                                 constant float* lowZoomFadeMasks [[buffer(6), function_constant(kTileLineFields)]],
                                                                 constant LineStyle* lineStyles [[buffer(7), function_constant(kTileLineFields)]],
-                                                                constant FillOutlineUniform& fillOutline [[buffer(9), function_constant(kTileFillOutline)]],
-                                                                constant FootprintFadeUniform& footprintFade [[buffer(10), function_constant(kTileFillFields)]],
                                                                 depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
                                                                 texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
     TileExactDepthFragmentOut out;
     out.color = tileFragmentColor(in, overviewFade, shadow, lineDash, styles, lowZoomFadeMasks, lineStyles,
-                                  fillOutline, footprintFade, shadowMap, groundShadowMask);
+                                  shadowMap, groundShadowMask);
     out.depth = in.rankDepth;
     return out;
 }
@@ -428,8 +356,8 @@ fragment TileExactDepthFragmentOut tileExactDepthFragmentShader(FragmentIn in [[
 // whatever overlaps there: the segments and the join fan of a bend, two
 // streets at a junction, a flyover across the road under it, the stitching
 // margins of two tiles, a cap over the next piece. A translucent road (a
-// tunnel, a road the thinness fade has taken part of, a translucent theme
-// colour) otherwise composites twice in every overlap and stamps a darker
+// tunnel, a translucent theme colour) otherwise composites twice in every
+// overlap and stamps a darker
 // patch there. A sheet is one role of the roads that read as one network
 // (FlatMapSurfaceDrawer decides: the carriageways of the ground and of the
 // bridges together, whatever their class).
@@ -472,8 +400,8 @@ struct RoadSheetUniform {
     float rankBias;
 };
 
-/// A road fragment's alpha apart from its coverage: the style's, the zoom
-/// fades and the thinness fade, the factors tileFragmentColor applies.
+/// A road fragment's alpha apart from its coverage: the style's and the
+/// zoom fades, the factors tileFragmentColor applies.
 static inline float tileRoadSheetAlpha(FragmentIn in,
                                        constant Style* styles,
                                        constant float* lowZoomFadeMasks,
@@ -483,10 +411,6 @@ static inline float tileRoadSheetAlpha(FragmentIn in,
     float alpha = styles[in.styleIndex].color.a
         * float(tileStyleFade(half(lowZoomFadeMasks[in.styleIndex]), overviewFade))
         * tilePointWidthRampAlpha(lineStyles[in.styleIndex], overviewFade.cameraZoom);
-    if (in.deferredEdgePx > 0.0) {
-        alpha *= tileRoadThinnessFade(deferredEdgePx * 2.0,
-                                      overviewFade.roadFadeOpaqueWidthPx);
-    }
     return clamp(alpha, 0.0, 1.0);
 }
 
@@ -525,8 +449,6 @@ fragment TileExactDepthFragmentOut tileRoadSheetFragmentShader(FragmentIn in [[s
                                                                constant Style* styles [[buffer(5)]],
                                                                constant float* lowZoomFadeMasks [[buffer(6)]],
                                                                constant LineStyle* lineStyles [[buffer(7)]],
-                                                               constant FillOutlineUniform& fillOutline [[buffer(9), function_constant(kTileFillOutline)]],
-                                                               constant FootprintFadeUniform& footprintFade [[buffer(10), function_constant(kTileFillFields)]],
                                                                constant RoadSheetUniform& roadSheet [[buffer(11)]],
                                                                depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
                                                                texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
@@ -536,7 +458,7 @@ fragment TileExactDepthFragmentOut tileRoadSheetFragmentShader(FragmentIn in [[s
     float alpha = tileRoadSheetAlpha(in, styles, lowZoomFadeMasks, lineStyles, overviewFade, deferredEdgePx);
     TileExactDepthFragmentOut out;
     out.color = tileFragmentColor(in, overviewFade, shadow, lineDash, styles, lowZoomFadeMasks, lineStyles,
-                                  fillOutline, footprintFade, shadowMap, groundShadowMask);
+                                  shadowMap, groundShadowMask);
     out.depth = tileRoadSheetDepth(coverage, alpha, roadSheet);
     return out;
 }
