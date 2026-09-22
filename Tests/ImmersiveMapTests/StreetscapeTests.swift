@@ -112,8 +112,12 @@ final class StreetscapeTests: XCTestCase {
 
     // MARK: - A street map's strokes, width by class
 
-    private func roadStyle(_ properties: [String: String], tile: Tile, streetscape: Bool) -> FeatureStyle {
-        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
+    private func roadStyle(_ properties: [String: String],
+                           tile: Tile,
+                           streetscape: Bool,
+                           cased: Bool = false) -> FeatureStyle {
+        let theme = ImmersiveMapTilesTheme.default.roadMetrics { $0.drawsCasing = cased }
+        let style = ImmersiveMapTilesDefaultMapStyle(theme: theme)
         return style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                          properties: properties.mapValues { MvtValue.string($0) },
                                                          tile: tile,
@@ -150,9 +154,13 @@ final class StreetscapeTests: XCTestCase {
     }
 
     func testAStrokeWearsACasingAndNoCeilingAndNoPaint() {
-        let stroke = roadStyle(["class": "primary", "lanes": "4", "lanes_src": "tagged"], tile: tile, streetscape: false)
+        let plain = roadStyle(["class": "primary", "lanes": "4", "lanes_src": "tagged"], tile: tile, streetscape: false)
+        XCTAssertFalse(plain.lineRenderPasses.contains { $0.roadPassRole == .casing },
+                       "A road draws without an outline unless the theme asks for one")
+        let stroke = roadStyle(["class": "primary", "lanes": "4", "lanes_src": "tagged"], tile: tile,
+                               streetscape: false, cased: true)
         let casing = stroke.lineRenderPasses.first { $0.roadPassRole == .casing }
-        XCTAssertNotNil(casing, "A street map's road has a casing")
+        XCTAssertNotNil(casing, "With the theme's switch on, a street map's road has a casing")
         let strokeUnitsPerPoint = ImmersiveMapTilesDefaultMapStyle.streetStrokeUnitsPerPoint(tile: tile)
         XCTAssertEqual(casing?.lineGeometry.lineWidth ?? 0,
                        stroke.lineGeometry.lineWidth + 2 * strokeUnitsPerPoint,

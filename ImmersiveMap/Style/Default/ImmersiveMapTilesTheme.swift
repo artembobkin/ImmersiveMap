@@ -228,6 +228,13 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
         /// in camera zoom. Zero keeps every road a symbol at every zoom.
         public var worldLockZoom: Float
 
+        /// Whether a street map's road stroke wears a casing, an outline a
+        /// point wide on each side that eases in at street zoom. Off by
+        /// default: the roads read as one sheet of asphalt against the
+        /// ground, and an outline around every street turns the sheet back
+        /// into separate ribbons.
+        public var drawsCasing: Bool
+
         /// The tile zoom a class first draws at. The street era draws what
         /// the tiles carry from this zoom on. A value under the zoom the
         /// source first ships the class at changes nothing.
@@ -239,6 +246,7 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
                     symbolZoom: Float = 14,
                     overviewOpacity: Float = 0.6,
                     worldLockZoom: Float = 15,
+                    drawsCasing: Bool = false,
                     minimumTileZoom: RoadClassValues<Int> = RoadMetrics.defaultMinimumTileZoom) {
             self.symbolWidthPoints = symbolWidthPoints
             self.overviewWidthPoints = overviewWidthPoints
@@ -246,6 +254,7 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
             self.symbolZoom = symbolZoom
             self.overviewOpacity = overviewOpacity
             self.worldLockZoom = worldLockZoom
+            self.drawsCasing = drawsCasing
             self.minimumTileZoom = minimumTileZoom
         }
 
@@ -474,6 +483,7 @@ public struct ImmersiveMapTilesTheme: Equatable, Sendable {
         out.append(contentsOf: roadMetrics.overviewWidthPoints.all)
         out.append(contentsOf: [roadMetrics.overviewZoom, roadMetrics.symbolZoom, roadMetrics.overviewOpacity])
         out.append(roadMetrics.worldLockZoom)
+        out.append(roadMetrics.drawsCasing ? 1 : 0)
         out.append(contentsOf: roadMetrics.minimumTileZoom.all.map(Float.init))
         return out
     }

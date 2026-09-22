@@ -590,7 +590,9 @@ extension ImmersiveMapTilesDefaultMapStyle {
         let symbolCeilingPoints: Float = strokes || Self.roadsAreScreenFixed ? 0 : maximumWidthPoints
 
         var casingPass: LinePass?
-        if casing, tunnel == false, Self.drawsAutomobileKerb || strokes {
+        // A carriageway's kerb is the style's own switch, a stroke's casing
+        // the theme's (`RoadMetrics.drawsCasing`).
+        if casing, tunnel == false, Self.drawsAutomobileKerb || (strokes && theme.roadMetrics.drawsCasing) {
             // The casing is a kerb: a fixed margin of ground on each side of
             // the carriageway, not a fraction of it. As a fraction it was a
             // few units on a symbolic width and metres wide on a true one,

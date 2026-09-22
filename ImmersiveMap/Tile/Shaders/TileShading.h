@@ -184,15 +184,24 @@ struct OverviewFadeUniform {
     // a point-locked deferred ribbon's width is stated at. Zero: the width
     // holds in pixels at every depth. See tilePointWidthPerspectiveScale.
     float pointWidthReferenceDepth;
-    // The roads' thinness fade, as widths on screen in pixels; see
+    // The roads' thinness fade, as a width on screen in pixels; see
     // tileRoadThinnessFade. A zero opaque width turns it off.
-    float roadFadeGoneWidthPx;
     float roadFadeOpaqueWidthPx;
     // The footprint fade of the building fills, as footprint areas on
     // screen in square pixels (BuildingFootprintFade). A zero opaque area
     // turns it off. The extruded buildings do not fade.
     float footprintGoneAreaPx;
     float footprintOpaqueAreaPx;
+    // The pixels one world unit of ground spans across the view at the
+    // centre of the screen: what turns a width in pixels there into the
+    // width on the ground every road of that style lies at. Zero: the
+    // widths follow the distance alone.
+    float pointWidthCentrePixelsPerWorldUnit;
+    // The camera matrix's columns of the two ground axes, their x, y and w
+    // rows: what a ground direction becomes in clip space, for the fragment
+    // stage, which has no camera matrix of its own.
+    packed_float3 groundAxisXClip;
+    packed_float3 groundAxisYClip;
 };
 
 /// The alpha of a fill of the footprint fade band (mask 5, see
@@ -227,32 +236,62 @@ static inline float tileFootprintAlpha(float2 packedRadius,
                       areaPx);
 }
 
-/// How much a point-locked deferred ribbon's width scales at a view depth:
-/// the style's points hold at the centre of the screen and the width
-/// follows the perspective from there, thinner toward the horizon and
-/// wider in the foreground, the way a width on the ground would. The
-/// foreground growth is capped so a road under a low camera stays a symbol.
-/// A width frozen on the ground (`worldScale` above one, see
-/// tilePointWidthWorldScale) is no symbol any more: the cap lifts with the
-/// scale, so the foreground of a street view follows the true perspective.
-constant float kTilePointWidthPerspectiveMaximum = 2.0;
-static inline float tilePointWidthPerspectiveScale(float referenceDepth, float viewDepth, float worldScale) {
-    if (referenceDepth <= 0.0) {
-        return 1.0;
-    }
-    return min(referenceDepth / max(viewDepth, 1e-6), kTilePointWidthPerspectiveMaximum * worldScale);
+/// The pixels one world unit of ground spans on screen along `axis` at a
+/// point of the screen: across the view the ground shrinks with the
+/// distance and nothing else, into the view the grazing angle flattens it
+/// much faster, down to nothing at the horizon. `ndc` is the point on
+/// screen, `viewDepth` its depth.
+static inline float tileGroundPixelsPerWorldUnit(float2 axis,
+                                                 float2 ndc,
+                                                 float viewDepth,
+                                                 constant OverviewFadeUniform& overviewFade) {
+    float3 clipStep = float3(overviewFade.groundAxisXClip) * axis.x
+        + float3(overviewFade.groundAxisYClip) * axis.y;
+    float2 halfViewport = overviewFade.viewportSizePx * 0.5;
+    return length((clipStep.xy - ndc * clipStep.z) * halfViewport) / max(viewDepth, 1e-6);
 }
 
+/// How much a point-locked deferred ribbon's width scales at a point of the
+/// screen. The width lies on the ground: one ground width per road,
+/// whatever way the road runs, chosen so that a road running along the
+/// view through the centre of the screen is exactly its style's points
+/// wide. From there the perspective does the rest, as it does to the
+/// blocks around the road: thinner toward the horizon, wider in the
+/// foreground, and a road across the view thinner than one along it under
+/// a tilted camera. Nothing about it depends on the camera's bearing, so
+/// a turn of the camera changes no road's width on the ground and every
+/// segment of a bend is as wide as the next. `axis` is the ground
+/// direction the width is laid in. A zero axis (the hub of a fan, the
+/// centreline of a segment) takes the distance alone.
+static inline float tilePointWidthPerspectiveScale(constant OverviewFadeUniform& overviewFade,
+                                                   float viewDepth,
+                                                   float2 axis,
+                                                   float2 ndc) {
+    if (overviewFade.pointWidthReferenceDepth <= 0.0) {
+        return 1.0;
+    }
+    if (overviewFade.pointWidthCentrePixelsPerWorldUnit <= 0.0 || dot(axis, axis) <= 1e-6) {
+        return overviewFade.pointWidthReferenceDepth / max(viewDepth, 1e-6);
+    }
+    return tileGroundPixelsPerWorldUnit(normalize(axis), ndc, viewDepth, overviewFade)
+        / overviewFade.pointWidthCentrePixelsPerWorldUnit;
+}
+
+/// The narrowest antialiasing band a line is laid in: half a pixel each
+/// side of its centre. A thinner line draws in it at the share of it the
+/// line covers (tileLineCoverage).
+constant float kTileLineMinimumEdgePx = 0.5;
+
 /// How much of a road is left at its width on screen: a road thinner than
-/// `opaqueWidthPx` fades with its width and is gone at `goneWidthPx`, so a
+/// `opaqueWidthPx` fades with its width, down to nothing at no width, so a
 /// road the perspective has thinned leaves the picture instead of staying
 /// a full-strength hairline. One when `opaqueWidthPx` is zero (off).
 /// Mirrored by RoadThinnessFade.alpha.
-static inline float tileRoadThinnessFade(float widthPx, float goneWidthPx, float opaqueWidthPx) {
+static inline float tileRoadThinnessFade(float widthPx, float opaqueWidthPx) {
     if (opaqueWidthPx <= 0.0) {
         return 1.0;
     }
-    return smoothstep(goneWidthPx, max(opaqueWidthPx, goneWidthPx + 1e-3), widthPx);
+    return smoothstep(0.0, opaqueWidthPx, widthPx);
 }
 
 /// Per-draw dash scale: tile units per layout point at the tile's nominal
@@ -388,18 +427,21 @@ static inline half tileLineCoverage(float lineDistance,
             edgePx = max(edgePx, floorPx);
         }
     }
-    // Never thinner than a pixel: a line the style wants narrower draws a
-    // pixel wide at the alpha of its width (Mapbox GL's rule), so a
-    // hairline keeps its brightness under camera motion instead of
-    // flickering as its sub-pixel band crosses pixel centres. The rim
-    // still bounds the edge: the ribbon is tessellated wide enough for
-    // this (ParseLine.minimumExtrudedHalfWidth).
-    const float minimumEdgePx = 0.5;
+    // A line under a pixel wide covers a fraction of the pixels it crosses,
+    // and draws as that: the antialiasing band is a pixel wide whatever the
+    // line is, so the band is laid a pixel wide and carries the share of
+    // it the line covers (Mapbox GL's rule). The line is not made a pixel
+    // wide: it keeps the light a line of its width has, and fades out as
+    // it thins instead of standing as a solid hairline. Without the share a
+    // line of no width at all would still draw at half strength, and one
+    // laid at its own width would flicker as its sub-pixel band crossed
+    // pixel centres. The rim still bounds the edge: the ribbon is
+    // tessellated wide enough for this (ParseLine.minimumExtrudedHalfWidth).
     float requestedEdgePx = edgePx;
-    edgePx = max(edgePx, min(minimumEdgePx, rimPx - 0.5));
-    float thinness = clamp(requestedEdgePx / minimumEdgePx, 0.0, 1.0);
+    edgePx = max(edgePx, min(kTileLineMinimumEdgePx, rimPx - 0.5));
+    float widthShare = clamp(requestedEdgePx / kTileLineMinimumEdgePx, 0.0, 1.0);
     float sideDistancePx = edgePx - abs(lineDistance) * rimPx;
-    float coverage = smoothstep(-0.5, 0.5, sideDistancePx) * thinness;
+    float coverage = smoothstep(-0.5, 0.5, sideDistancePx) * widthShare;
 
     half dashLengthPoints = lineStyle.z;
     if (dashLengthPoints > 0.0h) {

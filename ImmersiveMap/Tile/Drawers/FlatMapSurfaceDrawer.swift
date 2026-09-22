@@ -114,6 +114,7 @@ enum FlatMapSurfaceDrawer {
             viewportSizePx: drawableSizePx,
             pointWidthReferenceDepth: screenCentreGroundDepth(cameraMatrix: cameraUniform.matrix),
             roadThinnessFade: roadThinnessFade,
+            cameraMatrix: cameraUniform.matrix,
             footprintGoneAreaPx: footprintGoneAreaPx,
             footprintOpaqueAreaPx: footprintOpaqueAreaPx
         )

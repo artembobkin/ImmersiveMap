@@ -5,36 +5,27 @@ import Foundation
 
 /// The roads' thinness fade: a road becomes more transparent as it gets
 /// thinner on screen. At `opaqueWidthPixels` wide and over it draws at its
-/// style's alpha, at `goneWidthPixels` and under it is gone, and it fades
-/// smoothly between the two. The widths are the road's visible width in
+/// style's alpha, and under that it fades smoothly with its width, down to
+/// nothing at no width at all. The width is the road's visible width in
 /// drawable pixels, after the perspective has thinned it. Edited in the
 /// debug panel. Mirror of `tileRoadThinnessFade` in TileShading.h.
 struct RoadThinnessFade: Hashable {
-    var goneWidthPixels: Float
     var opaqueWidthPixels: Float
 
-    static let goneRange: ClosedRange<Double> = 0 ... 8
     static let opaqueRange: ClosedRange<Double> = 0 ... 16
-    /// Under every symbol width of the built-in style on a 1x display (the
-    /// thinnest class is two points wide), so a road at the width its style
-    /// states is opaque, and the fade takes only what the perspective has
-    /// thinned toward a hairline. A default above the symbol widths left
-    /// every road translucent up close and the thin classes gone outright.
-    static let `default` = RoadThinnessFade(goneWidthPixels: 1.5, opaqueWidthPixels: 3.5)
+    static let `default` = RoadThinnessFade(opaqueWidthPixels: 10)
     /// No fade: what a rasterized tile's picture is drawn with, where a
     /// pixel is a texel of the picture and not of the screen.
-    static let off = RoadThinnessFade(goneWidthPixels: 0, opaqueWidthPixels: 0)
+    static let off = RoadThinnessFade(opaqueWidthPixels: 0)
 
-    init(goneWidthPixels: Float, opaqueWidthPixels: Float) {
-        self.goneWidthPixels = max(goneWidthPixels, 0)
+    init(opaqueWidthPixels: Float) {
         self.opaqueWidthPixels = max(opaqueWidthPixels, 0)
     }
 
     /// The share of a road's alpha left at a width on screen.
     func alpha(widthPixels: Float) -> Float {
         guard opaqueWidthPixels > 0 else { return 1 }
-        let upper = max(opaqueWidthPixels, goneWidthPixels + 1e-3)
-        let t = min(max((widthPixels - goneWidthPixels) / (upper - goneWidthPixels), 0), 1)
+        let t = min(max(widthPixels / opaqueWidthPixels, 0), 1)
         return t * t * (3 - 2 * t)
     }
 }

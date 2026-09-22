@@ -11,11 +11,14 @@ import XCTest
 /// pass's fade band).
 final class RoadPathAndCasingStyleTests: XCTestCase {
     private let style = ImmersiveMapTilesDefaultMapStyle()
+    /// The same style with the theme's stroke casing switched on.
+    private let casedStyle = ImmersiveMapTilesDefaultMapStyle(
+        theme: ImmersiveMapTilesTheme.default.roadMetrics { $0.drawsCasing = true })
 
-    private func roadStyle(cls: String, zoom: Int) -> FeatureStyle {
+    private func roadStyle(cls: String, zoom: Int, cased: Bool = false) -> FeatureStyle {
         // A street map's layer, without the streetscape: the road is a
         // stroke with a casing, not a measured carriageway.
-        style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
+        (cased ? casedStyle : style).makeStyle(data: DetFeatureStyleData(layerName: "transportation",
                                                   properties: ["class": .string(cls)],
                                                   tile: Tile(x: 0, y: 0, z: zoom),
                                                   layerCarriesStreetscape: false,
@@ -40,7 +43,9 @@ final class RoadPathAndCasingStyleTests: XCTestCase {
     /// fade band, while the fill keeps the road band.
     func testTheCasingCarriesItsZoomAsTheFadeBand() {
         XCTAssertEqual(ImmersiveMapTilesDefaultMapStyle.casingMinimumCameraZoom, 16)
-        let street = roadStyle(cls: "motorway", zoom: 14)
+        XCTAssertNil(roadStyle(cls: "motorway", zoom: 14).resolvedLineRenderPasses.first { $0.roadPassRole == .casing },
+                     "a road draws without an outline unless the theme asks for one")
+        let street = roadStyle(cls: "motorway", zoom: 14, cased: true)
         let casing = street.resolvedLineRenderPasses.first { $0.roadPassRole == .casing }!
         let fill = street.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
         XCTAssertEqual(casing.lowZoomFadeMask, LowZoomOverviewFade.classFadeMask(startZoom: 16))

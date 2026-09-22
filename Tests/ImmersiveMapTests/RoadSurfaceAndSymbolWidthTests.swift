@@ -110,12 +110,25 @@ final class RoadSurfaceAndSymbolWidthTests: XCTestCase {
         XCTAssertEqual(TileUnificationStage.makeTileLineStyle(from: pass).worldLockZoom, 14)
     }
 
-    func testARoadAtItsSymbolWidthIsOpaqueUnderTheDefaultThinnessFade() {
-        // The thinnest symbol is two points, which is two pixels on a 1x
-        // display: the fade must leave it whole and only take hairlines.
-        let thinnest = ImmersiveMapTilesTheme.RoadMetrics.defaultSymbolWidthPoints.all.min()!
-        XCTAssertEqual(RoadThinnessFade.default.alpha(widthPixels: thinnest), 1)
-        XCTAssertEqual(RoadThinnessFade.default.alpha(widthPixels: 0.5), 0)
+    func testTheThinnessFadeRunsFromNoWidthToItsOpaqueWidth() {
+        let fade = RoadThinnessFade.default
+        XCTAssertEqual(fade.opaqueWidthPixels, 10)
+        XCTAssertEqual(fade.alpha(widthPixels: 10), 1)
+        XCTAssertEqual(fade.alpha(widthPixels: 24), 1)
+        XCTAssertEqual(fade.alpha(widthPixels: 5), 0.5, accuracy: 1e-6, "half the width is half way up the ramp")
+        // The fade runs all the way down: a road of no width is gone.
+        XCTAssertEqual(fade.alpha(widthPixels: 0), 0)
+        XCTAssertLessThan(fade.alpha(widthPixels: 0.2), fade.alpha(widthPixels: 1))
+        XCTAssertEqual(RoadThinnessFade.off.alpha(widthPixels: 0.2), 1)
+    }
+
+    func testALineUnderAPixelDrawsAtTheShareOfThePixelItCovers() throws {
+        let source = try String(contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("ImmersiveMap/Tile/Shaders/TileShading.h"), encoding: .utf8)
+        XCTAssertTrue(source.contains("float widthShare = clamp(requestedEdgePx / kTileLineMinimumEdgePx, 0.0, 1.0);"))
+        XCTAssertTrue(source.contains("smoothstep(-0.5, 0.5, sideDistancePx) * widthShare;"),
+                      "a sub-pixel line is not forced into a solid pixel-wide one")
     }
 
     func testTheSurfaceBlendIsContinuousAcrossTheHandoverZooms() {

@@ -155,8 +155,6 @@ final class DebugOverlayHUDView: NSView {
     private let buildingFadeSlider = NSSlider()
     /// The roads' thinness fade, two widths on screen in pixels
     /// (`RoadThinnessFade`).
-    private let roadFadeGoneLabel = NSTextField(labelWithString: "")
-    private let roadFadeGoneSlider = NSSlider()
     private let roadFadeOpaqueLabel = NSTextField(labelWithString: "")
     private let roadFadeOpaqueSlider = NSSlider()
     /// The raster zone (`RasterZone`): whether the far ground turns into
@@ -311,9 +309,7 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(buildingFadeLabel, text: "")
         configureSlider(buildingCutSlider, range: BuildingFootprintFade.goneAreaRange, action: #selector(buildingLODSliderChanged))
         configureSlider(buildingFadeSlider, range: BuildingFootprintFade.opaqueAreaRange, action: #selector(buildingLODSliderChanged))
-        configureControlLabel(roadFadeGoneLabel, text: "")
         configureControlLabel(roadFadeOpaqueLabel, text: "")
-        configureSlider(roadFadeGoneSlider, range: RoadThinnessFade.goneRange, action: #selector(roadThinnessFadeSliderChanged))
         configureSlider(roadFadeOpaqueSlider, range: RoadThinnessFade.opaqueRange, action: #selector(roadThinnessFadeSliderChanged))
         configureControlLabel(rasterZoneLabel, text: "Raster zone: far ground as pictures")
         configureControlLabel(rasterZoneStartLabel, text: "")
@@ -472,7 +468,7 @@ final class DebugOverlayHUDView: NSView {
          tileGridLabel, tileGridSwitch, tileGridDensityControl,
          wireframeLabel, wireframeSwitch,
          buildingCutLabel, buildingCutSlider, buildingFadeLabel, buildingFadeSlider,
-         roadFadeGoneLabel, roadFadeGoneSlider, roadFadeOpaqueLabel, roadFadeOpaqueSlider,
+         roadFadeOpaqueLabel, roadFadeOpaqueSlider,
          rasterZoneLabel, rasterZoneSwitch, rasterZoneStartLabel, rasterZoneStartSlider,
          rasterZoneTransitionLabel, rasterZoneTransitionSlider,
          rasterZoneFootprintsLabel, rasterZoneFootprintsSwitch, rasterZoneLinesLabel, rasterZoneLinesSwitch,
@@ -685,7 +681,6 @@ final class DebugOverlayHUDView: NSView {
         buildingCutSlider.doubleValue = Double(tuning.buildingGoneAreaPixels)
         buildingFadeSlider.doubleValue = Double(tuning.buildingOpaqueAreaPixels)
         updateBuildingLODLabels()
-        roadFadeGoneSlider.doubleValue = Double(tuning.roadThinnessFade.goneWidthPixels)
         roadFadeOpaqueSlider.doubleValue = Double(tuning.roadThinnessFade.opaqueWidthPixels)
         updateRoadThinnessFadeLabels()
         rasterZoneSwitch.state = tuning.rasterZone.isEnabled ? .on : .off
@@ -955,7 +950,6 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutFullWidthRow(ringRuleSetsRemoveButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutControlRow(buildingCutLabel, buildingCutSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(buildingFadeLabel, buildingFadeSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(roadFadeGoneLabel, roadFadeGoneSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(roadFadeOpaqueLabel, roadFadeOpaqueSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(rasterZoneLabel, rasterZoneSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(rasterZoneStartLabel, rasterZoneStartSlider, at: cursor, contentWidth: contentWidth)
@@ -1375,10 +1369,6 @@ final class DebugOverlayHUDView: NSView {
         onRingRuleSetsChanged?(ringRuleSets)
     }
 
-    static func roadFadeGoneTitle(pixels: Float) -> String {
-        String(format: "Roads: gone under %.1f px wide", pixels)
-    }
-
     static func roadFadeOpaqueTitle(pixels: Float) -> String {
         pixels > 0
             ? String(format: "Roads: opaque from %.1f px wide", pixels)
@@ -1386,14 +1376,12 @@ final class DebugOverlayHUDView: NSView {
     }
 
     private func updateRoadThinnessFadeLabels() {
-        roadFadeGoneLabel.stringValue = Self.roadFadeGoneTitle(pixels: Float(roadFadeGoneSlider.doubleValue))
         roadFadeOpaqueLabel.stringValue = Self.roadFadeOpaqueTitle(pixels: Float(roadFadeOpaqueSlider.doubleValue))
     }
 
     @objc private func roadThinnessFadeSliderChanged() {
         updateRoadThinnessFadeLabels()
-        selectedTuning.roadThinnessFade = RoadThinnessFade(goneWidthPixels: Float(roadFadeGoneSlider.doubleValue),
-                                                           opaqueWidthPixels: Float(roadFadeOpaqueSlider.doubleValue))
+        selectedTuning.roadThinnessFade = RoadThinnessFade(opaqueWidthPixels: Float(roadFadeOpaqueSlider.doubleValue))
         onRingRuleSetsChanged?(ringRuleSets)
     }
 

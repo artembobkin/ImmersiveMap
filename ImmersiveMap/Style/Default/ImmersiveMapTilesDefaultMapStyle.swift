@@ -17,7 +17,7 @@ import simd
 /// `Streetscape` and `Labels`. Nothing in them is public: the members are
 /// internal only so that the extensions can share them across files.
 public struct ImmersiveMapTilesDefaultMapStyle: ImmersiveMapVectorTileStyle {
-    static let implementationRevision: UInt32 = 76
+    static let implementationRevision: UInt32 = 77
     /// Roads opt into the engine's z3->4 camera-zoom fade band, so the major
     /// classes ease in over the globe instead of popping with the z4 tiles.
     let roadLowZoomFadeMask: Float = 2.0

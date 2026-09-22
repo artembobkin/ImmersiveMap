@@ -110,6 +110,12 @@ struct VertexOut {
     // the style and the vertex's own scale on screen (the rim is extruded
     // one feather past it); zero for a pre-extruded ribbon.
     float deferredEdgePx [[flat, function_constant(kTileLineFields)]];
+    // The ground direction a deferred ribbon's width is laid in: the
+    // extrusion direction, interpolated, so across a fan it sweeps with the
+    // rim and across a segment it keeps its axis (the sign flips through
+    // the centreline, and only the axis is read). Zero where nothing is
+    // deferred.
+    float2 widthAxis [[function_constant(kTileLineFields)]];
     // The outline variant carries the clip position once more, as an
     // ordinary (perspective-correct) interpolant: divided by w in the
     // fragment it is the point of the projected edge the rasterizer paired
@@ -135,6 +141,7 @@ struct FragmentIn {
     float lineDistance [[function_constant(kTileLineFields)]];
     float lineParameterRaw [[function_constant(kTileLineFields)]];
     float deferredEdgePx [[flat, function_constant(kTileLineFields)]];
+    float2 widthAxis [[function_constant(kTileLineFields)]];
     float4 clipPosition [[function_constant(kTileFillOutline)]];
     float rankDepth [[flat, function_constant(kTileExactRankDepth)]];
 };
@@ -156,6 +163,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                                   constant OverviewFadeUniform& overviewFade [[buffer(8)]]) {
     float2 localPosition = float2(vertexIn.position.xy);
     float deferredEdgePx = 0.0;
+    float2 widthAxis = float2(0.0);
     if (kTileLineFields) {
         // A deferred ribbon: the vertex is a point of the centreline and
         // carries the direction to extrude along. The style's width is
@@ -169,6 +177,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
         float2 normal = vertexIn.normal;
         if (dot(normal, normal) > 0.25) {
             normal = normalize(normal);
+            widthAxis = normal;
             LineStyle lineStyle = lineStyles[vertexIn.styleIndex];
             float4 clipCentre = camera.matrix * (modelMatrix * float4(localPosition, 0.0, 1.0));
             float4 clipAlong = camera.matrix * (modelMatrix * float4(normal, 0.0, 0.0));
@@ -190,9 +199,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
             // pixel whatever depth range the triangle spans.
             float rimEdgePx = deferredEdgePx;
             if (lineStyle.widthPoints > 0.0) {
-                rimEdgePx *= tilePointWidthPerspectiveScale(
-                    overviewFade.pointWidthReferenceDepth, w0,
-                    tilePointWidthWorldScale(lineStyle.worldLockZoom, overviewFade.cameraZoom));
+                rimEdgePx *= tilePointWidthPerspectiveScale(overviewFade, w0, normal, clipCentre.xy / w0);
             }
             float units = min((rimEdgePx + kTileDeferredRibbonFeatherPx) / pixelsPerUnit,
                               kTileDeferredRibbonMaximumUnits);
@@ -230,6 +237,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
         out.lineDistance = float(vertexIn.lineDistance) / 127.0;
         out.lineParameterRaw = float(vertexIn.lineParameter);
         out.deferredEdgePx = deferredEdgePx;
+        out.widthAxis = widthAxis;
     } else {
         TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles);
         out.color = style.color;
@@ -254,10 +262,13 @@ static inline float tileFragmentDeferredEdgePx(FragmentIn in,
                                                constant OverviewFadeUniform& overviewFade) {
     float deferredEdgePx = in.deferredEdgePx;
     if (deferredEdgePx > 0.0 && lineStyles[in.styleIndex].widthPoints > 0.0) {
-        deferredEdgePx *= tilePointWidthPerspectiveScale(
-            overviewFade.pointWidthReferenceDepth,
-            1.0 / max(in.position.w, 1e-6),
-            tilePointWidthWorldScale(lineStyles[in.styleIndex].worldLockZoom, overviewFade.cameraZoom));
+        // The pixel's place on screen in NDC, y up.
+        float2 ndc = in.position.xy / max(overviewFade.viewportSizePx, float2(1.0)) * float2(2.0, -2.0)
+            + float2(-1.0, 1.0);
+        deferredEdgePx *= tilePointWidthPerspectiveScale(overviewFade,
+                                                         1.0 / max(in.position.w, 1e-6),
+                                                         in.widthAxis,
+                                                         ndc);
     }
     return deferredEdgePx;
 }
@@ -305,7 +316,6 @@ static inline half4 tileFragmentColor(FragmentIn in,
         // screen: the visible width is twice the resolved half-width.
         if (in.deferredEdgePx > 0.0) {
             color.a *= half(tileRoadThinnessFade(deferredEdgePx * 2.0,
-                                                 overviewFade.roadFadeGoneWidthPx,
                                                  overviewFade.roadFadeOpaqueWidthPx));
         }
     } else {
@@ -444,7 +454,6 @@ static inline float tileRoadSheetAlpha(FragmentIn in,
         * tilePointWidthRampAlpha(lineStyles[in.styleIndex], overviewFade.cameraZoom);
     if (in.deferredEdgePx > 0.0) {
         alpha *= tileRoadThinnessFade(deferredEdgePx * 2.0,
-                                      overviewFade.roadFadeGoneWidthPx,
                                       overviewFade.roadFadeOpaqueWidthPx);
     }
     return clamp(alpha, 0.0, 1.0);
