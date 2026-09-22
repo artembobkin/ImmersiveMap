@@ -181,8 +181,25 @@ struct LineFeatureReader {
                             let endFree = endContinuation == false
                                 && endConnected == false
                                 && renderFragment.points.last.map { isPointStrictlyInsideTile($0) } == true
-                            let startCapRound = lineRenderPass.lineGeometry.lineCapRound && startFree
-                            let endCapRound = lineRenderPass.lineGeometry.lineCapRound && endFree
+                            // A connected end where the road goes on as another piece
+                            // of the same style is rounded off, whatever the style's
+                            // cap: the disc fills the wedge two square cuts leave on
+                            // the outside of a bend, and its overlap with the next piece
+                            // is invisible (`RoadLayerPrecomputation.continuationKeysByPoint`).
+                            let startContinuesSameStyle = startConnected
+                                && startContinuation == false
+                                && isRoadContinuationEndpoint(renderFragment.points.first,
+                                                              key: style.key,
+                                                              precomputation: precomputation)
+                            let endContinuesSameStyle = endConnected
+                                && endContinuation == false
+                                && isRoadContinuationEndpoint(renderFragment.points.last,
+                                                              key: style.key,
+                                                              precomputation: precomputation)
+                            let startCapRound = (lineRenderPass.lineGeometry.lineCapRound && startFree)
+                                || startContinuesSameStyle
+                            let endCapRound = (lineRenderPass.lineGeometry.lineCapRound && endFree)
+                                || endContinuesSameStyle
                             let styleData = lineRenderPass.lineGeometry
 
                             if let linePolygon = tools.parseLine.parse(points: renderFragment.points,
@@ -325,6 +342,15 @@ struct LineFeatureReader {
         point.x < tileExtent &&
         point.y > 0.0 &&
         point.y < tileExtent
+    }
+
+    private func isRoadContinuationEndpoint(_ point: SIMD2<Float>?,
+                                            key: UInt8,
+                                            precomputation: RoadLayerPrecomputation) -> Bool {
+        guard let point else {
+            return false
+        }
+        return precomputation.continuationKeysByPoint[RoadConnectionPointKey(point: point)]?.contains(key) == true
     }
 
     private func isRoadBoundaryContinuationEndpoint(_ point: SIMD2<Float>?) -> Bool {

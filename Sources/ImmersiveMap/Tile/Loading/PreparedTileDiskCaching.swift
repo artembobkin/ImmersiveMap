@@ -770,7 +770,11 @@ final class PreparedTileDiskCaching {
     // again. A v104 entry has the wider style stride, a trailing line list
     // the drawer would read as triangles, and building fills baked on
     // mask 5.
-    static let preparedFormatVersion: UInt32 = 105
+    // 106: a road piece's connected end at a node where the road goes on
+    // as another piece of the same style is rounded off with a cap
+    // (`RoadLayerPrecomputation.continuationKeysByPoint`); a v105 entry
+    // has square cuts there and a wedge of ground open on every bend.
+    static let preparedFormatVersion: UInt32 = 106
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

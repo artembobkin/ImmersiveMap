@@ -50,6 +50,21 @@ struct RoadSurfaceArea {
 /// `empty` for every other layer.
 struct RoadLayerPrecomputation {
     let sharedPointCounts: [RoadConnectionPointKey: Int]
+    /// The nodes where a road continues as another piece of the same
+    /// style: for each point, the road identity keys (`RoadStyle.key`) of
+    /// which two or more features END there. The pieces the tiles ship
+    /// cut at such a node draw as separate ribbons whenever the stitcher
+    /// leaves them apart (no street identity on the geometry, a third road
+    /// meeting at the node, a footway of the pedestrian tier), and each
+    /// ends in a hard butt cut square to its own last segment. Where the
+    /// two directions differ, the cuts leave a wedge of ground open on
+    /// the outside of the bend, a hairline at a fraction of a degree. The
+    /// line reader rounds a connected end at one of these nodes off with a
+    /// cap: the overlap of two ribbons of one style is invisible under the
+    /// road sheet, which blends each pixel once, and the wedge is filled
+    /// at any angle. A node shared with a road of another style is a
+    /// junction, and its ends stay square.
+    let continuationKeysByPoint: [RoadConnectionPointKey: Set<UInt8>]
     /// The lines a feature's PAINT is built from: the same raw lines,
     /// but clipped only by the surfaces that cut paint (junctions
     /// reconstructed from the graph), not by every surface. A hand-mapped
@@ -67,6 +82,7 @@ struct RoadLayerPrecomputation {
     let surfaceBridges: [RoadSurfaceGapBridger.Bridge]
 
     static let empty = RoadLayerPrecomputation(sharedPointCounts: [:],
+                                               continuationKeysByPoint: [:],
                                                paintLinesByFeatureIndex: [],
                                                linesByFeatureIndex: [],
                                                surfaceAreas: [],
@@ -244,6 +260,11 @@ struct RoadLayerPrecomputation {
         }
 
         var pointCounts: [RoadConnectionPointKey: Int] = [:]
+        // How many features of each road identity end at each point, from
+        // the raw polyline ends: an end the tile clip moves onto the
+        // boundary is a boundary continuation, which the reader keeps
+        // square for the neighbouring tile to meet.
+        var endCountsByPoint: [RoadConnectionPointKey: [UInt8: Int]] = [:]
         var linesByFeatureIndex = Array(repeating: [PreparedRoadLine](), count: layer.features.count)
         for (featureIndex, lines) in stitched.enumerated() where lines.isEmpty == false {
             var preparedLines: [PreparedRoadLine] = []
@@ -253,6 +274,7 @@ struct RoadLayerPrecomputation {
             // connection at every point a marking happens to share with a
             // road vertex.
             let isShippedPaint = featureFacts[featureIndex].road?.isShippedPaint == true
+            let identityKey = roadStyles[featureIndex]?.key
             for points in lines {
                 let fragments = lineClipper.clip(points: points, tileExtent: tileExtent)
                 for fragment in fragments {
@@ -261,12 +283,24 @@ struct RoadLayerPrecomputation {
                         pointCounts[RoadConnectionPointKey(point: point), default: 0] += 1
                     }
                 }
+                if isShippedPaint == false, let identityKey, let first = points.first, let last = points.last {
+                    endCountsByPoint[RoadConnectionPointKey(point: first), default: [:]][identityKey, default: 0] += 1
+                    endCountsByPoint[RoadConnectionPointKey(point: last), default: [:]][identityKey, default: 0] += 1
+                }
                 preparedLines.append(PreparedRoadLine(points: points, exactFragments: fragments))
             }
             linesByFeatureIndex[featureIndex] = preparedLines
         }
+        var continuationKeysByPoint: [RoadConnectionPointKey: Set<UInt8>] = [:]
+        for (point, counts) in endCountsByPoint {
+            let keys = counts.filter { $0.value >= 2 }.keys
+            if keys.isEmpty == false {
+                continuationKeysByPoint[point] = Set(keys)
+            }
+        }
 
         return RoadLayerPrecomputation(sharedPointCounts: pointCounts,
+                                       continuationKeysByPoint: continuationKeysByPoint,
                                        paintLinesByFeatureIndex: paintLinesByFeatureIndex,
                                        linesByFeatureIndex: linesByFeatureIndex,
                                        surfaceAreas: surfaceAreas,
