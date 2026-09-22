@@ -37,8 +37,7 @@ private struct MapScreen: View {
             // The controls are drawn only when a camera controller is attached:
             // they drive it, so without one the modifier does nothing.
             .camera(camera, position: Self.start)
-            .labels(isEnabled: false)
-            .msaa(isEnabled: true)
+            .labels(isEnabled: true)
             .enableCameraUIControls()
             // A tileset under development is rebuilt and re-served under the
             // same coordinates, so a warm disk cache would keep showing the
