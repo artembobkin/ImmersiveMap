@@ -17,8 +17,9 @@ Projects:
 ## Not an example, not a post
 
 `Examples/` documents the public API for a reader, and each project there stays
-put: one page of the manual per app. `Posts/` stages a scene to be recorded.
-Both are written to be found in the state a stranger expects.
+put: one page of the manual per app. A showcase scene (its own repository,
+`../ImmersiveMapShowcase`) stages a scene to be recorded. Both are written to be
+found in the state a stranger expects.
 
 A project here is the opposite. It is expected to change under you, to be
 pointed at a URL that will stop existing, to carry the settings of the current

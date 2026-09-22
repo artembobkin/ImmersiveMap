@@ -808,7 +808,7 @@ struct VisualReviewScreen: View {
         .help("Send \(VisualReviewPaths.verdictsFileName) somewhere: AirDrop to the Mac, or save it to Files.")
     }
 
-    /// Batch hook, in the shape the `Posts/` apps already use: launching with
+    /// Batch hook, in the shape the showcase scenes already use: launching with
     /// `IMMERSIVE_VISUAL_REVIEW_RENDER=1` renders the catalogue and exits with
     /// a process status, no clicks involved. `IMMERSIVE_VISUAL_REVIEW_ONLY`
     /// takes a comma separated list of scenario ids to render instead of all

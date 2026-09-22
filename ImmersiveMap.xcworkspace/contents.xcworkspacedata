@@ -41,22 +41,6 @@
    </Group>
    <Group
       location = "container:"
-      name = "Posts">
-      <FileRef
-         location = "group:Posts/NewYorkFlyover/NewYorkFlyover.xcodeproj">
-      </FileRef>
-      <FileRef
-         location = "group:Posts/BerlinNightDescent/BerlinNightDescent.xcodeproj">
-      </FileRef>
-      <FileRef
-         location = "group:Posts/GlobeUnfurl/GlobeUnfurl.xcodeproj">
-      </FileRef>
-      <FileRef
-         location = "group:Posts/CrowdBloom/CrowdBloom.xcodeproj">
-      </FileRef>
-   </Group>
-   <Group
-      location = "container:"
       name = "Tools">
       <FileRef
          location = "group:Tools/VisualReview/ImmersiveMapVisualReview.xcodeproj">
