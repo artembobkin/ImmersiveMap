@@ -56,7 +56,7 @@ final class RealTileEndpointDiagnosticTests: XCTestCase {
         // rebuilt by accident and both disk caches stay off (every run
         // fetches fresh tiles).
         let settings = FixtureTiles.tilelessSettings()
-            .tileURLTemplate("https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt")
+            .tileArchive(ImmersiveMapTilesService.tileArchiveURL)
         let recorder = ImmersiveMapStillRecorder()
         let camera = ImmersiveMapCameraPosition(latitudeDegrees: 55.75, longitudeDegrees: 37.61, zoom: zoom)
         var configuration = ImmersiveMapStillConfiguration(width: 900, height: 900, pixelsPerPoint: 1)

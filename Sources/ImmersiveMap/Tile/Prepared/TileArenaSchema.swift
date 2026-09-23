@@ -8,7 +8,7 @@ enum TileArenaSlot: Equatable, Sendable {
     case geometryVertices(TileArenaGeometryLayerID)
     case geometryIndices(TileArenaGeometryLayerID)
     case geometryStyles(TileArenaGeometryLayerID)
-    case geometryOverviewStyleMasks(TileArenaGeometryLayerID)
+    case geometryStyleZoomFades(TileArenaGeometryLayerID)
     case geometryLineStyles(TileArenaGeometryLayerID)
     case extrudedVertices
     case extrudedIndices
@@ -100,8 +100,8 @@ enum TileArenaSchema {
             return MemoryLayout<ExtrudedVertexIn>.stride
         case .geometryStyles, .extrudedStyles:
             return MemoryLayout<TilePolygonStyle>.stride
-        case .geometryOverviewStyleMasks:
-            return MemoryLayout<Float>.stride
+        case .geometryStyleZoomFades:
+            return MemoryLayout<SIMD2<Float>>.stride
         case .geometryLineStyles:
             return MemoryLayout<TileLineStyle>.stride
         case .glyphRunVertices, .poiIconRunVertices, .roadLabelGlyphVertices:
@@ -116,7 +116,7 @@ enum TileArenaSchema {
         slots.append(.geometryVertices(layerID))
         slots.append(.geometryIndices(layerID))
         slots.append(.geometryStyles(layerID))
-        slots.append(.geometryOverviewStyleMasks(layerID))
+        slots.append(.geometryStyleZoomFades(layerID))
         slots.append(.geometryLineStyles(layerID))
     }
 }

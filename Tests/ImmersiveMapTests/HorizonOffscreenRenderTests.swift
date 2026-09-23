@@ -149,7 +149,7 @@ final class HorizonOffscreenRenderTests: XCTestCase {
     @MainActor
     func testABuildingCrossingTheHorizonKeepsItsColour() async throws {
         let fixtureBuilding = SIMD4<Float>(1, 1, 0, 1)
-        let configuration = ImmersiveMapTilesTheme.default
+        let configuration = ProtomapsBasemapTheme.default
             .layers { layers in
                 layers.water = Self.fixtureWater
             }
@@ -157,7 +157,7 @@ final class HorizonOffscreenRenderTests: XCTestCase {
                 features.buildingFillColor = fixtureBuilding
             }
         var settings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
+            .mapStyle(ProtomapsBasemapMapStyle(theme: configuration))
         settings.scene.starfield.starCount = 0
         settings.scene.shadows.isEnabled = false
         settings.scene.fog = ImmersiveMapSettings.FogSettings(hazeRange: 4...8)
@@ -175,17 +175,16 @@ final class HorizonOffscreenRenderTests: XCTestCase {
         // the point the camera looks at, many times taller than the eye is
         // high, so its wall runs from the near ground up past the horizon
         // line in the middle of the frame.
-        let water = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["class": "ocean"])
-            + VectorTileFixture.fullCoverageTile(layerName: "globallandcover", properties: ["class": "water"])
+        let water = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["kind": "ocean"])
         let centerTile = WebMercatorTileScheme.tile(latitude: latitude, longitude: longitude, z: zoom)
         let center = WebMercatorTileScheme.tileLocalPoint(latitude: latitude, longitude: longitude, in: centerTile)
         let half: Int32 = 512
         let tower = VectorTileFixture.layerTile(
-            layerName: "building",
-            features: [.init(id: 1,
-                             geometry: .polygon(ring: [(center.0 - half, center.1 - half), (center.0 + half, center.1 - half),
-                                                       (center.0 + half, center.1 + half), (center.0 - half, center.1 + half)]),
-                             properties: ["render_height": "3000"])])
+            layerName: "buildings",
+            features: [.building(id: 1,
+                                 ring: [(center.0 - half, center.1 - half), (center.0 + half, center.1 - half),
+                                        (center.0 + half, center.1 + half), (center.0 - half, center.1 + half)],
+                                 height: "3000")])
         for level in 0 ... zoom {
             let tiles = WebMercatorTileScheme.neighbourhoodPyramid(latitude: latitude,
                                                                    longitude: longitude,
@@ -310,7 +309,7 @@ final class HorizonOffscreenRenderTests: XCTestCase {
     @MainActor
     private func renderTiltedPlane(clearColor: SIMD4<Double>,
                                    fog: ImmersiveMapSettings.FogSettings) async throws -> RenderedFrame {
-        let configuration = ImmersiveMapTilesTheme.default
+        let configuration = ProtomapsBasemapTheme.default
             .layers { layers in
                 layers.water = Self.fixtureWater
                 // The clear colour is the theme's land.
@@ -318,7 +317,7 @@ final class HorizonOffscreenRenderTests: XCTestCase {
                                            Float(clearColor.z), Float(clearColor.w))
             }
         var settings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
+            .mapStyle(ProtomapsBasemapMapStyle(theme: configuration))
         settings.scene.starfield.starCount = 0
         settings.scene.shadows.isEnabled = false
         settings.scene.fog = fog
@@ -331,8 +330,7 @@ final class HorizonOffscreenRenderTests: XCTestCase {
                                                               pitch: 1.25))
         let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
 
-        let data = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["class": "ocean"])
-            + VectorTileFixture.fullCoverageTile(layerName: "globallandcover", properties: ["class": "water"])
+        let data = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["kind": "ocean"])
         for zoom in 0 ... 10 {
             let tiles = WebMercatorTileScheme.neighbourhoodPyramid(latitude: latitude,
                                                                    longitude: longitude,

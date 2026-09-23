@@ -9,6 +9,6 @@ import Foundation
 struct DrawingGeometryLayer {
     let drawing: DrawingPolygonBytes
     let styles: [TilePolygonStyle]
-    let overviewStyleMasks: [Float]
+    let styleZoomFades: [SIMD2<Float>]
     let lineStyles: [TileLineStyle]
 }

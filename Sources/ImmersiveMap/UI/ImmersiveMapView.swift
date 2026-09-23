@@ -507,28 +507,31 @@ public extension ImmersiveMapView {
         return view
     }
 
-    /// Points the map at any tile endpoint with one URL template:
+    /// Points the map at a PMTiles archive:
     ///
     ///     ImmersiveMapView()
-    ///         .tileURLTemplate("https://tiles.com/{x}/{y}/{z}?apiKey=xxx")
+    ///         .tileArchive(URL(string: "https://tiles.example.com/planet.pmtiles")!)
     ///
-    /// `{x}`, `{y}` and `{z}` may appear in any order and the query string is
-    /// preserved as written, so a key can live in the template. Credentials
-    /// that travel as headers go in `headers`, added to every tile request:
+    /// The archive is one file of MVT tiles (PMTiles v3, gzip or
+    /// uncompressed), read over HTTP range requests, so any static host
+    /// serves it. The query string is sent as written, so a key can live in
+    /// the URL. Credentials that travel as headers go in `headers`, added to
+    /// every archive request:
     ///
-    ///     .tileURLTemplate("https://tiles.com/{x}/{y}/{z}",
-    ///                      headers: ["X-API-Key": "xxx"])
+    ///     .tileArchive(URL(string: "https://tiles.example.com/planet.pmtiles")!,
+    ///                  headers: ["Authorization": "Bearer xxx"])
     ///
     /// The source is only where bytes come from. How they are parsed and drawn
-    /// is configured separately: the default `ImmersiveMapTilesMapStyle` draws
-    /// OpenMapTiles-schema MVT, and any other schema pairs the template with
-    /// `.mapStyle(VectorTileMapStyle(style:))`. A source that does
-    /// not ship z0-16 states its depth via `tileMaximumZoomLevel(_:)`, and its
+    /// is configured separately by `.mapStyle(_:)`: the default
+    /// `ProtomapsBasemapMapStyle` draws Protomaps basemap tiles, and any
+    /// other schema pairs the archive with
+    /// `VectorTileMapStyle(style:schema:)`. An archive built to a depth other
+    /// than the default states it via `tileMaximumZoomLevel(_:)`, and its
     /// data credit via `attributionSettings`.
-    public func tileURLTemplate(_ urlTemplate: String,
-                                headers: [String: String] = [:]) -> ImmersiveMapView {
+    public func tileArchive(_ archiveURL: URL,
+                            headers: [String: String] = [:]) -> ImmersiveMapView {
         var view = self
-        view.settings = view.settings.tileURLTemplate(urlTemplate, headers: headers)
+        view.settings = view.settings.tileArchive(archiveURL, headers: headers)
         return view
     }
 
@@ -540,7 +543,7 @@ public extension ImmersiveMapView {
     /// `.mapStyle(.default)` or `.mapStyle(.default.apply { theme in ... })`.
     /// A concrete overload, so the leading dot resolves on the built-in style
     /// whatever the closure body does.
-    public func mapStyle(_ mapStyle: ImmersiveMapTilesMapStyle) -> ImmersiveMapView {
+    public func mapStyle(_ mapStyle: ProtomapsBasemapMapStyle) -> ImmersiveMapView {
         self.mapStyle(AnyImmersiveMapMapStyle(mapStyle))
     }
 
@@ -558,12 +561,12 @@ public extension ImmersiveMapView {
 
     /// The deepest tile zoom level the renderer requests from the source.
     ///
-    /// The default is the hosted service's depth
-    /// (`ImmersiveMapTilesService.maximumTileZoomLevel`, currently 16). A
-    /// source built to a different depth states it here, next to its
-    /// `tileURLTemplate(_:headers:)`: a source that stops at z14 sets
+    /// The default is the hosted archive's depth
+    /// (`ImmersiveMapTilesService.maximumTileZoomLevel`). An archive built
+    /// to a different depth states it here, next to its
+    /// `tileArchive(_:headers:)`: an archive that stops at z14 sets
     /// `.tileMaximumZoomLevel(14)` so the renderer never asks for tiles the
-    /// endpoint cannot answer. Past the deepest level the camera keeps
+    /// archive cannot answer. Past the deepest level the camera keeps
     /// zooming and the deepest tiles are scaled up, exactly as before; offline
     /// region downloads clamp to the same level.
     public func tileMaximumZoomLevel(_ maximumZoomLevel: Int) -> ImmersiveMapView {

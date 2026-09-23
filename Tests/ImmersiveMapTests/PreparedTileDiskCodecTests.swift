@@ -8,7 +8,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
     private static let testBlobURL = URL(fileURLWithPath: "/nonexistent/test.ptgeo")
 
     func testPreparedTileCacheFormatVersionIncludesArenaImageRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 106)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 109)
     }
 
     func testPreparedTileCodecCompressesEnvelopeAndRoundTrips() throws {
@@ -587,9 +587,10 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         }
         XCTAssertEqual(blob[512..<(512 + styleStride)], expectedStyleBytes)
 
-        // Ground overview masks: one Float zero.
-        XCTAssertEqual(spans[3], TileArenaSpan(byteOffset: 768, byteCount: 4, elementCount: 1, indexWidth: nil))
-        XCTAssertEqual(blob[768..<772], Data([0x00, 0x00, 0x00, 0x00]))
+        // Ground zoom fades: one pair, the no-fade pair (-2, -1) as two
+        // little-endian Float32s.
+        XCTAssertEqual(spans[3], TileArenaSpan(byteOffset: 768, byteCount: 8, elementCount: 1, indexWidth: nil))
+        XCTAssertEqual(blob[768..<776], Data([0x00, 0x00, 0x00, 0xC0, 0x00, 0x00, 0x80, 0xBF]))
 
         // Ground line styles: one all-zero TileLineStyle (the fixture style
         // is a plain polygon).
@@ -624,7 +625,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                                 count: vertexCount),
                 indices: [0, UInt32(vertexCount - 1), 12_345],
                 styles: [TilePolygonStyle(color: SIMD4<Float>(0, 1, 0, 1))],
-                overviewStyleMasks: [0]
+                styleZoomFades: [ImmersiveMapZoomFade.none.shaderPair]
             )
         )
 
@@ -754,8 +755,6 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                                   textRevision: textRevision,
                                   labelLanguage: labelLanguage,
                                   labelFallbackPolicy: fallbackPolicy,
-                                  houseNumbersEnabled: true,
-                                  houseNumbersMinimumZoom: 15,
                                   capitalMaximumZoom: 12,
                                   cityMaximumZoom: 12,
                                   smallSettlementMaximumZoom: 12,

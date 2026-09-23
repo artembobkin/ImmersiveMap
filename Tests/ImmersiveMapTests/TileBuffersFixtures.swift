@@ -13,7 +13,7 @@ enum TileBuffersFixtures {
         TileBuffers.GeometryLayer(vertices: nil,
                                   indices: nil,
                                   styles: nil,
-                                  overviewStyleMask: nil,
+                                  styleZoomFade: nil,
                                   lineStyles: nil,
                                   indexType: .uint16)
     }

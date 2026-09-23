@@ -13,10 +13,10 @@ final class ParsedTile {
     let drawingBridgePolygon: DrawingPolygonBytes
     let drawingExtruded: DrawingExtrudedBytes
     let styles: [TilePolygonStyle]
-    let overviewStyleMasks: [Float]
+    let styleZoomFades: [SIMD2<Float>]
     let lineStyles: [TileLineStyle]
     let bridgeStyles: [TilePolygonStyle]
-    let bridgeOverviewStyleMasks: [Float]
+    let bridgeStyleZoomFades: [SIMD2<Float>]
     let bridgeLineStyles: [TileLineStyle]
     let tile: Tile
     let textLabels: [ParsedTextLabel]
@@ -29,10 +29,10 @@ final class ParsedTile {
         drawingBridgePolygon: DrawingPolygonBytes,
         drawingExtruded: DrawingExtrudedBytes,
         styles: [TilePolygonStyle],
-        overviewStyleMasks: [Float],
+        styleZoomFades: [SIMD2<Float>],
         lineStyles: [TileLineStyle],
         bridgeStyles: [TilePolygonStyle],
-        bridgeOverviewStyleMasks: [Float],
+        bridgeStyleZoomFades: [SIMD2<Float>],
         bridgeLineStyles: [TileLineStyle],
         tile: Tile,
         textLabels: [ParsedTextLabel],
@@ -44,10 +44,10 @@ final class ParsedTile {
         self.drawingBridgePolygon = drawingBridgePolygon
         self.drawingExtruded = drawingExtruded
         self.styles = styles
-        self.overviewStyleMasks = overviewStyleMasks
+        self.styleZoomFades = styleZoomFades
         self.lineStyles = lineStyles
         self.bridgeStyles = bridgeStyles
-        self.bridgeOverviewStyleMasks = bridgeOverviewStyleMasks
+        self.bridgeStyleZoomFades = bridgeStyleZoomFades
         self.bridgeLineStyles = bridgeLineStyles
         self.tile = tile
         self.textLabels = textLabels

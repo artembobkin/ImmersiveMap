@@ -4,7 +4,8 @@
 import Foundation
 import Network
 
-/// A minimal HTTP server on loopback that answers whatever a router hands it.
+/// A minimal HTTP server on loopback that serves one resource by byte range,
+/// the way a static host serves a PMTiles archive.
 ///
 /// Some cases need a map that actually has tiles on it, and the only way to
 /// get one through a public entry point (`ImmersiveMapStillRecorder` builds
@@ -14,47 +15,61 @@ import Network
 /// within the capture's settle window: it is exactly why the scene-model
 /// capture case failed on CI while passing locally.
 ///
-/// The bytes come from `VectorTileFixture`, so the tile is the same on every
-/// run and on every machine, and the request travels the real path (URL,
-/// download, parse, materialize) rather than being injected behind it.
+/// The bytes come from `PMTilesArchiveWriter` over `VectorTileFixture`, so the
+/// archive is the same on every run and on every machine, and the request
+/// travels the real path (range request, header, directory, tile, parse,
+/// materialize) rather than being injected behind it.
 ///
 /// Tests do not build one of these directly: ``FixtureTileService`` owns the
-/// one the suite renders from.
+/// one the suite renders from. `PMTilesArchiveClientTests` builds its own to
+/// script the replaced-archive and ignored-range answers.
 final class LocalTileServer: @unchecked Sendable {
-    /// One answer: the bytes and what they are. A router returning nil makes
-    /// the server reply 404, which the tile loader reads as "this tile has
-    /// nothing to render" rather than as a transport failure.
-    struct Response {
-        let contentType: String
-        let body: Data
+    /// The resource at a path: its bytes and the validator they answer with.
+    /// A router returning nil makes the server reply 404.
+    struct Resource: Sendable {
+        var body: Data
+        var etag: String
+        var contentType: String
+        /// A host that ignores the `Range` header and answers the whole file
+        /// with 200. The client has to cope, so the server can be told to be
+        /// one.
+        var ignoresRanges = false
 
-        static func protobuf(_ body: Data) -> Response {
-            Response(contentType: "application/x-protobuf", body: body)
+        static func archive(_ body: Data, etag: String = "\"immersive-map-test-fixture\"") -> Resource {
+            Resource(body: body, etag: etag, contentType: "application/octet-stream")
         }
+    }
 
-        static func json(_ body: Data) -> Response {
-            Response(contentType: "application/json", body: body)
+    /// One parsed request, as the router sees it.
+    struct Request: Sendable {
+        var path: String
+        var headers: [String: String]
+
+        func header(_ name: String) -> String? {
+            let wanted = name.lowercased()
+            return headers.first { $0.key.lowercased() == wanted }?.value
         }
     }
 
     private let listener: NWListener
     private let queue = DispatchQueue(label: "ImmersiveMapTests.LocalTileServer")
-    private let route: @Sendable (String) -> Response?
+    private let route: @Sendable (Request) -> Resource?
 
-    /// - Parameter route: called with the request path (`/tiles/3/4/5.mvt`) on
-    ///   the server's own serial queue, so it sees one request at a time, but
-    ///   never on the caller's thread.
-    init(route: @escaping @Sendable (String) -> Response?) throws {
+    /// - Parameter route: called with the request (path such as
+    ///   `/planet.pmtiles`, and the headers) on the server's own serial
+    ///   queue, so it sees one request at a time, but never on the caller's
+    ///   thread.
+    init(route: @escaping @Sendable (Request) -> Resource?) throws {
         self.route = route
 
         let parameters = NWParameters.tcp
         parameters.allowLocalEndpointReuse = true
         // Bound to loopback, and to a port the system picks. Loopback because
-        // a fixture tile has no business being reachable from whatever network
-        // the machine is on, and because binding every interface is what makes
-        // macOS ask the developer whether to allow incoming connections. Port
-        // zero because parallel test runs and a developer's own servers must
-        // never collide.
+        // a fixture archive has no business being reachable from whatever
+        // network the machine is on, and because binding every interface is
+        // what makes macOS ask the developer whether to allow incoming
+        // connections. Port zero because parallel test runs and a developer's
+        // own servers must never collide.
         parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
         listener = try NWListener(using: parameters)
 
@@ -96,12 +111,13 @@ final class LocalTileServer: @unchecked Sendable {
         return URL(string: "http://127.0.0.1:\(port)")
     }
 
-    /// The base URL to point the tile network settings at. The loader
-    /// appends `/{z}/{x}/{y}.mvt`, and the TileJSON endpoint sits next to
-    /// the tile path as `tiles.json`.
-    var tileBaseURL: URL? {
-        baseURL?.appendingPathComponent("tiles")
+    /// The archive URL to point the tile network settings at.
+    var archiveURL: URL? {
+        baseURL?.appendingPathComponent(String(Self.archivePath.dropFirst()))
     }
+
+    /// Where the fixture archive lives under the base URL.
+    static let archivePath = "/planet.pmtiles"
 
     deinit {
         listener.cancel()
@@ -111,16 +127,14 @@ final class LocalTileServer: @unchecked Sendable {
     ///
     /// One `receive` is not enough. TCP may split even a short GET, and an
     /// earlier version answered whatever had arrived by then: a truncated
-    /// path matched no route and became a 404. A 404 is the most expensive
-    /// wrong answer this server can give, because the loader reads it as
-    /// "this tile has nothing to render" and puts the tile in a ten-minute
-    /// cooldown (`TileRetryController.notFoundCooldown`), which inside a test
-    /// process means forever. One split request would have emptied the map
-    /// for the rest of the run, silently, which is the flake this whole
-    /// fixture service exists to remove.
+    /// path matched no route and became a 404. A 404 on the archive is the
+    /// most expensive wrong answer this server can give, because the loader
+    /// reads it as the archive being gone and backs off, which inside a test
+    /// process can empty the map for the rest of the run, silently. That is
+    /// the flake this whole fixture service exists to remove.
     private static func readRequest(on connection: NWConnection,
                                     received: Data,
-                                    route: @escaping @Sendable (String) -> Response?) {
+                                    route: @escaping @Sendable (Request) -> Resource?) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: maximumRequestBytes) { content, _, isComplete, error in
             var request = received
             if let content {
@@ -134,9 +148,10 @@ final class LocalTileServer: @unchecked Sendable {
             }
             // A request that never arrived in full gets a 400 rather than a
             // 404: the loader retries a client error within a second and
-            // blacklists a not-found for ten minutes.
-            let response = requestPath(in: request).map { httpResponse(for: route($0)) }
-                ?? httpResponse(status: "400 Bad Request")
+            // backs off an archive that is gone.
+            let response = parsedRequest(in: request).map { parsed in
+                httpResponse(for: route(parsed), request: parsed)
+            } ?? httpResponse(status: "400 Bad Request")
             connection.send(content: response,
                             completion: .contentProcessed { _ in
                                 connection.cancel()
@@ -144,11 +159,10 @@ final class LocalTileServer: @unchecked Sendable {
         }
     }
 
-    /// The path out of a complete request line such as
-    /// `GET /tiles/3/4/5.mvt HTTP/1.1`, query string dropped. Nil when the
-    /// line is not all there, so a partial read cannot be mistaken for a
-    /// request for `/`.
-    private static func requestPath(in data: Data) -> String? {
+    /// The request line and headers out of a complete header block, query
+    /// string dropped from the path. Nil when the request line is not all
+    /// there, so a partial read cannot be mistaken for a request for `/`.
+    private static func parsedRequest(in data: Data) -> Request? {
         let head = String(decoding: data.prefix(maximumRequestBytes), as: UTF8.self)
         guard let lineEnd = head.range(of: "\r\n") else {
             return nil
@@ -162,39 +176,106 @@ final class LocalTileServer: @unchecked Sendable {
         // `prefix`, not `split`: splitting "?" on "?" drops both empty halves
         // and leaves an empty array, and subscripting that traps and takes the
         // whole test process with it.
-        return String(fields[1].prefix { $0 != "?" })
+        let path = String(fields[1].prefix { $0 != "?" })
+
+        var headers: [String: String] = [:]
+        let headerBlock = head[lineEnd.upperBound...]
+        let blockEnd = headerBlock.range(of: "\r\n\r\n")?.lowerBound ?? headerBlock.endIndex
+        for line in headerBlock[headerBlock.startIndex..<blockEnd].split(separator: "\r\n") {
+            guard let colon = line.firstIndex(of: ":") else {
+                continue
+            }
+            let name = line[line.startIndex..<colon].trimmingCharacters(in: .whitespaces)
+            let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            headers[name] = value
+        }
+        return Request(path: path, headers: headers)
     }
 
     private static let maximumRequestBytes = 64 * 1024
 
-    /// A bodiless answer, for the paths that carry no tile and for a request
+    /// A bodiless answer, for the paths that carry nothing and for a request
     /// that never arrived in full.
-    private static func httpResponse(status: String) -> Data {
+    private static func httpResponse(status: String, extraHeaders: String = "") -> Data {
         let header = """
             HTTP/1.1 \(status)\r
             Content-Length: 0\r
-            Cache-Control: no-store\r
+            \(extraHeaders)Cache-Control: no-store\r
             Connection: close\r
             \r\n
             """
         return Data(header.utf8)
     }
 
-    private static func httpResponse(for response: Response?) -> Data {
-        guard let response else {
+    /// The answer a static host gives: 206 for a satisfiable range, 416 for a
+    /// range that starts past the end, 412 when `If-Match` names another
+    /// ETag, and 200 with the whole file when no range was asked for (or the
+    /// resource is told to ignore ranges).
+    private static func httpResponse(for resource: Resource?, request: Request) -> Data {
+        guard let resource else {
             return httpResponse(status: "404 Not Found")
         }
+        let total = resource.body.count
+        if let ifMatch = request.header("If-Match"), ifMatch != resource.etag {
+            return httpResponse(status: "412 Precondition Failed", extraHeaders: "ETag: \(resource.etag)\r\n")
+        }
+        let range = resource.ignoresRanges ? nil : request.header("Range").flatMap { byteRange($0, total: total) }
+        if request.header("Range") != nil, resource.ignoresRanges == false, range == nil {
+            return httpResponse(status: "416 Range Not Satisfiable",
+                                extraHeaders: "Content-Range: bytes */\(total)\r\nETag: \(resource.etag)\r\n")
+        }
+        let status: String
+        let body: Data
+        var rangeHeader = ""
+        if let range {
+            status = "206 Partial Content"
+            body = resource.body.subdata(in: range)
+            rangeHeader = "Content-Range: bytes \(range.lowerBound)-\(range.upperBound - 1)/\(total)\r\n"
+        } else {
+            status = "200 OK"
+            body = resource.body
+        }
         let header = """
-            HTTP/1.1 200 OK\r
-            Content-Type: \(response.contentType)\r
-            Content-Length: \(response.body.count)\r
-            ETag: "immersive-map-test-fixture"\r
+            HTTP/1.1 \(status)\r
+            Content-Type: \(resource.contentType)\r
+            Content-Length: \(body.count)\r
+            \(rangeHeader)Accept-Ranges: bytes\r
+            ETag: \(resource.etag)\r
             Cache-Control: no-store\r
             Connection: close\r
             \r\n
             """
         var bytes = Data(header.utf8)
-        bytes.append(response.body)
+        bytes.append(body)
         return bytes
+    }
+
+    /// `bytes=a-b` clamped to the resource, or nil when it starts past the
+    /// end (which is what 416 means). A suffix range (`bytes=-n`) and an open
+    /// end (`bytes=a-`) are both understood, since a real host does.
+    private static func byteRange(_ value: String, total: Int) -> Range<Int>? {
+        guard value.hasPrefix("bytes=") else {
+            return nil
+        }
+        let spec = value.dropFirst("bytes=".count)
+        guard let dash = spec.firstIndex(of: "-") else {
+            return nil
+        }
+        let startText = spec[spec.startIndex..<dash]
+        let endText = spec[spec.index(after: dash)...]
+        if startText.isEmpty {
+            guard let suffix = Int(endText), suffix > 0 else {
+                return nil
+            }
+            return max(0, total - suffix)..<total
+        }
+        guard let start = Int(startText), start < total else {
+            return nil
+        }
+        let end = Int(endText).map { min($0 + 1, total) } ?? total
+        guard end > start else {
+            return nil
+        }
+        return start..<end
     }
 }

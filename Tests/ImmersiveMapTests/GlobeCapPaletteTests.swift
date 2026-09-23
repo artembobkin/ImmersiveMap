@@ -36,10 +36,10 @@ final class GlobeCapPaletteTests: XCTestCase {
     /// constants the tiles paint the ocean and Antarctica with, so the caps
     /// continue the tiles seamlessly.
     func testTheBuiltInStyleCapsAreTheThemesWaterAndIce() {
-        let palette = GlobeCapRenderer.makePalette(baseColors: ImmersiveMapTilesDefaultMapStyle().baseColors)
+        let palette = GlobeCapRenderer.makePalette(baseColors: ProtomapsBasemapDefaultMapStyle().baseColors)
 
-        assertColor(palette.north.color, equals: ImmersiveMapTilesTheme.default.layers.water)
-        assertColor(palette.south.color, equals: ImmersiveMapTilesTheme.default.layers.ice)
+        assertColor(palette.north.color, equals: ProtomapsBasemapTheme.default.layers.water)
+        assertColor(palette.south.color, equals: ProtomapsBasemapTheme.default.layers.ice)
     }
 
     private func assertColor(_ color: SIMD4<Float>,

@@ -6,9 +6,10 @@ import simd
 
 /// Decides which of a tile's building candidates are extruded, once every
 /// footprint of the tile is known: duplicates go, a part nested inside a
-/// taller part of the same building goes, and a ground outline that
-/// engulfs the articulated parts of other buildings is clamped down to a
-/// pedestal.
+/// taller part of the same building goes, an outline that ground-standing
+/// parts already cover goes, a ground outline that engulfs the
+/// articulated parts of other buildings is clamped down to a pedestal, and
+/// a volume hidden inside the volumes kept around it goes.
 enum BuildingExtrusionResolver {
     /// Wraps a candidate with its footprint bbox and area, both computed exactly
     /// once. The passes below compare O(n^2) candidate pairs; recomputing these
@@ -37,7 +38,206 @@ enum BuildingExtrusionResolver {
             filtered.append(contentsOf: suppressNested(uniqueCandidates))
         }
 
-        return clampEnvelopes(filtered).map(\.candidate)
+        let clamped = clampEnvelopes(dropOutlinesCoveredByParts(filtered))
+        return dropVolumesHiddenInsideOthers(clamped).map(\.candidate)
+    }
+
+    /// Share of a volume's footprint that must lie inside kept volumes, each
+    /// starting no higher and reaching no lower, for the volume to go.
+    private static let hiddenVolumeCoverage: Float = 0.95
+
+    /// A volume that sits wholly inside the volumes kept around it is never
+    /// seen, except where its lid lies in the plane of theirs: there the two
+    /// triangulations flicker through each other. Only such volumes are
+    /// measured: one hidden under taller volumes costs nothing to keep. Sources ship such volumes
+    /// on their own (two outlines of one building mapped twice, a part inside
+    /// its outline at the outline's height, two parts at one height over the
+    /// same ground), so a candidate whose footprint lies, to
+    /// `hiddenVolumeCoverage`, inside kept candidates that start at or below
+    /// its base and reach at least its top is left out. The candidates are
+    /// visited from the largest footprint down (the taller, then the lower
+    /// based, then the lower building id first on a tie), so of two
+    /// identical volumes one stays, the same one on every parse.
+    private static func dropVolumesHiddenInsideOthers(_ candidates: [MeasuredCandidate]) -> [MeasuredCandidate] {
+        guard candidates.count > 1 else { return candidates }
+        let heightEpsilon: Float = 0.01
+        let ordered = candidates.enumerated().sorted { lhs, rhs in
+            let left = lhs.element, right = rhs.element
+            if left.area != right.area {
+                return left.area > right.area
+            }
+            if left.candidate.topHeight != right.candidate.topHeight {
+                return left.candidate.topHeight > right.candidate.topHeight
+            }
+            if left.candidate.baseHeight != right.candidate.baseHeight {
+                return left.candidate.baseHeight < right.candidate.baseHeight
+            }
+            if left.candidate.buildingId != right.candidate.buildingId {
+                return left.candidate.buildingId < right.candidate.buildingId
+            }
+            return lhs.offset < rhs.offset
+        }
+        var kept: [MeasuredCandidate] = []
+        kept.reserveCapacity(candidates.count)
+        var keptOffsets: [Int] = []
+        keptOffsets.reserveCapacity(candidates.count)
+        var keptGrid = BoundsGrid()
+        for (offset, measured) in ordered {
+            let enclosing = keptGrid.indices(near: measured.bounds).map { kept[$0] }.filter { other in
+                other.candidate.baseHeight <= measured.candidate.baseHeight + heightEpsilon
+                    && other.candidate.topHeight >= measured.candidate.topHeight - heightEpsilon
+                    && other.bounds.intersects(measured.bounds)
+            }
+            // Only a lid in the plane of another lid flickers. A volume hidden
+            // under taller ones is not seen either way, so it is not worth a
+            // coverage measurement.
+            let sharesLidPlane = enclosing.contains {
+                abs($0.candidate.topHeight - measured.candidate.topHeight) <= heightEpsilon
+            }
+            if sharesLidPlane == false
+                || isCovered(measured, by: enclosing, atLeast: hiddenVolumeCoverage) == false {
+                keptGrid.insert(kept.count, bounds: measured.bounds)
+                kept.append(measured)
+                keptOffsets.append(offset)
+            }
+        }
+        // Back to the tile's order, so the mesh order does not depend on
+        // which volumes went.
+        return zip(keptOffsets, kept).sorted { $0.0 < $1.0 }.map(\.1)
+    }
+
+    /// Share of an outline's footprint that ground-standing parts must cover
+    /// for the outline to go.
+    private static let partCoverageToDropOutline: Float = 0.9
+    /// Samples thrown over a footprint's bounds to measure coverage, and the
+    /// denser set used when too few would land inside a thin or holed
+    /// footprint. The samples follow the R2 low-discrepancy sequence rather
+    /// than a regular grid: a grid of 12 by 12 read a courtyard block 95
+    /// percent covered as 84 percent, its lines falling in step with the
+    /// walls, while R2 points never line up with a straight wall and hold
+    /// the estimate within a few percent from a couple of hundred samples.
+    /// Only footprints that overlap a possible cover are sampled at all.
+    private static let coverageSampleCount = 256
+    private static let denseCoverageSampleCount = 1024
+    private static let minimumCoverageSamples = 64
+    /// The R2 sequence's steps: the inverse plastic number and its square.
+    private static let r2StepX: Float = 0.754_877_67
+    private static let r2StepY: Float = 0.569_840_29
+    /// How far, as a share of its larger side, a footprint may reach out of
+    /// the box around its covers and still be tested: parts often trace an
+    /// outline a few units inside it.
+    private static let coverageBoundsMargin: Float = 0.03
+
+    /// Simple 3D Buildings: once a building is modelled with parts, its
+    /// outline is not drawn, the parts are. A source that names which
+    /// outline owns which part lets the reader drop the outline by identity
+    /// (`BuildingFeatureReader.partInfo`), and an outline that repeats a part
+    /// ring for ring goes by its footprint signature. A source with neither
+    /// (the Protomaps basemap ships no building id) still ships the outline
+    /// next to parts that trace it with a vertex more or less and a
+    /// differently drawn courtyard. Extruded together, the outline and the
+    /// part that reaches the same height put two lids in one plane, and
+    /// their different triangulations flicker through each other as stray
+    /// triangles. So an outline whose footprint is covered, to
+    /// `partCoverageToDropOutline`, by parts standing on the ground is left
+    /// out. Parts that float (a roof slab, a lantern) never count: they do
+    /// not replace the walls below them.
+    private static func dropOutlinesCoveredByParts(_ candidates: [MeasuredCandidate]) -> [MeasuredCandidate] {
+        let baseEpsilon: Float = 0.5
+        var groundParts = BoundsGrid()
+        for (index, measured) in candidates.enumerated()
+        where measured.candidate.isPart && measured.candidate.baseHeight <= baseEpsilon {
+            groundParts.insert(index, bounds: measured.bounds)
+        }
+        guard groundParts.isEmpty == false else { return candidates }
+
+        return candidates.filter { measured in
+            guard measured.candidate.isPart == false else { return true }
+            let overlapping = groundParts.indices(near: measured.bounds)
+                .map { candidates[$0] }
+                .filter { $0.bounds.intersects(measured.bounds) }
+            guard overlapping.isEmpty == false else { return true }
+            return isCovered(measured, by: overlapping, atLeast: partCoverageToDropOutline) == false
+        }
+    }
+
+    /// Whether at least `share` of the candidate's footprint (exterior minus
+    /// courtyards) lies inside the covers, measured on low-discrepancy
+    /// samples over its bounds. The walk stops once the misses rule the
+    /// answer out, so a volume that plainly stands out of its neighbours
+    /// costs a handful of samples.
+    private static func isCovered(_ candidate: MeasuredCandidate,
+                                  by covers: [MeasuredCandidate],
+                                  atLeast share: Float) -> Bool {
+        let bounds = candidate.bounds
+        let width = bounds.maxX - bounds.minX
+        let height = bounds.maxY - bounds.minY
+        guard width > 0, height > 0, candidate.area > 0, covers.isEmpty == false else { return false }
+        // The common case needs no samples: a footprint standing wholly
+        // inside one cover (a rooftop part in its building's outline).
+        if covers.contains(where: { isWhollyInside(candidate, $0) }) {
+            return true
+        }
+        // Cheap rejection first: a footprint mostly inside the covers lies,
+        // up to a thin margin, inside the box around them. A neighbour whose
+        // box merely touches this one fails here without a single sample.
+        let margin = coverageBoundsMargin * max(width, height)
+        let coverBounds = covers.dropFirst().reduce(covers[0].bounds) { $0.union($1.bounds) }
+        guard bounds.minX >= coverBounds.minX - margin, bounds.maxX <= coverBounds.maxX + margin,
+              bounds.minY >= coverBounds.minY - margin, bounds.maxY <= coverBounds.maxY + margin else {
+            return false
+        }
+        // The expected number of samples inside the footprint sets how many
+        // misses the share allows. A thin or holed footprint gets the finer
+        // grid, so the estimate rests on enough samples.
+        let fillRatio = min(1, candidate.area / (width * height))
+        var total = coverageSampleCount
+        if fillRatio * Float(total) < Float(minimumCoverageSamples) {
+            total = denseCoverageSampleCount
+        }
+        let allowedMisses = Int(((1 - share) * fillRatio * Float(total)).rounded(.up))
+        // Every prefix of the R2 sequence is spread over the whole box, so an
+        // uncovered corner shows up in the first samples.
+        var unitX: Float = 0.5
+        var unitY: Float = 0.5
+        var inside = 0
+        var misses = 0
+        for _ in 0..<total {
+            unitX += r2StepX
+            unitY += r2StepY
+            unitX -= unitX.rounded(.down)
+            unitY -= unitY.rounded(.down)
+            let point = SIMD2<Float>(bounds.minX + unitX * width, bounds.minY + unitY * height)
+            guard isInFootprint(point, of: candidate.candidate) else { continue }
+            inside += 1
+            if covers.contains(where: { isInFootprint(point, of: $0.candidate) }) == false {
+                misses += 1
+                if misses > allowedMisses {
+                    return false
+                }
+            }
+        }
+        guard inside > 0 else { return false }
+        return Float(inside - misses) >= share * Float(inside)
+    }
+
+    /// Every vertex of the candidate's exterior inside the cover's footprint
+    /// (its exterior and none of its courtyards), and no courtyard of the
+    /// cover reaching into the candidate. Exact for the convex and the
+    /// gently concave footprints buildings have, and it only ever answers
+    /// yes for a footprint that is inside.
+    private static func isWhollyInside(_ candidate: MeasuredCandidate, _ cover: MeasuredCandidate) -> Bool {
+        guard candidate.bounds.isInsideOrEqual(to: cover.bounds) else { return false }
+        let exterior = candidate.candidate.clippedExterior
+        guard exterior.allSatisfy({ isInFootprint($0, of: cover.candidate) }) else { return false }
+        return cover.candidate.clippedInteriors.allSatisfy { courtyard in
+            courtyard.contains { pointInRing($0, ring: exterior) } == false
+        }
+    }
+
+    private static func isInFootprint(_ point: SIMD2<Float>, of candidate: BuildingExtrusionCandidate) -> Bool {
+        pointInRing(point, ring: candidate.clippedExterior)
+            && candidate.clippedInteriors.contains { pointInRing(point, ring: $0) } == false
     }
 
     /// Some sources (e.g. OpenMapTiles for St. Basil's Cathedral) emit a tall
@@ -118,13 +318,11 @@ enum BuildingExtrusionResolver {
             let clamped = BuildingExtrusionCandidate(
                 styleKey: candidate.styleKey,
                 buildingId: candidate.buildingId,
+                isPart: candidate.isPart,
                 footprintSignature: candidate.footprintSignature,
                 clippedExterior: candidate.clippedExterior,
                 clippedInteriors: candidate.clippedInteriors,
-                unclippedExterior: candidate.unclippedExterior,
-                hasUnclippedInteriorRings: candidate.hasUnclippedInteriorRings,
                 roof: candidate.roof,
-                roofInfo: nil,
                 baseHeight: candidate.baseHeight,
                 topHeight: clampedTop
             )
@@ -268,11 +466,67 @@ enum BuildingExtrusionResolver {
         return FootprintBounds(minX: minX, minY: minY, maxX: maxX, maxY: maxY)
     }
 
+    /// A uniform grid over tile space that finds the candidates whose boxes
+    /// may meet a given box, so the coverage passes compare a footprint with
+    /// its neighbourhood instead of with every building of the tile.
+    private struct BoundsGrid {
+        private static let cellSize: Float = 256
+        private var cells: [Int64: [Int]] = [:]
+
+        var isEmpty: Bool {
+            cells.isEmpty
+        }
+
+        mutating func insert(_ index: Int, bounds: FootprintBounds) {
+            forEachCell(of: bounds) { cells[$0, default: []].append(index) }
+        }
+
+        /// Every index stored in a cell the box touches, each once, in
+        /// ascending order.
+        func indices(near bounds: FootprintBounds) -> [Int] {
+            var found: [Int] = []
+            forEachCell(of: bounds) { key in
+                if let stored = cells[key] {
+                    found.append(contentsOf: stored)
+                }
+            }
+            guard found.count > 1 else { return found }
+            found.sort()
+            var unique: [Int] = []
+            unique.reserveCapacity(found.count)
+            for index in found where unique.last != index {
+                unique.append(index)
+            }
+            return unique
+        }
+
+        private func forEachCell(of bounds: FootprintBounds, _ body: (Int64) -> Void) {
+            let minColumn = Int64((bounds.minX / Self.cellSize).rounded(.down))
+            let maxColumn = Int64((bounds.maxX / Self.cellSize).rounded(.down))
+            let minRow = Int64((bounds.minY / Self.cellSize).rounded(.down))
+            let maxRow = Int64((bounds.maxY / Self.cellSize).rounded(.down))
+            for row in minRow...maxRow {
+                for column in minColumn...maxColumn {
+                    body(row &* 1_000_003 &+ column)
+                }
+            }
+        }
+    }
+
     private struct FootprintBounds {
         let minX: Float
         let minY: Float
         let maxX: Float
         let maxY: Float
+
+        func union(_ other: FootprintBounds) -> FootprintBounds {
+            FootprintBounds(minX: min(minX, other.minX), minY: min(minY, other.minY),
+                            maxX: max(maxX, other.maxX), maxY: max(maxY, other.maxY))
+        }
+
+        func intersects(_ other: FootprintBounds) -> Bool {
+            minX <= other.maxX && maxX >= other.minX && minY <= other.maxY && maxY >= other.minY
+        }
 
         func isInsideOrEqual(to other: FootprintBounds) -> Bool {
             let epsilon: Float = 0.001

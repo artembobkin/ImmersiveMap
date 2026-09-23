@@ -185,7 +185,7 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
 
     @MainActor
     private func makeHarness(size: Int = 160) throws -> OffscreenFrameHarness {
-        let configuration = ImmersiveMapTilesTheme.default
+        let configuration = ProtomapsBasemapTheme.default
             .layers {
                 $0.water = Self.fixtureWater
                 // The overview biomes blend forest toward grass by zoom: both
@@ -194,7 +194,7 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
                 $0.grass = Self.fixtureForest
             }
         var settings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
+            .mapStyle(ProtomapsBasemapMapStyle(theme: configuration))
         // The stars twinkle with scene time, so a settle loop over a globe
         // frame never sees two identical pictures while they are drawn.
         settings.scene.starfield.starCount = 0
@@ -206,7 +206,7 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
                                   latitude: Double = GlobeVectorSurfaceOffscreenRenderTests.latitude,
                                   longitude: Double = GlobeVectorSurfaceOffscreenRenderTests.longitude,
                                   maximumZoom: Int) async throws {
-        let data = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["class": "ocean"])
+        let data = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["kind": "ocean"])
         let tiles = WebMercatorTileScheme.neighbourhoodPyramid(latitude: latitude,
                                                                longitude: longitude,
                                                                maximumZoom: maximumZoom)
@@ -222,10 +222,10 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
     private func loadWorldFixtureTiles(into harness: OffscreenFrameHarness,
                                        maximumZoom: Int,
                                        waterWithinDegrees: Double) async throws {
-        let water = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["class": "ocean"])
-        // The overview zooms draw the continuous `globallandcover` biomes and
-        // hide the OSM `landcover` layer, so the far side is a biome forest.
-        let forest = VectorTileFixture.fullCoverageTile(layerName: "globallandcover", properties: ["class": "forest"])
+        let water = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["kind": "ocean"])
+        // The overview zooms draw the continuous land cover, so the far
+        // side is a land cover forest.
+        let forest = VectorTileFixture.fullCoverageTile(layerName: "landcover", properties: ["kind": "forest"])
         let cameraLatitude = Self.latitude * .pi / 180
         let cameraLongitude = Self.longitude * .pi / 180
         for z in 0...maximumZoom {

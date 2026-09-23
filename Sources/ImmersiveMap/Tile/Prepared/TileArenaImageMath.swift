@@ -49,7 +49,7 @@ struct TileArenaImagePlan: Sendable {
         case indicesUInt16([UInt16])
         case indicesUInt32([UInt32])
         case styles([TilePolygonStyle])
-        case overviewStyleMasks([Float])
+        case styleZoomFades([SIMD2<Float>])
         case lineStyles([TileLineStyle])
         case labelVertices([LabelVertex])
     }
@@ -93,8 +93,8 @@ enum TileArenaImageMath {
                 builder.appendIndices(layer.indices, vertexCount: layer.vertices.count)
             case .geometryStyles(let layerID):
                 builder.append(.styles(geometryLayer(layerID, of: preparedTile).styles))
-            case .geometryOverviewStyleMasks(let layerID):
-                builder.append(.overviewStyleMasks(geometryLayer(layerID, of: preparedTile).overviewStyleMasks))
+            case .geometryStyleZoomFades(let layerID):
+                builder.append(.styleZoomFades(geometryLayer(layerID, of: preparedTile).styleZoomFades))
             case .geometryLineStyles(let layerID):
                 builder.append(.lineStyles(geometryLayer(layerID, of: preparedTile).lineStyles))
             case .extrudedVertices:
@@ -150,7 +150,7 @@ enum TileArenaImageMath {
             values.withUnsafeBytes(body)
         case .styles(let values):
             values.withUnsafeBytes(body)
-        case .overviewStyleMasks(let values):
+        case .styleZoomFades(let values):
             values.withUnsafeBytes(body)
         case .lineStyles(let values):
             values.withUnsafeBytes(body)
@@ -224,8 +224,8 @@ enum TileArenaImageMath {
                 return (values.count * MemoryLayout<UInt32>.stride, values.count)
             case .styles(let values):
                 return (values.count * MemoryLayout<TilePolygonStyle>.stride, values.count)
-            case .overviewStyleMasks(let values):
-                return (values.count * MemoryLayout<Float>.stride, values.count)
+            case .styleZoomFades(let values):
+                return (values.count * MemoryLayout<SIMD2<Float>>.stride, values.count)
             case .lineStyles(let values):
                 return (values.count * MemoryLayout<TileLineStyle>.stride, values.count)
             case .labelVertices(let values):

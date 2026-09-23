@@ -14,18 +14,16 @@ final class LabelsEnabledParseTests: XCTestCase {
         var config = ImmersiveMapSettings.default
         config.labels.isEnabled = labelsEnabled
         return TileMvtParser.forTests(settings: config,
-                                      mapStyle: ImmersiveMapTilesDefaultMapStyle())
+                                      mapStyle: ProtomapsBasemapDefaultMapStyle())
     }
 
     /// A named peak and a named primary road: one point label, one road label.
     private func parseNamedTile(labelsEnabled: Bool) throws -> ParsedTile {
         let data = VectorTileFixture.layersTile([
-            (layerName: "mountain_peak",
-             features: [.init(id: 1, geometry: .point(2048, 2048), properties: ["name": "Peak", "rank": "1"])]),
-            (layerName: "transportation_name",
-             features: [.init(id: 2,
-                              geometry: .line(points: [(256, 2048), (3840, 2048)]),
-                              properties: ["class": "primary", "name": "Main Street"])])
+            (layerName: "pois",
+             features: [.poi(id: 1, at: (2048, 2048), kind: "peak", name: "Peak", minZoom: 10)]),
+            (layerName: "roads",
+             features: [.road(id: 2, points: [(256, 2048), (3840, 2048)], name: "Main Street")])
         ])
         return try makeParser(labelsEnabled: labelsEnabled).parse(tile: Self.tile, mvtData: data)
     }
@@ -48,8 +46,6 @@ final class LabelsEnabledParseTests: XCTestCase {
                                       textRevision: 3,
                                       labelLanguage: .english,
                                       labelFallbackPolicy: .international,
-                                      houseNumbersEnabled: true,
-                                      houseNumbersMinimumZoom: 17,
                                       capitalMaximumZoom: 10,
                                       cityMaximumZoom: 12,
                                       smallSettlementMaximumZoom: 14,

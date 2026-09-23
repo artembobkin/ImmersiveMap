@@ -22,11 +22,11 @@ import Mvt
 /// the render side share with the parser, which they name directly and
 /// never through the parser's internals. One reader per geometry kind,
 /// each a struct with no state across tiles: `Ground/`, `Buildings/`,
-/// `Roads/` (with the per-layer pre-pass its line and surface readers draw
-/// from) and `Labels/`, all appending into one `ReadingStageResult`. The
+/// `Roads/` (with the per-layer pre-pass its line reader draws from) and
+/// `Labels/`, all appending into one `ReadingStageResult`. The
 /// folder knows no tile schema: it never reads an attribute by name and
 /// never compares a layer name, since what a feature is (a building of
-/// some height, a road in a tunnel, a piece of some street) is the schema
+/// some height, a road in a tunnel) is the schema
 /// reading's answer (`ImmersiveMapFeatureFacts`), and how it draws is the
 /// style's (`FeatureStyle`); the parser carries the two side by side for
 /// every feature. It holds no label policy, no Metal, and no loading,
@@ -39,7 +39,6 @@ final class TileMvtParser {
     private let buildingReader: BuildingFeatureReader
     private let groundReader: GroundFeatureReader
     private let lineReader: LineFeatureReader
-    private let roadSurfaceReader = RoadSurfaceAreaReader()
     private let tileExtent = Float(TileCoordinateSpace.tileExtentDouble)
 
     init(mapStyle: MapStyleRuntime,
@@ -67,10 +66,10 @@ final class TileMvtParser {
             drawingBridgePolygon: unificationResult.drawingBridgePolygon,
             drawingExtruded: unificationResult.drawingExtruded,
             styles: unificationResult.styles,
-            overviewStyleMasks: unificationResult.overviewStyleMasks,
+            styleZoomFades: unificationResult.styleZoomFades,
             lineStyles: unificationResult.lineStyles,
             bridgeStyles: unificationResult.bridgeStyles,
-            bridgeOverviewStyleMasks: unificationResult.bridgeOverviewStyleMasks,
+            bridgeStyleZoomFades: unificationResult.bridgeStyleZoomFades,
             bridgeLineStyles: unificationResult.bridgeLineStyles,
             tile: tile,
             textLabels: readingStageResult.textLabels,
@@ -93,11 +92,8 @@ final class TileMvtParser {
     }
 
     /// Attributes and facts for every feature of every layer, then the
-    /// road layers merged into the first of them. The streetscape's
-    /// surfaces and paint and the roads they belong to have to be one
-    /// feature list: the surfaces clip the ribbons of the roads that enter
-    /// them, the tunnel roofs are found among the surfaces, a measured
-    /// crossing stands in for the one read off the same road's tag. Which
+    /// road layers merged into the first of them, so the roads of a tile
+    /// are one feature list for stitching and junction counting. Which
     /// layers those are is the reading's answer, feature by feature; a
     /// road layer whose extent differs from the first's stays on its own,
     /// since its coordinates would not line up.
@@ -171,58 +167,17 @@ final class TileMvtParser {
             // Styles resolve exactly once per feature here; the building and
             // road pre-passes below share them instead of asking again.
             let featureAttributes = preparedLayer.attributes
-            var featureFacts = preparedLayer.facts
+            let featureFacts = preparedLayer.facts
             var featureStyles: [FeatureStyle] = []
             featureStyles.reserveCapacity(layer.features.count)
-            mvtData.withUnsafeBytes { bytes in
-                // A tunnel's road surface ships with the tunnel's `layer` but
-                // says nothing of the tunnel itself: the one fact the engine
-                // adds to the reading, so the style draws the surface as the
-                // tunnel's roof instead of open asphalt.
-                if preparedLayer.hasRoads {
-                    for index in RoadTunnelSurfaceResolver.tunnelSurfaceIndices(layer: layer,
-                                                                                  featureFacts: featureFacts,
-                                                                                  bytes: bytes) {
-                        if case .road(var road) = featureFacts[index] {
-                            road.isTunnelRoof = true
-                            featureFacts[index] = .road(road)
-                        }
-                    }
-                }
-                // Two facts about the layer the style is told along with
-                // each feature: whether it carries the measured streetscape
-                // (reconstructed surfaces, measured paint), so a road style
-                // draws carriageways where they are and strokes where they
-                // are not; and whether the source measured the crossings, so
-                // a style that also stripes the crossings read off a
-                // footway's tag draws each crossing once.
-                var layerCarriesStreetscape = false
-                var layerShipsMeasuredCrossings = false
-                for facts in featureFacts {
-                    guard let road = facts.road else { continue }
-                    switch road.kind {
-                    case .surface(reconstructed: true):
-                        layerCarriesStreetscape = true
-                    case .paint(let paint):
-                        layerCarriesStreetscape = true
-                        if case .crossing(marked: true) = paint.kind {
-                            layerShipsMeasuredCrossings = true
-                        }
-                    case .surface, .parkingLot, .centreline:
-                        break
-                    }
-                }
-                for (featureIndex, feature) in layer.features.enumerated() {
-                    featureStyles.append(mapStyle.makeStyle(data: DetFeatureStyleData(
-                        layerName: layerName,
-                        properties: featureAttributes[featureIndex],
-                        tile: tile,
-                        facts: featureFacts[featureIndex],
-                        layerCarriesStreetscape: layerCarriesStreetscape,
-                        geometryType: feature.type,
-                        layerShipsMeasuredCrossings: layerShipsMeasuredCrossings
-                    )))
-                }
+            for (featureIndex, feature) in layer.features.enumerated() {
+                featureStyles.append(mapStyle.makeStyle(data: DetFeatureStyleData(
+                    layerName: layerName,
+                    properties: featureAttributes[featureIndex],
+                    tile: tile,
+                    facts: featureFacts[featureIndex],
+                    geometryType: feature.type
+                )))
             }
 
             let buildingPartInfo = buildingReader.partInfo(geometry: layerGeometry, featureFacts: featureFacts)
@@ -289,12 +244,6 @@ final class TileMvtParser {
                                      into: &result)
                 }
             }
-            roadSurfaceReader.appendSurfaceBridges(roads: roads.precomputation,
-                                                   featureFacts: featureFacts,
-                                                   featureStyles: featureStyles,
-                                                   tile: tile,
-                                                   tools: tools,
-                                                   into: &result)
             let elapsedNanoseconds = DispatchTime.now().uptimeNanoseconds - layerStart
                 + preparedLayer.preparationNanoseconds
             result.layerTimings.append(TileParseLayerTiming(layerName: layerName,
@@ -373,27 +322,7 @@ final class TileMvtParser {
                 }
             }
         case .road(let roadStyle):
-            if let road = facts.road, road.isSurface, roads.usesSeparateRoadRendering {
-                // A carriageway surface (junction area) joins the road
-                // phases instead of the ground: its fill stroke is the
-                // triangulated polygon, its casing stroke the outline
-                // tessellated as a closed kerb. Sorted among the roads by
-                // class, so the surface covers the kerbs of the ribbons that
-                // run into it.
-                for polygon in polygons {
-                    guard let parsedGeometry = tools.parsePolygon.parseGeometry(polygon: polygon,
-                                                                                tileExtent: tileExtent) else {
-                        continue
-                    }
-                    roadSurfaceReader.append(parsedGeometry: parsedGeometry,
-                                             road: road,
-                                             style: roadStyle,
-                                             tile: tile,
-                                             surfaceAreas: roads.precomputation.surfaceAreas,
-                                             tools: tools,
-                                             into: &result)
-                }
-            } else if let fill = roadStyle.fill {
+            if let fill = roadStyle.fill {
                 appendGroundPolygons(polygons, pass: fill, placement: roadStyle.placement, tools: tools, into: &result)
             }
         case .line(let line):

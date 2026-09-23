@@ -4,6 +4,7 @@
 import Foundation
 @testable import ImmersiveMap
 import Mvt
+import PMTiles
 import XCTest
 
 /// The suite renders from pre-loaded tiles, never from the tile service.
@@ -18,56 +19,60 @@ final class FixtureTileServiceTests: XCTestCase {
     // MARK: - The service is there
 
     func testFixtureServiceServesATileTheParserCanRead() async throws {
-        let tileBaseURL = try XCTUnwrap(FixtureTileService.shared.tileBaseURL,
-                                        "The fixture tile service never came up, so no test can render a tile")
+        let archiveURL = try XCTUnwrap(FixtureTileService.shared.archiveURL,
+                                       "The fixture tile service never came up, so no test can render a tile")
 
-        let (data, response) = try await URLSession.shared.data(from: tileBaseURL.appendingPathComponent("3/4/5.mvt"))
+        let client = PMTilesArchiveClient(archiveURL: archiveURL,
+                                          requestHeaders: [:],
+                                          session: URLSession(configuration: .ephemeral))
+        let outcome = try await client.tileBytes(z: 3, x: 4, y: 5)
 
-        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        guard case let .tile(data, _) = outcome else {
+            return XCTFail("The fixture archive must hold every tile, got \(outcome)")
+        }
         // Read back by the engine's own decoder: the fixture is only worth
         // anything if the loader can do with it what it does with a download.
         let decoded = try MvtTileDecoder.decode(data: data)
         XCTAssertEqual(decoded.layers.map(\.name), ["water"])
     }
 
-    /// The loader prefers the versioned TileJSON template and only falls back
-    /// to the base path, so the fixture service answers the discovery request
-    /// too. Without this the request still stays on loopback, but every
-    /// rendering case would exercise the fallback path and never the one the
-    /// hosted service actually uses.
-    func testFixtureServiceAdvertisesATileJSONTemplate() async throws {
-        let tileBaseURL = try XCTUnwrap(FixtureTileService.shared.tileBaseURL)
-        let tileJSONURL = tileBaseURL.deletingLastPathComponent().appendingPathComponent("tiles.json")
+    /// The archive is served the way a static host serves it: a range
+    /// request gets exactly its bytes, a 206, and the validator the client
+    /// pins the index to.
+    func testFixtureServiceAnswersARangeRequestWithTheBytesAndTheETag() async throws {
+        let archiveURL = try XCTUnwrap(FixtureTileService.shared.archiveURL)
+        var request = URLRequest(url: archiveURL)
+        request.setValue("bytes=0-126", forHTTPHeaderField: "Range")
 
-        let template = try await TileJSONTemplateLoader().loadTemplate(from: tileJSONURL)
+        let (data, response) = try await URLSession.shared.data(for: request)
 
-        let resolved = try XCTUnwrap(TileJSONTileURLProvider.url(fromTemplate: try XCTUnwrap(template),
-                                                                 x: 4, y: 5, z: 3))
-        XCTAssertEqual(resolved.host, "127.0.0.1")
-        let (data, _) = try await URLSession.shared.data(from: resolved)
-        XCTAssertEqual(try MvtTileDecoder.decode(data: data).layers.map(\.name), ["water"],
-                       "The advertised template must serve tiles, not just resolve")
+        let httpResponse = try XCTUnwrap(response as? HTTPURLResponse)
+        XCTAssertEqual(httpResponse.statusCode, 206)
+        XCTAssertEqual(httpResponse.value(forHTTPHeaderField: "ETag"), FixtureTileService.etag)
+        XCTAssertEqual(data.count, PMTilesHeader.byteCount)
+        XCTAssertEqual(data, FixtureTileService.shared.archiveData.prefix(PMTilesHeader.byteCount))
+        XCTAssertNoThrow(try PMTilesHeader(parsing: data))
     }
 
-    /// A request split across two writes is still answered with the tile.
+    /// A request split across two writes is still answered with the bytes.
     ///
     /// TCP may break even a short GET in two, and the server used to answer
     /// whatever had arrived by the first read: the truncated path matched no
-    /// route and became a 404, which the loader reads as "this tile is empty"
-    /// and blacklists for ten minutes (`TileRetryController.notFoundCooldown`).
-    /// One split request would have emptied the map for the rest of the run.
-    func testASplitRequestIsStillAnsweredWithTheTile() throws {
-        let (data, status) = try Self.rawRequest(["GET /tiles/3/4/", "5.mvt HTTP/1.1\r\nHost: fixture\r\n\r\n"])
+    /// route and became a 404, which the loader reads as the archive being
+    /// gone and backs off. One split request would have emptied the map for
+    /// a good while.
+    func testASplitRequestIsStillAnsweredWithTheBytes() throws {
+        let (data, status) = try Self.rawRequest(["GET /planet.pm", "tiles HTTP/1.1\r\nHost: fixture\r\nRange: bytes=0-6\r\n\r\n"])
 
-        XCTAssertEqual(status, 200, "A request that arrived in two pieces must not be a 404")
-        XCTAssertEqual(try MvtTileDecoder.decode(data: data).layers.map(\.name), ["water"])
+        XCTAssertEqual(status, 206, "A request that arrived in two pieces must not be a 404")
+        XCTAssertEqual(data, Data("PMTiles".utf8))
     }
 
     /// A request that stops mid-line is a 400, deliberately not a 404: the
-    /// loader retries a client error within a second, and gives a not-found
-    /// ten minutes.
+    /// loader retries a client error within a second, and backs off an
+    /// archive that is gone.
     func testATruncatedRequestIsRefusedCheaply() throws {
-        let (_, status) = try Self.rawRequest(["GET /tiles/3/4"], closeAfterWriting: true)
+        let (_, status) = try Self.rawRequest(["GET /planet"], closeAfterWriting: true)
 
         XCTAssertEqual(status, 400)
     }
@@ -77,7 +82,7 @@ final class FixtureTileServiceTests: XCTestCase {
     func testARequestTargetOfOnlyAQuestionMarkDoesNotTrap() throws {
         let (_, status) = try Self.rawRequest(["GET ? HTTP/1.1\r\nHost: fixture\r\n\r\n"])
 
-        XCTAssertEqual(status, 404, "An empty path carries no tile, but it must be answered, not crashed on")
+        XCTAssertEqual(status, 404, "An empty path carries nothing, but it must be answered, not crashed on")
     }
 
     /// Writes the pieces to the fixture service over a raw socket, with a
@@ -85,8 +90,8 @@ final class FixtureTileServiceTests: XCTestCase {
     /// status line's code and the body.
     private static func rawRequest(_ pieces: [String],
                                    closeAfterWriting: Bool = false) throws -> (body: Data, status: Int) {
-        let tileBaseURL = try XCTUnwrap(FixtureTileService.shared.tileBaseURL)
-        let port = try XCTUnwrap(tileBaseURL.port)
+        let archiveURL = try XCTUnwrap(FixtureTileService.shared.archiveURL)
+        let port = try XCTUnwrap(archiveURL.port)
 
         let socketHandle = socket(AF_INET, SOCK_STREAM, 0)
         guard socketHandle >= 0 else {
@@ -141,8 +146,7 @@ final class FixtureTileServiceTests: XCTestCase {
     func testFixtureSettingsStayOnLoopback() {
         for (label, settings) in [("served", FixtureTiles.settings()),
                                   ("tileless", FixtureTiles.tilelessSettings())] {
-            XCTAssertEqual(settings.tiles.network.tileBaseURL.host, "127.0.0.1", "\(label) tile base URL")
-            XCTAssertEqual(settings.tiles.network.tileJSONURL?.host, "127.0.0.1", "\(label) TileJSON URL")
+            XCTAssertEqual(settings.tiles.network.tileArchiveURL.host, "127.0.0.1", "\(label) archive URL")
             // A run must leave nothing behind in the user's caches, and must
             // not be able to read what an earlier run wrote.
             XCTAssertFalse(settings.tiles.cache.urlCacheEnabled, "\(label) raw tile cache")
@@ -221,10 +225,10 @@ final class FixtureTileServiceTests: XCTestCase {
     /// and it was wrong: `RenderFrameEngine` builds a `RenderPersistentContext`,
     /// which builds a `TileRenderStore`, which builds an
     /// `ImmersiveMapNeedsTile`, which builds a `DefaultTileLoadPipeline`,
-    /// which builds a `TileDownloader`, whose `init` fires the TileJSON
-    /// request before a frame is ever asked for. Three test files reached the
-    /// hosted service through that chain while this check watched the layer
-    /// above and reported nothing. The list now names the chain itself.
+    /// which builds a `TileDownloader`, which reads the hosted archive as
+    /// soon as a frame asks for a tile. Three test files reached the hosted
+    /// service through that chain while this check watched the layer above
+    /// and reported nothing. The list now names the chain itself.
     private static let runtimeEntryPoints = ["ImmersiveMapNSView(",
                                              "ImmersiveMapUIView(",
                                              "ImmersiveMapStillRecorder(",

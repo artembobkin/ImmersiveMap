@@ -76,9 +76,9 @@ struct VisualReviewScenario: Identifiable {
         self.lookFor = lookFor
         self.avatars = avatars
         self.sceneModels = sceneModels
-        // Every scenario renders the hosted endpoint through the one-line
-        // template. The endpoint is public: no key, no account.
-        self.settings = settings.tileURLTemplate("https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt")
+        // Every scenario renders the hosted archive. It is public: no key,
+        // no account.
+        self.settings = settings.tileArchive(URL(string: "https://tiles.immersivemap.dev/20260922.pmtiles")!)
         self.subject = subject
         self.output = output
     }
@@ -109,24 +109,6 @@ enum VisualReviewCatalogue {
         static let sanFrancisco = ImmersiveMapCameraPosition(latitudeDegrees: 37.8100,
                                                              longitudeDegrees: -122.4100,
                                                              zoom: 13)
-        static let kremlin = ImmersiveMapCameraPosition(latitudeDegrees: 55.7517,
-                                                        longitudeDegrees: 37.6178,
-                                                        zoom: 15.6,
-                                                        bearing: 0.4,
-                                                        pitch: 0.9)
-        static let tverskaya = ImmersiveMapCameraPosition(latitudeDegrees: 55.7570,
-                                                          longitudeDegrees: 37.6135,
-                                                          zoom: 16.4,
-                                                          bearing: 0.3,
-                                                          pitch: 0.5)
-        /// The same junction one tile level out: the camera sits in the band
-        /// z15 tiles serve, which is where the street has to draw everything
-        /// the z16 shot draws.
-        static let tverskayaOneLevelOut = ImmersiveMapCameraPosition(latitudeDegrees: 55.7570,
-                                                                     longitudeDegrees: 37.6135,
-                                                                     zoom: 15.4,
-                                                                     bearing: 0.3,
-                                                                     pitch: 0.5)
         /// The Boulevard Ring diving under Novy Arbat at Arbat Gate square:
         /// the one covered stretch of a vehicular tunnel in the centre.
         static let arbatTunnel = ImmersiveMapCameraPosition(latitudeDegrees: 55.7522,
@@ -134,14 +116,14 @@ enum VisualReviewCatalogue {
                                                             zoom: 17.0,
                                                             bearing: 0.0,
                                                             pitch: 0.0)
-        static let okhotnyParking = ImmersiveMapCameraPosition(latitudeDegrees: 55.7577,
-                                                               longitudeDegrees: 37.6156,
-                                                               zoom: 16.5,
-                                                               bearing: 0.3,
-                                                               pitch: 0.4)
         static let centralRussia = ImmersiveMapCameraPosition(latitudeDegrees: 55.7,
                                                               longitudeDegrees: 37.6,
                                                               zoom: 5)
+        /// The Moscow region half way through the land cover to land use
+        /// handover: camera zoom 7.5, served by the z7 tiles.
+        static let moscowRegionHandover = ImmersiveMapCameraPosition(latitudeDegrees: 55.75,
+                                                                     longitudeDegrees: 37.6,
+                                                                     zoom: 7.5)
         /// Moscow region tilted almost to the horizon, looking north over
         /// the lakes and the WorldCover fields toward Tver and Yaroslavl:
         /// the far ground is the raster-derived landcover minified into
@@ -175,13 +157,6 @@ enum VisualReviewCatalogue {
                                                               zoom: 16.2,
                                                               bearing: 0.5,
                                                               pitch: 0.9)
-        /// The Bolshoi Theatre from Teatralnaya Square, facing its portico,
-        /// with the measured streetscape of the square in front.
-        static let bolshoi = ImmersiveMapCameraPosition(latitudeDegrees: 55.7587,
-                                                        longitudeDegrees: 37.6187,
-                                                        zoom: 17.9,
-                                                        bearing: 0.0,
-                                                        pitch: 1.15)
         static let alps = ImmersiveMapCameraPosition(latitudeDegrees: 46.02,
                                                      longitudeDegrees: 7.75,
                                                      zoom: 10)
@@ -219,8 +194,8 @@ enum VisualReviewCatalogue {
             id: "labels.phone.streets",
             title: "Street labels on a 3x phone",
             lookFor: """
-            Read them, do not just see them. Street names, POIs and house \
-            numbers should all be comfortably readable at arm's length, with \
+            Read them, do not just see them. Street names and POIs should \
+            all be comfortably readable at arm's length, with \
             open counters in a, e and o rather than letters closed up by their \
             halo. Nothing should be so large that the map disappears under the \
             type, and labels should be thinned out enough to leave the streets \
@@ -402,6 +377,23 @@ enum VisualReviewCatalogue {
             subject: .still(camera: Place.centralRussia)),
 
         VisualReviewScenario(
+            id: "landcover.handover.moscow",
+            title: "Moscow region, land cover to land use cross-fade",
+            lookFor: """
+            Camera zoom 7.5, half way through the handover from the \
+            continuous land cover to the OSM land use. The plain is half way \
+            between the two: the soft land cover tint still there at half \
+            strength, the land use patches (forests, fields, the city tone \
+            around Moscow) showing through at half strength over it. No hard \
+            edge anywhere between tiles, no square where one tile is already \
+            land use and its neighbour still land cover. Zooming through 7 \
+            to 8 should read as one continuous blend, with nothing popping \
+            when the z8 tiles arrive.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.moscowRegionHandover)),
+
+        VisualReviewScenario(
             id: "terrain.alps",
             title: "Alps, terrain and landcover",
             lookFor: """
@@ -450,29 +442,11 @@ enum VisualReviewCatalogue {
             subject: .still(camera: Place.manhattan)),
 
         VisualReviewScenario(
-            id: "buildings.roofs.kremlin",
-            title: "Kremlin, shaped roofs",
-            lookFor: """
-            The one tile with every roof shape in it. Where the tiles carry \
-            roof tags: gable ridges run along their building, not diagonally \
-            to it, and gable ends close as vertical triangles up to the \
-            ridge; the Kremlin wall's merlons read as small aligned gables, \
-            not stray fins; tower tents rise as clean pyramids from their \
-            eaves with nothing creased and no edge cutting through a wall; \
-            domes are smooth caps, skillions a single tilted plane. Nothing \
-            z-fights, and every sloped face is lit from above. A building \
-            the engine cannot shape honestly wears a flat lid, which is \
-            correct, not a regression.
-            """,
-            settings: .default,
-            subject: .still(camera: Place.kremlin)),
-
-        VisualReviewScenario(
             id: "roads.carriageways.street",
             title: "Street level, a street map's strokes",
             lookFor: """
-            Roads as strokes, the way a street map draws them: these tiles \
-            carry no streetscape. An avenue is wider than the \
+            Roads as strokes, the way a street map draws them. An avenue \
+            is wider than the \
             side street it crosses by rank alone (motorway, primary, \
             secondary, minor, service, in that order), not by its real \
             width, so two primaries are the same width whatever their lane \
@@ -480,65 +454,10 @@ enum VisualReviewCatalogue {
             Each stroke has a thin, even casing on both sides, and the \
             asphalt is bare: no lane divider, no centre line, no edge line. \
             Junctions are round joins where strokes meet, never a blob of \
-            merged surface. The only figures on the road are the zebra \
-            stripes of marked crossings.
+            merged surface.
             """,
             settings: .default,
             subject: .still(camera: Place.manhattan)),
-
-        VisualReviewScenario(
-            id: "roads.streetscape.absent",
-            title: "Tverskaya junction, tiles without the streetscape",
-            lookFor: """
-            The same junction as the next shot, served from tiles that carry \
-            no streetscape: \
-            the streets are strokes with a casing, their width by class \
-            alone and narrower than the real carriageway, and the asphalt \
-            is bare. No lane separators, no centre \
-            line, no edge line, no letters A on the bus lane, no parking-bay \
-            combs in the lots (the lots are plain asphalt with a kerb), no \
-            single flush junction surface: the ribbons meet as ribbons. The \
-            zebra crossings ARE there, drawn once each.
-            """,
-            settings: .default,
-            subject: .still(camera: Place.tverskaya)),
-
-        VisualReviewScenario(
-            id: "roads.osm2streets.tverskaya",
-            title: "Tverskaya junction, measured streetscape",
-            lookFor: """
-            Where the tiles carry the measured streetscape (central Moscow \
-            test builds): the junction is ONE surface, flush with every \
-            street entering it, no ribs and no seams inside it; each \
-            carriageway is a single polygon with one thin even kerb; lane \
-            separators are short even dashes that stop at the junction edge \
-            instead of running across it; the centre line is a longer dash, \
-            the carriageway edge a thin solid line; crossings are zebra \
-            stripes inside the junction, drawn once. The palette stays the \
-            light asphalt grey. Where the tiles carry no streetscape the \
-            streets draw exactly as before, and the boundary between the two \
-            is not a visible seam.
-            """,
-            settings: .default,
-            subject: .still(camera: Place.tverskaya)),
-
-        VisualReviewScenario(
-            id: "roads.osm2streets.tverskaya.z15",
-            title: "Tverskaya junction one zoom level out",
-            lookFor: """
-            The same junction a level coarser, where the engine is serving \
-            z15 tiles instead of z16: it must carry the SAME figures as the \
-            shot above, only smaller. Lane separators, centre lines, zebra \
-            crossings, the letters A of the bus lane and the parking bay \
-            combs are all present; nothing is missing that the closer shot \
-            has, and nothing new appears. The paint is fainter and finer \
-            here, which is the camera-zoom fade doing its work, but it is \
-            paint rather than grey mush, and the dashes still sit on the \
-            asphalt as separate marks. Zooming in past 16 must not pop \
-            anything into existence.
-            """,
-            settings: .default,
-            subject: .still(camera: Place.tverskayaOneLevelOut)),
 
         VisualReviewScenario(
             id: "roads.tunnel.arbat",
@@ -546,36 +465,15 @@ enum VisualReviewCatalogue {
             lookFor: """
             The two carriageways of the Boulevard Ring run north-south \
             through the square and pass UNDER Novy Arbat. On both sides of \
-            the avenue the covered stretch is a faint ghost of the road: the \
-            asphalt grey at twenty percent over the ground, a flat fill with \
-            no kerb, no lane dashes and no edge line on it, ending square \
-            where the open road resumes with its full grey and its paint. \
-            Novy Arbat itself is solid, its lane paint runs through the \
-            crossing unbroken, and nothing of the tunnel shows through it. \
-            No white dashes float over the ghost, and the ghost does not \
-            continue as a lighter band across the avenue.
+            the avenue the covered stretch is a faint ghost of the road: a \
+            translucent ribbon in the tunnel tone with no casing, ending \
+            square where the open road resumes with its full grey. Novy \
+            Arbat itself is solid and nothing of the tunnel shows through \
+            it. The ghost does not continue as a lighter band across the \
+            avenue.
             """,
             settings: .default,
             subject: .still(camera: Place.arbatTunnel)),
-
-        VisualReviewScenario(
-            id: "roads.parking.okhotny",
-            title: "Okhotny Ryad, parking lots",
-            lookFor: """
-            The parking strips along Okhotny Ryad and by the State Duma are \
-            asphalt with a thin kerb, and each carries the comb of parking \
-            bays: short white stripes across the strip, evenly spaced, never \
-            poking past the kerb. A deep lot reads as rows of bays separated \
-            by clean aisles; parking aisles inside a lot carry no kerb of \
-            their own. The dedicated bus lane along Okhotny \
-            Ryad carries large white letters A stamped along it, feet toward \
-            the oncoming driver, with no recolored surface under them, and \
-            the comb never climbs onto it or onto any carriageway. At the \
-            bus stops the kerb carries the yellow sawtooth of the stop \
-            marking, anchored to the edge of the roadway.
-            """,
-            settings: .default,
-            subject: .still(camera: Place.okhotnyParking)),
 
         VisualReviewScenario(
             id: "roads.labels.flat",
@@ -678,17 +576,6 @@ enum VisualReviewCatalogue {
             settings: .default,
             subject: .still(camera: Place.parisTilted),
             sceneModels: Showcase.parisModels()),
-
-        VisualReviewScenario(
-            id: "showcase.bolshoi.streetscape",
-            title: "The Bolshoi Theatre over the measured streetscape",
-            lookFor: """
-            The theatre's front under a low camera, the square in front of \
-            it drawn from the measured streetscape: carriageways, lane \
-            markings and crossings as surfaces rather than strokes.
-            """,
-            settings: .default,
-            subject: .still(camera: Place.bolshoi)),
 
         VisualReviewScenario(
             id: "video.globe.to.street",
@@ -860,14 +747,13 @@ enum Showcase {
         settings.scene.shadows.isEnabled = true
         settings.scene.shadows.strength = 0.45
         settings.labels.language = ImmersiveMapSettings.LabelLanguage("de")
-        settings.labels.houseNumbers.enabled = false
         return settings
     }
 
     private static let nightLand = SIMD4<Float>(0.09, 0.10, 0.13, 1)
 
-    private static var nightStyle: ImmersiveMapTilesMapStyle {
-        ImmersiveMapTilesMapStyle(theme: ImmersiveMapTilesTheme.default
+    private static var nightStyle: ProtomapsBasemapMapStyle {
+        ProtomapsBasemapMapStyle(theme: ProtomapsBasemapTheme.default
             .layers { layers in
                 layers.land = nightLand
                 layers.water = SIMD4<Float>(0.04, 0.09, 0.20, 1)
@@ -884,7 +770,7 @@ enum Showcase {
                 layers.boundary = SIMD4<Float>(0.58, 0.36, 0.78, 0.9)
                 let base = SIMD4<Float>(0.42, 0.40, 0.36, 1)
                 let minor = SIMD4<Float>(0.24, 0.24, 0.28, 1)
-                layers.roads = ImmersiveMapTilesTheme.RoadLayerStyles(
+                layers.roads = ProtomapsBasemapTheme.RoadLayerStyles(
                     motorway: base, trunk: base, primary: base,
                     secondary: minor, tertiary: minor, minor: minor, service: minor, path: minor, rail: minor,
                     casing: SIMD4<Float>(0.06, 0.06, 0.08, 0.95))

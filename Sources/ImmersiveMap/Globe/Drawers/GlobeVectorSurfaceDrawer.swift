@@ -63,12 +63,9 @@ enum GlobeVectorSurfaceDrawer {
 
         var cameraUniformValue = cameraUniform
         var globeValue = globe
-        // Every road is a symbol at these zooms and no road is painted yet:
-        // the marking alpha stays zero.
+        // Every style's zoom fade is evaluated against the camera zoom in
+        // the shader, so the globe and the plane fade alike.
         let overviewFadeUniform = TileOverviewFadeUniform(
-            overviewAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .overviewFeatures),
-            roadAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .roads),
-            landuseAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .landuse),
             pixelsPerPoint: pixelsPerPoint,
             cameraZoom: Float(cameraZoom)
         )
@@ -144,7 +141,7 @@ enum GlobeVectorSurfaceDrawer {
             let isTranslucentFillRun: (GroundStyleRun) -> Bool = { run in
                 run.isFillsClass
                     && isOpaque(run, overviewFade: overviewFadeUniform) == false
-                    && TileStyleFadeMath.fadeIsZero(mask: run.fadeMask, overviewFade: overviewFadeUniform) == false
+                    && TileStyleFadeMath.fadeIsZero(zoomFade: run.zoomFade, overviewFade: overviewFadeUniform) == false
             }
             forEachSource(renderEncoder: renderEncoder,
                           sources: uniqueSources,
@@ -164,7 +161,7 @@ enum GlobeVectorSurfaceDrawer {
             // skipped the same way.
             let isVisibleRibbonRun: (GroundStyleRun) -> Bool = { run in
                 run.isLinesClass
-                    && TileStyleFadeMath.fadeIsZero(mask: run.fadeMask, overviewFade: overviewFadeUniform) == false
+                    && TileStyleFadeMath.fadeIsZero(zoomFade: run.zoomFade, overviewFade: overviewFadeUniform) == false
             }
             renderEncoder.pushDebugGroup("ground.lineRibbons")
             pipeline.selectSphereClassPipeline(renderEncoder: renderEncoder, linesClass: true, morph: morph)
@@ -216,7 +213,7 @@ enum GlobeVectorSurfaceDrawer {
                   let indices = buffers.indices,
                   let vertices = buffers.vertices,
                   let styles = buffers.styles,
-                  let overviewStyleMask = buffers.overviewStyleMask,
+                  let styleZoomFade = buffers.styleZoomFade,
                   let lineStyles = buffers.lineStyles else { continue }
 
             let tile = metalTile.tile
@@ -226,12 +223,12 @@ enum GlobeVectorSurfaceDrawer {
             renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.reference(sourceZoom: tile.z))
             renderEncoder.setVertexBuffer(vertices.buffer, offset: vertices.offset, index: 0)
             renderEncoder.setVertexBuffer(styles.buffer, offset: styles.offset, index: 2)
-            renderEncoder.setVertexBuffer(overviewStyleMask.buffer, offset: overviewStyleMask.offset, index: 4)
+            renderEncoder.setVertexBuffer(styleZoomFade.buffer, offset: styleZoomFade.offset, index: 4)
             renderEncoder.setVertexBuffer(lineStyles.buffer, offset: lineStyles.offset, index: 5)
             // The ribbons fragment resolves the style by index (the fills
             // fragment never reads these slots).
             renderEncoder.setFragmentBuffer(styles.buffer, offset: styles.offset, index: 5)
-            renderEncoder.setFragmentBuffer(overviewStyleMask.buffer, offset: overviewStyleMask.offset, index: 6)
+            renderEncoder.setFragmentBuffer(styleZoomFade.buffer, offset: styleZoomFade.offset, index: 6)
             renderEncoder.setFragmentBuffer(lineStyles.buffer, offset: lineStyles.offset, index: 7)
             var surfaceTile = GlobeSurfaceTileUniform(tile: tile)
             renderEncoder.setVertexBytes(&surfaceTile, length: MemoryLayout<GlobeSurfaceTileUniform>.stride, index: 9)
@@ -254,7 +251,7 @@ enum GlobeVectorSurfaceDrawer {
 
     private static func isOpaque(_ run: GroundStyleRun,
                                  overviewFade: TileOverviewFadeUniform) -> Bool {
-        run.isAlphaOpaque && TileStyleFadeMath.fadeIsOne(mask: run.fadeMask, overviewFade: overviewFade)
+        run.isAlphaOpaque && TileStyleFadeMath.fadeIsOne(zoomFade: run.zoomFade, overviewFade: overviewFade)
     }
 
     /// Draws the placement's style runs that pass `predicate`, coalescing

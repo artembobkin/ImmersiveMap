@@ -14,7 +14,7 @@ final class TileMvtParserSphereSubdivisionTests: XCTestCase {
 
     func testCoarseTileGroundIsSplitOnTheGrid() throws {
         let parser = makeParser()
-        let data = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["class": "ocean"])
+        let data = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["kind": "ocean"])
         let coarse = try parser.parse(tile: Tile(x: 0, y: 0, z: 0), mvtData: data)
         let fine = try parser.parse(tile: Tile(x: 617, y: 320, z: 10), mvtData: data)
         XCTAssertGreaterThan(coarse.drawingPolygon.indices.count, fine.drawingPolygon.indices.count,

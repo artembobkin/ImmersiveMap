@@ -44,8 +44,8 @@ final class ImmersiveMapSettingsDefaultsTests: XCTestCase {
     /// the land, the north cap the water and the south cap the ice, so
     /// loading never flashes a lighter patch and a cap never punches a hole.
     func testTheBaseColoursAreTheThemesLandWaterAndIce() {
-        let theme = ImmersiveMapTilesTheme.default
-        let base = ImmersiveMapTilesDefaultMapStyle(theme: theme).baseColors
+        let theme = ProtomapsBasemapTheme.default
+        let base = ProtomapsBasemapDefaultMapStyle(theme: theme).baseColors
         XCTAssertEqual(base.map, theme.layers.land)
         XCTAssertEqual(base.northCap, theme.layers.water)
         XCTAssertEqual(base.southCap, theme.layers.ice)

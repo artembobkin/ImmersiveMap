@@ -7,18 +7,11 @@ import simd
 /// surface, the sphere surface and the atlas bake; the layouts mirror the
 /// structs of the same names in TileShading.h.
 struct TileOverviewFadeUniform {
-    var overviewAlpha: Float
-    var roadAlpha: Float
-    var landuseAlpha: Float
     /// Converts the per-style point-locked line widths into the pixels the
     /// shader's coverage math runs in.
     var pixelsPerPoint: Float
-    /// See `LowZoomOverviewFade.roadMarkingAlpha`: road markings come in
-    /// over their own camera-zoom band. Zero on the globe and in the atlas:
-    /// no road is painted yet.
-    var roadMarkingAlpha: Float = 0
-    /// See `LowZoomOverviewFade.classFadeMask`: the live camera zoom the
-    /// per-class road fade is evaluated against.
+    /// The live camera zoom every style's zoom fade is evaluated against
+    /// (`ImmersiveMapZoomFade`, `tileStyleFade`), and the point-width ramps.
     var cameraZoom: Float
     /// The drawable in pixels, what the deferred ribbons' vertex stage
     /// converts a tile unit's clip-space span into pixels with (Tile.metal).
@@ -44,20 +37,12 @@ struct TileOverviewFadeUniform {
     var groundAxisYClipY: Float = 0
     var groundAxisYClipW: Float = 0
 
-    init(overviewAlpha: Float,
-         roadAlpha: Float,
-         landuseAlpha: Float,
-         pixelsPerPoint: Float,
-         roadMarkingAlpha: Float = 0,
+    init(pixelsPerPoint: Float,
          cameraZoom: Float,
          viewportSizePx: SIMD2<Float> = .zero,
          pointWidthReferenceDepth: Float = 0,
          cameraMatrix: matrix_float4x4? = nil) {
-        self.overviewAlpha = overviewAlpha
-        self.roadAlpha = roadAlpha
-        self.landuseAlpha = landuseAlpha
         self.pixelsPerPoint = pixelsPerPoint
-        self.roadMarkingAlpha = roadMarkingAlpha
         self.cameraZoom = cameraZoom
         self.viewportSizePx = viewportSizePx
         self.pointWidthReferenceDepth = pointWidthReferenceDepth

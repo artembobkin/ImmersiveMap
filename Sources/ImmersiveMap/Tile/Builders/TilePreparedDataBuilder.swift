@@ -26,7 +26,7 @@ final class TilePreparedDataBuilder {
             ground: PreparedTileCPU.GeometryLayer(vertices: parsedTile.drawingPolygon.vertices,
                                                   indices: parsedTile.drawingPolygon.indices,
                                                   styles: parsedTile.styles,
-                                                  overviewStyleMasks: parsedTile.overviewStyleMasks,
+                                                  styleZoomFades: parsedTile.styleZoomFades,
                                                   lineStyles: parsedTile.lineStyles,
                                                   fillsIndexCount: parsedTile.drawingPolygon.fillsIndexCount),
             roads: parsedTile.drawingRoadPhases.map { structureBucket in
@@ -34,14 +34,14 @@ final class TilePreparedDataBuilder {
                     PreparedTileCPU.GeometryLayer(vertices: phase.drawing.vertices,
                                                  indices: phase.drawing.indices,
                                                  styles: phase.styles,
-                                                 overviewStyleMasks: phase.overviewStyleMasks,
+                                                 styleZoomFades: phase.styleZoomFades,
                                                  lineStyles: phase.lineStyles)
                 }
             },
             bridgeOverlay: PreparedTileCPU.GeometryLayer(vertices: parsedTile.drawingBridgePolygon.vertices,
                                                          indices: parsedTile.drawingBridgePolygon.indices,
                                                          styles: parsedTile.bridgeStyles,
-                                                         overviewStyleMasks: parsedTile.bridgeOverviewStyleMasks,
+                                                         styleZoomFades: parsedTile.bridgeStyleZoomFades,
                                                          lineStyles: parsedTile.bridgeLineStyles),
             extruded: PreparedTileCPU.Extruded(vertices: parsedTile.drawingExtruded.vertices,
                                                indices: parsedTile.drawingExtruded.indices,

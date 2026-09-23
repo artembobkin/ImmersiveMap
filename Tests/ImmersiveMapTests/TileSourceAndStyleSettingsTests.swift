@@ -5,19 +5,19 @@
 import XCTest
 
 final class TileSourceAndStyleSettingsTests: XCTestCase {
-    func testTemplateAndMapStyleConfigureSourceAndStyleSeparately() {
-        let style = ImmersiveMapTilesTheme.default.labels { labels in
+    func testArchiveAndMapStyleConfigureSourceAndStyleSeparately() {
+        let style = ProtomapsBasemapTheme.default.labels { labels in
             labels.town.haloEm = 0.125
         }
 
         let settings = ImmersiveMapSettings.default
-            .tileURLTemplate("https://tiles.example.com/tiles/{z}/{x}/{y}.mvt")
-            .mapStyle(ImmersiveMapTilesMapStyle(theme: style))
+            .tileArchive(URL(string: "https://tiles.example.com/planet.pmtiles")!)
+            .mapStyle(ProtomapsBasemapMapStyle(theme: style))
 
-        XCTAssertEqual(settings.tiles.network.tileURLTemplate,
-                       "https://tiles.example.com/tiles/{z}/{x}/{y}.mvt")
+        XCTAssertEqual(settings.tiles.network.tileArchiveURL,
+                       URL(string: "https://tiles.example.com/planet.pmtiles"))
         XCTAssertEqual(settings.mapStyle.configurationFingerprint,
-                       AnyImmersiveMapMapStyle(ImmersiveMapTilesMapStyle(theme: style)).configurationFingerprint)
+                       AnyImmersiveMapMapStyle(ProtomapsBasemapMapStyle(theme: style)).configurationFingerprint)
         XCTAssertEqual(settings.tiles.coverage.maximumZoomLevel,
                        ImmersiveMapTilesService.maximumTileZoomLevel)
     }
@@ -25,20 +25,17 @@ final class TileSourceAndStyleSettingsTests: XCTestCase {
     func testDefaultSettingsPointAtTheHostedService() {
         let network = ImmersiveMapSettings.default.tiles.network
 
-        XCTAssertEqual(network.tileBaseURL, ImmersiveMapTilesService.tileBaseURL)
-        // The hosted service serves no TileJSON document, so the defaults do
-        // not fire a discovery request that can only 404.
-        XCTAssertNil(network.tileJSONURL)
-        XCTAssertNil(network.tileURLTemplate)
+        XCTAssertEqual(network.tileArchiveURL, ImmersiveMapTilesService.tileArchiveURL)
+        XCTAssertEqual(network.tileArchiveURL.pathExtension, "pmtiles")
         XCTAssertTrue(network.tileRequestHeaders.isEmpty)
         XCTAssertNotEqual(network.cacheIdentity, 0)
     }
 
     func testMapStyleChangeRebuildsPreparedData() {
         let oldSettings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(theme: .default))
+            .mapStyle(ProtomapsBasemapMapStyle(theme: .default))
         let newSettings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(theme: .default.layers { layers in
+            .mapStyle(ProtomapsBasemapMapStyle(theme: .default.layers { layers in
                 layers.water = SIMD4<Float>(0.12, 0.34, 0.56, 1.0)
             }))
 

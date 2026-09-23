@@ -13,17 +13,19 @@ extension FeatureStyle {
 
 extension LinePass {
     /// A stroke whose width is stated in on-screen points and held there at
-    /// every zoom: opaque from the first frame it is visible (the overview
-    /// fade band), butt ends, plain joins, the dash pattern in points, and
-    /// a ribbon provisioned to host the width.
+    /// every zoom: by default coming in over the first zoom level off the
+    /// whole-planet view (camera zoom 0 to 1) and opaque from there, butt
+    /// ends, plain joins, the dash pattern in points, and a ribbon
+    /// provisioned to host the width.
     public static func pointLocked(key: UInt8,
                                    color: SIMD4<Float>,
                                    widthPoints: Float,
                                    dashLengthPoints: Float = 0,
-                                   dashGapPoints: Float = 0) -> LinePass {
+                                   dashGapPoints: Float = 0,
+                                   zoomFade: ImmersiveMapZoomFade = .fadeIn(from: 0, to: 1)) -> LinePass {
         LinePass(key: key,
                  color: color,
-                 lowZoomFadeMask: 1.0,
+                 zoomFade: zoomFade,
                  lineWidthPoints: widthPoints,
                  dashLengthPoints: dashLengthPoints,
                  dashGapPoints: dashGapPoints,

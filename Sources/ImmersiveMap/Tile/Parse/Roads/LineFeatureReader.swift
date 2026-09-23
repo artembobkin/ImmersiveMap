@@ -6,14 +6,14 @@ import Mvt
 import simd
 
 /// Reads a line feature into the ribbons its style's passes draw, the
-/// decorations stamped along it (crossings, arrows, bus lane letters, bus
-/// stop zigzags), and its road name label.
+/// decoration stamped along it (the oneway arrows), and its road name
+/// label.
 ///
 /// On the road layer at street zooms the feature takes the separate-road
-/// path: its lines come pre-clipped and stitched from the layer's
+/// path: its lines come stitched from the layer's
 /// `RoadLayerPrecomputation`, its ribbons join the road phases sorted by
-/// structure and class, paint stops at junctions, and ends that continue
-/// into a neighbouring tile or another road stay hard. Every other line (a
+/// structure and class, and ends that continue into a neighbouring tile
+/// or another road stay hard. Every other line (a
 /// boundary, a waterway, a road at an overview zoom) draws as ground or
 /// bridge geometry clipped to the tile with no junction knowledge.
 ///
@@ -26,10 +26,7 @@ struct LineFeatureReader {
 
     private let labelDecisions: TileLabelDecisions
     private let labelsEnabled: Bool
-    private let crosswalkZebraBuilder = CrosswalkZebraGeometryBuilder()
     private let roadDirectionArrowBuilder = RoadDirectionArrowGeometryBuilder()
-    private let busLaneLetterBuilder = BusLaneLetterGeometryBuilder()
-    private let busStopZigzagBuilder = BusStopZigzagGeometryBuilder()
     private let tileExtent = Float(TileCoordinateSpace.tileExtentDouble)
 
     init(labelDecisions: TileLabelDecisions, options: TileParseOptions) {
@@ -92,19 +89,8 @@ struct LineFeatureReader {
             }
             preparedLines = converted
         }
-        // Two tracks of the same feature: the ribbon and its
-        // labels draw from lines cut by every carriageway
-        // surface, the paint from lines cut only by crossings
-        // (see paintLinesByFeatureIndex).
-        let paintPreparedLines = usesSeparateRoadRendering
-            ? precomputation.paintLinesByFeatureIndex[featureIndex]
-            : preparedLines
-        let passGroups: [(lines: [PreparedRoadLine], passes: [RoadStyle.Pass], emitsLabels: Bool)] = [
-            (preparedLines, lineRenderPasses.filter { $0.role != .detail }, true),
-            (paintPreparedLines, lineRenderPasses.filter { $0.role == .detail }, false)
-        ]
-        for group in passGroups where group.passes.isEmpty == false || group.emitsLabels {
-            for preparedLine in group.lines {
+        do {
+            for preparedLine in preparedLines {
                 let linePoints = preparedLine.points
                 let exactClippedFragments = preparedLine.exactFragments
                 guard exactClippedFragments.isEmpty == false else {
@@ -116,7 +102,7 @@ struct LineFeatureReader {
                                        padding: sharedRoadPadding)
                     : []
 
-                for roadPass in group.passes {
+                for roadPass in lineRenderPasses {
                     let lineRenderPass = roadPass.pass
                     if usesSeparateRoadRendering {
                         result.registerRoadStyle(BakedStyle(pass: lineRenderPass), key: lineRenderPass.key)
@@ -236,8 +222,7 @@ struct LineFeatureReader {
                     }
                 }
 
-                if group.emitsLabels,
-                   let labelText,
+                if let labelText,
                    let roadLabelStyle {
                     for fragment in exactClippedFragments {
                         guard shouldIncludeRoadLabelFragment(fragment) else {
@@ -260,10 +245,9 @@ struct LineFeatureReader {
     }
 
     /// The decoration a pass stamps along the feature's exact fragments on
-    /// the separate-road path, appended in place: the zebra of a crossing
-    /// (under any pass), and under the detail pass the bus lane's letter,
-    /// the bus stop's sawtooth and the oneway arrows.
-    /// Returns false when the pass draws the plain ribbon instead.
+    /// the separate-road path, appended in place: under the detail pass
+    /// the oneway arrows. Returns false when the pass draws the plain
+    /// ribbon instead.
     private func appendDecoration(style: RoadStyle,
                                   pass roadPass: RoadStyle.Pass,
                                   fragments: [ClippedLineFragment],
@@ -283,37 +267,6 @@ struct LineFeatureReader {
             }
         }
         switch style.decoration {
-        case .zebraCrossing(let zebra):
-            for fragment in fragments {
-                append(crosswalkZebraBuilder.buildPolygons(
-                    points: fragment.points,
-                    zoneWidth: Float(pass.lineGeometry.lineWidth),
-                    zebra: zebra
-                ))
-            }
-            return true
-        case .busLaneLetter(let letter) where roadPass.role == .detail:
-            // The bus lane's axis: the letter A stamped along it, from the
-            // same polygon path the zebra and the arrows take.
-            for fragment in fragments {
-                append(busLaneLetterBuilder.buildPolygons(
-                    points: fragment.points,
-                    unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile),
-                    letter: letter
-                ))
-            }
-            return true
-        case .busStopZigzag(let zigzag) where roadPass.role == .detail:
-            // The stop's kerb: the yellow sawtooth, folded from the shipped
-            // axis.
-            for fragment in fragments {
-                append(busStopZigzagBuilder.buildPolygons(
-                    points: fragment.points,
-                    unitsPerMetre: ParkingBayGeometryBuilder.tileUnitsPerMetre(tile: tile),
-                    zigzag: zigzag
-                ))
-            }
-            return true
         case .onewayArrow(let arrow) where roadPass.role == .detail:
             for fragment in fragments {
                 append(roadDirectionArrowBuilder.buildPolygons(
@@ -323,7 +276,7 @@ struct LineFeatureReader {
                 ))
             }
             return true
-        case .none, .busLaneLetter, .busStopZigzag, .onewayArrow, .parkingBays:
+        case .none, .onewayArrow:
             return false
         }
     }

@@ -21,7 +21,7 @@ struct BakedStyle {
     init(fill: FillStyle) {
         self.pass = LinePass(key: fill.key,
                              color: fill.color,
-                             lowZoomFadeMask: fill.lowZoomFadeMask,
+                             zoomFade: fill.zoomFade,
                              lineGeometry: LineGeometryStyle(lineWidth: Self.fillRibbonWidth))
     }
 
@@ -32,5 +32,6 @@ struct BakedStyle {
     }
 
     var color: SIMD4<Float> { pass.color }
-    var lowZoomFadeMask: Float { pass.lowZoomFadeMask }
+    /// The pair the tile shaders read for the style's zoom fade.
+    var zoomFade: SIMD2<Float> { pass.zoomFade.shaderPair }
 }

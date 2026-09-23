@@ -52,8 +52,8 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
             """
         case .buildings:
             """
-            The theme's `features.buildingExtrusion` and `features.buildingRoofShapes` \
-            (baked into the prepared tiles, so a toggle re-parses them) and \
+            The theme's `features.buildingExtrusion` \
+            (baked into the prepared tiles, so a toggle re-parses it) and \
             `settings.scene` (light, shadows), which is per-frame uniforms and \
             applies without touching a single tile. Flat presentation only.
             """
@@ -65,7 +65,7 @@ enum PlaygroundSection: String, CaseIterable, Identifiable, Hashable {
         case .style:
             """
             The palette is the map style, not a settings field: build an \
-            `ImmersiveMapTilesMapStyle` from a configuration and hand it over. \
+            `ProtomapsBasemapMapStyle` from a theme and hand it over. \
             Colors are baked into prepared tiles, the extrusion alpha is not.
             """
         case .presentation:

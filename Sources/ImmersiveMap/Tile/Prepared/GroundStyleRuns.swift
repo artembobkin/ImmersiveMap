@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import Foundation
+import simd
 
 /// One contiguous run of ground indices belonging to one style and one
 /// geometry class, in paint order. The parser emits the ground bucket as
@@ -22,10 +23,11 @@ struct GroundStyleRun: Equatable, Sendable {
     /// First index element of the run and its length, in index elements.
     var indexStart: UInt32
     var indexCount: UInt32
-    /// The style's zoom-fade mask (see `tileStyleFade`); the drawer combines
-    /// it with the frame's fade alphas to decide whether the style is opaque
-    /// this frame.
-    var fadeMask: Float
+    /// The style's zoom fade, the pair `tileStyleFade` reads (x the zoom
+    /// of zero alpha, y the zoom of full alpha). The drawer evaluates it at
+    /// the frame's camera zoom to decide whether the style is opaque this
+    /// frame, or invisible.
+    var zoomFade: SIMD2<Float>
     /// Bit 0: the style's colour carries alpha 1, so the run is opaque
     /// whenever its fade is 1. Bit 1: the run is line ribbons and draws
     /// through the line-field pipeline.
@@ -128,11 +130,11 @@ enum GroundStyleRunScanner {
                 flags |= GroundStyleRun.alphaOpaqueFlag
             }
         }
-        let fadeMask = styleIndex < ground.overviewStyleMasks.count
-            ? ground.overviewStyleMasks[styleIndex] : 0
+        let zoomFade = styleIndex < ground.styleZoomFades.count
+            ? ground.styleZoomFades[styleIndex] : ImmersiveMapZoomFade.none.shaderPair
         return GroundStyleRun(indexStart: UInt32(start),
                               indexCount: UInt32(count),
-                              fadeMask: fadeMask,
+                              zoomFade: zoomFade,
                               flags: flags)
     }
 
@@ -143,7 +145,7 @@ enum GroundStyleRunScanner {
         // paints exactly like the unsplit path.
         return [GroundStyleRun(indexStart: 0,
                                indexCount: UInt32(ground.indices.count),
-                               fadeMask: 0,
+                               zoomFade: ImmersiveMapZoomFade.none.shaderPair,
                                flags: GroundStyleRun.linesClassFlag)]
     }
 }

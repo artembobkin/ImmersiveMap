@@ -9,28 +9,23 @@ import Foundation
 struct BuildingExtrusionCandidate {
     let styleKey: UInt8
     let buildingId: UInt64
+    /// A `building:part` rather than a building outline. The resolver
+    /// drops an outline that ground-standing parts already cover.
+    let isPart: Bool
     let footprintSignature: BuildingFootprintSignature
     // All rings are RENDER space (y up): the extrusion path works in
-    // the same space as the roof tessellation it merges with, and enters
+    // the same space as the lid tessellation it merges with, and enters
     // it exactly once, at candidate construction in the building reader.
     let clippedExterior: [SIMD2<Float>]
     let clippedInteriors: [[SIMD2<Float>]]
-    /// The exterior ring as the tile carries it, before the clip to the
-    /// tile square, in the same converted coordinates as `clippedExterior`.
-    /// The roof frame must come from this whole footprint, never from the
-    /// clipped one, or ridges break at tile edges.
-    let unclippedExterior: [SIMD2<Float>]
-    let hasUnclippedInteriorRings: Bool
+    /// The flat lid's triangulation of the clipped footprint.
     let roof: ParsedPolygon
-    let roofInfo: RoofInfo?
     let baseHeight: Float
     let topHeight: Float
 }
 
-/// A building's vertical extent in tile units at the tile's zoom, and the
-/// roof it carries when shaped roofs are on.
+/// A building's vertical extent in tile units at the tile's zoom.
 struct BuildingExtrusionHeights {
     let base: Float
     let top: Float
-    let roof: RoofInfo?
 }

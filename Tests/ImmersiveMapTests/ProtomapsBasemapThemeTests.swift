@@ -1,0 +1,85 @@
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
+// SPDX-License-Identifier: MIT
+
+@testable import ImmersiveMap
+import XCTest
+
+final class ProtomapsBasemapThemeTests: XCTestCase {
+    /// A recolor must change disk-cache identity, otherwise the map keeps drawing
+    /// from prepared tiles baked with the old palette.
+    func testCacheFingerprintChangesWithEveryPaletteGroup() {
+        let base = ProtomapsBasemapTheme.default
+
+        let relabeled = base.labels { labels in
+            labels.town.haloEm += 0.05
+        }
+        let relayered = base.layers { layers in
+            layers.water = SIMD4<Float>(0.12, 0.34, 0.56, 1)
+        }
+        let refeatured = base.features { features in
+            features.buildingFillColor = SIMD4<Float>(0.18, 0.19, 0.23, 1)
+        }
+
+        XCTAssertNotEqual(base.cacheFingerprint, relabeled.cacheFingerprint)
+        XCTAssertNotEqual(base.cacheFingerprint, relayered.cacheFingerprint)
+        XCTAssertNotEqual(base.cacheFingerprint, refeatured.cacheFingerprint)
+    }
+
+    /// `apply` is a copy with the changes: the original is untouched, the
+    /// style built from it carries them, and the leading-dot spelling on the
+    /// view resolves to the built-in style.
+    @MainActor
+    func testApplyMakesAChangedCopy() {
+        let base = ProtomapsBasemapTheme.default
+        let water = SIMD4<Float>(0.2, 0.4, 0.8, 1)
+
+        let recoloured = base.apply { theme in
+            theme.layers.water = water
+        }
+
+        XCTAssertEqual(base, .default)
+        XCTAssertEqual(recoloured.layers.water, water)
+        XCTAssertNotEqual(base.cacheFingerprint, recoloured.cacheFingerprint)
+
+        let style = ProtomapsBasemapMapStyle.default.apply { theme in
+            theme.layers.water = water
+        }
+        XCTAssertEqual(style.theme, recoloured)
+
+        // Spelled as an app writes it: after another modifier, with a literal
+        // in the closure body, which is what once sent the leading dot to
+        // the type-erased overload.
+        let settings = ImmersiveMapView()
+            .fog(isEnabled: false)
+            .mapStyle(.default.apply { theme in
+                theme.layers.water = [0.2, 0.4, 0.8, 1]
+            })
+            .settings
+        XCTAssertEqual(settings.mapStyle.configurationFingerprint,
+                       ProtomapsBasemapMapStyle(theme: recoloured).configurationFingerprint)
+    }
+
+    /// `-0.0 == 0.0` is true, so two themes that compare equal would
+    /// otherwise hash differently and thrash the prepared-tile disk cache.
+    func testCacheFingerprintCanonicalizesSignedZeroFloatValues() {
+        let positiveZero = ProtomapsBasemapTheme.default
+            .labels { labels in
+                labels.town.haloEm = 0.0
+            }
+        let negativeZero = ProtomapsBasemapTheme.default
+            .labels { labels in
+                labels.town.haloEm = -0.0
+            }
+
+        XCTAssertEqual(positiveZero, negativeZero)
+        XCTAssertEqual(positiveZero.cacheFingerprint, negativeZero.cacheFingerprint)
+    }
+
+    /// The raw values are written into the prepared-tile disk format
+    /// (`PreparedTileDiskCodec`) and folded into the style fingerprint, so
+    /// swapping them would render every cached label at the wrong weight.
+    func testLabelFontWeightRawValuesAreStable() {
+        XCTAssertEqual(LabelFontWeight.bold.rawValue, 0)
+        XCTAssertEqual(LabelFontWeight.thin.rawValue, 1)
+    }
+}

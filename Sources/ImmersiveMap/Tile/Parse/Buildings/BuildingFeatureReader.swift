@@ -5,7 +5,7 @@ import Foundation
 import Mvt
 
 /// Reads what a polygon feature contributes to the buildings of a tile:
-/// whether it is extruded at all, how tall, with which roof, and the
+/// whether it is extruded at all, how tall, and the
 /// candidate that records it until the whole tile has been read and
 /// `BuildingExtrusionResolver` can tell the outlines from the parts. What
 /// the feature is as a building is the schema reading's answer
@@ -29,6 +29,7 @@ struct BuildingFeatureReader {
     /// A feature's extrusion, decided once for all of its polygons.
     struct Extrusion {
         let buildingId: UInt64
+        let isPart: Bool
         let heights: BuildingExtrusionHeights
     }
 
@@ -97,14 +98,12 @@ struct BuildingFeatureReader {
               let heights = extrusionHeights(building: building, tileZoom: tile.z, style: style) else {
             return nil
         }
-        return Extrusion(buildingId: buildingId, heights: heights)
+        return Extrusion(buildingId: buildingId, isPart: building.isPart, heights: heights)
     }
 
     /// The candidate for one polygon of an extruded feature, nil for a
     /// polygon with no height or no usable footprint. The extrusion path's
-    /// ONE entry into render space: the candidate's rings all flip here, so
-    /// the unclipped ring shares exact coordinates with the clipped one on
-    /// uncut edges.
+    /// ONE entry into render space: the candidate's rings all flip here.
     func candidate(polygon: Polygon,
                    parsedGeometry: ParsePolygon.ParsedGeometry,
                    styleKey: UInt8,
@@ -114,18 +113,13 @@ struct BuildingFeatureReader {
               let footprintSignature = BuildingFootprintSignature(polygon: polygon) else {
             return nil
         }
-        let unclippedExterior = TileCoordinateSpace.renderPoints(
-            polygon.exteriorRing.map { SIMD2<Float>(Float($0.x), Float($0.y)) }
-        )
         return BuildingExtrusionCandidate(styleKey: styleKey,
                                           buildingId: extrusion.buildingId,
+                                          isPart: extrusion.isPart,
                                           footprintSignature: footprintSignature,
                                           clippedExterior: TileCoordinateSpace.renderPoints(parsedGeometry.clipped.exterior),
                                           clippedInteriors: parsedGeometry.clipped.interiors.map(TileCoordinateSpace.renderPoints),
-                                          unclippedExterior: unclippedExterior,
-                                          hasUnclippedInteriorRings: polygon.interiorRings.contains { $0.count >= 3 },
                                           roof: parsedGeometry.parsedPolygon,
-                                          roofInfo: heights.roof,
                                           baseHeight: heights.base,
                                           topHeight: heights.top)
     }
@@ -137,10 +131,7 @@ struct BuildingFeatureReader {
         for candidate in BuildingExtrusionResolver.resolveExterior(candidates) {
             if let extrudedMesh = BuildingExtrusionMeshBuilder.build(clippedExterior: candidate.clippedExterior,
                                                                      clippedInteriors: candidate.clippedInteriors,
-                                                                     unclippedExterior: candidate.unclippedExterior,
-                                                                     hasUnclippedInteriorRings: candidate.hasUnclippedInteriorRings,
                                                                      roof: candidate.roof,
-                                                                     roofInfo: candidate.roofInfo,
                                                                      baseHeight: candidate.baseHeight,
                                                                      topHeight: candidate.topHeight,
                                                                      tileExtent: Float(tileExtent)) {
@@ -171,17 +162,6 @@ struct BuildingFeatureReader {
 
         let base = max(0, min(scaledMinHeight, scaledHeight))
         let top = max(scaledHeight, base)
-        // A style that raises no shaped roofs gives every building the flat
-        // lid at its full height. The style is prepared-cache identity, so a
-        // change re-parses instead of serving the other shape from disk.
-        guard style.roofShapes, let roof = building.roof else {
-            return BuildingExtrusionHeights(base: base, top: top, roof: nil)
-        }
-        return BuildingExtrusionHeights(base: base,
-                                        top: top,
-                                        roof: RoofInfo(height: roof.heightMetres * style.heightScale * zoomScale,
-                                                       shape: roof.shape,
-                                                       orientation: roof.orientation,
-                                                       directionDegrees: roof.directionDegrees))
+        return BuildingExtrusionHeights(base: base, top: top)
     }
 }

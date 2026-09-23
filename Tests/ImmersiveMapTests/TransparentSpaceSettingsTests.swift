@@ -22,7 +22,7 @@ final class TransparentSpaceSettingsTests: XCTestCase {
     /// no longer matters.
     func testTransparentSpaceClearsToATransparentPixel() {
         let settings = ImmersiveMapSettings.default.transparentSpace()
-        let clearColor = RenderFrameClearColor.make(transition: 0, settings: settings, mapColor: ImmersiveMapTilesTheme.default.baseColors.map)
+        let clearColor = RenderFrameClearColor.make(transition: 0, settings: settings, mapColor: ProtomapsBasemapTheme.default.baseColors.map)
 
         XCTAssertEqual(clearColor.red, 0)
         XCTAssertEqual(clearColor.green, 0)
@@ -33,7 +33,7 @@ final class TransparentSpaceSettingsTests: XCTestCase {
     func testOpaqueSpaceKeepsItsConfiguredClearColor() {
         var settings = ImmersiveMapSettings.default
         settings.scene.space.clearColor = SIMD4<Double>(0.1, 0.2, 0.3, 1.0)
-        let clearColor = RenderFrameClearColor.make(transition: 0, settings: settings, mapColor: ImmersiveMapTilesTheme.default.baseColors.map)
+        let clearColor = RenderFrameClearColor.make(transition: 0, settings: settings, mapColor: ProtomapsBasemapTheme.default.baseColors.map)
 
         XCTAssertEqual(clearColor.red, 0.1, accuracy: 1e-9)
         XCTAssertEqual(clearColor.green, 0.2, accuracy: 1e-9)

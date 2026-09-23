@@ -92,13 +92,13 @@ final class GlobeCapOffscreenRenderTests: XCTestCase {
 
     @MainActor
     private func makeHarness() throws -> OffscreenFrameHarness {
-        let configuration = ImmersiveMapTilesTheme.default
+        let configuration = ProtomapsBasemapTheme.default
             .layers {
                 $0.water = Self.fixtureWater
                 $0.ice = Self.fixtureWater
             }
         var settings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
+            .mapStyle(ProtomapsBasemapMapStyle(theme: configuration))
         // The caps are the theme's water and ice: both poles are the fixture
         // magenta too, so the disc checks cover cap and tiles alike.
         // The stars twinkle with scene time; a settle loop needs a still sky.
@@ -109,7 +109,7 @@ final class GlobeCapOffscreenRenderTests: XCTestCase {
     @MainActor
     private func loadFixtureTiles(into harness: OffscreenFrameHarness, maximumZoom: Int,
                                   southern: Bool = false) async throws {
-        let data = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["class": "ocean"])
+        let data = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["kind": "ocean"])
         // Every tile of the pole rows down to `maximumZoom`, plus the
         // neighbourhood under the camera.
         var tiles = Set(WebMercatorTileScheme.neighbourhoodPyramid(latitude: southern ? -85.0 : 85.0,

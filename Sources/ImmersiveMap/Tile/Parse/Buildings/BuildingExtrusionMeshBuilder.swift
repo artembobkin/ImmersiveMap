@@ -4,18 +4,14 @@
 import Foundation
 import simd
 
-/// Turns one resolved building candidate into its mesh: the roof (shaped by
-/// `RoofGeometryBuilder` when the candidate carries a roof, a flat lid
-/// otherwise) and a wall per footprint edge, in render space with every
+/// Turns one resolved building candidate into its mesh: a flat lid at the
+/// top height and a wall per footprint edge, in render space with every
 /// normal facing out of the building material.
 enum BuildingExtrusionMeshBuilder {
     static func build(
         clippedExterior: [SIMD2<Float>],
         clippedInteriors: [[SIMD2<Float>]],
-        unclippedExterior: [SIMD2<Float>] = [],
-        hasUnclippedInteriorRings: Bool = false,
         roof: ParsedPolygon,
-        roofInfo: RoofInfo?,
         baseHeight: Float,
         topHeight: Float,
         tileExtent: Float
@@ -85,34 +81,9 @@ enum BuildingExtrusionMeshBuilder {
         }
 
         let sanitizedExterior = sanitizeRing(clippedExterior)
-        let footprintRing = unclippedExterior.isEmpty ? sanitizedExterior : sanitizeRing(unclippedExterior)
-        let hasInteriorRings = hasUnclippedInteriorRings
-            || clippedInteriors.contains { sanitizeRing($0).count >= 3 }
-        let roofGeometry = roofInfo.flatMap {
-            RoofGeometryBuilder.build(roof: $0,
-                                      footprintRing: footprintRing,
-                                      wallRing: sanitizedExterior,
-                                      hasInteriorRings: hasInteriorRings,
-                                      flatTriangulationVertices: roof.vertices.map {
-                                          SIMD2<Float>(Float($0.x), Float($0.y))
-                                      },
-                                      flatTriangulationIndices: roof.indices,
-                                      baseHeight: baseHeight,
-                                      topHeight: topHeight,
-                                      tileExtent: tileExtent)
-        }
         let roofOffset = UInt32(vertices.count)
-        if let roofGeometry {
-            let roofSurfaceID = nextLocalSurfaceID
-            nextLocalSurfaceID &+= 1
-            vertices.append(contentsOf: roofGeometry.surfaceVertices.map {
-                ParsedExtrudedVertex(position: $0.position, normal: $0.normal, surfaceID: roofSurfaceID)
-            })
-            indices.append(contentsOf: roofGeometry.surfaceIndices.map { $0 + roofOffset })
-        } else if roof.indices.count >= 3 {
-            // Flat tag, no roof tags, or a footprint the roof builder cannot
-            // shape: a flat lid at the full height. A wrong roof reads worse
-            // than a flat one.
+        if roof.indices.count >= 3 {
+            // The flat lid at the full height.
             let roofSurfaceID = nextLocalSurfaceID
             nextLocalSurfaceID &+= 1
             let roofNormal = SIMD3<Float>(0, 0, 1)
@@ -134,8 +105,6 @@ enum BuildingExtrusionMeshBuilder {
             }
         }
 
-        let wallTop: (SIMD2<Float>) -> Float = roofGeometry?.wallTop ?? { _ in topHeight }
-
         func appendWalls(for ring: [SIMD2<Float>], clockwise: Bool, isSanitized: Bool = false) {
             var ringPoints = isSanitized ? ring : sanitizeRing(ring)
             guard ringPoints.count >= 2 else { return }
@@ -150,10 +119,8 @@ enum BuildingExtrusionMeshBuilder {
 
                 let v0 = SIMD3<Float>(p0.x, p0.y, baseHeight)
                 let v1 = SIMD3<Float>(p1.x, p1.y, baseHeight)
-                let top0 = wallTop(p0)
-                let top1 = wallTop(p1)
-                let v2 = SIMD3<Float>(p1.x, p1.y, top1)
-                let v3 = SIMD3<Float>(p0.x, p0.y, top0)
+                let v2 = SIMD3<Float>(p1.x, p1.y, topHeight)
+                let v3 = SIMD3<Float>(p0.x, p0.y, topHeight)
                 // Argument order makes every wall normal face out of the
                 // building material: away from an exterior ring's interior,
                 // into a hole ring's cavity (exterior rings are wound CW
@@ -181,9 +148,7 @@ enum BuildingExtrusionMeshBuilder {
         }
 
         // Exterior: CW so walls are front-facing with back culling in current tile space.
-        // The roof geometry's ring carries extra vertices where the gable ridge
-        // crosses an edge, so wall tops can follow the roof up to the ridge.
-        appendWalls(for: roofGeometry?.wallExteriorRing ?? sanitizedExterior, clockwise: true, isSanitized: true)
+        appendWalls(for: sanitizedExterior, clockwise: true, isSanitized: true)
         for interior in clippedInteriors {
             // Interior (hole): opposite winding
             appendWalls(for: interior, clockwise: false)

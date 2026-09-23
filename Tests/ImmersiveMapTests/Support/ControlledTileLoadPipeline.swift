@@ -527,7 +527,7 @@ final class ControlledTileLoadPipeline: TileLoadPipeline, @unchecked Sendable {
         let emptyGeometry = PreparedTileCPU.GeometryLayer(vertices: [],
                                                          indices: [],
                                                          styles: [],
-                                                         overviewStyleMasks: [])
+                                                         styleZoomFades: [])
         let emptyRoadPhases = RoadGeometryPhases(shadow: emptyGeometry,
                                                  casing: emptyGeometry,
                                                  fill: emptyGeometry,

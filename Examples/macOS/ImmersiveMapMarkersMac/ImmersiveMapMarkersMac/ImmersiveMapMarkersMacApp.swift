@@ -33,7 +33,7 @@ private struct MarkersScreen: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             ImmersiveMapView()
-                .tileURLTemplate(hostedTileTemplate)
+                .tileArchive(hostedTileArchive)
                 .camera(camera, position: Self.overview)
                 .markers(places, coordinate: \.coordinate, anchor: anchor) { place in
                     if usesCards {
@@ -121,4 +121,4 @@ private struct MarkersScreen: View {
 
 /// The hosted tile endpoint, written as the one-line URL template. It is
 /// public: no key, no account.
-private let hostedTileTemplate = "https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt"
+private let hostedTileArchive = URL(string: "https://tiles.immersivemap.dev/20260922.pmtiles")!

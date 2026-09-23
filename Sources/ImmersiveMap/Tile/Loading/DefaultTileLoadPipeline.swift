@@ -8,7 +8,7 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
     // from raw bytes and never persists the parsed result.
     private let preparedTileDiskCaching: PreparedTileDiskCaching?
     // nil in offline-only mode: the pipeline then owns no network transport at
-    // all, which also keeps the TileJSON discovery request from ever firing.
+    // all.
     private let tileDownloader: TileDownloader?
     // nil when offline regions are disabled.
     private let offlineTileStore: OfflineTileStore?

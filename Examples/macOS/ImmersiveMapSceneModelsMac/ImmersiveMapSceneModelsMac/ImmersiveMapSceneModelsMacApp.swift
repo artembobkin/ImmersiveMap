@@ -42,7 +42,7 @@ private struct SceneModelsScreen: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             ImmersiveMapView()
-                .tileURLTemplate(hostedTileTemplate)
+                .tileArchive(hostedTileArchive)
                 .camera(camera, position: DemoCity.paris.cameraPosition)
                 .sceneModels(sceneModels)
                 // Hit-testing follows the model through the morph and through
@@ -266,4 +266,4 @@ private enum DemoCity: String, CaseIterable, Identifiable {
 
 /// The hosted tile endpoint, written as the one-line URL template. It is
 /// public: no key, no account.
-private let hostedTileTemplate = "https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt"
+private let hostedTileArchive = URL(string: "https://tiles.immersivemap.dev/20260922.pmtiles")!

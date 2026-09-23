@@ -11,9 +11,9 @@ struct UnificationStageResult {
     var drawingBridgePolygon: DrawingPolygonBytes
     var drawingExtruded: DrawingExtrudedBytes
     var styles: [TilePolygonStyle]
-    var overviewStyleMasks: [Float]
+    var styleZoomFades: [SIMD2<Float>]
     var lineStyles: [TileLineStyle]
     var bridgeStyles: [TilePolygonStyle]
-    var bridgeOverviewStyleMasks: [Float]
+    var bridgeStyleZoomFades: [SIMD2<Float>]
     var bridgeLineStyles: [TileLineStyle]
 }

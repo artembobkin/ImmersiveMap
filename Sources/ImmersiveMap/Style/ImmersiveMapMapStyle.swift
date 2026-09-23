@@ -33,16 +33,16 @@ public struct AnyImmersiveMapMapStyle: Equatable, Sendable {
 }
 
 /// Draws any MVT source with a hand-written per-feature style, over the
-/// reading of its schema. The default reading is the hosted tiles', which
-/// covers a source that spells its tags the same way; a source that names
-/// things differently pairs the style with a reading of its own.
+/// reading of its schema. The default reading is the Protomaps basemap's,
+/// which covers a source that spells its tags the same way; a source that
+/// names things differently pairs the style with a reading of its own.
 public struct VectorTileMapStyle: ImmersiveMapMapStyle {
     public let configurationFingerprint: UInt64
     public let schema: any ImmersiveMapTileSchema
     public let vectorTileStyle: any ImmersiveMapVectorTileStyle
 
     public init(style: any ImmersiveMapVectorTileStyle,
-                schema: any ImmersiveMapTileSchema = ImmersiveMapTilesSchema(),
+                schema: any ImmersiveMapTileSchema = ProtomapsBasemapSchema(),
                 configurationFingerprint: UInt64? = nil) {
         self.schema = schema
         self.vectorTileStyle = style

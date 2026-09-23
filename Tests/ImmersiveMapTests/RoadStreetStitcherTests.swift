@@ -9,9 +9,9 @@ import simd
 /// Pins the stitching rule of the road-network tile contract:
 /// pieces of one street (same name and drawing attributes) that meet at an
 /// endpoint no third road shares become one polyline before tessellation;
-/// junctions, different streets, different widths and nameless pieces do not.
+/// junctions, different streets, different classes and nameless pieces do not.
 final class RoadStreetStitcherTests: XCTestCase {
-    private let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
+    private let style = ProtomapsBasemapDefaultMapStyle(theme: .default)
 
     private func value(_ string: String) -> MvtValue {
         .string(string)
@@ -20,25 +20,26 @@ final class RoadStreetStitcherTests: XCTestCase {
         .int(Int64(int))
     }
 
-    private func attributes(name: String?, cls: String = "primary", lanes: Int = 4) -> [String: MvtValue] {
-        var a: [String: MvtValue] = ["class": value(cls), "lanes": value(lanes)]
+    private func attributes(name: String?, cls: String = "primary", link: Bool = false) -> [String: MvtValue] {
+        var a = ProtomapsRoadSpelling.values(forClass: cls)
+        if link { a["is_link"] = .bool(true) }
         if let name { a["name"] = value(name) }
         return a
     }
 
     private func styles(for attributes: [[String: MvtValue]]) -> [FeatureStyle] {
         attributes.map {
-            style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
+            style.makeStyle(data: DetFeatureStyleData(layerName: "roads",
                                                       properties: $0,
-                                                      tile: Tile(x: 39615, y: 20486, z: 16)))
+                                                      tile: Tile(x: 19807, y: 10243, z: 15)))
         }
     }
 
     private func facts(for attributes: [[String: MvtValue]]) -> [ImmersiveMapFeatureFacts] {
         attributes.map {
-            ImmersiveMapTilesSchema().facts(layerName: "transportation",
+            ProtomapsBasemapSchema().facts(layerName: "roads",
                                             properties: $0,
-                                            tile: Tile(x: 39615, y: 20486, z: 16))
+                                            tile: Tile(x: 19807, y: 10243, z: 15))
         }
     }
 
@@ -90,21 +91,21 @@ final class RoadStreetStitcherTests: XCTestCase {
             [[SIMD2(1000, 100), SIMD2(2000, 100)]],
             [[SIMD2(1000, 100), SIMD2(1000, 800)]],
         ]
-        let attrs = [attributes(name: "A"), attributes(name: "A"), attributes(name: "B", cls: "minor", lanes: 2)]
+        let attrs = [attributes(name: "A"), attributes(name: "A"), attributes(name: "B", cls: "minor")]
         let out = RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureFacts: facts(for: attrs), featureStyles: styles(for: attrs))
         XCTAssertEqual(out, lines, "Three drive-tier features at one point is a junction; nothing is stitched")
     }
 
-    func testDifferentStreetsAndDifferentWidthsStayApart() {
+    func testDifferentStreetsAndDifferentClassesStayApart() {
         let lines: [[[SIMD2<Float>]]] = [
             [[SIMD2(0, 100), SIMD2(1000, 100)]],
             [[SIMD2(1000, 100), SIMD2(2000, 100)]],
         ]
         let otherStreet = [attributes(name: "A"), attributes(name: "B")]
         XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureFacts: facts(for: otherStreet), featureStyles: styles(for: otherStreet)), lines)
-        let otherWidth = [attributes(name: "A", lanes: 4), attributes(name: "A", lanes: 6)]
-        XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureFacts: facts(for: otherWidth), featureStyles: styles(for: otherWidth)), lines,
-                       "A width step is a real edge, not a seam to hide")
+        let otherClass = [attributes(name: "A", cls: "primary"), attributes(name: "A", cls: "secondary")]
+        XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureFacts: facts(for: otherClass), featureStyles: styles(for: otherClass)), lines,
+                       "A class step is a real edge, not a seam to hide")
     }
 
     func testPiecesWithoutANameAreLeftAlone() {
@@ -128,47 +129,16 @@ final class RoadStreetStitcherTests: XCTestCase {
         XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines, featureFacts: facts(for: attrs), featureStyles: styles(for: attrs)), lines)
     }
 
-    // MARK: - the source's own street identity
-
-    func testPiecesOfOneStreetJoinOnTheSourcesIdentityEvenWhereTheirAttributesDiffer() {
-        // A tiler that assembles streets before cutting tiles states which
-        // street a piece belongs to. Where it does, that answer replaces the
-        // guess: these two pieces differ in lane count, which the attribute
-        // comparison treats as two different streets, and they are one.
-        let lines: [[[SIMD2<Float>]]] = [
-            [[SIMD2(0, 100), SIMD2(1000, 100)]],
-            [[SIMD2(1000, 100), SIMD2(2000, 100)]],
-        ]
-        var withStreet = [attributes(name: "Mokhovaya", lanes: 6), attributes(name: "Mokhovaya", lanes: 2)]
-        withStreet[0]["street"] = value(4211)
-        withStreet[1]["street"] = value(4211)
-        let joined = RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
-                                               featureFacts: facts(for: withStreet), featureStyles: styles(for: withStreet))
-        XCTAssertEqual(joined[0], [[SIMD2(0, 100), SIMD2(1000, 100), SIMD2(2000, 100)]],
-                       "One street on the ground, one ribbon on the map")
-        XCTAssertEqual(joined[1], [])
-
-        // Two different ids at the same point stay apart, whatever they are
-        // called: this is a junction, not a seam.
-        var different = withStreet
-        different[1]["street"] = value(9002)
-        XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
-                                                 featureFacts: facts(for: different), featureStyles: styles(for: different)),
-                       lines)
-    }
-
     func testOneStreetIsStillNotOneRibbonAcrossATunnelOrABridge() {
-        // A street runs into a tunnel and out again: one street, and the
-        // source says so, but the two pieces do not draw alike. Welding them
+        // A street runs into a tunnel and out again: one street, but the
+        // two pieces do not draw alike. Welding them
         // would draw the surface half as tunnel or the other way round.
         let lines: [[[SIMD2<Float>]]] = [
             [[SIMD2(0, 100), SIMD2(1000, 100)]],
             [[SIMD2(1000, 100), SIMD2(2000, 100)]],
         ]
         var attrs = [attributes(name: "Novy Arbat"), attributes(name: "Novy Arbat")]
-        attrs[0]["street"] = value(5150)
-        attrs[1]["street"] = value(5150)
-        attrs[1]["brunnel"] = value("tunnel")
+        attrs[1]["is_tunnel"] = .bool(true)
         XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
                                                  featureFacts: facts(for: attrs), featureStyles: styles(for: attrs)),
                        lines,
@@ -176,46 +146,30 @@ final class RoadStreetStitcherTests: XCTestCase {
 
         // Same street, same everything that draws: one ribbon.
         var joined = attrs
-        joined[1]["brunnel"] = value("")
-        joined[1].removeValue(forKey: "brunnel")
+        joined[1].removeValue(forKey: "is_tunnel")
         XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
                                                  featureFacts: facts(for: joined), featureStyles: styles(for: joined))[0],
                        [[SIMD2(0, 100), SIMD2(1000, 100), SIMD2(2000, 100)]])
     }
 
-    func testAStatedWidthChangeIsARealEdgeEvenWithinOneStreet() {
-        // The street widens into a turn pocket before a junction: the stated
-        // width differs, so the pieces stay separate ribbons. Welding them
-        // would draw the whole street at one piece's width.
+    func testARampIsARealEdgeEvenWithinOneStreet() {
+        // The street's ramp carries the street's name: it draws one step
+        // under its parent, so the pieces stay separate ribbons. Welding
+        // them would draw the ramp at the parent's priority.
         let lines: [[[SIMD2<Float>]]] = [
             [[SIMD2(0, 100), SIMD2(1000, 100)]],
             [[SIMD2(1000, 100), SIMD2(2000, 100)]],
         ]
-        var attrs = [attributes(name: "Mokhovaya", lanes: 5), attributes(name: "Mokhovaya", lanes: 5)]
-        attrs[0]["street"] = value(4211); attrs[1]["street"] = value(4211)
-        attrs[0]["width"] = value(120); attrs[1]["width"] = value(180)
+        let attrs = [attributes(name: "Mokhovaya"), attributes(name: "Mokhovaya", link: true)]
         XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
                                                  featureFacts: facts(for: attrs), featureStyles: styles(for: attrs)),
                        lines,
-                       "Twelve metres and eighteen metres are two ribbons")
+                       "A street and its ramp are two ribbons")
 
-        var same = attrs
-        same[1]["width"] = value(120)
+        let same = [attributes(name: "Mokhovaya"), attributes(name: "Mokhovaya")]
         XCTAssertEqual(RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
                                                  featureFacts: facts(for: same), featureStyles: styles(for: same))[0],
                        [[SIMD2(0, 100), SIMD2(1000, 100), SIMD2(2000, 100)]],
-                       "Equal widths weld as before")
-    }
-
-    func testAPieceWithoutTheSourcesIdentityFallsBackToItsAttributes() {
-        // A source that ships no street id is read as before.
-        let lines: [[[SIMD2<Float>]]] = [
-            [[SIMD2(0, 100), SIMD2(1000, 100)]],
-            [[SIMD2(1000, 100), SIMD2(2000, 100)]],
-        ]
-        let attrs = [attributes(name: "Tverskaya"), attributes(name: "Tverskaya")]
-        let out = RoadStreetStitcher.stitch(linesByFeatureIndex: lines,
-                                            featureFacts: facts(for: attrs), featureStyles: styles(for: attrs))
-        XCTAssertEqual(out[0], [[SIMD2(0, 100), SIMD2(1000, 100), SIMD2(2000, 100)]])
+                       "Equal pieces weld as before")
     }
 }

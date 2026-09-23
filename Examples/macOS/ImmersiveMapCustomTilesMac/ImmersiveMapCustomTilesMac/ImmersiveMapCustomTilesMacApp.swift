@@ -15,25 +15,26 @@ struct ImmersiveMapCustomTilesMacApp: App {
 }
 
 /// Your own MVT tile source, wired entirely through the public API. The source
-/// is one URL template set with `.tileURLTemplate(_:headers:)`; how the bytes
-/// are parsed and drawn is configured separately, with a hand-written
+/// is one PMTiles archive URL set with `.tileArchive(_:headers:)`. How the
+/// bytes are parsed and drawn is configured separately, with a hand-written
 /// `ImmersiveMapVectorTileStyle` wrapped in a `VectorTileMapStyle` plus the
 /// label profile naming which MVT properties carry label text.
 ///
-/// The URL below points at the project's own public endpoint so the example
-/// runs with no account, but nothing here is specific to it: any endpoint that
-/// serves MVT works the same way. Paste yours into the field.
+/// The URL below points at the project's own public archive so the example
+/// runs with no account, but nothing here is specific to it: any archive of
+/// MVT tiles on a host that answers range requests works the same way. Paste
+/// yours into the field.
 private struct CustomTilesScreen: View {
     @State private var camera = ImmersiveMapCameraController()
-    @State private var templateText = Self.defaultTemplate
+    @State private var archiveText = Self.defaultArchive.absoluteString
     @State private var apiKey = ""
-    @State private var appliedTemplate = Self.defaultTemplate
+    @State private var appliedArchive = Self.defaultArchive
     @State private var appliedAPIKey = ""
     @State private var usesCustomStyle = true
 
-    /// A public OpenMapTiles-schema endpoint, used so the example starts with
-    /// something on screen. Replace it with your own.
-    private static let defaultTemplate = "https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt"
+    /// The public hosted archive, used so the example starts with something
+    /// on screen. Replace it with your own.
+    private static let defaultArchive = URL(string: "https://tiles.immersivemap.dev/20260922.pmtiles")!
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -49,19 +50,19 @@ private struct CustomTilesScreen: View {
     /// The modifiers are value builders, so the source and the style can be
     /// chosen in plain Swift before the view is handed to SwiftUI.
     ///
-    /// The tile source is always the applied template; only the style is
+    /// The tile source is always the applied archive; only the style is
     /// toggled, so the comparison is like for like: the same bytes drawn by
     /// the hand-written style versus by the built-in one.
     private var mapView: ImmersiveMapView {
-        // Credentials travel as request headers (or inside the template's
+        // Credentials travel as request headers (or inside the archive URL's
         // query string). Empty means anonymous.
         let headers = appliedAPIKey.isEmpty ? [:] : ["Authorization": "Bearer \(appliedAPIKey)"]
         let base = ImmersiveMapView()
             .camera(camera, position: Self.overview)
-            .tileURLTemplate(appliedTemplate, headers: headers)
+            .tileArchive(appliedArchive, headers: headers)
             // Required by the data licence, and it has to name what is
             // actually being served. This example defaults to the hosted
-            // endpoint, an OpenStreetMap planet, so the badge credits
+            // archive, an OpenStreetMap planet, so the badge credits
             // OpenStreetMap. Point the URL field at your own source and this
             // string becomes yours to get right, see the README.
             .attributionSettings(ImmersiveMapSettings.AttributionSettings(
@@ -70,14 +71,18 @@ private struct CustomTilesScreen: View {
                     copyright: "",
                     linkURL: URL(string: "https://www.openstreetmap.org/copyright"))))
         guard usesCustomStyle else {
-            return base
+            // The built-in style, stated so the two sides of the toggle read
+            // side by side: the hosted archive is Protomaps basemap tiles.
+            return base.mapStyle(ProtomapsBasemapMapStyle())
         }
-        return base.mapStyle(VectorTileMapStyle(style: DemoTileStyle()))
+        // The demo rules over the Protomaps reading: the style is this app's,
+        // the facts it reads (a road's structure) come from the schema.
+        return base.mapStyle(VectorTileMapStyle(style: DemoTileStyle(), schema: ProtomapsBasemapSchema()))
     }
 
     private var controls: some View {
         HStack(spacing: 12) {
-            TextField("https://host/tiles/{z}/{x}/{y}.mvt", text: $templateText)
+            TextField("https://host/planet.pmtiles", text: $archiveText)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 330)
             SecureField("api key (optional)", text: $apiKey)
@@ -86,7 +91,7 @@ private struct CustomTilesScreen: View {
             Button("Apply") {
                 applyTileSource()
             }
-            .disabled(templateText.isEmpty)
+            .disabled(Self.archiveURL(from: archiveText) == nil)
 
             Divider().frame(height: 20)
 
@@ -99,12 +104,28 @@ private struct CustomTilesScreen: View {
         .background(.ultraThinMaterial, in: Capsule())
     }
 
-    /// The template and the header names are part of the tile cache identity,
-    /// which is what keeps caches of different sources apart: pointing the map
-    /// elsewhere can never serve the previous source's tiles from disk.
+    /// The archive URL and the header names are part of the tile cache
+    /// identity, which is what keeps caches of different sources apart:
+    /// pointing the map elsewhere can never serve the previous source's tiles
+    /// from disk.
     private func applyTileSource() {
-        appliedTemplate = templateText
+        guard let archive = Self.archiveURL(from: archiveText) else {
+            return
+        }
+        appliedArchive = archive
         appliedAPIKey = apiKey
+    }
+
+    /// The field's text as an archive URL, or nil when it is not one the
+    /// loader could reach: the scheme must be http or https, and there must
+    /// be a host.
+    private static func archiveURL(from text: String) -> URL? {
+        guard let url = URL(string: text.trimmingCharacters(in: .whitespaces)),
+              let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
+              url.host?.isEmpty == false else {
+            return nil
+        }
+        return url
     }
 
     private static let overview = ImmersiveMapCameraPosition(

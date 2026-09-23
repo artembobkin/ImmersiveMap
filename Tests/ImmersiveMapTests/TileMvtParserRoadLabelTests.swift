@@ -41,9 +41,9 @@ final class TileMvtParserRoadLabelTests: XCTestCase {
 
         var layer = MvtLayerMessage()
         layer.version = 2
-        layer.name = "road"
+        layer.name = "roads"
         layer.extent = 4096
-        layer.keys = ["name", "name_en", "name_fr"]
+        layer.keys = ["name", "name:en", "name:fr"]
         layer.values = [
             stringValue("Rue Native"),
             stringValue("Rivoli Street"),

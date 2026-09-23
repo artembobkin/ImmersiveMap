@@ -12,7 +12,7 @@ struct PreparedTileCPU: Sendable {
         let vertices: [TileVertexIn]
         let indices: [UInt32]
         let styles: [TilePolygonStyle]
-        let overviewStyleMasks: [Float]
+        let styleZoomFades: [SIMD2<Float>]
         /// Per-style line parameters (point-locked width, point dash pattern,
         /// edge threshold), lockstep with `styles`. See `TileLineStyle`.
         let lineStyles: [TileLineStyle]
@@ -25,13 +25,13 @@ struct PreparedTileCPU: Sendable {
         init(vertices: [TileVertexIn],
              indices: [UInt32],
              styles: [TilePolygonStyle],
-             overviewStyleMasks: [Float],
+             styleZoomFades: [SIMD2<Float>],
              lineStyles: [TileLineStyle]? = nil,
              fillsIndexCount: Int? = nil) {
             self.vertices = vertices
             self.indices = indices
             self.styles = styles
-            self.overviewStyleMasks = overviewStyleMasks
+            self.styleZoomFades = styleZoomFades
             // nil defaults to plain polygons while keeping the array in
             // lockstep with `styles`: the vertex shader indexes it per style.
             self.lineStyles = lineStyles ?? Array(repeating: .polygon, count: styles.count)

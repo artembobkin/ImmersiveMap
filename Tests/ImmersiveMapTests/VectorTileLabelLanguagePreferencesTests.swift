@@ -6,18 +6,16 @@ import Mvt
 import XCTest
 
 /// The chain speaks in language codes; which fields carry a language's
-/// spelling is the schema reading's business. The hosted tiles' reading
-/// takes both spellings a source can carry, `name_xx` and `name:xx`.
-/// Reading only the underscore form left an English-configured map
-/// showing native `name` values ("América", "Afrika;أفريقيا") over tiles
-/// that carry `name:en`.
+/// spelling is the schema reading's business. The Protomaps basemap's
+/// reading takes the colon spelling, `name:xx`, and nothing else: an
+/// underscore field is not a name in a language.
 final class VectorTileLabelLanguagePreferencesTests: XCTestCase {
     private func stringValue(_ string: String) -> MvtValue {
         .string(string)
     }
 
     private func label(_ properties: [String: MvtValue]) -> ImmersiveMapLabelFacts {
-        ImmersiveMapTilesSchema().facts(layerName: "place", properties: properties, tile: Tile(x: 0, y: 0, z: 10)).label
+        ProtomapsBasemapSchema().facts(layerName: "places", properties: properties, tile: Tile(x: 0, y: 0, z: 10)).label
             ?? ImmersiveMapLabelFacts()
     }
 
@@ -50,13 +48,13 @@ final class VectorTileLabelLanguagePreferencesTests: XCTestCase {
         XCTAssertEqual(text, "Americas")
     }
 
-    func testResolverStillReadsTheUnderscoreForm() {
+    func testResolverDoesNotReadTheUnderscoreForm() {
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let text = resolver.resolveText(
             label: label(["name": stringValue("Deutschland"), "name_en": stringValue("Germany")]),
             preferences: .from(settingsLanguage: .english)
         )
-        XCTAssertEqual(text, "Germany")
+        XCTAssertEqual(text, "Deutschland", "the basemap spells a language with a colon, and nothing else is one")
     }
 
     func testNativeNameStaysTheLastResort() {

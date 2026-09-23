@@ -10,10 +10,12 @@ import os
 /// Behavior per tile:
 /// - already stored (bytes or an empty marker): counted, never refetched;
 /// - fetched bytes: written and counted;
-/// - "nothing here" answers (404, 410, empty body): stored as an empty marker
-///   and counted, so a coastal region with ocean tiles still completes;
-/// - transport and server failures: retried a few times with a short pause,
-///   then counted as failed (a later download run tries them again);
+/// - "nothing here" answers (a tile absent from the archive directory, or
+///   above its depth, or empty): stored as an empty marker and counted, so a
+///   coastal region with ocean tiles still completes;
+/// - transport and server failures, and an archive that cannot be read:
+///   retried a few times with a short pause, then counted as failed (a later
+///   download run tries them again);
 /// - authorization failures: the whole run aborts, because every remaining
 ///   tile would fail the same way.
 ///

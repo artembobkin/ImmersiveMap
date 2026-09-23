@@ -6,7 +6,7 @@ import simd
 
 /// Everything a style is told about one feature before it says how the
 /// feature draws: the feature as the tile carries it, the facts the schema
-/// reading made of it, and the two things the map adds.
+/// reading made of it, and the style's own identity.
 public struct ImmersiveMapFeatureStyleContext {
     /// The style's identity, the namespace its label identities are minted
     /// in.
@@ -18,24 +18,9 @@ public struct ImmersiveMapFeatureStyleContext {
     public let geometry: ImmersiveMapFeatureGeometry
     public let properties: ImmersiveMapFeatureProperties
     /// What the feature is, as the schema reading says (`ImmersiveMapTileSchema`):
-    /// a road in a tunnel, a carriageway surface, a building of some
-    /// height. A style draws by these rather than by reading the tags
-    /// again, and a fact the engine derived (a surface found to be a
-    /// tunnel's roof) arrives here and nowhere else.
+    /// a road in a tunnel, a building of some height. A style draws by
+    /// these rather than by reading the tags again.
     public let facts: ImmersiveMapFeatureFacts
-    /// The feature's layer carries the measured streetscape: carriageway
-    /// surfaces reconstructed from the road graph, or lines of measured
-    /// paint. A fact about the layer the parser derives from the reading
-    /// before any feature is styled. A road style reads it to decide what
-    /// is painted on the asphalt: a crossing is stripes on a carriageway,
-    /// and a tile without the streetscape has no carriageway to stripe.
-    public let layerCarriesStreetscape: Bool
-    /// The feature's layer carries measured, marked crossings
-    /// (`ImmersiveMapRoadPaint.Kind.crossing`): a fact about the layer the
-    /// parser derives from the reading before any feature is styled. A
-    /// style that also stripes the crossings read off a footway's own tag
-    /// reads it to draw each crossing once.
-    public let layerShipsMeasuredCrossings: Bool
 
     init(styleID: String, data: DetFeatureStyleData) {
         self.styleID = styleID
@@ -51,8 +36,6 @@ public struct ImmersiveMapFeatureStyleContext {
         }
         self.properties = ImmersiveMapFeatureProperties(values: data.properties)
         self.facts = data.facts
-        self.layerCarriesStreetscape = data.layerCarriesStreetscape
-        self.layerShipsMeasuredCrossings = data.layerShipsMeasuredCrossings
     }
 }
 
@@ -67,8 +50,8 @@ public enum WaterNameKind: Sendable {
 /// included.
 ///
 /// The parser asks the style for every feature of every layer. What a
-/// feature is (a building of some height, a road in a tunnel, a piece of
-/// some street) is the schema reading's answer (`ImmersiveMapTileSchema`),
+/// feature is (a building of some height, a road in a tunnel) is the
+/// schema reading's answer (`ImmersiveMapTileSchema`),
 /// handed to the style in the context's `facts`; the style answers only
 /// with the look, a `FeatureStyle`: colours, widths, dashes, the passes a
 /// road draws in, the text style and rank of a label. The factories on
@@ -110,7 +93,7 @@ public protocol ImmersiveMapVectorTileStyle: Sendable {
 
 public extension ImmersiveMapVectorTileStyle {
     var baseColors: ImmersiveMapBaseColors {
-        ImmersiveMapTilesTheme.default.baseColors
+        ProtomapsBasemapTheme.default.baseColors
     }
 
     var styleID: String {

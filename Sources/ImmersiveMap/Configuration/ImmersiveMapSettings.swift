@@ -338,36 +338,27 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public struct NetworkSettings: Equatable, Sendable {
             public var maxConcurrentFetches: Int
             public var pendingRequestQueueCapacity: Int
-            public var tileBaseURL: URL
-            /// Optional TileJSON endpoint. When set, the tile loader discovers a
-            /// versioned, immutable URL template (…/v/<version>/tiles/{z}/{x}/{y}.pbf)
-            /// and falls back to `tileBaseURL/{z}/{x}/{y}.mvt` until/if it resolves.
-            public var tileJSONURL: URL?
-            /// Optional tile URL template with `{x}`, `{y}` and `{z}` placeholders.
-            /// When set, it wins over `tileBaseURL` and TileJSON discovery; the
-            /// query string is preserved as written.
-            public var tileURLTemplate: String?
-            /// HTTP header fields added to every tile request. This is how
+            /// The tile source: one PMTiles v3 archive over HTTP(S), read with
+            /// range requests. The archive holds MVT tiles, gzip-compressed or
+            /// not. A query string in the URL is sent as written, so a key can
+            /// live there.
+            public var tileArchiveURL: URL
+            /// HTTP header fields added to every archive request. This is how
             /// header-based credentials travel, e.g. `["Authorization": "Bearer xxx"]`.
             public var tileRequestHeaders: [String: String]
-            /// The map style's `configurationFingerprint`, folded into the raw and prepared
-            /// disk-cache namespaces so a provider/content change invalidates the
-            /// caches even when the base URL is unchanged (e.g. a server-side layer
-            /// was added). 0 means "not provider-derived".
+            /// Folded into the raw and prepared disk-cache namespaces so a
+            /// content change invalidates the caches even when the archive URL
+            /// is unchanged. 0 means "not provider-derived".
             public var cacheIdentity: UInt64
 
             public init(maxConcurrentFetches: Int,
                         pendingRequestQueueCapacity: Int,
-                        tileBaseURL: URL = URL(string: "https://example.com/api/v1/map/tiles")!,
-                        tileJSONURL: URL? = nil,
-                        tileURLTemplate: String? = nil,
+                        tileArchiveURL: URL = ImmersiveMapTilesService.tileArchiveURL,
                         tileRequestHeaders: [String: String] = [:],
                         cacheIdentity: UInt64 = 0) {
                 self.maxConcurrentFetches = maxConcurrentFetches
                 self.pendingRequestQueueCapacity = pendingRequestQueueCapacity
-                self.tileBaseURL = tileBaseURL
-                self.tileJSONURL = tileJSONURL
-                self.tileURLTemplate = tileURLTemplate
+                self.tileArchiveURL = tileArchiveURL
                 self.tileRequestHeaders = tileRequestHeaders
                 self.cacheIdentity = cacheIdentity
             }
@@ -377,8 +368,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             public static let defaultPreparedDiskCacheSizeInBytes: Int = 2 * 1_024 * 1_024 * 1_024
 
             public var clearDiskCachesOnLaunch: Bool
-            /// Raw HTTP tile cache (URLSession's URLCache). When false, every tile
-            /// download goes to the network (still revalidated by the server ETag).
+            /// URLSession's URLCache on the tile session. Inert with the
+            /// archive source: it is read by byte range, and range answers
+            /// bypass the cache. Kept as a setting so an app that toggled it
+            /// still compiles and the planner still treats it as a cache
+            /// change.
             public var urlCacheEnabled: Bool
             /// On-disk cache of parsed/tessellated tiles: the layer every tile
             /// the camera has already looked at comes back from, without the
@@ -518,17 +512,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     }
 
     public struct LabelSettings: Equatable, Sendable {
-        public struct HouseNumberSettings: Equatable, Sendable {
-            public var enabled: Bool
-            public var minimumZoom: Int
-
-            public init(enabled: Bool,
-                        minimumZoom: Int) {
-                self.enabled = enabled
-                self.minimumZoom = minimumZoom
-            }
-        }
-
         public struct SettlementVisibilitySettings: Equatable, Sendable {
             public var capitalMaximumZoom: Int
             public var cityMaximumZoom: Int
@@ -582,7 +565,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
 
         /// Whether the map has labels at all: place names, points of
-        /// interest, house numbers and road names alike. Off, the parser
+        /// interest and road names alike. Off, the parser
         /// bakes no text into the prepared tiles (no name resolution, no
         /// shaping, no glyph runs on the GPU), and with nothing to place
         /// the label layer and the per-frame placement and collision work
@@ -591,7 +574,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var isEnabled: Bool
         public var language: LabelLanguage
         public var fallbackPolicy: LabelFallbackPolicy
-        public var houseNumbers: HouseNumberSettings
         public var settlementVisibility: SettlementVisibilitySettings
         public var landmarks: LandmarkSettings
         public var base: BaseSettings
@@ -600,7 +582,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public init(isEnabled: Bool = true,
                     language: LabelLanguage,
                     fallbackPolicy: LabelFallbackPolicy = .international,
-                    houseNumbers: HouseNumberSettings,
                     settlementVisibility: SettlementVisibilitySettings = SettlementVisibilitySettings(),
                     landmarks: LandmarkSettings = LandmarkSettings(),
                     base: BaseSettings,
@@ -608,7 +589,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.isEnabled = isEnabled
             self.language = language
             self.fallbackPolicy = fallbackPolicy
-            self.houseNumbers = houseNumbers
             self.settlementVisibility = settlementVisibility
             self.landmarks = landmarks
             self.base = base
@@ -1075,7 +1055,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     public init(renderLoop: RenderLoopSettings,
                 camera: CameraSettings,
                 presentation: PresentationSettings,
-                mapStyle: AnyImmersiveMapMapStyle = AnyImmersiveMapMapStyle(ImmersiveMapTilesMapStyle()),
+                mapStyle: AnyImmersiveMapMapStyle = AnyImmersiveMapMapStyle(ProtomapsBasemapMapStyle()),
                 tiles: TileSettings,
                 labels: LabelSettings,
                 scene: SceneSettings,
@@ -1139,11 +1119,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         presentation: PresentationSettings(automaticTransitionStartZoom: 6.0,
                                            automaticTransitionSpan: 1.0,
                                            globeRadiusScale: 0.14),
-        mapStyle: AnyImmersiveMapMapStyle(ImmersiveMapTilesMapStyle()),
+        mapStyle: AnyImmersiveMapMapStyle(ProtomapsBasemapMapStyle()),
         tiles: TileSettings(coverage: TileSettings.CoverageSettings(maximumZoomLevel: ImmersiveMapTilesService.maximumTileZoomLevel),
                             network: TileSettings.NetworkSettings(maxConcurrentFetches: 5,
                                                                   pendingRequestQueueCapacity: 50,
-                                                                  tileBaseURL: ImmersiveMapTilesService.tileBaseURL,
+                                                                  tileArchiveURL: ImmersiveMapTilesService.tileArchiveURL,
                                                                   cacheIdentity: ImmersiveMapTilesService.cacheIdentity),
                             cache: TileSettings.CacheSettings(clearDiskCachesOnLaunch: false,
                                                               preparedDiskTimeToLive: 7 * 24 * 60 * 60,
@@ -1151,8 +1131,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                             parsing: TileSettings.ParsingSettings(addTestBorders: false)),
         labels: LabelSettings(language: .english,
                               fallbackPolicy: .international,
-                              houseNumbers: LabelSettings.HouseNumberSettings(enabled: true,
-                                                                              minimumZoom: 15),
                               settlementVisibility: LabelSettings.SettlementVisibilitySettings(capitalMaximumZoom: 12,
                                                                                                cityMaximumZoom: 12,
                                                                                                smallSettlementMaximumZoom: 12),
@@ -1230,15 +1208,16 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
-    /// Points the tile loader at any endpoint with one URL template such as
-    /// `https://tiles.com/{x}/{y}/{z}?apiKey=xxx`; `headers` are added to every
-    /// tile request. The source is just bytes: how they are parsed and drawn is
-    /// configured separately through `mapStyle(_:)`, and the zoom coverage
-    /// through `tileSettings(_:)` when the endpoint does not ship z0-16.
-    func tileURLTemplate(_ urlTemplate: String,
-                         headers: [String: String] = [:]) -> ImmersiveMapSettings {
+    /// Points the tile loader at a PMTiles archive such as
+    /// `https://tiles.example.com/planet.pmtiles`. `headers` are added to
+    /// every archive request. The source is just bytes: how they are parsed
+    /// and drawn is configured separately through `mapStyle(_:)`, and the
+    /// zoom coverage through `tileMaximumZoomLevel(_:)` when the archive is
+    /// built to a depth other than the default.
+    func tileArchive(_ archiveURL: URL,
+                     headers: [String: String] = [:]) -> ImmersiveMapSettings {
         var settings = self
-        settings.tiles.network.tileURLTemplate = urlTemplate
+        settings.tiles.network.tileArchiveURL = archiveURL
         settings.tiles.network.tileRequestHeaders = headers
         return settings
     }

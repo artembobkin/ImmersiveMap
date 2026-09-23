@@ -64,7 +64,7 @@ final class TransparentSpaceOffscreenRenderTests: XCTestCase {
         let harness = try OffscreenFrameHarness.makeOrSkip(settings: settings)
         harness.setZoom(1.0)
         let baseline = try await harness.renderFrame()
-        let water = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["class": "ocean"])
+        let water = VectorTileFixture.fullCoverageTile(layerName: "water", properties: ["kind": "ocean"])
         for z in 0 ... 2 {
             for x in 0 ..< (1 << z) {
                 for y in 0 ..< (1 << z) {

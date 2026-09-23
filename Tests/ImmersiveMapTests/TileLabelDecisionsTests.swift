@@ -6,18 +6,18 @@ import Mvt
 import XCTest
 
 final class TileLabelDecisionsTests: XCTestCase {
-    /// The names of a property dictionary as the hosted tiles' reading
+    /// The names of a property dictionary as the Protomaps basemap's reading
     /// states them; an empty reading for a feature with no name at all.
     private func label(_ properties: [String: MvtValue]) -> ImmersiveMapLabelFacts {
-        ImmersiveMapTilesSchema().facts(layerName: "place", properties: properties, tile: Tile(x: 0, y: 0, z: 10)).label
+        ProtomapsBasemapSchema().facts(layerName: "places", properties: properties, tile: Tile(x: 0, y: 0, z: 10)).label
             ?? ImmersiveMapLabelFacts()
     }
 
     func testRussianPreferencesPreferRussianThenEnglishThenNative() {
         let properties: [String: MvtValue] = [
             "name": stringValue("Москва"),
-            "name_en": stringValue("Moscow"),
-            "name_ru": stringValue("Москва")
+            "name:en": stringValue("Moscow"),
+            "name:ru": stringValue("Москва")
         ]
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .russian)
@@ -31,7 +31,7 @@ final class TileLabelDecisionsTests: XCTestCase {
     func testFrenchPreferencesFallBackToEnglishBeforeNativeWhenPreferredNameIsAbsent() {
         let properties: [String: MvtValue] = [
             "name": stringValue("Москва"),
-            "name_en": stringValue("Moscow")
+            "name:en": stringValue("Moscow")
         ]
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .french)
@@ -42,7 +42,7 @@ final class TileLabelDecisionsTests: XCTestCase {
     func testLocalFirstPolicyFallsBackToNativeBeforeEnglishWhenPreferredNameIsAbsent() {
         let properties: [String: MvtValue] = [
             "name": stringValue("Москва"),
-            "name_en": stringValue("Moscow")
+            "name:en": stringValue("Moscow")
         ]
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .french,
@@ -66,8 +66,8 @@ final class TileLabelDecisionsTests: XCTestCase {
     func testEnglishPreferencesPreferEnglishThenNative() {
         let properties: [String: MvtValue] = [
             "name": stringValue("Moscow Native"),
-            "name_en": stringValue("Moscow EN"),
-            "name_ru": stringValue("Москва")
+            "name:en": stringValue("Moscow EN"),
+            "name:ru": stringValue("Москва")
         ]
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .english)
@@ -80,8 +80,8 @@ final class TileLabelDecisionsTests: XCTestCase {
     func testFrenchPreferencesPreferNameFrThenEnglish() {
         let properties: [String: MvtValue] = [
             "name": stringValue("Paris Native"),
-            "name_en": stringValue("Paris EN"),
-            "name_fr": stringValue("Paris FR")
+            "name:en": stringValue("Paris EN"),
+            "name:fr": stringValue("Paris FR")
         ]
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .french)
@@ -93,8 +93,8 @@ final class TileLabelDecisionsTests: XCTestCase {
     func testSharedResolverCoversRoadLabelFieldSelection() {
         let properties: [String: MvtValue] = [
             "name": stringValue("Rue Native"),
-            "name_en": stringValue("Rivoli Street"),
-            "name_fr": stringValue("Rue de Rivoli")
+            "name:en": stringValue("Rivoli Street"),
+            "name:fr": stringValue("Rue de Rivoli")
         ]
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .french)
@@ -104,7 +104,7 @@ final class TileLabelDecisionsTests: XCTestCase {
 
     func testGermanPreferencesFallbackToEnglishWhenPreferredFieldIsMissing() {
         let properties: [String: MvtValue] = [
-            "name_en": stringValue("Munich EN")
+            "name:en": stringValue("Munich EN")
         ]
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .german)
@@ -115,7 +115,7 @@ final class TileLabelDecisionsTests: XCTestCase {
     func testEnglishPreferencesFallBackToNativeLatinWhenEnglishNameIsAbsent() {
         let properties: [String: MvtValue] = [
             "name": stringValue("Moscow"),
-            "name_ru": stringValue("Москва")
+            "name:ru": stringValue("Москва")
         ]
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .english)
@@ -126,7 +126,7 @@ final class TileLabelDecisionsTests: XCTestCase {
     func testEnglishPreferencesFallBackToNativeCyrillicWhenEnglishNameIsAbsent() {
         let properties: [String: MvtValue] = [
             "name": stringValue("Москва"),
-            "name_ru": stringValue("Москва")
+            "name:ru": stringValue("Москва")
         ]
         let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
         let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .english)
@@ -174,37 +174,40 @@ final class TileLabelDecisionsTests: XCTestCase {
     }
 
     func testTheDecisionsBuildATextLabelCompatibleDecision() throws {
-        let style = ImmersiveMapTilesDefaultMapStyle()
+        let style = ProtomapsBasemapDefaultMapStyle()
         let decisions = TileLabelDecisions(style: style,
                                            glyphCoverage: .legacyAtlasForTests,
                                            language: .english,
                                            fallbackPolicy: .international)
         let tile = Tile(x: 123, y: 456, z: 10)
         let properties: [String: MvtValue] = [
-            "name_en": stringValue("Moscow"),
-            "class": stringValue("city"),
-            "rank": .int(3)
+            "name:en": stringValue("Moscow"),
+            "kind": stringValue("locality"),
+            "kind_detail": stringValue("city"),
+            "population_rank": .int(15)
         ]
-        let featureStyle = style.makeStyle(data: DetFeatureStyleData(layerName: "place",
+        let featureStyle = style.makeStyle(data: DetFeatureStyleData(layerName: "places",
                                                                      properties: properties,
-                                                                     tile: tile))
-        let feature = VectorTileLabelFeature(styleID: "immersivemaptiles",
+                                                                     tile: tile,
+                                                                     geometryType: .point))
+        let feature = VectorTileLabelFeature(styleID: "protomaps",
                                              tile: tile,
-                                             layerName: "place",
+                                             layerName: "places",
                                              featureID: 7,
                                              anchor: SIMD2<Int16>(2048, 2048))
-        let label = try XCTUnwrap(ImmersiveMapTilesSchema().facts(layerName: "place", properties: properties, tile: tile).label)
+        let label = try XCTUnwrap(ProtomapsBasemapSchema().facts(layerName: "places", properties: properties, tile: tile).label)
 
         let decision = decisions.pointLabelDecision(feature: feature,
                                                     label: label,
                                                     style: featureStyle.pointLabelStyle!)
 
         XCTAssertEqual(decision?.text, "Moscow")
-        XCTAssertEqual(decision?.priority.visibilityRank, 3, "The rank is the style's reading of the tile")
-        XCTAssertEqual(decision?.priority.collisionRank, 3, "A place collides at its own rank")
+        // A population rank of 15 out of 18, a city: (18 - 15) * 10 + 2.
+        XCTAssertEqual(decision?.priority.visibilityRank, 32, "The rank is the style's reading of the tile")
+        XCTAssertEqual(decision?.priority.collisionRank, 32, "A place collides at its own rank")
         XCTAssertEqual(decision?.identity,
-                       .styleFeature(styleID: "immersivemaptiles",
-                                     layerName: "place",
+                       .styleFeature(styleID: "protomaps",
+                                     layerName: "places",
                                      featureID: 7))
         XCTAssertEqual(decision?.style.key, featureStyle.pointLabelStyle?.text.key)
         XCTAssertEqual(decision?.style.sizePoints, featureStyle.pointLabelStyle?.text.sizePoints)

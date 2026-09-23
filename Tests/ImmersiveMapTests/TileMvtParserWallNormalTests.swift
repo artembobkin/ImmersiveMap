@@ -19,7 +19,6 @@ final class TileMvtParserWallNormalTests: XCTestCase {
                                         clippedInteriors: interiors,
                                         roof: ParsedPolygon(vertices: roofVertices,
                                                                           indices: [0, 1, 2, 0, 2, 3]),
-                                        roofInfo: nil,
                                         baseHeight: 0,
                                         topHeight: 50,
                                         tileExtent: 4096)

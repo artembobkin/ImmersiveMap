@@ -305,8 +305,6 @@ enum PreparedTileDiskCodec {
         let tileZ: Int32
         let labelLanguage: LabelLanguageValue
         let labelFallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy
-        let houseNumbersEnabled: Bool
-        let houseNumbersMinimumZoom: UInt32
         let addTestBorders: Bool
         // ETag of the raw tile this prepared tile was derived from; lets the cache
         // self-invalidate when the server content at the same URL changes.
@@ -644,8 +642,6 @@ enum PreparedTileDiskCodec {
             tileZ: encodeInt32(preparedTile.tile.z, field: "Tile.z"),
             labelLanguage: LabelLanguageValue(cacheIdentity.labelLanguage),
             labelFallbackPolicy: cacheIdentity.labelFallbackPolicy,
-            houseNumbersEnabled: cacheIdentity.houseNumbersEnabled,
-            houseNumbersMinimumZoom: cacheIdentity.houseNumbersMinimumZoom,
             addTestBorders: cacheIdentity.addTestBorders,
             sourceETag: sourceETag,
             arenaByteCount: UInt64(plan.totalByteCount),
@@ -713,8 +709,6 @@ enum PreparedTileDiskCodec {
               entry.tileZ == Int32(expectedTile.z),
               entry.labelLanguage.runtimeValue == cacheIdentity.labelLanguage,
               entry.labelFallbackPolicy == cacheIdentity.labelFallbackPolicy,
-              entry.houseNumbersEnabled == cacheIdentity.houseNumbersEnabled,
-              entry.houseNumbersMinimumZoom == cacheIdentity.houseNumbersMinimumZoom,
               entry.addTestBorders == cacheIdentity.addTestBorders,
               expectedSourceETag.map({ entry.sourceETag == $0 }) ?? true else {
             throw PreparedTileDiskCodecError.invalidMetadata

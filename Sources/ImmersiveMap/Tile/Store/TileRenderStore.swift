@@ -37,8 +37,6 @@ final class TileRenderStore: @unchecked Sendable {
             textRevision: textRenderer.preparedTileTextRevision,
             labelLanguage: config.labels.language,
             labelFallbackPolicy: config.labels.fallbackPolicy,
-            houseNumbersEnabled: config.labels.houseNumbers.enabled,
-            houseNumbersMinimumZoom: UInt32(max(0, config.labels.houseNumbers.minimumZoom)),
             capitalMaximumZoom: UInt32(max(0, config.labels.settlementVisibility.capitalMaximumZoom)),
             cityMaximumZoom: UInt32(max(0, config.labels.settlementVisibility.cityMaximumZoom)),
             smallSettlementMaximumZoom: UInt32(max(0, config.labels.settlementVisibility.smallSettlementMaximumZoom)),

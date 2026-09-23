@@ -43,19 +43,17 @@ public struct ImmersiveMapFeature {
 /// words. Every schema names things differently (a road in a tunnel is
 /// `brunnel=tunnel` in one, `structure=tunnel` or `layer=-1` in another),
 /// and this is the one place a schema's spelling is turned into facts: a
-/// road with a structure, a layer and a street identity, a building with
-/// its heights, a carriageway surface, a line of measured paint, a point
-/// with a name in several languages or a house number.
+/// road with a structure, a layer and a name, a building with its
+/// heights, a point with a name in several languages.
 ///
 /// One question, asked per feature. What the parser decides per layer it
 /// derives from the answers: every layer whose features are roads is a
-/// road layer, and the road layers of a tile (the roads and the measured
-/// streetscape shipped as a second layer) merge into one before they are
-/// read, so a surface clips the ribbons that enter it whichever layer
-/// either came from.
+/// road layer, and the road layers of a tile merge into one before they
+/// are read, so the roads of a tile stitch and count junctions as one
+/// network whichever layer each came from.
 ///
 /// The engine's geometry work reads the facts and nothing else: which
-/// draw phase a road takes, which surface owns which ribbon, where a
+/// draw phase a road takes, where a
 /// street stitches, what rises as a building, which spelling of a name
 /// the map's language shows. The style reads the same facts next to the
 /// properties and answers only with how the feature looks. Neither the
@@ -64,7 +62,7 @@ public struct ImmersiveMapFeature {
 /// The `Schema` folder: this protocol, the facts (`ImmersiveMapFeatureFacts`,
 /// one case per kind of thing, carrying `ImmersiveMapRoadFacts`,
 /// `ImmersiveMapBuildingExtrusion` or `ImmersiveMapLabelFacts`), the typed
-/// property accessors, and the built-in reading of the hosted tiles in
+/// property accessors, and the built-in reading of the Protomaps basemap in
 /// `Default/`. No drawing, no colours, no Metal, no parsing.
 public protocol ImmersiveMapTileSchema: Sendable {
     /// Folded into the prepared-tile cache identity: any change to the

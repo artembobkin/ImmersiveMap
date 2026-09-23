@@ -10,14 +10,14 @@ import XCTest
 /// line or a road), and the camera zoom the casing shows from (the casing
 /// pass's fade band).
 final class RoadPathAndCasingStyleTests: XCTestCase {
-    private let style = ImmersiveMapTilesDefaultMapStyle()
+    private let style = ProtomapsBasemapDefaultMapStyle()
     /// The same style with the theme's casing switched on.
-    private let casedStyle = ImmersiveMapTilesDefaultMapStyle(
-        theme: ImmersiveMapTilesTheme.default.roadMetrics { $0.drawsCasing = true })
+    private let casedStyle = ProtomapsBasemapDefaultMapStyle(
+        theme: ProtomapsBasemapTheme.default.roadMetrics { $0.drawsCasing = true })
 
     private func roadStyle(cls: String, zoom: Int, cased: Bool = false) -> FeatureStyle {
-        (cased ? casedStyle : style).makeStyle(data: DetFeatureStyleData(layerName: "transportation",
-                                                  properties: ["class": .string(cls)],
+        (cased ? casedStyle : style).makeStyle(data: DetFeatureStyleData(layerName: "roads",
+                                                  properties: ProtomapsRoadSpelling.values(forClass: cls),
                                                   tile: Tile(x: 0, y: 0, z: zoom),
                                                   geometryType: .linestring))
     }
@@ -26,7 +26,7 @@ final class RoadPathAndCasingStyleTests: XCTestCase {
     /// from it the same stroke is a road, so the parser stitches and sorts
     /// it. The stroke itself is the same either side of the boundary.
     func testTheOverviewStrokeIsALineBelowTheRoadPathZoomAndARoadFromIt() {
-        XCTAssertEqual(ImmersiveMapTilesDefaultMapStyle.roadPathMinimumTileZoom, 8)
+        XCTAssertEqual(ProtomapsBasemapDefaultMapStyle.roadPathMinimumTileZoom, 8)
         let below = roadStyle(cls: "motorway", zoom: 7)
         let from = roadStyle(cls: "motorway", zoom: 8)
         if case .line = below {} else { XCTFail("A z7 motorway is a ground line") }
@@ -39,15 +39,15 @@ final class RoadPathAndCasingStyleTests: XCTestCase {
     /// The casing eases in from the style's casing zoom, as the pass's own
     /// fade band, while the fill keeps the road band.
     func testTheCasingCarriesItsZoomAsTheFadeBand() {
-        XCTAssertEqual(ImmersiveMapTilesDefaultMapStyle.casingMinimumCameraZoom, 16)
+        XCTAssertEqual(ProtomapsBasemapDefaultMapStyle.casingMinimumCameraZoom, 16)
         XCTAssertNil(roadStyle(cls: "motorway", zoom: 14).resolvedLineRenderPasses.first { $0.roadPassRole == .casing },
                      "a road draws without an outline unless the theme asks for one")
         let street = roadStyle(cls: "motorway", zoom: 14, cased: true)
         let casing = street.resolvedLineRenderPasses.first { $0.roadPassRole == .casing }!
         let fill = street.resolvedLineRenderPasses.first { $0.roadPassRole == .fill }!
-        XCTAssertEqual(casing.lowZoomFadeMask, LowZoomOverviewFade.classFadeMask(startZoom: 16))
-        XCTAssertEqual(LowZoomOverviewFade.classFadeAlpha(for: 15.99, startZoom: 16), 0)
-        XCTAssertEqual(LowZoomOverviewFade.classFadeAlpha(for: 17, startZoom: 16), 1)
-        XCTAssertEqual(fill.lowZoomFadeMask, style.roadLowZoomFadeMask)
+        XCTAssertEqual(casing.zoomFade, .fadeIn(from: 16, to: 17))
+        XCTAssertEqual(casing.zoomFade.alpha(atZoom: 15.99), 0)
+        XCTAssertEqual(casing.zoomFade.alpha(atZoom: 17), 1)
+        XCTAssertEqual(fill.zoomFade, ProtomapsBasemapDefaultMapStyle.roadZoomFade)
     }
 }

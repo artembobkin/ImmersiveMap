@@ -42,7 +42,7 @@ extension FeatureStyle {
     }
 
     var color: SIMD4<Float> { primaryPass?.color ?? SIMD4<Float>(0, 0, 0, 0) }
-    var lowZoomFadeMask: Float { primaryPass?.lowZoomFadeMask ?? 0 }
+    var zoomFade: ImmersiveMapZoomFade { primaryPass?.zoomFade ?? .none }
     var lineWidthPoints: Float { primaryPass?.lineWidthPoints ?? 0 }
     var dashLengthPoints: Float { primaryPass?.dashLengthPoints ?? 0 }
     var dashGapPoints: Float { primaryPass?.dashGapPoints ?? 0 }
@@ -62,6 +62,5 @@ extension FeatureStyle {
     var roadClassPriority: Int { roadStyle?.classPriority ?? 0 }
     var roadTier: RoadTier { roadStyle?.tier ?? .pedestrian }
     var roadDecorationKind: RoadDecorationKind { roadStyle?.decoration ?? .none }
-    var surfaceAreaCutsPaint: Bool { (roadStyle?.surfacePaint ?? .keeps) != .keeps }
     var roadLevel: RoadLevel { roadStyle?.level ?? .ground }
 }

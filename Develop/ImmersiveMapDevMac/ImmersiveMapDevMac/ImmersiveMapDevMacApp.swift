@@ -28,17 +28,15 @@ private struct MapScreen: View {
 
     var body: some View {
         ImmersiveMapView()
-            .tileURLTemplate(devTileTemplate)
+            .tileArchive(devTileArchive)
             .mapStyle(.default.apply { theme in
-                theme.features.buildingRoofShapes = false
-                theme.features.buildingExtrusion = false
+                theme.features.buildingExtrusion = true
             })
-            .shadows(isEnabled: false)
+            .shadows(isEnabled: true)
+            .labels(isEnabled: true)
             // The controls are drawn only when a camera controller is attached:
             // they drive it, so without one the modifier does nothing.
             .camera(camera, position: Self.start)
-            .labels(isEnabled: true)
-            .enableCameraUIControls()
             // A tileset under development is rebuilt and re-served under the
             // same coordinates, so a warm disk cache would keep showing the
             // previous build. Every launch here starts from the network.
@@ -63,15 +61,13 @@ private struct MapScreen: View {
     )
 }
 
-/// The tile source under test, written as the one-line URL template.
+/// The tile source under test: the PMTiles archive the map reads.
 ///
-/// The default is the test endpoint that serves tiles cut by our own generator
-/// straight from OSM into the ImmersiveMap schema: only the layers and fields
-/// the style actually reads, plus the road lane counts that OpenMapTiles does
-/// not carry. `IMMERSIVEMAP_DEV_TILE_TEMPLATE` in the scheme environment points
-/// the app somewhere else without touching this file, which is what to reach for
-/// when comparing two builds of a tileset.
-private let devTileTemplate = ProcessInfo.processInfo
-    .environment["IMMERSIVEMAP_DEV_TILE_TEMPLATE"]
-    .flatMap { $0.isEmpty ? nil : $0 }
-    ?? "https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt"
+/// The default is the hosted archive. `IMMERSIVEMAP_DEV_TILE_ARCHIVE` in the
+/// scheme environment points the app at another archive URL without touching
+/// this file, which is what to reach for when comparing two builds of a
+/// tileset.
+private let devTileArchive = ProcessInfo.processInfo
+    .environment["IMMERSIVEMAP_DEV_TILE_ARCHIVE"]
+    .flatMap { $0.isEmpty ? nil : URL(string: $0) }
+    ?? URL(string: "https://tiles.immersivemap.dev/20260922.pmtiles")!

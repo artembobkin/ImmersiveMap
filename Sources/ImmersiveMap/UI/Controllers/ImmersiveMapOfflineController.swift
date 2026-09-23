@@ -50,8 +50,8 @@ public final class ImmersiveMapOfflineController {
     private let maxConcurrentFetches: Int
     private let pause: @Sendable (TimeInterval) async -> Void
     private let progressReportStride: Int
-    // Created on first download: constructing the transport eagerly would fire
-    // the TileJSON discovery request for a controller that only lists regions.
+    // Created on first download: a controller that only lists regions has no
+    // business holding a transport, even one that fetches nothing until asked.
     private var fetchTile: OfflineRegionDownloader.FetchTile?
     private var records: [String: OfflineStoredRegionRecord] = [:]
     // Each run carries a generation so a drained task that outlives its
@@ -66,8 +66,8 @@ public final class ImmersiveMapOfflineController {
     private var statuses: [String: ImmersiveMapOfflineRegionStatus] = [:]
 
     /// - Parameter settings: the same settings value the map renders with
-    ///   (built with `.tileURLTemplate` and friends, or `.default` for the
-    ///   hosted service). Sharing the value guarantees the store namespace
+    ///   (built with `.tileArchive` and friends, or `.default` for the
+    ///   hosted archive). Sharing the value guarantees the store namespace
     ///   matches what that map resolves, so downloaded regions are found
     ///   without any wiring.
     public convenience init(settings: ImmersiveMapSettings = .default) {

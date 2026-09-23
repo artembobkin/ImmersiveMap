@@ -6,7 +6,7 @@ import ImmersiveMap
 
 /// Two different things that both look like "appearance".
 ///
-/// The palette is the map style: an `ImmersiveMapTilesMapStyle` built from a
+/// The palette is the map style: an `ProtomapsBasemapMapStyle` built from a
 /// configuration, handed to the view instead of the default one. Its colors are
 /// baked into prepared tiles and into their disk-cache identity (the
 /// configuration's `cacheFingerprint`), so a new palette re-prepares everything.
@@ -82,12 +82,12 @@ struct StylePanel: View {
     /// the section and coming back cannot show a palette the map is not using.
     /// A road metric of the built-in theme, read back out of the map style
     /// and written by re-applying the style with the changed theme.
-    private func roadMetric(_ keyPath: WritableKeyPath<ImmersiveMapTilesTheme.RoadMetrics, Double>) -> Binding<Double> {
+    private func roadMetric(_ keyPath: WritableKeyPath<ProtomapsBasemapTheme.RoadMetrics, Double>) -> Binding<Double> {
         Binding(get: {
-            settings.mapStyle.tilesTheme?.roadMetrics[keyPath: keyPath] ?? 0
+            settings.mapStyle.basemapTheme?.roadMetrics[keyPath: keyPath] ?? 0
         }, set: { newValue in
-            guard let theme = settings.mapStyle.tilesTheme else { return }
-            settings = settings.mapStyle(ImmersiveMapTilesMapStyle(theme: theme.roadMetrics { $0[keyPath: keyPath] = newValue }))
+            guard let theme = settings.mapStyle.basemapTheme else { return }
+            settings = settings.mapStyle(ProtomapsBasemapMapStyle(theme: theme.roadMetrics { $0[keyPath: keyPath] = newValue }))
         })
     }
 
@@ -98,7 +98,7 @@ struct StylePanel: View {
 }
 
 /// Three palettes for the built-in tile source. Each one is an
-/// `ImmersiveMapTilesTheme` built with the `.layers`, `.features` and
+/// `ProtomapsBasemapTheme` built with the `.layers`, `.features` and
 /// `.labels` builders. What no tile paints (the ground where nothing has
 /// loaded yet, the polar caps) follows the theme's land, water and ice.
 enum StylePalette: String, CaseIterable, Identifiable {
@@ -127,20 +127,20 @@ enum StylePalette: String, CaseIterable, Identifiable {
     }
 
     /// A palette is colours: the road metrics the map is drawn with stay.
-    private func mapStyle(keepingRoadMetricsOf settings: ImmersiveMapSettings) -> ImmersiveMapTilesMapStyle {
+    private func mapStyle(keepingRoadMetricsOf settings: ImmersiveMapSettings) -> ProtomapsBasemapMapStyle {
         var theme = configuration
-        if let current = settings.mapStyle.tilesTheme {
+        if let current = settings.mapStyle.basemapTheme {
             theme.roadMetrics = current.roadMetrics
         }
-        return ImmersiveMapTilesMapStyle(theme: theme)
+        return ProtomapsBasemapMapStyle(theme: theme)
     }
 
-    private var configuration: ImmersiveMapTilesTheme {
+    private var configuration: ProtomapsBasemapTheme {
         switch self {
         case .day:
             return .default
         case .night:
-            return ImmersiveMapTilesTheme.default
+            return ProtomapsBasemapTheme.default
                 .layers { layers in
                     layers.land = SIMD4<Float>(0.09, 0.10, 0.13, 1)
                     layers.water = SIMD4<Float>(0.04, 0.09, 0.20, 1)
@@ -169,7 +169,7 @@ enum StylePalette: String, CaseIterable, Identifiable {
                     labels.water.fillColor = SIMD3<Float>(0.55, 0.72, 0.96)
                 }
         case .blueprint:
-            return ImmersiveMapTilesTheme.default
+            return ProtomapsBasemapTheme.default
                 .layers { layers in
                     let paper = SIMD4<Float>(0.05, 0.16, 0.38, 1)
                     layers.land = paper
@@ -202,8 +202,8 @@ enum StylePalette: String, CaseIterable, Identifiable {
 
     private func roadsTinted(base: SIMD4<Float>,
                              minor: SIMD4<Float>,
-                             casing: SIMD4<Float>) -> ImmersiveMapTilesTheme.RoadLayerStyles {
-        ImmersiveMapTilesTheme.RoadLayerStyles(motorway: base,
+                             casing: SIMD4<Float>) -> ProtomapsBasemapTheme.RoadLayerStyles {
+        ProtomapsBasemapTheme.RoadLayerStyles(motorway: base,
                                                                       trunk: base,
                                                                       primary: base,
                                                                       secondary: minor,
@@ -215,7 +215,7 @@ enum StylePalette: String, CaseIterable, Identifiable {
                                                                       casing: casing)
     }
 
-    private func tint(_ labels: inout ImmersiveMapTilesTheme.LabelStyles,
+    private func tint(_ labels: inout ProtomapsBasemapTheme.LabelStyles,
                       fill: SIMD3<Float>,
                       stroke: SIMD3<Float>) {
         labels.city.fillColor = fill

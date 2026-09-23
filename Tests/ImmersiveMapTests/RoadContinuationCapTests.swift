@@ -22,12 +22,12 @@ final class RoadContinuationCapTests: XCTestCase {
     private func parse(_ features: [VectorTileFixture.Feature]) throws -> ParsedTile {
         try TileMvtParser.forTests(settings: .default)
             .parse(tile: tile,
-                   mvtData: VectorTileFixture.layerTile(layerName: "transportation", features: features))
+                   mvtData: VectorTileFixture.layerTile(layerName: "roads", features: features))
     }
 
     private func road(_ points: [(Int32, Int32)], id: UInt64, cls: String = "primary",
                       extra: [String: String] = [:]) -> VectorTileFixture.Feature {
-        var properties = ["class": cls, "lanes": "4"]
+        var properties = ProtomapsRoadSpelling.properties(forClass: cls)
         for (key, value) in extra { properties[key] = value }
         return .init(id: id, geometry: .line(points: points), properties: properties)
     }

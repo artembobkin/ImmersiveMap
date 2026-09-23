@@ -3,9 +3,11 @@
 
 @testable import ImmersiveMap
 import Foundation
+import PMTiles
+import PMTilesTestSupport
 
-/// The tile service the test suite renders from: pre-loaded fixture tiles,
-/// served over loopback by this process, for the whole run.
+/// The tile service the test suite renders from: one pre-built fixture
+/// archive, served over loopback by this process, for the whole run.
 ///
 /// The suite must never fetch a tile from the real service. A test that does
 /// is three tests in one: it asserts what it meant to, plus that the machine
@@ -15,56 +17,68 @@ import Foundation
 /// the original assertion, which is the worst way to learn any of it.
 ///
 /// Everything below the transport stays real. The bytes travel the whole
-/// loader path (URL, HTTP, ETag, parse, tessellate, materialize) exactly as a
-/// downloaded tile would; only where they come from changes. The tiles
-/// themselves are built by `VectorTileFixture` at start-up rather than checked
-/// in as blobs, so what they contain can be read in the source.
+/// loader path (range request, header, directory, ETag, gzip, parse,
+/// tessellate, materialize) exactly as a hosted archive's would. Only where
+/// they come from changes. The tiles themselves are built by
+/// `VectorTileFixture` at start-up rather than checked in as blobs, so what
+/// they contain can be read in the source.
 ///
 /// One listener serves the whole process: the port is part of the tile source
 /// identity, so a port per test would give every test its own cache namespace
-/// and its own TileJSON discovery request for nothing.
+/// for nothing.
 final class FixtureTileService: @unchecked Sendable {
     static let shared = FixtureTileService()
 
-    /// The base URL to point the tile network settings at, or nil when the
+    /// The archive URL to point the tile network settings at, or nil when the
     /// listener never came up. `FixtureTileServiceTests` is where that
     /// failure is reported; the settings helpers below stay offline either
     /// way, they just have no tiles to serve.
-    let tileBaseURL: URL?
+    let archiveURL: URL?
+
+    /// The archive as served, for a test that wants to read it back.
+    let archiveData: Data
+
+    /// The ETag the server answers with.
+    static let etag = "\"immersive-map-test-fixture\""
 
     private let server: LocalTileServer?
 
     private init() {
-        // A single polygon covering the whole tile, tagged as water, is enough
-        // for every case that needs "the map has ground on it": it paints the
-        // same wherever the camera happens to look, so no test has to reason
-        // about which tile its viewport landed on.
-        let tileBody = VectorTileFixture.fullCoverageTile(layerName: "water",
-                                                          properties: ["class": "water"])
-
-        // The TileJSON document advertises an absolute template, which cannot
-        // be written before the system hands out a port. The box is filled the
-        // moment it is known, and the loader's discovery request cannot arrive
-        // before then: nothing has the address yet.
-        let templateBox = Locked<String?>(nil)
-        let server = try? LocalTileServer(route: { path in
-            if path.hasSuffix("tiles.json") {
-                guard let template = templateBox.withLock({ $0 }),
-                      let document = try? JSONSerialization.data(withJSONObject: ["tiles": [template]]) else {
-                    return nil
-                }
-                return .json(document)
-            }
-            guard path.hasSuffix(".mvt") || path.hasSuffix(".pbf") else {
-                return nil
-            }
-            return .protobuf(tileBody)
+        archiveData = Self.makeArchive()
+        let archive = LocalTileServer.Resource.archive(archiveData, etag: Self.etag)
+        let server = try? LocalTileServer(route: { request in
+            request.path == LocalTileServer.archivePath ? archive : nil
         })
         self.server = server
-        tileBaseURL = server?.tileBaseURL
-        if let baseURL = server?.baseURL {
-            templateBox.withLock { $0 = "\(baseURL.absoluteString)/v/fixture/tiles/{z}/{x}/{y}.pbf" }
+        archiveURL = server?.archiveURL
+    }
+
+    /// One tile, stored once, addressed by every coordinate of every zoom.
+    ///
+    /// A single polygon covering the whole tile, tagged as water, is enough
+    /// for every case that needs "the map has ground on it": it paints the
+    /// same wherever the camera happens to look, so no test has to reason
+    /// about which tile its viewport landed on. The directory says so in
+    /// sixteen entries: at zoom z the ids run from `(4^z - 1) / 3` for `4^z`
+    /// tiles, and one run-length entry per zoom points them all at the one
+    /// stored tile.
+    private static func makeArchive() -> Data {
+        let tileBody = VectorTileFixture.fullCoverageTile(layerName: "water",
+                                                          properties: ["kind": "water"])
+        let stored = PMTilesArchiveWriter.gzip(tileBody)
+        var writer = PMTilesArchiveWriter()
+        writer.tileCompression = .gzip
+        writer.explicitTileData = stored
+        writer.explicitEntries = (0...15).map { zoom in
+            let tileCount = UInt64(1) << UInt64(2 * zoom)
+            return PMTilesEntry(tileID: (tileCount - 1) / 3,
+                                offset: 0,
+                                length: UInt32(stored.count),
+                                runLength: UInt32(tileCount))
         }
+        writer.minZoom = 0
+        writer.maxZoom = 15
+        return writer.serializedData()
     }
 }
 
@@ -76,16 +90,16 @@ enum FixtureTiles {
     /// under these can have real tiles on it, and no request leaves the
     /// machine.
     static func settings(_ settings: ImmersiveMapSettings = .default) -> ImmersiveMapSettings {
-        guard let tileBaseURL = FixtureTileService.shared.tileBaseURL else {
+        guard let archiveURL = FixtureTileService.shared.archiveURL else {
             // The listener failed. Falling back to the dead port keeps the
             // guarantee that matters (nothing reaches the network); the
             // missing tiles are reported by `FixtureTileServiceTests`.
             return tilelessSettings(settings)
         }
-        return cacheless(sourced(settings, tileBaseURL: tileBaseURL))
+        return cacheless(sourced(settings, archiveURL: archiveURL))
     }
 
-    /// Settings under which no tile can ever reach a frame: the provider
+    /// Settings under which no tile can ever reach a frame: the archive
     /// points at a port nothing listens on, so the loader fails immediately
     /// and locally (connection refused on 127.0.0.1, no DNS, no traffic).
     ///
@@ -93,20 +107,17 @@ enum FixtureTiles {
     /// the scene: two frames rendered a sixtieth of a second apart must not
     /// differ because a tile landed between them.
     static func tilelessSettings(_ settings: ImmersiveMapSettings = .default) -> ImmersiveMapSettings {
-        cacheless(sourced(settings, tileBaseURL: deadEndTileBaseURL))
+        cacheless(sourced(settings, archiveURL: deadEndArchiveURL))
     }
 
     /// Port 1 is reserved and unused; nothing on the machine listens there.
-    static let deadEndTileBaseURL = URL(string: "http://127.0.0.1:1/tiles")!
+    static let deadEndArchiveURL = URL(string: "http://127.0.0.1:1/planet.pmtiles")!
 
-    /// Points the network settings at the given base URL the same way the
-    /// shipped defaults point at the hosted service: the loader appends
-    /// `/{z}/{x}/{y}.mvt`, and TileJSON sits next to the tile path.
-    private static func sourced(_ settings: ImmersiveMapSettings, tileBaseURL: URL) -> ImmersiveMapSettings {
+    /// Points the network settings at the given archive the same way the
+    /// shipped defaults point at the hosted one.
+    private static func sourced(_ settings: ImmersiveMapSettings, archiveURL: URL) -> ImmersiveMapSettings {
         var sourced = settings
-        sourced.tiles.network.tileBaseURL = tileBaseURL
-        sourced.tiles.network.tileJSONURL = tileBaseURL.deletingLastPathComponent()
-            .appendingPathComponent("tiles.json")
+        sourced.tiles.network.tileArchiveURL = archiveURL
         return sourced
     }
 

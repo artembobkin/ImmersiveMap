@@ -17,16 +17,16 @@ final class TileSourceStyleSeparationTests: XCTestCase {
         XCTAssertFalse(settingLabels.contains("tileProvider"))
     }
 
-    func testTemplateConfiguresSourceAndStyleConfiguresParsingSeparately() {
+    func testArchiveConfiguresSourceAndStyleConfiguresParsingSeparately() {
         let mapStyle = VectorTileMapStyle(style: BasicVectorTileStyle(cacheFingerprint: 77),
                                           schema: TitledTileSchema())
 
         let settings = ImmersiveMapSettings.default
-            .tileURLTemplate("https://example.com/api/v1/map/tiles/{z}/{x}/{y}.mvt")
+            .tileArchive(URL(string: "https://example.com/api/v1/map/planet.pmtiles")!)
             .mapStyle(mapStyle)
 
-        XCTAssertEqual(settings.tiles.network.tileURLTemplate,
-                       "https://example.com/api/v1/map/tiles/{z}/{x}/{y}.mvt")
+        XCTAssertEqual(settings.tiles.network.tileArchiveURL,
+                       URL(string: "https://example.com/api/v1/map/planet.pmtiles"))
         XCTAssertEqual(settings.mapStyle.configurationFingerprint, mapStyle.configurationFingerprint)
 
         let runtime = MapStyleRuntime(settings: settings)
@@ -39,10 +39,10 @@ final class TileSourceStyleSeparationTests: XCTestCase {
 
     func testChangingOnlyMapStyleIsAStyleChangeNotATileSourceChange() {
         let oldSettings = ImmersiveMapSettings.default
-            .tileURLTemplate("https://example.com/tiles/{z}/{x}/{y}.mvt")
+            .tileArchive(URL(string: "https://example.com/planet.pmtiles")!)
             .mapStyle(VectorTileMapStyle(style: BasicVectorTileStyle(cacheFingerprint: 1)))
         let newSettings = ImmersiveMapSettings.default
-            .tileURLTemplate("https://example.com/tiles/{z}/{x}/{y}.mvt")
+            .tileArchive(URL(string: "https://example.com/planet.pmtiles")!)
             .mapStyle(VectorTileMapStyle(style: BasicVectorTileStyle(cacheFingerprint: 2)))
 
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
@@ -51,12 +51,12 @@ final class TileSourceStyleSeparationTests: XCTestCase {
         XCTAssertEqual(plan.actions, [.invalidateCaches, .rebuildPreparedData, .rebuildGPUResources, .recreateRenderer])
     }
 
-    func testChangingOnlyTheTemplateIsATileChange() {
+    func testChangingOnlyTheArchiveIsATileChange() {
         let oldSettings = ImmersiveMapSettings.default
-            .tileURLTemplate("https://example.com/api/v1/map/tiles/{z}/{x}/{y}.mvt")
+            .tileArchive(URL(string: "https://example.com/api/v1/map/planet.pmtiles")!)
             .mapStyle(VectorTileMapStyle(style: BasicVectorTileStyle(cacheFingerprint: 1)))
         let newSettings = ImmersiveMapSettings.default
-            .tileURLTemplate("https://example.com/api/v2/map/tiles/{z}/{x}/{y}.mvt")
+            .tileArchive(URL(string: "https://example.com/api/v2/map/planet.pmtiles")!)
             .mapStyle(VectorTileMapStyle(style: BasicVectorTileStyle(cacheFingerprint: 1)))
 
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)

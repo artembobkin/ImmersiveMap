@@ -86,6 +86,8 @@ enum VectorTileFixture {
         let properties: [String: String]
     }
 
+    /// The features of the Protomaps basemap, spelled by kind: a test
+    /// states what a feature is and the builder writes the basemap's keys.
     /// A tile holding one layer of arbitrary polygon and line features, for
     /// cases where the parser's behavior depends on how features relate to
     /// one another (a junction area among the roads that enter it).
@@ -256,5 +258,74 @@ enum WebMercatorTileScheme {
                 }
             }
         }
+    }
+}
+
+extension VectorTileFixture.Feature {
+    /// A road of the `roads` layer: `kind` and `kind_detail` as the
+    /// basemap spells them, the name along it, and any further keys.
+    static func road(id: UInt64,
+                     kind: String = "major_road",
+                     kindDetail: String? = "primary",
+                     points: [(Int32, Int32)],
+                     name: String? = nil,
+                     extra: [String: String] = [:]) -> VectorTileFixture.Feature {
+        var properties = ["kind": kind]
+        if let kindDetail { properties["kind_detail"] = kindDetail }
+        if let name { properties["name"] = name }
+        for (key, value) in extra { properties[key] = value }
+        return VectorTileFixture.Feature(id: id, geometry: .line(points: points), properties: properties)
+    }
+
+    /// A building of the `buildings` layer, with its heights in metres.
+    static func building(id: UInt64,
+                         ring: [(Int32, Int32)],
+                         height: String? = nil,
+                         minHeight: String? = nil,
+                         part: Bool = false) -> VectorTileFixture.Feature {
+        var properties = ["kind": part ? "building_part" : "building"]
+        if let height { properties["height"] = height }
+        if let minHeight { properties["min_height"] = minHeight }
+        return VectorTileFixture.Feature(id: id, geometry: .polygon(ring: ring), properties: properties)
+    }
+
+    /// A named point of the `places` layer.
+    static func place(id: UInt64,
+                      at point: (Int32, Int32),
+                      kind: String = "locality",
+                      kindDetail: String? = "city",
+                      name: String,
+                      populationRank: Int? = nil,
+                      extra: [String: String] = [:]) -> VectorTileFixture.Feature {
+        var properties = ["kind": kind, "name": name]
+        if let kindDetail { properties["kind_detail"] = kindDetail }
+        if let populationRank { properties["population_rank"] = String(populationRank) }
+        for (key, value) in extra { properties[key] = value }
+        return VectorTileFixture.Feature(id: id, geometry: .point(point.0, point.1), properties: properties)
+    }
+
+    /// A named point of the `pois` layer, `kind` the raw OSM value.
+    static func poi(id: UInt64,
+                    at point: (Int32, Int32),
+                    kind: String,
+                    name: String,
+                    minZoom: Int? = nil,
+                    extra: [String: String] = [:]) -> VectorTileFixture.Feature {
+        var properties = ["kind": kind, "name": name]
+        if let minZoom { properties["min_zoom"] = String(minZoom) }
+        for (key, value) in extra { properties[key] = value }
+        return VectorTileFixture.Feature(id: id, geometry: .point(point.0, point.1), properties: properties)
+    }
+
+    /// A named point of the `water` layer: the label the basemap ships
+    /// beside a body of water.
+    static func waterName(id: UInt64,
+                          at point: (Int32, Int32),
+                          kind: String = "lake",
+                          name: String,
+                          extra: [String: String] = [:]) -> VectorTileFixture.Feature {
+        var properties = ["kind": kind, "name": name]
+        for (key, value) in extra { properties[key] = value }
+        return VectorTileFixture.Feature(id: id, geometry: .point(point.0, point.1), properties: properties)
     }
 }

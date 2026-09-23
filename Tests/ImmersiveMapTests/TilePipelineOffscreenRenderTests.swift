@@ -70,11 +70,9 @@ final class TilePipelineOffscreenRenderTests: XCTestCase {
         let avenues: [VectorTileFixture.Feature] = (0..<16).map { row in
             let y = Int32(128 + row * 256)
             let points: [(Int32, Int32)] = [(0, y), (4096, y)]
-            return .init(id: UInt64(row + 1),
-                         geometry: .line(points: points),
-                         properties: ["class": "primary", "lanes": "4", "name": "Avenue \(row)"])
+            return .road(id: UInt64(row + 1), points: points, name: "Avenue \(row)")
         }
-        let data = VectorTileFixture.layerTile(layerName: "transportation", features: avenues)
+        let data = VectorTileFixture.layerTile(layerName: "roads", features: avenues)
         let tiles = WebMercatorTileScheme.neighbourhoodPyramid(latitude: Self.camera.latitudeDegrees,
                                                                longitude: Self.camera.longitudeDegrees,
                                                                maximumZoom: Int(Self.renderZoom))
@@ -102,7 +100,7 @@ final class TilePipelineOffscreenRenderTests: XCTestCase {
         // engine's map color is the style's land, so a tile whose only paint
         // is the synthetic land quad leaves the frame exactly as it was, by
         // design, and could not prove it arrived.
-        try await loadFixtureTiles(into: harness, layerName: "landcover", className: "wood")
+        try await loadFixtureTiles(into: harness, layerName: "landuse", kind: "wood")
         let painted = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(1))
 
         // Both halves are needed. Without the first, a frame where the ground
@@ -142,10 +140,10 @@ final class TilePipelineOffscreenRenderTests: XCTestCase {
     /// darkened magenta would no longer match the colour it was given.
     @MainActor
     private func makeHarness() throws -> OffscreenFrameHarness {
-        let configuration = ImmersiveMapTilesTheme.default
+        let configuration = ProtomapsBasemapTheme.default
             .layers { $0.water = Self.fixtureWater }
         let settings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
+            .mapStyle(ProtomapsBasemapMapStyle(theme: configuration))
         return try OffscreenFrameHarness.makeOrSkip(settings: settings)
     }
 
@@ -159,9 +157,9 @@ final class TilePipelineOffscreenRenderTests: XCTestCase {
     @MainActor
     private func loadFixtureTiles(into harness: OffscreenFrameHarness,
                                   layerName: String,
-                                  className: String? = nil) async throws {
+                                  kind: String? = nil) async throws {
         let data = VectorTileFixture.fullCoverageTile(layerName: layerName,
-                                                          properties: ["class": className ?? layerName])
+                                                          properties: ["kind": kind ?? layerName])
         let tiles = WebMercatorTileScheme.neighbourhoodPyramid(latitude: Self.camera.latitudeDegrees,
                                                                longitude: Self.camera.longitudeDegrees,
                                                                maximumZoom: Int(Self.renderZoom))

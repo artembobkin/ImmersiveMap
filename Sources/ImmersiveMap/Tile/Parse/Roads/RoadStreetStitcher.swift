@@ -14,14 +14,12 @@ import simd
 /// when, and only when, they are the same street to draw, meeting at an
 /// endpoint that no third road shares.
 ///
-/// Which street a piece belongs to is the schema reading's answer, from the
-/// source's own where it gives one (`street`, an id assembled from the
-/// whole network before the tiles were cut), otherwise guessed from the
-/// name and every drawing attribute,
-/// which is right within a tile and refuses to join two pieces whose lane
-/// counts the tiler happened to write differently. Either way the attributes
-/// that change how a piece is drawn must still agree: a street runs into a
-/// tunnel and out again, and those are one street but not one ribbon.
+/// Which street a piece belongs to is the schema reading's answer, guessed
+/// from the name and every drawing attribute, which is right within a tile
+/// and refuses to join two pieces whose lane counts the tiler happened to
+/// write differently. The attributes that change how a piece is drawn must
+/// agree: a street runs into a tunnel and out again, and those are one
+/// street but not one ribbon.
 ///
 /// A node where a third road meets is a junction, and a street may pass
 /// through it only as its own geometry, never glued across it: gluing there
@@ -50,7 +48,6 @@ enum RoadStreetStitcher {
         var participates = false
         for index in 0..<featureCount where linesByFeatureIndex[index].isEmpty == false {
             guard let road = featureFacts[index].road,
-                  road.isShippedPaint == false,
                   featureStyles[index].roadStyle?.tier == .automobile,
                   let key = road.stitchingKey else {
                 continue

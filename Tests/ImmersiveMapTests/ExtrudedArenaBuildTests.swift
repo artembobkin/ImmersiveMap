@@ -29,8 +29,6 @@ final class ExtrudedArenaBuildTests: XCTestCase {
                                                  textRevision: 1,
                                                  labelLanguage: .english,
                                                  labelFallbackPolicy: .international,
-                                                 houseNumbersEnabled: true,
-                                                 houseNumbersMinimumZoom: 15,
                                                  capitalMaximumZoom: 12,
                                                  cityMaximumZoom: 12,
                                                  smallSettlementMaximumZoom: 12,

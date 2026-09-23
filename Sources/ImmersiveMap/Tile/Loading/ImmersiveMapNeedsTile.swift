@@ -1183,6 +1183,8 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
             return "empty_body"
         case .network:
             return "network"
+        case .archiveUnavailable:
+            return "archive_unavailable"
         }
     }
 }

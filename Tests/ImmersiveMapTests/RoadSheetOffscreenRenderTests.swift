@@ -19,19 +19,21 @@ final class RoadSheetOffscreenRenderTests: XCTestCase {
 
     @MainActor
     func testTwoGroundStreetsCrossAsOneSheet() async throws {
-        try await assertCrossingIsOneSheet(crossingProperties: ["class": "primary"])
+        try await assertCrossingIsOneSheet(crossingProperties: ProtomapsRoadSpelling.properties(forClass: "primary"))
     }
 
     @MainActor
     func testABridgeOverAStreetCrossesAsOneSheet() async throws {
-        try await assertCrossingIsOneSheet(crossingProperties: ["class": "primary", "brunnel": "bridge"])
+        try await assertCrossingIsOneSheet(crossingProperties: ProtomapsRoadSpelling.properties(forClass: "primary")
+            .merging(["is_bridge": "true"]) { _, new in new })
     }
 
     /// The sheet writes its depth from the fragment stage, and under
     /// multisampling that depth and the sheet's stencil bit are per sample.
     @MainActor
     func testABridgeOverAStreetCrossesAsOneSheetUnderMultisampling() async throws {
-        try await assertCrossingIsOneSheet(crossingProperties: ["class": "primary", "brunnel": "bridge"],
+        try await assertCrossingIsOneSheet(crossingProperties: ProtomapsRoadSpelling.properties(forClass: "primary")
+            .merging(["is_bridge": "true"]) { _, new in new },
                                            multisampled: true)
     }
 
@@ -40,9 +42,9 @@ final class RoadSheetOffscreenRenderTests: XCTestCase {
                                           multisampled: Bool = false,
                                           file: StaticString = #filePath,
                                           line: UInt = #line) async throws {
-        let theme = ImmersiveMapTilesTheme.default.layers { $0.roads.primary = Self.fixtureRoad }
+        let theme = ProtomapsBasemapTheme.default.layers { $0.roads.primary = Self.fixtureRoad }
         var settings = FixtureTiles.tilelessSettings()
-            .mapStyle(ImmersiveMapTilesMapStyle(theme: theme))
+            .mapStyle(ProtomapsBasemapMapStyle(theme: theme))
             .msaa(isEnabled: multisampled)
         settings.scene.starfield.starCount = 0
         let harness = try OffscreenFrameHarness.makeOrSkip(settings: settings)
@@ -58,8 +60,8 @@ final class RoadSheetOffscreenRenderTests: XCTestCase {
 
         // A street along the tile's middle row and one along its middle
         // column: they cross under the camera.
-        let data = VectorTileFixture.layerTile(layerName: "transportation", features: [
-            .init(id: 1, geometry: .line(points: [(0, 2048), (4096, 2048)]), properties: ["class": "primary"]),
+        let data = VectorTileFixture.layerTile(layerName: "roads", features: [
+            .road(id: 1, points: [(0, 2048), (4096, 2048)]),
             .init(id: 2, geometry: .line(points: [(2048, 0), (2048, 4096)]), properties: crossingProperties)
         ])
         let loaded = await harness.tileRenderStore.parseTile(tile: Self.tile, data: data)

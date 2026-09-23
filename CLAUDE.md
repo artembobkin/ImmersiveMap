@@ -27,11 +27,13 @@ A folder's boundary rules, what it owns and what it must not contain, are in the
 
 ### Targets
 
-The package follows the standard SwiftPM layout (`Sources/<Target>`, `Tests/<Target>Tests`), so `Package.swift` states no paths. Besides `ImmersiveMap` (the engine, the only product) there are three targets at `package` access, visible to every target of the package and to no app that links the product:
+The package follows the standard SwiftPM layout (`Sources/<Target>`, `Tests/<Target>Tests`), so `Package.swift` states no paths. Besides `ImmersiveMap` (the engine, the only product) there are five targets at `package` access, visible to every target of the package and to no app that links the product:
 
 - `Mvt` (`Sources/Mvt`): the Mapbox Vector Tile decoder. The zero-copy wire decoder `MvtTileDecoder`, the decoded model, `MvtGeometryDecoder` and `MvtAttributeDecoder` (the per-feature geometry and tag loops live there so they specialize next to the varint reader, never across the module boundary), `MvtValue` and `MvtGeometryType`, and the tile-space geometry `Point`/`Polygon` with the multi aliases, which `Sources/ImmersiveMap/Tile/Parse/TileSpaceGeometry.swift` re-declares as engine typealiases so they shadow QuickDraw's names the way the old in-module declarations did. The target knows nothing of the tile schema's meaning: no layer name, no style.
 - `MvtTestSupport` (`Sources/MvtTestSupport`): the test-side encoder, the synthetic fixture tiles and a deterministic generator. A regular target because test targets cannot share sources, and `MvtTests` and `ImmersiveMapTests` both depend on it.
-- `Earcut` (`Sources/Earcut`): the internal earcut port for polygon triangulation, one enum `Earcut` with `tessellate` and `deviation`, no dependencies. `ParsePolygon` and `RoofGeometryBuilder` reach it with `import Earcut`, and `EarcutTests` imports the module without `@testable`.
+- `PMTiles` (`Sources/PMTiles`): the PMTiles v3 reader, a tool like `Earcut` with no engine dependency. The format as pure functions over `Data` (`PMTilesHeader`, `PMTilesDirectory` with `PMTilesEntry` and the lookup, `PMTilesTileID` for the Hilbert tile id, `PMTilesGzip` over the system zlib, `PMTilesFormatError`) and the HTTP range client `PMTilesArchiveClient` that reads an archive with them, keeping its leaf directories in `PMTilesDirectoryCache`. It hands back decompressed tile bytes, and the engine's `TileDownloader` maps its outcomes onto the tile loader's.
+- `PMTilesTestSupport` (`Sources/PMTilesTestSupport`): `PMTilesArchiveWriter`, a writer independent of the reader that builds fixture archives for `PMTilesTests` and `ImmersiveMapTests`.
+- `Earcut` (`Sources/Earcut`): the internal earcut port for polygon triangulation, one enum `Earcut` with `tessellate` and `deviation`, no dependencies. `ParsePolygon` reaches it with `import Earcut`, and `EarcutTests` imports the module without `@testable`.
 
 ### Decisions
 

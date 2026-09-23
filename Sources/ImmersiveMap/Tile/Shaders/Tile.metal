@@ -133,7 +133,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                                   constant Camera& camera [[buffer(1)]],
                                   constant Style* styles [[buffer(2)]],
                                   constant float4x4& modelMatrix [[buffer(3)]],
-                                  constant float* lowZoomFadeMasks [[buffer(4)]],
+                                  constant float2* styleZoomFades [[buffer(4)]],
                                   constant LineStyle* lineStyles [[buffer(5)]],
                                   constant float& depthBandOffset [[buffer(7)]],
                                   constant OverviewFadeUniform& overviewFade [[buffer(8)]]) {
@@ -243,12 +243,12 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
         out.deferredEdgePx = deferredEdgePx;
         out.widthAxis = widthAxis;
     } else {
-        TileVertexStyle style = tileVertexStyle(vertexIn, styles, lowZoomFadeMasks, lineStyles);
+        TileVertexStyle style = tileVertexStyle(vertexIn, styles, styleZoomFades, lineStyles);
         out.color = style.color;
         // The zoom fade folds into the alpha here: a function of the style
         // and the frame only, so the fills fragment neither interpolates
         // the mask nor walks the fade bands.
-        out.color.a *= tileStyleFade(style.lowZoomFadeMask, overviewFade);
+        out.color.a *= tileStyleFade(style.zoomFade, overviewFade);
     }
     return out;
 }
@@ -282,7 +282,7 @@ static inline half4 tileFragmentColor(FragmentIn in,
                                       constant Shadow& shadow,
                                       constant LineDashUniform& lineDash,
                                       constant Style* styles,
-                                      constant float* lowZoomFadeMasks,
+                                      constant float2* styleZoomFades,
                                       constant LineStyle* lineStyles,
                                       depth2d<float> shadowMap,
                                       texture2d<half> groundShadowMask) {
@@ -307,7 +307,7 @@ static inline half4 tileFragmentColor(FragmentIn in,
     if (kTileLineFields) {
         float deferredEdgePx = tileFragmentDeferredEdgePx(in, lineStyles, overviewFade);
         color = tileLineFragmentColor(in.styleIndex, in.lineDistance, in.lineParameterRaw,
-                                      styles, lowZoomFadeMasks, lineStyles,
+                                      styles, styleZoomFades, lineStyles,
                                       overviewFade, lineDash, deferredEdgePx);
     } else {
         color = in.color;
@@ -323,11 +323,11 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                                   constant Shadow& shadow [[buffer(3)]],
                                   constant LineDashUniform& lineDash [[buffer(4)]],
                                   constant Style* styles [[buffer(5), function_constant(kTileLineFields)]],
-                                  constant float* lowZoomFadeMasks [[buffer(6), function_constant(kTileLineFields)]],
+                                  constant float2* styleZoomFades [[buffer(6), function_constant(kTileLineFields)]],
                                   constant LineStyle* lineStyles [[buffer(7), function_constant(kTileLineFields)]],
                                   depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
                                   texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
-    return tileFragmentColor(in, overviewFade, shadow, lineDash, styles, lowZoomFadeMasks, lineStyles,
+    return tileFragmentColor(in, overviewFade, shadow, lineDash, styles, styleZoomFades, lineStyles,
                              shadowMap, groundShadowMask);
 }
 
@@ -341,12 +341,12 @@ fragment TileExactDepthFragmentOut tileExactDepthFragmentShader(FragmentIn in [[
                                                                 constant Shadow& shadow [[buffer(3)]],
                                                                 constant LineDashUniform& lineDash [[buffer(4)]],
                                                                 constant Style* styles [[buffer(5), function_constant(kTileLineFields)]],
-                                                                constant float* lowZoomFadeMasks [[buffer(6), function_constant(kTileLineFields)]],
+                                                                constant float2* styleZoomFades [[buffer(6), function_constant(kTileLineFields)]],
                                                                 constant LineStyle* lineStyles [[buffer(7), function_constant(kTileLineFields)]],
                                                                 depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
                                                                 texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
     TileExactDepthFragmentOut out;
-    out.color = tileFragmentColor(in, overviewFade, shadow, lineDash, styles, lowZoomFadeMasks, lineStyles,
+    out.color = tileFragmentColor(in, overviewFade, shadow, lineDash, styles, styleZoomFades, lineStyles,
                                   shadowMap, groundShadowMask);
     out.depth = in.rankDepth;
     return out;
@@ -404,12 +404,12 @@ struct RoadSheetUniform {
 /// zoom fades, the factors tileFragmentColor applies.
 static inline float tileRoadSheetAlpha(FragmentIn in,
                                        constant Style* styles,
-                                       constant float* lowZoomFadeMasks,
+                                       constant float2* styleZoomFades,
                                        constant LineStyle* lineStyles,
                                        constant OverviewFadeUniform& overviewFade,
                                        float deferredEdgePx) {
     float alpha = styles[in.styleIndex].color.a
-        * float(tileStyleFade(half(lowZoomFadeMasks[in.styleIndex]), overviewFade))
+        * float(tileStyleFade(styleZoomFades[in.styleIndex], overviewFade))
         * tilePointWidthRampAlpha(lineStyles[in.styleIndex], overviewFade.cameraZoom);
     return clamp(alpha, 0.0, 1.0);
 }
@@ -430,13 +430,13 @@ fragment TileRoadSheetDepthOut tileRoadSheetDepthFragmentShader(FragmentIn in [[
                                                                 constant OverviewFadeUniform& overviewFade [[buffer(0)]],
                                                                 constant LineDashUniform& lineDash [[buffer(4)]],
                                                                 constant Style* styles [[buffer(5)]],
-                                                                constant float* lowZoomFadeMasks [[buffer(6)]],
+                                                                constant float2* styleZoomFades [[buffer(6)]],
                                                                 constant LineStyle* lineStyles [[buffer(7)]],
                                                                 constant RoadSheetUniform& roadSheet [[buffer(11)]]) {
     float deferredEdgePx = tileFragmentDeferredEdgePx(in, lineStyles, overviewFade);
     half coverage = tileLineFragmentCoverage(in.styleIndex, in.lineDistance, in.lineParameterRaw,
                                              lineStyles, overviewFade, lineDash, deferredEdgePx);
-    float alpha = tileRoadSheetAlpha(in, styles, lowZoomFadeMasks, lineStyles, overviewFade, deferredEdgePx);
+    float alpha = tileRoadSheetAlpha(in, styles, styleZoomFades, lineStyles, overviewFade, deferredEdgePx);
     TileRoadSheetDepthOut out;
     out.depth = tileRoadSheetDepth(coverage, alpha, roadSheet);
     return out;
@@ -447,7 +447,7 @@ fragment TileExactDepthFragmentOut tileRoadSheetFragmentShader(FragmentIn in [[s
                                                                constant Shadow& shadow [[buffer(3)]],
                                                                constant LineDashUniform& lineDash [[buffer(4)]],
                                                                constant Style* styles [[buffer(5)]],
-                                                               constant float* lowZoomFadeMasks [[buffer(6)]],
+                                                               constant float2* styleZoomFades [[buffer(6)]],
                                                                constant LineStyle* lineStyles [[buffer(7)]],
                                                                constant RoadSheetUniform& roadSheet [[buffer(11)]],
                                                                depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
@@ -455,9 +455,9 @@ fragment TileExactDepthFragmentOut tileRoadSheetFragmentShader(FragmentIn in [[s
     float deferredEdgePx = tileFragmentDeferredEdgePx(in, lineStyles, overviewFade);
     half coverage = tileLineFragmentCoverage(in.styleIndex, in.lineDistance, in.lineParameterRaw,
                                              lineStyles, overviewFade, lineDash, deferredEdgePx);
-    float alpha = tileRoadSheetAlpha(in, styles, lowZoomFadeMasks, lineStyles, overviewFade, deferredEdgePx);
+    float alpha = tileRoadSheetAlpha(in, styles, styleZoomFades, lineStyles, overviewFade, deferredEdgePx);
     TileExactDepthFragmentOut out;
-    out.color = tileFragmentColor(in, overviewFade, shadow, lineDash, styles, lowZoomFadeMasks, lineStyles,
+    out.color = tileFragmentColor(in, overviewFade, shadow, lineDash, styles, styleZoomFades, lineStyles,
                                   shadowMap, groundShadowMask);
     out.depth = tileRoadSheetDepth(coverage, alpha, roadSheet);
     return out;

@@ -19,8 +19,10 @@ struct OfflineStoredRegionRecord: Codable, Equatable, Sendable {
 /// On-disk home of downloaded tiles, namespaced by the tile source the bytes
 /// came from (`PreparedTileCacheIdentity.tileSourceRevision`, the same hash
 /// that keys the prepared-tile cache), so a map view and a standalone
-/// `ImmersiveMapOfflineController` configured with the same provider agree on
-/// the location without ever meeting.
+/// `ImmersiveMapOfflineController` configured with the same archive agree on
+/// the location without ever meeting. A new planet is a new archive URL,
+/// which is a new namespace: regions downloaded from the previous one stay
+/// on disk until the app removes them.
 ///
 /// Lives in Application Support rather than Caches: a region is an explicit
 /// download the user expects to keep, not something the OS may evict under
@@ -28,10 +30,11 @@ struct OfflineStoredRegionRecord: Codable, Equatable, Sendable {
 ///
 /// Layout: `<base>/ImmersiveMapOfflineTiles/v1/u<source-hex>/`
 ///   - `regions/<fnv64(id)>.json` for region records
-///   - `tiles/z<z>/<x>_<y>.mvt` for raw tile bytes; a zero-byte file records a
-///     tile the source reported as empty (HTTP 404/410 or an empty body), so
-///     resuming a download does not refetch it and offline serving can answer
-///     "known empty" instead of "unknown".
+///   - `tiles/z<z>/<x>_<y>.mvt` for decompressed MVT bytes. A zero-byte file
+///     records a tile the archive reported as empty (absent from its
+///     directory, above its depth, or an empty body), so resuming a download
+///     does not refetch it and offline serving can answer "known empty"
+///     instead of "unknown".
 ///
 /// All writes are atomic single-file operations and every method touches the
 /// filesystem directly with no in-memory state, so the value is freely usable

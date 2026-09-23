@@ -136,9 +136,9 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
 
     func testMapStyleLabelPaletteChangeRebuildsPreparedData() {
         let oldSettings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(theme: .default))
+            .mapStyle(ProtomapsBasemapMapStyle(theme: .default))
         let newSettings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(theme: .default.labels { labels in
+            .mapStyle(ProtomapsBasemapMapStyle(theme: .default.labels { labels in
                 labels.town.haloEm = 0.11
             }))
 

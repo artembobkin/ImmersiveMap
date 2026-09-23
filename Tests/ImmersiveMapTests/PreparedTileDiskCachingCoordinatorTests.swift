@@ -73,8 +73,6 @@ final class PreparedTileDiskCachingCoordinatorTests: XCTestCase {
                                   textRevision: 4,
                                   labelLanguage: .english,
                                   labelFallbackPolicy: .international,
-                                  houseNumbersEnabled: true,
-                                  houseNumbersMinimumZoom: 15,
                                   capitalMaximumZoom: 12,
                                   cityMaximumZoom: 12,
                                   smallSettlementMaximumZoom: 12,
@@ -87,7 +85,7 @@ final class PreparedTileDiskCachingCoordinatorTests: XCTestCase {
         let emptyGeometry = PreparedTileCPU.GeometryLayer(vertices: [],
                                                          indices: [],
                                                          styles: [],
-                                                         overviewStyleMasks: [])
+                                                         styleZoomFades: [])
         let emptyRoadPhases = RoadGeometryPhases(shadow: emptyGeometry,
                                                  casing: emptyGeometry,
                                                  fill: emptyGeometry,

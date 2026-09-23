@@ -40,11 +40,11 @@ final class FlatBuildingCoverageOffscreenRenderTests: XCTestCase {
         // The cell: water ground and one building over its whole extent.
         // The children: snow ground, no buildings.
         let waterData = VectorTileFixture.fullCoverageTile(layerName: "water",
-                                                           properties: ["class": "ocean"])
-        let buildingData = VectorTileFixture.fullCoverageTile(layerName: "building",
-                                                              properties: ["render_height": "40"])
-        let snowData = VectorTileFixture.fullCoverageTile(layerName: "globallandcover",
-                                                          properties: ["class": "snow"])
+                                                           properties: ["kind": "ocean"])
+        let buildingData = VectorTileFixture.fullCoverageTile(layerName: "buildings",
+                                                              properties: ["kind": "building", "height": "40"])
+        let snowData = VectorTileFixture.fullCoverageTile(layerName: "landuse",
+                                                          properties: ["kind": "glacier"])
         let cellLoaded = await harness.tileRenderStore.parseTile(tile: Self.cell, data: waterData + buildingData)
         XCTAssertTrue(cellLoaded, "The cell fixture tile must parse")
         let firstChildLoaded = await harness.tileRenderStore.parseTile(tile: Self.children[0], data: snowData)
@@ -96,7 +96,7 @@ final class FlatBuildingCoverageOffscreenRenderTests: XCTestCase {
 
     @MainActor
     private func makeHarness() throws -> OffscreenFrameHarness {
-        let configuration = ImmersiveMapTilesTheme.default
+        let configuration = ProtomapsBasemapTheme.default
             .layers { layers in
                 layers.water = Self.fixtureWater
                 layers.ice = Self.fixtureSnow
@@ -105,7 +105,7 @@ final class FlatBuildingCoverageOffscreenRenderTests: XCTestCase {
                 features.buildingFillColor = Self.fixtureBuilding
             }
         var settings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
+            .mapStyle(ProtomapsBasemapMapStyle(theme: configuration))
         settings.scene.starfield.starCount = 0
         // No cast shadows: they would tint the sampled snow according to the
         // sun's azimuth.

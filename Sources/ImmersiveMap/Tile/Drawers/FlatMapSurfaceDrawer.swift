@@ -86,11 +86,7 @@ enum FlatMapSurfaceDrawer {
         }
         var cameraUniformValue = cameraUniform
         var overviewFadeUniform = TileOverviewFadeUniform(
-            overviewAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .overviewFeatures),
-            roadAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .roads),
-            landuseAlpha: LowZoomOverviewFade.alpha(for: cameraZoom, kind: .landuse),
             pixelsPerPoint: pixelsPerPoint,
-            roadMarkingAlpha: LowZoomOverviewFade.roadMarkingAlpha(for: cameraZoom),
             cameraZoom: Float(cameraZoom),
             viewportSizePx: drawableSizePx,
             pointWidthReferenceDepth: screenCentreGroundDepth(cameraMatrix: cameraUniform.matrix),
@@ -198,7 +194,7 @@ enum FlatMapSurfaceDrawer {
         let isOpaqueFillRun: (GroundStyleRun) -> Bool = { run in
             run.isFillsClass
                 && run.isAlphaOpaque
-                && TileStyleFadeMath.fadeIsOne(mask: run.fadeMask, overviewFade: overviewFadeUniform)
+                && TileStyleFadeMath.fadeIsOne(zoomFade: run.zoomFade, overviewFade: overviewFadeUniform)
         }
         let isTranslucentFillRun: (GroundStyleRun) -> Bool = { run in
             run.isFillsClass && isOpaqueFillRun(run) == false
@@ -346,17 +342,17 @@ enum FlatMapSurfaceDrawer {
               let indices = buffers.indices,
               let vertices = buffers.vertices,
               let styles = buffers.styles,
-              let overviewStyleMask = buffers.overviewStyleMask,
+              let styleZoomFade = buffers.styleZoomFade,
               let lineStyles = buffers.lineStyles else { return }
 
         renderEncoder.setVertexBuffer(vertices.buffer, offset: vertices.offset, index: 0)
         renderEncoder.setVertexBuffer(styles.buffer, offset: styles.offset, index: 2)
-        renderEncoder.setVertexBuffer(overviewStyleMask.buffer, offset: overviewStyleMask.offset, index: 4)
+        renderEncoder.setVertexBuffer(styleZoomFade.buffer, offset: styleZoomFade.offset, index: 4)
         renderEncoder.setVertexBuffer(lineStyles.buffer, offset: lineStyles.offset, index: 5)
         // The lines-class fragment resolves the style by index (the fills
         // fragment never reads these slots).
         renderEncoder.setFragmentBuffer(styles.buffer, offset: styles.offset, index: 5)
-        renderEncoder.setFragmentBuffer(overviewStyleMask.buffer, offset: overviewStyleMask.offset, index: 6)
+        renderEncoder.setFragmentBuffer(styleZoomFade.buffer, offset: styleZoomFade.offset, index: 6)
         renderEncoder.setFragmentBuffer(lineStyles.buffer, offset: lineStyles.offset, index: 7)
         // The tile-priority stencil reference: the ground pass replaces the
         // stencil with it, every pass tests greaterEqual against the finest
@@ -415,7 +411,7 @@ enum FlatMapSurfaceDrawer {
         for run in runs {
             guard run.indexCount > 0,
                   runFilter?(run) != false,
-                  TileStyleFadeMath.fadeIsZero(mask: run.fadeMask, overviewFade: overviewFade) == false else {
+                  TileStyleFadeMath.fadeIsZero(zoomFade: run.zoomFade, overviewFade: overviewFade) == false else {
                 if spanCount > 0 { spans.append((spanStart, spanCount)) }
                 spanCount = 0
                 continue

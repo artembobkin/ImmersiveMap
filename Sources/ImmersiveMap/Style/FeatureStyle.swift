@@ -38,29 +38,12 @@ public enum RoadTier: Sendable {
 
 /// Where a road draws in the road stack: tunnels under everything on the
 /// ground, bridges over everything. The style decides from the facts (a
-/// tunnel's roof, a road diving under a bridge with only a negative
+/// road in a tunnel, a road diving under a bridge with only a negative
 /// `layer`, a ramp with a positive one).
 public enum RoadLevel: Sendable {
     case tunnel
     case ground
     case bridge
-}
-
-/// What a carriageway surface does to the paint of the roads inside it,
-/// on top of clipping their ribbons.
-public enum RoadSurfacePaintRule: Sendable {
-    /// The paint runs on over the surface: a hand-mapped `area:highway`
-    /// typically covers a whole street's carriageway, and the street
-    /// keeps its markings.
-    case keeps
-    /// The paint the style draws from a road's own tags (a crossing read
-    /// off a footway) ends at the surface's edge: a junction reconstructed
-    /// from the road graph ships the paint the source measured, and that
-    /// is drawn instead.
-    case cutsStyled
-    /// Every line of paint inside the surface is cut, the measured paint
-    /// too: a tunnel's roof seen from above is a bare fill.
-    case cutsAll
 }
 
 /// How a label's text is drawn.
@@ -141,7 +124,8 @@ public struct LinePass: Sendable {
 
     public var key: UInt8
     public var color: SIMD4<Float>
-    public var lowZoomFadeMask: Float
+    /// How the stroke appears or disappears with the camera zoom.
+    public var zoomFade: ImmersiveMapZoomFade
     /// Point-locked visible line width (full width, layout points). Zero keeps
     /// the world-locked behavior: the visible edge is the tessellated width.
     /// Non-zero resolves the edge in screen space at render time, so the width
@@ -178,7 +162,7 @@ public struct LinePass: Sendable {
 
     public init(key: UInt8,
                 color: SIMD4<Float>,
-                lowZoomFadeMask: Float = 0.0,
+                zoomFade: ImmersiveMapZoomFade = .none,
                 lineWidthPoints: Float = 0.0,
                 dashLengthPoints: Float = 0.0,
                 dashGapPoints: Float = 0.0,
@@ -189,7 +173,7 @@ public struct LinePass: Sendable {
                 lineGeometry: LineGeometryStyle) {
         self.key = key
         self.color = color
-        self.lowZoomFadeMask = lowZoomFadeMask
+        self.zoomFade = zoomFade
         self.lineWidthPoints = lineWidthPoints
         self.dashLengthPoints = dashLengthPoints
         self.dashGapPoints = dashGapPoints
@@ -205,7 +189,8 @@ public struct LinePass: Sendable {
 public struct FillStyle: Sendable {
     public var key: UInt8
     public var color: SIMD4<Float>
-    public var lowZoomFadeMask: Float
+    /// How the fill appears or disappears with the camera zoom.
+    public var zoomFade: ImmersiveMapZoomFade
     /// A fill whose polygons with many holes (an ocean with its islands)
     /// are not tessellated as one polygon: the exterior draws as the fill
     /// and each hole as the background, so the tessellator never sees the
@@ -214,11 +199,11 @@ public struct FillStyle: Sendable {
 
     public init(key: UInt8,
                 color: SIMD4<Float>,
-                lowZoomFadeMask: Float = 0.0,
+                zoomFade: ImmersiveMapZoomFade = .none,
                 splitsComplexHoles: Bool = false) {
         self.key = key
         self.color = color
-        self.lowZoomFadeMask = lowZoomFadeMask
+        self.zoomFade = zoomFade
         self.splitsComplexHoles = splitsComplexHoles
     }
 }
@@ -240,23 +225,21 @@ public struct LineStyle: Sendable {
     }
 }
 
-/// A road: a line or a carriageway surface drawn in the road order. One
-/// stroke per role, bottom to top (`shadow`, `casing`, `fill`, the `paint`
-/// on the surface, `overlay`), plus what the engine's road work needs to
-/// know about the road as the style sees it: where it sorts, which tier
-/// it draws in, whether paint stops at it, what figure is stamped along
-/// it, and the name laid along it.
+/// A road: a line drawn in the road order. One stroke per role, bottom to
+/// top (`shadow`, `casing`, `fill`, the `paint` on the surface,
+/// `overlay`), plus what the engine's road work needs to know about the
+/// road as the style sees it: where it sorts, which tier it draws in,
+/// what figure is stamped along it, and the name laid along it.
 public struct RoadStyle: Sendable {
     public var shadow: LinePass?
     public var casing: LinePass?
     public var fill: LinePass?
     /// The strokes painted on the surface, drawn in the `detail` role above
-    /// every fill: lane lines, a crossing's band, the parking-bay comb.
+    /// every fill: the stroke a decoration is stamped in.
     public var paint: [LinePass]
     public var overlay: LinePass?
     /// The road's place among the roads of its level: higher draws over
-    /// lower, and a carriageway surface owns the ribbons of the same or a
-    /// lower class inside it.
+    /// lower.
     public var classPriority: Int
     /// Where the road draws in the stack (see `RoadLevel`).
     public var level: RoadLevel
@@ -264,10 +247,6 @@ public struct RoadStyle: Sendable {
     public var tier: RoadTier
     /// The figure stamped along the geometry instead of a plain stroke.
     public var decoration: RoadDecorationKind
-    /// What a carriageway surface (`ImmersiveMapRoadFacts.Kind.surface`)
-    /// does to the paint of the roads inside it (see
-    /// `RoadSurfacePaintRule`). Ignored for a road that is no surface.
-    public var surfacePaint: RoadSurfacePaintRule
     /// The name laid along the road, nil for a road that carries none.
     public var label: LabelTextStyle?
     public var placement: LinePlacement
@@ -281,7 +260,6 @@ public struct RoadStyle: Sendable {
                 level: RoadLevel = .ground,
                 tier: RoadTier = .pedestrian,
                 decoration: RoadDecorationKind = .none,
-                surfacePaint: RoadSurfacePaintRule = .keeps,
                 label: LabelTextStyle? = nil,
                 placement: LinePlacement = .ground) {
         self.shadow = shadow
@@ -293,7 +271,6 @@ public struct RoadStyle: Sendable {
         self.level = level
         self.tier = tier
         self.decoration = decoration
-        self.surfacePaint = surfacePaint
         self.label = label
         self.placement = placement
     }
@@ -335,23 +312,16 @@ public struct ExtrusionStyle: Sendable {
     /// The height in metres of a building the reading states no height
     /// for; zero leaves it flat.
     public var fallbackHeight: Float
-    /// Whether the shaped roof the reading found (`ImmersiveMapRoof`) is
-    /// raised. Off, the building takes a flat lid at its full height and
-    /// the roof geometry is never built.
-    public var roofShapes: Bool
-
     public init(key: UInt8,
                 color: SIMD4<Float>,
                 heightScale: Float = 1.0,
                 anchorZoom: Int = 16,
-                fallbackHeight: Float = 0,
-                roofShapes: Bool = false) {
+                fallbackHeight: Float = 0) {
         self.key = key
         self.color = color
         self.heightScale = heightScale
         self.anchorZoom = anchorZoom
         self.fallbackHeight = fallbackHeight
-        self.roofShapes = roofShapes
     }
 }
 
@@ -392,7 +362,7 @@ public struct PointLabelStyle: Sendable {
 /// and the renderer draws. One case per drawing mode, each carrying only
 /// the knobs that mode has: a reader switches over the case and cannot
 /// read a label's fields off a fill. What the feature is (a road in a
-/// tunnel, a carriageway surface, a building of some height) is not in
+/// tunnel, a building of some height) is not in
 /// here: that is the schema reading's `ImmersiveMapFeatureFacts`, which the
 /// parser carries next to the style.
 ///
@@ -457,17 +427,21 @@ public enum FeatureStyle: Sendable {
 // MARK: - The common drawing modes
 
 public extension FeatureStyle {
-    /// A fill.
-    static func polygon(key: UInt8, color: SIMD4<Float>) -> FeatureStyle {
-        .fill(FillStyle(key: key, color: color))
+    /// A fill, drawn at its full alpha unless `zoomFade` says otherwise.
+    static func polygon(key: UInt8,
+                        color: SIMD4<Float>,
+                        zoomFade: ImmersiveMapZoomFade = .none) -> FeatureStyle {
+        .fill(FillStyle(key: key, color: color, zoomFade: zoomFade))
     }
 
     /// A line of a width in tile units.
     static func line(key: UInt8,
                      color: SIMD4<Float>,
-                     width: Float) -> FeatureStyle {
+                     width: Float,
+                     zoomFade: ImmersiveMapZoomFade = .none) -> FeatureStyle {
         .line(LineStyle(pass: LinePass(key: key,
                                        color: color,
+                                       zoomFade: zoomFade,
                                        lineGeometry: LineGeometryStyle(lineWidth: Double(max(Float(0), width))))))
     }
 
@@ -485,12 +459,14 @@ public extension FeatureStyle {
                                 color: SIMD4<Float>,
                                 widthPoints: Float,
                                 dashLengthPoints: Float = 0,
-                                dashGapPoints: Float = 0) -> FeatureStyle {
+                                dashGapPoints: Float = 0,
+                                zoomFade: ImmersiveMapZoomFade = .fadeIn(from: 0, to: 1)) -> FeatureStyle {
         .line(LineStyle(pass: LinePass.pointLocked(key: key,
                                                    color: color,
                                                    widthPoints: max(0, widthPoints),
                                                    dashLengthPoints: max(0, dashLengthPoints),
-                                                   dashGapPoints: max(0, dashGapPoints)),
+                                                   dashGapPoints: max(0, dashGapPoints),
+                                                   zoomFade: zoomFade),
                         fillsAreas: false))
     }
 

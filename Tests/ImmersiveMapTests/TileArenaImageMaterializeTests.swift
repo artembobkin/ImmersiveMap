@@ -25,13 +25,13 @@ final class TileArenaImageMaterializeTests: XCTestCase {
             vertices: (0..<7).map { TileVertexIn(position: SIMD2<Int16>(Int16($0), Int16($0 * 2)), styleIndex: 0) },
             indices: [0, 1, 2, 2, 3, 4, 4, 5, 6],
             styles: [TilePolygonStyle(color: SIMD4<Float>(0.2, 0.4, 0.6, 1))],
-            overviewStyleMasks: [1]
+            styleZoomFades: [ImmersiveMapZoomFade.fadeIn(from: 0, to: 1).shaderPair]
         )
         let roadFill = PreparedTileCPU.GeometryLayer(
             vertices: (0..<4).map { TileVertexIn(position: SIMD2<Int16>(Int16($0 * 3), 9), styleIndex: 0) },
             indices: [0, 1, 2, 1, 2, 3],
             styles: [TilePolygonStyle(color: SIMD4<Float>(0.5, 0.5, 0.5, 1))],
-            overviewStyleMasks: [0]
+            styleZoomFades: [ImmersiveMapZoomFade.none.shaderPair]
         )
         let emptyLayer = PreparedTileCPUTestFixtures.emptyGeometryLayer()
         let groundPhases = RoadGeometryPhases(shadow: emptyLayer,
@@ -330,7 +330,7 @@ final class TileArenaImageMaterializeTests: XCTestCase {
                 },
                 indices: replacementGround.ground.indices,
                 styles: replacementGround.ground.styles,
-                overviewStyleMasks: replacementGround.ground.overviewStyleMasks
+                styleZoomFades: replacementGround.ground.styleZoomFades
             ),
             roads: replacementGround.roads,
             bridgeOverlay: replacementGround.bridgeOverlay,
@@ -471,7 +471,7 @@ final class TileArenaImageMaterializeTests: XCTestCase {
                 },
                 indices: [0, UInt32(vertexCount - 1), 65_534],
                 styles: [TilePolygonStyle(color: SIMD4<Float>(1, 0, 1, 1))],
-                overviewStyleMasks: [0]
+                styleZoomFades: [ImmersiveMapZoomFade.none.shaderPair]
             )
         )
         let cacheIdentity = makeCacheIdentity()
@@ -503,8 +503,6 @@ final class TileArenaImageMaterializeTests: XCTestCase {
                                   textRevision: 4,
                                   labelLanguage: .english,
                                   labelFallbackPolicy: .international,
-                                  houseNumbersEnabled: true,
-                                  houseNumbersMinimumZoom: 15,
                                   capitalMaximumZoom: 12,
                                   cityMaximumZoom: 12,
                                   smallSettlementMaximumZoom: 12,

@@ -3,6 +3,7 @@
 
 import XCTest
 @testable import ImmersiveMap
+import PMTiles
 
 /// The offline modes at the pipeline's download seam: `.offlineOnly` serves
 /// from the store without a transport, `.automatic` prefers fresh network
@@ -20,19 +21,16 @@ final class DefaultTileLoadPipelineOfflineTests: XCTestCase {
         try? FileManager.default.removeItem(at: baseDirectory)
     }
 
-    private struct FixedTileURLProvider: GetMapTileDownloadUrl {
-        func get(tileX: Int, tileY: Int, tileZ: Int) -> URL {
-            URL(string: "https://tiles.invalid/\(tileZ)/\(tileX)/\(tileY).mvt")!
-        }
-    }
-
     private final class ScriptedTileDownloader: TileDownloader {
         let result: DownloadResult
 
         init(result: DownloadResult) {
             self.result = result
-            super.init(mapTileDownloader: FixedTileURLProvider(),
-                       session: URLSession(configuration: .ephemeral))
+            // A client over a dead port: nothing is fetched in `init`, and
+            // `downloadResult` is overridden, so it is never reached.
+            super.init(archive: PMTilesArchiveClient(archiveURL: FixtureTiles.deadEndArchiveURL,
+                                                     requestHeaders: [:],
+                                                     session: URLSession(configuration: .ephemeral)))
         }
 
         override func downloadResult(tile: Tile) async -> DownloadResult {

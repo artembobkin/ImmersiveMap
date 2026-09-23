@@ -58,7 +58,7 @@
             isEnabled = "YES">
          </EnvironmentVariable>
          <EnvironmentVariable
-            key = "IMMERSIVEMAP_DEV_TILE_TEMPLATE"
+            key = "IMMERSIVEMAP_DEV_TILE_ARCHIVE"
             value = ""
             isEnabled = "YES">
          </EnvironmentVariable>

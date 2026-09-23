@@ -259,7 +259,7 @@ final class MetalTileFactory: @unchecked Sendable {
         ground = TileBuffers.GeometryLayer(vertices: ground.vertices,
                                            indices: ground.indices,
                                            styles: ground.styles,
-                                           overviewStyleMask: ground.overviewStyleMask,
+                                           styleZoomFade: ground.styleZoomFade,
                                            lineStyles: ground.lineStyles,
                                            indexType: ground.indexType,
                                            styleRuns: groundStyleRuns)
@@ -310,7 +310,7 @@ final class MetalTileFactory: @unchecked Sendable {
         return TileBuffers.GeometryLayer(vertices: vertices,
                                          indices: indices.view,
                                          styles: cursor.takeView(.geometryStyles(layerID)),
-                                         overviewStyleMask: cursor.takeView(.geometryOverviewStyleMasks(layerID)),
+                                         styleZoomFade: cursor.takeView(.geometryStyleZoomFades(layerID)),
                                          lineStyles: cursor.takeView(.geometryLineStyles(layerID)),
                                          indexType: indices.indexType)
     }

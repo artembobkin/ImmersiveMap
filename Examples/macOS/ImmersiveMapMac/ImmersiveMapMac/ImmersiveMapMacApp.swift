@@ -25,7 +25,7 @@ private struct MapScreen: View {
 
     var body: some View {
         ImmersiveMapView()
-            .tileURLTemplate(hostedTileTemplate)
+            .tileArchive(hostedTileArchive)
             // The controls are drawn only when a camera controller is attached:
             // they drive it, so without one the modifier does nothing.
             .camera(camera, position: Self.start)
@@ -49,4 +49,4 @@ private struct MapScreen: View {
 
 /// The hosted tile endpoint, written as the one-line URL template. It is
 /// public: no key, no account.
-private let hostedTileTemplate = "https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt"
+private let hostedTileArchive = URL(string: "https://tiles.immersivemap.dev/20260922.pmtiles")!

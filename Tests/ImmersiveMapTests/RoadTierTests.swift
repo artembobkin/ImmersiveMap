@@ -23,13 +23,11 @@ final class RoadTierTests: XCTestCase {
     }
 
     func testTheTierLineSitsBetweenServiceRoadsAndPaths() {
-        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
+        let style = ProtomapsBasemapDefaultMapStyle(theme: .default)
         func tier(_ className: String) -> RoadTier {
-            var props: [String: MvtValue] = [:]
-            let v = MvtValue.string(className); props["class"] = v
-            return style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
-                                                             properties: props,
-                                                             tile: Tile(x: 39616, y: 20486, z: 16))).roadTier
+            style.makeStyle(data: DetFeatureStyleData(layerName: "roads",
+                                                      properties: ProtomapsRoadSpelling.values(forClass: className),
+                                                      tile: Tile(x: 19808, y: 10243, z: 15))).roadTier
         }
         for automobile in ["motorway", "trunk", "primary", "secondary", "tertiary", "minor", "service"] {
             XCTAssertEqual(tier(automobile), .automobile, "\(automobile) is automobile")
@@ -39,11 +37,9 @@ final class RoadTierTests: XCTestCase {
         }
         // Railways are skipped for now (see the style's routing): hidden,
         // so no road and no tier of their own.
-        var railProps: [String: MvtValue] = [:]
-        railProps["class"] = MvtValue.string("rail")
-        let rail = style.makeStyle(data: DetFeatureStyleData(layerName: "transportation",
-                                                             properties: railProps,
-                                                             tile: Tile(x: 39616, y: 20486, z: 16)))
+        let rail = style.makeStyle(data: DetFeatureStyleData(layerName: "roads",
+                                                             properties: ["kind": .string("rail"), "kind_detail": .string("rail")],
+                                                             tile: Tile(x: 19808, y: 10243, z: 15)))
         XCTAssertNil(rail.roadStyle, "a railway draws nothing")
     }
 }

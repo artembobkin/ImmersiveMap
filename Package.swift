@@ -34,9 +34,22 @@ let package = Package(
             name: "MvtTestSupport",
             dependencies: ["Mvt"]
         ),
+        // The PMTiles v3 reader: the format (the header, the directories,
+        // the Hilbert tile id and the gzip step, pure functions over bytes)
+        // and the HTTP range client that reads an archive with them. Its own
+        // module for the same reason as `Earcut`: a tool that knows nothing
+        // of the engine, reached at `package` access. The test support target
+        // is the independent archive writer both test targets share.
+        .target(
+            name: "PMTiles"
+        ),
+        .target(
+            name: "PMTilesTestSupport",
+            dependencies: ["PMTiles"]
+        ),
         .target(
             name: "ImmersiveMap",
-            dependencies: ["Earcut", "Mvt"],
+            dependencies: ["Earcut", "Mvt", "PMTiles"],
             resources: [
                 .process("Avatars/Resources/avatar_marker_sdf.json"),
                 .process("Avatars/Resources/avatar_marker_sdf.png"),
@@ -66,8 +79,12 @@ let package = Package(
             dependencies: ["Mvt", "MvtTestSupport"]
         ),
         .testTarget(
+            name: "PMTilesTests",
+            dependencies: ["PMTiles", "PMTilesTestSupport"]
+        ),
+        .testTarget(
             name: "ImmersiveMapTests",
-            dependencies: ["ImmersiveMap", "Mvt", "MvtTestSupport"]
+            dependencies: ["ImmersiveMap", "Mvt", "MvtTestSupport", "PMTilesTestSupport"]
         )
     ],
     swiftLanguageModes: [.v6]

@@ -40,7 +40,7 @@ private struct OfflineScreen: View {
                 .frame(minWidth: 340, maxWidth: 400)
 
             ImmersiveMapView()
-                .tileURLTemplate(hostedTileTemplate)
+                .tileArchive(hostedTileArchive)
                 .camera(camera, position: OfflineRegionsPanel.presets.first!.cameraPosition)
                 .offlineTileMode(offlineMode)
                 .enableCameraUIControls()
@@ -58,4 +58,4 @@ private struct OfflineScreen: View {
 
 /// The hosted tile endpoint, written as the one-line URL template. It is
 /// public: no key, no account.
-private let hostedTileTemplate = "https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt"
+private let hostedTileArchive = URL(string: "https://tiles.immersivemap.dev/20260922.pmtiles")!

@@ -6,49 +6,54 @@ import XCTest
 
 /// The CPU mirror of `tileStyleFade` answers two questions per run and
 /// frame: fade exactly 1 (draw opaque) and fade exactly 0 (skip entirely).
-/// The bands and thresholds must match the shader's, band for band.
+/// Its progress must match the shader's and the public type's curve at the
+/// ends of every fade.
 final class TileStyleFadeMathTests: XCTestCase {
-    private func fade(overview: Float = 1, road: Float = 1, landuse: Float = 1,
-                      marking: Float = 1, cameraZoom: Float = 10) -> TileOverviewFadeUniform {
-        TileOverviewFadeUniform(overviewAlpha: overview,
-                                roadAlpha: road,
-                                landuseAlpha: landuse,
-                                pixelsPerPoint: 2,
-                                roadMarkingAlpha: marking,
-                                cameraZoom: cameraZoom)
+    private func uniform(_ cameraZoom: Float) -> TileOverviewFadeUniform {
+        TileOverviewFadeUniform(pixelsPerPoint: 2, cameraZoom: cameraZoom)
     }
 
-    func testEachBandReadsItsOwnAlpha() {
-        // Band masks: 1 overview, 2 roads, 3 landuse, 4 markings.
-        XCTAssertTrue(TileStyleFadeMath.fadeIsZero(mask: 1, overviewFade: fade(overview: 0)))
-        XCTAssertFalse(TileStyleFadeMath.fadeIsZero(mask: 1, overviewFade: fade(overview: 0.01)))
-        XCTAssertTrue(TileStyleFadeMath.fadeIsZero(mask: 2, overviewFade: fade(road: 0)))
-        XCTAssertFalse(TileStyleFadeMath.fadeIsZero(mask: 2, overviewFade: fade(road: 0.5)))
-        XCTAssertTrue(TileStyleFadeMath.fadeIsZero(mask: 3, overviewFade: fade(landuse: 0)))
-        XCTAssertTrue(TileStyleFadeMath.fadeIsZero(mask: 4, overviewFade: fade(marking: 0)))
-        // No mask: never faded, in either direction.
-        XCTAssertFalse(TileStyleFadeMath.fadeIsZero(mask: 0, overviewFade: fade(overview: 0, road: 0)))
-        XCTAssertTrue(TileStyleFadeMath.fadeIsOne(mask: 0, overviewFade: fade(overview: 0)))
+    func testNoFadeIsAlwaysOneAndNeverZero() {
+        let none = ImmersiveMapZoomFade.none.shaderPair
+        for zoom: Float in [0, 0.5, 7, 22] {
+            XCTAssertTrue(TileStyleFadeMath.fadeIsOne(zoomFade: none, overviewFade: uniform(zoom)), "\(zoom)")
+            XCTAssertFalse(TileStyleFadeMath.fadeIsZero(zoomFade: none, overviewFade: uniform(zoom)), "\(zoom)")
+        }
     }
 
-    func testClassFadeFollowsTheCameraZoom() {
-        // Mask 10 + startZoom: nothing below the start, full one level past.
-        let mask: Float = 14 // class fades in from zoom 4
-        XCTAssertTrue(TileStyleFadeMath.fadeIsZero(mask: mask, overviewFade: fade(cameraZoom: 3.9)))
-        XCTAssertTrue(TileStyleFadeMath.fadeIsZero(mask: mask, overviewFade: fade(cameraZoom: 4.0)))
-        XCTAssertFalse(TileStyleFadeMath.fadeIsZero(mask: mask, overviewFade: fade(cameraZoom: 4.3)))
-        XCTAssertFalse(TileStyleFadeMath.fadeIsOne(mask: mask, overviewFade: fade(cameraZoom: 4.3)))
-        XCTAssertTrue(TileStyleFadeMath.fadeIsOne(mask: mask, overviewFade: fade(cameraZoom: 5.0)))
+    func testAFadeInIsZeroBelowItsRangeAndOneAbove() {
+        let fade = ImmersiveMapZoomFade.fadeIn(from: 15, to: 15.4).shaderPair
+        XCTAssertTrue(TileStyleFadeMath.fadeIsZero(zoomFade: fade, overviewFade: uniform(14)))
+        XCTAssertTrue(TileStyleFadeMath.fadeIsZero(zoomFade: fade, overviewFade: uniform(15)))
+        XCTAssertFalse(TileStyleFadeMath.fadeIsZero(zoomFade: fade, overviewFade: uniform(15.2)))
+        XCTAssertFalse(TileStyleFadeMath.fadeIsOne(zoomFade: fade, overviewFade: uniform(15.2)))
+        XCTAssertTrue(TileStyleFadeMath.fadeIsOne(zoomFade: fade, overviewFade: uniform(15.4)))
+        XCTAssertTrue(TileStyleFadeMath.fadeIsOne(zoomFade: fade, overviewFade: uniform(18)))
     }
 
-    func testTheTwoQuestionsNeverBothHold() {
-        for mask: Float in [0, 1, 2, 3, 4, 12] {
-            for alpha: Float in [0, 0.5, 1] {
-                let uniform = fade(overview: alpha, road: alpha, landuse: alpha,
-                                   marking: alpha, cameraZoom: 2 + alpha)
-                let isOne = TileStyleFadeMath.fadeIsOne(mask: mask, overviewFade: uniform)
-                let isZero = TileStyleFadeMath.fadeIsZero(mask: mask, overviewFade: uniform)
-                XCTAssertFalse(isOne && isZero, "mask \(mask), alpha \(alpha)")
+    func testAFadeOutIsOneBelowItsRangeAndZeroAbove() {
+        let fade = ImmersiveMapZoomFade.fadeOut(from: 7, to: 8).shaderPair
+        XCTAssertTrue(TileStyleFadeMath.fadeIsOne(zoomFade: fade, overviewFade: uniform(3)))
+        XCTAssertTrue(TileStyleFadeMath.fadeIsOne(zoomFade: fade, overviewFade: uniform(7)))
+        XCTAssertFalse(TileStyleFadeMath.fadeIsOne(zoomFade: fade, overviewFade: uniform(7.5)))
+        XCTAssertFalse(TileStyleFadeMath.fadeIsZero(zoomFade: fade, overviewFade: uniform(7.5)))
+        XCTAssertTrue(TileStyleFadeMath.fadeIsZero(zoomFade: fade, overviewFade: uniform(8)))
+    }
+
+    /// The drawer's opaque and skip decisions follow the same curve the
+    /// public type (and the shader) evaluate.
+    func testTheMirrorAgreesWithTheCurveEverywhere() {
+        let fades: [ImmersiveMapZoomFade] = [.fadeIn(from: 0, to: 1), .fadeIn(from: 5, to: 6),
+                                             .fadeOut(from: 7, to: 8), .fadeIn(from: 15, to: 15.4)]
+        for fade in fades {
+            for step in 0...200 {
+                let zoom = Double(step) * 0.1
+                let alpha = fade.alpha(atZoom: zoom)
+                let frame = uniform(Float(zoom))
+                XCTAssertEqual(TileStyleFadeMath.fadeIsOne(zoomFade: fade.shaderPair, overviewFade: frame),
+                               alpha >= 1, "\(fade) at \(zoom)")
+                XCTAssertEqual(TileStyleFadeMath.fadeIsZero(zoomFade: fade.shaderPair, overviewFade: frame),
+                               alpha <= 0, "\(fade) at \(zoom)")
             }
         }
     }

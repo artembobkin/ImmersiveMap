@@ -43,9 +43,6 @@ struct LabelsPanel: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 290)
-
-                Toggle("House numbers", isOn: $settings.labels.houseNumbers.enabled)
-                    .toggleStyle(.switch)
             }
 
             PanelRow {
@@ -72,14 +69,6 @@ struct LabelsPanel: View {
                                     step: 1,
                                     format: "%.0f") { newValue in
                     settings.labels.landmarks.minimumZoom = Int(newValue)
-                }
-
-                DeferredValueSlider("Numbers from z",
-                                    value: Double(settings.labels.houseNumbers.minimumZoom),
-                                    range: 12...19,
-                                    step: 1,
-                                    format: "%.0f") { newValue in
-                    settings.labels.houseNumbers.minimumZoom = Int(newValue)
                 }
 
                 DeferredValueSlider("Fade, s",

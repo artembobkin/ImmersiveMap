@@ -8,7 +8,7 @@
 /// instead of hand-assembling arenas.
 enum PreparedTileCPUTestFixtures {
     static func emptyGeometryLayer() -> PreparedTileCPU.GeometryLayer {
-        PreparedTileCPU.GeometryLayer(vertices: [], indices: [], styles: [], overviewStyleMasks: [])
+        PreparedTileCPU.GeometryLayer(vertices: [], indices: [], styles: [], styleZoomFades: [])
     }
 
     static func empty(tile: Tile) -> PreparedTileCPU {
@@ -25,7 +25,7 @@ enum PreparedTileCPUTestFixtures {
             ],
             indices: [0, 1, 2],
             styles: [TilePolygonStyle(color: SIMD4<Float>(1, 0, 0, 1))],
-            overviewStyleMasks: [0]
+            styleZoomFades: [ImmersiveMapZoomFade.none.shaderPair]
         ))
     }
 
@@ -37,7 +37,7 @@ enum PreparedTileCPUTestFixtures {
                             count: vertexCount),
             indices: [],
             styles: [],
-            overviewStyleMasks: []
+            styleZoomFades: []
         ))
     }
 

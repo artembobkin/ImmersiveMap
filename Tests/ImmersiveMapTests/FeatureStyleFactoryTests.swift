@@ -58,7 +58,7 @@ final class FeatureStyleFactoryTests: XCTestCase {
 
         XCTAssertEqual(style.color, color)
         XCTAssertEqual(style.lineWidthPoints, 1.3, "The width is point-locked")
-        XCTAssertEqual(style.lowZoomFadeMask, 1.0, "Opaque from the first visible frame: the overview band")
+        XCTAssertEqual(style.zoomFade, .fadeIn(from: 0, to: 1), "Opaque from the first zoom level off the globe")
         XCTAssertFalse(style.lineGeometry.lineCapRound, "Butt ends")
         XCTAssertFalse(style.lineGeometry.lineJoinRound, "Plain joins")
         XCTAssertEqual(style.dashLengthPoints, 6, "Dashes are stated in points")

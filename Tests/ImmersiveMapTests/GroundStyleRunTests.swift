@@ -16,7 +16,7 @@ final class GroundStyleRunTests: XCTestCase {
 
     private func makeGround(styleOfTriangle: [UInt8],
                             styles: [TilePolygonStyle],
-                            masks: [Float]) -> PreparedTileCPU.GeometryLayer {
+                            masks: [SIMD2<Float>]) -> PreparedTileCPU.GeometryLayer {
         var vertices: [TileVertexIn] = []
         var indices: [UInt32] = []
         for style in styleOfTriangle {
@@ -27,20 +27,24 @@ final class GroundStyleRunTests: XCTestCase {
         return PreparedTileCPU.GeometryLayer(vertices: vertices,
                                              indices: indices,
                                              styles: styles,
-                                             overviewStyleMasks: masks)
+                                             styleZoomFades: masks)
     }
+
+    private let none = ImmersiveMapZoomFade.none.shaderPair
+    private let fadeIn = ImmersiveMapZoomFade.fadeIn(from: 3, to: 4).shaderPair
+    private let fadeOut = ImmersiveMapZoomFade.fadeOut(from: 7, to: 8).shaderPair
 
     func testScannerSplitsContiguousStyleRuns() {
         let opaque = TilePolygonStyle(color: SIMD4<Float>(1, 0, 0, 1))
         let translucent = TilePolygonStyle(color: SIMD4<Float>(1, 0, 0, 0.5))
         let ground = makeGround(styleOfTriangle: [0, 0, 1, 2, 2, 2],
                                 styles: [opaque, translucent, opaque],
-                                masks: [0, 1, 3])
+                                masks: [none, fadeIn, fadeOut])
         let runs = GroundStyleRunScanner.scan(ground: ground)
         XCTAssertEqual(runs.count, 3)
-        XCTAssertEqual(runs[0], GroundStyleRun(indexStart: 0, indexCount: 6, fadeMask: 0, flags: 1))
-        XCTAssertEqual(runs[1], GroundStyleRun(indexStart: 6, indexCount: 3, fadeMask: 1, flags: 0))
-        XCTAssertEqual(runs[2], GroundStyleRun(indexStart: 9, indexCount: 9, fadeMask: 3, flags: 1))
+        XCTAssertEqual(runs[0], GroundStyleRun(indexStart: 0, indexCount: 6, zoomFade: none, flags: 1))
+        XCTAssertEqual(runs[1], GroundStyleRun(indexStart: 6, indexCount: 3, zoomFade: fadeIn, flags: 0))
+        XCTAssertEqual(runs[2], GroundStyleRun(indexStart: 9, indexCount: 9, zoomFade: fadeOut, flags: 1))
     }
 
     /// The second segment: the ribbons, one run per style with the lines
@@ -63,13 +67,13 @@ final class GroundStyleRunTests: XCTestCase {
         let ground = PreparedTileCPU.GeometryLayer(vertices: vertices,
                                                    indices: indices,
                                                    styles: [opaque, opaque],
-                                                   overviewStyleMasks: [0, 3],
+                                                   styleZoomFades: [none, fadeOut],
                                                    fillsIndexCount: fillsIndexCount)
         let runs = GroundStyleRunScanner.scan(ground: ground)
         XCTAssertEqual(runs, [
-            GroundStyleRun(indexStart: 0, indexCount: 3, fadeMask: 0, flags: 1),
-            GroundStyleRun(indexStart: 3, indexCount: 3, fadeMask: 3, flags: 1),
-            GroundStyleRun(indexStart: 6, indexCount: 3, fadeMask: 3, flags: 3)
+            GroundStyleRun(indexStart: 0, indexCount: 3, zoomFade: none, flags: 1),
+            GroundStyleRun(indexStart: 3, indexCount: 3, zoomFade: fadeOut, flags: 1),
+            GroundStyleRun(indexStart: 6, indexCount: 3, zoomFade: fadeOut, flags: 3)
         ])
         XCTAssertTrue(runs[0].isFillsClass)
         XCTAssertFalse(runs[0].isLinesClass)
@@ -83,21 +87,26 @@ final class GroundStyleRunTests: XCTestCase {
     }
 
     /// A style with a fully opaque palette is opaque only while its zoom
-    /// fade is exactly 1; the CPU mirror must agree with the shader's
-    /// tileStyleFade band for band.
-    func testFadeIsOneMirrorsTheShaderBands() {
-        let fade = TileOverviewFadeUniform(overviewAlpha: 1.0,
-                                           roadAlpha: 0.5,
-                                           landuseAlpha: 0.0,
-                                           pixelsPerPoint: 2,
-                                           cameraZoom: 4.0)
-        XCTAssertTrue(TileStyleFadeMath.fadeIsOne(mask: 0, overviewFade: fade))
-        XCTAssertTrue(TileStyleFadeMath.fadeIsOne(mask: 1, overviewFade: fade))
-        XCTAssertFalse(TileStyleFadeMath.fadeIsOne(mask: 2, overviewFade: fade))
-        XCTAssertFalse(TileStyleFadeMath.fadeIsOne(mask: 3, overviewFade: fade))
-        // Class fade: mask 13 fades in from zoom 3, fully in at zoom 4.
-        XCTAssertTrue(TileStyleFadeMath.fadeIsOne(mask: 13, overviewFade: fade))
-        // Mask 14 fades in from zoom 4: not fully in yet at zoom 4.
-        XCTAssertFalse(TileStyleFadeMath.fadeIsOne(mask: 14, overviewFade: fade))
+    /// fade is exactly 1, and its run is skipped while the fade is exactly
+    /// 0. The CPU mirror must agree with the shader's tileStyleFade at the
+    /// ends of every fade, in and out.
+    func testTheFadeMirrorAgreesAtTheEndsOfAFade() {
+        func uniform(_ zoom: Float) -> TileOverviewFadeUniform {
+            TileOverviewFadeUniform(pixelsPerPoint: 2, cameraZoom: zoom)
+        }
+        XCTAssertTrue(TileStyleFadeMath.fadeIsOne(zoomFade: none, overviewFade: uniform(0)))
+        XCTAssertFalse(TileStyleFadeMath.fadeIsZero(zoomFade: none, overviewFade: uniform(0)))
+
+        // In from 3 to 4.
+        XCTAssertTrue(TileStyleFadeMath.fadeIsZero(zoomFade: fadeIn, overviewFade: uniform(3)))
+        XCTAssertFalse(TileStyleFadeMath.fadeIsOne(zoomFade: fadeIn, overviewFade: uniform(3.5)))
+        XCTAssertFalse(TileStyleFadeMath.fadeIsZero(zoomFade: fadeIn, overviewFade: uniform(3.5)))
+        XCTAssertTrue(TileStyleFadeMath.fadeIsOne(zoomFade: fadeIn, overviewFade: uniform(4)))
+
+        // Out from 7 to 8.
+        XCTAssertTrue(TileStyleFadeMath.fadeIsOne(zoomFade: fadeOut, overviewFade: uniform(7)))
+        XCTAssertFalse(TileStyleFadeMath.fadeIsOne(zoomFade: fadeOut, overviewFade: uniform(7.5)))
+        XCTAssertTrue(TileStyleFadeMath.fadeIsZero(zoomFade: fadeOut, overviewFade: uniform(8)))
+        XCTAssertTrue(TileStyleFadeMath.fadeIsZero(zoomFade: fadeOut, overviewFade: uniform(12)))
     }
 }

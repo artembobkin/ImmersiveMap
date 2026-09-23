@@ -127,19 +127,10 @@ static inline float tileLineEdgePixels(LineStyle lineStyle,
 constant float kTileDeferredRibbonFeatherPx = 1.0;
 
 struct OverviewFadeUniform {
-    float overviewAlpha;
-    float roadAlpha;
-    float landuseAlpha;
     float pixelsPerPoint;
-    // How far road markings have come in, over their own camera-zoom band:
-    // paint is a length on the ground and only resolves as paint once a
-    // three-metre dash is more than a point or two across. See
-    // LowZoomOverviewFade.roadMarkingAlpha.
-    float roadMarkingAlpha;
-    // The live camera zoom, for the per-class fade: a mask of 10 or more
-    // carries the zoom a road class fades in from (see
-    // LowZoomOverviewFade.classFadeMask), and the class comes in over the
-    // following zoom level, continuous with the camera.
+    // The live camera zoom: every style's zoom fade (tileStyleFade,
+    // ImmersiveMapZoomFade) and the point-width ramps are evaluated against
+    // it, continuous with the camera.
     float cameraZoom;
     // The drawable in pixels: what the deferred ribbons' vertex stage
     // converts a tile unit's clip-space span into pixels with.
@@ -213,7 +204,7 @@ struct LineDashUniform {
 /// fragment stage; see the interpolant notes on `VertexOut` in Tile.metal.
 struct TileVertexStyle {
     half4 color;
-    half lowZoomFadeMask;
+    float2 zoomFade;
     float lineDistance;
     float lineParameter;
     half4 lineStyle;
@@ -221,17 +212,17 @@ struct TileVertexStyle {
     half lineDashInTileUnits;
 };
 
-/// Resolves a vertex's style: the colour, the fade mask, and the line
+/// Resolves a vertex's style: the colour, the zoom fade, and the line
 /// field unpacked the way the fragment coverage reads it.
 static inline TileVertexStyle tileVertexStyle(VertexIn vertexIn,
                                               constant Style* styles,
-                                              constant float* lowZoomFadeMasks,
+                                              constant float2* styleZoomFades,
                                               constant LineStyle* lineStyles) {
     Style style = styles[vertexIn.styleIndex];
     LineStyle lineStyle = lineStyles[vertexIn.styleIndex];
     TileVertexStyle out;
     out.color = half4(style.color);
-    out.lowZoomFadeMask = half(lowZoomFadeMasks[vertexIn.styleIndex]);
+    out.zoomFade = styleZoomFades[vertexIn.styleIndex];
     out.lineDistance = float(vertexIn.lineDistance) / 127.0;
     // The longitudinal parameter is style-interpreted (see TileVertexIn): a
     // point-dashed style stores arc length in half tile units, a solid one
@@ -359,25 +350,16 @@ static inline half tileLineCoverage(float lineDistance,
     return half(coverage);
 }
 
-/// The zoom fade of a style from its baked mask: a class fade (mask of 10 or
-/// more carries the zoom the class fades in from) evaluates against the live
-/// camera zoom, the fixed bands take the frame's alphas, and zero means no
-/// fade.
-static inline half tileStyleFade(half lowZoomFadeMask, constant OverviewFadeUniform& overviewFade) {
-    if (lowZoomFadeMask >= 9.5h) {
-        float startZoom = float(lowZoomFadeMask) - 10.0;
-        float t = clamp(overviewFade.cameraZoom - startZoom, 0.0, 1.0);
-        return half(t * t * (3.0 - 2.0 * t));
-    } else if (lowZoomFadeMask >= 3.5h) {
-        return half(overviewFade.roadMarkingAlpha);
-    } else if (lowZoomFadeMask >= 2.5h) {
-        return half(overviewFade.landuseAlpha);
-    } else if (lowZoomFadeMask >= 1.5h) {
-        return half(overviewFade.roadAlpha);
-    } else if (lowZoomFadeMask >= 0.5h) {
-        return half(overviewFade.overviewAlpha);
-    }
-    return 1.0h;
+/// The zoom fade of a style (ImmersiveMapZoomFade): x is the camera zoom of
+/// zero alpha, y the camera zoom of full alpha, and the alpha is a
+/// smoothstep between them, evaluated against the live camera zoom. A fade
+/// out states x above y. Mirrored on the CPU by TileStyleFadeMath.
+static inline half tileStyleFade(float2 zoomFade, constant OverviewFadeUniform& overviewFade) {
+    float span = zoomFade.y - zoomFade.x;
+    float t = span != 0.0
+        ? clamp((overviewFade.cameraZoom - zoomFade.x) / span, 0.0, 1.0)
+        : step(zoomFade.y, overviewFade.cameraZoom);
+    return half(t * t * (3.0 - 2.0 * t));
 }
 
 /// The analytic coverage of a lines-class fragment from the flat style
@@ -427,14 +409,14 @@ static inline half4 tileLineFragmentColor(uint styleIndex,
                                           float lineDistance,
                                           float lineParameterRaw,
                                           constant Style* styles,
-                                          constant float* lowZoomFadeMasks,
+                                          constant float2* styleZoomFades,
                                           constant LineStyle* lineStyles,
                                           constant OverviewFadeUniform& overviewFade,
                                           constant LineDashUniform& lineDash,
                                           float deferredEdgePx) {
     Style style = styles[styleIndex];
     half4 color = half4(style.color);
-    color.a *= tileStyleFade(half(lowZoomFadeMasks[styleIndex]), overviewFade);
+    color.a *= tileStyleFade(styleZoomFades[styleIndex], overviewFade);
     color.a *= half(tilePointWidthRampAlpha(lineStyles[styleIndex], overviewFade.cameraZoom));
     color.a *= tileLineFragmentCoverage(styleIndex, lineDistance, lineParameterRaw,
                                         lineStyles, overviewFade, lineDash, deferredEdgePx);

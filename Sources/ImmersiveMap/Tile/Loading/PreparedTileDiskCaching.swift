@@ -10,30 +10,32 @@ struct PreparedTileCacheIdentity {
     let textRevision: UInt32
     let labelLanguage: ImmersiveMapSettings.LabelLanguage
     let labelFallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy
-    let houseNumbersEnabled: Bool
-    let houseNumbersMinimumZoom: UInt32
     let capitalMaximumZoom: UInt32
     let cityMaximumZoom: UInt32
     let smallSettlementMaximumZoom: UInt32
     let landmarkMinimumZoom: UInt32
     let addTestBorders: Bool
     /// With labels off the parser bakes no text at all (no place names, no
-    /// points of interest, no house numbers, no road names), so the switch
+    /// points of interest, no road names), so the switch
     /// is identity: a tile prepared without labels must not answer a map
     /// that wants them, and vice versa.
     let labelsEnabled: Bool
     var namespaceComponent: String {
-        "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-h\(houseNumbersEnabled ? 1 : 0)-z\(houseNumbersMinimumZoom)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)"
+        "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)"
     }
 
     static func tileSourceRevision(for network: ImmersiveMapSettings.TileSettings.NetworkSettings) -> UInt64 {
         var hasher = StableFNV1aHasher()
-        hasher.combine(network.tileBaseURL.absoluteString)
-        // The template is URL identity, hashed whole (a key embedded in its
-        // query included). Header names are identity too, but header values are
-        // credentials by convention, left out for the same reason the bearer
-        // token is: rotating a key must not cold-start the prepared cache.
-        hasher.combine(network.tileURLTemplate ?? "")
+        // The archive URL is the identity, hashed whole (a key embedded in
+        // its query included). A new planet is a new dated file name, so it
+        // is a new namespace. Header names are identity too, but header
+        // values are credentials by convention, left out for the same reason
+        // the bearer token is: rotating a key must not cold-start the
+        // prepared cache. The archive's ETag is not part of the namespace
+        // (it is computed before any request) and travels in every tile's
+        // source ETag instead, so a re-upload at the same URL cannot match a
+        // tile parsed from the previous one.
+        hasher.combine(network.tileArchiveURL.absoluteString)
         for field in network.tileRequestHeaders.keys.sorted() {
             hasher.combine("header:\(field)")
         }
@@ -774,7 +776,20 @@ final class PreparedTileDiskCaching {
     // as another piece of the same style is rounded off with a cap
     // (`RoadLayerPrecomputation.continuationKeysByPoint`); a v105 entry
     // has square cuts there and a wedge of ground open on every bend.
-    static let preparedFormatVersion: UInt32 = 106
+    // 107: the disk record no longer stores the house-number identity, the
+    // road phases carry no carriageway surfaces, shipped paint, zebra
+    // stripes, parking combs, bus letters or stop zigzags, and buildings
+    // carry flat lids only. A v106 entry has a longer entry header and
+    // detail geometry the parser no longer makes.
+    // 108: the building resolver leaves out an outline that ground-standing
+    // parts cover and a volume hidden inside kept volumes with its lid in
+    // their plane. A v107 entry still holds those extra lids, which flicker
+    // through the lids they share a plane with.
+    // 109: a style's zoom fade is a pair of camera zooms (zero alpha, full
+    // alpha) instead of one mask float, in the arena's per-style fade slot
+    // and in every ground style run. A v108 entry holds one float per style
+    // and a shorter run record.
+    static let preparedFormatVersion: UInt32 = 109
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

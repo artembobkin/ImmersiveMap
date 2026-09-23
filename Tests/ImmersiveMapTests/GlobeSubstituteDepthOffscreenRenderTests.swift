@@ -36,9 +36,9 @@ final class GlobeSubstituteDepthOffscreenRenderTests: XCTestCase {
         let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
 
         let waterData = VectorTileFixture.fullCoverageTile(layerName: "water",
-                                                           properties: ["class": "ocean"])
-        let snowData = VectorTileFixture.fullCoverageTile(layerName: "globallandcover",
-                                                          properties: ["class": "snow"])
+                                                           properties: ["kind": "ocean"])
+        let snowData = VectorTileFixture.fullCoverageTile(layerName: "landcover",
+                                                          properties: ["kind": "glacier"])
         let parentLoaded = await harness.tileRenderStore.parseTile(tile: Self.parent, data: waterData)
         XCTAssertTrue(parentLoaded, "The parent fixture tile must parse")
         let childLoaded = await harness.tileRenderStore.parseTile(tile: Self.exactChild, data: snowData)
@@ -85,13 +85,13 @@ final class GlobeSubstituteDepthOffscreenRenderTests: XCTestCase {
 
     @MainActor
     private func makeHarness() throws -> OffscreenFrameHarness {
-        let configuration = ImmersiveMapTilesTheme.default
+        let configuration = ProtomapsBasemapTheme.default
             .layers { layers in
                 layers.water = Self.fixtureWater
                 layers.ice = Self.fixtureSnow
             }
         var settings = ImmersiveMapSettings.default
-            .mapStyle(ImmersiveMapTilesMapStyle(theme: configuration))
+            .mapStyle(ProtomapsBasemapMapStyle(theme: configuration))
         settings.scene.starfield.starCount = 0
         return try OffscreenFrameHarness.makeOrSkip(settings: settings)
     }

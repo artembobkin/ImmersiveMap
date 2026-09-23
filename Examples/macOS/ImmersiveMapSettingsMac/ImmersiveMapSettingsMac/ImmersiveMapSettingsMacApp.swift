@@ -31,7 +31,7 @@ struct ImmersiveMapSettingsMacApp: App {
 private struct SettingsPlaygroundScreen: View {
     @State private var camera = ImmersiveMapCameraController()
     @State private var settings = ImmersiveMapSettings.default
-        .tileURLTemplate(hostedTileTemplate)
+        .tileArchive(hostedTileArchive)
     @State private var selection: PlaygroundSection? = .labels
     @State private var lastPlan: ImmersiveMapSettingsApplicationPlan?
 
@@ -173,4 +173,4 @@ private struct SettingsPlaygroundScreen: View {
 
 /// The hosted tile endpoint, written as the one-line URL template. It is
 /// public: no key, no account.
-private let hostedTileTemplate = "https://immersivemap.dev/tiles/{z}/{x}/{y}.mvt"
+private let hostedTileArchive = URL(string: "https://tiles.immersivemap.dev/20260922.pmtiles")!

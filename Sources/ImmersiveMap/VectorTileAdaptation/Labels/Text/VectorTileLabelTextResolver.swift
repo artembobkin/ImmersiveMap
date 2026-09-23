@@ -21,11 +21,4 @@ struct VectorTileLabelTextResolver {
         }
         return nil
     }
-
-    func resolveHouseNumber(label: ImmersiveMapLabelFacts) -> String? {
-        guard let number = label.houseNumber, number.isEmpty == false, glyphCoverage.canRender(number) else {
-            return nil
-        }
-        return number
-    }
 }

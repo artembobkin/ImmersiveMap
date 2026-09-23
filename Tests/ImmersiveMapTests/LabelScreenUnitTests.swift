@@ -132,21 +132,24 @@ final class LabelScreenUnitTests: XCTestCase {
     /// must never reach the screen under it is a resolved style. This walks the
     /// classes whose curve is lowest, which are the ones the floor exists for.
     func testNoResolvedLabelStyleIsBelowTheReadableFloor() {
-        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
+        let style = ProtomapsBasemapDefaultMapStyle(theme: .default)
         let cases: [(String, String, [String: MvtValue])] = [
-            ("poi", "poi", ["class": stringValue("restaurant")]),
-            ("house number", "housenumber", [:]),
-            ("water", "water_name", [:]),
-            ("ocean", "water_name", ["class": stringValue("ocean")]),
-            ("village", "place", ["class": stringValue("village")]),
-            ("city", "place", ["class": stringValue("city")]),
-            ("state", "place", ["class": stringValue("state")])
+            ("poi", "pois", ["kind": stringValue("restaurant"), "name": stringValue("Cafe")]),
+            ("water", "water", ["kind": stringValue("lake"), "name": stringValue("Lake")]),
+            ("ocean", "water", ["kind": stringValue("ocean"), "name": stringValue("Ocean")]),
+            ("village", "places", ["kind": stringValue("locality"), "kind_detail": stringValue("village"),
+                                   "name": stringValue("Village")]),
+            ("city", "places", ["kind": stringValue("locality"), "kind_detail": stringValue("city"),
+                                "name": stringValue("City")]),
+            ("region", "places", ["kind": stringValue("region"), "kind_detail": stringValue("state"),
+                                  "name": stringValue("Region")])
         ]
 
         for (name, layerName, properties) in cases {
             let featureStyle = style.makeStyle(data: DetFeatureStyleData(layerName: layerName,
                                                                         properties: properties,
-                                                                        tile: Tile(x: 0, y: 0, z: 16)))
+                                                                        tile: Tile(x: 0, y: 0, z: 15),
+                                                                        geometryType: .point))
             // Not `continue`: a case that stopped resolving would turn this into
             // a test that checks nothing and still reports green.
             guard let labelTextStyle = featureStyle.labelTextStyle else {
@@ -165,22 +168,20 @@ final class LabelScreenUnitTests: XCTestCase {
     /// an ocean label is the water appearance a few points larger, and lifting
     /// water first would make the ocean larger than the design asks for.
     func testTheFloorDoesNotPushDerivedClassesUp() {
-        let style = ImmersiveMapTilesDefaultMapStyle(theme: .default)
-        func sizePoints(class classValue: String?) -> Float {
-            var properties: [String: MvtValue] = [:]
-            if let classValue {
-                properties["class"] = stringValue(classValue)
-            }
-            let featureStyle = style.makeStyle(data: DetFeatureStyleData(layerName: "water_name",
+        let style = ProtomapsBasemapDefaultMapStyle(theme: .default)
+        func sizePoints(kind: String) -> Float {
+            let properties: [String: MvtValue] = ["kind": stringValue(kind), "name": stringValue("Water")]
+            let featureStyle = style.makeStyle(data: DetFeatureStyleData(layerName: "water",
                                                                         properties: properties,
-                                                                        tile: Tile(x: 0, y: 0, z: 6)))
+                                                                        tile: Tile(x: 0, y: 0, z: 6),
+                                                                        geometryType: .point))
             return featureStyle.labelTextStyle?.sizePoints ?? -1
         }
 
         // Water is 9.5 by the curve and lands on the floor; the ocean variant is
         // three points above the curve, which clears the floor on its own.
-        XCTAssertEqual(sizePoints(class: nil), LabelTypeScale.minimumSizePoints, accuracy: 0.0001)
-        XCTAssertEqual(sizePoints(class: "ocean"), 12.5, accuracy: 0.0001)
+        XCTAssertEqual(sizePoints(kind: "lake"), LabelTypeScale.minimumSizePoints, accuracy: 0.0001)
+        XCTAssertEqual(sizePoints(kind: "ocean"), 12.5, accuracy: 0.0001)
     }
 
     private func stringValue(_ value: String) -> MvtValue {

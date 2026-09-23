@@ -5,9 +5,9 @@
 import Mvt
 import XCTest
 
-/// A custom schema reading states which properties carry a label's text
-/// and which layers are house numbers; the custom style states the
-/// namespace its labels are identified in and how important each is.
+/// A custom schema reading states which properties carry a label's text.
+/// The custom style states the namespace its labels are identified in and
+/// how important each is.
 final class CustomVectorTileStyleLabelTests: XCTestCase {
     func testTextComesFromTheStyleTextKeys() {
         let decision = decide(feature(layer: "custom_label", ["title": .string("Custom Cafe")]))
@@ -17,19 +17,13 @@ final class CustomVectorTileStyleLabelTests: XCTestCase {
 
     func testTheLanguageChainIsReadBeforeTheStyleTextKeys() {
         let decision = decide(feature(layer: "custom_label",
-                                      ["name_en": .string("Cafe"), "title": .string("Custom Cafe")]))
+                                      ["name:en": .string("Cafe"), "title": .string("Custom Cafe")]))
 
         XCTAssertEqual(decision?.text, "Cafe")
     }
 
     func testAFeatureWithoutTextIsNoLabel() {
         XCTAssertNil(decide(feature(layer: "custom_label", ["category": .string("food")])))
-    }
-
-    func testHouseNumberLayersReadTheNumber() {
-        let decision = decide(feature(layer: "address_label", ["number": .string("12b")]))
-
-        XCTAssertEqual(decision?.text, "12b")
     }
 
     func testTheStyleRankAndCollisionRankReachTheDecision() {
@@ -117,16 +111,13 @@ final class CustomVectorTileStyleLabelTests: XCTestCase {
 }
 
 /// A schema whose labels carry their text in `title` (after the usual
-/// `name` fields) and whose `address_label` layer is house numbers in
-/// `number`.
+/// `name` fields).
 private struct CustomLabelTestSchema: ImmersiveMapTileSchema {
     let cacheFingerprint: UInt32 = 1
 
     func read(_ feature: ImmersiveMapFeature) -> ImmersiveMapFeatureFacts {
-        if feature.layerName == "address_label" {
-            return .labelled(ImmersiveMapLabelFacts(houseNumber: feature.properties.string("number")))
-        }
-        var label = ImmersiveMapTilesSchema().read(feature).label ?? ImmersiveMapLabelFacts()
+        // The basemap's names reading over a layer of this schema's own.
+        var label = ProtomapsBasemapSchema().names(feature.properties) ?? ImmersiveMapLabelFacts()
         if label.name == nil, let title = feature.properties.string("title") {
             label.name = title
         }

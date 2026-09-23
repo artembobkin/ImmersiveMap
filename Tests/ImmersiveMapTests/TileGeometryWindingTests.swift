@@ -11,11 +11,10 @@ import XCTest
 /// by construction; this pins that none of them slipped, on a coarse tile
 /// (fills with holes, the ocean split, the overview road stroke with its
 /// round joins and caps, the background quad, the debug borders) and on a
-/// street tile (ribbons, kerbs, junction and parking surfaces, one-way
-/// arrows, crossing stripes, bus lane letters and the stop zigzag).
+/// street tile (ribbons and kerbs).
 final class TileGeometryWindingTests: XCTestCase {
     private static let coarseTile = WebMercatorTileScheme.tile(latitude: 55.75, longitude: 37.61, z: 6)
-    private static let streetTile = Tile(x: 39615, y: 20486, z: 16)
+    private static let streetTile = Tile(x: 19807, y: 10243, z: 15)
 
     private func makeParser(addTestBorders: Bool = false) -> TileMvtParser {
         var config = ImmersiveMapSettings.default
@@ -60,26 +59,23 @@ final class TileGeometryWindingTests: XCTestCase {
                              geometry: .polygonWithHoles(exterior: Self.square(100, 100, 3000),
                                                          interiors: [Array(Self.square(1000, 1000, 800).reversed())]),
                              properties: ["class": "ocean"])]),
-            ("globallandcover", [.init(id: 1,
-                                       geometry: .polygon(ring: Self.square(300, 300, 1500)),
-                                       properties: ["class": "forest"]),
-                                 .init(id: 2,
-                                       geometry: .polygon(ring: [(2000, 2000), (3800, 2000), (3800, 3800),
-                                                                 (2900, 2600), (2000, 3800)]),
-                                       properties: ["class": "grass"])]),
+            ("landcover", [.init(id: 1,
+                                 geometry: .polygon(ring: Self.square(300, 300, 1500)),
+                                 properties: ["kind": "forest"]),
+                           .init(id: 2,
+                                 geometry: .polygon(ring: [(2000, 2000), (3800, 2000), (3800, 3800),
+                                                           (2900, 2600), (2000, 3800)]),
+                                 properties: ["kind": "grassland"])]),
             // The overview stroke with round joins and caps: a right and a
             // left turn inside the tile, a bend leaving the tile (the clip
             // re-fans it), and a bridge, which the overview stroke draws like
             // any other road (the bridge overlay begins at street zooms).
-            ("transportation", [.init(id: 1,
-                                      geometry: .line(points: [(300, 3000), (1200, 3000), (1200, 3600), (2000, 3600)]),
-                                      properties: ["class": "motorway"]),
-                                .init(id: 2,
-                                      geometry: .line(points: [(2500, 500), (3500, 500), (3500, 1500), (4500, 1500)]),
-                                      properties: ["class": "motorway"]),
-                                .init(id: 3,
-                                      geometry: .line(points: [(500, 800), (1500, 1200)]),
-                                      properties: ["class": "motorway", "brunnel": "bridge"])])
+            ("roads", [.road(id: 1, kind: "highway", kindDetail: "motorway",
+                             points: [(300, 3000), (1200, 3000), (1200, 3600), (2000, 3600)]),
+                       .road(id: 2, kind: "highway", kindDetail: "motorway",
+                             points: [(2500, 500), (3500, 500), (3500, 1500), (4500, 1500)]),
+                       .road(id: 3, kind: "highway", kindDetail: "motorway",
+                             points: [(500, 800), (1500, 1200)], extra: ["is_bridge": "true"])])
         ]
         let backgroundOnly = try parser.parse(tile: Self.coarseTile,
                                               mvtData: VectorTileFixture.layerTile(layerName: "landcover", features: []))
@@ -99,33 +95,15 @@ final class TileGeometryWindingTests: XCTestCase {
         let features: [VectorTileFixture.Feature] = [
             // A one-way avenue with a bend: ribbon, kerbs, unclipped joins
             // and the direction arrows.
-            .init(id: 1,
-                  geometry: .line(points: [(0, 1200), (1800, 1200), (2600, 1900), (4096, 1900)]),
-                  properties: ["class": "primary", "lanes": "4", "oneway": "1", "name": "Avenue"]),
-            .init(id: 2,
-                  geometry: .line(points: [(2048, 1052), (2048, 1352)]),
-                  properties: ["class": "path", "subclass": "footway", "crossing": "marked"]),
-            .init(id: 3,
-                  geometry: .polygon(ring: Self.square(1500, 2400, 1200)),
-                  properties: ["subclass": "parking_area"]),
-            .init(id: 4,
-                  geometry: .polygon(ring: Self.square(3000, 2400, 600)),
-                  properties: ["class": "primary", "subclass": "junction_area", "origin": "graph"]),
-            .init(id: 5,
-                  geometry: .line(points: [(500, 3300), (3600, 3300)]),
-                  properties: ["marking": "bus_lane"]),
-            .init(id: 6,
-                  geometry: .line(points: [(500, 3600), (2500, 3600)]),
-                  properties: ["marking": "bus_stop_zigzag"]),
-            .init(id: 7,
-                  geometry: .line(points: [(200, 600), (3900, 600)]),
-                  properties: ["class": "service", "brunnel": "tunnel"]),
-            .init(id: 8,
-                  geometry: .line(points: [(200, 300), (4300, 300)]),
-                  properties: ["class": "primary", "lanes": "4", "brunnel": "bridge", "layer": "1"])
+            .road(id: 1, points: [(0, 1200), (1800, 1200), (2600, 1900), (4096, 1900)],
+                  name: "Avenue", extra: ["oneway": "true"]),
+            .road(id: 2, kind: "path", kindDetail: "footway", points: [(2048, 1052), (2048, 1352)]),
+            .road(id: 7, kind: "minor_road", kindDetail: "service", points: [(200, 600), (3900, 600)],
+                  extra: ["is_tunnel": "true"]),
+            .road(id: 8, points: [(200, 300), (4300, 300)], extra: ["is_bridge": "true", "layer": "1"])
         ]
         let parsed = try parser.parse(tile: Self.streetTile,
-                                      mvtData: VectorTileFixture.layerTile(layerName: "transportation",
+                                      mvtData: VectorTileFixture.layerTile(layerName: "roads",
                                                                            features: features))
         assertCounterClockwise(parsed.drawingPolygon, "ground")
         assertCounterClockwise(parsed.drawingBridgePolygon, "bridge overlay")
@@ -135,8 +113,6 @@ final class TileGeometryWindingTests: XCTestCase {
                 assertCounterClockwise(bucket.layer(for: role).drawing, "\(structureKind) \(role)")
             }
         }
-        XCTAssertGreaterThan(parsed.drawingRoadPhases.bucket(for: .automobileGround).layer(for: .detail).drawing.indices.count, 0,
-                             "The decorations (arrows, stripes, letters, zigzag) were emitted")
         XCTAssertGreaterThan(parsed.drawingRoadPhases.bucket(for: .bridge).layer(for: .fill).drawing.indices.count, 0,
                              "The bridge bucket was exercised")
         XCTAssertGreaterThan(parsed.drawingRoadPhases.bucket(for: .tunnel).layer(for: .fill).drawing.indices.count, 0,

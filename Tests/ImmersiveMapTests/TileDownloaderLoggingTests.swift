@@ -4,6 +4,8 @@
 @testable import ImmersiveMap
 import Darwin
 import Foundation
+import PMTiles
+import PMTilesTestSupport
 import XCTest
 
 final class TileDownloaderLoggingTests: XCTestCase {
@@ -14,22 +16,25 @@ final class TileDownloaderLoggingTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(configuration.tlsMaximumSupportedProtocolVersion.rawValue, tls13.rawValue)
     }
 
-    func testSuccessfulDownloadDoesNotWriteRoutineLogsToStandardOutput() async {
-        let responseData = Data([0x01, 0x02, 0x03])
-        SuccessfulTileURLProtocol.responseData = responseData
+    func testSuccessfulDownloadDoesNotWriteRoutineLogsToStandardOutput() async throws {
+        let tileBytes = Data([0x01, 0x02, 0x03])
+        var writer = PMTilesArchiveWriter()
+        writer.tiles = [.init(z: 11, x: 586, y: 786, data: tileBytes)]
+        let archive = LocalTileServer.Resource.archive(writer.serializedData())
+        let server = try LocalTileServer(route: { _ in archive })
+        let archiveURL = try XCTUnwrap(server.archiveURL, "The loopback server never came up")
 
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [SuccessfulTileURLProtocol.self]
-        let session = URLSession(configuration: configuration)
-
-        let downloader = TileDownloader(
-            mapTileDownloader: FixedTileURLProvider(url: URL(string: "https://example.com/tile.mvt")!),
-            session: session
-        )
+        let downloader = TileDownloader(archive: PMTilesArchiveClient(archiveURL: archiveURL,
+                                                                      requestHeaders: [:],
+                                                                      session: URLSession(configuration: .ephemeral)))
 
         let output = await captureStandardOutput {
             let result = await downloader.downloadResult(tile: Tile(x: 586, y: 786, z: 11))
-            XCTAssertEqual(result, .success(responseData, etag: nil))
+            guard case let .success(data, etag) = result else {
+                return XCTFail("expected the tile, got \(result)")
+            }
+            XCTAssertEqual(data, tileBytes)
+            XCTAssertEqual(etag?.hasPrefix(archive.etag), true, "the tile's ETag carries the archive's validator")
         }
 
         XCTAssertEqual(output, "")
@@ -87,10 +92,9 @@ final class TileDownloaderLoggingTests: XCTestCase {
         configuration.protocolClasses = [RateLimitedTileURLProtocol.self]
         let session = URLSession(configuration: configuration)
 
-        let downloader = TileDownloader(
-            mapTileDownloader: FixedTileURLProvider(url: URL(string: "https://example.com/tile.mvt")!),
-            session: session
-        )
+        let downloader = TileDownloader(archive: PMTilesArchiveClient(archiveURL: URL(string: "https://example.com/planet.pmtiles")!,
+                                                                      requestHeaders: [:],
+                                                                      session: session))
 
         let output = await captureStandardOutput {
             let result = await downloader.downloadResult(tile: Tile(x: 586, y: 786, z: 11))
@@ -106,14 +110,14 @@ final class TileDownloaderLoggingTests: XCTestCase {
     func testAuthorizationMessageSaysTheHostedServiceNeedsNoCredential() {
         let message = TileDownloader.authorizationFailureMessage(
             statusCode: 401,
-            url: URL(string: "https://immersivemap.dev/tiles/0/0/0.mvt"),
+            url: URL(string: "https://tiles.immersivemap.dev/20260922.pmtiles"),
             responseBody: Data())
 
         XCTAssertTrue(message.contains("401"), message)
         XCTAssertTrue(message.contains("unauthorized"), message)
         XCTAssertTrue(message.contains("immersivemap.dev"), message)
         XCTAssertTrue(message.contains("needs no credential"), message)
-        XCTAssertTrue(message.contains("tileURLTemplate"), message)
+        XCTAssertTrue(message.contains("tileArchive"), message)
         XCTAssertFalse(message.contains("account"), message)
     }
 
@@ -122,13 +126,13 @@ final class TileDownloaderLoggingTests: XCTestCase {
     func testAuthorizationMessageGivesGenericAdviceForOtherHosts() {
         let message = TileDownloader.authorizationFailureMessage(
             statusCode: 403,
-            url: URL(string: "https://tiles.example.com/0/0/0.mvt?apiKey=x"),
+            url: URL(string: "https://tiles.example.com/planet.pmtiles?apiKey=x"),
             responseBody: Data())
 
         XCTAssertTrue(message.contains("403"), message)
         XCTAssertTrue(message.contains("forbidden"), message)
         XCTAssertTrue(message.contains("tiles.example.com"), message)
-        XCTAssertTrue(message.contains("tileURLTemplate"), message)
+        XCTAssertTrue(message.contains("tileArchive"), message)
         XCTAssertFalse(message.contains("needs no credential"), message)
     }
 
@@ -139,7 +143,7 @@ final class TileDownloaderLoggingTests: XCTestCase {
 
         let message = TileDownloader.authorizationFailureMessage(
             statusCode: 401,
-            url: URL(string: "https://immersivemap.dev/tiles/0/0/0.mvt"),
+            url: URL(string: "https://tiles.immersivemap.dev/20260922.pmtiles"),
             responseBody: body)
 
         XCTAssertTrue(message.contains("Token expired on 2026-08-01"), message)
@@ -171,10 +175,9 @@ final class TileDownloaderLoggingTests: XCTestCase {
         configuration.protocolClasses = [UnauthorizedTileURLProtocol.self]
         let session = URLSession(configuration: configuration)
 
-        let downloader = TileDownloader(
-            mapTileDownloader: FixedTileURLProvider(url: URL(string: "https://immersivemap.dev/tiles/0/0/0.mvt")!),
-            session: session
-        )
+        let downloader = TileDownloader(archive: PMTilesArchiveClient(archiveURL: URL(string: "https://tiles.immersivemap.dev/20260922.pmtiles")!,
+                                                                      requestHeaders: [:],
+                                                                      session: session))
 
         let output = await captureStandardOutput {
             let result = await downloader.downloadResult(tile: Tile(x: 0, y: 0, z: 0))
@@ -220,40 +223,6 @@ private final class RateLimitedTileURLProtocol: URLProtocol {
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: Self.body)
-        client?.urlProtocolDidFinishLoading(self)
-    }
-
-    override func stopLoading() {}
-}
-
-private struct FixedTileURLProvider: GetMapTileDownloadUrl {
-    let url: URL
-
-    func get(tileX _: Int, tileY _: Int, tileZ _: Int) -> URL {
-        url
-    }
-}
-
-private final class SuccessfulTileURLProtocol: URLProtocol {
-    nonisolated(unsafe) static var responseData = Data()
-
-    override class func canInit(with request: URLRequest) -> Bool {
-        true
-    }
-
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
-        request
-    }
-
-    override func startLoading() {
-        let response = HTTPURLResponse(
-            url: request.url!,
-            statusCode: 200,
-            httpVersion: nil,
-            headerFields: nil
-        )!
-        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Self.responseData)
         client?.urlProtocolDidFinishLoading(self)
     }
 

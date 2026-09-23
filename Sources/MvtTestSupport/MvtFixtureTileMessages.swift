@@ -4,10 +4,11 @@
 import Foundation
 import Mvt
 
-/// Synthetic tiles stated as messages: a dense z16 city tile that drives
-/// every parse path (water, landcover, landuse, buildings, roads, road names,
-/// POIs, places, house numbers) and a z4 ocean overview whose one polygon
-/// carries many island holes. The parser benchmark measures them and the
+/// Synthetic tiles stated as messages, spelled the way the Protomaps
+/// basemap spells its layers and keys: a dense z16 city tile that drives
+/// every parse path (water, land use, buildings, roads, road names, POIs,
+/// places) and a z4 ocean overview whose one polygon carries many island
+/// holes. The parser benchmark measures them and the
 /// decoder tests round-trip them.
 package enum MvtFixtureTileMessages {
     package static func denseCity() -> MvtTileMessage {
@@ -21,7 +22,6 @@ package enum MvtFixtureTileMessages {
         tile.layers.append(makeTransportationNameLayer(generator: &generator))
         tile.layers.append(makePoiLayer(generator: &generator))
         tile.layers.append(makePlaceLayer(generator: &generator))
-        tile.layers.append(makeHousenumberLayer(generator: &generator))
         return tile
     }
 
@@ -30,7 +30,7 @@ package enum MvtFixtureTileMessages {
         var tile = MvtTileMessage()
 
         var layer = layerTemplate(name: "water")
-        layer.keys = ["class"]
+        layer.keys = ["kind"]
         layer.values = [stringValue("ocean")]
 
         // One ocean polygon spanning the whole tile with many island holes:
@@ -59,8 +59,8 @@ package enum MvtFixtureTileMessages {
 
     private static func makeWaterLayer(generator: inout MvtSplitMix64Generator) -> MvtLayerMessage {
         var layer = layerTemplate(name: "water")
-        layer.keys = ["class"]
-        layer.values = [stringValue("river"), stringValue("lake")]
+        layer.keys = ["kind"]
+        layer.values = [stringValue("water"), stringValue("lake")]
 
         for featureIndex in 0..<6 {
             let cx = Int32(generator.int(200...3800))
@@ -87,8 +87,11 @@ package enum MvtFixtureTileMessages {
     }
 
     private static func makeLandcoverLayer(generator: inout MvtSplitMix64Generator) -> MvtLayerMessage {
-        var layer = layerTemplate(name: "landcover")
-        layer.keys = ["class", "subclass"]
+        // The vegetation of the land use layer: the basemap ships it in the
+        // same layer as the built-up land use below, and the parser reads
+        // both layers under one name.
+        var layer = layerTemplate(name: "landuse")
+        layer.keys = ["kind"]
         layer.values = [stringValue("grass"), stringValue("wood"), stringValue("park")]
 
         for featureIndex in 0..<40 {
@@ -102,7 +105,7 @@ package enum MvtFixtureTileMessages {
                            vertexCount: generator.int(12...60),
                            generator: &generator)
             ])
-            feature.tags = [0, UInt32(featureIndex % 2), 1, 2]
+            feature.tags = [0, UInt32(featureIndex % 3)]
             layer.features.append(feature)
         }
         return layer
@@ -110,7 +113,7 @@ package enum MvtFixtureTileMessages {
 
     private static func makeLanduseLayer(generator: inout MvtSplitMix64Generator) -> MvtLayerMessage {
         var layer = layerTemplate(name: "landuse")
-        layer.keys = ["class"]
+        layer.keys = ["kind"]
         layer.values = [stringValue("residential"), stringValue("commercial"), stringValue("industrial")]
 
         for featureIndex in 0..<25 {
@@ -131,8 +134,8 @@ package enum MvtFixtureTileMessages {
     }
 
     private static func makeBuildingLayer(generator: inout MvtSplitMix64Generator) -> MvtLayerMessage {
-        var layer = layerTemplate(name: "building")
-        layer.keys = ["render_height", "render_min_height", "building:part", "hide_3d", "colour"]
+        var layer = layerTemplate(name: "buildings")
+        layer.keys = ["height", "min_height", "kind", "layer"]
         var values: [MvtValue] = []
         for height in 0..<64 {
             let value = MvtValue.double(Double(4 + height * 3))
@@ -140,8 +143,8 @@ package enum MvtFixtureTileMessages {
         }
         let minHeightValue = MvtValue.double(3.0)
         values.append(minHeightValue) // 64
-        let truthyValue = MvtValue.bool(true)
-        values.append(truthyValue) // 65
+        values.append(stringValue("building_part")) // 65
+        values.append(sintValue(-1)) // 66
         layer.values = values
 
         for featureIndex in 0..<1500 {
@@ -177,10 +180,10 @@ package enum MvtFixtureTileMessages {
             feature.geometry = encodePolygonGeometry(rings: [orientExterior(ring)])
             var tags: [UInt32] = [0, UInt32(featureIndex % 64)]
             if featureIndex % 7 == 0 {
-                tags.append(contentsOf: [1, 64])
+                tags.append(contentsOf: [1, 64, 2, 65]) // a part on a base
             }
             if featureIndex % 97 == 0 {
-                tags.append(contentsOf: [3, 65])
+                tags.append(contentsOf: [3, 66]) // underground
             }
             feature.tags = tags
             layer.features.append(feature)
@@ -189,19 +192,22 @@ package enum MvtFixtureTileMessages {
     }
 
     private static func makeTransportationLayer(generator: inout MvtSplitMix64Generator) -> MvtLayerMessage {
-        var layer = layerTemplate(name: "transportation")
-        layer.keys = ["class", "brunnel", "oneway", "layer", "subclass"]
+        var layer = layerTemplate(name: "roads")
+        layer.keys = ["kind", "kind_detail", "is_bridge", "is_tunnel", "oneway", "layer"]
         layer.values = [
-            stringValue("motorway"),   // 0
-            stringValue("primary"),    // 1
-            stringValue("secondary"),  // 2
-            stringValue("minor"),      // 3
-            stringValue("service"),    // 4
-            stringValue("bridge"),     // 5
-            stringValue("tunnel"),     // 6
-            intValue(1),               // 7
-            intValue(-1)               // 8
+            stringValue("highway"),      // 0
+            stringValue("major_road"),   // 1
+            stringValue("minor_road"),   // 2
+            stringValue("motorway"),     // 3
+            stringValue("primary"),      // 4
+            stringValue("secondary"),    // 5
+            stringValue("residential"),  // 6
+            stringValue("service"),      // 7
+            MvtValue.bool(true),         // 8
+            sintValue(-1)                // 9
         ]
+        // The five classes of the tile, as kind and kind_detail pairs.
+        let classes: [(kind: UInt32, detail: UInt32)] = [(0, 3), (1, 4), (1, 5), (2, 6), (2, 7)]
 
         for featureIndex in 0..<500 {
             var feature = MvtFeatureMessage()
@@ -213,15 +219,16 @@ package enum MvtFixtureTileMessages {
                                        generator: &generator)
             )
 
-            var tags: [UInt32] = [0, UInt32(featureIndex % 5)]
+            let roadClass = classes[featureIndex % 5]
+            var tags: [UInt32] = [0, roadClass.kind, 1, roadClass.detail]
             if featureIndex % 13 == 0 {
-                tags.append(contentsOf: [1, 5]) // bridge
+                tags.append(contentsOf: [2, 8]) // bridge
             } else if featureIndex % 17 == 0 {
-                tags.append(contentsOf: [1, 6]) // tunnel
-                tags.append(contentsOf: [3, 8]) // layer -1
+                tags.append(contentsOf: [3, 8]) // tunnel
+                tags.append(contentsOf: [5, 9]) // layer -1
             }
             if featureIndex % 3 == 0 {
-                tags.append(contentsOf: [2, 7]) // oneway
+                tags.append(contentsOf: [4, 8]) // oneway
             }
             feature.tags = tags
             layer.features.append(feature)
@@ -230,13 +237,18 @@ package enum MvtFixtureTileMessages {
     }
 
     private static func makeTransportationNameLayer(generator: inout MvtSplitMix64Generator) -> MvtLayerMessage {
-        var layer = layerTemplate(name: "transportation_name")
-        layer.keys = ["class", "name", "name:en", "name:ru", "ref"]
+        // The named streets: a second road layer, which the parser merges
+        // into the first, the basemap's own spelling of a name on the road.
+        var layer = layerTemplate(name: "roads")
+        layer.keys = ["kind", "kind_detail", "name", "name:en", "name:ru"]
         var values: [MvtValue] = [
-            stringValue("primary"),
-            stringValue("secondary"),
-            stringValue("minor")
+            stringValue("major_road"),   // 0
+            stringValue("minor_road"),   // 1
+            stringValue("primary"),      // 2
+            stringValue("secondary"),    // 3
+            stringValue("residential")   // 4
         ]
+        let classes: [(kind: UInt32, detail: UInt32)] = [(0, 2), (0, 3), (1, 4)]
         let streetNames = [
             "Tverskaya Street", "Arbat Street", "Nevsky Avenue", "Sadovaya Street",
             "Leninsky Avenue", "Kutuzovsky Avenue", "Mira Avenue", "Prospekt Vernadskogo"
@@ -260,12 +272,14 @@ package enum MvtFixtureTileMessages {
             feature.geometry = encodeLineGeometry(
                 lines: randomPolylines(count: 1, pointRange: 6...30, generator: &generator)
             )
-            let nameIndex = UInt32(3 + featureIndex % 8)
+            let nameIndex = UInt32(5 + featureIndex % 8)
+            let roadClass = classes[featureIndex % 3]
             feature.tags = [
-                0, UInt32(featureIndex % 3),
-                1, nameIndex + 8,
-                2, nameIndex,
-                3, nameIndex + 8
+                0, roadClass.kind,
+                1, roadClass.detail,
+                2, nameIndex + 8,
+                3, nameIndex,
+                4, nameIndex + 8
             ]
             layer.features.append(feature)
         }
@@ -273,20 +287,20 @@ package enum MvtFixtureTileMessages {
     }
 
     private static func makePoiLayer(generator: inout MvtSplitMix64Generator) -> MvtLayerMessage {
-        var layer = layerTemplate(name: "poi")
-        layer.keys = ["class", "subclass", "name", "name:en", "rank"]
+        var layer = layerTemplate(name: "pois")
+        layer.keys = ["kind", "name", "name:en", "min_zoom"]
         var values: [MvtValue] = [
             stringValue("restaurant"),
             stringValue("cafe"),
-            stringValue("shop"),
+            stringValue("supermarket"),
             stringValue("museum"),
             stringValue("park")
         ]
         for poiIndex in 0..<40 {
             values.append(stringValue("Point of Interest \(poiIndex)"))
         }
-        for rank in 0..<10 {
-            values.append(intValue(Int64(rank)))
+        for minZoom in 0..<10 {
+            values.append(intValue(Int64(12 + minZoom)))
         }
         layer.values = values
 
@@ -299,10 +313,9 @@ package enum MvtFixtureTileMessages {
             ])
             feature.tags = [
                 0, UInt32(featureIndex % 5),
-                1, UInt32(featureIndex % 5),
+                1, UInt32(5 + featureIndex % 40),
                 2, UInt32(5 + featureIndex % 40),
-                3, UInt32(5 + featureIndex % 40),
-                4, UInt32(45 + featureIndex % 10)
+                3, UInt32(45 + featureIndex % 10)
             ]
             layer.features.append(feature)
         }
@@ -310,11 +323,11 @@ package enum MvtFixtureTileMessages {
     }
 
     private static func makePlaceLayer(generator: inout MvtSplitMix64Generator) -> MvtLayerMessage {
-        var layer = layerTemplate(name: "place")
-        layer.keys = ["class", "name", "name:en", "name:ru", "rank", "capital"]
+        var layer = layerTemplate(name: "places")
+        layer.keys = ["kind", "kind_detail", "name", "name:en", "name:ru", "population_rank"]
         var values: [MvtValue] = [
-            stringValue("suburb"),
             stringValue("neighbourhood"),
+            stringValue("macrohood"),
             stringValue("quarter")
         ]
         for placeIndex in 0..<20 {
@@ -336,34 +349,13 @@ package enum MvtFixtureTileMessages {
                 (Int32(generator.int(100...3995)), Int32(generator.int(100...3995)))
             ])
             feature.tags = [
-                0, UInt32(featureIndex % 3),
-                1, UInt32(3 + 20 + featureIndex % 20),
-                2, UInt32(3 + featureIndex % 20),
-                3, UInt32(3 + 20 + featureIndex % 20),
-                4, UInt32(43 + featureIndex % 8)
+                0, UInt32(featureIndex % 2),
+                1, 2,
+                2, UInt32(3 + 20 + featureIndex % 20),
+                3, UInt32(3 + featureIndex % 20),
+                4, UInt32(3 + 20 + featureIndex % 20),
+                5, UInt32(43 + featureIndex % 8)
             ]
-            layer.features.append(feature)
-        }
-        return layer
-    }
-
-    private static func makeHousenumberLayer(generator: inout MvtSplitMix64Generator) -> MvtLayerMessage {
-        var layer = layerTemplate(name: "housenumber")
-        layer.keys = ["housenumber"]
-        var values: [MvtValue] = []
-        for number in 0..<100 {
-            values.append(stringValue("\(number + 1)"))
-        }
-        layer.values = values
-
-        for featureIndex in 0..<200 {
-            var feature = MvtFeatureMessage()
-            feature.id = UInt64(featureIndex + 1)
-            feature.type = .point
-            feature.geometry = encodePointGeometry(points: [
-                (Int32(generator.int(0...4095)), Int32(generator.int(0...4095)))
-            ])
-            feature.tags = [0, UInt32(featureIndex % 100)]
             layer.features.append(feature)
         }
         return layer
@@ -495,6 +487,10 @@ package enum MvtFixtureTileMessages {
 
     private static func stringValue(_ value: String) -> MvtValue {
         .string(value)
+    }
+
+    private static func sintValue(_ value: Int64) -> MvtValue {
+        .sint(value)
     }
 
     private static func intValue(_ value: Int64) -> MvtValue {

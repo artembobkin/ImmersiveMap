@@ -34,7 +34,7 @@ struct TileBuffers {
         let vertices: TileBufferView?
         let indices: TileBufferView?
         let styles: TileBufferView?
-        let overviewStyleMask: TileBufferView?
+        let styleZoomFade: TileBufferView?
         /// Per-style line parameters (point-locked width, point dash pattern,
         /// edge threshold), lockstep with `styles`; see `TileLineStyle`.
         let lineStyles: TileBufferView?
@@ -48,14 +48,14 @@ struct TileBuffers {
         init(vertices: TileBufferView?,
              indices: TileBufferView?,
              styles: TileBufferView?,
-             overviewStyleMask: TileBufferView?,
+             styleZoomFade: TileBufferView?,
              lineStyles: TileBufferView?,
              indexType: MTLIndexType,
              styleRuns: [GroundStyleRun] = []) {
             self.vertices = vertices
             self.indices = indices
             self.styles = styles
-            self.overviewStyleMask = overviewStyleMask
+            self.styleZoomFade = styleZoomFade
             self.lineStyles = lineStyles
             self.indexType = indexType
             self.styleRuns = styleRuns

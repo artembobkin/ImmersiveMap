@@ -13,6 +13,7 @@ import XCTest
 /// and a street canopy (a break in the chain, which must not drag the top down).
 final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
     private func makeCandidate(buildingId: UInt64,
+                               isPart: Bool = false,
                                exterior: [SIMD2<Float>],
                                baseHeight: Float,
                                topHeight: Float) -> BuildingExtrusionCandidate {
@@ -25,13 +26,11 @@ final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
         return BuildingExtrusionCandidate(
             styleKey: 1,
             buildingId: buildingId,
+            isPart: isPart,
             footprintSignature: signature,
             clippedExterior: exterior,
             clippedInteriors: [],
-            unclippedExterior: exterior,
-            hasUnclippedInteriorRings: false,
             roof: ParsedPolygon(vertices: roofVertices, indices: [0, 1, 2]),
-            roofInfo: nil,
             baseHeight: baseHeight,
             topHeight: topHeight
         )

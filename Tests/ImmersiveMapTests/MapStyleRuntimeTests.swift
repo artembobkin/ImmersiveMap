@@ -36,7 +36,7 @@ private struct PlainTestMapStyle: ImmersiveMapMapStyle {
     }
 
     var schema: any ImmersiveMapTileSchema {
-        ImmersiveMapTilesSchema()
+        ProtomapsBasemapSchema()
     }
 
     var vectorTileStyle: any ImmersiveMapVectorTileStyle {
@@ -50,7 +50,7 @@ private struct RuntimeContextTestMapStyle: ImmersiveMapMapStyle {
     }
 
     var schema: any ImmersiveMapTileSchema {
-        ImmersiveMapTilesSchema()
+        ProtomapsBasemapSchema()
     }
 
     var vectorTileStyle: any ImmersiveMapVectorTileStyle {

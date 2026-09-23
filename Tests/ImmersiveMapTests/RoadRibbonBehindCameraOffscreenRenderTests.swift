@@ -82,9 +82,9 @@ final class RoadRibbonBehindCameraOffscreenRenderTests: XCTestCase {
     /// frame.
     @MainActor
     private func renderRoad(points: [(Int32, Int32)]) async throws -> RenderedFrame {
-        let theme = ImmersiveMapTilesTheme.default.layers { $0.roads.primary = Self.fixtureRoad }
+        let theme = ProtomapsBasemapTheme.default.layers { $0.roads.primary = Self.fixtureRoad }
         var settings = FixtureTiles.tilelessSettings()
-            .mapStyle(ImmersiveMapTilesMapStyle(theme: theme))
+            .mapStyle(ProtomapsBasemapMapStyle(theme: theme))
         settings.scene.starfield.starCount = 0
         let harness = try OffscreenFrameHarness.makeOrSkip(settings: settings, size: Self.frameSize)
 
@@ -100,8 +100,8 @@ final class RoadRibbonBehindCameraOffscreenRenderTests: XCTestCase {
                                                               pitch: Self.pitch))
         let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
 
-        let data = VectorTileFixture.layerTile(layerName: "transportation", features: [
-            .init(id: 1, geometry: .line(points: points), properties: ["class": "primary"])
+        let data = VectorTileFixture.layerTile(layerName: "roads", features: [
+            .road(id: 1, points: points)
         ])
         let loaded = await harness.tileRenderStore.parseTile(tile: Self.tile, data: data)
         XCTAssertTrue(loaded, "The fixture tile must parse")

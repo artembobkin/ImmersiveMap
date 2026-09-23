@@ -292,7 +292,7 @@ final class HorizonFrameResolverTests: XCTestCase {
     /// The band's colour with the fog off: the style's map colour, which
     /// every resolve here takes from the built-in theme unless stated.
     private func fogColor(_ settings: ImmersiveMapSettings) -> SIMD3<Float> {
-        let map = ImmersiveMapTilesTheme.default.baseColors.map
+        let map = ProtomapsBasemapTheme.default.baseColors.map
         return SIMD3<Float>(map.x, map.y, map.z)
     }
 
@@ -309,7 +309,7 @@ final class HorizonFrameResolverTests: XCTestCase {
     /// The render camera of the offscreen harness: unit distance from the
     /// view centre, pitched about the x axis, a square viewport.
     private func resolve(settings: ImmersiveMapSettings,
-                         mapColor: SIMD4<Float> = ImmersiveMapTilesTheme.default.baseColors.map,
+                         mapColor: SIMD4<Float> = ProtomapsBasemapTheme.default.baseColors.map,
                          transition: Float,
                          geometryTransition: Float,
                          mode: ViewMode,
@@ -375,7 +375,7 @@ final class HorizonBandMathTests: XCTestCase {
         let projection = Matrix.perspectiveMatrix(fovRadians: .pi / 4, aspect: 1, near: 0.01, far: 200)
         let view = Matrix.lookAt(eye: eye, center: SIMD3<Float>(0, 0, 0), up: SIMD3<Float>(0, 1, 0))
         return HorizonFrameResolver.resolve(settings: .default,
-                                            mapColor: ImmersiveMapTilesTheme.default.baseColors.map,
+                                            mapColor: ProtomapsBasemapTheme.default.baseColors.map,
                                             transition: 0,
                                             globe: GlobeUniform(panX: 0, panY: 0, radius: radius, transition: 0),
                                             renderSurfaceMode: .spherical,
@@ -402,7 +402,7 @@ final class HorizonBandMathTests: XCTestCase {
         let projection = Matrix.perspectiveMatrix(fovRadians: .pi / 4, aspect: 1, near: 0.01, far: 200)
         let view = Matrix.lookAt(eye: eye, center: SIMD3<Float>(0, 0, 0), up: SIMD3<Float>(0, 1, 0))
         let low = HorizonFrameResolver.resolve(settings: .default,
-                                               mapColor: ImmersiveMapTilesTheme.default.baseColors.map,
+                                               mapColor: ProtomapsBasemapTheme.default.baseColors.map,
                                                transition: 0,
                                                globe: GlobeUniform(panX: 0, panY: 0, radius: 200, transition: 0),
                                                renderSurfaceMode: .spherical,

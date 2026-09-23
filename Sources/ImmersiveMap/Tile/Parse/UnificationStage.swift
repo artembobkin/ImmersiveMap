@@ -62,10 +62,10 @@ enum TileUnificationStage {
                                           stylesByKey: [UInt8: BakedStyle],
                                           splitLinesClass: Bool = false) -> (drawing: DrawingPolygonBytes,
                                                                              styles: [TilePolygonStyle],
-                                                                             overviewStyleMasks: [Float],
+                                                                             styleZoomFades: [SIMD2<Float>],
                                                                              lineStyles: [TileLineStyle]) {
         var styles: [TilePolygonStyle] = []
-        var overviewStyleMasks: [Float] = []
+        var styleZoomFades: [SIMD2<Float>] = []
         var lineStyles: [TileLineStyle] = []
 
         let totalPolygonVertexCount = polygonByStyle.values.reduce(0) { partial, polygons in
@@ -85,7 +85,7 @@ enum TileUnificationStage {
         var styleIndexByKey: [UInt8: UInt8] = [:]
         styleIndexByKey.reserveCapacity(styleKeys.count)
         styles.reserveCapacity(styleKeys.count)
-        overviewStyleMasks.reserveCapacity(styleKeys.count)
+        styleZoomFades.reserveCapacity(styleKeys.count)
         for (index, styleKey) in styleKeys.enumerated() {
             if index > Int(UInt8.max) {
                 assertionFailure("Too many styles for tile pipeline.")
@@ -134,7 +134,7 @@ enum TileUnificationStage {
         for styleKey in styleKeys {
             if let style = stylesByKey[styleKey] {
                 styles.append(TilePolygonStyle(color: style.color))
-                overviewStyleMasks.append(style.lowZoomFadeMask)
+                styleZoomFades.append(style.zoomFade)
                 lineStyles.append(Self.makeTileLineStyle(from: style.pass))
             }
         }
@@ -143,7 +143,7 @@ enum TileUnificationStage {
                                              indices: unifiedIndices,
                                              fillsIndexCount: fillsIndexCount),
                 styles: styles,
-                overviewStyleMasks: overviewStyleMasks,
+                styleZoomFades: styleZoomFades,
                 lineStyles: lineStyles)
     }
 
@@ -172,10 +172,10 @@ enum TileUnificationStage {
     private static func unifyOrderedRoadLayer(sortedRoadPolygons: [OrderedRoadPolygon],
                                               stylesByKey: [UInt8: BakedStyle]) -> (drawing: DrawingPolygonBytes,
                                                                                       styles: [TilePolygonStyle],
-                                                                                      overviewStyleMasks: [Float],
+                                                                                      styleZoomFades: [SIMD2<Float>],
                                                                                       lineStyles: [TileLineStyle]) {
         var styles: [TilePolygonStyle] = []
-        var overviewStyleMasks: [Float] = []
+        var styleZoomFades: [SIMD2<Float>] = []
         var lineStyles: [TileLineStyle] = []
 
         let totalPolygonVertexCount = sortedRoadPolygons.reduce(0) { partial, polygon in
@@ -189,7 +189,7 @@ enum TileUnificationStage {
         var styleIndexByKey: [UInt8: UInt8] = [:]
         styleIndexByKey.reserveCapacity(styleKeys.count)
         styles.reserveCapacity(styleKeys.count)
-        overviewStyleMasks.reserveCapacity(styleKeys.count)
+        styleZoomFades.reserveCapacity(styleKeys.count)
 
         for (index, styleKey) in styleKeys.enumerated() {
             if index > Int(UInt8.max) {
@@ -199,7 +199,7 @@ enum TileUnificationStage {
             styleIndexByKey[styleKey] = UInt8(index)
             if let style = stylesByKey[styleKey] {
                 styles.append(TilePolygonStyle(color: style.color))
-                overviewStyleMasks.append(style.lowZoomFadeMask)
+                styleZoomFades.append(style.zoomFade)
                 lineStyles.append(Self.makeTileLineStyle(from: style.pass))
             }
         }
@@ -229,26 +229,26 @@ enum TileUnificationStage {
         return (drawing: DrawingPolygonBytes(vertices: unifiedVertices,
                                              indices: unifiedIndices),
                 styles: styles,
-                overviewStyleMasks: overviewStyleMasks,
+                styleZoomFades: styleZoomFades,
                 lineStyles: lineStyles)
     }
 
     private static func makeDrawingGeometryLayer(
         drawing: DrawingPolygonBytes,
         styles: [TilePolygonStyle],
-        overviewStyleMasks: [Float],
+        styleZoomFades: [SIMD2<Float>],
         lineStyles: [TileLineStyle]
     ) -> DrawingGeometryLayer {
         DrawingGeometryLayer(drawing: drawing,
                              styles: styles,
-                             overviewStyleMasks: overviewStyleMasks,
+                             styleZoomFades: styleZoomFades,
                              lineStyles: lineStyles)
     }
 
     private static func makeEmptyDrawingGeometryLayer() -> DrawingGeometryLayer {
         makeDrawingGeometryLayer(drawing: DrawingPolygonBytes(vertices: [], indices: []),
                                  styles: [],
-                                 overviewStyleMasks: [],
+                                 styleZoomFades: [],
                                  lineStyles: [])
     }
 
@@ -276,7 +276,7 @@ enum TileUnificationStage {
                                            casing: emptyRoadLayer,
                                            fill: makeDrawingGeometryLayer(drawing: unifiedRoadLayer.drawing,
                                                                          styles: unifiedRoadLayer.styles,
-                                                                         overviewStyleMasks: unifiedRoadLayer.overviewStyleMasks,
+                                                                         styleZoomFades: unifiedRoadLayer.styleZoomFades,
                                                                          lineStyles: unifiedRoadLayer.lineStyles),
                                            detail: emptyRoadLayer,
                                            overlay: emptyRoadLayer),
@@ -311,7 +311,7 @@ enum TileUnificationStage {
                     )
                     return makeDrawingGeometryLayer(drawing: layer.drawing,
                                                     styles: layer.styles,
-                                                    overviewStyleMasks: layer.overviewStyleMasks,
+                                                    styleZoomFades: layer.styleZoomFades,
                                                     lineStyles: layer.lineStyles)
                 }
 
@@ -393,10 +393,10 @@ enum TileUnificationStage {
                 styles: extrudedStyles
             ),
             styles: groundLayer.styles,
-            overviewStyleMasks: groundLayer.overviewStyleMasks,
+            styleZoomFades: groundLayer.styleZoomFades,
             lineStyles: groundLayer.lineStyles,
             bridgeStyles: bridgeLayer.styles,
-            bridgeOverviewStyleMasks: bridgeLayer.overviewStyleMasks,
+            bridgeStyleZoomFades: bridgeLayer.styleZoomFades,
             bridgeLineStyles: bridgeLayer.lineStyles
         )
     }

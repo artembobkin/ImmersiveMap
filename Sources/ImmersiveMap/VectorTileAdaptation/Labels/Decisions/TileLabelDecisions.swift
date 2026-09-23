@@ -45,20 +45,13 @@ struct TileLabelDecisions {
     }
 
     /// How a point feature the style labels is labelled: its text (the
-    /// house number where the reading states one, the name in the map's
-    /// language otherwise), its identity across tiles, and the priorities
+    /// name in the map's language), its identity across tiles, and the priorities
     /// and the sprite the style gave it. Nil when the feature carries no
     /// text the atlas can render.
     func pointLabelDecision(feature: VectorTileLabelFeature,
                             label: ImmersiveMapLabelFacts,
                             style: PointLabelStyle) -> VectorTileLabelDecision? {
-        let text: String?
-        if label.houseNumber != nil {
-            text = textResolver.resolveHouseNumber(label: label)
-        } else {
-            text = textResolver.resolveText(label: label, preferences: languagePreferences)
-        }
-        guard let resolvedText = text else {
+        guard let resolvedText = textResolver.resolveText(label: label, preferences: languagePreferences) else {
             return nil
         }
         let identity: VectorTileLabelIdentity

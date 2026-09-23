@@ -11,8 +11,8 @@ import ImmersiveMap
 ///
 /// The theme's `features.buildingExtrusion` is the master switch: off, no
 /// building rises and every footprint stays a flat fill, which is what the
-/// globe shows too. Both it and the roof switch are theme values, baked into
-/// the prepared tiles, so the toggles re-parse them.
+/// globe shows too. It is a theme value, baked into the prepared tiles, so
+/// the toggle re-parses them.
 ///
 /// Buildings always draw solid and depth-correct; the translucent
 /// compositing path was removed.
@@ -33,11 +33,6 @@ struct BuildingsPanel: View {
                     .toggleStyle(.switch)
 
                 Toggle("Shadows", isOn: $settings.scene.shadows.isEnabled)
-                    .toggleStyle(.switch)
-
-                // Shaped roofs are baked into the prepared tiles, so this
-                // toggle re-parses them (a moment of loading is expected).
-                Toggle("Roof shapes", isOn: themeToggle(\.features.buildingRoofShapes))
                     .toggleStyle(.switch)
             }
 
@@ -77,12 +72,12 @@ struct BuildingsPanel: View {
     /// A switch of the built-in theme, read back out of the map style and
     /// written by re-applying the style with the changed theme. The palette
     /// picker (see `StylePanel`) replaces the whole theme, switches included.
-    private func themeToggle(_ keyPath: WritableKeyPath<ImmersiveMapTilesTheme, Bool>) -> Binding<Bool> {
+    private func themeToggle(_ keyPath: WritableKeyPath<ProtomapsBasemapTheme, Bool>) -> Binding<Bool> {
         Binding(get: {
-            settings.mapStyle.tilesTheme?[keyPath: keyPath] ?? false
+            settings.mapStyle.basemapTheme?[keyPath: keyPath] ?? false
         }, set: { newValue in
-            guard let theme = settings.mapStyle.tilesTheme else { return }
-            settings = settings.mapStyle(ImmersiveMapTilesMapStyle(theme: theme.apply { $0[keyPath: keyPath] = newValue }))
+            guard let theme = settings.mapStyle.basemapTheme else { return }
+            settings = settings.mapStyle(ProtomapsBasemapMapStyle(theme: theme.apply { $0[keyPath: keyPath] = newValue }))
         })
     }
 

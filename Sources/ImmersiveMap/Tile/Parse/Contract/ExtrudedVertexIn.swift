@@ -9,7 +9,7 @@ import simd
 /// Positions are tile-local render-space units in 14.2 fixed point
 /// (`positionScale`): a quarter-unit step, which is under 15 cm at the
 /// street-zoom tiles buildings ship at, with a range of two tile squares
-/// of headroom for buffered roof frames. The vertex shader multiplies by
+/// of headroom. The vertex shader multiplies by
 /// the inverse scale before transforming. Normals are 8-bit signed and
 /// renormalized in the shader; buildings carry no per-vertex surface id
 /// (no shader ever read the one the 48-byte layout stored).

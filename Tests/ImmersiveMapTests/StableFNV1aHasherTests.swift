@@ -9,10 +9,10 @@ final class StableFNV1aHasherTests: XCTestCase {
         var hasher = StableFNV1aHasher()
 
         hasher.combine("immersivemap")
-        hasher.combine("immersivemaptiles")
+        hasher.combine("protomaps")
         hasher.combine("https://tiles.immersivemap.dev")
         hasher.combine("12345")
 
-        XCTAssertEqual(hasher.finalize(), 0xaeea2c1e559c60a3)
+        XCTAssertEqual(hasher.finalize(), 0xdc9e7f144eae4bdc)
     }
 }

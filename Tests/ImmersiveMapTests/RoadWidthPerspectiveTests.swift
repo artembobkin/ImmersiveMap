@@ -33,8 +33,7 @@ final class RoadWidthPerspectiveTests: XCTestCase {
     }
 
     private func uniform(_ matrix: matrix_float4x4) -> TileOverviewFadeUniform {
-        TileOverviewFadeUniform(overviewAlpha: 1, roadAlpha: 1, landuseAlpha: 1,
-                                pixelsPerPoint: 2, cameraZoom: 16,
+        TileOverviewFadeUniform(pixelsPerPoint: 2, cameraZoom: 16,
                                 viewportSizePx: viewport,
                                 pointWidthReferenceDepth: FlatMapSurfaceDrawer.screenCentreGroundDepth(cameraMatrix: matrix),
                                 cameraMatrix: matrix)
@@ -53,8 +52,7 @@ final class RoadWidthPerspectiveTests: XCTestCase {
     }
 
     func testADrawWithoutACameraMatrixFollowsTheDistanceOnly() {
-        let uniform = TileOverviewFadeUniform(overviewAlpha: 1, roadAlpha: 1, landuseAlpha: 1,
-                                              pixelsPerPoint: 2, cameraZoom: 16)
+        let uniform = TileOverviewFadeUniform(pixelsPerPoint: 2, cameraZoom: 16)
         XCTAssertEqual(uniform.pointWidthCentrePixelsPerWorldUnit, 0)
     }
 
@@ -62,16 +60,20 @@ final class RoadWidthPerspectiveTests: XCTestCase {
         var matrix = matrix_identity_float4x4
         matrix.columns.0 = SIMD4<Float>(1, 2, 3, 4)
         matrix.columns.1 = SIMD4<Float>(5, 6, 7, 8)
-        let uniform = TileOverviewFadeUniform(overviewAlpha: 1, roadAlpha: 1, landuseAlpha: 1,
-                                              pixelsPerPoint: 2, cameraZoom: 16, cameraMatrix: matrix)
+        let uniform = TileOverviewFadeUniform(pixelsPerPoint: 2, cameraZoom: 16, cameraMatrix: matrix)
         XCTAssertEqual([uniform.groundAxisXClipX, uniform.groundAxisXClipY, uniform.groundAxisXClipW], [1, 2, 4])
         XCTAssertEqual([uniform.groundAxisYClipX, uniform.groundAxisYClipY, uniform.groundAxisYClipW], [5, 6, 8])
     }
 
     func testSwiftAndMetalUniformsAgreeOnTheTail() throws {
-        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.pointWidthCentrePixelsPerWorldUnit), 36)
-        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.groundAxisXClipX), 40)
-        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.groundAxisYClipX), 52)
+        // pixelsPerPoint 0, cameraZoom 4, viewportSizePx 8 (float2 aligned),
+        // pointWidthReferenceDepth 16, then the tail.
+        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.cameraZoom), 4)
+        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.viewportSizePx), 8)
+        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.pointWidthCentrePixelsPerWorldUnit), 20)
+        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.groundAxisXClipX), 24)
+        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.offset(of: \.groundAxisYClipX), 36)
+        XCTAssertEqual(MemoryLayout<TileOverviewFadeUniform>.stride, 48)
 
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -80,7 +82,8 @@ final class RoadWidthPerspectiveTests: XCTestCase {
         let structRange = try XCTUnwrap(source.range(of: "struct OverviewFadeUniform {"))
         let body = source[structRange.upperBound...]
         var cursor = body.startIndex
-        for field in ["float pointWidthReferenceDepth;", "float pointWidthCentrePixelsPerWorldUnit;",
+        for field in ["float pixelsPerPoint;", "float cameraZoom;", "float2 viewportSizePx;",
+                      "float pointWidthReferenceDepth;", "float pointWidthCentrePixelsPerWorldUnit;",
                       "packed_float3 groundAxisXClip;", "packed_float3 groundAxisYClip;"] {
             let range = try XCTUnwrap(body.range(of: field, range: cursor ..< body.endIndex), field)
             cursor = range.upperBound

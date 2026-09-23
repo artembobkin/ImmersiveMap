@@ -71,11 +71,11 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
     }
 
     func testMapStyleSettingsModifierStoresBuiltInConfiguration() {
-        let style = ImmersiveMapTilesTheme.default.labels { labels in
+        let style = ProtomapsBasemapTheme.default.labels { labels in
             labels.town.haloEm = 0.125
         }
 
-        let mapStyle = ImmersiveMapTilesMapStyle(theme: style)
+        let mapStyle = ProtomapsBasemapMapStyle(theme: style)
         let settings = ImmersiveMapSettings.default
             .mapStyle(mapStyle)
 
@@ -84,10 +84,10 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
     }
 
     func testMapStyleViewModifierStoresBuiltInConfiguration() throws {
-        let style = ImmersiveMapTilesTheme.default.labels { labels in
+        let style = ProtomapsBasemapTheme.default.labels { labels in
             labels.poi.haloEm = 0.35
         }
-        let mapStyle = ImmersiveMapTilesMapStyle(theme: style)
+        let mapStyle = ProtomapsBasemapMapStyle(theme: style)
 
         let view = ImmersiveMapView()
             .mapStyle(mapStyle)
@@ -97,15 +97,15 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertEqual(unwrappedSettings.mapStyle, AnyImmersiveMapMapStyle(mapStyle))
     }
 
-    func testTileURLTemplateModifierStoresTemplateAndHeadersInNetworkSettings() throws {
+    func testTileArchiveModifierStoresArchiveURLAndHeadersInNetworkSettings() throws {
         let view = ImmersiveMapView()
-            .tileURLTemplate("https://tiles.com/{x}/{y}/{z}?apiKey=xxx",
-                             headers: ["X-Client": "demo"])
+            .tileArchive(URL(string: "https://tiles.com/planet.pmtiles?apiKey=xxx")!,
+                         headers: ["X-Client": "demo"])
 
         let settings: ImmersiveMapSettings? = reflectedValue("settings", in: view)
         let unwrappedSettings = try XCTUnwrap(settings)
-        XCTAssertEqual(unwrappedSettings.tiles.network.tileURLTemplate,
-                       "https://tiles.com/{x}/{y}/{z}?apiKey=xxx")
+        XCTAssertEqual(unwrappedSettings.tiles.network.tileArchiveURL,
+                       URL(string: "https://tiles.com/planet.pmtiles?apiKey=xxx"))
         XCTAssertEqual(unwrappedSettings.tiles.network.tileRequestHeaders, ["X-Client": "demo"])
     }
 
@@ -359,13 +359,13 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertEqual(settings.debug, debug)
     }
 
-    func testTemplateWithHeadersConfiguresSourceAndCredentialsTogether() {
+    func testArchiveWithHeadersConfiguresSourceAndCredentialsTogether() {
         let settings = ImmersiveMapSettings.default
-            .tileURLTemplate("https://tiles.example.com/vector/{z}/{x}/{y}.mvt",
-                             headers: ["Authorization": "Bearer public-token"])
+            .tileArchive(URL(string: "https://tiles.example.com/vector/planet.pmtiles")!,
+                         headers: ["Authorization": "Bearer public-token"])
 
-        XCTAssertEqual(settings.tiles.network.tileURLTemplate,
-                       "https://tiles.example.com/vector/{z}/{x}/{y}.mvt")
+        XCTAssertEqual(settings.tiles.network.tileArchiveURL,
+                       URL(string: "https://tiles.example.com/vector/planet.pmtiles"))
         XCTAssertEqual(settings.tiles.network.tileRequestHeaders,
                        ["Authorization": "Bearer public-token"])
     }

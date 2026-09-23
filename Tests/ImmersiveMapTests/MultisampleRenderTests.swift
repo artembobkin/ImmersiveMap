@@ -71,9 +71,9 @@ final class MultisampleRenderTests: XCTestCase {
                                                              in: tile)
             let containsCamera = (0..<4096).contains(point.0) && (0..<4096).contains(point.1)
             let peaks = containsCamera
-                ? [VectorTileFixture.Feature(id: 1, geometry: .point(point.0, point.1), properties: ["name": "Peak", "rank": "1"])]
+                ? [VectorTileFixture.Feature.poi(id: 1, at: point, kind: "peak", name: "Peak", minZoom: 0)]
                 : []
-            let data = VectorTileFixture.layerTile(layerName: "mountain_peak", features: peaks)
+            let data = VectorTileFixture.layerTile(layerName: "pois", features: peaks)
             let loaded = await harness.tileRenderStore.parseTile(tile: tile, data: data)
             XCTAssertTrue(loaded, "The fixture tile \(tile) must parse")
         }

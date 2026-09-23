@@ -186,7 +186,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                time: frameContext.time,
                                                fadeInSeconds: fadeInSeconds,
                                                fadeOutSeconds: fadeOutSeconds)
-        let overviewFadeAlpha = LowZoomOverviewFade.alpha(for: frameContext.zoom)
+        let overviewFadeAlpha = ImmersiveMapZoomFade.overview.alpha(atZoom: frameContext.zoom)
         baseLabelCache.updateFadeAlphas(baseFade.currentAlphas, multiplier: overviewFadeAlpha)
 
         if baseLabelTraceRecorder.isRecordingActive {

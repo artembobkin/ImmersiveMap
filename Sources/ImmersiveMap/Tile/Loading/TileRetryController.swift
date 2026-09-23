@@ -166,7 +166,7 @@ final class TileRetryController {
                 return max(retryAfter ?? 0, policy.rateLimitCooldown)
             case .client(_):
                 return policy.genericClientCooldown
-            case .server(_), .network, .nonHTTPResponse, .emptyBody:
+            case .server(_), .network, .nonHTTPResponse, .emptyBody, .archiveUnavailable:
                 return exponentialBackoff(failureCount: failureCount)
             }
         }
@@ -184,7 +184,8 @@ final class TileRetryController {
                 return policy.globalAuthCooldown
             case let .rateLimited(retryAfter):
                 return max(retryAfter ?? 0, policy.globalRateLimitCooldown)
-            case .notFound, .gone, .server(_), .client(_), .nonHTTPResponse, .emptyBody, .network:
+            case .notFound, .gone, .server(_), .client(_), .nonHTTPResponse, .emptyBody, .network,
+                 .archiveUnavailable:
                 return nil
             }
         }

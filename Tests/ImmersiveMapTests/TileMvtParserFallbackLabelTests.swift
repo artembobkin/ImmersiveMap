@@ -113,10 +113,10 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         let parsedTile = try parser.parse(tile: Tile(x: 0, y: 0, z: 0),
                                           mvtData: makeTileWithAtlanticOceanLabel().serializedData())
         let expectedKey = VectorTileLabelIdentity.styleFeature(styleID: "parser-provider",
-                                                                  layerName: "water_name",
+                                                                  layerName: "water",
                                                                   featureID: 1).runtimeKey
-        let defaultStyleKey = VectorTileLabelIdentity.styleFeature(styleID: "immersivemaptiles",
-                                                                         layerName: "water_name",
+        let defaultStyleKey = VectorTileLabelIdentity.styleFeature(styleID: "protomaps",
+                                                                         layerName: "water",
                                                                          featureID: 1).runtimeKey
 
         XCTAssertTrue(parsedTile.textLabels.map(\.key).contains(expectedKey))
@@ -298,9 +298,9 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
 
         var layer = MvtLayerMessage()
         layer.version = 2
-        layer.name = "water_name"
+        layer.name = "water"
         layer.extent = 4096
-        layer.keys = ["class", "type", "name", "name_en"]
+        layer.keys = ["kind", "type", "name", "name:en"]
         layer.values = [
             stringValue("ocean"),
             stringValue("ocean"),
@@ -346,7 +346,7 @@ private struct FallbackWaterLabelStyle: ImmersiveMapVectorTileStyle {
 
     func makeStyle(for feature: ImmersiveMapFeatureStyleContext) -> FeatureStyle {
         let labelTextStyle: LabelTextStyle?
-        switch feature.properties.string("class") {
+        switch feature.properties.string("kind") {
         case "ocean":
             labelTextStyle = oceanLabelTextStyle
         case "sea":
