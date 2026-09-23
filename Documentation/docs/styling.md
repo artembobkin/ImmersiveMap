@@ -1,7 +1,8 @@
 # Map styling and colors
 
-The built-in style draws the hosted tiles, and its look is a plain value,
-`ImmersiveMapTilesTheme`: the colour of every ground layer and road class, the
+The built-in style, `ProtomapsBasemapMapStyle`, draws the
+[Protomaps basemap](map-data.md) tiles, and its look is a plain value,
+`ProtomapsBasemapTheme`: the colour of every ground layer and road class, the
 building fill, the label appearances and which labels show. Start from the
 default and change what you want, on the view:
 
@@ -17,25 +18,24 @@ ImmersiveMapView()
 
 Colours are RGBA in 0...1 (label colours RGB), written as array literals or
 as `SIMD4<Float>`. A theme can also be a value of its own, passed to
-`ImmersiveMapTilesMapStyle(theme:)`:
+`ProtomapsBasemapMapStyle(theme:)`:
 
 ```swift
-let night = ImmersiveMapTilesTheme.default.apply { theme in
+let night = ProtomapsBasemapTheme.default.apply { theme in
     theme.layers.land = [0.08, 0.09, 0.11, 1]
     theme.layers.wood = [0.07, 0.14, 0.10, 1]
 }
 
 ImmersiveMapView()
-    .mapStyle(ImmersiveMapTilesMapStyle(theme: night))
+    .mapStyle(ProtomapsBasemapMapStyle(theme: night))
 ```
 
 The groups are `layers` (land, water, wood, grass, farmland, ice, sand,
 wetland, park, residential, industrial, boundary, aeroway, and `roads` with
 one colour per road class plus the casing), `features` (the building fill,
-and whether buildings rise at all and raise their shaped roofs:
-`buildingExtrusion`, on by default, and `buildingRoofShapes`, off by
-default), `labels` (fill
-and stroke colour, halo, size and weight per label class),
+and whether buildings rise at all: `buildingExtrusion`, on by default,
+with flat roofs), `labels` (fill and stroke colour, halo, size and weight
+per label class),
 `labelVisibility` and `roadMetrics`. Every value feeds the style's cache
 fingerprint, so a changed value rebakes the prepared tiles by itself.
 
@@ -46,7 +46,7 @@ class (`motorway`, `trunk`, `primary`, `secondary`, `tertiary`, `minor`,
 `service`, `path`, and `other` for every class the style does not name):
 
 ```swift
-let style = ImmersiveMapTilesMapStyle.default.apply { theme in
+let style = ProtomapsBasemapMapStyle.default.apply { theme in
     theme.roadMetrics.symbolWidthPoints.minor = 3
     theme.roadMetrics.worldLockZoom = 15
     theme.roadMetrics.minimumTileZoom.service = 13
@@ -83,7 +83,35 @@ arrived yet is the land colour, the northern polar cap the water and the
 southern one the ice (`ImmersiveMapBaseColors`, which a style of your own
 states itself).
 
-A source in another schema, or a look the theme cannot express, is a style of
-its own: an `ImmersiveMapVectorTileStyle` answering `makeStyle(for:)` per
+### How the style reads the tiles
+
+The road classes come from the basemap's `roads` layer: `highway` is the
+motorway class, `major_road` splits into trunk, primary, secondary and
+tertiary by its `kind_detail`, `minor_road` is minor or service, and `path`
+is the path class. Sidewalks, crossings and railways are not drawn. The
+ground is the `earth` polygon in the land colour, the continuous `landcover`
+through zoom 7 and the OpenStreetMap `landuse` from there on. The two hand
+over as a cross-fade: over camera zoom 7 to 8 the land cover fades out while
+the land use fades in, so the switch of tile level at zoom 8 changes nothing
+on screen.
+
+### A style of your own
+
+An archive in another schema, or a look the theme cannot express, is a style
+of its own: an `ImmersiveMapVectorTileStyle` answering `makeStyle(for:)` per
 feature, paired with a schema reading in `VectorTileMapStyle(style:schema:)`.
 The custom tiles example shows one.
+
+Any fill or stroke can appear or disappear gradually with the camera, through
+the `zoomFade` of its `FillStyle` or `LinePass`:
+
+```swift
+FillStyle(key: 4, color: grass, zoomFade: .fadeOut(from: 7, to: 8))
+LinePass(key: 44, color: street, zoomFade: .fadeIn(from: 12, to: 13), lineGeometry: geometry)
+```
+
+The fade is a smoothstep over the camera zoom between the two values, and it
+depends on the camera zoom alone, so two tile levels that state the same
+fade draw the same frame. The engine draws the tiles of the camera zoom
+rounded down: a layer that the tiles carry through zoom 7 is still on screen
+for camera zoom 7.0 to 7.99, which is where to fade it out.

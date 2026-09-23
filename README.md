@@ -21,10 +21,7 @@ ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps
   <img src="Documentation/Assets/readme-avatars-globe.png" width="49%" alt="Avatar markers on the globe">
 </p>
 <p align="center">
-  <img src="Documentation/Assets/readme-bolshoi-proezd.png" width="49%" alt="The Bolshoi Theatre over the measured streetscape">
   <img src="Documentation/Assets/readme-san-francisco.png" width="49%" alt="San Francisco coastline with labels">
-</p>
-<p align="center">
   <img src="Documentation/Assets/readme-alps.png" width="49%" alt="The Alps with terrain and landcover">
 </p>
 
@@ -48,7 +45,18 @@ The bench apps, the run script and the method are in
 
 ## Features
 
-[Built-in vector tiles](Documentation/docs/map-data.md), native iOS (UIKit host), native macOS, SwiftUI integration, [map styling and colors](Documentation/docs/styling.md), [the streetscape](Documentation/docs/streetscape.md), [SwiftUI markers](Documentation/docs/markers.md), [avatars](Documentation/docs/avatars.md), [3D scene models](Documentation/docs/scene-models.md), [tour video export](Documentation/docs/tour-video-export.md).
+[Built-in Protomaps vector tiles](Documentation/docs/map-data.md), native iOS (UIKit host), native macOS, SwiftUI integration, [map styling and colors](Documentation/docs/styling.md), [SwiftUI markers](Documentation/docs/markers.md), [avatars](Documentation/docs/avatars.md), [3D scene models](Documentation/docs/scene-models.md), [tour video export](Documentation/docs/tour-video-export.md).
+
+## Map Data
+
+The map draws the [Protomaps basemap](https://docs.protomaps.com/basemaps/layers), an OpenStreetMap planet packed into a single [PMTiles](https://docs.protomaps.com/pmtiles/) archive. The engine reads the archive straight from static storage with HTTP range requests, so there is no tile server in between. The archive hosted for this project is the default and needs no key or account. Your own archive, the whole planet or a region cut out with `pmtiles extract`, is one modifier away:
+
+```swift
+ImmersiveMapView()
+    .tileArchive(URL(string: "https://tiles.example.com/planet.pmtiles")!)
+```
+
+More in [Where the map data comes from](Documentation/docs/map-data.md).
 
 ## Quick Start
 
@@ -86,7 +94,7 @@ https://github.com/artembobkin/ImmersiveMap.git
 
 ## Attribution
 
-"© OpenStreetMap" is required if you use the built-in tile provider. Otherwise the license is MIT and nothing here changes that. It would just be cool if you mention ImmersiveMap somewhere:
+"© OpenStreetMap" is required if you use the built-in tiles, which are OpenStreetMap data. Otherwise the license is MIT and nothing here changes that. It would just be cool if you mention ImmersiveMap somewhere:
 
 ```text
 Maps powered by ImmersiveMap (immersivemap.dev)

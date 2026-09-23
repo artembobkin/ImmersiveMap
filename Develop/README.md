@@ -9,10 +9,10 @@ than living in someone's uncommitted diff.
 Projects:
 
 - `ImmersiveMapDevMac`: the plain map with the camera controls and the debug HUD,
-  reading the test tile endpoint instead of the hosted one, with the disk caches
-  cleared on every launch. `IMMERSIVEMAP_DEV_TILE_TEMPLATE` in the scheme
-  environment repoints the map tiles at another source without editing the
-  file.
+  reading the hosted Protomaps archive, with the disk caches cleared on every
+  launch. `IMMERSIVEMAP_DEV_TILE_ARCHIVE` in the scheme environment points the
+  map at another PMTiles archive URL without editing the file, which is what
+  to reach for when comparing two builds of a tileset.
 
 ## Not an example, not a post
 
@@ -34,9 +34,9 @@ Two consequences follow from that:
   Release so the scene they exist to show does not drop frames. These exist to
   be stepped through with breakpoints in the tile pipeline. Switch a scheme's
   Run action to Release by hand when the question is about frame timing.
-- A tile URL under development is a URL under development. It can answer 204
-  outside the box it was cut for, serve a stale build, or go away entirely, and
-  an empty map is the data saying so, not the engine failing.
+- An archive under development is an archive under development. It can cover
+  only the box it was cut for, hold a stale build, or go away entirely, and an
+  empty map is the data saying so, not the engine failing.
 
 ## Conventions
 
@@ -46,10 +46,10 @@ Same hand-written `.xcodeproj` layout as the examples: a shared scheme under
 `Develop` group of `ImmersiveMap.xcworkspace/contents.xcworkspacedata`. A new
 project is a copy of a sibling with the names changed.
 
-The hosted tile service is public and needs no key, and nothing secret is
-ever committed, here least of all. An app that has to reach a private endpoint
-of your own passes its headers through `.tileURLTemplate(_:headers:)` from a
-value that lives outside the repository.
+The hosted archive is public and needs no key, and nothing secret is ever
+committed, here least of all. An app that has to reach a private archive of
+your own passes its headers through `.tileArchive(_:headers:)` from a value
+that lives outside the repository.
 
 Build from the CLI:
 
