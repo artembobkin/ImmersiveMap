@@ -298,7 +298,10 @@ final class FlatRingRuleCoverageTests: XCTestCase {
 
     #if os(macOS)
     /// The panel's distance slider runs on the square root of the ring
-    /// number: every ring number comes back from its own slider value.
+    /// number: every ring number comes back from its own slider value. The
+    /// slider helpers belong to an `NSView`, so they are main actor isolated
+    /// (Xcode 16.4 rejects the call from a nonisolated test).
+    @MainActor
     func testThePanelsDistanceSliderReadsEveryRing() {
         for distance in FlatRingRules.distanceRange {
             let value = DebugOverlayHUDView.ringRuleSliderValue(distance: distance)

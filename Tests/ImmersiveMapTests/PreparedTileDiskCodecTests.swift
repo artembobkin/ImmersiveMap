@@ -556,21 +556,31 @@ final class PreparedTileDiskCodecTests: XCTestCase {
 
         // The vertex layout is a binding contract (vertex descriptor, arena
         // strides); pin the ABI before trusting stride-derived expectations.
-        XCTAssertEqual(MemoryLayout<TileVertexIn>.stride, 8)
+        XCTAssertEqual(MemoryLayout<TileVertexIn>.stride, 12)
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 48)
 
         // Slot sequence: 5 ground + 20 road phases x 5 (four structures:
         // tunnel, ground, automobile ground, bridge) + 5 bridge overlay
         // + 3 extruded + 0 label runs (all sets empty) + 1 road glyphs.
         XCTAssertEqual(spans.count, 114)
 
-        // Ground vertices: 3 elements at offset 0, 24 bytes. The three
+        // Ground vertices: 3 elements at offset 0, 36 bytes. The three
         // vertices are (0,0), (4096,0), (0,4096) with styleIndex 0, a zero
-        // line distance and the saturated line parameter (0x7FFF little-endian
-        // [0xFF, 0x7F]); 4096 is 0x1000, little-endian [0x00, 0x10].
-        XCTAssertEqual(spans[0], TileArenaSpan(byteOffset: 0, byteCount: 24, elementCount: 3, indexWidth: nil))
-        XCTAssertEqual(blob[0..<24], Data([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7F,
-                                           0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7F,
-                                           0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0xFF, 0x7F]))
+        // line distance, the saturated line parameter (0x7FFF little-endian
+        // [0xFF, 0x7F]) and a zero normal. 4096 is 0x1000, little-endian
+        // [0x00, 0x10]. The last two bytes of each 12-byte vertex are the
+        // struct's alignment padding, whose content Swift does not define,
+        // so only the first ten bytes of each vertex are pinned.
+        XCTAssertEqual(spans[0], TileArenaSpan(byteOffset: 0, byteCount: 36, elementCount: 3, indexWidth: nil))
+        let expectedVertexBytes: [[UInt8]] = [
+            [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7F, 0x00, 0x00],
+            [0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7F, 0x00, 0x00],
+            [0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0xFF, 0x7F, 0x00, 0x00],
+        ]
+        for (index, expected) in expectedVertexBytes.enumerated() {
+            let start = index * 12
+            XCTAssertEqual(blob[start ..< start + 10], Data(expected), "vertex \(index)")
+        }
 
         // Ground indices: [0, 1, 2] narrowed to UInt16 (3 vertices are far
         // below the 65535-vertex ceiling), 6 bytes at the next 256 boundary.
@@ -592,10 +602,12 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         XCTAssertEqual(spans[3], TileArenaSpan(byteOffset: 768, byteCount: 8, elementCount: 1, indexWidth: nil))
         XCTAssertEqual(blob[768..<776], Data([0x00, 0x00, 0x00, 0xC0, 0x00, 0x00, 0x80, 0xBF]))
 
-        // Ground line styles: one all-zero TileLineStyle (the fixture style
-        // is a plain polygon).
-        XCTAssertEqual(spans[4], TileArenaSpan(byteOffset: 1024, byteCount: 32, elementCount: 1, indexWidth: nil))
-        XCTAssertEqual(blob[1024..<1056], Data(count: 32))
+        // Ground line styles: one TileLineStyle for the plain polygon, all
+        // zero but the ramp's start alpha, which is one without a ramp
+        // (the twelfth Float32, 1.0 little-endian [0x00, 0x00, 0x80, 0x3F]).
+        XCTAssertEqual(spans[4], TileArenaSpan(byteOffset: 1024, byteCount: 48, elementCount: 1, indexWidth: nil))
+        XCTAssertEqual(blob[1024..<1068], Data(count: 44))
+        XCTAssertEqual(blob[1068..<1072], Data([0x00, 0x00, 0x80, 0x3F]))
 
         // Everything after the ground layer is empty: zero-length spans do
         // not advance the cursor, so the arena ends at the width span's
@@ -606,10 +618,10 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         }
         XCTAssertEqual(decoded.image.arenaByteCount, 1280)
         XCTAssertEqual(blob.count, 1280)
-        XCTAssertEqual(blob[24..<256], Data(count: 232), "Span padding must be deterministic zeros")
+        XCTAssertEqual(blob[36..<256], Data(count: 220), "Span padding must be deterministic zeros")
         XCTAssertEqual(blob[262..<512], Data(count: 250), "Span padding must be deterministic zeros")
-        XCTAssertEqual(blob[772..<1024], Data(count: 252), "Span padding must be deterministic zeros")
-        XCTAssertEqual(blob[1056..<1280], Data(count: 224), "Span padding must be deterministic zeros")
+        XCTAssertEqual(blob[776..<1024], Data(count: 248), "Span padding must be deterministic zeros")
+        XCTAssertEqual(blob[1072..<1280], Data(count: 208), "Span padding must be deterministic zeros")
     }
 
     func testWideIndexGeometrySkipsNarrowingAndRoundTrips() throws {

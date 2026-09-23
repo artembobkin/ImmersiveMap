@@ -7,8 +7,8 @@ import XCTest
 /// The synthetic background every tile carries under its features is one
 /// quad; the density the sphere needs comes from the ground subdivider, so
 /// the background is exactly as fine as the rest of the ground at that
-/// zoom and no finer: the 64x64 cells of z0, one quad from z10 where the
-/// surface is flat.
+/// zoom and no finer: the 64x64 cells of z0, one quad from z8, where the
+/// surface has unfurled and nothing is drawn on the sphere.
 final class TileBackgroundQuadTests: XCTestCase {
     private func parseBackgroundOnly(_ tile: Tile) throws -> DrawingPolygonBytes {
         let config = ImmersiveMapSettings.default
@@ -20,7 +20,7 @@ final class TileBackgroundQuadTests: XCTestCase {
 
     func testTheBackgroundFollowsTheSubdividerGridByZoom() throws {
         let cellsPerSideByZoom: [(zoom: Int, cellsPerSide: Int)] = [
-            (0, 64), (1, 64), (2, 32), (3, 32), (4, 16), (5, 16), (6, 8), (7, 8), (8, 4), (9, 4), (10, 1), (12, 1), (16, 1),
+            (0, 64), (1, 64), (2, 32), (3, 32), (4, 16), (5, 16), (6, 8), (7, 8), (8, 1), (9, 1), (10, 1), (12, 1), (16, 1),
         ]
         for entry in cellsPerSideByZoom {
             let drawing = try parseBackgroundOnly(Tile(x: 0, y: 0, z: entry.zoom))

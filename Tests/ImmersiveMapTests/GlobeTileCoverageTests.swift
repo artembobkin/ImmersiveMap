@@ -96,7 +96,7 @@ final class GlobeTileCoverageTests: XCTestCase {
     func testTheBandsReportTheirZoomsAndCounts() {
         let resolution = Self.resolve()
         XCTAssertEqual(resolution.bands.map(\.zoom), [6, 5, 4, 2])
-        XCTAssertEqual(resolution.bands.map(\.distance), [1, 2, 3, 20])
+        XCTAssertEqual(resolution.bands.map(\.distance), [1, 2, 3, 9])
         XCTAssertEqual(resolution.bands.first?.tileCount, 9, "the look-at tile and ring 1, all in view")
         let banded = resolution.bands.reduce(0) { $0 + $1.tileCount }
         XCTAssertLessThanOrEqual(banded, resolution.targets.count)
