@@ -57,9 +57,9 @@ extension ProtomapsBasemapDefaultMapStyle {
         case "ferry":
             // A ferry route is a symbolic line like a border: a thin dashed
             // stroke in the water's colour, stated in points and held there
-            // at every zoom.
+            // at every zoom. It crosses the river under the bridges' decks.
             guard tileZoom >= Self.ferryMinimumTileZoom else { return hiddenStyle }
-            return FeatureStyle.pointLockedLine(key: 41,
+            return FeatureStyle.pointLockedLine(key: 23,
                                                 color: theme.layers.water,
                                                 widthPoints: Self.ferryWidthPoints,
                                                 dashLengthPoints: Self.ferryDashPoints,
@@ -75,9 +75,7 @@ extension ProtomapsBasemapDefaultMapStyle {
                 return hiddenStyle
             }
         case "rail":
-            // Railways are skipped for now: not drawn at any zoom, on any
-            // surface. `railStyle` stays for when they come back.
-            return hiddenStyle
+            return railStyle(kindDetail: kindDetail, tileZoom: tileZoom)
         default:
             break
         }
@@ -515,8 +513,8 @@ extension ProtomapsBasemapDefaultMapStyle {
     /// decimetres, so a narrow stroke keeps the figure a few metres long.
     static let roadMarkingRibbonWidth: Double = 8
 
-    /// The railway's stroke, when railways come back: a dashed symbol in
-    /// points, like every road, held on screen at every zoom.
+    /// The railway's stroke: a dashed symbol in points, like every road,
+    /// held on screen at every zoom.
     static let railWidthPoints: Float = 1.5
     static let railDashPoints: Float = 6.0
     static let railGapPoints: Float = 6.0

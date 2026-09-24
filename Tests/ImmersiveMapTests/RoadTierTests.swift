@@ -35,11 +35,9 @@ final class RoadTierTests: XCTestCase {
         for pedestrian in ["path", "track"] {
             XCTAssertEqual(tier(pedestrian), .pedestrian, "\(pedestrian) is the finer network under it")
         }
-        // Railways are skipped for now (see the style's routing): hidden,
-        // so no road and no tier of their own.
         let rail = style.makeStyle(data: DetFeatureStyleData(layerName: "roads",
                                                              properties: ["kind": .string("rail"), "kind_detail": .string("rail")],
                                                              tile: Tile(x: 19808, y: 10243, z: 15)))
-        XCTAssertNil(rail.roadStyle, "a railway draws nothing")
+        XCTAssertEqual(rail.roadTier, .pedestrian, "a railway is the finer network under the automobile one")
     }
 }

@@ -35,6 +35,17 @@ struct ParsedPolygon {
         lineDistances.count == vertices.count
             && lineParameters.count == vertices.count
     }
+
+    /// Gives a fill the line attributes of the saturated line interior (on
+    /// the centreline, far from any end), the values an attribute-less
+    /// polygon defaults to. The fill then sweeps with the ribbons and draws
+    /// among the ground lines by its key, fully covered
+    /// (`FillStyle.drawsAmongGroundLines`).
+    mutating func makeLineClassFill() {
+        lineDistances = [Int8](repeating: 0, count: vertices.count)
+        lineParameters = [Int16](repeating: Int16.max, count: vertices.count)
+        lineNormals = []
+    }
 }
 
 extension ParsedPolygon {

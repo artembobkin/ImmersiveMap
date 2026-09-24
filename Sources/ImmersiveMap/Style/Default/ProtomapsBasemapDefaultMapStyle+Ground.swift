@@ -130,13 +130,32 @@ extension ProtomapsBasemapDefaultMapStyle {
             return polygon(key: 18, color: colors.sand, zoomFade: fade)
         case "aerodrome", "runway", "taxiway":
             return polygon(key: 19, color: colors.aeroway, zoomFade: fade)
+        case "pedestrian", "pier":
+            // The basemap ships a bridge's deck (`man_made=bridge`) as a
+            // `pedestrian` area, the same kind as a paved square. The deck
+            // lies over the river, so it draws above the water, its
+            // waterway lines and the ferry routes, in the land tone, under
+            // the roads it carries. A square on land in the land tone reads
+            // as the ground it is.
+            guard tileZoom >= Self.bridgeDeckMinimumTileZoom else {
+                return hiddenStyle
+            }
+            return .fill(FillStyle(key: Self.bridgeDeckKey,
+                                   color: colors.land,
+                                   drawsAmongGroundLines: true))
         default:
-            // A protected area blankets whole city centres, a pedestrian
-            // area or a pier is the ground itself, and the rest (a marina,
-            // a stadium, an attraction) says nothing a fill should.
+            // A protected area blankets whole city centres, and the rest (a
+            // marina, a stadium, an attraction) says nothing a fill should.
             return hiddenStyle
         }
     }
+
+    /// The deck's place among the ground lines: above the waterway lines
+    /// (22) and the ferry routes (23), below the aeroway lines and the
+    /// borders.
+    static let bridgeDeckKey: UInt8 = 24
+    /// A deck only reads next to the street network it carries.
+    static let bridgeDeckMinimumTileZoom = 13
 
     /// A river, a canal or a stream: the lines of the `water` layer. The
     /// basemap spells the waterway kind on `kind` for a line and on

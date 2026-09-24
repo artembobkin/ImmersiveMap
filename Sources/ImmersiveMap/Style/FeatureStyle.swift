@@ -196,15 +196,24 @@ public struct FillStyle: Sendable {
     /// and each hole as the background, so the tessellator never sees the
     /// hundreds of islands of a coastal tile at once.
     public var splitsComplexHoles: Bool
+    /// A fill that takes its place among the ground lines by its key. The
+    /// ground draws every fill first and every line over them, so a plain
+    /// fill lies under every river and ferry route whatever its key. A
+    /// fill that must cover such lines (a bridge's deck over the river)
+    /// draws with the lines instead, over those of a lower key and under
+    /// those of a higher one, and over every plain fill.
+    public var drawsAmongGroundLines: Bool
 
     public init(key: UInt8,
                 color: SIMD4<Float>,
                 zoomFade: ImmersiveMapZoomFade = .none,
-                splitsComplexHoles: Bool = false) {
+                splitsComplexHoles: Bool = false,
+                drawsAmongGroundLines: Bool = false) {
         self.key = key
         self.color = color
         self.zoomFade = zoomFade
         self.splitsComplexHoles = splitsComplexHoles
+        self.drawsAmongGroundLines = drawsAmongGroundLines
     }
 }
 

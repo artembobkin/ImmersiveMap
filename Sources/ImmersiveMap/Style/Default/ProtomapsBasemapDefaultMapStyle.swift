@@ -18,7 +18,7 @@ import simd
 /// Nothing in them is public: the members are
 /// internal only so that the extensions can share them across files.
 public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
-    static let implementationRevision: UInt32 = 3
+    static let implementationRevision: UInt32 = 7
     /// Streets ease in over camera zoom 5 to 6, from the zoom the style first
     /// shows a road (the motorway skeleton on the z5 tiles), instead of
     /// popping with the tiles.

@@ -138,7 +138,29 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
                       "Land cover and land use share the z7 tiles, so they must not share a key")
         XCTAssertEqual(makeStyle(style, layerName: "landuse", kind: "protected_area", zoom: 12).key, 0,
                        "a protected area blankets whole city centres and is not a green")
-        XCTAssertEqual(makeStyle(style, layerName: "landuse", kind: "pedestrian", zoom: 14).key, 0)
+    }
+
+    /// A bridge's deck ships as a `pedestrian` area. It draws among the
+    /// ground lines, over the water, the waterway lines and the ferry
+    /// routes, in the land tone, from the street zooms.
+    func testBridgeDeckDrawsAboveTheWater() {
+        let style = ProtomapsBasemapDefaultMapStyle(theme: .default)
+        let water = makeStyle(style, layerName: "water", kind: "water", zoom: 15, geometry: .polygon)
+        let waterway = makeStyle(style, layerName: "water", kind: "river", zoom: 15, geometry: .linestring)
+        let ferry = makeStyle(style, layerName: "roads", kind: "ferry", zoom: 15, geometry: .linestring)
+        for kind in ["pedestrian", "pier"] {
+            let deck = makeStyle(style, layerName: "landuse", kind: kind, zoom: 15)
+            XCTAssertGreaterThan(deck.key, water.key, "\(kind) lies over the river")
+            XCTAssertGreaterThan(deck.key, waterway.key, "\(kind) hides the river's centre line")
+            XCTAssertGreaterThan(deck.key, ferry.key, "\(kind) hides the ferry routes under the bridge")
+            guard case .fill(let fill) = deck else {
+                return XCTFail("\(kind) is a fill")
+            }
+            XCTAssertTrue(fill.drawsAmongGroundLines, "\(kind) draws with the lines it covers")
+            XCTAssertEqual(deck.color, style.theme.layers.land, "\(kind)")
+            XCTAssertEqual(makeStyle(style, layerName: "landuse", kind: kind, zoom: 12).key, 0,
+                           "\(kind) hides below the street zooms")
+        }
     }
 
     /// The handover is a cross-fade with the camera over zoom 7 to 8, the
@@ -187,11 +209,12 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
                               "\(kind)/\(kindDetail ?? "") must draw from z\(minimumZoom)")
         }
         // The sidewalks and crossings of z14 are noise around every street,
-        // and the railways are skipped for now.
+        // and a subway runs under the city. Surface rail draws.
         for zoom in [12, 14, 15] {
             XCTAssertEqual(key("path", "sidewalk", zoom: zoom), 0, "z\(zoom)")
             XCTAssertEqual(key("path", "crossing", zoom: zoom), 0, "z\(zoom)")
-            XCTAssertEqual(key("rail", "rail", zoom: zoom), 0, "z\(zoom)")
+            XCTAssertEqual(key("rail", "subway", zoom: zoom), 0, "z\(zoom)")
+            XCTAssertNotEqual(key("rail", "rail", zoom: zoom), 0, "z\(zoom)")
             XCTAssertEqual(key("aerialway", "cable_car", zoom: zoom), 0, "z\(zoom)")
         }
     }
@@ -563,6 +586,8 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
         XCTAssertEqual(makeStyle(style, layerName: "buildings", kind: "building", zoom: 12, geometry: .polygon).key, 0)
         let building = makeStyle(style, layerName: "buildings", kind: "building", zoom: 13, geometry: .polygon)
         XCTAssertNotNil(building.extrusionStyle)
+        XCTAssertGreaterThan(building.extrusionFallbackHeight, 0,
+                             "a building the tile states no height for still rises")
         XCTAssertEqual(makeStyle(style, layerName: "buildings", kind: "address", zoom: 15, geometry: .point).key, 0)
     }
 

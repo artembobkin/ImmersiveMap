@@ -297,7 +297,11 @@ final class TileMvtParser {
                                                                             tileExtent: tileExtent) else {
                     continue
                 }
-                result.appendGround(parsedGeometry.parsedPolygon, key: fill.key, placement: .ground)
+                var parsedPolygon = parsedGeometry.parsedPolygon
+                if fill.drawsAmongGroundLines {
+                    parsedPolygon.makeLineClassFill()
+                }
+                result.appendGround(parsedPolygon, key: fill.key, placement: .ground)
             }
         case .extrusion(let extrusion):
             result.registerStyle(BakedStyle(extrusion: extrusion), key: extrusion.key, placement: .ground)
