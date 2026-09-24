@@ -173,13 +173,39 @@ extension ProtomapsBasemapDefaultMapStyle {
         return pointLabel(key: 70, band: .place, rank: rank, appearance: appearance)
     }
 
-    func waterLabelStyle(kind: String?, props: [String: MvtValue]) -> FeatureStyle {
+    /// A water body's name lies on the water: it turns and tilts with the
+    /// map and grows with the zoom, the way an atlas letters a sea. It is
+    /// ink on the water rather than a label over it: no halo, a deeper blue
+    /// of the water's own hue (the theme's water label), the letters spaced
+    /// out.
+    func waterLabelStyle(kind: String?, props: [String: MvtValue], tileZoom: Int) -> FeatureStyle {
         var appearance = theme.labels.water
         if kind == "ocean" {
             appearance.sizePoints += 3
         }
-        return pointLabel(key: 73, band: .water, rank: minZoomRank(props: props), appearance: appearance)
+        let minimumZoom = parseIntValue(props["min_zoom"]) ?? tileZoom
+        return pointLabel(key: 73,
+                          band: .water,
+                          rank: minZoomRank(props: props),
+                          appearance: appearance,
+                          placement: .surface(Self.waterLabelSurfacePlacement(minimumZoom: minimumZoom)))
     }
+
+    /// Where a water name painted on the map shows. The basemap ships the
+    /// name from the tile zoom `minimumZoom`, which the engine draws from
+    /// that camera zoom on: the name shows from there at its point size,
+    /// grows with the map from half a zoom in, and is gone two zooms in,
+    /// before it outgrows the water it names.
+    static func waterLabelSurfacePlacement(minimumZoom: Int) -> SurfaceLabelPlacement {
+        let start = Double(max(minimumZoom, 0))
+        return SurfaceLabelPlacement(referenceZoom: start + 0.5,
+                                     minimumZoom: start,
+                                     maximumZoom: start + 2,
+                                     letterSpacingEm: waterLabelLetterSpacingEm)
+    }
+
+    /// The tracking of a water name, in ems.
+    static let waterLabelLetterSpacingEm: Float = 0.15
 
     /// The landmarks among the POIs: the peaks and the airports, which take
     /// their own keys and collision band.
@@ -321,13 +347,15 @@ extension ProtomapsBasemapDefaultMapStyle {
                     rank: Int,
                     appearance: ProtomapsBasemapTheme.LabelAppearance,
                     minCameraZoom: Float = 0,
-                    icon: PoiSpriteIcon? = nil) -> FeatureStyle {
+                    icon: PoiSpriteIcon? = nil,
+                    placement: LabelPlacement = .screen) -> FeatureStyle {
         FeatureStyle.pointLabel(key: key,
                                 labelTextStyle(key: Int(key), appearance: appearance),
                                 rank: rank,
                                 collisionRank: Self.labelCollisionRank(band: band, rank: rank),
                                 minCameraZoom: minCameraZoom,
-                                icon: icon)
+                                icon: icon,
+                                placement: placement)
     }
 
     func labelTextStyle(key: Int,

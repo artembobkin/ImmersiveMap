@@ -789,7 +789,19 @@ final class PreparedTileDiskCaching {
     // alpha) instead of one mask float, in the arena's per-style fade slot
     // and in every ground style run. A v108 entry holds one float per style
     // and a shorter run record.
-    static let preparedFormatVersion: UInt32 = 109
+    // 110: the labels painted on the map (`LabelPlacement.surface`) are
+    // baked as glyph quads in the tile's units, a trailing arena span and a
+    // record per label in the entry. A v109 entry has neither and draws
+    // the water names upright on the screen.
+    // 111: a surface label's vertex holds its anchor and its offset in
+    // points instead of a baked tile position, so the frame scales the text
+    // by the map's scale on screen. A v110 entry's text is baked for a tile
+    // of 256 points and draws several times too large.
+    // 112: a surface label's record carries its letter spacing. A v111
+    // entry has no such field.
+    // 113: a surface label's record carries the zooms it shows at instead
+    // of two zoom fades. A v112 entry has the fades.
+    static let preparedFormatVersion: UInt32 = 113
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

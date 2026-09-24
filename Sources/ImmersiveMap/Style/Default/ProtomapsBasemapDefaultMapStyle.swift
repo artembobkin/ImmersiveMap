@@ -18,7 +18,7 @@ import simd
 /// Nothing in them is public: the members are
 /// internal only so that the extensions can share them across files.
 public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
-    static let implementationRevision: UInt32 = 7
+    static let implementationRevision: UInt32 = 10
     /// Streets ease in over camera zoom 5 to 6, from the zoom the style first
     /// shows a road (the motorway skeleton on the z5 tiles), instead of
     /// popping with the tiles.
@@ -121,7 +121,7 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
             switch data.geometry {
             case .point:
                 guard includesWaterLabel(kind: kind, tileZoom: z) else { return hiddenStyle }
-                return waterLabelStyle(kind: kind, props: props)
+                return waterLabelStyle(kind: kind, props: props, tileZoom: z)
             case .line:
                 return waterwayStyle(kind: kind, kindDetail: kindDetail, props: props)
             case .polygon, .unknown:

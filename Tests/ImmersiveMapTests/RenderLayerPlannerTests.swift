@@ -18,6 +18,7 @@ final class RenderLayerPlannerTests: XCTestCase {
         XCTAssertEqual(plan.map(\.layer), [
             .tileOwnership,
             .flatMapSurface,
+            .surfaceLabels,
             .buildingExtrusion,
             .sceneModels,
             .horizon,
@@ -43,6 +44,7 @@ final class RenderLayerPlannerTests: XCTestCase {
         XCTAssertEqual(plan.map(\.layer), [
             .tileOwnership,
             .flatMapSurface,
+            .surfaceLabels,
             .buildingExtrusion,
             .sceneModels,
             .horizon,
@@ -51,7 +53,7 @@ final class RenderLayerPlannerTests: XCTestCase {
             .avatars,
             .debugOverlay
         ])
-        XCTAssertEqual(enabledLayers(in: plan), [.tileOwnership, .flatMapSurface, .buildingExtrusion, .sceneModels, .horizon])
+        XCTAssertEqual(enabledLayers(in: plan), [.tileOwnership, .flatMapSurface, .surfaceLabels, .buildingExtrusion, .sceneModels, .horizon])
         XCTAssertEqual(skipReason(for: .sceneModelOcclusion, in: plan), .noSceneModelContent)
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)
@@ -71,6 +73,7 @@ final class RenderLayerPlannerTests: XCTestCase {
         XCTAssertEqual(plan.map(\.layer), [
             .starfield,
             .globeVectorSurface,
+            .surfaceLabels,
             .globeCap,
             .sceneModels,
             .horizon,
@@ -95,6 +98,7 @@ final class RenderLayerPlannerTests: XCTestCase {
         XCTAssertEqual(plan.map(\.layer), [
             .starfield,
             .globeVectorSurface,
+            .surfaceLabels,
             .globeCap,
             .sceneModels,
             .horizon,
@@ -103,7 +107,7 @@ final class RenderLayerPlannerTests: XCTestCase {
             .avatars,
             .debugOverlay
         ])
-        XCTAssertEqual(enabledLayers(in: plan), [.starfield, .globeVectorSurface, .globeCap, .sceneModels, .horizon])
+        XCTAssertEqual(enabledLayers(in: plan), [.starfield, .globeVectorSurface, .surfaceLabels, .globeCap, .sceneModels, .horizon])
         XCTAssertEqual(skipReason(for: .sceneModelOcclusion, in: plan), .noSceneModelContent)
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)
@@ -167,6 +171,7 @@ final class RenderLayerPlannerTests: XCTestCase {
 
         XCTAssertEqual(enabledLayers(in: plan), [
             .globeVectorSurface,
+            .surfaceLabels,
             .globeCap,
             .sceneModels,
             .horizon,

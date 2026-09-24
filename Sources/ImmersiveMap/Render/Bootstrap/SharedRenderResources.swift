@@ -104,6 +104,8 @@ final class SharedRenderResources {
     let tilePipeline: TilePipeline
     /// The tile geometry drawn straight onto the sphere in the world pass.
     let globeVectorSurfacePipeline: TilePipeline
+    /// The labels painted on the map, in the world pass on both surfaces.
+    let surfaceLabelPipeline: SurfaceLabelPipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
     /// The tile-ownership stencil prepass of the flat passes.
     let tileOwnershipPipeline: TileOwnershipPipeline
@@ -297,6 +299,7 @@ final class SharedRenderResources {
         self.polygonPipeline = compiled.polygonPipeline
         self.tilePipeline = compiled.tilePipeline
         self.globeVectorSurfacePipeline = compiled.globeVectorSurfacePipeline
+        self.surfaceLabelPipeline = compiled.surfaceLabelPipeline
         self.extrudedTilePipeline = compiled.extrudedTilePipeline
         self.tileOwnershipPipeline = compiled.tileOwnershipPipeline
         self.groundShadowMaskPipeline = compiled.groundShadowMaskPipeline
@@ -323,6 +326,7 @@ final class SharedRenderResources {
         let polygonPipeline: PolygonsPipeline
         let tilePipeline: TilePipeline
         let globeVectorSurfacePipeline: TilePipeline
+        let surfaceLabelPipeline: SurfaceLabelPipeline
         let extrudedTilePipeline: ExtrudedTilePipeline
         let tileOwnershipPipeline: TileOwnershipPipeline
         let groundShadowMaskPipeline: GroundShadowMaskPipeline
@@ -354,6 +358,7 @@ final class SharedRenderResources {
         var polygonPipeline: PolygonsPipeline?
         var tilePipeline: TilePipeline?
         var globeVectorSurfacePipeline: TilePipeline?
+        var surfaceLabelPipeline: SurfaceLabelPipeline?
         var extrudedTilePipeline: ExtrudedTilePipeline?
         var tileOwnershipPipeline: TileOwnershipPipeline?
         var groundShadowMaskPipeline: GroundShadowMaskPipeline?
@@ -403,6 +408,10 @@ final class SharedRenderResources {
                                                         library: library,
                                                         sampleCount: sampleCount,
                                                         surface: .sphere) },
+            { surfaceLabelPipeline = SurfaceLabelPipeline(metalDevice: device,
+                                                          pixelFormat: pixelFormat,
+                                                          library: library,
+                                                          sampleCount: sampleCount) },
             { fxaaPipeline = FXAAPipeline(metalDevice: device,
                                           pixelFormat: pixelFormat,
                                           library: library) },
@@ -427,6 +436,7 @@ final class SharedRenderResources {
             polygonPipeline: polygonPipeline!,
             tilePipeline: tilePipeline!,
             globeVectorSurfacePipeline: globeVectorSurfacePipeline!,
+            surfaceLabelPipeline: surfaceLabelPipeline!,
             extrudedTilePipeline: extrudedTilePipeline!,
             tileOwnershipPipeline: tileOwnershipPipeline!,
             groundShadowMaskPipeline: groundShadowMaskPipeline!,

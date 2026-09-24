@@ -77,6 +77,10 @@ enum RenderGraphFactory {
                                                                             opaqueDepthState: context.sphereOpaqueOwnerState,
                                                                             translucentDepthState: context.tileStencilTestState,
                                                                             debugOverlayControls: debugOverlayControls)
+        let surfaceLabelSubsystem = SurfaceLabelRenderSubsystem(pipeline: context.surfaceLabelPipeline,
+                                                                textRenderer: context.textRenderer,
+                                                                depthState: context.groundDepthState,
+                                                                depthDisabledState: context.depthDisabledState)
         let globeCapSubsystem = GlobeCapRenderSubsystem(globeCapDepthState: context.globeCapDepthState,
                                                         depthDisabledState: context.depthDisabledState,
                                                         globeCapRenderer: context.globeCapRenderer)
@@ -100,6 +104,7 @@ enum RenderGraphFactory {
             buildingExtrusionSubsystem,
             starfieldSubsystem,
             globeVectorSurfaceSubsystem,
+            surfaceLabelSubsystem,
             globeCapSubsystem,
             horizonSubsystem,
             postProcessingSubsystem,

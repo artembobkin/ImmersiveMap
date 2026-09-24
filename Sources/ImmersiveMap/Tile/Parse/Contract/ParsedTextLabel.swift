@@ -5,7 +5,8 @@ import Foundation
 
 /// A point label as the parser read it from a feature: its text, its
 /// anchor in tile units, the identity that keeps it stable across parses,
-/// and the priorities and style the label policy decided.
+/// the priorities and style the label policy decided, and whether it stands
+/// on the screen or lies on the map.
 struct ParsedTextLabel {
     let text: String
     let position: SIMD2<Int16>
@@ -16,6 +17,7 @@ struct ParsedTextLabel {
     let poiIcon: PoiSpriteIcon?
     /// Minimum camera zoom at which the label is visible (0 = always).
     let minCameraZoom: Float
+    let placement: LabelPlacement
 
     init(text: String,
          position: SIMD2<Int16>,
@@ -27,7 +29,8 @@ struct ParsedTextLabel {
          collisionPriority: Int,
          textStyle: LabelTextStyle,
          poiIcon: PoiSpriteIcon? = nil,
-         minCameraZoom: Float = 0) {
+         minCameraZoom: Float = 0,
+         placement: LabelPlacement = .screen) {
         self.text = text
         self.position = position
         self.key = ParsedLabelKey.makePointLabelKey(text: text,
@@ -40,6 +43,7 @@ struct ParsedTextLabel {
         self.textStyle = textStyle
         self.poiIcon = poiIcon
         self.minCameraZoom = minCameraZoom
+        self.placement = placement
     }
 
     init(text: String,
@@ -49,7 +53,8 @@ struct ParsedTextLabel {
          collisionPriority: Int,
          textStyle: LabelTextStyle,
          poiIcon: PoiSpriteIcon? = nil,
-         minCameraZoom: Float = 0) {
+         minCameraZoom: Float = 0,
+         placement: LabelPlacement = .screen) {
         self.text = text
         self.position = position
         self.key = key
@@ -58,5 +63,6 @@ struct ParsedTextLabel {
         self.textStyle = textStyle
         self.poiIcon = poiIcon
         self.minCameraZoom = minCameraZoom
+        self.placement = placement
     }
 }

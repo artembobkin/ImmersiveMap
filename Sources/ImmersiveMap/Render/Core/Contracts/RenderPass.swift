@@ -28,6 +28,10 @@ enum RenderLayer: String, CaseIterable {
     /// ownership map instead of carrying slot clip distances.
     case tileOwnership
     case flatMapSurface
+    /// The labels painted on the map, right after the ground on either
+    /// surface: over the ground and the roads, under the buildings and the
+    /// models, see `SurfaceLabelRenderSubsystem`.
+    case surfaceLabels
     case buildingExtrusion
     case sceneModels
     /// Depth-only replay of the scene models at the start of the overlay pass:
@@ -94,14 +98,14 @@ struct RenderLayerPlanner {
             // The horizon last: the fog band hazes everything painted near
             // the horizon line, buildings and models included, and the
             // labels, which come after, stay crisp.
-            [.tileOwnership, .flatMapSurface, .buildingExtrusion, .sceneModels, .horizon]
+            [.tileOwnership, .flatMapSurface, .surfaceLabels, .buildingExtrusion, .sceneModels, .horizon]
         case .spherical:
             // Sky first: nothing writes surface depth any more (the
             // placeholder grid is gone), so the space background and the
             // stars paint the whole frame and the tile geometry blends over
             // them, opaque where its background quad lands. The horizon last,
             // over the models near the limb.
-            [.starfield, .globeVectorSurface, .globeCap, .sceneModels, .horizon]
+            [.starfield, .globeVectorSurface, .surfaceLabels, .globeCap, .sceneModels, .horizon]
         }
 
         return worldLayers.map { layer in

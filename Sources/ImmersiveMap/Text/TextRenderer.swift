@@ -195,6 +195,12 @@ class TextRenderer {
         Self.preparedTileTextRevisionValue
     }
 
+    /// Atlas texels per em of a weight's atlas: what a width stated in ems
+    /// spans in the distance field.
+    func atlasEmTexels(for weight: LabelFontWeight) -> CGFloat {
+        atlasData(for: weight).atlas.size
+    }
+
     var glyphCoverage: VectorTileLabelGlyphCoverage {
         VectorTileLabelGlyphCoverage(atlasData: atlasData, thinAtlasData: thinAtlasData)
     }
@@ -217,12 +223,15 @@ class TextRenderer {
         }
     }
     
+    /// - Parameter letterSpacing: extra room after every character, in ems:
+    ///   the tracking a spaced-out name is set with.
     func collectLabelVertices(for text: String,
                               labelIndex: simd_int1,
                               scale: Float,
                               wrap: LabelWrapOptions? = nil,
                               normalizeY: Bool = true,
-                              weight: LabelFontWeight = .bold) -> TextMetrics {
+                              weight: LabelFontWeight = .bold,
+                              letterSpacing: Float = 0) -> TextMetrics {
         if let wrap,
            wrap.maxLines > 1,
            wrap.maxWidth > 0 {
@@ -231,7 +240,8 @@ class TextRenderer {
                                                       scale: scale,
                                                       wrap: wrap,
                                                       normalizeY: normalizeY,
-                                                      weight: weight)
+                                                      weight: weight,
+                                                      letterSpacing: letterSpacing)
             if wrapped.vertices.isEmpty == false {
                 return wrapped
             }
@@ -241,19 +251,22 @@ class TextRenderer {
                                               labelIndex: labelIndex,
                                               scale: scale,
                                               normalizeY: normalizeY,
-                                              weight: weight)
+                                              weight: weight,
+                                              letterSpacing: letterSpacing)
     }
 
     private func collectSingleLineLabelVertices(for text: String,
                                                 labelIndex: simd_int1,
                                                 scale: Float,
                                                 normalizeY: Bool,
-                                                weight: LabelFontWeight) -> TextMetrics {
+                                                weight: LabelFontWeight,
+                                                letterSpacing: Float) -> TextMetrics {
         guard let layout = makeLineLayout(for: text,
                                           labelIndex: labelIndex,
                                           scale: scale,
                                           baselineY: 0.0,
-                                          weight: weight) else {
+                                          weight: weight,
+                                          letterSpacing: letterSpacing) else {
             return TextMetrics(size: TextSize(width: 0.0, height: 0.0), vertices: [])
         }
 
@@ -417,10 +430,12 @@ class TextRenderer {
                                              scale: Float,
                                              wrap: LabelWrapOptions,
                                              normalizeY: Bool,
-                                             weight: LabelFontWeight) -> TextMetrics {
+                                             weight: LabelFontWeight,
+                                             letterSpacing: Float) -> TextMetrics {
         let lines = wrappedLines(for: text,
                                  scale: scale,
                                  weight: weight,
+                                 letterSpacing: letterSpacing,
                                  wrap: wrap)
         guard lines.isEmpty == false else {
             return TextMetrics(size: TextSize(width: 0.0, height: 0.0), vertices: [])
@@ -435,7 +450,8 @@ class TextRenderer {
                                               labelIndex: labelIndex,
                                               scale: scale,
                                               baselineY: -Float(index) * lineAdvance,
-                                              weight: weight) else {
+                                              weight: weight,
+                                              letterSpacing: letterSpacing) else {
                 continue
             }
             lineLayouts.append(layout)
@@ -495,7 +511,8 @@ class TextRenderer {
                                 labelIndex: simd_int1,
                                 scale: Float,
                                 baselineY: Float,
-                                weight: LabelFontWeight) -> LabelLineLayout? {
+                                weight: LabelFontWeight,
+                                letterSpacing: Float) -> LabelLineLayout? {
         var vertices: [LabelVertex] = []
         var currentX: Float = 0.0
         let atlasData = atlasData(for: weight)
@@ -511,12 +528,12 @@ class TextRenderer {
                 continue
             }
             guard let glyph = glyphLookup[char.value] else {
-                currentX += Float(atlasData.metrics.emSize) * scale * 0.25
+                currentX += Float(atlasData.metrics.emSize) * scale * 0.25 + letterSpacing * scale
                 continue
             }
 
             guard let atlasBounds = glyph.atlasBounds else {
-                currentX += Float(glyph.advance) * scale
+                currentX += Float(glyph.advance) * scale + letterSpacing * scale
                 continue
             }
 
@@ -548,7 +565,7 @@ class TextRenderer {
             ]
 
             vertices.append(contentsOf: quadVertices)
-            currentX += Float(glyph.advance) * scale
+            currentX += Float(glyph.advance) * scale + letterSpacing * scale
             minX = min(minX, left)
             minY = min(minY, bottom)
             maxX = max(maxX, right)
@@ -596,6 +613,7 @@ class TextRenderer {
     private func wrappedLines(for text: String,
                               scale: Float,
                               weight: LabelFontWeight,
+                              letterSpacing: Float,
                               wrap: LabelWrapOptions) -> [String] {
         let maxLines = max(1, wrap.maxLines)
         let segments = makeWrapSegments(from: text)
@@ -649,7 +667,10 @@ class TextRenderer {
                 }
 
                 let candidate = currentLine + segmentText
-                if measureTextWidth(for: candidate, scale: scale, weight: weight) <= wrap.maxWidth {
+                if measureTextWidth(for: candidate,
+                                    scale: scale,
+                                    weight: weight,
+                                    letterSpacing: letterSpacing) <= wrap.maxWidth {
                     currentLine = candidate
                 } else {
                     let normalized = trimTrailingWhitespace(in: currentLine)
@@ -675,10 +696,12 @@ class TextRenderer {
 
     private func measureTextWidth(for text: String,
                                   scale: Float,
-                                  weight: LabelFontWeight) -> Float {
+                                  weight: LabelFontWeight,
+                                  letterSpacing: Float) -> Float {
         guard let bounds = measureTextBounds(for: text,
                                              scale: scale,
-                                             weight: weight) else {
+                                             weight: weight,
+                                             letterSpacing: letterSpacing) else {
             return 0.0
         }
         return max(0.0, bounds.maxX - bounds.minX)
@@ -686,7 +709,8 @@ class TextRenderer {
 
     private func measureTextBounds(for text: String,
                                    scale: Float,
-                                   weight: LabelFontWeight) -> (minX: Float, maxX: Float)? {
+                                   weight: LabelFontWeight,
+                                   letterSpacing: Float) -> (minX: Float, maxX: Float)? {
         var currentX: Float = 0.0
         let atlasData = atlasData(for: weight)
         let glyphLookup = glyphLookup(for: weight)
@@ -698,12 +722,12 @@ class TextRenderer {
                 continue
             }
             guard let glyph = glyphLookup[char.value] else {
-                currentX += Float(atlasData.metrics.emSize) * scale * 0.25
+                currentX += Float(atlasData.metrics.emSize) * scale * 0.25 + letterSpacing * scale
                 continue
             }
 
             guard glyph.atlasBounds != nil else {
-                currentX += Float(glyph.advance) * scale
+                currentX += Float(glyph.advance) * scale + letterSpacing * scale
                 continue
             }
 
@@ -714,7 +738,7 @@ class TextRenderer {
 
             minX = min(minX, left)
             maxX = max(maxX, right)
-            currentX += Float(glyph.advance) * scale
+            currentX += Float(glyph.advance) * scale + letterSpacing * scale
         }
 
         guard minX.isFinite, maxX.isFinite else {

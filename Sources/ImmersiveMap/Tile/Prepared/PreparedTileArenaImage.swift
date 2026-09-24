@@ -76,4 +76,7 @@ struct PreparedTileArenaImage: Sendable {
     let textLabels: TextLabelSetMeta
     let roadLabels: RoadLabelsMeta
     let blob: GeometryBlob
+    /// The records of the labels painted on the map; their glyph quads are
+    /// the arena's surface label span.
+    var surfaceLabels: [SurfaceLabelRecord] = []
 }

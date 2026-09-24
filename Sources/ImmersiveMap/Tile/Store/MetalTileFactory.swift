@@ -116,7 +116,8 @@ final class MetalTileFactory: @unchecked Sendable {
             backingBuffer: backingBuffer,
             groundStyleRuns: GroundStyleRunScanner.scan(ground: preparedTile.ground),
             textLabels: Self.textLabelSetMeta(from: preparedTile.textLabels),
-            roadLabels: Self.roadLabelsMeta(from: preparedTile.roadLabels)
+            roadLabels: Self.roadLabelsMeta(from: preparedTile.roadLabels),
+            surfaceLabels: preparedTile.surfaceLabels.labels
         ) else {
             // The plan and the reader both walk the schema's slot sequence,
             // so a mismatch here is a programming error, but failing into
@@ -212,7 +213,8 @@ final class MetalTileFactory: @unchecked Sendable {
                                                       backingBuffer: backingBuffer,
                                                       groundStyleRuns: image.groundStyleRuns,
                                                       textLabels: image.textLabels,
-                                                      roadLabels: image.roadLabels) else {
+                                                      roadLabels: image.roadLabels,
+                                                      surfaceLabels: image.surfaceLabels) else {
             return .imageUnreadable
         }
         return .tile(MetalTile(tile: image.tile, tileBuffers: tileBuffers))
@@ -249,7 +251,8 @@ final class MetalTileFactory: @unchecked Sendable {
                                          backingBuffer: MTLBuffer?,
                                          groundStyleRuns: [GroundStyleRun],
                                          textLabels: PreparedTileArenaImage.TextLabelSetMeta,
-                                         roadLabels: PreparedTileArenaImage.RoadLabelsMeta) -> TileBuffers? {
+                                         roadLabels: PreparedTileArenaImage.RoadLabelsMeta,
+                                         surfaceLabels: [SurfaceLabelRecord]) -> TileBuffers? {
         let expectedSlots = TileArenaSchema.slots(text: TileArenaSchema.runCounts(of: textLabels))
         var cursor = SpanCursor(spans: spans,
                                 expectedSlots: expectedSlots,
@@ -291,7 +294,17 @@ final class MetalTileFactory: @unchecked Sendable {
                                                       anchorRanges: roadLabels.anchorRanges,
                                                       anchors: roadLabels.anchors)
 
-        guard cursor.isConsistent else {
+        let surfaceLabelVertices = cursor.takeView(.surfaceLabelVertices)
+
+        // Every record's span must lie inside the vertices: the records of a
+        // cached image are untrusted input like its span table.
+        let surfaceVertexCount = surfaceLabelVertices?.count ?? 0
+        guard cursor.isConsistent,
+              surfaceLabels.allSatisfy({ record in
+                  record.vertexStart >= 0
+                      && record.vertexCount >= 0
+                      && record.vertexStart <= surfaceVertexCount - record.vertexCount
+              }) else {
             return nil
         }
         return TileBuffers(backingBuffer: backingBuffer,
@@ -300,7 +313,9 @@ final class MetalTileFactory: @unchecked Sendable {
                            bridgeOverlay: bridgeOverlay,
                            extruded: extruded,
                            textLabels: textLabelBuffers,
-                           roadLabels: roadLabelBuffers)
+                           roadLabels: roadLabelBuffers,
+                           surfaceLabels: SurfaceLabels(labels: surfaceLabels,
+                                                        vertices: surfaceLabelVertices))
     }
 
     private static func takeGeometryLayer(_ layerID: TileArenaGeometryLayerID,

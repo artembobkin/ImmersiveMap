@@ -7,18 +7,24 @@ final class TilePreparedDataBuilder {
     private let tileParser: TileMvtParser
     private let textLabelsBuilder: TileTextLabelsBuilder
     private let roadLabelsBuilder: TileRoadLabelsBuilder
+    private let surfaceLabelsBuilder: TileSurfaceLabelsBuilder
 
     init(tileParser: TileMvtParser,
          textLabelsBuilder: TileTextLabelsBuilder,
-         roadLabelsBuilder: TileRoadLabelsBuilder) {
+         roadLabelsBuilder: TileRoadLabelsBuilder,
+         surfaceLabelsBuilder: TileSurfaceLabelsBuilder) {
         self.tileParser = tileParser
         self.textLabelsBuilder = textLabelsBuilder
         self.roadLabelsBuilder = roadLabelsBuilder
+        self.surfaceLabelsBuilder = surfaceLabelsBuilder
     }
 
     func build(tile: Tile, data: Data) throws -> PreparedTileLoadResult {
         let parsedTile = try tileParser.parse(tile: tile, mvtData: data)
-        let textLabels = textLabelsBuilder.build(textLabels: parsedTile.textLabels, tile: tile)
+        // A label stands on the screen or lies on the map, never both.
+        let screenLabels = parsedTile.textLabels.filter { $0.placement == .screen }
+        let textLabels = textLabelsBuilder.build(textLabels: screenLabels, tile: tile)
+        let surfaceLabels = surfaceLabelsBuilder.build(textLabels: parsedTile.textLabels, tile: tile)
         let roadLabels = roadLabelsBuilder.build(roadTextLabels: parsedTile.roadTextLabels, tile: tile)
 
         let preparedTile = PreparedTileCPU(
@@ -47,7 +53,8 @@ final class TilePreparedDataBuilder {
                                                indices: parsedTile.drawingExtruded.indices,
                                                styles: parsedTile.drawingExtruded.styles),
             textLabels: textLabels,
-            roadLabels: roadLabels
+            roadLabels: roadLabels,
+            surfaceLabels: surfaceLabels
         )
         return PreparedTileLoadResult(preparedTile: preparedTile,
                                       parseLayerTimings: parsedTile.parseLayerTimings)

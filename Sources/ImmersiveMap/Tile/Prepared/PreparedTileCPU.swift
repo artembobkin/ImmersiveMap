@@ -74,6 +74,19 @@ struct PreparedTileCPU: Sendable {
         let anchors: [RoadLabelAnchor]
     }
 
+    /// The labels painted on the map (`LabelPlacement.surface`): every
+    /// glyph quad of the tile in one array, and one record per label naming
+    /// its span. A vertex's `position` is its label's anchor in tile render
+    /// units (y up, the ground's space) and its `spriteUV` its offset from
+    /// the anchor in layout points, which the frame scales into tile units
+    /// (`SurfaceLabelScale`). A label's `labelIndex` is its record's index.
+    struct SurfaceLabelSet {
+        let labels: [SurfaceLabelRecord]
+        let vertices: [LabelVertex]
+
+        static let empty = SurfaceLabelSet(labels: [], vertices: [])
+    }
+
     let tile: Tile
     let ground: GeometryLayer
     let roads: RoadStructureBuckets<RoadGeometryPhases<GeometryLayer>>
@@ -83,4 +96,17 @@ struct PreparedTileCPU: Sendable {
     /// the collision pass decides what shows.
     let textLabels: TextLabelSet
     let roadLabels: RoadLabels
+    var surfaceLabels: SurfaceLabelSet = .empty
+}
+
+/// One label painted on the map: what draws it and where its glyph quads
+/// sit in the tile's surface label vertices.
+struct SurfaceLabelRecord: Sendable {
+    /// The label's identity across tiles and zooms: the one copy of a key
+    /// that draws is chosen per frame (`SurfaceLabelSelection`).
+    let key: UInt64
+    let style: LabelTextStyle
+    let placement: SurfaceLabelPlacement
+    let vertexStart: Int
+    let vertexCount: Int
 }

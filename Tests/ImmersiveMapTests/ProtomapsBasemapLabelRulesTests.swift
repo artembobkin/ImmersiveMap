@@ -55,6 +55,39 @@ final class ProtomapsBasemapLabelRulesTests: XCTestCase {
         XCTAssertLessThan(peakStyle.labelCollisionRank, poiStyle.labelCollisionRank)
     }
 
+    // MARK: Placement
+
+    /// A water name lies on the water, painted on the map from the zoom the
+    /// basemap ships it at; every other label stands on the screen.
+    func testAWaterNameIsPaintedOnTheMap() throws {
+        let lake = style.makeStyle(data: feature(layer: "water", ["kind": .string("lake"), "name": .string("Lake"),
+                                                                  "min_zoom": .int(6)], tileZoom: 8))
+        guard case .pointLabel(let label) = lake, case .surface(let placement) = label.placement else {
+            return XCTFail("a lake's name is a label painted on the map")
+        }
+        XCTAssertEqual(placement.referenceZoom, 6.5)
+        XCTAssertFalse(placement.isVisible(atZoom: 5.9), "not before the zoom the basemap ships it at")
+        XCTAssertTrue(placement.isVisible(atZoom: 6))
+        XCTAssertFalse(placement.isVisible(atZoom: 8), "gone before it outgrows the water")
+        XCTAssertGreaterThan(placement.letterSpacingEm, 0, "a water name is spaced out")
+        XCTAssertEqual(label.text.haloEm, 0, "ink on the water, with no halo")
+
+        guard case .pointLabel(let city) = style.makeStyle(data: place(populationRank: 5, tileZoom: 10)) else {
+            return XCTFail("a city is a label")
+        }
+        XCTAssertEqual(city.placement, .screen)
+    }
+
+    /// An ocean the coarsest tiles carry is there from the widest view.
+    func testAnOceanNameOfTheCoarsestTilesShowsFromTheWidestView() {
+        let ocean = style.makeStyle(data: feature(layer: "water", ["kind": .string("ocean"), "name": .string("Ocean"),
+                                                                   "min_zoom": .int(0)], tileZoom: 0))
+        guard case .pointLabel(let label) = ocean, case .surface(let placement) = label.placement else {
+            return XCTFail("an ocean's name is a label painted on the map")
+        }
+        XCTAssertTrue(placement.isVisible(atZoom: 0))
+    }
+
     // MARK: Places by zoom
 
     func testOnlyCountriesAreLabelledAtTheLowestZooms() {

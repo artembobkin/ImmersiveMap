@@ -123,6 +123,16 @@ struct TileBuffers {
     let extruded: Extruded
     let textLabels: TextLabelSet
     let roadLabels: RoadLabels
+    var surfaceLabels: SurfaceLabels = .empty
+}
+
+/// The labels painted on the map: one record per label and its glyph quads
+/// in the tile's render units, a span of the arena.
+struct SurfaceLabels {
+    let labels: [SurfaceLabelRecord]
+    let vertices: TileBufferView?
+
+    static var empty: SurfaceLabels { SurfaceLabels(labels: [], vertices: nil) }
 }
 
 struct LabelGlyphRange {

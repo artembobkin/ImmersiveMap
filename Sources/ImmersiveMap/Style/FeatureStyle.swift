@@ -351,19 +351,25 @@ public struct PointLabelStyle: Sendable {
     public var minCameraZoom: Float
     /// The sprite drawn beside the text, nil for text alone.
     public var icon: PoiSpriteIcon?
+    /// Upright on the screen, or painted on the map. A label painted on the
+    /// map draws its text alone: the icon, the ranks and the minimum camera
+    /// zoom belong to the screen labels.
+    public var placement: LabelPlacement
 
     public init(key: UInt8,
                 text: LabelTextStyle,
                 rank: Int = 0,
                 collisionRank: Int? = nil,
                 minCameraZoom: Float = 0,
-                icon: PoiSpriteIcon? = nil) {
+                icon: PoiSpriteIcon? = nil,
+                placement: LabelPlacement = .screen) {
         self.key = key
         self.text = text
         self.rank = rank
         self.collisionRank = collisionRank ?? rank
         self.minCameraZoom = minCameraZoom
         self.icon = icon
+        self.placement = placement
     }
 }
 
@@ -499,19 +505,22 @@ public extension FeatureStyle {
     /// A point label. The text is the name the schema reading states, in
     /// the map's language; this says how it is drawn, how important it is
     /// (`rank`, lower first, and `collisionRank`, which defaults to the
-    /// rank), from which camera zoom, and which sprite stands beside it.
+    /// rank), from which camera zoom, which sprite stands beside it, and
+    /// whether it stands on the screen or lies on the map.
     static func pointLabel(key: UInt8,
                            _ textStyle: LabelTextStyle,
                            rank: Int = 0,
                            collisionRank: Int? = nil,
                            minCameraZoom: Float = 0,
-                           icon: PoiSpriteIcon? = nil) -> FeatureStyle {
+                           icon: PoiSpriteIcon? = nil,
+                           placement: LabelPlacement = .screen) -> FeatureStyle {
         .pointLabel(PointLabelStyle(key: key,
                                     text: Self.keyed(textStyle, key: key),
                                     rank: rank,
                                     collisionRank: collisionRank,
                                     minCameraZoom: minCameraZoom,
-                                    icon: icon))
+                                    icon: icon,
+                                    placement: placement))
     }
 
     /// A road drawn as a line of a width in tile units, with its name laid

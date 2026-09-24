@@ -55,7 +55,8 @@ final class TileRenderStore: @unchecked Sendable {
         let roadLabelsBuilder = TileRoadLabelsBuilder(textRenderer: textRenderer)
         self.preparedDataBuilder = TilePreparedDataBuilder(tileParser: tileParser,
                                                            textLabelsBuilder: textLabelsBuilder,
-                                                           roadLabelsBuilder: roadLabelsBuilder)
+                                                           roadLabelsBuilder: roadLabelsBuilder,
+                                                           surfaceLabelsBuilder: TileSurfaceLabelsBuilder(textRenderer: textRenderer))
         self.metalTileFactory = MetalTileFactory(metalDevice: metalDevice)
         workingSet = TileWorkingSetStore(tileTraceRecorder: tileTraceRecorder)
         // The factory owns the MTLIO capability decision: the transport that

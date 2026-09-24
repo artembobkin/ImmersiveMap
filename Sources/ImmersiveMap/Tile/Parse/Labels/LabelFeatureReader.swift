@@ -54,7 +54,8 @@ struct LabelFeatureReader {
                                                      collisionPriority: decision.priority.collisionRank,
                                                      textStyle: decision.style,
                                                      poiIcon: decision.poiIcon,
-                                                     minCameraZoom: style.minCameraZoom))
+                                                     minCameraZoom: style.minCameraZoom,
+                                                     placement: style.placement))
             if label.namesWaterBody {
                 result.waterNameTexts.insert(decision.text)
             }
@@ -95,7 +96,8 @@ struct LabelFeatureReader {
                                                      collisionPriority: fallback.sortKey,
                                                      textStyle: style.text,
                                                      poiIcon: nil,
-                                                     minCameraZoom: style.minCameraZoom))
+                                                     minCameraZoom: style.minCameraZoom,
+                                                     placement: style.placement))
         }
     }
 

@@ -611,9 +611,11 @@ public extension ProtomapsBasemapTheme.LabelStyles {
         poi: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.40, 0.42, 0.40), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.225, sizePoints: 8, weight: .thin),
+        // The water names lie on the water: a deeper blue of its own hue
+        // and no halo, so they read as part of the surface.
         water: ProtomapsBasemapTheme.LabelAppearance(
-            fillColor: SIMD3<Float>(0.24, 0.44, 0.68), strokeColor: SIMD3<Float>(1, 1, 1),
-            haloEm: 0.168, sizePoints: 9.5, weight: .thin),
+            fillColor: SIMD3<Float>(0.29, 0.49, 0.71), strokeColor: SIMD3<Float>(1, 1, 1),
+            haloEm: 0, sizePoints: 9.5, weight: .thin),
         road: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.30, 0.30, 0.30), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.106, sizePoints: 17, weight: .bold)

@@ -16,6 +16,7 @@ enum TileArenaSlot: Equatable, Sendable {
     case glyphRunVertices(run: Int)
     case poiIconRunVertices(run: Int)
     case roadLabelGlyphVertices
+    case surfaceLabelVertices
 }
 
 /// The geometry layers a tile carries, in schema vocabulary.
@@ -46,7 +47,8 @@ struct TileArenaTextRunCounts: Equatable, Sendable {
 enum TileArenaSchema {
     /// The canonical slot sequence: ground, road buckets x phases (in their
     /// draw orders), bridge overlay, extruded, the text label set (glyph
-    /// runs, then POI icon runs), road label glyphs.
+    /// runs, then POI icon runs), road label glyphs, the glyphs of the labels
+    /// painted on the map.
     static func slots(text: TileArenaTextRunCounts) -> [TileArenaSlot] {
         var slots: [TileArenaSlot] = []
         appendGeometryLayer(.ground, to: &slots)
@@ -68,6 +70,7 @@ enum TileArenaSchema {
             slots.append(.poiIconRunVertices(run: run))
         }
         slots.append(.roadLabelGlyphVertices)
+        slots.append(.surfaceLabelVertices)
         return slots
     }
 
@@ -104,7 +107,7 @@ enum TileArenaSchema {
             return MemoryLayout<SIMD2<Float>>.stride
         case .geometryLineStyles:
             return MemoryLayout<TileLineStyle>.stride
-        case .glyphRunVertices, .poiIconRunVertices, .roadLabelGlyphVertices:
+        case .glyphRunVertices, .poiIconRunVertices, .roadLabelGlyphVertices, .surfaceLabelVertices:
             return MemoryLayout<LabelVertex>.stride
         case .geometryIndices, .extrudedIndices:
             return nil

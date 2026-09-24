@@ -20,6 +20,7 @@ final class RenderPersistentContext {
     let polygonPipeline: PolygonsPipeline
     let tilePipeline: TilePipeline
     let globeVectorSurfacePipeline: TilePipeline
+    let surfaceLabelPipeline: SurfaceLabelPipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
     let tileOwnershipPipeline: TileOwnershipPipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
@@ -130,6 +131,7 @@ final class RenderPersistentContext {
         self.polygonPipeline = shared.polygonPipeline
         self.tilePipeline = shared.tilePipeline
         self.globeVectorSurfacePipeline = shared.globeVectorSurfacePipeline
+        self.surfaceLabelPipeline = shared.surfaceLabelPipeline
         self.extrudedTilePipeline = shared.extrudedTilePipeline
         self.tileOwnershipPipeline = shared.tileOwnershipPipeline
         self.groundShadowMaskPipeline = shared.groundShadowMaskPipeline

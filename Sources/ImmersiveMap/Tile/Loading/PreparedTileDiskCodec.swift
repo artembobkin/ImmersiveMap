@@ -345,6 +345,7 @@ enum PreparedTileDiskCodec {
         let roadSizeCount: UInt32
         let roadAnchorRanges: [RoadLabelAnchorRangeValue]
         let roadAnchors: [RoadLabelAnchorValue]
+        let surfaceLabels: [SurfaceLabelRecordValue]
     }
 
     struct SpanValue: Codable {
@@ -398,6 +399,41 @@ enum PreparedTileDiskCodec {
                 glyphRunStyles: try glyphRunStyles.map { try $0.runtimeValue() },
                 poiIconRunStyles: try poiIconRunStyles.map { try $0.runtimeValue() }
             )
+        }
+    }
+
+    struct SurfaceLabelRecordValue: Codable {
+        let key: UInt64
+        let style: LabelTextStyleValue
+        let referenceZoom: Double
+        /// nil for an open end.
+        let minimumZoom: Double?
+        let maximumZoom: Double?
+        let letterSpacingEm: Float
+        let vertexStart: UInt32
+        let vertexCount: UInt32
+
+        init(_ record: SurfaceLabelRecord) throws {
+            key = record.key
+            style = try LabelTextStyleValue(record.style)
+            referenceZoom = record.placement.referenceZoom
+            minimumZoom = record.placement.minimumZoom.isFinite ? record.placement.minimumZoom : nil
+            maximumZoom = record.placement.maximumZoom.isFinite ? record.placement.maximumZoom : nil
+            letterSpacingEm = record.placement.letterSpacingEm
+            vertexStart = try encodeUInt32(record.vertexStart, field: "SurfaceLabelRecord.vertexStart")
+            vertexCount = try encodeUInt32(record.vertexCount, field: "SurfaceLabelRecord.vertexCount")
+        }
+
+        func runtimeValue() throws -> SurfaceLabelRecord {
+            let placement = SurfaceLabelPlacement(referenceZoom: referenceZoom,
+                                                  minimumZoom: minimumZoom ?? -.infinity,
+                                                  maximumZoom: maximumZoom ?? .infinity,
+                                                  letterSpacingEm: letterSpacingEm)
+            return SurfaceLabelRecord(key: key,
+                                      style: try style.runtimeValue(),
+                                      placement: placement,
+                                      vertexStart: Int(vertexStart),
+                                      vertexCount: Int(vertexCount))
         }
     }
 
@@ -664,7 +700,8 @@ enum PreparedTileDiskCodec {
             roadSizes: encodePODArray(preparedTile.roadLabels.sizes),
             roadSizeCount: encodeUInt32(preparedTile.roadLabels.sizes.count, field: "RoadLabels.sizes.count"),
             roadAnchorRanges: preparedTile.roadLabels.anchorRanges.map(RoadLabelAnchorRangeValue.init),
-            roadAnchors: preparedTile.roadLabels.anchors.map(RoadLabelAnchorValue.init)
+            roadAnchors: preparedTile.roadLabels.anchors.map(RoadLabelAnchorValue.init),
+            surfaceLabels: preparedTile.surfaceLabels.labels.map(SurfaceLabelRecordValue.init)
         )
 
         let encoder = PropertyListEncoder()
@@ -779,7 +816,8 @@ enum PreparedTileDiskCodec {
                 anchorRanges: entry.roadAnchorRanges.map { $0.runtimeValue() },
                 anchors: entry.roadAnchors.map { $0.runtimeValue() }
             ),
-            blob: blob
+            blob: blob,
+            surfaceLabels: try entry.surfaceLabels.map { try $0.runtimeValue() }
         )
         return PreparedTileDiskCacheHit(image: image,
                                         sourceETag: entry.sourceETag.isEmpty ? nil : entry.sourceETag)

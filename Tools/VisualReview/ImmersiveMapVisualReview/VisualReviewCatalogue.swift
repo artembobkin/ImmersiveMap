@@ -187,6 +187,20 @@ enum VisualReviewCatalogue {
                                                           zoom: 1.5,
                                                           bearing: 0.4,
                                                           pitch: 0.6)
+        /// The North Atlantic between the Americas and Europe, the globe
+        /// turned and tilted: the ocean and sea names painted on the sphere.
+        static let atlanticGlobe = ImmersiveMapCameraPosition(latitudeDegrees: 35.0,
+                                                              longitudeDegrees: -35.0,
+                                                              zoom: 1.6,
+                                                              bearing: 0.5,
+                                                              pitch: 0.5)
+        /// Lake Geneva on the flat map, under a turned and tilted camera: a
+        /// lake's name painted on the water.
+        static let lakeGenevaTilted = ImmersiveMapCameraPosition(latitudeDegrees: 46.43,
+                                                                 longitudeDegrees: 6.55,
+                                                                 zoom: 8.6,
+                                                                 bearing: 0.5,
+                                                                 pitch: 0.9)
     }
 
     static let scenarios: [VisualReviewScenario] = [
@@ -221,6 +235,36 @@ enum VisualReviewCatalogue {
             settings: .default,
             subject: .still(camera: Place.sanFrancisco),
             output: .phone),
+
+        VisualReviewScenario(
+            id: "labels.surface.globe",
+            title: "Ocean names painted on the globe",
+            lookFor: """
+            The ocean and sea names lie on the water, not on the screen: each \
+            one follows the curve of the planet along its parallel, turns with \
+            the globe's bearing and is foreshortened toward the limb, and none \
+            shows on the far side. The letters are crisp with a thin light \
+            halo, whole where they cross a tile edge, and no name is drawn \
+            twice. The upright screen labels of the countries draw over them.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.atlanticGlobe)),
+
+        VisualReviewScenario(
+            id: "labels.surface.flat.tilted",
+            title: "A lake's name painted on the flat map",
+            lookFor: """
+            The lake's name lies on the water in the tilted flat map: it is \
+            turned with the map's bearing and foreshortened by the tilt like \
+            the shoreline around it, larger near the camera than far away. \
+            The halo stays thin and even on every letter, the text is whole \
+            across tile edges, and a building in front of it covers it rather \
+            than the other way round (a road or a bridge over the water stays \
+            under the text). The town names nearby \
+            stay upright on the screen.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.lakeGenevaTilted)),
 
         VisualReviewScenario(
             id: "globe.default",
