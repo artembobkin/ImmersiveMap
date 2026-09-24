@@ -49,14 +49,7 @@ The bench apps, the run script and the method are in
 
 ## Map Data
 
-The map draws the [Protomaps basemap](https://docs.protomaps.com/basemaps/layers), an OpenStreetMap planet packed into a single [PMTiles](https://docs.protomaps.com/pmtiles/) archive. The engine reads the archive straight from static storage with HTTP range requests, so there is no tile server in between. The archive hosted for this project is the default and needs no key or account. Your own archive, the whole planet or a region cut out with `pmtiles extract`, is one modifier away:
-
-```swift
-ImmersiveMapView()
-    .tileArchive(URL(string: "https://tiles.example.com/planet.pmtiles")!)
-```
-
-More in [Where the map data comes from](Documentation/docs/map-data.md).
+The map draws the Protomaps basemap, an OpenStreetMap planet in a single PMTiles archive that the engine reads with HTTP range requests, with no tile server in between. The archive hosted for this project is the default, and `.tileArchive(_:headers:)` points the map at any [Protomaps planet build](https://maps.protomaps.com/builds/) or a region cut from one.
 
 ## Quick Start
 
