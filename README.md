@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/artembobkin/ImmersiveMap/actions/workflows/ci.yml/badge.svg)](https://github.com/artembobkin/ImmersiveMap/actions/workflows/ci.yml) [![Swift Versions](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fartembobkin%2FImmersiveMap%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/artembobkin/ImmersiveMap) [![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Fartembobkin%2FImmersiveMap%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/artembobkin/ImmersiveMap) [![Release](https://img.shields.io/github/v/tag/artembobkin/ImmersiveMap?label=release&sort=semver&style=flat-square)](https://github.com/artembobkin/ImmersiveMap/tags) [![License](https://img.shields.io/github/license/artembobkin/ImmersiveMap?style=flat-square)](LICENSE)
 
-ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps** on Apple platforms, about +6 MB of app size.
+ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps** on Apple platforms.
 
 <p align="center">
   <img src="Assets/readme-manhattan.png" width="49%" alt="Manhattan with 3D buildings and shadows">
@@ -77,7 +77,7 @@ Maps powered by ImmersiveMap (immersivemap.dev)
 
 ## Contributing
 
-ImmersiveMap is currently maintained as a single-maintainer project. Issues and feedback are welcome. Pull requests are accepted. See [CONTRIBUTING.md](CONTRIBUTING.md). For bug reports, feature requests, questions and ideas, open an [issue](https://github.com/artembobkin/ImmersiveMap/issues).
+ImmersiveMap is currently maintained as a single-maintainer project. Issues and feedback are welcome. Pull requests are accepted. For bug reports, feature requests, questions and ideas, open an [issue](https://github.com/artembobkin/ImmersiveMap/issues).
 
 ## License
 
@@ -85,4 +85,4 @@ ImmersiveMap is available under the MIT license. See [LICENSE](LICENSE). The int
 
 ## Commercial Support
 
-I am available for consulting and custom ImmersiveMap integrations. To get in touch, open an [issue](https://github.com/artembobkin/ImmersiveMap/issues/new), or write to me in the chat at [immersivemap.dev/account](https://immersivemap.dev/account/).
+I am available for consulting and custom ImmersiveMap integrations. To get in touch, open an [issue](https://github.com/artembobkin/ImmersiveMap/issues/new).

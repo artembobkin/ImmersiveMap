@@ -2,7 +2,4 @@ blank_issues_enabled: true
 contact_links:
   - name: Security vulnerability
     url: https://github.com/artembobkin/ImmersiveMap/security/advisories/new
-    about: Please report security issues privately, not as public issues. See SECURITY.md.
-  - name: Commercial support / consulting
-    url: https://immersivemap.dev/account/
-    about: For consulting and custom integrations, write to me in the chat, or open a blank issue here.
+    about: Please report security issues privately, not as public issues.

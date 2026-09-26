@@ -1,6 +1,5 @@
 <!--
 Thanks for contributing to ImmersiveMap!
-Please read CONTRIBUTING.md before opening a PR.
 -->
 
 ## What changed
