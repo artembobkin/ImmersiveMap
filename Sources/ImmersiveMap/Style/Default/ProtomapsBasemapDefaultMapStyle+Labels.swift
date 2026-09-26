@@ -4,33 +4,13 @@
 import Mvt
 import simd
 
-/// The labels: which point features of `places`, `water` and `pois` become
-/// labels at which tile zoom, how they rank against each other, and how
-/// each is drawn. The road names are laid along the roads themselves
-/// (`roadStyle`).
+/// The labels: every named point of `places`, `water` and `pois` and every
+/// house number of `buildings` becomes a label on each tile that ships it.
+/// The POIs and the house numbers wait for the camera zoom the theme's
+/// `labelVisibility` gives them, and how the rest rank against each other
+/// decides which of them the collisions keep. The road names are laid
+/// along the roads themselves (`roadStyle`).
 extension ProtomapsBasemapDefaultMapStyle {
-    /// The point labels of the coarse zooms are a short list: the
-    /// countries up to z2, the countries and the major cities at z3, the
-    /// oceans up to z4.
-    static let lowZoomOverviewMaximumTileZoom = 4
-    /// The tile zoom the POIs join from. The basemap ships the biggest of
-    /// them (an airport, a national park) much earlier, but over a region
-    /// view they compete with the places for the same room.
-    static let poiMinimumTileZoom = 13
-    /// The peaks and the airports are landmarks of a region view and join
-    /// before the rest of the POIs.
-    static let landmarkPoiMinimumTileZoom = 8
-
-    /// OSM street furniture that must never become a label at any zoom:
-    /// bicycle racks, waste baskets, gates, building entrances, bus stops.
-    /// Such kinds amount to thousands of features per tile and only clutter
-    /// collisions.
-    static let excludedPoiKinds: Set<String> = [
-        "bicycle_parking", "waste_basket", "gate", "entrance", "bench",
-        "drinking_water", "toilets", "vending_machine", "recycling",
-        "bus_stop", "parking", "atm"
-    ]
-
     /// A feature without a rank is the least important thing in its layer.
     static let unrankedLabelRank = 1_000
 
@@ -62,12 +42,13 @@ extension ProtomapsBasemapDefaultMapStyle {
     }
 
     /// The collision bands: places beat water names beat peaks and airports
-    /// beat the other POIs whatever their ranks.
+    /// beat the other POIs beat the house numbers whatever their ranks.
     enum LabelBand {
         case place
         case water
         case landmark
         case poi
+        case address
 
         var base: Int {
             switch self {
@@ -75,57 +56,13 @@ extension ProtomapsBasemapDefaultMapStyle {
             case .water: return 20_000
             case .landmark: return 40_000
             case .poi: return 50_000
+            case .address: return 70_000
             }
         }
     }
 
     static func labelCollisionRank(band: LabelBand, rank: Int) -> Int {
         band.base + rank
-    }
-
-    /// The tile zoom a kind of place is shown from when the tile states no
-    /// `min_zoom` for it.
-    static func placeFallbackMinimumZoom(kind: String?) -> Int {
-        switch kind {
-        case "country": return 0
-        case "region": return 4
-        case "locality": return 5
-        default: return 12
-        }
-    }
-
-    func includesPlaceLabel(kind: String?, kindDetail: String?, props: [String: MvtValue], tileZoom: Int) -> Bool {
-        // Countries dominate the very low zooms.
-        if tileZoom <= 2 {
-            return kind == "country"
-        }
-        // z3: countries, the cities and the capitals, and not the dense
-        // region labels that otherwise flood this zoom.
-        if tileZoom == 3 {
-            if kind == "country" {
-                return true
-            }
-            return kind == "locality" && (kindDetail == "city" || isCapital(props))
-        }
-        let minimumZoom = parseIntValue(props["min_zoom"]) ?? Self.placeFallbackMinimumZoom(kind: kind)
-        return tileZoom >= minimumZoom
-    }
-
-    func includesWaterLabel(kind: String?, tileZoom: Int) -> Bool {
-        guard tileZoom <= Self.lowZoomOverviewMaximumTileZoom else { return true }
-        // The basemap files the seas under the ocean kind as well.
-        return kind == "ocean"
-    }
-
-    func includesPoiLabel(kind: String?, tileZoom: Int) -> Bool {
-        let minimumZoom = Self.isLandmarkPoi(kind: kind) ? Self.landmarkPoiMinimumTileZoom : Self.poiMinimumTileZoom
-        guard tileZoom >= minimumZoom else {
-            return false
-        }
-        if let kind, Self.excludedPoiKinds.contains(kind) {
-            return false
-        }
-        return true
     }
 
     /// The `capital` attribute is the raw OSM value, present on a capital
@@ -194,13 +131,12 @@ extension ProtomapsBasemapDefaultMapStyle {
     /// Where a water name painted on the map shows. The basemap ships the
     /// name from the tile zoom `minimumZoom`, which the engine draws from
     /// that camera zoom on: the name shows from there at its point size,
-    /// grows with the map from half a zoom in, and is gone two zooms in,
-    /// before it outgrows the water it names.
+    /// grows with the map from half a zoom in, and stays on the water at
+    /// every deeper zoom, covering the same ground as the water it names.
     static func waterLabelSurfacePlacement(minimumZoom: Int) -> SurfaceLabelPlacement {
         let start = Double(max(minimumZoom, 0))
         return SurfaceLabelPlacement(referenceZoom: start + 0.5,
                                      minimumZoom: start,
-                                     maximumZoom: start + 2,
                                      letterSpacingEm: waterLabelLetterSpacingEm)
     }
 
@@ -224,34 +160,39 @@ extension ProtomapsBasemapDefaultMapStyle {
     // the icon glyph is white. All POIs share one key (72): runs are grouped by
     // full style identity (weight + colors), so different categories land in
     // separate draw runs.
-    func poiLabelStyle(kind: String?, props: [String: MvtValue], tileZoom: Int) -> FeatureStyle {
-        // The basemap states per POI the tile zoom it belongs to
-        // (`min_zoom`, from the feature's prominence), and every tile from
-        // there carries it. The label appears with the camera at that zoom
-        // and never before the tile it rides: a static threshold the
-        // runtime and the collisions apply by camera zoom.
-        let icon = Self.poiIcon(kind: kind)
-        let isLandmark = Self.isLandmarkPoi(kind: kind)
-        var minCameraZoom = Float(tileZoom)
-        if isLandmark == false || kind != "aerodrome" {
-            minCameraZoom = max(minCameraZoom, Float(parseIntValue(props["min_zoom"]) ?? Self.poiUnstatedMinimumZoom))
+    func poiLabelStyle(kind: String?, props: [String: MvtValue]) -> FeatureStyle {
+        let visibility = theme.labelVisibility
+        // The basemap ranks a POI by the zoom it belongs to: its deepest
+        // tile (z15) ships the whole street, down to the cafés at 16, the
+        // shops at 17 and the bus stops at 18, and the POI waits for that
+        // camera zoom instead of crowding the ones ranked above it.
+        var minCameraZoom: Float = 0
+        if visibility.poiFollowsSourceMinimumZoom, let sourceMinimumZoom = parseIntValue(props["min_zoom"]) {
+            minCameraZoom = Float(sourceMinimumZoom)
         }
+        if let category = Self.poiCategory(kind: kind) {
+            minCameraZoom = max(minCameraZoom, Float(visibility.poiCategoryMinimumZoom.zoom(for: category)))
+        }
+        if let name = props["name"]?.stringValue, name.count > visibility.poiLongNameCharacterCount {
+            minCameraZoom = max(minCameraZoom, Float(visibility.poiLongNameMinimumZoom))
+        }
+        var icon = Self.poiIcon(kind: kind)
         if icon == nil {
-            // A category the icon set does not know (an office, a company, a
-            // monument, a named building) has nothing to draw but its name,
-            // and in a city centre those names outnumber everything else: bare
-            // text over the buildings, saying nothing about what the place is.
-            // By default they are left out entirely; a theme that
-            // wants them back gets them from the iconless zoom floor.
+            // A category the icon set does not know draws with the plain
+            // marker, a small dot in the category colour, so the place
+            // still shows as a place and not as bare text. A theme that wants such POIs gone (`poiRequiresIcon`)
+            // or held back to a zoom (`poiIconlessMinimumZoom`) says so.
             guard theme.labelVisibility.poiRequiresIcon == false else {
                 return hiddenStyle
             }
+            icon = .marker
             minCameraZoom = max(minCameraZoom, Float(theme.labelVisibility.poiIconlessMinimumZoom))
         }
         // The global POI floor is an absolute visibility gate that may
         // exceed everything above (up to hiding POIs entirely).
         minCameraZoom = max(minCameraZoom, Float(theme.labelVisibility.poiMinimumZoom))
 
+        let isLandmark = Self.isLandmarkPoi(kind: kind)
         var appearance = theme.labels.poi
         appearance.fillColor = poiCategoryColor(kind: kind)
         let key: UInt8
@@ -268,18 +209,63 @@ extension ProtomapsBasemapDefaultMapStyle {
                           icon: icon)
     }
 
-    /// The zoom a POI without a stated `min_zoom` is taken to belong to:
-    /// past the basemap's deepest tile, so it only ever shows overzoomed.
-    static let poiUnstatedMinimumZoom = 16
+    /// A house number: the address points of the `buildings` layer, which
+    /// the schema reads as a label carrying the number. Small grey text
+    /// with no icon, below every other label in the collisions, so a
+    /// number shows only where the street and its places leave room.
+    func addressLabelStyle(facts: ImmersiveMapFeatureFacts) -> FeatureStyle {
+        guard facts.label != nil else {
+            return hiddenStyle
+        }
+        var appearance = theme.labels.poi
+        appearance.sizePoints -= 2
+        appearance.weight = .thin
+        appearance.fillColor = SIMD3<Float>(0.45, 0.45, 0.47)
+        return pointLabel(key: 76,
+                          band: .address,
+                          rank: 0,
+                          appearance: appearance,
+                          minCameraZoom: Float(theme.labelVisibility.addressMinimumZoom))
+    }
+
+    /// The POI categories that wait for a zoom of their own
+    /// (`LabelVisibility.PoiCategoryZooms`), from the POI's `kind`, the raw
+    /// OSM value. Nil for the rest, which follow the basemap's rank alone:
+    /// the landmarks, museums and theatres, the parks, the stations, the
+    /// hospitals, the places of worship, the food and drink, the hotels,
+    /// the malls and department stores.
+    static func poiCategory(kind: String?) -> PoiCategory? {
+        switch kind {
+        case "university", "college", "research_institute":
+            return .campus
+        case "mall", "department_store", "marketplace":
+            return nil
+        case "post_office", "post_box", "parcel_locker", "bank", "atm", "bureau_de_change",
+             "money_transfer", "pharmacy", "chemist", "clinic", "doctors", "dentist",
+             "school", "kindergarten", "childcare", "music_school", "language_school", "driving_school",
+             "townhall", "civic_admin", "administrative", "government", "courthouse", "embassy",
+             "police", "fire_station", "community_centre", "social_facility",
+             "toilets", "fuel", "charging_station", "car_wash", "car_repair", "veterinary",
+             "hairdresser", "laundry", "dry_cleaning", "copyshop":
+            return .service
+        case "bus_stop", "stop", "tram_stop", "platform", "subway_entrance", "halt", "taxi",
+             "ticket_validator", "parking", "parking_entrance", "parking_space",
+             "bicycle_parking", "motorcycle_parking", "kick-scooter_parking", "car_sharing",
+             "bicycle_rental", "mobility_hub":
+            return .transitDetail
+        default:
+            return poiIcon(kind: kind) == .shopping ? .shop : nil
+        }
+    }
 
     /// The sprite a POI draws beside its name, from its `kind`, the raw OSM
-    /// value. Nil for a category with no symbol, which draws as text alone
-    /// or not at all (`poiRequiresIcon`).
+    /// value. Nil for a category with no symbol of its own, which draws
+    /// with the plain marker or not at all (`poiRequiresIcon`).
     static func poiIcon(kind: String?) -> PoiSpriteIcon? {
         switch kind {
-        case "restaurant", "fast_food", "food_court":
+        case "restaurant", "fast_food", "food_court", "ice_cream":
             return .restaurant
-        case "cafe", "bakery":
+        case "cafe", "bakery", "pastry", "coffee", "tea", "juice_bar", "internet_cafe":
             return .cafe
         case "bar", "pub", "biergarten", "nightclub":
             return .bar
@@ -293,11 +279,19 @@ extension ProtomapsBasemapDefaultMapStyle {
             return .school
         case "aerodrome", "airfield", "heliport":
             return .airport
-        case "stadium", "sports_centre", "pitch":
+        case "stadium", "sports_centre", "pitch", "fitness_centre", "sports", "dojo", "ice_rink",
+             "swimming_pool", "playground", "golf_course":
             return .stadium
         case "hotel", "hostel", "guest_house", "motel":
             return .hotel
-        case "supermarket", "mall", "convenience", "department_store", "marketplace":
+        case "supermarket", "mall", "convenience", "department_store", "marketplace",
+             "grocery", "kiosk", "deli", "alcohol", "wine", "cheese", "seafood", "confectionery",
+             "health_food", "greengrocer", "butcher", "retail", "clothes", "shoes", "bag",
+             "fashion_accessories", "jewelry", "watches", "gift", "books", "stationery",
+             "newsagent", "toys", "electronics", "mobile_phone", "hifi", "hardware", "doityourself",
+             "furniture", "houseware", "florist", "cosmetics", "perfumery", "beauty", "optician",
+             "pet", "bicycle", "car", "second_hand", "antiques", "art", "music", "musical_instrument",
+             "photo", "fabric", "tobacco", "e-cigarette", "cannabis", "variety_store", "baby_goods":
             return .shopping
         case "fuel", "charging_station":
             return .gasStation
@@ -305,6 +299,24 @@ extension ProtomapsBasemapDefaultMapStyle {
             return .pharmacy
         case "viewpoint", "attraction", "peak", "volcano":
             return .viewpoint
+        case "station", "halt", "tram_stop", "subway_entrance", "platform":
+            return .train
+        case "bus_stop", "bus_station", "stop", "taxi", "ferry_terminal", "mobility_hub":
+            return .transit
+        case "parking", "parking_entrance", "parking_space", "bicycle_parking",
+             "motorcycle_parking", "kick-scooter_parking", "car_sharing", "bicycle_rental":
+            return .parking
+        case "bank", "atm", "bureau_de_change", "money_transfer":
+            return .bank
+        case "theatre", "cinema", "arts_centre", "music_venue", "events_venue", "conference_centre":
+            return .theatre
+        case "toilets":
+            return .toilets
+        case "townhall", "police", "fire_station", "post_office", "courthouse", "civic_admin",
+             "administrative", "community_centre", "embassy", "social_facility":
+            return .civic
+        case "place_of_worship", "religious", "religious_administration", "monastery":
+            return .worship
         default:
             return nil
         }
@@ -327,16 +339,24 @@ extension ProtomapsBasemapDefaultMapStyle {
             return SIMD3<Float>(0.82, 0.22, 0.26)   // health: red
         case "school", "college", "university", "kindergarten", "library":
             return SIMD3<Float>(0.22, 0.46, 0.52)   // education: teal
-        case "museum", "gallery", "attraction", "artwork", "theatre", "cinema":
+        case "museum", "gallery", "attraction", "artwork", "theatre", "cinema",
+             "arts_centre", "music_venue", "events_venue", "conference_centre":
             return SIMD3<Float>(0.46, 0.30, 0.66)   // culture: violet
         case "park", "garden", "national_park", "nature_reserve", "dog_park",
              "stadium", "pitch", "sports_centre", "swimming_pool", "golf_course", "playground", "picnic_site":
             return SIMD3<Float>(0.22, 0.54, 0.30)   // leisure/nature: green
         case "station", "aerodrome", "airfield", "heliport", "fuel", "charging_station",
-             "car_rental", "ferry_terminal", "harbour":
+             "car_rental", "ferry_terminal", "harbour", "halt", "tram_stop", "subway_entrance",
+             "platform", "bus_stop", "bus_station", "stop", "taxi", "mobility_hub",
+             "parking", "parking_entrance", "parking_space", "bicycle_parking",
+             "motorcycle_parking", "kick-scooter_parking", "car_sharing", "bicycle_rental":
             return SIMD3<Float>(0.32, 0.42, 0.55)   // transport: blue-gray
-        case "bank", "post_office", "townhall", "police", "fire_station", "government":
+        case "bank", "post_office", "townhall", "police", "fire_station", "government",
+             "atm", "bureau_de_change", "money_transfer", "courthouse", "civic_admin",
+             "administrative", "community_centre", "embassy", "social_facility", "toilets":
             return SIMD3<Float>(0.40, 0.44, 0.52)   // offices/public services: gray-blue
+        case "place_of_worship", "religious", "religious_administration", "monastery":
+            return SIMD3<Float>(0.55, 0.45, 0.22)   // worship: muted gold
         default:
             return theme.labels.poi.fillColor  // everything else: default dark
         }
@@ -366,5 +386,25 @@ extension ProtomapsBasemapDefaultMapStyle {
                        haloEm: appearance.haloEm,
                        sizePoints: LabelTypeScale.clamped(appearance.sizePoints),
                        weight: appearance.weight)
+    }
+}
+
+/// A POI category that waits for a zoom of its own, see
+/// `ProtomapsBasemapTheme.LabelVisibility.PoiCategoryZooms`.
+enum PoiCategory {
+    case campus
+    case shop
+    case service
+    case transitDetail
+}
+
+extension ProtomapsBasemapTheme.LabelVisibility.PoiCategoryZooms {
+    func zoom(for category: PoiCategory) -> Int {
+        switch category {
+        case .campus: return campus
+        case .shop: return shop
+        case .service: return service
+        case .transitDetail: return transitDetail
+        }
     }
 }

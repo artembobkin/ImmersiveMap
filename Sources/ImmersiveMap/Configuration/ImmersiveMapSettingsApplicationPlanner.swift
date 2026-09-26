@@ -13,6 +13,7 @@ public enum ImmersiveMapSettingsChangeDomain: String, CaseIterable, Equatable {
     case attribution
     case postProcessing
     case debug
+    case landmarks
 }
 
 public enum ImmersiveMapSettingsApplyAction: String, CaseIterable, Equatable {
@@ -120,6 +121,18 @@ public enum ImmersiveMapSettingsApplicationPlanner {
             } else {
                 mark(.postProcessing, actions: [.rebuildGPUResources, .recreateRenderer])
             }
+        }
+
+        // Which buildings the landmarks replace, and from which zoom, is baked
+        // into every prepared tile (the cache identity carries it). The
+        // models alone are read per frame.
+        func replacement(_ settings: ImmersiveMapSettings) -> [String] {
+            settings.landmarks.map { "\($0.replacedBuilding)@\($0.minimumZoom)" }
+        }
+        if replacement(oldValue) != replacement(newValue) {
+            mark(.landmarks, actions: [.rebuildPreparedData, .recreateRenderer])
+        } else if oldValue.landmarks != newValue.landmarks {
+            mark(.landmarks, actions: [.liveApply])
         }
 
         return ImmersiveMapSettingsApplicationPlan(changedDomains: changedDomains, actions: actions)

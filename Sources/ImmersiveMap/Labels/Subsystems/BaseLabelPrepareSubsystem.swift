@@ -44,6 +44,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     private let fadeOutSeconds: TimeInterval
     private let maxGlyphTurnRadians: Float
     private let collisionGridCellSizePoints: Float
+    /// Half of `collisionSpacingPoints`: what every base label's collision
+    /// box grows by on each side, so two kept labels never touch.
+    private let collisionMarginPoints: Float
 
     private var sourceEntriesVersionTracker = StagedHashChangeTracker()
     private var projectionVersionTracker = StagedHashChangeTracker()
@@ -122,6 +125,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         self.fadeOutSeconds = settings.base.fadeOutSeconds
         self.maxGlyphTurnRadians = settings.road.maxGlyphTurnRadians
         self.collisionGridCellSizePoints = max(4.0, settings.base.gridCellSizePoints)
+        self.collisionMarginPoints = max(0, settings.base.collisionSpacingPoints) * 0.5
     }
 
     func update(frameContext: FrameContext) {
@@ -398,7 +402,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         baseFade.rebind(keys: inputs.map { $0.isValid ? $0.labelKey : 0 }, time: time)
         collisionSolver.rebindBase(ranks: candidates.map(LabelCollisionRank.init(candidate:)))
         baseGroupIds = candidates.map(\.groupId)
-        baseHalfSizesPx = candidates.map(\.halfSize)
+        baseHalfSizesPx = candidates.map { $0.halfSize + collisionMarginPoints }
         solvedPixelsPerPoint = 0
         baseScreenPoints = Array(repeating: ScreenPointOutput(position: .zero, depth: 0, visible: 0), count: count)
         baseHorizonVisible = Array(repeating: false, count: count)
@@ -420,7 +424,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         let candidates = baseLabelCache.labelCollisionAABBInputs
         let count = min(candidates.count, baseHalfSizesPx.count)
         for index in 0..<count {
-            baseHalfSizesPx[index] = candidates[index].halfSize * pixelsPerPoint
+            baseHalfSizesPx[index] = (candidates[index].halfSize + collisionMarginPoints) * pixelsPerPoint
         }
     }
 

@@ -553,6 +553,17 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Models that take the place of the map's own buildings: each one's
+    /// building (its OSM outline and the parts standing inside it) is no
+    /// longer extruded, and the model is drawn where it stood. See
+    /// ``ImmersiveMapLandmark``. Changing which buildings are replaced
+    /// prepares the tiles again, like a style change.
+    public func landmarks(_ landmarks: [ImmersiveMapLandmark]) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.landmarks(landmarks)
+        return view
+    }
+
     public func tileSettings(_ tiles: ImmersiveMapSettings.TileSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.tileSettings(tiles)

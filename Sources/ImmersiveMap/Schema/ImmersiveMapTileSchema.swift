@@ -72,4 +72,17 @@ public protocol ImmersiveMapTileSchema: Sendable {
     /// What the feature is. `.none` for a feature that is none of the
     /// things the facts describe: a ground fill, a border, a river.
     func read(_ feature: ImmersiveMapFeature) -> ImmersiveMapFeatureFacts
+    /// The id the tiles give the features made from an OSM element, nil
+    /// when the tiles carry no OSM identity. Every tile and every zoom the
+    /// element appears in carries the same id, which is how the engine finds
+    /// the building a landmark replaces.
+    func tileFeatureID(of element: ImmersiveMapOSMElement) -> UInt64?
+}
+
+public extension ImmersiveMapTileSchema {
+    /// A schema whose tiles carry no OSM identity: no building can be
+    /// replaced by a landmark.
+    func tileFeatureID(of element: ImmersiveMapOSMElement) -> UInt64? {
+        nil
+    }
 }

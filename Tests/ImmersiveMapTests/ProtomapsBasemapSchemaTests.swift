@@ -54,6 +54,24 @@ final class ProtomapsBasemapSchemaTests: XCTestCase {
         XCTAssertNotEqual(key(["oneway": .bool(true)]), key([:]))
     }
 
+    func testARoadWithOnlyARouteNumberIsNamedAndLabelledByIt() throws {
+        let road = try XCTUnwrap(facts(layer: "roads", ["kind": .string("highway"), "ref": .string("M10;E105")],
+                                       geometry: .linestring).road)
+        XCTAssertEqual(road.name, "M10 / E105")
+        XCTAssertEqual(road.label?.name, "M10 / E105")
+        XCTAssertNotNil(road.stitchingKey, "the number is the road's identity for stitching")
+    }
+
+    func testANamedRoadWithARouteNumberLeadsItsLabelWithTheNumber() throws {
+        let road = try XCTUnwrap(facts(layer: "roads",
+                                       ["kind": .string("major_road"), "ref": .string("A104"),
+                                        "name": .string("Dmitrovskoye"), "name:en": .string("Dmitrov Highway")],
+                                       geometry: .linestring).road)
+        XCTAssertEqual(road.name, "Dmitrovskoye", "the name stays the street's identity")
+        XCTAssertEqual(road.label?.name, "A104 · Dmitrovskoye")
+        XCTAssertEqual(road.label?.namesByLanguage["en"], "A104 · Dmitrov Highway")
+    }
+
     func testABuildingCarriesItsHeightsAndKind() {
         let building = facts(layer: "buildings",
                              ["kind": .string("building"), "height": .double(24), "min_height": .double(3)],

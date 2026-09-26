@@ -16,11 +16,12 @@ extension ProtomapsBasemapDefaultMapStyle {
     typealias RoadClass = ProtomapsBasemapTheme.RoadClass
 
     /// The class a road of the basemap draws as, from its `kind` and
-    /// `kind_detail`, nil for one the style does not draw: a sidewalk and a
-    /// crossing (the z14 noise around every street), an aerialway, a pier.
-    /// The ferries, the aeroways and the railways are handled before this
-    /// is asked, since they are not roads of any class.
-    static func roadClass(kind: String?, kindDetail: String?) -> RoadClass? {
+    /// `kind_detail`. Every line of the layer draws: a sidewalk and a
+    /// crossing are paths, and a kind the style does not name (an
+    /// aerialway, a pier) is `other`. The ferries, the aeroways and the
+    /// railways are handled before this is asked, since they are not roads
+    /// of any class.
+    static func roadClass(kind: String?, kindDetail: String?) -> RoadClass {
         let detail = kindDetail.map { $0.hasSuffix("_link") ? String($0.dropLast(5)) : $0 }
         switch kind {
         case "highway":
@@ -35,14 +36,9 @@ extension ProtomapsBasemapDefaultMapStyle {
         case "minor_road":
             return detail == "service" ? .service : .minor
         case "path":
-            switch detail {
-            case "sidewalk", "crossing": return nil
-            default: return .path
-            }
-        case "other":
-            return .other
+            return .path
         default:
-            return nil
+            return .other
         }
     }
 
@@ -58,34 +54,27 @@ extension ProtomapsBasemapDefaultMapStyle {
             // A ferry route is a symbolic line like a border: a thin dashed
             // stroke in the water's colour, stated in points and held there
             // at every zoom. It crosses the river under the bridges' decks.
-            guard tileZoom >= Self.ferryMinimumTileZoom else { return hiddenStyle }
             return FeatureStyle.pointLockedLine(key: 23,
                                                 color: theme.layers.water,
                                                 widthPoints: Self.ferryWidthPoints,
                                                 dashLengthPoints: Self.ferryDashPoints,
                                                 dashGapPoints: Self.ferryGapPoints)
         case "aeroway":
-            guard tileZoom >= Self.aerowayMinimumTileZoom else { return hiddenStyle }
+            // One key per width: the width is part of the baked style.
             switch kindDetail {
             case "runway":
                 return line(key: 28, color: theme.layers.aeroway, width: 8)
-            case "taxiway":
-                return line(key: 28, color: theme.layers.aeroway, width: 3)
             default:
-                return hiddenStyle
+                return line(key: 27, color: theme.layers.aeroway, width: 3)
             }
         case "rail":
-            return railStyle(kindDetail: kindDetail, tileZoom: tileZoom)
+            return railStyle(tunnel: isTunnel)
         default:
             break
         }
-        guard let roadClass = Self.roadClass(kind: kind, kindDetail: kindDetail) else {
-            return hiddenStyle
-        }
-        // A class draws only from the zoom where it can carry meaning: over a
-        // country or regional view every road the tile ships is a sub-pixel
-        // hairline, and drawing all of them just greys the map. Majors appear
-        // first, the minor network fills in toward street level.
+        let roadClass = Self.roadClass(kind: kind, kindDetail: kindDetail)
+        // The theme may hold a class back to a tile zoom. By default it
+        // does not: every road the tile ships draws.
         guard tileZoom >= theme.roadMetrics.minimumTileZoom.value(for: roadClass) else {
             return hiddenStyle
         }
@@ -106,8 +95,8 @@ extension ProtomapsBasemapDefaultMapStyle {
            let stroke = Self.overviewRoadStroke(roadClass) {
             return overviewRoadStyle(stroke,
                                      roadClass: roadClass,
+                                     name: road.name,
                                      color: Self.streetRoadColor(roadClass, roads: roads),
-                                     fadeStartZoom: Self.overviewRoadFadeStartZoom(roadClass),
                                      tileZoom: tileZoom,
                                      tunnel: isTunnel)
         }
@@ -176,24 +165,10 @@ extension ProtomapsBasemapDefaultMapStyle {
     }
 
     /// The ferry route's stroke: a dashed line a little heavier than a
-    /// regional border, in points, from the tile zoom the basemap ships
-    /// ferries readably.
-    static let ferryMinimumTileZoom = 8
+    /// regional border, in points.
     static let ferryWidthPoints: Float = 1.2
     static let ferryDashPoints: Float = 6.0
     static let ferryGapPoints: Float = 4.0
-
-    /// The runways and taxiways draw from the tile zoom the basemap ships
-    /// them at.
-    static let aerowayMinimumTileZoom = 10
-
-    /// The tile zoom a road's name is laid along it from: the street era,
-    /// where the symbol is wide enough to carry text.
-    static let roadLabelMinimumTileZoom = 12
-
-    /// The tile zoom the arrows of a one-way street appear from: the
-    /// basemap states `oneway` from z14.
-    static let onewayArrowMinimumTileZoom = 14
 
     /// The style key of everything a tunnel draws, one per class fill key.
     /// A key is a colour slot per tile: the parser bakes the first style it
@@ -279,23 +254,8 @@ extension ProtomapsBasemapDefaultMapStyle {
         let priority: Int
     }
 
-    /// The camera zoom a class fades in from, over the following zoom level
-    /// (`classZoomFade`): the tile zoom that first ships it readably, so the
-    /// class comes in with the camera instead of popping with the tile.
-    /// Trunks are gated with motorways at z5 but the basemap only ships them
-    /// from z6, so their fade starts where they exist.
-    static func overviewRoadFadeStartZoom(_ roadClass: RoadClass) -> Int {
-        switch roadClass {
-        case .motorway: return 5
-        case .trunk: return 6
-        case .primary: return 7
-        case .secondary: return 9
-        default: return 10
-        }
-    }
-
-    /// A fade in over the one zoom level from `startZoom`, what a road class
-    /// and a road's casing come in with.
+    /// A fade in over the one zoom level from `startZoom`, what a road's
+    /// casing comes in with.
     static func classZoomFade(startZoom: Int) -> ImmersiveMapZoomFade {
         .fadeIn(from: Double(startZoom), to: Double(startZoom) + 1)
     }
@@ -386,8 +346,8 @@ extension ProtomapsBasemapDefaultMapStyle {
     /// Tunnels are the same stroke at the tunnel opacity.
     func overviewRoadStyle(_ stroke: OverviewRoadStroke,
                            roadClass: RoadClass,
+                           name: String,
                            color: SIMD4<Float>,
-                           fadeStartZoom: Int,
                            tileZoom: Int,
                            tunnel: Bool) -> FeatureStyle {
         let fillKey = tunnel ? Self.roadTunnelKey(forFillKey: stroke.fillKey) : stroke.fillKey
@@ -404,10 +364,8 @@ extension ProtomapsBasemapDefaultMapStyle {
         let fill = LinePass(
             key: fillKey,
             color: fillColor,
-            // The class fades in over the zoom level after it first
-            // ships, continuous with the camera, instead of popping with
-            // the tile.
-            zoomFade: Self.classZoomFade(startZoom: fadeStartZoom),
+            // The class shows from the first tile that ships it.
+            zoomFade: Self.roadZoomFade,
             lineWidthPoints: widthPoints,
             pointWidthWorldLockZoom: theme.roadMetrics.worldLockZoom,
             pointWidthRamp: ramp,
@@ -419,7 +377,12 @@ extension ProtomapsBasemapDefaultMapStyle {
         guard tileZoom >= Self.roadPathMinimumTileZoom else {
             return .line(LineStyle(pass: fill, fillsAreas: false))
         }
-        return .road(RoadStyle(fill: fill, classPriority: stroke.priority))
+        // The name rides the stroke on the road path, as it does from the
+        // street era.
+        let label: LabelTextStyle? = name.isEmpty == false
+            ? labelTextStyle(key: Int(stroke.fillKey), appearance: theme.labels.road)
+            : nil
+        return .road(RoadStyle(fill: fill, classPriority: stroke.priority, label: label))
     }
 
     func roadStyle(fillKey: UInt8,
@@ -477,7 +440,7 @@ extension ProtomapsBasemapDefaultMapStyle {
                                 lineGeometry: fillGeometry)
         // The name is laid along the street's own symbol: the basemap ships
         // it on the road line, with no label layer of its own.
-        let label: LabelTextStyle? = name.isEmpty == false && tileZoom >= Self.roadLabelMinimumTileZoom
+        let label: LabelTextStyle? = name.isEmpty == false
             ? labelTextStyle(key: Int(fillKey), appearance: theme.labels.road)
             : nil
         // The arrows of a one-way street: a paint stroke in the detail
@@ -485,7 +448,7 @@ extension ProtomapsBasemapDefaultMapStyle {
         // figure along the surface segments. A tunnel carries no paint.
         var paint: [LinePass] = []
         var decoration: RoadDecorationKind = .none
-        if oneway, tunnel == false, tileZoom >= Self.onewayArrowMinimumTileZoom {
+        if oneway, tunnel == false {
             paint = [LinePass(key: Self.roadMarkingKey(forFillKey: fillKey),
                               color: theme.layers.roads.marking,
                               zoomFade: Self.roadMarkingZoomFade,
@@ -500,12 +463,8 @@ extension ProtomapsBasemapDefaultMapStyle {
                                label: label))
     }
 
-    /// The paint on the asphalt comes in over camera zoom 15 to 15.4:
-    /// nothing below 15, where a figure a few metres long is noise rather
-    /// than paint, and in full a little past it. The band starts at the
-    /// theme's default world lock, so the paint arrives on a road that is
-    /// already a width on the ground.
-    static let roadMarkingZoomFade = ImmersiveMapZoomFade.fadeIn(from: 15, to: 15.4)
+    /// The paint on the asphalt shows wherever the tile states it.
+    static let roadMarkingZoomFade = ImmersiveMapZoomFade.none
 
     /// The stroke the arrow figure is sized from, in tile units: the
     /// figure's length and width follow it (`RoadDirectionArrowGeometryBuilder`),
@@ -519,17 +478,14 @@ extension ProtomapsBasemapDefaultMapStyle {
     static let railDashPoints: Float = 6.0
     static let railGapPoints: Float = 6.0
 
-    func railStyle(kindDetail: String?, tileZoom: Int) -> FeatureStyle {
-        // Subway lines run in tunnels under buildings and parks and read as
-        // a confusing dashed line, so they stay hidden. Surface rail (rail,
-        // tram, light_rail, monorail) draws dashed.
-        if kindDetail == "subway" {
-            return hiddenStyle
-        }
+    /// Every railway draws dashed: surface rail, trams and the subway. A
+    /// line in a tunnel (most of a subway) takes the tunnel opacity of a
+    /// road, so it shows where it runs without reading as surface track.
+    func railStyle(tunnel: Bool) -> FeatureStyle {
         let ribbonWidth = Double(Self.railWidthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint
         return .road(RoadStyle(
-            fill: LinePass(key: 46,
-                           color: theme.layers.roads.rail,
+            fill: LinePass(key: tunnel ? 80 : 46,
+                           color: tunnel ? Self.tunnelTone(theme.layers.roads.rail) : theme.layers.roads.rail,
                            zoomFade: Self.roadZoomFade,
                            lineWidthPoints: Self.railWidthPoints,
                            dashLengthPoints: Self.railDashPoints,

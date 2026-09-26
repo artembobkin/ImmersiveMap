@@ -27,14 +27,13 @@ extension ProtomapsBasemapDefaultMapStyle {
     /// full grass green turned every z7 plain green and the step to z8
     /// into a jump from green to cream.
     ///
-    /// The land cover fades out over camera zoom 7 to 8
-    /// (`landcoverZoomFade`), while the z7 tiles still serve the view, and
-    /// the land use fades in over the same range (`landuseStyle`): the
-    /// handover is a cross-fade with the camera, not a step with the tiles.
+    /// The land cover draws on every tile that ships it, under the land
+    /// use of the same tile, and a class the style does not name draws in
+    /// the grassland tone rather than not at all. It fades out over camera
+    /// zoom 7 to 8 (`landcoverZoomFade`), while the z7 tiles, the last to
+    /// carry it, still serve the view, so it leaves with the camera instead
+    /// of popping off with the tile level.
     func landcoverStyle(kind: String?, tileZoom: Int) -> FeatureStyle {
-        guard tileZoom <= Self.landcoverMaximumTileZoom else {
-            return hiddenStyle
-        }
         let colors = theme.layers
         let fade = Self.landcoverZoomFade
         let vegetationBase = colors.grass
@@ -42,7 +41,7 @@ extension ProtomapsBasemapDefaultMapStyle {
         switch kind {
         case "barren":
             return polygon(key: 3, color: colors.sand, zoomFade: fade)
-        case "grassland", "scrub":
+        case "grassland", "scrub", nil:
             return polygon(key: 4,
                            color: blend(colors.land, toward: vegetationBase, amount: amount),
                            zoomFade: fade)
@@ -62,7 +61,7 @@ extension ProtomapsBasemapDefaultMapStyle {
             // street map's residential land use wears from z8.
             return polygon(key: 10, color: colors.residential, zoomFade: fade)
         default:
-            return hiddenStyle
+            return landcoverStyle(kind: nil, tileZoom: tileZoom)
         }
     }
 
@@ -93,20 +92,21 @@ extension ProtomapsBasemapDefaultMapStyle {
         base + (target - base) * amount
     }
 
-    /// The basemap's `landuse`: the OSM land use and the natural cover of
-    /// the street zooms, one kind per feature. In full from tile z8. On the
-    /// z7 tiles, which already carry part of it, it fades in over camera
-    /// zoom 7 to 8 (`landuseHandoverZoomFade`) as the land cover fades out,
-    /// so the z8 tiles take over a frame that already shows it.
-    func landuseStyle(kind: String?, tileZoom: Int) -> FeatureStyle {
-        guard tileZoom >= Self.landuseMinimumTileZoom else {
-            return hiddenStyle
-        }
+    /// The basemap's `landuse`: the OSM land use and the natural cover,
+    /// one kind per feature, on every tile that ships it. It lies over the
+    /// land cover of the coarse tiles that carry both. A kind the style
+    /// does not name draws in the muted built tone rather than not at all.
+    func landuseStyle(kind: String?) -> FeatureStyle {
         let colors = theme.layers
-        let fade: ImmersiveMapZoomFade = tileZoom < Self.landuseFullTileZoom ? Self.landuseHandoverZoomFade : .none
+        let fade = ImmersiveMapZoomFade.none
         switch kind {
         case "residential", "neighbourhood", "farmyard":
             return polygon(key: 9, color: colors.residential, zoomFade: fade)
+        case "protected_area":
+            // A protected area blankets whole regions and city centres: a
+            // faint green over the land, under the built-up tints and every
+            // other fill, so it shows only where nothing else is.
+            return polygon(key: 7, color: blend(colors.land, toward: colors.grass, amount: 0.25), zoomFade: fade)
         case "commercial", "industrial", "railway", "military",
              "hospital", "school", "university", "college":
             // Schools and hospitals are the muted built tone, not a green:
@@ -116,19 +116,20 @@ extension ProtomapsBasemapDefaultMapStyle {
             return polygon(key: 11, color: colors.wood, zoomFade: fade)
         case "park", "garden", "grass", "meadow", "recreation_ground", "cemetery",
              "golf_course", "pitch", "playground", "dog_park", "zoo",
-             "national_park", "nature_reserve", "scrub":
+             "national_park", "nature_reserve", "scrub", "grassland", "heath",
+             "village_green", "camp_site", "picnic_site":
             // One green for all urban greenery, so no two-tone seam where a
             // park meets the pitch inside it.
             return polygon(key: 12, color: colors.grass, zoomFade: fade)
-        case "farmland", "orchard":
+        case "farmland", "orchard", "allotments", "vineyard", "plant_nursery":
             return polygon(key: 13, color: colors.farmland, zoomFade: fade)
         case "wetland":
             return polygon(key: 14, color: colors.wetland, zoomFade: fade)
         case "glacier":
             return polygon(key: 17, color: colors.ice, zoomFade: fade)
-        case "sand", "beach":
+        case "sand", "beach", "bare_rock", "quarry", "scree", "shingle":
             return polygon(key: 18, color: colors.sand, zoomFade: fade)
-        case "aerodrome", "runway", "taxiway":
+        case "aerodrome", "airfield", "runway", "taxiway", "apron", "helipad":
             return polygon(key: 19, color: colors.aeroway, zoomFade: fade)
         case "pedestrian", "pier":
             // The basemap ships a bridge's deck (`man_made=bridge`) as a
@@ -137,16 +138,15 @@ extension ProtomapsBasemapDefaultMapStyle {
             // waterway lines and the ferry routes, in the land tone, under
             // the roads it carries. A square on land in the land tone reads
             // as the ground it is.
-            guard tileZoom >= Self.bridgeDeckMinimumTileZoom else {
-                return hiddenStyle
-            }
             return .fill(FillStyle(key: Self.bridgeDeckKey,
                                    color: colors.land,
                                    drawsAmongGroundLines: true))
         default:
-            // A protected area blankets whole city centres, and the rest (a
-            // marina, a stadium, an attraction) says nothing a fill should.
-            return hiddenStyle
+            // Everything else the basemap ships (retail, construction, a
+            // platform, a kindergarten, a stadium, a marina, `other`) is
+            // built or managed ground: the muted built tone marks where it
+            // is without a colour of its own.
+            return polygon(key: 9, color: colors.industrial, zoomFade: fade)
         }
     }
 
@@ -154,17 +154,18 @@ extension ProtomapsBasemapDefaultMapStyle {
     /// (22) and the ferry routes (23), below the aeroway lines and the
     /// borders.
     static let bridgeDeckKey: UInt8 = 24
-    /// A deck only reads next to the street network it carries.
-    static let bridgeDeckMinimumTileZoom = 13
 
     /// A river, a canal or a stream: the lines of the `water` layer. The
     /// basemap spells the waterway kind on `kind` for a line and on
     /// `kind_detail` for a body, so both are read.
+    ///
+    /// A culverted waterway (a negative `layer`, or a `tunnel` tag) still
+    /// draws, at the tunnel opacity of a road, so the network stays joined
+    /// and reads as underground.
     func waterwayStyle(kind: String?, kindDetail: String?, props: [String: MvtValue]) -> FeatureStyle {
-        // A culverted waterway is invisible in reality.
-        if let tunnel = props["tunnel"]?.stringValue?.lowercased(), tunnel.isEmpty == false, tunnel != "no" {
-            return hiddenStyle
-        }
+        let tunnelTag = props["tunnel"]?.stringValue?.lowercased()
+        let isCulvert = (parseIntValue(props["layer"]) ?? 0) < 0
+            || (tunnelTag.map { $0.isEmpty == false && $0 != "no" } ?? false)
         // The basemap ships major rivers from z9; without a floor their
         // 2.5-unit width is sub-pixel over a region view and the
         // antialiasing correctly dims them to near-invisibility, so a point
@@ -183,56 +184,78 @@ extension ProtomapsBasemapDefaultMapStyle {
             width = 1.0
             minimumWidthPoints = 0.5
         }
-        return line(key: 22,
-                    color: theme.layers.water,
+        return line(key: isCulvert ? 21 : 22,
+                    color: isCulvert ? Self.tunnelTone(theme.layers.water) : theme.layers.water,
                     width: width,
                     minimumWidthPoints: minimumWidthPoints)
     }
 
-    /// Below this tile zoom the map is a planet or continent view: regional
-    /// borders are pure clutter there and stay hidden.
-    static let regionalBoundaryMinimumZoom = 4
-
-    /// The `boundaries` layer: the country borders at every zoom, the
-    /// regions from the regional zoom, and nothing finer. A disputed
-    /// border keeps the stroke and takes a short dash.
+    /// The `boundaries` layer: every level the tile ships. The countries
+    /// and the regions keep their weights; the finer levels (a county, a
+    /// municipality, a map unit) draw thinner and lighter, and a line the
+    /// basemap marks as no recognised border (a disputed claim, an
+    /// unrecognised country, the limit of a sea overlay) takes the short
+    /// dash of a disputed border.
     func boundaryStyle(kind: String?, props: [String: MvtValue], tileZoom: Int) -> FeatureStyle {
-        let isCountry: Bool
+        enum Level { case country, region, local }
+        let level: Level
+        var disputed = parseBoolValue(props["disputed"])
         switch kind {
         case "country":
-            isCountry = true
-        case "region":
-            isCountry = false
+            level = .country
+        case "unrecognized_country", "disputed":
+            level = .country
+            disputed = true
+        case "region", "map_unit":
+            level = .region
+        case "overlay_limit":
+            level = .local
+            disputed = true
         default:
-            return hiddenStyle
-        }
-        if isCountry == false, tileZoom < Self.regionalBoundaryMinimumZoom {
-            return hiddenStyle
+            level = .local
         }
         // Borders draw through the point-locked line factory (see
         // FeatureStyle.pointLockedLine, which documents the principle they
         // originated): width and dash pattern in layout points, opaque, butt
-        // ends, ribbon provisioned to host the width.
-        let key: UInt8 = isCountry ? 102 : 100
-        // Regional borders at country overview zooms: the saturated purple
-        // that separates districts at street zooms is the one cold hue in a
-        // whole-region frame and reads as scribble there. Until the region
-        // zooms the line lightens and turns half transparent; national
-        // borders keep their full weight throughout.
+        // ends, ribbon provisioned to host the width. One key per colour.
+        let key: UInt8
+        let widthPoints: Float
         var color = theme.layers.boundary
-        if isCountry == false, tileZoom <= 6 {
-            let softened = color + (SIMD4<Float>(1, 1, 1, color.w) - color) * 0.35
-            color = SIMD4<Float>(softened.x, softened.y, softened.z, color.w * 0.6)
+        switch level {
+        case .country:
+            key = 103
+            widthPoints = 1.6
+        case .region:
+            key = 100
+            widthPoints = 1.1
+            // Regional borders at country overview zooms: the saturated
+            // purple that separates districts at street zooms is the one
+            // cold hue in a whole-region frame and reads as scribble
+            // there. Until the region zooms the line lightens and turns
+            // half transparent. National borders keep their full weight.
+            if tileZoom <= 6 {
+                color = Self.softenedBoundaryColor(color, towardWhite: 0.35, alpha: 0.6)
+            }
+        case .local:
+            key = 98
+            widthPoints = 0.7
+            color = Self.softenedBoundaryColor(color, towardWhite: 0.45, alpha: 0.55)
         }
-        let disputed = parseBoolValue(props["disputed"])
         // Borders are drawn as lines only: the point-locked mode fills no
         // areas, so a boundary that arrives as a polygon is never a blob.
+        // The dash is part of the baked style, so a disputed line takes
+        // the key under its level's.
         return FeatureStyle.pointLockedLine(
-            key: key,
+            key: disputed ? key - 1 : key,
             color: color,
-            widthPoints: isCountry ? 1.6 : 1.1,
+            widthPoints: widthPoints,
             dashLengthPoints: disputed ? 3.0 : 7.0,
             dashGapPoints: disputed ? 3.0 : 3.5
         )
+    }
+
+    static func softenedBoundaryColor(_ color: SIMD4<Float>, towardWhite amount: Float, alpha: Float) -> SIMD4<Float> {
+        let softened = color + (SIMD4<Float>(1, 1, 1, color.w) - color) * amount
+        return SIMD4<Float>(softened.x, softened.y, softened.z, color.w * alpha)
     }
 }

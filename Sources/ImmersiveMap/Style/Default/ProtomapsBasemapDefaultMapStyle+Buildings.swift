@@ -15,10 +15,11 @@ extension ProtomapsBasemapDefaultMapStyle {
     /// (three metres a storey plus two).
     static let buildingFallbackHeightMetres: Float = 8
 
-    func buildingStyle(facts: ImmersiveMapFeatureFacts, tileZoom: Int) -> FeatureStyle {
-        // A feature of the layer the reading found to be no building (an
-        // address point) draws nothing.
-        guard tileZoom >= Self.buildingMinimumTileZoom, facts.building != nil else {
+    /// A footprint on every tile that ships one: the basemap's merged
+    /// blocks of z12 and z13 draw too, flat or raised as the engine's
+    /// building coverage decides.
+    func buildingStyle(facts: ImmersiveMapFeatureFacts) -> FeatureStyle {
+        guard facts.building != nil else {
             return hiddenStyle
         }
         guard theme.features.buildingExtrusion else {

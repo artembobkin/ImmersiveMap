@@ -6,8 +6,8 @@ import Mvt
 import XCTest
 
 /// The built-in style's label rules, read through the same `makeStyle` the
-/// parser calls: which point features become labels at which tile zoom,
-/// and how they rank.
+/// parser calls: every named point the tile ships becomes a label, and
+/// how the labels rank decides which of them the collisions keep.
 ///
 /// The rank of a place is the basemap's `population_rank` turned around
 /// (lower is more important), and a place without one is the least
@@ -58,7 +58,8 @@ final class ProtomapsBasemapLabelRulesTests: XCTestCase {
     // MARK: Placement
 
     /// A water name lies on the water, painted on the map from the zoom the
-    /// basemap ships it at; every other label stands on the screen.
+    /// basemap ships it at and at every deeper zoom. Every other label
+    /// stands on the screen.
     func testAWaterNameIsPaintedOnTheMap() throws {
         let lake = style.makeStyle(data: feature(layer: "water", ["kind": .string("lake"), "name": .string("Lake"),
                                                                   "min_zoom": .int(6)], tileZoom: 8))
@@ -68,7 +69,8 @@ final class ProtomapsBasemapLabelRulesTests: XCTestCase {
         XCTAssertEqual(placement.referenceZoom, 6.5)
         XCTAssertFalse(placement.isVisible(atZoom: 5.9), "not before the zoom the basemap ships it at")
         XCTAssertTrue(placement.isVisible(atZoom: 6))
-        XCTAssertFalse(placement.isVisible(atZoom: 8), "gone before it outgrows the water")
+        XCTAssertTrue(placement.isVisible(atZoom: 8))
+        XCTAssertTrue(placement.isVisible(atZoom: 16), "still on the water at street zoom")
         XCTAssertGreaterThan(placement.letterSpacingEm, 0, "a water name is spaced out")
         XCTAssertEqual(label.text.haloEm, 0, "ink on the water, with no halo")
 
@@ -88,79 +90,59 @@ final class ProtomapsBasemapLabelRulesTests: XCTestCase {
         XCTAssertTrue(placement.isVisible(atZoom: 0))
     }
 
-    // MARK: Places by zoom
+    // MARK: Every label the tile ships
 
-    func testOnlyCountriesAreLabelledAtTheLowestZooms() {
-        XCTAssertTrue(isLabel(place(kind: "country", kindDetail: "country", tileZoom: 2)))
-        XCTAssertTrue(isLabel(place(kind: "country", kindDetail: "country", tileZoom: 0)))
-        XCTAssertFalse(isLabel(place(kind: "locality", kindDetail: "city", populationRank: 17, tileZoom: 2)))
-        XCTAssertFalse(isLabel(place(kind: "locality", kindDetail: "city", extra: ["capital": .string("yes")], tileZoom: 2)))
-        XCTAssertFalse(isLabel(place(kind: "region", kindDetail: "state", tileZoom: 2)))
+    func testEveryPlaceTheTileShipsIsLabelledAtEveryZoom() {
+        for tileZoom in [0, 2, 3, 4, 8, 12] {
+            XCTAssertTrue(isLabel(place(kind: "country", kindDetail: "country", tileZoom: tileZoom)), "z\(tileZoom)")
+            XCTAssertTrue(isLabel(place(kind: "locality", kindDetail: "city", populationRank: 17, tileZoom: tileZoom)))
+            XCTAssertTrue(isLabel(place(kind: "region", kindDetail: "state", tileZoom: tileZoom)), "z\(tileZoom)")
+            XCTAssertTrue(isLabel(place(kind: "locality", kindDetail: "town", extra: ["min_zoom": .int(7)],
+                                        tileZoom: tileZoom)), "z\(tileZoom)")
+            XCTAssertTrue(isLabel(place(kind: "neighbourhood", kindDetail: "neighbourhood", tileZoom: tileZoom)),
+                          "z\(tileZoom)")
+        }
     }
 
-    func testZoomThreeAddsCitiesAndCapitalsButNotRegions() {
-        XCTAssertTrue(isLabel(place(kind: "locality", kindDetail: "city", tileZoom: 3)))
-        XCTAssertTrue(isLabel(place(kind: "locality", kindDetail: "town", extra: ["capital": .string("yes")], tileZoom: 3)))
-        XCTAssertFalse(isLabel(place(kind: "region", kindDetail: "state", tileZoom: 3)))
-        XCTAssertFalse(isLabel(place(kind: "locality", kindDetail: "town", tileZoom: 3)))
-    }
-
-    func testFromZoomFourThePlaceFollowsItsStatedMinimumZoom() {
-        XCTAssertTrue(isLabel(place(kind: "region", kindDetail: "state", tileZoom: 4)))
-        XCTAssertTrue(isLabel(place(kind: "locality", kindDetail: "town", extra: ["min_zoom": .int(4)], tileZoom: 4)))
-        XCTAssertFalse(isLabel(place(kind: "locality", kindDetail: "town", extra: ["min_zoom": .int(7)], tileZoom: 4)))
-        XCTAssertFalse(isLabel(place(kind: "neighbourhood", kindDetail: "neighbourhood", tileZoom: 8)),
-                       "without a stated zoom a neighbourhood waits for the street zooms")
-        XCTAssertTrue(isLabel(place(kind: "neighbourhood", kindDetail: "neighbourhood", tileZoom: 12)))
-    }
-
-    func testEveryStatedPlaceIsLabelledFromZoomFive() {
-        XCTAssertTrue(isLabel(place(kind: "locality", kindDetail: "town", tileZoom: 5)))
-        XCTAssertTrue(isLabel(place(kind: "locality", kindDetail: "village", tileZoom: 12)))
-    }
-
-    // MARK: Water names by zoom
-
-    func testOnlyOceansAreLabelledAtTheOverviewZooms() {
-        XCTAssertTrue(isLabel(feature(layer: "water", ["kind": .string("ocean"), "name": .string("Sea")], tileZoom: 3)))
-        XCTAssertTrue(isLabel(feature(layer: "water", ["kind": .string("ocean"), "name": .string("Sea")], tileZoom: 4)))
-        XCTAssertFalse(isLabel(feature(layer: "water", ["kind": .string("lake"), "name": .string("Lake")], tileZoom: 4)))
-        XCTAssertTrue(isLabel(feature(layer: "water", ["kind": .string("lake"), "name": .string("Lake")], tileZoom: 5)))
+    func testEveryWaterNameTheTileShipsIsLabelled() {
+        for tileZoom in [0, 3, 4, 5, 12] {
+            XCTAssertTrue(isLabel(feature(layer: "water", ["kind": .string("ocean"), "name": .string("Sea")],
+                                          tileZoom: tileZoom)), "z\(tileZoom)")
+            XCTAssertTrue(isLabel(feature(layer: "water", ["kind": .string("lake"), "name": .string("Lake")],
+                                          tileZoom: tileZoom)), "z\(tileZoom)")
+        }
     }
 
     // MARK: POIs
 
-    func testNoisePoiKindsAreExcluded() {
-        for noiseKind in ["bicycle_parking", "waste_basket", "gate", "entrance", "bench", "bus_stop", "parking"] {
-            XCTAssertFalse(isLabel(poi(kind: noiseKind, minZoom: 13)),
-                           "Kind \(noiseKind) must not become a label")
+    func testEveryPoiKindBecomesALabel() {
+        for kind in ["bicycle_parking", "waste_basket", "gate", "entrance", "bench", "bus_stop", "parking", "office"] {
+            XCTAssertTrue(isLabel(poi(kind: kind, minZoom: 13)), "Kind \(kind) is labelled")
         }
     }
 
-    func testAPoiWithAnIconIsLabelledFromItsStatedZoom() {
+    func testAPoiWaitsForItsStatedZoom() {
         let restaurant = style.makeStyle(data: poi(kind: "restaurant", minZoom: 15, tileZoom: 14))
         XCTAssertNotNil(restaurant.labelTextStyle)
-        XCTAssertEqual(restaurant.labelMinCameraZoom, 15, "the label waits for the camera at the stated zoom")
-        let early = style.makeStyle(data: poi(kind: "restaurant", minZoom: 12, tileZoom: 14))
-        XCTAssertEqual(early.labelMinCameraZoom, 14, "and never comes before the tile it rides")
+        XCTAssertEqual(restaurant.labelMinCameraZoom, 15, "the basemap's rank is the zoom it shows from")
+        for tileZoom in [8, 12, 13] {
+            XCTAssertTrue(isLabel(poi(kind: "restaurant", minZoom: 12, tileZoom: tileZoom)), "z\(tileZoom)")
+            XCTAssertTrue(isLabel(poi(kind: "peak", minZoom: 7, tileZoom: tileZoom)), "z\(tileZoom)")
+        }
     }
 
-    func testAPoiWithoutAStatedZoomWaitsForTheDeepestZoom() {
-        XCTAssertEqual(style.makeStyle(data: poi(kind: "restaurant", minZoom: nil)).labelMinCameraZoom,
-                       Float(ProtomapsBasemapDefaultMapStyle.poiUnstatedMinimumZoom))
+    func testAPoiWithoutAStatedZoomShowsWithItsTile() {
+        XCTAssertEqual(style.makeStyle(data: poi(kind: "restaurant", minZoom: nil)).labelMinCameraZoom, 0)
     }
 
-    func testPoiBelowMinimumTileZoomIsExcluded() {
-        XCTAssertFalse(isLabel(poi(kind: "restaurant", minZoom: 12, tileZoom: 12)))
-        XCTAssertTrue(isLabel(poi(kind: "restaurant", minZoom: 12, tileZoom: 13)))
-    }
+    // MARK: House numbers
 
-    func testLandmarksJoinBeforeTheOtherPois() {
-        XCTAssertTrue(isLabel(poi(kind: "peak", minZoom: 8, tileZoom: 8)))
-        XCTAssertTrue(isLabel(poi(kind: "aerodrome", minZoom: 8, tileZoom: 8)))
-        XCTAssertFalse(isLabel(poi(kind: "peak", minZoom: 7, tileZoom: 7)))
-        XCTAssertEqual(style.makeStyle(data: poi(kind: "aerodrome", minZoom: 5, tileZoom: 9)).labelMinCameraZoom, 9,
-                       "an airport is at the floor of its tile, whatever the basemap states")
+    func testAnAddressPointIsLabelledWithItsHouseNumber() {
+        let number = feature(layer: "buildings", ["kind": .string("address"), "addr_housenumber": .string("7/2")],
+                             tileZoom: 15)
+        XCTAssertEqual(number.facts.label?.name, "7/2")
+        XCTAssertTrue(isLabel(number))
+        XCTAssertFalse(isLabel(feature(layer: "buildings", ["kind": .string("address")], tileZoom: 15)))
     }
 
     // MARK: Helpers

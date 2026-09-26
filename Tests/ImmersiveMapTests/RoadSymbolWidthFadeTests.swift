@@ -36,16 +36,16 @@ final class RoadSymbolWidthFadeTests: XCTestCase {
         let standard = ProtomapsBasemapTheme.default
         XCTAssertEqual(fill(standard, cls: "minor", z: 14)?.pointWidthWorldLockZoom, 15,
                        "a road keeps its width on the ground from camera zoom 15")
-        XCTAssertNil(fill(standard, cls: "minor", z: 13), "the small network joins at street zoom")
+        XCTAssertNotNil(fill(standard, cls: "minor", z: 12), "the small network draws from the tile that ships it")
 
         let changed = standard.roadMetrics { metrics in
             metrics.worldLockZoom = 15.5
             metrics.symbolWidthPoints.minor = 3
-            metrics.minimumTileZoom.minor = 13
+            metrics.minimumTileZoom.minor = 14
         }
         XCTAssertEqual(fill(changed, cls: "minor", z: 14)?.pointWidthWorldLockZoom, 15.5)
         XCTAssertEqual(fill(changed, cls: "minor", z: 14)?.lineWidthPoints, 3)
-        XCTAssertNotNil(fill(changed, cls: "minor", z: 13))
+        XCTAssertNil(fill(changed, cls: "minor", z: 13), "a theme can still hold a class back")
         XCTAssertNotEqual(changed.cacheFingerprint, standard.cacheFingerprint,
                           "the metrics are baked into the tiles, so they are part of the cache identity")
     }
@@ -56,20 +56,15 @@ final class RoadSymbolWidthFadeTests: XCTestCase {
         XCTAssertEqual(TileUnificationStage.makeTileLineStyle(from: pass).worldLockZoom, 14)
     }
 
-    func testRoadMarkingsDrawNothingBelowCameraZoomFifteen() {
-        // Below camera zoom 15 there is NO paint at all; from 15 it fades in
-        // over a short band, fully in well before z16.
+    func testRoadMarkingsShowWhereverTheTileStatesThem() {
         let paint = ProtomapsBasemapDefaultMapStyle.roadMarkingZoomFade
-        XCTAssertEqual(paint.alpha(atZoom: 13.0), 0)
-        XCTAssertEqual(paint.alpha(atZoom: 14.9), 0)
-        XCTAssertEqual(paint.alpha(atZoom: 15.0), 0)
-        XCTAssertGreaterThan(paint.alpha(atZoom: 15.2), 0)
-        XCTAssertEqual(paint.alpha(atZoom: 15.4), 1)
-        XCTAssertEqual(paint.alpha(atZoom: 16.0), 1)
+        for zoom in [12.0, 13.0, 14.9, 15.0, 16.0] {
+            XCTAssertEqual(paint.alpha(atZoom: zoom), 1, "z\(zoom)")
+        }
     }
 
     func testClassFadeComesInOverTheZoomLevelAfterItsStart() {
-        // A class comes in over the one zoom level after its start, smooth.
+        // A casing comes in over the one zoom level after its start, smooth.
         let motorway = ProtomapsBasemapDefaultMapStyle.classZoomFade(startZoom: 5)
         XCTAssertEqual(motorway, .fadeIn(from: 5, to: 6))
         XCTAssertEqual(motorway.alpha(atZoom: 4.9), 0)

@@ -91,13 +91,13 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
         }
     }
 
-    func testLandcoverAndLanduseHandOverOnTheZ7Tiles() {
+    func testLandcoverAndLanduseKeepApartOnTheTilesTheyShare() {
         let configuration = ProtomapsBasemapTheme.default
         let colors = configuration.layers
         let style = ProtomapsBasemapDefaultMapStyle(theme: configuration)
         // The basemap ships the continuous land cover through z7 and the
-        // OSM land use in full from z8, part of it already on z7. One key
-        // per class, and the two families never share a key.
+        // OSM land use from z2, so the coarse tiles carry both. One key per
+        // class, and the two families never share a key.
         let cover: [(String, UInt8, SIMD4<Float>)] = [
             ("barren", 3, colors.sand),
             ("grassland", 4, colors.land + (colors.grass - colors.land) * 0.04),
@@ -109,8 +109,6 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
             let at7 = makeStyle(style, layerName: "landcover", kind: kind, zoom: 7)
             XCTAssertEqual(at7.key, key, "Unexpected key for \(kind)")
             XCTAssertEqual(at7.color, color, "Unexpected color for \(kind)")
-            XCTAssertEqual(makeStyle(style, layerName: "landcover", kind: kind, zoom: 8).key, 0,
-                           "\(kind) land cover must hide from z8")
         }
         let use: [(String, UInt8, SIMD4<Float>)] = [
             ("residential", 9, colors.residential),
@@ -129,20 +127,24 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
             let at8 = makeStyle(style, layerName: "landuse", kind: kind, zoom: 8)
             XCTAssertEqual(at8.key, key, "Unexpected key for \(kind)")
             XCTAssertEqual(at8.color, color, "Unexpected color for \(kind)")
-            XCTAssertEqual(makeStyle(style, layerName: "landuse", kind: kind, zoom: 7).key, key,
-                           "\(kind) land use already draws on the z7 tiles")
-            XCTAssertEqual(makeStyle(style, layerName: "landuse", kind: kind, zoom: 6).key, 0,
-                           "\(kind) land use must hide below z7")
+            XCTAssertEqual(makeStyle(style, layerName: "landuse", kind: kind, zoom: 4).key, key,
+                           "\(kind) land use draws on every tile that ships it")
         }
         XCTAssertTrue(Set(cover.map(\.1)).isDisjoint(with: Set(use.map(\.1))),
-                      "Land cover and land use share the z7 tiles, so they must not share a key")
-        XCTAssertEqual(makeStyle(style, layerName: "landuse", kind: "protected_area", zoom: 12).key, 0,
-                       "a protected area blankets whole city centres and is not a green")
+                      "Land cover and land use share the coarse tiles, so they must not share a key")
+        // A protected area blankets whole city centres: a faint tint under
+        // every other fill, never the park green.
+        let protected = makeStyle(style, layerName: "landuse", kind: "protected_area", zoom: 12)
+        XCTAssertLessThan(protected.key, 9)
+        XCTAssertNotEqual(protected.color, colors.grass)
+        // A kind the style does not name draws in the built tone.
+        XCTAssertEqual(makeStyle(style, layerName: "landuse", kind: "brownfield", zoom: 12).key, 9)
+        XCTAssertEqual(makeStyle(style, layerName: "landuse", kind: "brownfield", zoom: 12).color, colors.industrial)
     }
 
     /// A bridge's deck ships as a `pedestrian` area. It draws among the
     /// ground lines, over the water, the waterway lines and the ferry
-    /// routes, in the land tone, from the street zooms.
+    /// routes, in the land tone, on every tile that ships it.
     func testBridgeDeckDrawsAboveTheWater() {
         let style = ProtomapsBasemapDefaultMapStyle(theme: .default)
         let water = makeStyle(style, layerName: "water", kind: "water", zoom: 15, geometry: .polygon)
@@ -158,65 +160,62 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
             }
             XCTAssertTrue(fill.drawsAmongGroundLines, "\(kind) draws with the lines it covers")
             XCTAssertEqual(deck.color, style.theme.layers.land, "\(kind)")
-            XCTAssertEqual(makeStyle(style, layerName: "landuse", kind: kind, zoom: 12).key, 0,
-                           "\(kind) hides below the street zooms")
+            XCTAssertEqual(makeStyle(style, layerName: "landuse", kind: kind, zoom: 10).key, deck.key,
+                           "\(kind) draws on the coarser tiles too")
         }
     }
 
-    /// The handover is a cross-fade with the camera over zoom 7 to 8, the
-    /// range the z7 tiles serve: the land cover fades out, the z7 tiles'
-    /// land use fades in, and from the z8 tiles the land use has no fade.
-    func testLandcoverFadesOutAndLanduseFadesInBetweenZoomSevenAndEight() {
+    /// The land cover and the land use draw on every tile that ships them.
+    /// The land cover, which the basemap ships through z7 only, fades out
+    /// with the camera over zoom 7 to 8, where the z7 tiles still serve the
+    /// view. The land use has no fade.
+    func testLandcoverFadesOutOverTheLastZoomOfItsTilesAndLanduseDrawsEverywhere() {
         let style = ProtomapsBasemapDefaultMapStyle(theme: .default)
         for kind in ["barren", "grassland", "farmland", "forest", "glacier", "urban_area"] {
-            for zoom in [2, 5, 7] {
-                XCTAssertEqual(makeStyle(style, layerName: "landcover", kind: kind, zoom: zoom).zoomFade,
-                               .fadeOut(from: 7, to: 8), "\(kind) z\(zoom)")
+            for zoom in [2, 5, 7, 9] {
+                let fill = makeStyle(style, layerName: "landcover", kind: kind, zoom: zoom)
+                XCTAssertNotEqual(fill.key, 0, "\(kind) z\(zoom)")
+                XCTAssertEqual(fill.zoomFade, .fadeOut(from: 7, to: 8), "\(kind) z\(zoom)")
             }
         }
-        for kind in ["residential", "wood", "park", "farmland", "runway"] {
-            XCTAssertEqual(makeStyle(style, layerName: "landuse", kind: kind, zoom: 7).zoomFade,
-                           .fadeIn(from: 7, to: 8), kind)
-            XCTAssertEqual(makeStyle(style, layerName: "landuse", kind: kind, zoom: 8).zoomFade, .none, kind)
-            XCTAssertEqual(makeStyle(style, layerName: "landuse", kind: kind, zoom: 14).zoomFade, .none, kind)
+        for kind in ["residential", "wood", "park", "farmland", "runway", "protected_area", "other", "platform"] {
+            for zoom in [2, 5, 7, 8, 14] {
+                let fill = makeStyle(style, layerName: "landuse", kind: kind, zoom: zoom)
+                XCTAssertNotEqual(fill.key, 0, "\(kind) z\(zoom)")
+                XCTAssertEqual(fill.zoomFade, .none, "\(kind) z\(zoom)")
+            }
         }
-        let cover = ProtomapsBasemapDefaultMapStyle.landcoverZoomFade
-        let use = ProtomapsBasemapDefaultMapStyle.landuseHandoverZoomFade
-        XCTAssertEqual(cover.alpha(atZoom: 7.5), 0.5, accuracy: 1e-6)
-        XCTAssertEqual(use.alpha(atZoom: 7.5), 0.5, accuracy: 1e-6)
-        XCTAssertEqual(cover.alpha(atZoom: 8), 0, "the land cover is gone when the z8 tiles take over")
-        XCTAssertEqual(use.alpha(atZoom: 8), 1, "and the land use is in full")
     }
 
-    func testRoadClassesAppearByZoom() {
+    func testEveryRoadDrawsFromTheFirstTileThatShipsIt() {
         let style = ProtomapsBasemapDefaultMapStyle(theme: .default)
 
         func key(_ kind: String, _ kindDetail: String?, zoom: Int) -> UInt8 {
             makeStyle(style, layerName: "roads", kind: kind, kindDetail: kindDetail, zoom: zoom).key
         }
 
-        // Majors wait for the zoom where the basemap's network is whole;
-        // each further class joins at the zoom it can carry meaning.
-        for (kind, kindDetail, minimumZoom) in [("highway", "motorway", 5), ("major_road", "trunk", 5),
-                                                ("major_road", "primary", 7), ("ferry", nil, 8),
-                                                ("major_road", "secondary", 9), ("major_road", "tertiary", 10),
-                                                ("aeroway", "runway", 10),
-                                                ("minor_road", "residential", 14), ("minor_road", "service", 14),
-                                                ("path", "footway", 14)] as [(String, String?, Int)] {
-            XCTAssertEqual(key(kind, kindDetail, zoom: minimumZoom - 1), 0,
-                           "\(kind)/\(kindDetail ?? "") must hide below z\(minimumZoom)")
-            XCTAssertNotEqual(key(kind, kindDetail, zoom: minimumZoom), 0,
-                              "\(kind)/\(kindDetail ?? "") must draw from z\(minimumZoom)")
+        // The style holds no class back: the basemap's tile levels decide
+        // where a road first appears. Sidewalks, crossings, the subway and
+        // an aerialway draw too.
+        for (kind, kindDetail) in [("highway", "motorway"), ("major_road", "trunk"), ("major_road", "primary"),
+                                   ("ferry", nil), ("major_road", "secondary"), ("major_road", "tertiary"),
+                                   ("aeroway", "runway"), ("aeroway", "apron"), ("minor_road", "residential"),
+                                   ("minor_road", "service"), ("path", "footway"), ("path", "sidewalk"),
+                                   ("path", "crossing"), ("rail", "subway"), ("rail", "rail"),
+                                   ("aerialway", "cable_car")] as [(String, String?)] {
+            for zoom in [2, 6, 10, 12, 14, 15] {
+                XCTAssertNotEqual(key(kind, kindDetail, zoom: zoom), 0, "\(kind)/\(kindDetail ?? "") z\(zoom)")
+            }
         }
-        // The sidewalks and crossings of z14 are noise around every street,
-        // and a subway runs under the city. Surface rail draws.
-        for zoom in [12, 14, 15] {
-            XCTAssertEqual(key("path", "sidewalk", zoom: zoom), 0, "z\(zoom)")
-            XCTAssertEqual(key("path", "crossing", zoom: zoom), 0, "z\(zoom)")
-            XCTAssertEqual(key("rail", "subway", zoom: zoom), 0, "z\(zoom)")
-            XCTAssertNotEqual(key("rail", "rail", zoom: zoom), 0, "z\(zoom)")
-            XCTAssertEqual(key("aerialway", "cable_car", zoom: zoom), 0, "z\(zoom)")
-        }
+        // A subway in its tunnel draws at the tunnel opacity.
+        let subway = makeStyle(style, layerName: "roads", kind: "rail", kindDetail: "subway", zoom: 14,
+                               extraProperties: ["is_tunnel": .bool(true)])
+        XCTAssertLessThan(subway.color.w, ProtomapsBasemapTheme.default.layers.roads.rail.w)
+        // A theme can still hold a class back.
+        let heldBack = ProtomapsBasemapDefaultMapStyle(theme: .default.roadMetrics { metrics in
+            metrics.minimumTileZoom.minor = 14
+        })
+        XCTAssertEqual(makeStyle(heldBack, layerName: "roads", kind: "minor_road", kindDetail: "residential", zoom: 13).key, 0)
     }
 
     func testALinkSortsOneStepUnderItsParent() {
@@ -235,7 +234,7 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
         XCTAssertEqual(aisle.roadStyle?.classPriority, service.roadStyle!.classPriority - 1)
     }
 
-    func testANamedStreetCarriesItsLabelFromTheStreetEra() {
+    func testANamedRoadCarriesItsLabelOnTheRoadPath() {
         let style = ProtomapsBasemapDefaultMapStyle(theme: .default)
         let named = makeStyle(style, layerName: "roads", kind: "major_road", kindDetail: "primary", zoom: 12,
                               extraProperties: ["name": .string("Tverskaya")])
@@ -243,7 +242,7 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
         XCTAssertEqual(named.roadStyle?.label?.key, Int(named.key))
         let overview = makeStyle(style, layerName: "roads", kind: "major_road", kindDetail: "primary", zoom: 10,
                                  extraProperties: ["name": .string("Tverskaya")])
-        XCTAssertNil(overview.roadStyle?.label, "the overview stroke carries no name")
+        XCTAssertNotNil(overview.roadStyle?.label, "the overview stroke carries its name too")
         let unnamed = makeStyle(style, layerName: "roads", kind: "major_road", kindDetail: "primary", zoom: 12)
         XCTAssertNil(unnamed.roadStyle?.label)
     }
@@ -256,36 +255,32 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
         let paint = oneway.resolvedLineRenderPasses.first { $0.roadPassRole == .detail }
         XCTAssertNotNil(paint, "the arrows are stamped in a paint stroke")
         XCTAssertEqual(paint?.color, ProtomapsBasemapTheme.default.layers.roads.marking)
-        XCTAssertEqual(paint?.zoomFade, ProtomapsBasemapDefaultMapStyle.roadMarkingZoomFade)
+        XCTAssertEqual(paint?.zoomFade, ImmersiveMapZoomFade.none)
         let twoWay = makeStyle(style, layerName: "roads", kind: "minor_road", kindDetail: "residential", zoom: 14)
         XCTAssertEqual(twoWay.roadStyle?.decoration, RoadDecorationKind.none)
         XCTAssertFalse(twoWay.resolvedLineRenderPasses.contains { $0.roadPassRole == .detail })
         let early = makeStyle(style, layerName: "roads", kind: "major_road", kindDetail: "primary", zoom: 13,
                               extraProperties: ["oneway": .bool(true)])
-        XCTAssertEqual(early.roadStyle?.decoration, RoadDecorationKind.none, "the basemap states oneway from z14")
+        XCTAssertEqual(early.roadStyle?.decoration, .onewayArrow(), "the arrows ride every tile that states oneway")
         let tunnel = makeStyle(style, layerName: "roads", kind: "minor_road", kindDetail: "residential", zoom: 14,
                                extraProperties: ["oneway": .bool(true), "is_tunnel": .bool(true)])
         XCTAssertEqual(tunnel.roadStyle?.decoration, RoadDecorationKind.none, "a tunnel carries no paint")
     }
 
-    func testOverviewRoadsAreOpaqueAndOnlyStreetRoadsRideTheRoadFadeBand() {
+    func testRoadsShowWithTheirTileWithoutAFade() {
         let style = ProtomapsBasemapDefaultMapStyle(theme: .default)
-        // An overview class fades in with the camera over the zoom level
-        // after the tile zoom that first ships it (the per-class mask), and
-        // is opaque from then on: never the shared road band, which would
-        // hold every class translucent over the same zooms.
-        for (kind, kindDetail, zoom, start) in [("highway", "motorway", 6, 5), ("major_road", "trunk", 7, 6),
-                                                ("major_road", "primary", 8, 7), ("major_road", "secondary", 9, 9),
-                                                ("major_road", "tertiary", 11, 10)] {
+        // No road fades in with the camera: a road shows with the first
+        // tile that ships it, opaque.
+        for (kind, kindDetail, zoom) in [("highway", "motorway", 6), ("major_road", "trunk", 7),
+                                         ("major_road", "primary", 8), ("major_road", "secondary", 9),
+                                         ("major_road", "tertiary", 11), ("highway", "motorway", 12),
+                                         ("minor_road", "residential", 12)] {
             let road = makeStyle(style, layerName: "roads", kind: kind, kindDetail: kindDetail, zoom: zoom)
-            let classFade = ImmersiveMapZoomFade.fadeIn(from: Double(start), to: Double(start) + 1)
-            XCTAssertEqual(road.zoomFade, classFade, kindDetail)
-            for pass in road.resolvedLineRenderPasses {
-                XCTAssertEqual(pass.zoomFade, classFade, kindDetail)
+            XCTAssertEqual(road.zoomFade, .none, kindDetail)
+            for pass in road.resolvedLineRenderPasses where pass.roadPassRole != .casing {
+                XCTAssertEqual(pass.zoomFade, .none, kindDetail)
             }
         }
-        let streetMotorway = makeStyle(style, layerName: "roads", kind: "highway", kindDetail: "motorway", zoom: 12)
-        XCTAssertEqual(streetMotorway.zoomFade, .fadeIn(from: 5, to: 6))
     }
 
     func testAutomobileRoadsCarryNoCasingPass() {
@@ -324,8 +319,7 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
                                                 startZoom: metrics.overviewZoom,
                                                 endZoom: metrics.symbolZoom,
                                                 startAlpha: metrics.overviewOpacity))
-        XCTAssertEqual(fill.zoomFade, .fadeIn(from: 5, to: 6),
-                       "Overview roads fade in per class, never on the shared road band")
+        XCTAssertEqual(fill.zoomFade, .none, "Overview roads show with their tile")
         XCTAssertTrue(fill.lineGeometry.lineCapRound)
         XCTAssertTrue(fill.lineGeometry.lineJoinRound)
         XCTAssertEqual(fill.lineGeometry.lineWidth,
@@ -375,9 +369,15 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
         let river = makeStyle(style, layerName: "water", kind: "river", zoom: 9, geometry: .linestring)
         XCTAssertNotEqual(river.key, 0)
         XCTAssertEqual(river.minimumWidthPoints, 0.7)
-        let culvert = makeStyle(style, layerName: "water", kind: "stream", zoom: 14, geometry: .linestring,
-                                extraProperties: ["tunnel": .string("culvert")])
-        XCTAssertEqual(culvert.key, 0, "a culverted stream is invisible in reality")
+        // A culverted stream stays on the map at the tunnel opacity, on its
+        // own key, so it never shares a colour slot with the open water.
+        for culvertTag in [["tunnel": MvtValue.string("culvert")], ["layer": MvtValue.int(-1)]] {
+            let culvert = makeStyle(style, layerName: "water", kind: "stream", zoom: 14, geometry: .linestring,
+                                    extraProperties: culvertTag)
+            XCTAssertNotEqual(culvert.key, 0)
+            XCTAssertNotEqual(culvert.key, river.key)
+            XCTAssertLessThan(culvert.color.w, river.color.w)
+        }
     }
 
     func testGlobalPaletteUpdateChangesPreparedTileRevision() {
@@ -394,26 +394,30 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
                             .cacheFingerprint)
     }
 
-    func testPoiMinCameraZoomIsTheBasemapsStatedZoomAndNeverBeforeTheTile() {
+    func testEveryPoiWaitsForItsZoomAndTakesAnIcon() {
         let style = ProtomapsBasemapDefaultMapStyle(theme: .default)
 
-        // The basemap states the zoom a POI belongs to. A hospital stated at
-        // z12 in a z14 tile is visible from the tile's birth.
+        // A POI shows from the zoom the basemap ranks it at, and a
+        // street-level service no earlier than the service zoom.
         let hospitalStyle = makeStyle(style, layerName: "pois", kind: "hospital", minZoom: 12, zoom: 14, geometry: .point)
-        XCTAssertEqual(hospitalStyle.labelMinCameraZoom, 14)
-
-        // A shop stated at z15 waits for the camera there.
-        let shopStyle = makeStyle(style, layerName: "pois", kind: "supermarket", minZoom: 15, zoom: 14, geometry: .point)
-        XCTAssertEqual(shopStyle.labelMinCameraZoom, 15)
-
-        // A filling station stated at z17 arrives overzoomed.
-        let fuelStyle = makeStyle(style, layerName: "pois", kind: "fuel", minZoom: 17, zoom: 14, geometry: .point)
+        XCTAssertEqual(hospitalStyle.labelMinCameraZoom, 12)
+        let fuelStyle = makeStyle(style, layerName: "pois", kind: "fuel", minZoom: 15, zoom: 14, geometry: .point)
         XCTAssertEqual(fuelStyle.labelMinCameraZoom, 17)
+        XCTAssertLessThan(hospitalStyle.labelRank, fuelStyle.labelRank, "the earlier POI ranks first")
 
-        // Iconless POI (an office, outside the icon set): not drawn at all,
-        // whatever the basemap says.
+        // A category outside the icon set takes the plain marker.
         let officeStyle = makeStyle(style, layerName: "pois", kind: "office", minZoom: 12, zoom: 14, geometry: .point)
-        XCTAssertEqual(officeStyle.key, 0, "A POI with no icon carries only its name and is left out")
+        XCTAssertNotEqual(officeStyle.key, 0)
+        XCTAssertEqual(officeStyle.pointLabelStyle?.icon, .marker)
+
+        // The street furniture draws as well, each with its symbol.
+        for (kind, icon) in [("bus_stop", PoiSpriteIcon.transit), ("parking", .parking), ("atm", .bank),
+                             ("toilets", .toilets), ("station", .train), ("bench", .marker),
+                             ("place_of_worship", .worship), ("religious_administration", .worship)] {
+            let poi = makeStyle(style, layerName: "pois", kind: kind, minZoom: 16, zoom: 15, geometry: .point)
+            XCTAssertNotEqual(poi.key, 0, kind)
+            XCTAssertEqual(poi.pointLabelStyle?.icon, icon, kind)
+        }
 
         // The sprite beside the name is the style's choice, stated on the
         // label style: the engine draws what it is handed and reads no tag.
@@ -424,11 +428,6 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
         XCTAssertEqual(ProtomapsBasemapDefaultMapStyle.poiIcon(kind: "fuel"), .gasStation)
         XCTAssertEqual(ProtomapsBasemapDefaultMapStyle.poiIcon(kind: "peak"), .viewpoint)
         XCTAssertNil(ProtomapsBasemapDefaultMapStyle.poiIcon(kind: "office"))
-
-        // The same shop in a z13 tile is the same threshold: the basemap's
-        // zoom is absolute, not relative to the tile.
-        let earlierTileStyle = makeStyle(style, layerName: "pois", kind: "supermarket", minZoom: 15, zoom: 13, geometry: .point)
-        XCTAssertEqual(earlierTileStyle.labelMinCameraZoom, 15)
 
         // The landmarks take their own keys.
         XCTAssertEqual(makeStyle(style, layerName: "pois", kind: "peak", minZoom: 10, zoom: 12, geometry: .point).key, 74)
@@ -463,30 +462,36 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
                           ProtomapsBasemapDefaultMapStyle(theme: updated).cacheFingerprint)
     }
 
-    /// A POI the icon set cannot depict is left out by default, and a
-    /// configuration that wants those names back gets them from the iconless
-    /// zoom floor, exactly as before.
-    func testAnIconlessPoiIsHiddenUnlessTheConfigurationAsksForIt() {
+    /// A POI the icon set cannot depict draws with the plain marker by
+    /// default, and a configuration can leave such POIs out or hold them
+    /// back to a zoom.
+    func testAnIconlessPoiDrawsUnlessTheConfigurationLeavesItOut() {
         let byDefault = ProtomapsBasemapDefaultMapStyle(theme: .default)
-        XCTAssertEqual(makeStyle(byDefault, layerName: "pois", kind: "office", minZoom: 12, zoom: 14, geometry: .point).key, 0)
-        XCTAssertEqual(makeStyle(byDefault, layerName: "pois", kind: "monument", minZoom: 12, zoom: 15, geometry: .point).key, 0)
-        // A category with an icon is untouched.
-        XCTAssertNotEqual(makeStyle(byDefault, layerName: "pois", kind: "museum", minZoom: 12, zoom: 14, geometry: .point).key, 0)
+        XCTAssertNotEqual(makeStyle(byDefault, layerName: "pois", kind: "office", minZoom: 12, zoom: 14, geometry: .point).key, 0)
+        XCTAssertNotEqual(makeStyle(byDefault, layerName: "pois", kind: "monument", minZoom: 12, zoom: 15, geometry: .point).key, 0)
 
-        let withText = ProtomapsBasemapDefaultMapStyle(
+        let iconOnly = ProtomapsBasemapDefaultMapStyle(
             theme: .default.labelVisibility { visibility in
-                visibility.poiRequiresIcon = false
+                visibility.poiRequiresIcon = true
             }
         )
-        let officeStyle = makeStyle(withText, layerName: "pois", kind: "office", minZoom: 12, zoom: 14, geometry: .point)
-        XCTAssertNotEqual(officeStyle.key, 0)
-        XCTAssertEqual(officeStyle.labelMinCameraZoom, 16, "and it arrives at the iconless floor")
+        XCTAssertEqual(makeStyle(iconOnly, layerName: "pois", kind: "office", minZoom: 12, zoom: 14, geometry: .point).key, 0)
+        // A category with an icon is untouched.
+        XCTAssertNotEqual(makeStyle(iconOnly, layerName: "pois", kind: "museum", minZoom: 12, zoom: 14, geometry: .point).key, 0)
+
+        let heldBack = ProtomapsBasemapDefaultMapStyle(
+            theme: .default.labelVisibility { visibility in
+                visibility.poiIconlessMinimumZoom = 16
+            }
+        )
+        let officeStyle = makeStyle(heldBack, layerName: "pois", kind: "office", minZoom: 12, zoom: 14, geometry: .point)
+        XCTAssertEqual(officeStyle.labelMinCameraZoom, 16, "it arrives at the iconless floor")
     }
 
     func testPoiRequiresIconChangesPreparedTileRevision() {
         let original = ProtomapsBasemapTheme.default
         let updated = original.labelVisibility { visibility in
-            visibility.poiRequiresIcon = false
+            visibility.poiRequiresIcon = true
         }
 
         XCTAssertNotEqual(original.cacheFingerprint, updated.cacheFingerprint)
@@ -553,21 +558,29 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
         }
     }
 
-    func testPlanetZoomBoundariesShowCountriesOnly() {
+    func testEveryBoundaryLevelDrawsAtEveryZoom() {
         let style = ProtomapsBasemapDefaultMapStyle(theme: .default)
 
-        // Regional borders are clutter over a planet or continent view:
-        // hidden below the regional zoom, present from it on. Counties and
-        // localities never draw.
-        for zoom in [0, 2, 3] {
-            XCTAssertEqual(makeStyle(style, layerName: "boundaries", kind: "region", zoom: zoom).key, 0,
-                           "a region must hide at z\(zoom)")
+        // Every level the tile ships draws: the regions from the planet
+        // view, the counties and the municipalities thinner than a region.
+        let region = makeStyle(style, layerName: "boundaries", kind: "region", zoom: 8)
+        for zoom in [0, 2, 3, 4, 10, 15] {
+            XCTAssertNotEqual(makeStyle(style, layerName: "boundaries", kind: "region", zoom: zoom).key, 0,
+                              "a region at z\(zoom)")
+            for kind in ["county", "locality", "map_unit", "overlay_limit", "unrecognized_country"] {
+                XCTAssertNotEqual(makeStyle(style, layerName: "boundaries", kind: kind, zoom: zoom).key, 0,
+                                  "\(kind) at z\(zoom)")
+            }
         }
-        XCTAssertNotEqual(makeStyle(style, layerName: "boundaries", kind: "region", zoom: 4).key, 0)
-        for zoom in [4, 10, 15] {
-            XCTAssertEqual(makeStyle(style, layerName: "boundaries", kind: "county", zoom: zoom).key, 0, "z\(zoom)")
-            XCTAssertEqual(makeStyle(style, layerName: "boundaries", kind: "locality", zoom: zoom).key, 0, "z\(zoom)")
-        }
+        let county = makeStyle(style, layerName: "boundaries", kind: "county", zoom: 10)
+        XCTAssertLessThan(county.lineWidthPoints, region.lineWidthPoints)
+        XCTAssertLessThan(county.key, region.key, "a county draws under a region")
+        // An unrecognised country draws dashed like a disputed border, on
+        // its own key.
+        let country = makeStyle(style, layerName: "boundaries", kind: "country", zoom: 5)
+        let unrecognized = makeStyle(style, layerName: "boundaries", kind: "unrecognized_country", zoom: 5)
+        XCTAssertLessThan(unrecognized.dashLengthPoints, country.dashLengthPoints)
+        XCTAssertNotEqual(unrecognized.key, country.key)
 
         // Country borders stay, dashed at every zoom: the point-locked dash
         // pattern keeps its designed size, so it reads as dashes rather than
@@ -581,14 +594,22 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
         }
     }
 
-    func testBuildingsRiseFromTheirZoomAndAnAddressPointDrawsNothing() {
+    func testBuildingsDrawOnEveryTileAndAnAddressPointIsAHouseNumber() {
         let style = ProtomapsBasemapDefaultMapStyle(theme: .default)
-        XCTAssertEqual(makeStyle(style, layerName: "buildings", kind: "building", zoom: 12, geometry: .polygon).key, 0)
-        let building = makeStyle(style, layerName: "buildings", kind: "building", zoom: 13, geometry: .polygon)
-        XCTAssertNotNil(building.extrusionStyle)
-        XCTAssertGreaterThan(building.extrusionFallbackHeight, 0,
-                             "a building the tile states no height for still rises")
-        XCTAssertEqual(makeStyle(style, layerName: "buildings", kind: "address", zoom: 15, geometry: .point).key, 0)
+        for zoom in [12, 13, 15] {
+            let building = makeStyle(style, layerName: "buildings", kind: "building", zoom: zoom, geometry: .polygon)
+            XCTAssertNotNil(building.extrusionStyle, "z\(zoom)")
+            XCTAssertGreaterThan(building.extrusionFallbackHeight, 0,
+                                 "a building the tile states no height for still rises")
+        }
+        let number = makeStyle(style, layerName: "buildings", kind: "address", zoom: 15, geometry: .point,
+                               extraProperties: ["addr_housenumber": .string("12A")])
+        XCTAssertNotNil(number.labelTextStyle)
+        XCTAssertNil(number.pointLabelStyle?.icon)
+        let poi = makeStyle(style, layerName: "pois", kind: "cafe", minZoom: 18, zoom: 15, geometry: .point)
+        XCTAssertGreaterThan(number.labelCollisionRank, poi.labelCollisionRank, "a house number yields to every POI")
+        XCTAssertEqual(makeStyle(style, layerName: "buildings", kind: "address", zoom: 15, geometry: .point).key, 0,
+                       "an address point without a number draws nothing")
     }
 
     private func makeStyle(_ style: ProtomapsBasemapDefaultMapStyle,

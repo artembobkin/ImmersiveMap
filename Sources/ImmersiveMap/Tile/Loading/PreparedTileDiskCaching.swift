@@ -20,8 +20,15 @@ struct PreparedTileCacheIdentity {
     /// is identity: a tile prepared without labels must not answer a map
     /// that wants them, and vice versa.
     let labelsEnabled: Bool
+    /// The buildings the landmarks replace are not extruded
+    /// (`TileParseOptions.replacedBuildingsFingerprint`). Zero, the usual
+    /// case, adds nothing to the namespace.
+    var replacedBuildingsFingerprint: UInt64 = 0
     var namespaceComponent: String {
-        "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)"
+        let replacedBuildings = replacedBuildingsFingerprint == 0
+            ? ""
+            : "-r\(String(replacedBuildingsFingerprint, radix: 16))"
+        return "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)" + replacedBuildings
     }
 
     static func tileSourceRevision(for network: ImmersiveMapSettings.TileSettings.NetworkSettings) -> UInt64 {
@@ -801,7 +808,11 @@ final class PreparedTileDiskCaching {
     // entry has no such field.
     // 113: a surface label's record carries the zooms it shows at instead
     // of two zoom fades. A v112 entry has the fades.
-    static let preparedFormatVersion: UInt32 = 113
+    // 114: a POI label waits for the camera zoom the basemap ranks it at
+    // (`min_zoom`) and for its category's and long name's zooms, and a
+    // house number for `addressMinimumZoom`. A v113 entry shows every POI
+    // and house number from the tile's own zoom.
+    static let preparedFormatVersion: UInt32 = 114
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

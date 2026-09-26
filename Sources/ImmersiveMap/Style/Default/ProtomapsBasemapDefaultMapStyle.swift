@@ -18,25 +18,18 @@ import simd
 /// Nothing in them is public: the members are
 /// internal only so that the extensions can share them across files.
 public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
-    static let implementationRevision: UInt32 = 10
-    /// Streets ease in over camera zoom 5 to 6, from the zoom the style first
-    /// shows a road (the motorway skeleton on the z5 tiles), instead of
-    /// popping with the tiles.
-    static let roadZoomFade = ImmersiveMapZoomFade.fadeIn(from: 5, to: 6)
-    /// The basemap ships the continuous `landcover` through tile z7 and the
-    /// OSM `landuse` in full from z8, with part of the land use already in
-    /// the z7 tiles. The engine draws the z7 tiles for camera zoom 7.0 up to
-    /// 8.0, so that is where the two families cross-fade: the land cover
-    /// fades out and the z7 tiles' land use fades in, and by the time the
-    /// z8 tiles take over the land cover is gone and the land use in full.
-    static let landcoverMaximumTileZoom = 7
-    static let landuseMinimumTileZoom = 7
-    static let landuseFullTileZoom = 8
+    static let implementationRevision: UInt32 = 14
+    /// The style draws what the tile carries and adds no zoom gate of its
+    /// own: the basemap already thins every layer per tile level, so a
+    /// feature in a tile is a feature on the map. A road shows from the
+    /// first tile that ships it, without a fade.
+    static let roadZoomFade = ImmersiveMapZoomFade.none
+    /// The basemap ships the continuous `landcover` through tile z7 only,
+    /// and the engine draws the z7 tiles for camera zoom 7.0 up to 8.0. The
+    /// land cover fades out over that range, so the z8 tiles, which carry
+    /// none, take over a frame it has already left. The fade hides nothing
+    /// a tile would otherwise show: past camera zoom 8 no tile has it.
     static let landcoverZoomFade = ImmersiveMapZoomFade.fadeOut(from: 7, to: 8)
-    static let landuseHandoverZoomFade = ImmersiveMapZoomFade.fadeIn(from: 7, to: 8)
-    /// The basemap ships buildings from z11 as merged blobs with quantized
-    /// heights. They only read well next to the street network.
-    static let buildingMinimumTileZoom = 13
     let theme: ProtomapsBasemapTheme
 
     /// The land, the water and the ice of the theme, where no tile paints.
@@ -116,11 +109,10 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
         case "landcover":
             return landcoverStyle(kind: kind, tileZoom: z)
         case "landuse":
-            return landuseStyle(kind: kind, tileZoom: z)
+            return landuseStyle(kind: kind)
         case "water":
             switch data.geometry {
             case .point:
-                guard includesWaterLabel(kind: kind, tileZoom: z) else { return hiddenStyle }
                 return waterLabelStyle(kind: kind, props: props, tileZoom: z)
             case .line:
                 return waterwayStyle(kind: kind, kindDetail: kindDetail, props: props)
@@ -128,7 +120,10 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
                 return polygon(key: 20, color: theme.layers.water)
             }
         case "buildings":
-            return buildingStyle(facts: data.facts, tileZoom: z)
+            if data.geometry == .point {
+                return addressLabelStyle(facts: data.facts)
+            }
+            return buildingStyle(facts: data.facts)
         case "roads":
             let road = data.facts.road ?? .ground
             return roadPolicy(applying: road,
@@ -140,13 +135,9 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
         case "boundaries":
             return boundaryStyle(kind: kind, props: props, tileZoom: z)
         case "places":
-            guard includesPlaceLabel(kind: kind, kindDetail: kindDetail, props: props, tileZoom: z) else {
-                return hiddenStyle
-            }
             return placeLabelStyle(kind: kind, kindDetail: kindDetail, props: props)
         case "pois":
-            guard includesPoiLabel(kind: kind, tileZoom: z) else { return hiddenStyle }
-            return poiLabelStyle(kind: kind, props: props, tileZoom: z)
+            return poiLabelStyle(kind: kind, props: props)
         default:
             return hiddenStyle
         }

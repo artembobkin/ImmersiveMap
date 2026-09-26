@@ -201,6 +201,25 @@ enum VisualReviewCatalogue {
                                                                  zoom: 8.6,
                                                                  bearing: 0.5,
                                                                  pitch: 0.9)
+        /// Moscow and its ring roads at a region zoom, served by the z9
+        /// tiles: every road, border and land use the tiles ship.
+        static let moscowRegion = ImmersiveMapCameraPosition(latitudeDegrees: 55.75,
+                                                             longitudeDegrees: 37.62,
+                                                             zoom: 9.5)
+        /// Around Pushkinskaya square, served by the overzoomed z15 tiles:
+        /// the house numbers, the street furniture and the route numbers.
+        static let moscowStreets = ImmersiveMapCameraPosition(latitudeDegrees: 55.7650,
+                                                              longitudeDegrees: 37.6060,
+                                                              zoom: 17)
+        /// The Kremlin, Teatralnaya and Tverskaya tilted, at the zooms the
+        /// label density curve steps through.
+        static func moscowCentreTilted(zoom: Double) -> ImmersiveMapCameraPosition {
+            ImmersiveMapCameraPosition(latitudeDegrees: 55.7560,
+                                       longitudeDegrees: 37.6140,
+                                       zoom: zoom,
+                                       bearing: 0,
+                                       pitch: 0.9)
+        }
     }
 
     static let scenarios: [VisualReviewScenario] = [
@@ -237,6 +256,42 @@ enum VisualReviewCatalogue {
             output: .phone),
 
         VisualReviewScenario(
+            id: "labels.density.z13",
+            title: "Moscow centre labels at z13",
+            lookFor: """
+            The city at a glance: the sights around the Kremlin, the metro \
+            stations, the big parks and a few theatres, with clear map between \
+            them. No post office, parcel point, school, clinic, residential \
+            block or bare dot with a name, and no label touches another.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.moscowCentreTilted(zoom: 13))),
+
+        VisualReviewScenario(
+            id: "labels.density.z14",
+            title: "Moscow centre labels at z14",
+            lookFor: """
+            The sights, the metro, the parks, the main theatres and \
+            universities, a few landmark hotels and department stores. \
+            Still no services, shops, cafés or house numbers, and every label \
+            has space around it: the streets read between them.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.moscowCentreTilted(zoom: 14))),
+
+        VisualReviewScenario(
+            id: "labels.density.z15",
+            title: "Moscow centre labels at z15",
+            lookFor: """
+            The z14 set plus the notable hotels, museums, churches and a \
+            handful of well-known restaurants. The everyday cafés, the shop \
+            rows along Tverskaya and Okhotny Ryad, the house numbers and the \
+            three-line names are not here yet: they come in at z16 and z17.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.moscowCentreTilted(zoom: 15))),
+
+        VisualReviewScenario(
             id: "labels.surface.globe",
             title: "Ocean names painted on the globe",
             lookFor: """
@@ -265,6 +320,39 @@ enum VisualReviewCatalogue {
             """,
             settings: .default,
             subject: .still(camera: Place.lakeGenevaTilted)),
+
+        VisualReviewScenario(
+            id: "style.everything.region",
+            title: "Everything the tiles ship, region zoom",
+            lookFor: """
+            The style draws every feature the z9 tiles carry and hides none \
+            by zoom. The motorways, trunks, primaries and the secondaries the \
+            tiles already ship all draw, with their names along them. County \
+            and municipal borders show as thin light dashes under the \
+            regional ones. The land use is in its own colours (a faint green \
+            over protected areas, the built tone over anything unnamed), the \
+            lake names stay on the water, and the POIs the tiles carry show \
+            with their icons, a plain marker where there is no icon.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.moscowRegion)),
+
+        VisualReviewScenario(
+            id: "style.everything.streets",
+            title: "Everything the tiles ship, street zoom",
+            lookFor: """
+            Every POI in the z15 tiles is on the map: shops, bus stops, \
+            parking, ATMs, benches, each with its icon or the plain marker, as \
+            many as the collisions leave room for. House numbers are small \
+            grey text on the buildings and give way to every other label. \
+            Sidewalks, crossings and the subway (faint, in its tunnel) draw, \
+            a road with a route number carries it in its label, and one-way \
+            arrows are on the one-way streets. Nothing should flicker as the \
+            labels compete.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.moscowStreets),
+            output: .phone),
 
         VisualReviewScenario(
             id: "globe.default",

@@ -7,15 +7,18 @@ import Foundation
 /// What the tags are called is the basemap's contract; the facts they
 /// become carry none of it.
 extension ProtomapsBasemapSchema {
-    /// A road's structure, layer, name and stitching key.
+    /// A road's structure, layer, name, label and stitching key.
     ///
     /// The structure is `is_tunnel` or `is_bridge`, and the layer among
-    /// roads of one structure is `layer`. The name is `name`. The stitching
-    /// key is the name with the attributes that change how a piece draws
-    /// (`kind`, `kind_detail`, `is_link`, `oneway`, `layer`, `is_bridge`,
-    /// `is_tunnel`). A route reference is left out on purpose: a `ref` that
-    /// changes mid-street is not a drawing change. A road without a name
-    /// has no key and is never stitched.
+    /// roads of one structure is `layer`. The name is `name`, or the route
+    /// reference `ref` for a road that has only a number. The label is the
+    /// name in every language, led by the reference where the road has
+    /// both (`M10 · Leningradskoye Shosse`). The stitching key is the name
+    /// with the attributes that change how a piece draws (`kind`,
+    /// `kind_detail`, `is_link`, `oneway`, `layer`, `is_bridge`,
+    /// `is_tunnel`). A reference is left out of the key for a named road on
+    /// purpose: a `ref` that changes mid-street is not a drawing change. A
+    /// road with neither has no key and is never stitched.
     func road(_ properties: ImmersiveMapFeatureProperties) -> ImmersiveMapRoadFacts {
         let structure: ImmersiveMapRoadFacts.Structure
         if properties.bool("is_tunnel") == true {
@@ -25,14 +28,56 @@ extension ProtomapsBasemapSchema {
         } else {
             structure = .ground
         }
-        let name = properties.string("name") ?? ""
-        let stitchingKey: String? = name.isEmpty
-            ? nil
-            : key(of: properties, ["name", "kind", "kind_detail", "is_link", "oneway", "layer", "is_bridge", "is_tunnel"])
+        let reference = routeReference(properties)
+        var label = names(properties)
+        if let reference {
+            if var named = label {
+                named.name = named.name.map { "\(reference) · \($0)" }
+                named.namesByLanguage = named.namesByLanguage.mapValues { "\(reference) · \($0)" }
+                label = named
+            } else {
+                label = ImmersiveMapLabelFacts(name: reference)
+            }
+        }
+        let ownName = properties.string("name") ?? ""
+        let name = ownName.isEmpty ? (reference ?? "") : ownName
+        let drawingAttributes = ["kind", "kind_detail", "is_link", "oneway", "layer", "is_bridge", "is_tunnel"]
+        let stitchingKey: String?
+        if ownName.isEmpty == false {
+            stitchingKey = key(of: properties, ["name"] + drawingAttributes)
+        } else if reference != nil {
+            stitchingKey = key(of: properties, ["ref"] + drawingAttributes)
+        } else {
+            stitchingKey = nil
+        }
         return ImmersiveMapRoadFacts(structure: structure,
                                      layer: properties.integer("layer") ?? 0,
                                      name: name,
-                                     stitchingKey: stitchingKey)
+                                     stitchingKey: stitchingKey,
+                                     label: label)
+    }
+
+    /// A road's route reference as it is signed: the basemap's `ref`, whose
+    /// several routes on one road (`M10;E105`) are joined with a slash. Nil
+    /// for a road without one.
+    private func routeReference(_ properties: ImmersiveMapFeatureProperties) -> String? {
+        guard let ref = properties.string("ref") else {
+            return nil
+        }
+        let routes = ref.split(separator: ";")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { $0.isEmpty == false }
+        return routes.isEmpty ? nil : routes.joined(separator: " / ")
+    }
+
+    /// An address point's house number, `addr_housenumber`, as a label.
+    /// Nil for a point without one.
+    func houseNumber(_ properties: ImmersiveMapFeatureProperties) -> ImmersiveMapLabelFacts? {
+        guard let number = properties.string("addr_housenumber")?.trimmingCharacters(in: .whitespaces),
+              number.isEmpty == false else {
+            return nil
+        }
+        return ImmersiveMapLabelFacts(name: number)
     }
 
     private func key(of properties: ImmersiveMapFeatureProperties, _ attributes: [String]) -> String {

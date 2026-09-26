@@ -157,6 +157,8 @@ final class TileMvtParser {
         let tools = TileParseTools()
         var result = ReadingStageResult()
         var buildingExtrusionCandidates: [BuildingExtrusionCandidate] = []
+        var replacedBuildings = ReplacedBuildingFilter(replacedIDs: options.replacedBuildingIDs,
+                                                       tileZoom: tile.z)
 
         for preparedLayer in prepareLayers(decodedTile: decodedTile, tile: tile) {
             let layerStart = DispatchTime.now().uptimeNanoseconds
@@ -203,6 +205,9 @@ final class TileMvtParser {
                 let attributes = featureAttributes[featureIndex]
                 let facts = featureFacts[featureIndex]
                 let style = featureStyles[featureIndex]
+                if feature.type == .polygon, facts.building != nil, replacedBuildings.replaces(feature.id) {
+                    replacedBuildings.record(outline: layerGeometry.polygons(of: feature))
+                }
                 if case .hidden = style {
                     // The style declines the feature: nothing to draw.
                     continue
@@ -257,7 +262,9 @@ final class TileMvtParser {
 
         groundReader.finish(tile: tile, addTestBorders: options.addTestBorders, into: &result)
 
-        buildingReader.appendExtrudedMeshes(resolving: buildingExtrusionCandidates, into: &result)
+        // Only once every layer is read: an outline can come after its parts.
+        buildingReader.appendExtrudedMeshes(resolving: replacedBuildings.remaining(buildingExtrusionCandidates),
+                                            into: &result)
 
         result.removeEmptyBuckets()
         return result

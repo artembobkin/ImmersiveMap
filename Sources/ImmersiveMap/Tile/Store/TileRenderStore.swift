@@ -30,6 +30,7 @@ final class TileRenderStore: @unchecked Sendable {
         tileLoadingStatusReporter: TileLoadingStatusReporter?
     ) {
         self.tileTraceRecorder = tileTraceRecorder
+        let parseOptions = TileParseOptions(settings: config, schema: styleRuntime.schema)
         let preparedTileCacheIdentity = PreparedTileCacheIdentity(
             preparedFormatVersion: PreparedTileDiskCaching.preparedFormatVersion,
             styleRevision: styleRuntime.preparedTileStyleRevision,
@@ -42,7 +43,8 @@ final class TileRenderStore: @unchecked Sendable {
             smallSettlementMaximumZoom: UInt32(max(0, config.labels.settlementVisibility.smallSettlementMaximumZoom)),
             landmarkMinimumZoom: UInt32(max(0, config.labels.landmarks.minimumZoom)),
             addTestBorders: config.tiles.parsing.addTestBorders,
-            labelsEnabled: config.labels.isEnabled
+            labelsEnabled: config.labels.isEnabled,
+            replacedBuildingsFingerprint: parseOptions.replacedBuildingsFingerprint
         )
         let labelDecisions = TileLabelDecisions(style: styleRuntime.style,
                                                 glyphCoverage: textRenderer.glyphCoverage,
@@ -50,7 +52,7 @@ final class TileRenderStore: @unchecked Sendable {
                                                 fallbackPolicy: config.labels.fallbackPolicy)
         let tileParser = TileMvtParser(mapStyle: styleRuntime,
                                        labelDecisions: labelDecisions,
-                                       options: TileParseOptions(settings: config))
+                                       options: parseOptions)
         let textLabelsBuilder = TileTextLabelsBuilder(textRenderer: textRenderer)
         let roadLabelsBuilder = TileRoadLabelsBuilder(textRenderer: textRenderer)
         self.preparedDataBuilder = TilePreparedDataBuilder(tileParser: tileParser,

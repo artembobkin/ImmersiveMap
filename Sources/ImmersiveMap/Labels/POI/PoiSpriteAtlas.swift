@@ -48,6 +48,35 @@ extension PoiSpriteIcon {
             return ["pills.fill", "cross.case.fill", "cross.fill"]
         case .viewpoint:
             return ["binoculars.fill", "eye.fill", "location.viewfinder"]
+        case .train:
+            return ["tram.fill", "train.side.front.car", "circle.fill"]
+        case .transit:
+            return ["bus.fill", "bus", "circle.fill"]
+        case .parking:
+            return ["parkingsign", "p.circle.fill", "car.fill"]
+        case .bank:
+            return ["banknote.fill", "creditcard.fill", "building.columns.fill"]
+        case .theatre:
+            return ["theatermasks.fill", "film.fill", "star.fill"]
+        case .toilets:
+            return ["toilet.fill", "figure.stand", "circle.fill"]
+        case .civic:
+            return ["building.2.fill", "building.fill", "circle.fill"]
+        case .worship:
+            return ["hands.and.sparkles.fill", "hands.sparkles.fill", "sparkles"]
+        case .marker:
+            // No symbol: the marker is the disc alone.
+            return []
+        }
+    }
+
+    /// The disc's side relative to an icon's. The plain marker is a small
+    /// solid dot in the category colour, so a POI without a symbol reads
+    /// as a place, lighter than the POIs that say what they are.
+    var discScale: Float {
+        switch self {
+        case .marker: return 0.42
+        default: return 1
         }
     }
 }

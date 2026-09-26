@@ -68,19 +68,59 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
 
     /// Zoom thresholds that decide whether a label class is drawn at all (as
     /// opposed to `LabelStyles`, which only decides how a drawn label looks).
+    ///
+    /// The default is a density curve, not a filter: a city centre reads at
+    /// every zoom instead of drowning in names. A POI shows from the zoom the
+    /// basemap ranks it at (its `min_zoom`), so the landmarks, the parks and
+    /// the metro lead at z13 and z14, and the restaurants, cafés and shops
+    /// come in at z16 and z17. On top of that, the categories that help only
+    /// someone standing in the street (post offices, cash machines, clinics,
+    /// schools, stops and entrances, parking, named plots without a symbol)
+    /// wait for the street zooms, and so do the house numbers and the
+    /// longest names.
     public struct LabelVisibility: Equatable, Sendable {
+        /// The zoom a POI category waits for, whatever the basemap ranks
+        /// the POI at. The categories not named here follow the basemap
+        /// alone.
+        public struct PoiCategoryZooms: Equatable, Sendable {
+            /// Universities, colleges and institutes: many, large and named
+            /// at length, so they would crowd out the landmarks at z13.
+            public var campus: Int
+            /// Shops, other than malls, department stores and markets.
+            public var shop: Int
+            /// The street-level services: post and parcel offices, banks and
+            /// cash machines, pharmacies, clinics and doctors, schools and
+            /// kindergartens, offices of the state, embassies, police and
+            /// fire stations, public toilets, fuel and charging.
+            public var service: Int
+            /// The pieces of transit: stops, platforms, metro entrances,
+            /// taxi ranks, parking and bike docks. The stations themselves
+            /// follow the basemap.
+            public var transitDetail: Int
+
+            public init(campus: Int = 14,
+                        shop: Int = 16,
+                        service: Int = 17,
+                        transitDetail: Int = 17) {
+                self.campus = campus
+                self.shop = shop
+                self.service = service
+                self.transitDetail = transitDetail
+            }
+        }
+
         /// Whether a POI needs an icon to be labelled at all.
         ///
         /// A category the icon set does not recognize (an office, a company, a
         /// monument, a named building) has nothing to draw but its name, and
         /// those names are the bulk of a city centre's POIs: bare text over the
         /// buildings, in the type size of a landmark, saying nothing about what
-        /// the place is. The default is to leave them out, so the map carries
-        /// the categories it can actually depict. Set to `false` to draw them
-        /// as text, from `poiIconlessMinimumZoom`.
+        /// the place is. The default draws them with the plain marker from
+        /// `poiIconlessMinimumZoom` on. Set to `true` to leave them out
+        /// altogether.
         public var poiRequiresIcon: Bool
 
-        /// Minimum tile zoom from which icon-less POIs (offices, companies, and
+        /// Minimum camera zoom from which icon-less POIs (offices, companies, and
         /// other categories outside the set of recognized icons) are drawn. POIs
         /// with an icon draw from the regular threshold, so overview zooms keep
         /// only icon POIs while the dense scatter of text-only labels kicks in
@@ -94,12 +134,39 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// hides POIs entirely (useful for clean cinematic footage).
         public var poiMinimumZoom: Int
 
-        public init(poiIconlessMinimumZoom: Int = 16,
+        /// Whether a POI waits for the zoom the basemap ranks it at, its
+        /// `min_zoom`. Off, every POI a tile ships competes from the tile's
+        /// own zoom, and only the collisions thin them out.
+        public var poiFollowsSourceMinimumZoom: Bool
+
+        /// The zooms whole POI categories wait for.
+        public var poiCategoryMinimumZoom: PoiCategoryZooms
+
+        /// A POI whose name runs past `poiLongNameCharacterCount` characters
+        /// waits for this zoom: a name that wraps to three lines is a block of
+        /// text, not a label, until the map has room for it.
+        public var poiLongNameMinimumZoom: Int
+        public var poiLongNameCharacterCount: Int
+
+        /// Minimum camera zoom of the house numbers.
+        public var addressMinimumZoom: Int
+
+        public init(poiIconlessMinimumZoom: Int = 17,
                     poiMinimumZoom: Int = 0,
-                    poiRequiresIcon: Bool = true) {
+                    poiRequiresIcon: Bool = false,
+                    poiFollowsSourceMinimumZoom: Bool = true,
+                    poiCategoryMinimumZoom: PoiCategoryZooms = PoiCategoryZooms(),
+                    poiLongNameMinimumZoom: Int = 17,
+                    poiLongNameCharacterCount: Int = 32,
+                    addressMinimumZoom: Int = 17) {
             self.poiIconlessMinimumZoom = poiIconlessMinimumZoom
             self.poiMinimumZoom = poiMinimumZoom
             self.poiRequiresIcon = poiRequiresIcon
+            self.poiFollowsSourceMinimumZoom = poiFollowsSourceMinimumZoom
+            self.poiCategoryMinimumZoom = poiCategoryMinimumZoom
+            self.poiLongNameMinimumZoom = poiLongNameMinimumZoom
+            self.poiLongNameCharacterCount = poiLongNameCharacterCount
+            self.addressMinimumZoom = addressMinimumZoom
         }
     }
 
@@ -263,11 +330,11 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// into separate ribbons.
         public var drawsCasing: Bool
 
-        /// The tile zoom a class first draws at. The street era draws what
-        /// the tiles carry from this zoom on. A value under the zoom the
-        /// Protomaps basemap first ships the class at (motorways from z3,
-        /// trunks from z6, primaries from z7, secondaries from z9, the
-        /// minor network from z12) changes nothing.
+        /// The tile zoom a class first draws at. The style draws what the
+        /// tiles carry from this zoom on. The default is 0 for every class,
+        /// so a road shows from the first tile the Protomaps basemap ships it
+        /// in (motorways from z4, trunks from z6, primaries from z7,
+        /// secondaries from z10, the minor network from z12).
         public var minimumTileZoom: RoadClassValues<Int>
 
         public init(symbolWidthPoints: RoadClassValues<Float> = RoadMetrics.defaultSymbolWidthPoints,
@@ -316,19 +383,18 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
             other: 0.4
         )
 
-        /// Majors carry a country view. The small automobile network, the
-        /// service roads and the paths join together at street zoom: over a
-        /// city view they only grey the map.
+        /// No class is held back: the basemap's own tile levels decide where
+        /// each road first appears.
         public static let defaultMinimumTileZoom = RoadClassValues<Int>(
-            motorway: 5,
-            trunk: 5,
-            primary: 7,
-            secondary: 9,
-            tertiary: 10,
-            minor: 14,
-            service: 14,
-            path: 14,
-            other: 14
+            motorway: 0,
+            trunk: 0,
+            primary: 0,
+            secondary: 0,
+            tertiary: 0,
+            minor: 0,
+            service: 0,
+            path: 0,
+            other: 0
         )
     }
 
@@ -501,6 +567,14 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         out.append(Float(labelVisibility.poiIconlessMinimumZoom))
         out.append(Float(labelVisibility.poiMinimumZoom))
         out.append(labelVisibility.poiRequiresIcon ? 1 : 0)
+        out.append(labelVisibility.poiFollowsSourceMinimumZoom ? 1 : 0)
+        out.append(contentsOf: [labelVisibility.poiCategoryMinimumZoom.campus,
+                                labelVisibility.poiCategoryMinimumZoom.shop,
+                                labelVisibility.poiCategoryMinimumZoom.service,
+                                labelVisibility.poiCategoryMinimumZoom.transitDetail,
+                                labelVisibility.poiLongNameMinimumZoom,
+                                labelVisibility.poiLongNameCharacterCount,
+                                labelVisibility.addressMinimumZoom].map(Float.init))
         // The road metrics are baked into the tiles' line styles and decide
         // which classes a tile carries at all.
         out.append(contentsOf: roadMetrics.symbolWidthPoints.all)

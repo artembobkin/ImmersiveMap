@@ -542,13 +542,20 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             public var gridCellSizePoints: Float
             public var fadeInSeconds: TimeInterval
             public var fadeOutSeconds: TimeInterval
+            /// The least clear space between two point labels, in layout
+            /// points: a label is kept only where its box, grown by half of
+            /// this on every side, meets no other. At zero the labels pack
+            /// edge to edge and a busy street reads as one block of text.
+            public var collisionSpacingPoints: Float
 
             public init(gridCellSizePoints: Float,
                         fadeInSeconds: TimeInterval,
-                        fadeOutSeconds: TimeInterval) {
+                        fadeOutSeconds: TimeInterval,
+                        collisionSpacingPoints: Float = 10) {
                 self.gridCellSizePoints = gridCellSizePoints
                 self.fadeInSeconds = fadeInSeconds
                 self.fadeOutSeconds = fadeOutSeconds
+                self.collisionSpacingPoints = collisionSpacingPoints
             }
         }
 
@@ -1051,6 +1058,9 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     public var postProcessing: PostProcessingSettings
     public var viewReuse: ViewReuseSettings
     public var debug: DebugSettings
+    /// Models that take the place of the map's own buildings, see
+    /// `ImmersiveMapLandmark`.
+    public var landmarks: [ImmersiveMapLandmark]
 
     public init(renderLoop: RenderLoopSettings,
                 camera: CameraSettings,
@@ -1063,7 +1073,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                 attribution: AttributionSettings = AttributionSettings(),
                 postProcessing: PostProcessingSettings = PostProcessingSettings(),
                 viewReuse: ViewReuseSettings = ViewReuseSettings(),
-                debug: DebugSettings) {
+                debug: DebugSettings,
+                landmarks: [ImmersiveMapLandmark] = []) {
         self.renderLoop = renderLoop
         self.camera = camera
         self.presentation = presentation
@@ -1076,6 +1087,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         self.postProcessing = postProcessing
         self.viewReuse = viewReuse
         self.debug = debug
+        self.landmarks = landmarks
     }
 
     public static let `default` = ImmersiveMapSettings(
@@ -1229,6 +1241,12 @@ public extension ImmersiveMapSettings {
     func mapStyle(_ mapStyle: AnyImmersiveMapMapStyle) -> ImmersiveMapSettings {
         var settings = self
         settings.mapStyle = mapStyle
+        return settings
+    }
+
+    func landmarks(_ landmarks: [ImmersiveMapLandmark]) -> ImmersiveMapSettings {
+        var settings = self
+        settings.landmarks = landmarks
         return settings
     }
 

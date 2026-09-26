@@ -19,4 +19,14 @@ public enum PoiSpriteIcon: String, CaseIterable, Sendable {
     case gasStation
     case pharmacy
     case viewpoint
+    case train
+    case transit
+    case parking
+    case bank
+    case theatre
+    case toilets
+    case civic
+    case worship
+    /// The plain marker of a POI whose category has no symbol of its own.
+    case marker
 }

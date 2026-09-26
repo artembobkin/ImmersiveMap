@@ -251,7 +251,7 @@ final class TileTextLabelsBuilder {
                                          iconVertices: [])
         }
 
-        let iconSize = poiIconSize(for: textStyle, contentScale: contentScale)
+        let iconSize = poiIconSize(for: textStyle, contentScale: contentScale) * poiIcon.discScale
         let iconGap = poiIconGap(for: textStyle, contentScale: contentScale)
         let combinedWidth = iconSize + iconGap + textMetrics.size.width
         let combinedHeight = max(iconSize, textMetrics.size.height)
