@@ -1,8 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 //
-// Part of the mapbox/earcut port. The ISC notice heads EarcutCore.swift and
-// is repeated in THIRD-PARTY-NOTICES.md at the repository root.
+// Part of the mapbox/earcut port. The ISC notice heads EarcutCore.swift.
 
 // The block-bbox index for findHoleBridge (upstream issue #183): one
 // [minX, minY, maxX, maxY] box per K consecutive ring edges, so the leftward

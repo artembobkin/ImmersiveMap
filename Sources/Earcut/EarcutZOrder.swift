@@ -1,8 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 //
-// Part of the mapbox/earcut port. The ISC notice heads EarcutCore.swift and
-// is repeated in THIRD-PARTY-NOTICES.md at the repository root.
+// Part of the mapbox/earcut port. The ISC notice heads EarcutCore.swift.
 
 // The z-order (Morton) curve over the ring, which is what makes the ear
 // test on a large polygon a local scan instead of a full ring walk.

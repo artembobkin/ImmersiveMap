@@ -1,12 +1,11 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 //
-// Part of the mapbox/earcut port. The ISC notice heads EarcutCore.swift and
-// is repeated in THIRD-PARTY-NOTICES.md at the repository root.
+// Part of the mapbox/earcut port. The ISC notice heads EarcutCore.swift.
 
 /// The `Earcut` module: the ear-clipping triangulator, a Swift port of
-/// mapbox/earcut v3.2.3 (ISC license, notice in `THIRD-PARTY-NOTICES.md` at
-/// the repository root). Ported are `earcut` and `deviation`. The optional
+/// mapbox/earcut v3.2.3 (ISC license, notice at the top of
+/// `EarcutCore.swift`). Ported are `earcut` and `deviation`. The optional
 /// `refine` pass toward a constrained Delaunay triangulation is not, since
 /// nothing in the engine reads triangle shape. The functions keep the
 /// reference implementation's names and bodies, split by phase into the

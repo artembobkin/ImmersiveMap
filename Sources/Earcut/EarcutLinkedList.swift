@@ -1,8 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 //
-// Part of the mapbox/earcut port. The ISC notice heads EarcutCore.swift and
-// is repeated in THIRD-PARTY-NOTICES.md at the repository root.
+// Part of the mapbox/earcut port. The ISC notice heads EarcutCore.swift.
 
 // Building the circular doubly linked rings the ear clipping walks, and
 // pruning the vertices that carry no shape.

@@ -1,8 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 //
-// Part of the mapbox/earcut port. The ISC notice heads EarcutCore.swift and
-// is repeated in THIRD-PARTY-NOTICES.md at the repository root.
+// Part of the mapbox/earcut port. The ISC notice heads EarcutCore.swift.
 
 // Turning a polygon with holes into a single ring: every hole is bridged
 // into the outer loop, left to right.
