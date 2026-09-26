@@ -23,7 +23,7 @@ final class MarkerOverlayContainerView: UIView {
 @MainActor
 final class MarkerOverlayItemHost {
     /// No parent view controller: marker content is a closed leaf
-    /// (navigation/presentation from inside is unsupported, see docs/markers.md),
+    /// (navigation or presentation from inside it is unsupported), and its
     /// traits arrive through the window.
     private let hostingController: UIHostingController<AnyView>
 

@@ -23,8 +23,8 @@ found in the state a stranger expects.
 
 A project here is the opposite. It is expected to change under you, to be
 pointed at a URL that will stop existing, to carry the settings of the current
-experiment. Nothing in `Documentation/` links to it, no test covers it, and
-breaking one costs nothing but the next commit. When an experiment turns into a
+experiment. The README does not link to it, no test covers it, and breaking
+one costs nothing but the next commit. When an experiment turns into a
 feature, the app that shows it off is written in `Examples/` and this one goes
 back to whatever comes next.
 

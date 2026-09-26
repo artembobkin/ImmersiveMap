@@ -5,47 +5,29 @@
 ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps** on Apple platforms, about +6 MB of app size.
 
 <p align="center">
-  <img src="Documentation/Assets/readme-manhattan.png" width="49%" alt="Manhattan with 3D buildings and shadows">
-  <img src="Documentation/Assets/readme-chicago.png" width="49%" alt="The Chicago Loop under a tilted camera">
+  <img src="Assets/readme-manhattan.png" width="49%" alt="Manhattan with 3D buildings and shadows">
+  <img src="Assets/readme-chicago.png" width="49%" alt="The Chicago Loop under a tilted camera">
 </p>
 <p align="center">
-  <img src="Documentation/Assets/readme-berlin-night.png" width="49%" alt="Berlin Mitte in the dark palette">
-  <img src="Documentation/Assets/readme-berlin.png" width="49%" alt="Berlin Mitte from a tilted camera">
+  <img src="Assets/readme-berlin-night.png" width="49%" alt="Berlin Mitte in the dark palette">
+  <img src="Assets/readme-berlin.png" width="49%" alt="Berlin Mitte from a tilted camera">
 </p>
 <p align="center">
-  <img src="Documentation/Assets/readme-avatars-shibuya.png" width="49%" alt="Avatar markers with badges over Shibuya">
-  <img src="Documentation/Assets/readme-scene-models-paris.png" width="49%" alt="A 3D scene model by the Eiffel Tower">
+  <img src="Assets/readme-avatars-shibuya.png" width="49%" alt="Avatar markers with badges over Shibuya">
+  <img src="Assets/readme-scene-models-paris.png" width="49%" alt="A 3D scene model by the Eiffel Tower">
 </p>
 <p align="center">
-  <img src="Documentation/Assets/readme-globe.png" width="49%" alt="The globe with the atmosphere and stars">
-  <img src="Documentation/Assets/readme-avatars-globe.png" width="49%" alt="Avatar markers on the globe">
+  <img src="Assets/readme-globe.png" width="49%" alt="The globe with the atmosphere and stars">
+  <img src="Assets/readme-avatars-globe.png" width="49%" alt="Avatar markers on the globe">
 </p>
 <p align="center">
-  <img src="Documentation/Assets/readme-san-francisco.png" width="49%" alt="San Francisco coastline with labels">
-  <img src="Documentation/Assets/readme-alps.png" width="49%" alt="The Alps with terrain and landcover">
+  <img src="Assets/readme-san-francisco.png" width="49%" alt="San Francisco coastline with labels">
+  <img src="Assets/readme-alps.png" width="49%" alt="The Alps around Zermatt with land cover and peak names">
 </p>
-
-## Performance
-
-iPhone 15 Pro Max, iOS 26.5, 120 Hz. Scripted session: city flights at zoom 14 to 16.5
-with tilt, a 20 second pan, an idle map. Mapbox Maps SDK 11.26.0 in its Standard style.
-The bench apps, the run script and the method are in
-[ImmersiveMapPerformance](https://github.com/artembobkin/ImmersiveMapPerformance).
-
-| Metric | ImmersiveMap | Mapbox Standard |
-|---|---:|---:|
-| Frame rate on screen | 117 to 120 fps | 108 to 120 fps |
-| GPU per frame, mean | 4.4 to 4.7 ms | 4.0 to 4.7 ms |
-| GPU per frame, p50 / p75 / p90 / p99 | 3.8 / 4.7 / 5.5 / 6.9 ms | 4.1 / 5.0 / 6.0 / 8.2 ms |
-| CPU, pan | 40 % of one core | 50 % |
-| CPU, idle | 1 %, no frames drawn | 1 to 2 % |
-| Memory, moving | 230 to 290 MB | 270 to 940 MB |
-| Memory, idle | 160 to 200 MB | 290 to 720 MB |
-| First map view, main thread | 60 to 75 ms | not measured |
 
 ## Features
 
-[Built-in Protomaps vector tiles](Documentation/docs/map-data.md), native iOS (UIKit host), native macOS, SwiftUI integration, [map styling and colors](Documentation/docs/styling.md), [SwiftUI markers](Documentation/docs/markers.md), [avatars](Documentation/docs/avatars.md), [3D scene models](Documentation/docs/scene-models.md), [tour video export](Documentation/docs/tour-video-export.md).
+Built-in Protomaps vector tiles, native iOS (UIKit host), native macOS, SwiftUI integration, map styling and colors, SwiftUI markers, avatars, 3D scene models, landmark models that replace the map's buildings, tour video export.
 
 ## Map Data
 
@@ -95,12 +77,12 @@ Maps powered by ImmersiveMap (immersivemap.dev)
 
 ## Contributing
 
-ImmersiveMap is currently maintained as a single-maintainer project. Issues and feedback are welcome. Pull requests are accepted. See [CONTRIBUTING.md](CONTRIBUTING.md). Bug reports and feature requests belong in [Issues](https://github.com/artembobkin/ImmersiveMap/issues). Questions, ideas, and anything open-ended belong in [Discussions](https://github.com/artembobkin/ImmersiveMap/discussions).
+ImmersiveMap is currently maintained as a single-maintainer project. Issues and feedback are welcome. Pull requests are accepted. See [CONTRIBUTING.md](CONTRIBUTING.md). For bug reports, feature requests, questions and ideas, open an [issue](https://github.com/artembobkin/ImmersiveMap/issues).
 
 ## License
 
-ImmersiveMap is available under the MIT license. See [LICENSE](LICENSE). The internal earcut triangulator is a port of ISC-licensed Mapbox code; its notice, ready to copy into an app's acknowledgements screen, is in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+ImmersiveMap is available under the MIT license. See [LICENSE](LICENSE). The internal earcut triangulator is a port of ISC-licensed Mapbox code. Its notice, ready to copy into an app's acknowledgements screen, is in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Commercial Support
 
-I am available for consulting and custom ImmersiveMap integrations. To get in touch, start a [discussion](https://github.com/artembobkin/ImmersiveMap/discussions), or write to me in the chat at [immersivemap.dev/account](https://immersivemap.dev/account/).
+I am available for consulting and custom ImmersiveMap integrations. To get in touch, open an [issue](https://github.com/artembobkin/ImmersiveMap/issues/new), or write to me in the chat at [immersivemap.dev/account](https://immersivemap.dev/account/).

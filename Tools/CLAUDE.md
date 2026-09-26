@@ -10,8 +10,6 @@ xcodebuild test -project Tools/DeviceTests/ImmersiveMapDeviceTests.xcodeproj \
 
 Reach for it when the question is about hardware: the simulator is a software renderer, so timing, memory and driver behaviour are only real on a device. The tests that read `.metal` source off the checkout to assert on shader logic cannot pass on a device, where there is no checkout; filter them out with `-only-testing:` rather than treating them as failures.
 
-The performance bench (two iPhone apps that replay one scripted camera session, one linking ImmersiveMap and one the Mapbox Maps SDK, with the run script, the summariser and the trace reader) is its own repository, `artembobkin/ImmersiveMapPerformance`, checked out next to this one as `../ImmersiveMapPerformance`: its `ImmersiveMapBench.xcodeproj` links this package by the local path `../ImmersiveMap`, so it always measures this working tree. Its README is the method, and a measurement that belongs in this repository's README comes from there.
-
 Offline tooling (not part of the SwiftPM build):
 
 - `Tools/TextAtlas/generate_text_atlas.sh`: regenerates the committed MTSDF text atlases in `Sources/ImmersiveMap/Text/Resources/` (`atlas` and `atlas_thin`: RGB carries the MSDF the label fill samples, alpha the plain SDF the halo/stroke coverage is derived from). Requires `msdf-atlas-gen` and local Noto Sans fonts; fonts are never committed. The PNG and its JSON are regenerated together, so a half-updated pair means the shader samples a channel that is not there.

@@ -37,4 +37,4 @@ Say what changed and why, add tests where applicable, and attach a before/after 
 
 ## Bugs and questions
 
-Bug reports and feature requests go to [Issues](https://github.com/artembobkin/ImmersiveMap/issues), open-ended questions to [Discussions](https://github.com/artembobkin/ImmersiveMap/discussions). Report security issues privately through [Security Advisories](https://github.com/artembobkin/ImmersiveMap/security/advisories/new); see [SECURITY.md](SECURITY.md).
+Bug reports, feature requests and questions all go to [Issues](https://github.com/artembobkin/ImmersiveMap/issues). Report security issues privately through [Security Advisories](https://github.com/artembobkin/ImmersiveMap/security/advisories/new); see [SECURITY.md](SECURITY.md).
