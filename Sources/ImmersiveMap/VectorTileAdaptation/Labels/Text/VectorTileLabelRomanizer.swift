@@ -171,16 +171,11 @@ struct VectorTileLabelRomanizer: Equatable {
     }
 
     private static func script(of scalar: Unicode.Scalar) -> Script {
-        switch scalar.value {
-        case 0x0400...0x052F, 0x1C80...0x1C8F, 0x2DE0...0x2DFF, 0xA640...0xA69F,  // Cyrillic
-             0x0370...0x03FF, 0x1F00...0x1FFF,                                   // Greek
-             0x0530...0x058F, 0xFB13...0xFB17,                                   // Armenian
-             0x10A0...0x10FF, 0x1C90...0x1CBF, 0x2D00...0x2D2F:                  // Georgian
-            return scalar.properties.isAlphabetic ? .romanizable : .other
-        case 0x0000...0x024F, 0x1E00...0x1EFF, 0x2C60...0x2C7F, 0xA720...0xA7FF:
-            return scalar.properties.isAlphabetic ? .latin : .other
-        default:
-            return scalar.properties.isAlphabetic ? .unsupported : .other
+        switch VectorTileLabelScript.of(scalar) {
+        case nil: return .other
+        case .latin: return .latin
+        case .cyrillic, .greek, .armenian, .georgian: return .romanizable
+        case .other: return .unsupported
         }
     }
 }

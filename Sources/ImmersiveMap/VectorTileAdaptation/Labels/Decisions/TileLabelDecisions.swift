@@ -103,8 +103,13 @@ struct TileLabelDecisions {
         for candidate in languagePreferences.fallbackChain {
             let code = candidate.languageCode ?? "native"
             var value = names[code]
-            if candidate.kind == .romanizedNative {
+            switch candidate.kind {
+            case .romanizedNative:
                 value = value.flatMap(languagePreferences.romanizer.romanize)
+            case .nativeInMapScript:
+                value = value.flatMap { languagePreferences.mapScript?.writes($0) == true ? $0 : nil }
+            case .preferred, .native, .english:
+                break
             }
             guard let value,
                   value.isEmpty == false,

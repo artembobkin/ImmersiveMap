@@ -13,7 +13,7 @@ final class TileLabelDecisionsTests: XCTestCase {
             ?? ImmersiveMapLabelFacts()
     }
 
-    func testRussianPreferencesPreferRussianThenEnglishThenNative() {
+    func testRussianPreferencesPreferRussianThenCyrillicNativeThenEnglishThenNative() {
         let properties: [String: MvtValue] = [
             "name": stringValue("Москва"),
             "name:en": stringValue("Moscow"),
@@ -24,8 +24,37 @@ final class TileLabelDecisionsTests: XCTestCase {
 
         XCTAssertEqual(preferences.selectedLanguage, .russian)
         XCTAssertEqual(preferences.fallbackPolicy, .international)
-        XCTAssertEqual(preferences.fallbackChain.map(\.languageCode), ["ru", "en", nil])
+        XCTAssertEqual(preferences.fallbackChain.map(\.languageCode), ["ru", nil, "en", nil])
         XCTAssertEqual(resolver.resolveText(label: label(properties), preferences: preferences), "Москва")
+    }
+
+    /// The Moscow POIs the basemap ships with no `name:ru`: the local name
+    /// is Russian already, and it beats the English one.
+    func testRussianPreferencesTakeTheCyrillicNativeNameBeforeEnglish() {
+        let properties: [String: MvtValue] = [
+            "name": stringValue("Охотный Ряд"),
+            "name:en": stringValue("Okhotny Ryad")
+        ]
+        let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
+        let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .russian)
+
+        XCTAssertEqual(resolver.resolveText(label: label(properties), preferences: preferences), "Охотный Ряд")
+    }
+
+    /// A local name in another alphabet, or one mixing in Latin, still
+    /// yields to English on a Russian map.
+    func testRussianPreferencesTakeEnglishOverANativeNameOutsideCyrillic() {
+        let resolver = VectorTileLabelTextResolver(glyphCoverage: .legacyAtlasForTests)
+        let preferences = VectorTileLabelLanguagePreferences.from(settingsLanguage: .russian)
+
+        XCTAssertEqual(resolver.resolveText(label: label(["name": stringValue("Rue de Rivoli"),
+                                                          "name:en": stringValue("Rivoli Street")]),
+                                            preferences: preferences),
+                       "Rivoli Street")
+        XCTAssertEqual(resolver.resolveText(label: label(["name": stringValue("ТЦ Mega"),
+                                                          "name:en": stringValue("Mega Mall")]),
+                                            preferences: preferences),
+                       "Mega Mall")
     }
 
     func testFrenchPreferencesFallBackToEnglishBeforeNativeWhenPreferredNameIsAbsent() {

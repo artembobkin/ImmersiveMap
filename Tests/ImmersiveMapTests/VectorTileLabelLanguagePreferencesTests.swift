@@ -26,12 +26,22 @@ final class VectorTileLabelLanguagePreferencesTests: XCTestCase {
     }
 
     /// A map in a language not written in Latin letters has nothing to
-    /// romanize into: the local name follows English as it is.
-    func testNonEnglishInternationalChainKeepsEnglishBeforeNative() {
+    /// romanize into: a local name in its alphabet comes before English, and
+    /// any other local name follows English as it is.
+    func testNonLatinInternationalChainTriesTheNativeNameInItsAlphabetBeforeEnglish() {
         let chain = VectorTileLabelLanguagePreferences.from(settingsLanguage: .russian,
                                                             fallbackPolicy: .international)
             .fallbackChain
-        XCTAssertEqual(chain.map(\.languageCode), ["ru", "en", nil])
+        XCTAssertEqual(chain.map(\.languageCode), ["ru", nil, "en", nil])
+        XCTAssertEqual(chain.map(\.kind), [.preferred, .nativeInMapScript, .english, .native])
+    }
+
+    /// A language whose alphabet the text logic does not tell apart keeps
+    /// English before the local name.
+    func testUnknownScriptInternationalChainKeepsEnglishBeforeNative() {
+        let chain = VectorTileLabelLanguagePreferences.from(settingsLanguage: .init("ja"),
+                                                            fallbackPolicy: .international)
+            .fallbackChain
         XCTAssertEqual(chain.map(\.kind), [.preferred, .english, .native])
     }
 

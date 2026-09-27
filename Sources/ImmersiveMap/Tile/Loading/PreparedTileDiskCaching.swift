@@ -825,7 +825,11 @@ final class PreparedTileDiskCaching {
     // 118: a label style states how far its letters are grown past the
     // font's outline (`LabelTextStyle.emboldenPoints`), which the entry's
     // text styles carry. A v117 entry has no such field.
-    static let preparedFormatVersion: UInt32 = 118
+    // 119: a map in a language written in an alphabet other than Latin
+    // shows a local name in that alphabet before the English one
+    // (`VectorTileLabelLanguagePreferences`). A v118 entry holds the
+    // English name.
+    static let preparedFormatVersion: UInt32 = 119
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

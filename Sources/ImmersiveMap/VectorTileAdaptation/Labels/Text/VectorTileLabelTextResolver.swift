@@ -15,8 +15,13 @@ struct VectorTileLabelTextResolver {
                      uppercased: Bool = false) -> String? {
         for candidate in preferences.fallbackChain {
             var text = candidate.languageCode.map { label.namesByLanguage[$0] } ?? label.name
-            if candidate.kind == .romanizedNative {
+            switch candidate.kind {
+            case .romanizedNative:
                 text = text.flatMap(preferences.romanizer.romanize)
+            case .nativeInMapScript:
+                text = text.flatMap { preferences.mapScript?.writes($0) == true ? $0 : nil }
+            case .preferred, .native, .english:
+                break
             }
             if uppercased {
                 text = text?.uppercased()

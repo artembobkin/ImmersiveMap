@@ -55,7 +55,10 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// Armenian or Georgian is romanized to plain ASCII first, so the map
         /// shows one alphabet ("Georgiyevskiy Lane" for "Георгиевский
         /// переулок" on an English map). A local name in another script is
-        /// shown as it is.
+        /// shown as it is. When the map's language is written in Cyrillic,
+        /// Greek, Armenian or Georgian, a local name in that alphabet comes
+        /// before the English one ("Охотный Ряд", not "Okhotny Ryad", on a
+        /// Russian map).
         case international
         /// The local name as the place spells it, then the English name.
         case localFirst

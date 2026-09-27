@@ -6,7 +6,10 @@
 /// the fallback policy states. Under the international policy a map in a
 /// language written in Latin letters tries the local name romanized before
 /// the local name as it is (`VectorTileLabelRomanizer`), so a name in
-/// another alphabet shows in the map's. Which fields of a tile carry a language's
+/// another alphabet shows in the map's. A map in a language written in
+/// another alphabet tries the local name before English when the local name
+/// is written in that alphabet: a Moscow shop with no `name:ru` is
+/// "Охотный Ряд" on a Russian map, not "Okhotny Ryad". Which fields of a tile carry a language's
 /// spelling is the schema reading's business (`ImmersiveMapLabelFacts`);
 /// the chain speaks in language codes.
 struct VectorTileLabelLanguagePreferences: Equatable {
@@ -16,6 +19,9 @@ struct VectorTileLabelLanguagePreferences: Equatable {
             case native
             /// The local name in Latin letters.
             case romanizedNative
+            /// The local name, only when it is written in the map
+            /// language's alphabet (`mapScript`).
+            case nativeInMapScript
             case english
         }
 
@@ -29,6 +35,9 @@ struct VectorTileLabelLanguagePreferences: Equatable {
     let selectedLanguage: ImmersiveMapSettings.LabelLanguage
     let fallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy
     let romanizer: VectorTileLabelRomanizer
+    /// The alphabet the map's language is written in, nil when the text
+    /// logic does not tell it apart.
+    let mapScript: VectorTileLabelScript?
 
     static func from(
         settingsLanguage: ImmersiveMapSettings.LabelLanguage,
@@ -38,6 +47,12 @@ struct VectorTileLabelLanguagePreferences: Equatable {
         let english = Candidate(languageCode: "en", kind: .english)
         let native = Candidate(languageCode: nil, kind: .native)
         let romanizer = VectorTileLabelRomanizer(targetLanguage: settingsLanguage)
+        let mapScript = VectorTileLabelScript(language: settingsLanguage)
+        // In an alphabet other than Latin, a local name in the map's own
+        // alphabet reads better than the English one.
+        let nativeInMapScript = mapScript.map { $0 != .latin && $0 != .other } == true
+            ? [Candidate(languageCode: nil, kind: .nativeInMapScript)]
+            : []
         let internationalNative = romanizer.isEnabled
             ? [Candidate(languageCode: nil, kind: .romanizedNative), native]
             : [native]
@@ -48,7 +63,7 @@ struct VectorTileLabelLanguagePreferences: Equatable {
             let preferred = Candidate(languageCode: settingsLanguage.nameFieldSuffix, kind: .preferred)
             switch fallbackPolicy {
             case .international:
-                fallbackChain = [preferred, english] + internationalNative
+                fallbackChain = [preferred] + nativeInMapScript + [english] + internationalNative
             case .localFirst:
                 fallbackChain = [preferred, native, english]
             }
@@ -57,6 +72,7 @@ struct VectorTileLabelLanguagePreferences: Equatable {
         return VectorTileLabelLanguagePreferences(fallbackChain: fallbackChain,
                                                   selectedLanguage: settingsLanguage,
                                                   fallbackPolicy: fallbackPolicy,
-                                                  romanizer: romanizer)
+                                                  romanizer: romanizer,
+                                                  mapScript: mapScript)
     }
 }
