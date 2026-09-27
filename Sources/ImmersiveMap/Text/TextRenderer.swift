@@ -85,14 +85,17 @@ struct TextVertex {
 
 struct TextStyleUniform: Equatable {
     var textColor: SIMD3<Float>
-    var _padding0: Float = 0.0
+    /// How far the letters are grown past the font's outline, in pixels.
+    var fillBiasPx: Float
     var strokeColor: SIMD3<Float>
     var strokeWidthPx: Float
 
     init(textColor: SIMD3<Float>,
          strokeColor: SIMD3<Float> = SIMD3<Float>(1.0, 1.0, 1.0),
-         strokeWidthPx: Float = 2.0) {
+         strokeWidthPx: Float = 2.0,
+         fillBiasPx: Float = 0.75) {
         self.textColor = textColor
+        self.fillBiasPx = fillBiasPx
         self.strokeColor = strokeColor
         self.strokeWidthPx = strokeWidthPx
     }

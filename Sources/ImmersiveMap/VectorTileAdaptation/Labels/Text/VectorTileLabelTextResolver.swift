@@ -11,11 +11,15 @@ struct VectorTileLabelTextResolver {
     }
 
     func resolveText(label: ImmersiveMapLabelFacts,
-                     preferences: VectorTileLabelLanguagePreferences) -> String? {
+                     preferences: VectorTileLabelLanguagePreferences,
+                     uppercased: Bool = false) -> String? {
         for candidate in preferences.fallbackChain {
             var text = candidate.languageCode.map { label.namesByLanguage[$0] } ?? label.name
             if candidate.kind == .romanizedNative {
                 text = text.flatMap(preferences.romanizer.romanize)
+            }
+            if uppercased {
+                text = text?.uppercased()
             }
             guard let text, text.isEmpty == false, glyphCoverage.canRender(text) else {
                 continue

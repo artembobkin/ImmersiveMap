@@ -819,7 +819,13 @@ final class PreparedTileDiskCaching {
     // labels with a plate run of their own in the text label set, and a
     // trailing arena span per plate run. A v115 entry lays the numbers
     // along the road as text, in front of the name.
-    static let preparedFormatVersion: UInt32 = 116
+    // 117: a label style may set its text in capitals
+    // (`LabelTextStyle.uppercased`), which the entry's text styles carry.
+    // A v116 entry has no such field.
+    // 118: a label style states how far its letters are grown past the
+    // font's outline (`LabelTextStyle.emboldenPoints`), which the entry's
+    // text styles carry. A v117 entry has no such field.
+    static let preparedFormatVersion: UInt32 = 118
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

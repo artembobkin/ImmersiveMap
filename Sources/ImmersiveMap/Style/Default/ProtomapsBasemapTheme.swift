@@ -29,17 +29,26 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// at the same physical size on a 2x desktop display and a 3x phone.
         public var sizePoints: Float
         public var weight: LabelFontWeight
+        /// Whether the label is set in capitals.
+        public var uppercased: Bool
+        /// How far the letters are grown past the font's outline, in layout
+        /// points (`LabelTextStyle.emboldenPoints`).
+        public var emboldenPoints: Float
 
         public init(fillColor: SIMD3<Float>,
                     strokeColor: SIMD3<Float>,
                     haloEm: Float,
                     sizePoints: Float,
-                    weight: LabelFontWeight) {
+                    weight: LabelFontWeight,
+                    uppercased: Bool = false,
+                    emboldenPoints: Float = LabelTextStyle.defaultEmboldenPoints) {
             self.fillColor = fillColor
             self.strokeColor = strokeColor
             self.haloEm = haloEm
             self.sizePoints = sizePoints
             self.weight = weight
+            self.uppercased = uppercased
+            self.emboldenPoints = emboldenPoints
         }
     }
 
@@ -557,7 +566,8 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         func add(_ v: SIMD3<Float>) { out.append(contentsOf: [v.x, v.y, v.z]) }
         func add(_ a: LabelAppearance) {
             add(a.fillColor); add(a.strokeColor)
-            out.append(contentsOf: [a.haloEm, a.sizePoints, Float(a.weight.rawValue)])
+            out.append(contentsOf: [a.haloEm, a.sizePoints, Float(a.weight.rawValue), a.uppercased ? 1 : 0,
+                                    a.emboldenPoints])
         }
         add(layers.land); add(layers.water); add(layers.wood); add(layers.grass)
         add(layers.farmland); add(layers.ice); add(layers.sand); add(layers.wetland)
@@ -701,8 +711,13 @@ public extension ProtomapsBasemapTheme.LabelStyles {
         water: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.29, 0.49, 0.71), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0, sizePoints: 9.5, weight: .thin),
+        // The street names stay under the places and the landmarks: small
+        // light grey capitals in the thin face with a little added weight
+        // and a narrow halo, the way a commercial map letters its streets,
+        // so a street reads as a street and never outweighs the city it
+        // runs through.
         road: ProtomapsBasemapTheme.LabelAppearance(
-            fillColor: SIMD3<Float>(0.30, 0.30, 0.30), strokeColor: SIMD3<Float>(1, 1, 1),
-            haloEm: 0.106, sizePoints: 17, weight: .bold)
+            fillColor: SIMD3<Float>(0.45, 0.45, 0.46), strokeColor: SIMD3<Float>(1, 1, 1),
+            haloEm: 0.1, sizePoints: 11, weight: .thin, uppercased: true, emboldenPoints: 0.2)
     )
 }

@@ -247,6 +247,7 @@ final class TileTextLabelsBuilder {
         /// and the em size, so two labels that share an em ratio but not a size
         /// no longer share a run.
         let haloWidthPoints: Float
+        let emboldenPoints: Float
 
         init(_ style: LabelTextStyle) {
             self.key = style.key
@@ -254,6 +255,7 @@ final class TileTextLabelsBuilder {
             self.fillColor = style.fillColor
             self.strokeColor = style.strokeColor
             self.haloWidthPoints = style.haloEm * style.sizePoints
+            self.emboldenPoints = style.emboldenPoints
         }
 
         /// Deterministic draw order: first by `key` (matches the previous
@@ -263,6 +265,7 @@ final class TileTextLabelsBuilder {
             if lhs.key != rhs.key { return lhs.key < rhs.key }
             if lhs.weight.rawValue != rhs.weight.rawValue { return lhs.weight.rawValue < rhs.weight.rawValue }
             if lhs.haloWidthPoints != rhs.haloWidthPoints { return lhs.haloWidthPoints < rhs.haloWidthPoints }
+            if lhs.emboldenPoints != rhs.emboldenPoints { return lhs.emboldenPoints < rhs.emboldenPoints }
             for index in 0..<3 where lhs.fillColor[index] != rhs.fillColor[index] {
                 return lhs.fillColor[index] < rhs.fillColor[index]
             }

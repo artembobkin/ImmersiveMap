@@ -388,7 +388,9 @@ extension ProtomapsBasemapDefaultMapStyle {
                        strokeColor: appearance.strokeColor,
                        haloEm: appearance.haloEm,
                        sizePoints: LabelTypeScale.clamped(appearance.sizePoints),
-                       weight: appearance.weight)
+                       weight: appearance.weight,
+                       uppercased: appearance.uppercased,
+                       emboldenPoints: appearance.emboldenPoints)
     }
 }
 

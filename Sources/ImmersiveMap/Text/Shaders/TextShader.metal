@@ -12,7 +12,8 @@ struct VertexIn {
 
 struct TextStyle {
     float3 textColor;
-    float _padding0;
+    // How far the letters are grown past the font's outline, in pixels.
+    float fillBiasPx;
     float3 strokeColor;
     float strokeWidthPx;
 };
@@ -105,13 +106,12 @@ fragment TextFragmentOut textFragment(VertexOut in [[stage_in]],
                             ) {
     TextDistance distance = computeTextDistance(in, atlasTexture);
 
-    const float boldBiasPx = 0.75;
     // Point labels sit on textured terrain, so keep the halo narrow enough
     // that large style values cannot fill the glyph quad.
     float maxStrokePx = max(0.5 * distance.screenPxRange - 0.5, 0.0);
     float strokeWidthPx = min(style.strokeWidthPx, maxStrokePx);
     return shadeGlyph(distance,
-                      distance.msdfPxDist + boldBiasPx,
+                      distance.msdfPxDist + style.fillBiasPx,
                       strokeWidthPx,
                       style,
                       in.alpha);
@@ -123,14 +123,30 @@ fragment TextFragmentOut roadTextFragment(VertexOut in [[stage_in]],
                                 ) {
     TextDistance distance = computeTextDistance(in, atlasTexture);
 
-    const float fillBiasPx = 0.75;
-    // Road labels need a less aggressive clamp than point labels: the generic
-    // half-range cap can collapse the outline to zero on rotated thin glyphs.
-    // Keep a small guaranteed stroke, but stay within the signed-distance support.
-    float maxStrokePx = max(distance.screenPxRange - 0.75, 0.75);
+    // A road label is rotated along its road, and `fwidth` sums the uv
+    // derivatives of both screen axes, so on a glyph turned by 45 degrees it
+    // reads the range about 1.4 times too small. The range here comes from
+    // the length of the derivatives instead, the same at every angle, and
+    // the distances are rescaled to it.
+    const float distanceRange = 24.0;
+    float2 texSize = float2(atlasTexture.get_width(), atlasTexture.get_height());
+    float2 texelsPerPixelX = dfdx(in.uv) * texSize;
+    float2 texelsPerPixelY = dfdy(in.uv) * texSize;
+    float texelsPerPixel = sqrt(0.5 * (dot(texelsPerPixelX, texelsPerPixelX)
+                                       + dot(texelsPerPixelY, texelsPerPixelY)));
+    float screenPxRange = max(distanceRange / max(texelsPerPixel, 1e-6), 1.0);
+    float rescale = screenPxRange / distance.screenPxRange;
+    distance.msdfPxDist *= rescale;
+    distance.sdfPxDist *= rescale;
+    distance.screenPxRange = screenPxRange;
+
+    // The halo stays inside the distance field's support, half the range
+    // past the glyph edge. Beyond it the field is flat at its minimum, and a
+    // wider halo covers the whole glyph quad, drawing the label as boxes.
+    float maxStrokePx = max(0.5 * distance.screenPxRange - 0.5, 0.0);
     float strokeWidthPx = min(style.strokeWidthPx, maxStrokePx);
     return shadeGlyph(distance,
-                      distance.msdfPxDist + fillBiasPx,
+                      distance.msdfPxDist + style.fillBiasPx,
                       strokeWidthPx,
                       style,
                       in.alpha);

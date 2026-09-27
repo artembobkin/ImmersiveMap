@@ -517,6 +517,8 @@ enum PreparedTileDiskCodec {
         let haloEm: Float
         let sizePoints: Float
         let weightRawValue: UInt8
+        let uppercased: Bool
+        let emboldenPoints: Float
 
         init(_ style: LabelTextStyle) throws {
             self.key = try encodeInt32(style.key, field: "LabelTextStyle.key")
@@ -525,6 +527,8 @@ enum PreparedTileDiskCodec {
             self.haloEm = style.haloEm
             self.sizePoints = style.sizePoints
             self.weightRawValue = style.weight.rawValue
+            self.uppercased = style.uppercased
+            self.emboldenPoints = style.emboldenPoints
         }
 
         func runtimeValue() throws -> LabelTextStyle {
@@ -539,7 +543,9 @@ enum PreparedTileDiskCodec {
                                   strokeColor: SIMD3<Float>(strokeColor[0], strokeColor[1], strokeColor[2]),
                                   haloEm: haloEm,
                                   sizePoints: sizePoints,
-                                  weight: weight)
+                                  weight: weight,
+                                  uppercased: uppercased,
+                                  emboldenPoints: emboldenPoints)
         }
     }
 

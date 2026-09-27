@@ -38,10 +38,12 @@ struct TileLabelDecisions {
 
     /// The name a road line is labelled with, in the map's language with its
     /// fallback chain, or nil when the feature carries none the atlas can
-    /// render.
-    func roadLabelText(label: ImmersiveMapLabelFacts?) -> String? {
-        guard let label else { return nil }
-        return textResolver.resolveText(label: label, preferences: languagePreferences)
+    /// render. In capitals when the style sets it so.
+    func roadLabelText(label: ImmersiveMapLabelFacts?, style: LabelTextStyle?) -> String? {
+        guard let label, let style else { return nil }
+        return textResolver.resolveText(label: label,
+                                        preferences: languagePreferences,
+                                        uppercased: style.uppercased)
     }
 
     /// The route signs whose numbers the atlas can render, in their order.
@@ -66,7 +68,9 @@ struct TileLabelDecisions {
     func pointLabelDecision(feature: VectorTileLabelFeature,
                             label: ImmersiveMapLabelFacts,
                             style: PointLabelStyle) -> VectorTileLabelDecision? {
-        guard let resolvedText = textResolver.resolveText(label: label, preferences: languagePreferences) else {
+        guard let resolvedText = textResolver.resolveText(label: label,
+                                                          preferences: languagePreferences,
+                                                          uppercased: style.text.uppercased) else {
             return nil
         }
         let identity: VectorTileLabelIdentity

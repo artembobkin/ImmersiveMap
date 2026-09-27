@@ -137,7 +137,8 @@ final class RendererLabelDrawer {
             // fragments.
             let textStyle = TextStyleUniform(textColor: style.fillColor,
                                              strokeColor: style.strokeColor,
-                                             strokeWidthPx: style.haloWidthPixels(screenScale: screenScale))
+                                             strokeWidthPx: style.haloWidthPixels(screenScale: screenScale),
+                                             fillBiasPx: style.emboldenPixels(screenScale: screenScale))
             setTextStyle(textStyle, renderEncoder: renderEncoder, bindings: &bindings)
             renderEncoder.drawPrimitives(type: .triangle,
                                          vertexStart: 0,
@@ -204,7 +205,8 @@ final class RendererLabelDrawer {
                 let texture = style.weight == .bold ? textRenderer.texture : textRenderer.thinTexture
                 let textStyle = TextStyleUniform(textColor: style.fillColor,
                                                  strokeColor: style.strokeColor,
-                                                 strokeWidthPx: style.haloWidthPixels(screenScale: screenScale))
+                                                 strokeWidthPx: style.haloWidthPixels(screenScale: screenScale),
+                                                 fillBiasPx: style.emboldenPixels(screenScale: screenScale))
 
                 setFragmentTexture(texture, renderEncoder: renderEncoder, bindings: &bindings)
                 setTextStyle(textStyle, renderEncoder: renderEncoder, bindings: &bindings)

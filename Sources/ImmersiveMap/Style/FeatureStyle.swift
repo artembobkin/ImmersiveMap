@@ -65,24 +65,46 @@ public struct LabelTextStyle: Sendable {
     /// factories, the floor for type that is meant to be read.
     public var sizePoints: Float
     public var weight: LabelFontWeight
+    /// Whether the label is set in capitals. The text is uppercased when the
+    /// name is resolved, before the atlas is asked whether it can render
+    /// it, so a name whose capitals it lacks falls back like any other.
+    public var uppercased: Bool
+    /// How far the letters are grown past the font's outline, in layout
+    /// points: a little weight that keeps small type solid over a busy map.
+    /// Zero draws the face as the font designs it, and a negative value
+    /// thins it.
+    public var emboldenPoints: Float
+
+    /// The growth every label had before it was a style value: three
+    /// quarters of a pixel on the 2x display the palette was authored on.
+    public static let defaultEmboldenPoints: Float = 0.375
 
     public init(key: Int = 0,
                 fillColor: SIMD3<Float>,
                 strokeColor: SIMD3<Float>,
                 haloEm: Float,
                 sizePoints: Float,
-                weight: LabelFontWeight) {
+                weight: LabelFontWeight,
+                uppercased: Bool = false,
+                emboldenPoints: Float = LabelTextStyle.defaultEmboldenPoints) {
         self.key = key
         self.fillColor = fillColor
         self.strokeColor = strokeColor
         self.haloEm = haloEm
         self.sizePoints = sizePoints
         self.weight = weight
+        self.uppercased = uppercased
+        self.emboldenPoints = emboldenPoints
     }
 
     /// Halo width in device pixels for this style at a given screen scale.
     func haloWidthPixels(screenScale: ScreenScale) -> Float {
         screenScale.pixels(haloEm * sizePoints)
+    }
+
+    /// The growth of the letters in device pixels at a given screen scale.
+    func emboldenPixels(screenScale: ScreenScale) -> Float {
+        screenScale.pixels(emboldenPoints)
     }
 }
 
