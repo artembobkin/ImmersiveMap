@@ -19,17 +19,35 @@ final class VectorTileLabelLanguagePreferencesTests: XCTestCase {
             ?? ImmersiveMapLabelFacts()
     }
 
-    func testEnglishChainTriesEnglishBeforeTheNativeName() {
-        let chain = VectorTileLabelLanguagePreferences.from(settingsLanguage: .english)
-            .fallbackChain.map(\.languageCode)
-        XCTAssertEqual(chain, ["en", nil])
+    func testEnglishChainTriesEnglishThenTheRomanizedNativeName() {
+        let chain = VectorTileLabelLanguagePreferences.from(settingsLanguage: .english).fallbackChain
+        XCTAssertEqual(chain.map(\.languageCode), ["en", nil, nil])
+        XCTAssertEqual(chain.map(\.kind), [.english, .romanizedNative, .native])
     }
 
+    /// A map in a language not written in Latin letters has nothing to
+    /// romanize into: the local name follows English as it is.
     func testNonEnglishInternationalChainKeepsEnglishBeforeNative() {
         let chain = VectorTileLabelLanguagePreferences.from(settingsLanguage: .russian,
                                                             fallbackPolicy: .international)
-            .fallbackChain.map(\.languageCode)
-        XCTAssertEqual(chain, ["ru", "en", nil])
+            .fallbackChain
+        XCTAssertEqual(chain.map(\.languageCode), ["ru", "en", nil])
+        XCTAssertEqual(chain.map(\.kind), [.preferred, .english, .native])
+    }
+
+    func testLatinInternationalChainRomanizesBeforeTheNativeName() {
+        let chain = VectorTileLabelLanguagePreferences.from(settingsLanguage: .german,
+                                                            fallbackPolicy: .international)
+            .fallbackChain
+        XCTAssertEqual(chain.map(\.kind), [.preferred, .english, .romanizedNative, .native])
+    }
+
+    /// Local first asks for the local name: it is shown as the place spells it.
+    func testLocalFirstChainDoesNotRomanize() {
+        let chain = VectorTileLabelLanguagePreferences.from(settingsLanguage: .german,
+                                                            fallbackPolicy: .localFirst)
+            .fallbackChain
+        XCTAssertEqual(chain.map(\.kind), [.preferred, .native, .english])
     }
 
     func testNonEnglishLocalFirstChainKeepsNativeBeforeEnglish() {

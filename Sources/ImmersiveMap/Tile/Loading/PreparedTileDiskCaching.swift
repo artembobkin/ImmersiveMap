@@ -812,7 +812,10 @@ final class PreparedTileDiskCaching {
     // (`min_zoom`) and for its category's and long name's zooms, and a
     // house number for `addressMinimumZoom`. A v113 entry shows every POI
     // and house number from the tile's own zoom.
-    static let preparedFormatVersion: UInt32 = 114
+    // 115: a map in a language written in Latin letters shows a local name
+    // in another alphabet romanized (`VectorTileLabelRomanizer`). A v114
+    // entry holds the name in its own alphabet.
+    static let preparedFormatVersion: UInt32 = 115
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

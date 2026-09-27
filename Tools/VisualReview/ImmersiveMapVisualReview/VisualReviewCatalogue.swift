@@ -292,6 +292,20 @@ enum VisualReviewCatalogue {
             subject: .still(camera: Place.moscowCentreTilted(zoom: 15))),
 
         VisualReviewScenario(
+            id: "labels.romanized.moscow",
+            title: "Moscow streets on an English map",
+            lookFor: """
+            One alphabet: every street, POI and house label is in Latin \
+            letters, and not a single Cyrillic one is left. A name the tiles \
+            carry in English shows that name. One they do not is romanized \
+            in plain ASCII with no diacritics and no apostrophes \
+            ("Bolshoy", not "Bol'shoy"), and a street type is translated \
+            and follows the name ("Georgiyevskiy Lane", "Shchepkina Street").
+            """,
+            settings: .default,
+            subject: .still(camera: Place.moscowStreets)),
+
+        VisualReviewScenario(
             id: "labels.surface.globe",
             title: "Ocean names painted on the globe",
             lookFor: """

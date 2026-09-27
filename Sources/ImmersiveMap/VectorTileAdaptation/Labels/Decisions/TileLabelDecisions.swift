@@ -83,7 +83,11 @@ struct TileLabelDecisions {
     func localizedName(from names: [String: String]) -> String? {
         for candidate in languagePreferences.fallbackChain {
             let code = candidate.languageCode ?? "native"
-            guard let value = names[code],
+            var value = names[code]
+            if candidate.kind == .romanizedNative {
+                value = value.flatMap(languagePreferences.romanizer.romanize)
+            }
+            guard let value,
                   value.isEmpty == false,
                   glyphCoverage.canRender(value) else {
                 continue

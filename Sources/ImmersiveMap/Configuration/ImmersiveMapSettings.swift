@@ -47,8 +47,17 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public static let turkish = LabelLanguage("tr")
     }
 
+    /// What a label shows when the feature has no name in the map's
+    /// language.
     public enum LabelFallbackPolicy: String, Codable, Sendable {
+        /// The English name, then the local name. When the map's language is
+        /// written in Latin letters, a local name in Cyrillic, Greek,
+        /// Armenian or Georgian is romanized to plain ASCII first, so the map
+        /// shows one alphabet ("Georgiyevskiy Lane" for "Георгиевский
+        /// переулок" on an English map). A local name in another script is
+        /// shown as it is.
         case international
+        /// The local name as the place spells it, then the English name.
         case localFirst
     }
 
