@@ -583,7 +583,14 @@ public extension ImmersiveMapView {
     /// is configured separately by `.mapStyle(_:)`: the default
     /// `ProtomapsBasemapMapStyle` draws Protomaps basemap tiles, and any
     /// other schema pairs the archive with
-    /// `VectorTileMapStyle(style:schema:)`. An archive built to a depth other
+    /// `VectorTileMapStyle(style:schema:)`.
+    ///
+    /// A file URL reads the archive from disk, which is how an app ships a
+    /// map in its bundle and renders it with no network at all:
+    ///
+    ///     .tileArchive(Bundle.main.url(forResource: "city", withExtension: "pmtiles")!)
+    ///
+    /// An archive built to a depth other
     /// than the default states it via `tileMaximumZoomLevel(_:)`, and its
     /// data credit via `attributionSettings`.
     public func tileArchive(_ archiveURL: URL,

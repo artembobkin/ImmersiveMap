@@ -3,7 +3,9 @@
 
 import Foundation
 
-/// Reads tiles out of one PMTiles archive over HTTP range requests.
+/// Reads tiles out of one PMTiles archive over HTTP range requests, or
+/// straight from disk when the archive URL is a file URL (an archive shipped
+/// in an app bundle, say).
 ///
 /// The archive is one file: a header, a root directory, leaf directories and
 /// the tile data. The client fetches the header and the root directory once
@@ -81,9 +83,11 @@ package final class PMTilesArchiveClient: @unchecked Sendable {
     package init(archiveURL: URL, requestHeaders: [String: String], session: URLSession) {
         self.archiveURL = archiveURL
         self.requestHeaders = requestHeaders
-        self.fetchRange = Self.makeURLSessionFetcher(archiveURL: archiveURL,
-                                                     requestHeaders: requestHeaders,
-                                                     session: session)
+        self.fetchRange = archiveURL.isFileURL
+            ? Self.makeFileFetcher(archiveURL: archiveURL)
+            : Self.makeURLSessionFetcher(archiveURL: archiveURL,
+                                         requestHeaders: requestHeaders,
+                                         session: session)
     }
 
     /// The test seam: a fetcher in place of the session. Not a protocol, a
@@ -318,6 +322,32 @@ package final class PMTilesArchiveClient: @unchecked Sendable {
             return nil
         }
         return UInt64(startText)
+    }
+
+    /// Reads the range from the file and answers it as a 206 without an
+    /// ETag, the shape an HTTP server gives, so the rest of the client does
+    /// not know the difference. A range past the end comes back short, as
+    /// the initial fetch of a small archive expects. A file that cannot be
+    /// opened is a network failure, retried like one.
+    private static func makeFileFetcher(archiveURL: URL) -> RangeFetcher {
+        { range, _ in
+            let handle: FileHandle
+            do {
+                handle = try FileHandle(forReadingFrom: archiveURL)
+            } catch {
+                throw Failure.network(error.localizedDescription)
+            }
+            defer {
+                try? handle.close()
+            }
+            do {
+                try handle.seek(toOffset: range.lowerBound)
+                let data = try handle.read(upToCount: Int(range.upperBound - range.lowerBound)) ?? Data()
+                return RangeResponse(statusCode: 206, body: data)
+            } catch {
+                throw Failure.archiveUnreadable(error.localizedDescription)
+            }
+        }
     }
 
     private static func makeURLSessionFetcher(archiveURL: URL,

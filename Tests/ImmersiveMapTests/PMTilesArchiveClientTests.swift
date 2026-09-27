@@ -72,6 +72,49 @@ final class PMTilesArchiveClientTests: XCTestCase {
 
     // MARK: - Reading
 
+    /// An archive shipped with the app is a file URL: the client reads it
+    /// from disk, with no server and no session involved.
+    func testAFileURLArchiveIsReadFromDisk() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let archiveURL = directory.appendingPathComponent("bundled.pmtiles")
+        // Leaves force reads past the first 16 KiB, into the middle of the file.
+        try Self.makeArchive(maximumRootEntries: 1).write(to: archiveURL)
+        let client = PMTilesArchiveClient(archiveURL: archiveURL,
+                                          requestHeaders: [:],
+                                          session: URLSession(configuration: .ephemeral))
+
+        let shallow = try await client.tileBytes(z: 3, x: 4, y: 5)
+        let deep = try await client.tileBytes(z: 7, x: 66, y: 41)
+        let missing = try await client.tileBytes(z: 3, x: 0, y: 0)
+        let tooDeep = try await client.tileBytes(z: 13, x: 0, y: 0)
+        XCTAssertEqual(try Self.layerNames(shallow), ["water"])
+        XCTAssertEqual(try Self.layerNames(deep), ["deep"])
+        XCTAssertEqual(missing, .missing)
+        XCTAssertEqual(tooDeep, .outsideZoomRange)
+    }
+
+    func testAMissingFileIsANetworkFailure() async {
+        let archiveURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("absent.pmtiles")
+        let client = PMTilesArchiveClient(archiveURL: archiveURL,
+                                          requestHeaders: [:],
+                                          session: URLSession(configuration: .ephemeral))
+
+        do {
+            _ = try await client.tileBytes(z: 0, x: 0, y: 0)
+            XCTFail("A missing archive file must not read as a tile")
+        } catch PMTilesArchiveClient.Failure.network {
+        } catch {
+            XCTFail("expected a network failure, got \(error)")
+        }
+    }
+
     func testAGzipTileComesBackDecodedForTheParser() async throws {
         let host = try ScriptedHost(.archive(Self.makeArchive()))
         let client = host.client()
