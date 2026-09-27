@@ -226,7 +226,8 @@ final class MetalTileFactory: @unchecked Sendable {
         -> PreparedTileArenaImage.TextLabelSetMeta {
         PreparedTileArenaImage.TextLabelSetMeta(placementInputs: set.placementInputs,
                                                 glyphRunStyles: set.glyphRuns.map(\.style),
-                                                poiIconRunStyles: set.poiIconRuns.map(\.style))
+                                                poiIconRunStyles: set.poiIconRuns.map(\.style),
+                                                routeShieldRunStyles: set.routeShieldRuns.map(\.style))
     }
 
     private static func roadLabelsMeta(from roadLabels: PreparedTileCPU.RoadLabels)
@@ -349,9 +350,14 @@ final class MetalTileFactory: @unchecked Sendable {
             PoiIconRunBuffer(style: style,
                              localVertices: cursor.takeView(.poiIconRunVertices(run: run)))
         }
+        let routeShieldRuns = meta.routeShieldRunStyles.enumerated().map { run, style in
+            RouteShieldRunBuffer(style: style,
+                                 localVertices: cursor.takeView(.routeShieldRunVertices(run: run)))
+        }
         return TileBuffers.TextLabelSet(placementInputs: meta.placementInputs,
                                         labelsByStyleRuns: glyphRuns,
-                                        poiIconRuns: poiIconRuns)
+                                        poiIconRuns: poiIconRuns,
+                                        routeShieldRuns: routeShieldRuns)
     }
 
     /// Sequential reader over the span table, pinned to the schema's slot

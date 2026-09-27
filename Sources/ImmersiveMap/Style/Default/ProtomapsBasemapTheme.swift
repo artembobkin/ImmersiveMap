@@ -5,7 +5,7 @@ import simd
 
 /// The look of the built-in style (the Protomaps basemap) as plain values:
 /// the colour of every layer and road class, the building fill, the label
-/// appearances and which labels show. An app recolours the map by changing a field of the default
+/// appearances and which labels show, and the route signs. An app recolours the map by changing a field of the default
 /// and never touches the layer logic:
 ///
 /// ```swift
@@ -465,17 +465,20 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
     public var layers: LayerStyles
     public var features: FeatureStyles
     public var roadMetrics: RoadMetrics
+    public var routeShields: RouteShields
 
     public init(labels: LabelStyles = .default,
                 labelVisibility: LabelVisibility = LabelVisibility(),
                 layers: LayerStyles = .default,
                 features: FeatureStyles = .default,
-                roadMetrics: RoadMetrics = RoadMetrics()) {
+                roadMetrics: RoadMetrics = RoadMetrics(),
+                routeShields: RouteShields = RouteShields()) {
         self.labels = labels
         self.labelVisibility = labelVisibility
         self.layers = layers
         self.features = features
         self.roadMetrics = roadMetrics
+        self.routeShields = routeShields
     }
 
     public static let `default` = ProtomapsBasemapTheme()
@@ -523,6 +526,12 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
     public func roadMetrics(_ update: (inout RoadMetrics) -> Void) -> ProtomapsBasemapTheme {
         var copy = self
         update(&copy.roadMetrics)
+        return copy
+    }
+
+    public func routeShields(_ update: (inout RouteShields) -> Void) -> ProtomapsBasemapTheme {
+        var copy = self
+        update(&copy.routeShields)
         return copy
     }
 
@@ -583,6 +592,8 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         out.append(roadMetrics.worldLockZoom)
         out.append(roadMetrics.drawsCasing ? 1 : 0)
         out.append(contentsOf: roadMetrics.minimumTileZoom.all.map(Float.init))
+        // The route signs are baked into the tiles as labels.
+        out.append(contentsOf: routeShields.fingerprintComponents)
         return out
     }
 }

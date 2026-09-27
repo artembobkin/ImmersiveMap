@@ -32,6 +32,10 @@ struct ReadingStageResult {
     /// shows.
     var waterNameTexts: Set<String> = []
     var roadTextLabels: [ParsedRoadTextLabel] = []
+    /// Every place along the tile's signed roads where their route signs
+    /// could stand. The tile keeps some of them as labels once every road
+    /// is read (`RouteShieldPlacement`).
+    var routeShieldCandidates: [RouteShieldCandidate] = []
     var layerTimings: [TileParseLayerTiming] = []
     private var roadPolygonSequence = 0
 

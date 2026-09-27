@@ -8,7 +8,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
     private static let testBlobURL = URL(fileURLWithPath: "/nonexistent/test.ptgeo")
 
     func testPreparedTileCacheFormatVersionIncludesArenaImageRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 115)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 116)
     }
 
     func testPreparedTileCodecCompressesEnvelopeAndRoundTrips() throws {
@@ -803,14 +803,29 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         )
         let glyphVertex = makeLabelVertex(seed: seed, labelIndex: seed + 400, spriteSeed: 0)
         let poiIconVertex = makeLabelVertex(seed: seed + 10, labelIndex: seed + 500, spriteSeed: seed + 20)
+        let plateVertex = makeLabelVertex(seed: seed + 40, labelIndex: seed + 700, spriteSeed: seed + 50)
 
         return PreparedTileCPU.TextLabelSet(
             placementInputs: [placementInput],
             glyphRuns: [PreparedTileCPU.TextGlyphRun(style: makeLabelTextStyle(seed: seed),
                                                      localGlyphVertices: [glyphVertex])],
             poiIconRuns: [PreparedTileCPU.PoiIconRun(style: makeLabelTextStyle(seed: seed + 30),
-                                                     localIconVertices: [poiIconVertex])]
+                                                     localIconVertices: [poiIconVertex])],
+            routeShieldRuns: [PreparedTileCPU.RouteShieldRun(style: makeRouteShieldRunStyle(seed: seed),
+                                                             localVertices: [plateVertex])]
         )
+    }
+
+    private func makeRouteShieldRunStyle(seed: Int32) -> RouteShieldRunStyle {
+        RouteShieldRunStyle(shape: seed.isMultiple(of: 2) ? .escutcheon : .rectangle,
+                            fillColor: SIMD3<Float>(Float(seed) + 0.11, Float(seed) + 0.12, Float(seed) + 0.13),
+                            borderColor: SIMD3<Float>(Float(seed) + 0.14, Float(seed) + 0.15, Float(seed) + 0.16),
+                            headerColor: seed.isMultiple(of: 2)
+                                ? SIMD3<Float>(Float(seed) + 0.17, Float(seed) + 0.18, Float(seed) + 0.19)
+                                : nil,
+                            headerFraction: 0.25,
+                            borderWidthPoints: Float(seed) + 0.9,
+                            cornerRadiusPoints: Float(seed) + 2.2)
     }
 
     private func makeLabelTextStyle(seed: Int32) -> LabelTextStyle {
@@ -836,6 +851,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         XCTAssertEqual(actual.placementInputs.count, expected.placementInputs.count, file: file, line: line)
         XCTAssertEqual(actual.glyphRunStyles.count, expected.glyphRuns.count, file: file, line: line)
         XCTAssertEqual(actual.poiIconRunStyles.count, expected.poiIconRuns.count, file: file, line: line)
+        XCTAssertEqual(actual.routeShieldRunStyles, expected.routeShieldRuns.map(\.style), file: file, line: line)
         guard actual.placementInputs.isEmpty == false,
               actual.glyphRunStyles.isEmpty == false,
               actual.poiIconRunStyles.isEmpty == false else {

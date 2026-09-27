@@ -54,22 +54,40 @@ final class ProtomapsBasemapSchemaTests: XCTestCase {
         XCTAssertNotEqual(key(["oneway": .bool(true)]), key([:]))
     }
 
-    func testARoadWithOnlyARouteNumberIsNamedAndLabelledByIt() throws {
+    func testARoadWithOnlyARouteNumberIsNamedByItButCarriesNoLabel() throws {
         let road = try XCTUnwrap(facts(layer: "roads", ["kind": .string("highway"), "ref": .string("M10;E105")],
                                        geometry: .linestring).road)
-        XCTAssertEqual(road.name, "M10 / E105")
-        XCTAssertEqual(road.label?.name, "M10 / E105")
+        XCTAssertEqual(road.name, "M10 / E105", "the number is the road's identity for counting junctions")
+        XCTAssertNil(road.label, "a number is drawn on its sign, not laid along the road")
         XCTAssertNotNil(road.stitchingKey, "the number is the road's identity for stitching")
+        XCTAssertEqual(road.routes, [ImmersiveMapRouteFacts(text: "M10"), ImmersiveMapRouteFacts(text: "E105")],
+                       "a road in no route relation signs every number of its ref, of no network")
     }
 
-    func testANamedRoadWithARouteNumberLeadsItsLabelWithTheNumber() throws {
+    func testANamedRoadWithARouteNumberKeepsTheNumberOutOfItsLabel() throws {
         let road = try XCTUnwrap(facts(layer: "roads",
                                        ["kind": .string("major_road"), "ref": .string("A104"),
                                         "name": .string("Dmitrovskoye"), "name:en": .string("Dmitrov Highway")],
                                        geometry: .linestring).road)
         XCTAssertEqual(road.name, "Dmitrovskoye", "the name stays the street's identity")
-        XCTAssertEqual(road.label?.name, "A104 · Dmitrovskoye")
-        XCTAssertEqual(road.label?.namesByLanguage["en"], "A104 · Dmitrov Highway")
+        XCTAssertEqual(road.label?.name, "Dmitrovskoye")
+        XCTAssertEqual(road.label?.namesByLanguage["en"], "Dmitrov Highway")
+        XCTAssertEqual(road.routes, [ImmersiveMapRouteFacts(text: "A104")])
+    }
+
+    func testARoadsRoutesAreItsNetworkAndSignTextPairsInOrder() throws {
+        // The M-9 west of Moscow as the basemap ships it: a European route
+        // first, then the national one. The railway network in the last slot
+        // has no sign text and is no route of the road.
+        let road = try XCTUnwrap(facts(layer: "roads",
+                                       ["kind": .string("highway"), "ref": .string("М-9"),
+                                        "network": .string("e-road"), "shield_text": .string("E22"),
+                                        "network_1": .string("e-road"), "shield_text_1": .string("E22"),
+                                        "network_2": .string("ru:national"), "shield_text_2": .string("М-9"),
+                                        "network_3": .string("Московская железная дорога")],
+                                       geometry: .linestring).road)
+        XCTAssertEqual(road.routes, [ImmersiveMapRouteFacts(network: "e-road", text: "E22"),
+                                     ImmersiveMapRouteFacts(network: "ru:national", text: "М-9")])
     }
 
     func testABuildingCarriesItsHeightsAndKind() {

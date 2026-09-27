@@ -12,6 +12,7 @@ struct LabelsDrawBatch {
 struct BaseLabelDrawBatch {
     let labelsByStyleRuns: [LabelsByStyleRun]
     let poiIconRuns: [PoiIconRunBuffer]
+    let routeShieldRuns: [RouteShieldRunBuffer]
     let globalLabelStart: Int
     let labelInstanceCount: Int
 }

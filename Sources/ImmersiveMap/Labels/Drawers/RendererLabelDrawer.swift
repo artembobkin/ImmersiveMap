@@ -20,6 +20,7 @@ final class RendererLabelDrawer {
         var labelShift: simd_int1?
         var textStyle: TextStyleUniform?
         var poiIconStyle: PoiIconStyleUniform?
+        var routeShieldStyle: RouteShieldStyleUniform?
     }
 
     static func drawBaseLabels(renderEncoder: MTLRenderCommandEncoder,
@@ -75,6 +76,11 @@ final class RendererLabelDrawer {
                                              vertexCount: poiIconRun.localVertexCount)
             }
         }
+
+        drawRouteShieldPlates(renderEncoder: renderEncoder,
+                              textRenderer: textRenderer,
+                              baseLabelsDrawBatches: baseLabelsDrawBatches,
+                              bindings: &bindings)
 
         renderEncoder.setRenderPipelineState(textRenderer.labelPipelineState)
         drawBaseLabelText(renderEncoder: renderEncoder,
@@ -136,6 +142,43 @@ final class RendererLabelDrawer {
             renderEncoder.drawPrimitives(type: .triangle,
                                          vertexStart: 0,
                                          vertexCount: drawLabel.localGlyphVertexCount)
+        }
+    }
+
+    /// The plates of the route signs, one draw per plate run, over the POI
+    /// discs and under every label's text: a sign's number is a glyph run
+    /// of its own and draws over its plate with the rest of the text.
+    private static func drawRouteShieldPlates(renderEncoder: MTLRenderCommandEncoder,
+                                              textRenderer: TextRenderer,
+                                              baseLabelsDrawBatches: [BaseLabelDrawBatch],
+                                              bindings: inout EncoderBindings) {
+        var isPipelineBound = false
+        for drawBatch in baseLabelsDrawBatches {
+            for run in drawBatch.routeShieldRuns {
+                guard let vertices = run.localVertices, run.localVertexCount > 0 else {
+                    continue
+                }
+                if isPipelineBound == false {
+                    renderEncoder.setRenderPipelineState(textRenderer.routeShieldPipelineState)
+                    isPipelineBound = true
+                }
+                let style = RouteShieldStyleUniform(run.style)
+                if bindings.routeShieldStyle != style {
+                    var styleValue = style
+                    renderEncoder.setFragmentBytes(&styleValue,
+                                                   length: MemoryLayout<RouteShieldStyleUniform>.stride,
+                                                   index: 0)
+                    bindings.routeShieldStyle = style
+                    // The slot is shared with the other fragment uniforms.
+                    bindings.poiIconStyle = nil
+                    bindings.textStyle = nil
+                }
+                setVertexBuffer0(vertices, renderEncoder: renderEncoder, bindings: &bindings)
+                setLabelShift(simd_int1(drawBatch.globalLabelStart), renderEncoder: renderEncoder, bindings: &bindings)
+                renderEncoder.drawPrimitives(type: .triangle,
+                                             vertexStart: 0,
+                                             vertexCount: run.localVertexCount)
+            }
         }
     }
 

@@ -9,6 +9,12 @@ final class TileTextLabelsBuilder {
         let style: LabelTextStyle
         let textVertices: [LabelVertex]
         let iconVertices: [LabelVertex]
+        /// A route sign label's numbers, each in its sign's colour: glyph
+        /// runs of their own beside `textVertices`, which such a label
+        /// leaves empty.
+        var routeShieldGlyphs: [(style: LabelTextStyle, vertices: [LabelVertex])] = []
+        /// A route sign label's plates, one quad per sign.
+        var routeShieldPlates: [(style: RouteShieldRunStyle, vertices: [LabelVertex])] = []
     }
 
     private let textRenderer: TextRenderer
@@ -96,6 +102,29 @@ final class TileTextLabelsBuilder {
             let uvX = Double(pos.x) / 4096.0
             let uvY = Double(pos.y) / 4096.0
             let uv = SIMD2<Float>(Float(uvX), Float(uvY))
+            let pointInput = TilePointInput(uv: uv, tile: tileIndices, tileSlotIndex: 0)
+
+            if let routeShields = label.routeShields {
+                let geometry = makeRouteShieldGeometry(routeShields,
+                                                       textKey: label.textStyle.key,
+                                                       labelIndex: simd_int1(sortedIndex))
+                guard geometry.size.x > 0 else { continue }
+                builtLabels.append(BuiltBaseLabel(
+                    placementInput: TextLabelPlacementInput(
+                        pointInput: pointInput,
+                        placementMeta: LabelPlacementMeta(key: label.key,
+                                                          sortKey: label.sortKey,
+                                                          collisionPriority: label.collisionPriority,
+                                                          labelSizePoints: geometry.size,
+                                                          minCameraZoom: label.minCameraZoom)
+                    ),
+                    style: label.textStyle,
+                    textVertices: [],
+                    iconVertices: [],
+                    routeShieldGlyphs: geometry.glyphs,
+                    routeShieldPlates: geometry.plates))
+                continue
+            }
 
             let style = label.textStyle
             let weight = style.weight
@@ -117,9 +146,7 @@ final class TileTextLabelsBuilder {
                                                      contentScale: contentScale)
 
             let placementInput = TextLabelPlacementInput(
-                pointInput: TilePointInput(uv: uv,
-                                           tile: tileIndices,
-                                           tileSlotIndex: 0),
+                pointInput: pointInput,
                 placementMeta: LabelPlacementMeta(key: label.key,
                                                   sortKey: label.sortKey,
                                                   collisionPriority: label.collisionPriority,
@@ -142,6 +169,10 @@ final class TileTextLabelsBuilder {
         var verticesByStyle: [LabelRunStyleIdentity: [LabelVertex]] = [:]
         var iconVerticesByStyle: [LabelRunStyleIdentity: [LabelVertex]] = [:]
         var styleByIdentity: [LabelRunStyleIdentity: LabelTextStyle] = [:]
+        var plateVerticesByStyle: [RouteShieldRunStyle: [LabelVertex]] = [:]
+        // Plate runs in the order their looks first appear: the dictionary
+        // alone would draw them in a different order every build.
+        var plateStyles: [RouteShieldRunStyle] = []
         var placementInputs: [TextLabelPlacementInput] = []
         placementInputs.reserveCapacity(builtLabels.count)
 
@@ -154,6 +185,19 @@ final class TileTextLabelsBuilder {
                                                                                         labelIndex: labelIndex))
             if builtLabel.iconVertices.isEmpty == false {
                 iconVerticesByStyle[identity, default: []].append(contentsOf: remappedVertices(builtLabel.iconVertices,
+                                                                                                labelIndex: labelIndex))
+            }
+            for glyphs in builtLabel.routeShieldGlyphs {
+                let glyphIdentity = LabelRunStyleIdentity(glyphs.style)
+                styleByIdentity[glyphIdentity] = glyphs.style
+                verticesByStyle[glyphIdentity, default: []].append(contentsOf: remappedVertices(glyphs.vertices,
+                                                                                             labelIndex: labelIndex))
+            }
+            for plate in builtLabel.routeShieldPlates {
+                if plateVerticesByStyle[plate.style] == nil {
+                    plateStyles.append(plate.style)
+                }
+                plateVerticesByStyle[plate.style, default: []].append(contentsOf: remappedVertices(plate.vertices,
                                                                                                 labelIndex: labelIndex))
             }
         }
@@ -173,9 +217,14 @@ final class TileTextLabelsBuilder {
             }
         }
 
+        let routeShieldRuns = plateStyles.map { style in
+            PreparedTileCPU.RouteShieldRun(style: style, localVertices: plateVerticesByStyle[style] ?? [])
+        }
+
         return PreparedTileCPU.TextLabelSet(placementInputs: placementInputs,
                                             glyphRuns: glyphRuns,
-                                            poiIconRuns: poiIconRuns)
+                                            poiIconRuns: poiIconRuns,
+                                            routeShieldRuns: routeShieldRuns)
     }
 
     /// Identity of a homogeneous glyph/icon run: everything the label drawing code
@@ -305,6 +354,115 @@ final class TileTextLabelsBuilder {
                         labelIndex: labelIndex,
                         spriteUV: SIMD2<Float>(0.0, 1.0))
         ]
+    }
+
+    private struct RouteShieldGeometry {
+        let size: SIMD2<Float>
+        let glyphs: [(style: LabelTextStyle, vertices: [LabelVertex])]
+        let plates: [(style: RouteShieldRunStyle, vertices: [LabelVertex])]
+    }
+
+    /// A route sign label laid out in layout points (y up): the signs side
+    /// by side, each centred on the label's height, each number centred on
+    /// its plate. A plate's quad carries its own size in `uv` and its
+    /// corner in `spriteUV`, which is what the plate's distance field is
+    /// drawn from (RouteShield.metal). On an `escutcheon` the number sits
+    /// in the body under the band, a little above the middle, where the
+    /// sign is still wide before it narrows to its point.
+    private func makeRouteShieldGeometry(_ style: RouteShieldStyle,
+                                         textKey: Int,
+                                         labelIndex: simd_int1) -> RouteShieldGeometry {
+        let em = style.sizePoints
+        let plateHeight = em * style.plateHeightEm
+        let gap = em * style.gapEm
+
+        struct Sign {
+            let metrics: TextMetrics
+            let appearance: RouteShieldAppearance
+            let width: Float
+            let height: Float
+        }
+        var signs: [Sign] = []
+        for shield in style.shields {
+            let metrics = textRenderer.collectLabelVertices(for: shield.text,
+                                                            labelIndex: labelIndex,
+                                                            scale: em,
+                                                            weight: style.weight)
+            guard metrics.vertices.isEmpty == false else { continue }
+            let appearance = shield.appearance
+            let paddedWidth = metrics.size.width + 2 * em * appearance.paddingEm
+            let width: Float
+            let height: Float
+            switch appearance.shape {
+            case .rectangle:
+                width = max(paddedWidth, plateHeight)
+                height = plateHeight
+            case .capsule:
+                // The round ends take room the padding does not count.
+                width = max(paddedWidth + plateHeight * 0.4, plateHeight * 1.2)
+                height = plateHeight
+            case .escutcheon:
+                width = max(paddedWidth, plateHeight)
+                height = max(plateHeight * 1.2, width * 1.05)
+            }
+            signs.append(Sign(metrics: metrics, appearance: appearance, width: width, height: height))
+        }
+        guard signs.isEmpty == false else {
+            return RouteShieldGeometry(size: .zero, glyphs: [], plates: [])
+        }
+
+        let labelHeight = signs.map(\.height).max() ?? plateHeight
+        var glyphs: [(style: LabelTextStyle, vertices: [LabelVertex])] = []
+        var plates: [(style: RouteShieldRunStyle, vertices: [LabelVertex])] = []
+        var x: Float = 0
+        for sign in signs {
+            let appearance = sign.appearance
+            let bottom = (labelHeight - sign.height) * 0.5
+            let headerFraction = appearance.headerColor == nil ? 0 : appearance.headerFraction
+            let textCentreFraction: Float = appearance.shape == .escutcheon
+                ? (1 - headerFraction) * 0.56
+                : 0.5
+            let textOffset = SIMD2<Float>(x + (sign.width - sign.metrics.size.width) * 0.5,
+                                          bottom + sign.height * textCentreFraction - sign.metrics.size.height * 0.5)
+            let vertices = sign.metrics.vertices.map { vertex in
+                var shifted = vertex
+                shifted.position += textOffset
+                return shifted
+            }
+            glyphs.append((style: LabelTextStyle(key: textKey,
+                                                 fillColor: appearance.textColor,
+                                                 strokeColor: appearance.textColor,
+                                                 haloEm: 0,
+                                                 sizePoints: em,
+                                                 weight: style.weight),
+                           vertices: vertices))
+            let plateStyle = RouteShieldRunStyle(shape: appearance.shape,
+                                                 fillColor: appearance.fillColor,
+                                                 borderColor: appearance.borderColor,
+                                                 headerColor: appearance.headerColor,
+                                                 headerFraction: headerFraction,
+                                                 borderWidthPoints: em * appearance.borderEm,
+                                                 cornerRadiusPoints: em * appearance.cornerRadiusEm)
+            plates.append((style: plateStyle,
+                           vertices: Self.makePlateQuad(origin: SIMD2<Float>(x, bottom),
+                                                        size: SIMD2<Float>(sign.width, sign.height),
+                                                        labelIndex: labelIndex)))
+            x += sign.width + gap
+        }
+        return RouteShieldGeometry(size: SIMD2<Float>(x - gap, labelHeight), glyphs: glyphs, plates: plates)
+    }
+
+    private static func makePlateQuad(origin: SIMD2<Float>,
+                                      size: SIMD2<Float>,
+                                      labelIndex: simd_int1) -> [LabelVertex] {
+        func corner(_ u: Float, _ v: Float) -> LabelVertex {
+            LabelVertex(position: origin + size * SIMD2<Float>(u, v),
+                        uv: size,
+                        labelIndex: labelIndex,
+                        spriteUV: SIMD2<Float>(u, v))
+        }
+        return [corner(0, 0), corner(1, 0), corner(0, 1),
+                corner(1, 0), corner(1, 1), corner(0, 1)]
     }
 
     /// Icon side in layout points: proportional to the text it sits next to,

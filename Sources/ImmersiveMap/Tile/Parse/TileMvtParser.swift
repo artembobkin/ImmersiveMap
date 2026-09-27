@@ -257,6 +257,7 @@ final class TileMvtParser {
         }
 
         if options.labelsEnabled {
+            lineReader.appendRouteShieldLabels(tile: tile, into: &result)
             labelReader.appendLowZoomWaterLabels(tile: tile, into: &result)
         }
 

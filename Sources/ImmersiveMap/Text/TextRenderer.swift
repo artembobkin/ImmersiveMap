@@ -168,6 +168,9 @@ class TextRenderer {
     var labelPipelineState: MTLRenderPipelineState!
     var roadLabelPipelineState: MTLRenderPipelineState!
     var poiIconPipelineState: MTLRenderPipelineState!
+    /// The route sign plates: the POI quad's vertex stage and the plate's
+    /// distance field (RouteShield.metal).
+    var routeShieldPipelineState: MTLRenderPipelineState!
     private var library: MTLLibrary
     private let sampleCount: Int
     private let boldAtlasName = "atlas"
@@ -873,6 +876,7 @@ class TextRenderer {
               let roadLabelVertexFn = library.makeFunction(name: "roadLabelTextVertex"),
               let poiIconVertexFn = library.makeFunction(name: "poiSpriteVertex"),
               let poiIconFragmentFn = library.makeFunction(name: "poiSpriteFragment"),
+              let routeShieldFragmentFn = library.makeFunction(name: "routeShieldFragment"),
               let fragmentFn = library.makeFunction(name: "textFragment"),
               let roadFragmentFn = library.makeFunction(name: "roadTextFragment") else { fatalError("Functions not found") }
         
@@ -913,6 +917,9 @@ class TextRenderer {
             poiIconPipelineState = try makePipelineState(vertexFunction: poiIconVertexFn,
                                                          vertexDescriptor: labelVertexDescriptor,
                                                          fragmentFunction: poiIconFragmentFn)
+            routeShieldPipelineState = try makePipelineState(vertexFunction: poiIconVertexFn,
+                                                             vertexDescriptor: labelVertexDescriptor,
+                                                             fragmentFunction: routeShieldFragmentFn)
         } catch {
             fatalError("Pipeline creation failed: \(error)")
         }

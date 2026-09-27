@@ -47,11 +47,23 @@ struct PreparedTileArenaImage: Sendable {
 
     /// Per-set CPU metadata: everything `TileBuffers.TextLabelSet` carries
     /// besides the vertex spans. Run styles run in span order (glyph runs
-    /// first, then POI icon runs), mirroring the schema traversal.
+    /// first, then POI icon runs, then route sign plates), mirroring the
+    /// schema traversal.
     struct TextLabelSetMeta: Sendable {
         let placementInputs: [TextLabelPlacementInput]
         let glyphRunStyles: [LabelTextStyle]
         let poiIconRunStyles: [LabelTextStyle]
+        let routeShieldRunStyles: [RouteShieldRunStyle]
+
+        init(placementInputs: [TextLabelPlacementInput],
+             glyphRunStyles: [LabelTextStyle],
+             poiIconRunStyles: [LabelTextStyle],
+             routeShieldRunStyles: [RouteShieldRunStyle] = []) {
+            self.placementInputs = placementInputs
+            self.glyphRunStyles = glyphRunStyles
+            self.poiIconRunStyles = poiIconRunStyles
+            self.routeShieldRunStyles = routeShieldRunStyles
+        }
     }
 
     struct RoadLabelsMeta: Sendable {

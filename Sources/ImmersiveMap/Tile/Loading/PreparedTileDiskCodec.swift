@@ -386,19 +386,62 @@ enum PreparedTileDiskCodec {
         let placementInputs: [TextPlacementInputValue]
         let glyphRunStyles: [LabelTextStyleValue]
         let poiIconRunStyles: [LabelTextStyleValue]
+        let routeShieldRunStyles: [RouteShieldRunStyleValue]
 
         init(_ set: PreparedTileCPU.TextLabelSet) throws {
             placementInputs = try set.placementInputs.map(TextPlacementInputValue.init)
             glyphRunStyles = try set.glyphRuns.map { try LabelTextStyleValue($0.style) }
             poiIconRunStyles = try set.poiIconRuns.map { try LabelTextStyleValue($0.style) }
+            routeShieldRunStyles = set.routeShieldRuns.map { RouteShieldRunStyleValue($0.style) }
         }
 
         func runtimeValue() throws -> PreparedTileArenaImage.TextLabelSetMeta {
             PreparedTileArenaImage.TextLabelSetMeta(
                 placementInputs: placementInputs.map { $0.runtimeValue() },
                 glyphRunStyles: try glyphRunStyles.map { try $0.runtimeValue() },
-                poiIconRunStyles: try poiIconRunStyles.map { try $0.runtimeValue() }
+                poiIconRunStyles: try poiIconRunStyles.map { try $0.runtimeValue() },
+                routeShieldRunStyles: try routeShieldRunStyles.map { try $0.runtimeValue() }
             )
+        }
+    }
+
+    struct RouteShieldRunStyleValue: Codable {
+        let shapeRawValue: UInt8
+        let fillColor: [Float]
+        let borderColor: [Float]
+        /// Empty for a plate with no band.
+        let headerColor: [Float]
+        let headerFraction: Float
+        let borderWidthPoints: Float
+        let cornerRadiusPoints: Float
+
+        init(_ style: RouteShieldRunStyle) {
+            shapeRawValue = style.shape.rawValue
+            fillColor = [style.fillColor.x, style.fillColor.y, style.fillColor.z]
+            borderColor = [style.borderColor.x, style.borderColor.y, style.borderColor.z]
+            headerColor = style.headerColor.map { [$0.x, $0.y, $0.z] } ?? []
+            headerFraction = style.headerFraction
+            borderWidthPoints = style.borderWidthPoints
+            cornerRadiusPoints = style.cornerRadiusPoints
+        }
+
+        func runtimeValue() throws -> RouteShieldRunStyle {
+            guard fillColor.count == 3, borderColor.count == 3,
+                  headerColor.isEmpty || headerColor.count == 3 else {
+                throw PreparedTileDiskCodecError.corruptedPayload("Invalid RouteShieldRunStyle color component count.")
+            }
+            guard let shape = RouteShieldAppearance.Shape(rawValue: shapeRawValue) else {
+                throw PreparedTileDiskCodecError.corruptedPayload("Invalid RouteShieldAppearance.Shape raw value.")
+            }
+            return RouteShieldRunStyle(shape: shape,
+                                       fillColor: SIMD3<Float>(fillColor[0], fillColor[1], fillColor[2]),
+                                       borderColor: SIMD3<Float>(borderColor[0], borderColor[1], borderColor[2]),
+                                       headerColor: headerColor.isEmpty
+                                           ? nil
+                                           : SIMD3<Float>(headerColor[0], headerColor[1], headerColor[2]),
+                                       headerFraction: headerFraction,
+                                       borderWidthPoints: borderWidthPoints,
+                                       cornerRadiusPoints: cornerRadiusPoints)
         }
     }
 
@@ -760,7 +803,8 @@ enum PreparedTileDiskCodec {
         let arenaByteCount = Int(entry.arenaByteCount)
         let expectedSlots = TileArenaSchema.slots(
             text: TileArenaTextRunCounts(glyphRunCount: entry.text.glyphRunStyles.count,
-                                         poiIconRunCount: entry.text.poiIconRunStyles.count))
+                                         poiIconRunCount: entry.text.poiIconRunStyles.count,
+                                         routeShieldRunCount: entry.text.routeShieldRunStyles.count))
         let spans = try entry.spanTable.map { try $0.runtimeValue() }
         try validate(spans: spans, slots: expectedSlots, arenaByteCount: arenaByteCount)
 

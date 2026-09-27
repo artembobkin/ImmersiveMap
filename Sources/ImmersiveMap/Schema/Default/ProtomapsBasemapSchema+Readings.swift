@@ -7,14 +7,18 @@ import Foundation
 /// What the tags are called is the basemap's contract; the facts they
 /// become carry none of it.
 extension ProtomapsBasemapSchema {
-    /// A road's structure, layer, name, label and stitching key.
+    /// A road's structure, layer, name, label, routes and stitching key.
     ///
     /// The structure is `is_tunnel` or `is_bridge`, and the layer among
-    /// roads of one structure is `layer`. The name is `name`, or the route
-    /// reference `ref` for a road that has only a number. The label is the
-    /// name in every language, led by the reference where the road has
-    /// both (`M10 · Leningradskoye Shosse`). The stitching key is the name
-    /// with the attributes that change how a piece draws (`kind`,
+    /// roads of one structure is `layer`. The label is the name in every
+    /// language, and nothing else: the route numbers are the routes, which
+    /// the style draws on their signs. The routes are the basemap's
+    /// `network_N` and `shield_text_N` pairs (`e-road` and `E22`,
+    /// `ru:national` and `М-9`), and for a road in no route relation the
+    /// `ref` alone, every number of it a route of no network. The name, the
+    /// road's identity for counting junctions, is `name`, or the route
+    /// reference for a road that has only a number. The stitching key is
+    /// the name with the attributes that change how a piece draws (`kind`,
     /// `kind_detail`, `is_link`, `oneway`, `layer`, `is_bridge`,
     /// `is_tunnel`). A reference is left out of the key for a named road on
     /// purpose: a `ref` that changes mid-street is not a drawing change. A
@@ -28,17 +32,8 @@ extension ProtomapsBasemapSchema {
         } else {
             structure = .ground
         }
-        let reference = routeReference(properties)
-        var label = names(properties)
-        if let reference {
-            if var named = label {
-                named.name = named.name.map { "\(reference) · \($0)" }
-                named.namesByLanguage = named.namesByLanguage.mapValues { "\(reference) · \($0)" }
-                label = named
-            } else {
-                label = ImmersiveMapLabelFacts(name: reference)
-            }
-        }
+        let references = routeReferences(properties)
+        let reference = references.isEmpty ? nil : references.joined(separator: " / ")
         let ownName = properties.string("name") ?? ""
         let name = ownName.isEmpty ? (reference ?? "") : ownName
         let drawingAttributes = ["kind", "kind_detail", "is_link", "oneway", "layer", "is_bridge", "is_tunnel"]
@@ -54,20 +49,56 @@ extension ProtomapsBasemapSchema {
                                      layer: properties.integer("layer") ?? 0,
                                      name: name,
                                      stitchingKey: stitchingKey,
-                                     label: label)
+                                     label: names(properties),
+                                     routes: routes(properties, references: references))
     }
 
-    /// A road's route reference as it is signed: the basemap's `ref`, whose
-    /// several routes on one road (`M10;E105`) are joined with a slash. Nil
-    /// for a road without one.
-    private func routeReference(_ properties: ImmersiveMapFeatureProperties) -> String? {
-        guard let ref = properties.string("ref") else {
-            return nil
+    /// The basemap names at most this many routes on one road
+    /// (`network_1` to `network_6`).
+    private static let routeSlotCount = 6
+
+    /// A road's routes: the pairs of `network_N` and `shield_text_N` in
+    /// their order, a slot with no sign text skipped (the basemap lists
+    /// the railway and ferry networks a road belongs to there too, with no
+    /// text). A road the basemap ships no pair for, but which states its
+    /// numbers in `ref`, has one route of no network per number.
+    private func routes(_ properties: ImmersiveMapFeatureProperties,
+                        references: [String]) -> [ImmersiveMapRouteFacts] {
+        var routes: [ImmersiveMapRouteFacts] = []
+        for slot in 1...Self.routeSlotCount {
+            guard let text = trimmed(properties.string("shield_text_\(slot)")) else {
+                continue
+            }
+            routes.append(ImmersiveMapRouteFacts(network: trimmed(properties.string("network_\(slot)")) ?? "",
+                                                 text: text))
         }
-        let routes = ref.split(separator: ";")
+        if routes.isEmpty, let text = trimmed(properties.string("shield_text")) {
+            routes.append(ImmersiveMapRouteFacts(network: trimmed(properties.string("network")) ?? "",
+                                                 text: text))
+        }
+        if routes.isEmpty {
+            routes = references.map { ImmersiveMapRouteFacts(text: $0) }
+        }
+        return routes
+    }
+
+    /// A road's route references as the basemap's `ref` states them, the
+    /// several routes of one road (`M10;E105`) apart. Empty for a road
+    /// without one.
+    private func routeReferences(_ properties: ImmersiveMapFeatureProperties) -> [String] {
+        guard let ref = properties.string("ref") else {
+            return []
+        }
+        return ref.split(separator: ";")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { $0.isEmpty == false }
-        return routes.isEmpty ? nil : routes.joined(separator: " / ")
+    }
+
+    private func trimmed(_ text: String?) -> String? {
+        guard let text = text?.trimmingCharacters(in: .whitespaces), text.isEmpty == false else {
+            return nil
+        }
+        return text
     }
 
     /// An address point's house number, `addr_housenumber`, as a label.

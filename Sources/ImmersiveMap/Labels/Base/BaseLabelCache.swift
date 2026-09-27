@@ -30,6 +30,7 @@ final class BaseLabelCache {
         var labelMinCameraZooms: [Float]
         var labelsByStyleRuns: [LabelsByStyleRun]
         var poiIconRuns: [PoiIconRunBuffer]
+        var routeShieldRuns: [RouteShieldRunBuffer]
     }
 
     private let arena = BaseLabelTileArena()
@@ -156,6 +157,7 @@ final class BaseLabelCache {
             }
             baseLabelsDrawBatches.append(BaseLabelDrawBatch(labelsByStyleRuns: record.labelsByStyleRuns,
                                                             poiIconRuns: record.poiIconRuns,
+                                                            routeShieldRuns: record.routeShieldRuns,
                                                             globalLabelStart: record.allocation.start,
                                                             labelInstanceCount: record.labelsCount))
         }
@@ -297,6 +299,7 @@ final class BaseLabelCache {
                 existingRecord.labelMinCameraZooms = selectedTextLabelSet.placementInputs.map(\.placementMeta.minCameraZoom)
                 existingRecord.labelsByStyleRuns = selectedTextLabelSet.labelsByStyleRuns
                 existingRecord.poiIconRuns = selectedTextLabelSet.poiIconRuns
+                existingRecord.routeShieldRuns = selectedTextLabelSet.routeShieldRuns
             }
 
             tileRecordsByOwnerKey[ownerKey] = existingRecord
@@ -320,7 +323,8 @@ final class BaseLabelCache {
                                                            labelSizes: selectedTextLabelSet.placementInputs.map(\.placementMeta.labelSizePoints),
                                                            labelMinCameraZooms: selectedTextLabelSet.placementInputs.map(\.placementMeta.minCameraZoom),
                                                            labelsByStyleRuns: selectedTextLabelSet.labelsByStyleRuns,
-                                                           poiIconRuns: selectedTextLabelSet.poiIconRuns)
+                                                           poiIconRuns: selectedTextLabelSet.poiIconRuns,
+                                                           routeShieldRuns: selectedTextLabelSet.routeShieldRuns)
     }
 
     private func removeTileRecord(for ownerKey: VisibleTile) {

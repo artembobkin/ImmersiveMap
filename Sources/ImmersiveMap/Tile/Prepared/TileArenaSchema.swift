@@ -15,6 +15,7 @@ enum TileArenaSlot: Equatable, Sendable {
     case extrudedStyles
     case glyphRunVertices(run: Int)
     case poiIconRunVertices(run: Int)
+    case routeShieldRunVertices(run: Int)
     case roadLabelGlyphVertices
     case surfaceLabelVertices
 }
@@ -26,11 +27,18 @@ enum TileArenaGeometryLayerID: Equatable, Sendable {
     case bridgeOverlay
 }
 
-/// Glyph-run and POI-icon-run counts of the text label set; the only
-/// data-dependent part of the slot sequence.
+/// Glyph-run, POI-icon-run and route-sign-run counts of the text label
+/// set: the only data-dependent part of the slot sequence.
 struct TileArenaTextRunCounts: Equatable, Sendable {
     let glyphRunCount: Int
     let poiIconRunCount: Int
+    let routeShieldRunCount: Int
+
+    init(glyphRunCount: Int, poiIconRunCount: Int, routeShieldRunCount: Int = 0) {
+        self.glyphRunCount = glyphRunCount
+        self.poiIconRunCount = poiIconRunCount
+        self.routeShieldRunCount = routeShieldRunCount
+    }
 }
 
 /// The single source of truth for the arena-image traversal: the canonical
@@ -47,8 +55,8 @@ struct TileArenaTextRunCounts: Equatable, Sendable {
 enum TileArenaSchema {
     /// The canonical slot sequence: ground, road buckets x phases (in their
     /// draw orders), bridge overlay, extruded, the text label set (glyph
-    /// runs, then POI icon runs), road label glyphs, the glyphs of the labels
-    /// painted on the map.
+    /// runs, then POI icon runs, then route sign plates), road label glyphs,
+    /// the glyphs of the labels painted on the map.
     static func slots(text: TileArenaTextRunCounts) -> [TileArenaSlot] {
         var slots: [TileArenaSlot] = []
         appendGeometryLayer(.ground, to: &slots)
@@ -69,6 +77,9 @@ enum TileArenaSchema {
         for run in 0..<text.poiIconRunCount {
             slots.append(.poiIconRunVertices(run: run))
         }
+        for run in 0..<text.routeShieldRunCount {
+            slots.append(.routeShieldRunVertices(run: run))
+        }
         slots.append(.roadLabelGlyphVertices)
         slots.append(.surfaceLabelVertices)
         return slots
@@ -84,12 +95,14 @@ enum TileArenaSchema {
 
     static func runCounts(of set: PreparedTileCPU.TextLabelSet) -> TileArenaTextRunCounts {
         TileArenaTextRunCounts(glyphRunCount: set.glyphRuns.count,
-                               poiIconRunCount: set.poiIconRuns.count)
+                               poiIconRunCount: set.poiIconRuns.count,
+                               routeShieldRunCount: set.routeShieldRuns.count)
     }
 
     static func runCounts(of meta: PreparedTileArenaImage.TextLabelSetMeta) -> TileArenaTextRunCounts {
         TileArenaTextRunCounts(glyphRunCount: meta.glyphRunStyles.count,
-                               poiIconRunCount: meta.poiIconRunStyles.count)
+                               poiIconRunCount: meta.poiIconRunStyles.count,
+                               routeShieldRunCount: meta.routeShieldRunStyles.count)
     }
 
     /// Element stride of a slot's span, nil for index slots (their stride is
@@ -107,7 +120,8 @@ enum TileArenaSchema {
             return MemoryLayout<SIMD2<Float>>.stride
         case .geometryLineStyles:
             return MemoryLayout<TileLineStyle>.stride
-        case .glyphRunVertices, .poiIconRunVertices, .roadLabelGlyphVertices, .surfaceLabelVertices:
+        case .glyphRunVertices, .poiIconRunVertices, .routeShieldRunVertices,
+             .roadLabelGlyphVertices, .surfaceLabelVertices:
             return MemoryLayout<LabelVertex>.stride
         case .geometryIndices, .extrudedIndices:
             return nil

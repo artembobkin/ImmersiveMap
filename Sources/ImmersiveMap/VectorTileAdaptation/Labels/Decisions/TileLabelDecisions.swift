@@ -44,6 +44,21 @@ struct TileLabelDecisions {
         return textResolver.resolveText(label: label, preferences: languagePreferences)
     }
 
+    /// The route signs whose numbers the atlas can render, in their order.
+    func renderableRouteShields(_ shields: [RouteShield]) -> [RouteShield] {
+        shields.filter { $0.text.isEmpty == false && glyphCoverage.canRender($0.text) }
+    }
+
+    /// The identity of a road's route signs standing at `anchor` in a tile:
+    /// local to the tile, since a road's signs stand in different places in
+    /// every tile that holds the road.
+    func routeShieldKey(tile: Tile, text: String, anchor: SIMD2<Int16>) -> UInt64 {
+        VectorTileLabelIdentity.tileLocal(tile: tile,
+                                          layerName: "route-shield",
+                                          text: text,
+                                          anchor: anchor).runtimeKey
+    }
+
     /// How a point feature the style labels is labelled: its text (the
     /// name in the map's language), its identity across tiles, and the priorities
     /// and the sprite the style gave it. Nil when the feature carries no

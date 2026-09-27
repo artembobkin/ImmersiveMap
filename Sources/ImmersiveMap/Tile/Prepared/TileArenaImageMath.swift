@@ -108,6 +108,8 @@ enum TileArenaImageMath {
                 builder.append(.labelVertices(preparedTile.textLabels.glyphRuns[run].localGlyphVertices))
             case .poiIconRunVertices(let run):
                 builder.append(.labelVertices(preparedTile.textLabels.poiIconRuns[run].localIconVertices))
+            case .routeShieldRunVertices(let run):
+                builder.append(.labelVertices(preparedTile.textLabels.routeShieldRuns[run].localVertices))
             case .roadLabelGlyphVertices:
                 builder.append(.labelVertices(preparedTile.roadLabels.localGlyphVertices))
             case .surfaceLabelVertices:

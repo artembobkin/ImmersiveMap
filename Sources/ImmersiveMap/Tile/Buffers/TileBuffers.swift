@@ -21,6 +21,15 @@ struct PoiIconRunBuffer {
     }
 }
 
+struct RouteShieldRunBuffer {
+    let style: RouteShieldRunStyle
+    let localVertices: TileBufferView?
+
+    var localVertexCount: Int {
+        localVertices?.count ?? 0
+    }
+}
+
 struct TextLabelPlacementInput {
     let pointInput: TilePointInput
     let placementMeta: LabelPlacementMeta
@@ -90,6 +99,17 @@ struct TileBuffers {
         let placementInputs: [TextLabelPlacementInput]
         let labelsByStyleRuns: [LabelsByStyleRun]
         let poiIconRuns: [PoiIconRunBuffer]
+        let routeShieldRuns: [RouteShieldRunBuffer]
+
+        init(placementInputs: [TextLabelPlacementInput],
+             labelsByStyleRuns: [LabelsByStyleRun],
+             poiIconRuns: [PoiIconRunBuffer],
+             routeShieldRuns: [RouteShieldRunBuffer] = []) {
+            self.placementInputs = placementInputs
+            self.labelsByStyleRuns = labelsByStyleRuns
+            self.poiIconRuns = poiIconRuns
+            self.routeShieldRuns = routeShieldRuns
+        }
 
         var labelsCount: Int {
             placementInputs.count

@@ -18,7 +18,7 @@ import simd
 /// Nothing in them is public: the members are
 /// internal only so that the extensions can share them across files.
 public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
-    static let implementationRevision: UInt32 = 14
+    static let implementationRevision: UInt32 = 15
     /// The style draws what the tile carries and adds no zoom gate of its
     /// own: the basemap already thins every layer per tile level, so a
     /// feature in a tile is a feature on the map. A road shows from the

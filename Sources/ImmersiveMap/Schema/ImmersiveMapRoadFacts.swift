@@ -35,19 +35,26 @@ public struct ImmersiveMapRoadFacts: Equatable, Sendable {
     /// where they met: the street they belong to plus everything that
     /// changes how a piece draws. Nil for a piece that is never stitched.
     public var stitchingKey: String?
-    /// The name laid along the road, nil for a road without one.
+    /// The name laid along the road, nil for a road without one. A route
+    /// number is not part of it: the numbers are `routes`, which the style
+    /// draws on their signs.
     public var label: ImmersiveMapLabelFacts?
+    /// The numbered routes the road carries, in the order the source lists
+    /// them. Empty for a road that is part of no route.
+    public var routes: [ImmersiveMapRouteFacts]
 
     public init(structure: Structure = .ground,
                 layer: Int = 0,
                 name: String = "",
                 stitchingKey: String? = nil,
-                label: ImmersiveMapLabelFacts? = nil) {
+                label: ImmersiveMapLabelFacts? = nil,
+                routes: [ImmersiveMapRouteFacts] = []) {
         self.structure = structure
         self.layer = layer
         self.name = name
         self.stitchingKey = stitchingKey
         self.label = label
+        self.routes = routes
     }
 
     /// A road on the ground with no identity.

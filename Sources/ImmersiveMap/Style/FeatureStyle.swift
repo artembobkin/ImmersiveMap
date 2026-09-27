@@ -238,7 +238,8 @@ public struct LineStyle: Sendable {
 /// top (`shadow`, `casing`, `fill`, the `paint` on the surface,
 /// `overlay`), plus what the engine's road work needs to know about the
 /// road as the style sees it: where it sorts, which tier it draws in,
-/// what figure is stamped along it, and the name laid along it.
+/// what figure is stamped along it, the name laid along it and the signs of
+/// its routes.
 public struct RoadStyle: Sendable {
     public var shadow: LinePass?
     public var casing: LinePass?
@@ -258,6 +259,9 @@ public struct RoadStyle: Sendable {
     public var decoration: RoadDecorationKind
     /// The name laid along the road, nil for a road that carries none.
     public var label: LabelTextStyle?
+    /// The signs of the routes the road carries, nil for a road that
+    /// carries none.
+    public var shields: RouteShieldStyle?
     public var placement: LinePlacement
 
     public init(shadow: LinePass? = nil,
@@ -270,6 +274,7 @@ public struct RoadStyle: Sendable {
                 tier: RoadTier = .pedestrian,
                 decoration: RoadDecorationKind = .none,
                 label: LabelTextStyle? = nil,
+                shields: RouteShieldStyle? = nil,
                 placement: LinePlacement = .ground) {
         self.shadow = shadow
         self.casing = casing
@@ -281,6 +286,7 @@ public struct RoadStyle: Sendable {
         self.tier = tier
         self.decoration = decoration
         self.label = label
+        self.shields = shields
         self.placement = placement
     }
 

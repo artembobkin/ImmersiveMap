@@ -815,7 +815,11 @@ final class PreparedTileDiskCaching {
     // 115: a map in a language written in Latin letters shows a local name
     // in another alphabet romanized (`VectorTileLabelRomanizer`). A v114
     // entry holds the name in its own alphabet.
-    static let preparedFormatVersion: UInt32 = 115
+    // 116: a road's route numbers are signs (`RouteShieldStyle`): point
+    // labels with a plate run of their own in the text label set, and a
+    // trailing arena span per plate run. A v115 entry lays the numbers
+    // along the road as text, in front of the name.
+    static let preparedFormatVersion: UInt32 = 116
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

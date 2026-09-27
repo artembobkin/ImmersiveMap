@@ -211,6 +211,28 @@ enum VisualReviewCatalogue {
         static let moscowStreets = ImmersiveMapCameraPosition(latitudeDegrees: 55.7650,
                                                               longitudeDegrees: 37.6060,
                                                               zoom: 17)
+        /// West of Moscow at a region zoom, served by the z9 tiles: the M-9,
+        /// the M-1 and the M-3 fanning out from the ring, the A-107 crossing
+        /// them, each with its national number and the E-route beside it.
+        static let moscowWestRouteSigns = ImmersiveMapCameraPosition(latitudeDegrees: 55.72,
+                                                                     longitudeDegrees: 37.05,
+                                                                     zoom: 9.6)
+        /// The M-9 at Istra, served by the z12 tiles: the motorway's two
+        /// carriageways and the regional roads crossing it, numbered 46К
+        /// and 46Н.
+        static let istraRouteSigns = ImmersiveMapCameraPosition(latitudeDegrees: 55.80,
+                                                                longitudeDegrees: 36.90,
+                                                                zoom: 12.5)
+        /// Newark and the New Jersey Turnpike: the Interstate, US highway and
+        /// state route signs side by side.
+        static let newarkRouteSigns = ImmersiveMapCameraPosition(latitudeDegrees: 40.72,
+                                                                 longitudeDegrees: -74.15,
+                                                                 zoom: 11)
+        /// The Frankfurter Kreuz: the Autobahn signs in blue and the
+        /// Bundesstraßen in yellow.
+        static let frankfurtRouteSigns = ImmersiveMapCameraPosition(latitudeDegrees: 50.07,
+                                                                    longitudeDegrees: 8.62,
+                                                                    zoom: 11)
         /// The Kremlin, Teatralnaya and Tverskaya tilted, at the zooms the
         /// label density curve steps through.
         static func moscowCentreTilted(zoom: Double) -> ImmersiveMapCameraPosition {
@@ -620,6 +642,42 @@ enum VisualReviewCatalogue {
             """,
             settings: .default,
             subject: .still(camera: Place.arbatTunnel)),
+
+        VisualReviewScenario(
+            id: "roads.shields.region",
+            title: "Route signs west of Moscow, region zoom",
+            lookFor: """
+            Every motorway and trunk carries its numbers on signs, upright             whatever way the road runs: the national number first on a red             plate with a white edge (М-9, М-1, А-107), the E-route beside it             on a green one. The numbers are small, white and centred on their             plates, the plates crisp at the edge. A road shows one set of             signs roughly every tile, never two copies stacked on the two             carriageways, and no number is laid along a road as text.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.moscowWestRouteSigns)),
+
+        VisualReviewScenario(
+            id: "roads.shields.corridor",
+            title: "Route signs along the M-9 at Istra",
+            lookFor: """
+            The M-9's red and green signs on the motorway, and the regional             roads' numbers (46К-..., 46Н-...) on plain white plates with a             grey edge. The signs give way to the town names and win over the             POIs. A named road shows its name along the line with no number             in front of it.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.istraRouteSigns)),
+
+        VisualReviewScenario(
+            id: "roads.shields.us",
+            title: "Route signs around Newark",
+            lookFor: """
+            The Interstates on a blue heraldic shield with a red band across             the top, pointed at the bottom, the number in white in the blue             part. The US highways on a white shield with a black edge, the             state routes on a white oval. No county route signs.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.newarkRouteSigns)),
+
+        VisualReviewScenario(
+            id: "roads.shields.germany",
+            title: "Route signs at the Frankfurter Kreuz",
+            lookFor: """
+            The Autobahn numbers (A3, A5) white on blue plates with a white             edge, the Bundesstraßen (B43, B44) black on yellow with a black             edge, and the E-routes on green after the national numbers.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.frankfurtRouteSigns)),
 
         VisualReviewScenario(
             id: "roads.labels.flat",

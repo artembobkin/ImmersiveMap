@@ -4,7 +4,7 @@
 import Foundation
 
 /// The reading of the Protomaps basemap schema (tiles version 4): the
-/// `roads` layer's structure flags, names and route references, the
+/// `roads` layer's structure flags, names and routes, the
 /// `buildings` layer's heights and house numbers, the names of `places`,
 /// `pois` and the water label points of `water`. A
 /// source that spells its tags the same way can use it as it is.
@@ -18,7 +18,7 @@ import Foundation
 public struct ProtomapsBasemapSchema: ImmersiveMapTileSchema {
     /// Bumped when the reading changes: every prepared tile is prepared
     /// again under the new reading.
-    public var cacheFingerprint: UInt32 { 2 }
+    public var cacheFingerprint: UInt32 { 3 }
 
     public init() {}
 

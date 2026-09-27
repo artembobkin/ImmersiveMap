@@ -6,8 +6,8 @@ import simd
 
 /// The roads: the `roads` layer's lines, from the overview strokes of a
 /// country view to the symbols of a street, with the casing and the fill
-/// of each, the name laid along a street and the arrows of a one-way
-/// street. How wide a road is: a road is a symbol, the theme states its
+/// of each, the name laid along a street, the signs of its routes and the
+/// arrows of a one-way street. How wide a road is: a road is a symbol, the theme states its
 /// width on screen in points per class (`RoadMetrics.symbolWidthPoints`),
 /// the shader draws exactly that many points until the world lock zoom and
 /// the ground width those points had there from then on. Nothing here
@@ -78,6 +78,13 @@ extension ProtomapsBasemapDefaultMapStyle {
         guard tileZoom >= theme.roadMetrics.minimumTileZoom.value(for: roadClass) else {
             return hiddenStyle
         }
+        // The name laid along the road is the road's own name: a road known
+        // only by its number carries the number on its signs instead.
+        let name = road.label == nil ? "" : road.name
+        let shields = routeShieldStyle(road: road,
+                                       roadClass: roadClass,
+                                       isLink: parseBoolValue(props["is_link"]),
+                                       tileZoom: tileZoom)
         // Over a country or region view a road is a symbol, not a surface,
         // and it draws on the same principle as the country borders: one
         // point-locked stroke in the generic ground path, opaque from the
@@ -95,7 +102,8 @@ extension ProtomapsBasemapDefaultMapStyle {
            let stroke = Self.overviewRoadStroke(roadClass) {
             return overviewRoadStyle(stroke,
                                      roadClass: roadClass,
-                                     name: road.name,
+                                     name: name,
+                                     shields: shields,
                                      color: Self.streetRoadColor(roadClass, roads: roads),
                                      tileZoom: tileZoom,
                                      tunnel: isTunnel)
@@ -159,7 +167,8 @@ extension ProtomapsBasemapDefaultMapStyle {
                          tunnel: isTunnel,
                          symbolWidthPoints: symbolWidthPoints,
                          roadClass: roadClass,
-                         name: road.name,
+                         name: name,
+                         shields: shields,
                          oneway: parseBoolValue(props["oneway"]),
                          tileZoom: tileZoom)
     }
@@ -347,6 +356,7 @@ extension ProtomapsBasemapDefaultMapStyle {
     func overviewRoadStyle(_ stroke: OverviewRoadStroke,
                            roadClass: RoadClass,
                            name: String,
+                           shields: RouteShieldStyle? = nil,
                            color: SIMD4<Float>,
                            tileZoom: Int,
                            tunnel: Bool) -> FeatureStyle {
@@ -382,7 +392,7 @@ extension ProtomapsBasemapDefaultMapStyle {
         let label: LabelTextStyle? = name.isEmpty == false
             ? labelTextStyle(key: Int(stroke.fillKey), appearance: theme.labels.road)
             : nil
-        return .road(RoadStyle(fill: fill, classPriority: stroke.priority, label: label))
+        return .road(RoadStyle(fill: fill, classPriority: stroke.priority, label: label, shields: shields))
     }
 
     func roadStyle(fillKey: UInt8,
@@ -393,6 +403,7 @@ extension ProtomapsBasemapDefaultMapStyle {
                    symbolWidthPoints: Float,
                    roadClass: RoadClass,
                    name: String = "",
+                   shields: RouteShieldStyle? = nil,
                    oneway: Bool = false,
                    tileZoom: Int = 16) -> FeatureStyle {
         // The road is a symbol: the class states a width in points, the
@@ -460,7 +471,51 @@ extension ProtomapsBasemapDefaultMapStyle {
                                paint: paint,
                                classPriority: priority,
                                decoration: decoration,
-                               label: label))
+                               label: label,
+                               shields: shields))
+    }
+
+    /// The signs of a road's routes, from the theme (`RouteShields`): the
+    /// routes it signs, on their country's signs, from the tile zoom the
+    /// road's class carries them at. A ramp carries none: it shares its
+    /// parent's numbers, and a sign on every ramp of an interchange buries
+    /// the one on the road itself. The motorways' signs win a collision
+    /// over the lesser classes', and every sign wins over the POIs.
+    func routeShieldStyle(road: ImmersiveMapRoadFacts,
+                          roadClass: RoadClass,
+                          isLink: Bool,
+                          tileZoom: Int) -> RouteShieldStyle? {
+        let signs = theme.routeShields
+        guard road.routes.isEmpty == false,
+              isLink == false,
+              tileZoom >= signs.minimumTileZoom.value(for: roadClass) else {
+            return nil
+        }
+        let shields = signs.shields(for: road.routes)
+        guard shields.isEmpty == false else {
+            return nil
+        }
+        let rank = Self.routeShieldClassRank(roadClass)
+        return RouteShieldStyle(shields: shields,
+                                sizePoints: LabelTypeScale.clamped(signs.sizePoints),
+                                weight: signs.weight,
+                                spacingPoints: signs.spacingPoints,
+                                rank: rank,
+                                collisionRank: Self.labelCollisionRank(band: .routeShield, rank: rank))
+    }
+
+    /// A road class's place among the route signs, the most important
+    /// first.
+    static func routeShieldClassRank(_ roadClass: RoadClass) -> Int {
+        switch roadClass {
+        case .motorway: return 0
+        case .trunk: return 1
+        case .primary: return 2
+        case .secondary: return 3
+        case .tertiary: return 4
+        case .minor: return 5
+        case .service, .path, .other: return 6
+        }
     }
 
     /// The paint on the asphalt shows wherever the tile states it.

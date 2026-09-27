@@ -6,8 +6,8 @@ import Mvt
 import simd
 
 /// Reads a line feature into the ribbons its style's passes draw, the
-/// decoration stamped along it (the oneway arrows), and its road name
-/// label.
+/// decoration stamped along it (the oneway arrows), its road name label,
+/// and the places its route signs could stand.
 ///
 /// On the road layer at street zooms the feature takes the separate-road
 /// path: its lines come stitched from the layer's
@@ -65,6 +65,9 @@ struct LineFeatureReader {
             ? labelDecisions.roadLabelText(label: facts.label)
             : nil
         let roadLabelStyle = style.label
+        let routeShields = labelsEnabled
+            ? style.shields.map { labelDecisions.renderableRouteShields($0.shields) } ?? []
+            : []
         let road = facts.road ?? .ground
         let roadClassPriority = style.classPriority
         let roadStructure = RoadStructureKind(level: style.level, tier: style.tier)
@@ -222,6 +225,20 @@ struct LineFeatureReader {
                     }
                 }
 
+                if let shieldStyle = style.shields, routeShields.isEmpty == false {
+                    let group = routeShields.map(\.text).joined(separator: " ")
+                    for fragment in exactClippedFragments {
+                        for point in RouteShieldPlacement.candidatePoints(along: fragment.points,
+                                                                          tileExtent: tileExtent) {
+                            result.routeShieldCandidates.append(RouteShieldCandidate(shields: routeShields,
+                                                                                     style: shieldStyle,
+                                                                                     styleKey: Int(style.key),
+                                                                                     position: point,
+                                                                                     group: group))
+                        }
+                    }
+                }
+
                 if let labelText,
                    let roadLabelStyle {
                     for fragment in exactClippedFragments {
@@ -242,6 +259,35 @@ struct LineFeatureReader {
                 }
             }
         }
+    }
+
+    /// The route signs of the tile's roads as point labels, once every
+    /// road is read: the candidates `RouteShieldPlacement` keeps, each a
+    /// label that draws its signs, keyed by the tile and the place.
+    func appendRouteShieldLabels(tile: Tile, into result: inout ReadingStageResult) {
+        for candidate in RouteShieldPlacement.select(result.routeShieldCandidates, tileExtent: tileExtent) {
+            let anchor = SIMD2(Int16(clamping: Int(candidate.position.x.rounded())),
+                               Int16(clamping: Int(candidate.position.y.rounded())))
+            var style = candidate.style
+            style.shields = candidate.shields
+            let textStyle = LabelTextStyle(key: candidate.styleKey,
+                                           fillColor: candidate.shields[0].appearance.textColor,
+                                           strokeColor: candidate.shields[0].appearance.textColor,
+                                           haloEm: 0,
+                                           sizePoints: style.sizePoints,
+                                           weight: style.weight)
+            result.textLabels.append(ParsedTextLabel(text: candidate.group,
+                                                     position: anchor,
+                                                     key: labelDecisions.routeShieldKey(tile: tile,
+                                                                                        text: candidate.group,
+                                                                                        anchor: anchor),
+                                                     sortKey: style.rank,
+                                                     collisionPriority: style.collisionRank,
+                                                     textStyle: textStyle,
+                                                     minCameraZoom: style.minCameraZoom,
+                                                     routeShields: style))
+        }
+        result.routeShieldCandidates.removeAll()
     }
 
     /// The decoration a pass stamps along the feature's exact fragments on

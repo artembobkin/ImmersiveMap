@@ -42,11 +42,13 @@ extension ProtomapsBasemapDefaultMapStyle {
     }
 
     /// The collision bands: places beat water names beat peaks and airports
-    /// beat the other POIs beat the house numbers whatever their ranks.
+    /// beat the route signs beat the other POIs beat the house numbers
+    /// whatever their ranks.
     enum LabelBand {
         case place
         case water
         case landmark
+        case routeShield
         case poi
         case address
 
@@ -55,6 +57,7 @@ extension ProtomapsBasemapDefaultMapStyle {
             case .place: return 0
             case .water: return 20_000
             case .landmark: return 40_000
+            case .routeShield: return 45_000
             case .poi: return 50_000
             case .address: return 70_000
             }

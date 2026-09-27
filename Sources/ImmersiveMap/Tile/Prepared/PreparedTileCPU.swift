@@ -55,10 +55,28 @@ struct PreparedTileCPU: Sendable {
         let localIconVertices: [LabelVertex]
     }
 
+    /// The plates of the route signs of one look (`RouteShieldRunStyle`),
+    /// one quad each, drawn under the numbers' glyph runs.
+    struct RouteShieldRun {
+        let style: RouteShieldRunStyle
+        let localVertices: [LabelVertex]
+    }
+
     struct TextLabelSet {
         let placementInputs: [TextLabelPlacementInput]
         let glyphRuns: [TextGlyphRun]
         let poiIconRuns: [PoiIconRun]
+        let routeShieldRuns: [RouteShieldRun]
+
+        init(placementInputs: [TextLabelPlacementInput],
+             glyphRuns: [TextGlyphRun],
+             poiIconRuns: [PoiIconRun],
+             routeShieldRuns: [RouteShieldRun] = []) {
+            self.placementInputs = placementInputs
+            self.glyphRuns = glyphRuns
+            self.poiIconRuns = poiIconRuns
+            self.routeShieldRuns = routeShieldRuns
+        }
     }
 
     struct RoadLabels {
