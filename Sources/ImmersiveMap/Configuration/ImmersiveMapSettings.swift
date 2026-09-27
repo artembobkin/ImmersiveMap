@@ -1465,6 +1465,19 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
+    /// Adjusts only the provided label fields; nil leaves a field unchanged.
+    func labelSettings(language: LabelLanguage? = nil,
+                       fallbackPolicy: LabelFallbackPolicy? = nil) -> ImmersiveMapSettings {
+        var settings = self
+        if let language {
+            settings.labels.language = language
+        }
+        if let fallbackPolicy {
+            settings.labels.fallbackPolicy = fallbackPolicy
+        }
+        return settings
+    }
+
     /// Labels on or off: place names, points of interest, house numbers
     /// and road names. Applies live, the prepared tiles keep their text.
     func labels(isEnabled: Bool = true) -> ImmersiveMapSettings {

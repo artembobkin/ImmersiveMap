@@ -51,6 +51,7 @@ private struct MapScreen: View {
             // same coordinates, so a warm disk cache would keep showing the
             // previous build. Every launch here starts from the network.
             .tileSettings(clearDiskCachesOnLaunch: true)
+            .labelSettings(language: .russian)
             // Camera coordinates and renderer diagnostics, drawn as host-view
             // chrome above the map. A development aid, off by default.
             .debugPanel()

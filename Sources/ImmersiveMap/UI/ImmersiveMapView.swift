@@ -734,6 +734,23 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// The language the labels are written in, and what a label shows when
+    /// a feature has no name in it. Adjusts only the provided fields; nil
+    /// leaves a field unchanged:
+    ///
+    /// ```swift
+    /// ImmersiveMapView()
+    ///     .labelSettings(language: .russian)
+    /// ```
+    ///
+    /// Both are baked into the prepared tiles, so a change re-prepares them.
+    public func labelSettings(language: ImmersiveMapSettings.LabelLanguage? = nil,
+                              fallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy? = nil) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.labelSettings(language: language, fallbackPolicy: fallbackPolicy)
+        return view
+    }
+
     /// Turns map labels on or off: place names, points of interest, house
     /// numbers and road names alike. Off skips the label layer and the
     /// placement and collision work behind it. It applies live and never
