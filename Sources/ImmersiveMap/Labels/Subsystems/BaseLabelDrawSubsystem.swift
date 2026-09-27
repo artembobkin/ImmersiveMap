@@ -68,8 +68,8 @@ final class BaseLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
         // depth: they rasterize at the far plane (see LabelTextVertex.metal)
         // and write fill and halo depths just short of it, so the halo of a
         // later glyph never covers the fill of an earlier one
-        // (TextShader.metal), while the scene model occlusion prepass,
-        // nearer still, clips them to the model silhouettes.
+        // (TextShader.metal). Nothing else writes that depth, so the scene
+        // models, drawn in the world pass, never hide a label.
         encoder.setDepthStencilState(labelDepthState)
         RendererLabelDrawer.drawBaseLabels(renderEncoder: encoder,
                                            screenMatrix: frameContext.cameraMatrices.screen,

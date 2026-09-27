@@ -192,7 +192,6 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
                                     builder: inout RenderPassAvailabilityBuilder) {
         let hasDrawItems = drawItems.isEmpty == false
         builder.sceneModelsEnabled = builder.sceneModelsEnabled || hasDrawItems
-        builder.sceneModelOcclusionEnabled = builder.sceneModelOcclusionEnabled || hasDrawItems
     }
 
     func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
@@ -211,14 +210,6 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
                                   pipeline: pipeline,
                                   surfaceMaskState: surfaceMaskState,
                                   depthDisabledState: depthDisabledState)
-        case .sceneModelOcclusion:
-            guard drawItems.isEmpty == false else { return }
-            SceneModelDrawer.drawLabelOcclusion(renderEncoder: encoder,
-                                                cameraUniform: frameContext.cameraUniform,
-                                                items: drawItems,
-                                                pipeline: pipeline,
-                                                extrudedDepthState: extrudedDepthState,
-                                                depthDisabledState: depthDisabledState)
         case .shadowCasters:
             guard let shadowState = frameContext.shadowFrameState,
                   shadowCasterItems.isEmpty == false else { return }

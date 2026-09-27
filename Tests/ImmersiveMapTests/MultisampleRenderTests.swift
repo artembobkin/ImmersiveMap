@@ -28,7 +28,6 @@ final class MultisampleRenderTests: XCTestCase {
     /// pipelines are single-sample anyway.
     func testTheOverlayAlwaysKeepsItsOwnPass() {
         XCTAssertFalse(RenderPassGraph.mergesOverlayIntoWorld(overlayLayers: [.labels, .avatars], renderSampleCount: 1))
-        XCTAssertFalse(RenderPassGraph.mergesOverlayIntoWorld(overlayLayers: [.sceneModelOcclusion, .labels], renderSampleCount: 1))
         XCTAssertFalse(RenderPassGraph.mergesOverlayIntoWorld(overlayLayers: [.labels, .avatars], renderSampleCount: 4))
     }
 

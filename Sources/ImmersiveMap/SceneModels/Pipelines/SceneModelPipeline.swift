@@ -10,11 +10,6 @@ class SceneModelPipeline {
     /// Depth-only replay into the shadow map: no color attachments and no
     /// fragment function, the rasterizer writes bare depth.
     let shadowPipelineState: MTLRenderPipelineState
-    /// Depth-only replay into the overlay pass, encoded before the labels so
-    /// their far-plane fragments depth-test against the model silhouettes.
-    /// The overlay pass keeps its single-sample color attachment bound, so the
-    /// pipeline declares the format with all color writes masked off.
-    let labelOcclusionPipelineState: MTLRenderPipelineState
     let baseColorSampler: MTLSamplerState
     let whiteTexture: MTLTexture
 
@@ -61,17 +56,6 @@ class SceneModelPipeline {
         shadowDescriptor.inputPrimitiveTopology = .triangle
         self.shadowPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: shadowDescriptor)
 
-        let occlusionDescriptor = MTLRenderPipelineDescriptor()
-        occlusionDescriptor.vertexFunction = library.makeFunction(name: "sceneModelDepthOnlyVertexShader")
-        occlusionDescriptor.fragmentFunction = nil
-        occlusionDescriptor.vertexDescriptor = vertexDescriptor
-        occlusionDescriptor.rasterSampleCount = 1
-        occlusionDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-        occlusionDescriptor.colorAttachments[0].writeMask = []
-        occlusionDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-        occlusionDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
-        self.labelOcclusionPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: occlusionDescriptor)
-
         let samplerDescriptor = MTLSamplerDescriptor()
         samplerDescriptor.minFilter = .linear
         samplerDescriptor.magFilter = .linear
@@ -104,9 +88,5 @@ class SceneModelPipeline {
 
     func selectShadowPipeline(renderEncoder: MTLRenderCommandEncoder) {
         renderEncoder.setRenderPipelineState(shadowPipelineState)
-    }
-
-    func selectLabelOcclusionPipeline(renderEncoder: MTLRenderCommandEncoder) {
-        renderEncoder.setRenderPipelineState(labelOcclusionPipelineState)
     }
 }

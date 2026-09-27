@@ -11,7 +11,6 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  labelsEnabled: true,
                                                  avatarsEnabled: true,
                                                  debugOverlayEnabled: true,
-                                                 sceneModelOcclusionEnabled: true,
                                                  starfieldEnabled: true)
         )
 
@@ -22,7 +21,6 @@ final class RenderLayerPlannerTests: XCTestCase {
             .buildingExtrusion,
             .sceneModels,
             .horizon,
-            .sceneModelOcclusion,
             .labels,
             .avatars,
             .debugOverlay
@@ -37,7 +35,6 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  labelsEnabled: false,
                                                  avatarsEnabled: false,
                                                  debugOverlayEnabled: false,
-                                                 sceneModelOcclusionEnabled: false,
                                                  starfieldEnabled: true)
         )
 
@@ -48,13 +45,11 @@ final class RenderLayerPlannerTests: XCTestCase {
             .buildingExtrusion,
             .sceneModels,
             .horizon,
-            .sceneModelOcclusion,
             .labels,
             .avatars,
             .debugOverlay
         ])
         XCTAssertEqual(enabledLayers(in: plan), [.tileOwnership, .flatMapSurface, .surfaceLabels, .buildingExtrusion, .sceneModels, .horizon])
-        XCTAssertEqual(skipReason(for: .sceneModelOcclusion, in: plan), .noSceneModelContent)
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)
         XCTAssertEqual(skipReason(for: .debugOverlay, in: plan), .debugOverlayDisabled)
@@ -66,7 +61,6 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  labelsEnabled: true,
                                                  avatarsEnabled: true,
                                                  debugOverlayEnabled: true,
-                                                 sceneModelOcclusionEnabled: true,
                                                  starfieldEnabled: true)
         )
 
@@ -77,7 +71,6 @@ final class RenderLayerPlannerTests: XCTestCase {
             .globeCap,
             .sceneModels,
             .horizon,
-            .sceneModelOcclusion,
             .labels,
             .avatars,
             .debugOverlay
@@ -91,7 +84,6 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  labelsEnabled: false,
                                                  avatarsEnabled: false,
                                                  debugOverlayEnabled: false,
-                                                 sceneModelOcclusionEnabled: false,
                                                  starfieldEnabled: true)
         )
 
@@ -102,59 +94,14 @@ final class RenderLayerPlannerTests: XCTestCase {
             .globeCap,
             .sceneModels,
             .horizon,
-            .sceneModelOcclusion,
             .labels,
             .avatars,
             .debugOverlay
         ])
         XCTAssertEqual(enabledLayers(in: plan), [.starfield, .globeVectorSurface, .surfaceLabels, .globeCap, .sceneModels, .horizon])
-        XCTAssertEqual(skipReason(for: .sceneModelOcclusion, in: plan), .noSceneModelContent)
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)
         XCTAssertEqual(skipReason(for: .debugOverlay, in: plan), .debugOverlayDisabled)
-    }
-
-    /// The occlusion prepass only serves the labels: with none to draw it is
-    /// off even when models are on screen, and the skip is not double-reported
-    /// (the labels item already reports the missing label content).
-    func testSceneModelOcclusionIsDisabledWithoutLabels() {
-        let plan = RenderLayerPlanner.plan(
-            availability: RenderPassAvailability(renderSurfaceMode: .spherical,
-                                                 labelsEnabled: false,
-                                                 avatarsEnabled: false,
-                                                 debugOverlayEnabled: false,
-                                                 sceneModelOcclusionEnabled: true,
-                                                 starfieldEnabled: true)
-        )
-
-        let occlusionItem = plan.first { $0.layer == .sceneModelOcclusion }
-        XCTAssertEqual(occlusionItem?.enabled, false)
-        XCTAssertNil(occlusionItem?.skipReason)
-    }
-
-    /// Labels keep drawing when no models are on screen: only the occlusion
-    /// prepass is skipped, reported as missing scene model content.
-    func testSceneModelOcclusionIsDisabledWithoutModels() {
-        let plan = RenderLayerPlanner.plan(
-            availability: RenderPassAvailability(renderSurfaceMode: .flat,
-                                                 labelsEnabled: true,
-                                                 avatarsEnabled: false,
-                                                 debugOverlayEnabled: false,
-                                                 sceneModelOcclusionEnabled: false,
-                                                 starfieldEnabled: true)
-        )
-
-        let occlusionItem = plan.first { $0.layer == .sceneModelOcclusion }
-        XCTAssertEqual(occlusionItem?.enabled, false)
-        XCTAssertEqual(occlusionItem?.skipReason, .noSceneModelContent)
-        XCTAssertTrue(enabledLayers(in: plan).contains(.labels))
-    }
-
-    /// The occlusion prepass must run inside the overlay pass: its depth
-    /// writes land in the overlay depth attachment the labels test against.
-    func testSceneModelOcclusionIsAnOverlayLayer() {
-        XCTAssertTrue(RenderPassGraph.isOverlayLayer(.sceneModelOcclusion))
-        XCTAssertFalse(RenderPassGraph.isWorldLayer(.sceneModelOcclusion))
     }
 
     /// Transparent space keeps the starfield in the plan but disabled: nothing
@@ -165,7 +112,6 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                  labelsEnabled: true,
                                                  avatarsEnabled: true,
                                                  debugOverlayEnabled: true,
-                                                 sceneModelOcclusionEnabled: true,
                                                  starfieldEnabled: false)
         )
 
@@ -175,7 +121,6 @@ final class RenderLayerPlannerTests: XCTestCase {
             .globeCap,
             .sceneModels,
             .horizon,
-            .sceneModelOcclusion,
             .labels,
             .avatars,
             .debugOverlay
@@ -194,7 +139,6 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                      labelsEnabled: true,
                                                      avatarsEnabled: true,
                                                      debugOverlayEnabled: true,
-                                                     sceneModelOcclusionEnabled: true,
                                                      starfieldEnabled: false)
             )
             let worldLayers = plan.map(\.layer).filter(RenderPassGraph.isWorldLayer)
@@ -215,7 +159,6 @@ final class RenderLayerPlannerTests: XCTestCase {
                                                      labelsEnabled: true,
                                                      avatarsEnabled: false,
                                                      debugOverlayEnabled: false,
-                                                     sceneModelOcclusionEnabled: false,
                                                      starfieldEnabled: true,
                                                      sceneModelsEnabled: false)
             )

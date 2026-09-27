@@ -29,8 +29,8 @@ vertex VertexOut labelTextVertex(LabelVertexIn in [[stage_in]],
     float2 pixelPosition = screenPoint.position + (in.position - halfSize) * pixelsPerPoint;
     out.position = matrix * float4(pixelPosition, 0.0, 1.0);
     // Far-plane depth: the cleared overlay depth (1.0) passes the labels'
-    // lessEqual test, while the scene model occlusion prepass depth, always
-    // closer, clips the label to the model silhouette.
+    // lessEqual test, and the fill and halo depths written just short of it
+    // order the glyphs (TextShader.metal).
     out.position.z = out.position.w;
     out.uv = in.uv;
     bool isVisible = (screenPoint.visible != 0u) &&

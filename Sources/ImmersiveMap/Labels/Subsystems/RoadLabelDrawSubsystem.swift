@@ -54,7 +54,7 @@ final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
         }
 
         // Same depth as BaseLabelDrawSubsystem: the overlay pass's own
-        // depth orders halo under fill and clips to the scene models.
+        // depth orders halo under fill.
         encoder.setDepthStencilState(labelDepthState)
         RendererLabelDrawer.drawRoadLabels(renderEncoder: encoder,
                                            screenMatrix: frameContext.cameraMatrices.screen,

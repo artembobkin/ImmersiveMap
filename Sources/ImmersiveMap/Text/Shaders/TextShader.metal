@@ -30,9 +30,8 @@ struct TextDistance {
 // fragment writes the nearer of two far-plane depths and a halo fragment the
 // farther, under lessEqual with depth write on, so a halo never lands on a
 // fill that is already there while a fill still lands on a halo. Both sit
-// just short of the far plane, so the scene model occlusion prepass (any
-// nearer depth) still clips the labels, and a fragment with no coverage
-// writes the far plane itself, which changes nothing.
+// just short of the far plane, and a fragment with no coverage writes the
+// far plane itself, which changes nothing.
 struct TextFragmentOut {
     half4 color [[color(0)]];
     float depth [[depth(less)]];

@@ -24,7 +24,6 @@ final class RenderPassGraphWorldLayerOrderTests: XCTestCase {
             labelsEnabled: false,
             avatarsEnabled: false,
             debugOverlayEnabled: false,
-            sceneModelOcclusionEnabled: false,
             starfieldEnabled: true)).filter(\.enabled).map(\.layer).first, .tileOwnership,
                        "The planner lists the ownership prepass first among the flat world layers")
     }

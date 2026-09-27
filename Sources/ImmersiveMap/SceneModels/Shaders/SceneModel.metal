@@ -51,14 +51,6 @@ vertex float4 sceneModelShadowVertexShader(SceneModelVertexIn vertexIn [[stage_i
     return casters.lightProjectionView * (modelMatrix * float4(vertexIn.position, 1.0));
 }
 
-// Depth-only vertex of the overlay label-occlusion prepass: the same shape as
-// the caster vertex above, but projected through the camera.
-vertex float4 sceneModelDepthOnlyVertexShader(SceneModelVertexIn vertexIn [[stage_in]],
-                                              constant Camera& camera [[buffer(1)]],
-                                              constant float4x4& modelMatrix [[buffer(2)]]) {
-    return camera.matrix * (modelMatrix * float4(vertexIn.position, 1.0));
-}
-
 // No analytic lighting model, matching the building extrusion
 // (TileExtruded.metal): the base color darkens only where the shadow map says
 // the static sun is occluded: faces away from the sun are occluded by their

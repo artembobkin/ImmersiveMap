@@ -85,10 +85,7 @@ struct SceneModelFrameState {
     /// At least one model survived light-frustum culling this frame; feeds the
     /// shadow-pass gate together with the building-caster check.
     var hasShadowCasters: Bool
-    /// At least one model draws in the world pass this frame. When false the
-    /// overlay layers fold into the world pass (no occlusion prepass to test
-    /// against) and the labels draw with depth disabled; the pass planner and
-    /// the label subsystems read the same bit, so the two decisions agree.
+    /// At least one model draws in the world pass this frame.
     var hasDrawnModels: Bool
     /// Hit volumes of the models this frame drew, published after the frame
     /// reaches the screen so taps are tested against what is visible.

@@ -45,8 +45,7 @@ final class SharedRenderResources {
     /// The label passes: lessEqual with the write on. The labels rasterize
     /// at the far plane and their fragments write one of two depths just
     /// short of it (TextShader.metal), fill nearer than halo, so a later
-    /// glyph's halo never covers an earlier glyph's fill; the scene model
-    /// occlusion prepass, nearer still, clips them as before.
+    /// glyph's halo never covers an earlier glyph's fill.
     let labelDepthState: MTLDepthStencilState
     let globeCapDepthState: MTLDepthStencilState
     /// The sky layers (the space background and the stars): drawn first on

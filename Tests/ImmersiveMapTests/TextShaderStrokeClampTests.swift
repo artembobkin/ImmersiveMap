@@ -74,8 +74,7 @@ final class TextShaderStrokeClampTests: XCTestCase {
 
     /// One text pass: the fragment writes a depth that orders fill over
     /// halo across neighbouring glyph quads, both just short of the far
-    /// plane the labels rasterize at, so the model occlusion prepass still
-    /// clips them.
+    /// plane the labels rasterize at.
     func testTextFragmentsOrderFillOverHaloThroughDepth() throws {
         let source = try textShaderSource()
         XCTAssertTrue(source.contains("float depth [[depth(less)]];"))
