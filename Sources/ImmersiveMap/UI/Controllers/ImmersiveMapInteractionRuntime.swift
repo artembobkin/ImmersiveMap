@@ -57,6 +57,14 @@ final class ImmersiveMapInteractionRuntime {
         if isActive && requestsFrameOnStart {
             renderRuntime.requestFrame()
         }
+
+        // One more frame after the last gesture lets go: the animations that
+        // carry on after the user, the elastic bounds' pull among them, keep
+        // the loop running only from a frame, which would otherwise pause
+        // right here.
+        if wasInteracting && hasActiveUserInteraction == false {
+            renderRuntime.requestFrame()
+        }
     }
 
     /// Clears every active source when the view parks in the reuse pool.

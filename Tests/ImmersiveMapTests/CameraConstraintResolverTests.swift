@@ -22,12 +22,23 @@ final class CameraConstraintResolverTests: XCTestCase {
         XCTAssertEqual(globeMaximumPitch(at: 20), degrees(75), accuracy: 0.0001)
     }
 
-    func testDefaultsLeavePitchFloorAndBearingCapOff() {
-        // The defaults must preserve the behavior apps already have: a
-        // reachable top-down view and unbounded rotation on the flat map.
+    func testDefaultsLeavePitchFloorBearingCapAndBoundsOff() {
+        // Every camera limit is opt-in: a reachable top-down view, unbounded
+        // rotation on both surfaces at every zoom, and the whole world open.
         XCTAssertEqual(settings.minimumPitch, 0)
         XCTAssertNil(settings.maximumAbsoluteBearing)
+        XCTAssertNil(settings.globeBearingLimit)
+        XCTAssertNil(settings.bounds)
         XCTAssertNil(resolve(.flat).bearing.maximumAbsoluteBearing)
+        XCTAssertNil(resolve(.spherical, at: 0).bearing.maximumAbsoluteBearing)
+    }
+
+    func testGlobeBearingCapWithoutAWindowAppliesAtEveryZoom() {
+        var settings = settings
+        settings.maximumAbsoluteBearing = .pi / 2
+
+        XCTAssertEqual(globeMaximumBearing(at: 0, settings: settings), .pi / 2, accuracy: 0.0001)
+        XCTAssertEqual(globeMaximumBearing(at: 20, settings: settings), .pi / 2, accuracy: 0.0001)
     }
 
     func testFlatPitchFloorHoldsAtEveryZoom() {
@@ -59,12 +70,13 @@ final class CameraConstraintResolverTests: XCTestCase {
     }
 
     func testGlobeBearingWindowOpensToTheCapInsteadOfTheHalfTurn() {
-        // Defaults: window floor 15 degrees, unlocked at zoom 6. The cap
-        // replaces the half turn as the widest the window opens.
+        // Window floor 15 degrees, unlocked at zoom 6. The cap replaces the
+        // half turn as the widest the window opens.
         var settings = settings
         settings.maximumAbsoluteBearing = .pi / 2
+        settings.globeBearingLimit = .init(minimumAbsoluteBearing: .pi / 12, unlockZoom: 6)
 
-        let floor = settings.globeMinimumAbsoluteBearing
+        let floor = Float.pi / 12
         XCTAssertEqual(globeMaximumBearing(at: 0, settings: settings), floor, accuracy: 0.0001)
         XCTAssertEqual(globeMaximumBearing(at: 3, settings: settings),
                        floor + (Float.pi / 2 - floor) * 0.5,
@@ -76,6 +88,7 @@ final class CameraConstraintResolverTests: XCTestCase {
     func testGlobeBearingCapBelowTheWindowFloorCollapsesTheWindow() {
         var settings = settings
         settings.maximumAbsoluteBearing = .pi / 24
+        settings.globeBearingLimit = .init(minimumAbsoluteBearing: .pi / 12, unlockZoom: 6)
 
         XCTAssertEqual(globeMaximumBearing(at: 0, settings: settings), .pi / 24, accuracy: 0.0001)
         XCTAssertEqual(globeMaximumBearing(at: 20, settings: settings), .pi / 24, accuracy: 0.0001)
@@ -92,7 +105,7 @@ final class CameraConstraintResolverTests: XCTestCase {
     private func globeMaximumBearing(at zoom: Double,
                                      settings: ImmersiveMapSettings.CameraSettings) -> Float {
         guard let maximum = resolve(.spherical, at: zoom, settings: settings).bearing.maximumAbsoluteBearing else {
-            XCTFail("The globe bearing window is never unbounded.")
+            XCTFail("A capped globe bearing is never unbounded.")
             return .nan
         }
         return maximum

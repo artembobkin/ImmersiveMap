@@ -57,23 +57,26 @@ enum CameraBearingConstraintResolver {
     static func resolve(cameraState: ImmersiveMapCameraState,
                         cameraSettings: ImmersiveMapSettings.CameraSettings,
                         renderSurfaceMode: ViewMode) -> CameraBearingConstraint {
-        guard renderSurfaceMode == .spherical else {
+        guard renderSurfaceMode == .spherical,
+              let globeBearingLimit = cameraSettings.globeBearingLimit else {
             return CameraBearingConstraint(maximumAbsoluteBearing: cameraSettings.maximumAbsoluteBearing)
         }
 
         return CameraBearingConstraint(
             maximumAbsoluteBearing: globeMaximumAbsoluteBearing(zoom: cameraState.zoom,
-                                                                cameraSettings: cameraSettings)
+                                                                limit: globeBearingLimit,
+                                                                maximumAbsoluteBearing: cameraSettings.maximumAbsoluteBearing)
         )
     }
 
     static func globeMaximumAbsoluteBearing(zoom: Double,
-                                            cameraSettings: ImmersiveMapSettings.CameraSettings) -> Float {
+                                            limit: ImmersiveMapSettings.CameraSettings.GlobeBearingLimit,
+                                            maximumAbsoluteBearing: Float?) -> Float {
         // The configured cap is the widest the globe's bearing window opens; a
         // cap below the window's floor collapses the window to the cap.
-        let ceiling = min(max(cameraSettings.maximumAbsoluteBearing ?? .pi, 0), .pi)
-        let minimumBearing = min(max(cameraSettings.globeMinimumAbsoluteBearing, 0), ceiling)
-        let unlockZoom = max(cameraSettings.globeBearingUnlockZoom, 0)
+        let ceiling = min(max(maximumAbsoluteBearing ?? .pi, 0), .pi)
+        let minimumBearing = min(max(limit.minimumAbsoluteBearing, 0), ceiling)
+        let unlockZoom = max(limit.unlockZoom, 0)
         guard unlockZoom > Double.leastNonzeroMagnitude else {
             return ceiling
         }

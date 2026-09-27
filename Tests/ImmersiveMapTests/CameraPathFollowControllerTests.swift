@@ -117,8 +117,8 @@ final class CameraPathFollowControllerTests: XCTestCase {
     /// restate the implementation, so this projects a point further along the
     /// path and checks where it actually lands.
     ///
-    /// Zoom 8 is past `globeBearingUnlockZoom`, so the globe bearing limit does
-    /// not clamp the turn and the check is about the sign, not the constraint.
+    /// The default settings put no bearing limit on the globe, so nothing
+    /// clamps the turn and the check is about the sign, not the constraint.
     @MainActor
     func testCourseModePutsTheDirectionOfTravelUpTheScreen() throws {
         try skipUnlessMetalAvailable()

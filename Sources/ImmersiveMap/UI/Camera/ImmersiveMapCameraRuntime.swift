@@ -333,6 +333,22 @@ final class ImmersiveMapCameraRuntime {
         return ZoomAnchorMath.compensatedCenterWorldMercator(input)
     }
 
+    /// Advances the elastic bounds' pull by one frame, notifying and
+    /// redrawing when the center moved. Returns whether it is still pulling.
+    func advanceBoundsPull(deltaTime: Double) -> Bool {
+        guard let renderCamera else {
+            return false
+        }
+
+        let centerBefore = renderCamera.currentCameraState().centerWorldMercator
+        let isReturning = renderCamera.advanceBoundsPull(deltaTime: deltaTime)
+        if renderCamera.currentCameraState().centerWorldMercator != centerBefore {
+            notifyCameraPositionChanged()
+            renderRuntime.requestFrame()
+        }
+        return isReturning
+    }
+
     func setCameraPitch(_ pitch: Float) {
         renderCamera?.setCameraPitch(pitch)
         applyCurrentCameraConstraints()

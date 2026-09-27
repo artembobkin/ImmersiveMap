@@ -130,6 +130,16 @@ final class FrameCameraStateResolver {
         requestRenderCameraUpdate()
     }
 
+    /// See `CameraStateController.advanceBoundsPull(deltaTime:)`.
+    func advanceBoundsPull(deltaTime: Double) -> Bool {
+        let centerBefore = cameraStateController.cameraState.centerWorldMercator
+        let isReturning = cameraStateController.advanceBoundsPull(deltaTime: deltaTime)
+        if cameraStateController.cameraState.centerWorldMercator != centerBefore {
+            requestRenderCameraUpdate()
+        }
+        return isReturning
+    }
+
     func currentCameraPosition() -> ImmersiveMapCameraPosition {
         let latLon = cameraStateController.getLatLonDeg()
         return ImmersiveMapCameraPosition(latitudeDegrees: latLon.latDeg,

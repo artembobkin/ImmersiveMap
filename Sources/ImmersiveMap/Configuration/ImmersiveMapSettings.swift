@@ -96,6 +96,112 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             }
         }
 
+        /// A zoom-dependent rotation window for the globe: at zoom 0 the camera
+        /// may turn at most `minimumAbsoluteBearing` away from north, and the
+        /// window opens linearly to the full `maximumAbsoluteBearing` (or the
+        /// half turn) at `unlockZoom`. Off unless an app sets one.
+        public struct GlobeBearingLimit: Equatable, Sendable {
+            public var minimumAbsoluteBearing: Float
+            public var unlockZoom: Double
+
+            public init(minimumAbsoluteBearing: Float, unlockZoom: Double) {
+                self.minimumAbsoluteBearing = minimumAbsoluteBearing
+                self.unlockZoom = unlockZoom
+            }
+        }
+
+        /// A geographic region the camera is held to. Below the pull's zoom
+        /// range the whole world is open, so a zoomed-out globe turns freely.
+        /// Across the range the area the map center belongs in closes in on
+        /// the region, following `pullCurve`, and from its upper bound it is
+        /// the region itself. `edgeBehavior` says whether the edge of that
+        /// area is a wall or an elastic band.
+        public struct Bounds: Equatable, Sendable {
+            /// What happens at the edge of the area the map center belongs in.
+            public enum EdgeBehavior: Equatable, Sendable {
+                /// The center cannot leave the area. Zooming in far from the
+                /// region draws the center toward it as the area closes in.
+                case hard
+                /// The center may leave the area, and a pull draws it back on
+                /// every frame, during gestures too, so a drag out of the
+                /// area works against it and a pinch toward an unreachable
+                /// point glides to the region as the zoom grows.
+                ///
+                /// The pull is gentle at the edge and grows with the distance:
+                /// at `d` screen points out it closes half the gap every
+                /// `pullHalfLife / (1 + d / maximumStretch)^pullProgression`
+                /// seconds, and never faster than a sixteenth of
+                /// `pullHalfLife`. A `pullProgression` of 0 pulls at the same
+                /// rate at any distance, a larger one keeps the edge soft and
+                /// the far field steep. A drag itself is also damped past the
+                /// edge, the center stopping about `maximumStretch` points
+                /// out however far the finger goes.
+                case elastic(maximumStretch: Double = 200,
+                             pullHalfLife: Double = 0.35,
+                             pullProgression: Double = 2)
+            }
+
+
+            /// How far the pull has closed across its zoom range: a cubic
+            /// Bezier from (0, 0) to (1, 1) with two control points, as in CSS
+            /// `cubic-bezier()`. The x axis is the progress through the zoom
+            /// range, the y axis the share of the way the reachable area has
+            /// closed in on the region, 0 for the whole world and 1 for the
+            /// region alone. A y outside 0...1 is clamped.
+            public struct PullCurve: Equatable, Sendable {
+                public var x1: Double
+                public var y1: Double
+                public var x2: Double
+                public var y2: Double
+
+                /// The control points' x values are clamped to 0...1, so the
+                /// curve stays a function of the zoom.
+                public init(x1: Double, y1: Double, x2: Double, y2: Double) {
+                    self.x1 = min(max(x1, 0), 1)
+                    self.y1 = y1
+                    self.x2 = min(max(x2, 0), 1)
+                    self.y2 = y2
+                }
+
+                /// Closes at a constant rate across the range.
+                public static let linear = PullCurve(x1: 0, y1: 0, x2: 1, y2: 1)
+                /// Starts gently and closes fastest at the upper bound.
+                public static let easeIn = PullCurve(x1: 0.42, y1: 0, x2: 1, y2: 1)
+                /// Closes fastest at the lower bound and settles onto the region.
+                public static let easeOut = PullCurve(x1: 0, y1: 0, x2: 0.58, y2: 1)
+                /// Gentle at both bounds, fastest in the middle.
+                public static let easeInOut = PullCurve(x1: 0.42, y1: 0, x2: 0.58, y2: 1)
+            }
+
+            /// The south-west corner, in degrees.
+            public var southWest: GeoCoordinate
+            /// The north-east corner, in degrees. A longitude west of the
+            /// south-west one spans the antimeridian.
+            public var northEast: GeoCoordinate
+            /// The zooms over which the camera is drawn into the region: the
+            /// whole world is open up to the lower bound, and the center is
+            /// inside the region from the upper bound on. Equal bounds switch
+            /// from one to the other at that zoom.
+            public var pullZoomRange: ClosedRange<Double>
+            /// How the pull runs across `pullZoomRange`.
+            public var pullCurve: PullCurve
+            /// A wall or an elastic band at the edge of the area, elastic by
+            /// default.
+            public var edgeBehavior: EdgeBehavior
+
+            public init(southWest: GeoCoordinate,
+                        northEast: GeoCoordinate,
+                        pullZoomRange: ClosedRange<Double> = 1...2,
+                        pullCurve: PullCurve = .easeInOut,
+                        edgeBehavior: EdgeBehavior = .elastic()) {
+                self.southWest = southWest
+                self.northEast = northEast
+                self.pullZoomRange = pullZoomRange
+                self.pullCurve = pullCurve
+                self.edgeBehavior = edgeBehavior
+            }
+        }
+
         public var maximumPitch: Float
         /// The lowest pitch the camera can reach, in radians from straight down.
         /// Zero (the default) allows the top-down view. A floor above the
@@ -108,13 +214,17 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var maximumZoom: Double
         public var focusedMarkerZoom: Double
         /// How far the camera may rotate away from north, in radians, symmetric
-        /// around it; `nil` (the default) leaves rotation unbounded. On the flat
-        /// map the cap applies directly. On the globe the bearing window still
-        /// opens with zoom (see `globeBearingUnlockZoom`), and the cap becomes
-        /// the widest that window opens instead of the full half turn.
+        /// around it; `nil` (the default) leaves rotation unbounded. The cap
+        /// applies on both surfaces. With a `globeBearingLimit` the globe's
+        /// window opens with zoom, and the cap becomes the widest that window
+        /// opens instead of the full half turn.
         public var maximumAbsoluteBearing: Float?
-        public var globeMinimumAbsoluteBearing: Float
-        public var globeBearingUnlockZoom: Double
+        /// The globe's zoom-dependent rotation window, `nil` (the default)
+        /// for none: the globe then turns as freely as the flat map.
+        public var globeBearingLimit: GlobeBearingLimit?
+        /// The region the camera is held to, `nil` (the default) for the
+        /// whole world.
+        public var bounds: Bounds?
         public var highZoomPitchExtension: Float
         public var highZoomPitchExtensionStartZoom: Double
         public var highZoomPitchExtensionEndZoom: Double
@@ -159,8 +269,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     maximumZoom: Double,
                     focusedMarkerZoom: Double,
                     maximumAbsoluteBearing: Float? = nil,
-                    globeMinimumAbsoluteBearing: Float,
-                    globeBearingUnlockZoom: Double,
+                    globeBearingLimit: GlobeBearingLimit? = nil,
+                    bounds: Bounds? = nil,
                     highZoomPitchExtension: Float = 0,
                     highZoomPitchExtensionStartZoom: Double = 15.0,
                     highZoomPitchExtensionEndZoom: Double = 16.0,
@@ -195,8 +305,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.maximumZoom = maximumZoom
             self.focusedMarkerZoom = focusedMarkerZoom
             self.maximumAbsoluteBearing = maximumAbsoluteBearing
-            self.globeMinimumAbsoluteBearing = globeMinimumAbsoluteBearing
-            self.globeBearingUnlockZoom = globeBearingUnlockZoom
+            self.globeBearingLimit = globeBearingLimit
+            self.bounds = bounds
             self.highZoomPitchExtension = highZoomPitchExtension
             self.highZoomPitchExtensionStartZoom = highZoomPitchExtensionStartZoom
             self.highZoomPitchExtensionEndZoom = highZoomPitchExtensionEndZoom
@@ -1104,8 +1214,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                // drop out at the screen's edge.
                                maximumZoom: 18.0,
                                focusedMarkerZoom: 15.25,
-                               globeMinimumAbsoluteBearing: Float.pi / 12.0,
-                               globeBearingUnlockZoom: 6.0,
                                highZoomPitchExtension: 0,
                                highZoomPitchExtensionStartZoom: 15.0,
                                highZoomPitchExtensionEndZoom: 16.0,

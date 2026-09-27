@@ -37,6 +37,15 @@ private struct MapScreen: View {
             // The controls are drawn only when a camera controller is attached:
             // they drive it, so without one the modifier does nothing.
             .camera(camera, position: Self.start)
+            // Moscow inside the MKAD ring: the globe turns freely up to zoom
+            // 1, the area closes in on the city between zoom 1 and 2, and
+            // from zoom 2 on a pull that grows with the distance draws the
+            // camera back into it, while a drag is still under way too.
+            .cameraBounds(southWest: GeoCoordinate(latitude: 55.57, longitude: 37.36),
+                          northEast: GeoCoordinate(latitude: 55.92, longitude: 37.86),
+                          pullZoomRange: 1...2,
+                          pullCurve: .easeInOut,
+                          edgeBehavior: .elastic(maximumStretch: 200, pullHalfLife: 0.35, pullProgression: 2))
             .landmarks(DevLandmarks.landmarks)
             // A tileset under development is rebuilt and re-served under the
             // same coordinates, so a warm disk cache would keep showing the

@@ -30,6 +30,8 @@ final class ImmersiveMapCameraAnimationRuntime {
     private var cameraPitchFollowIsActive = false
     private lazy var cameraBearingFollow = CameraBearingFollow(configuration: makeCameraBearingFollowConfiguration())
     private var cameraBearingFollowIsActive = false
+    private var boundsPullIsActive = false
+    private var boundsPullLastTickTime: CFTimeInterval?
 
     init(cameraRuntime: ImmersiveMapCameraRuntime,
          interactionRuntime: ImmersiveMapInteractionRuntime,
@@ -193,6 +195,9 @@ final class ImmersiveMapCameraAnimationRuntime {
         advanceGlobeCameraPanInertiaIfNeeded(currentTime: currentTime)
         pathFollowController.advanceIfNeeded(currentTime: currentTime)
         flightController.advanceIfNeeded(currentTime: currentTime)
+        // Last, so the pull acts on the center every other animation left
+        // this frame, and a flight that ended hands over in the same frame.
+        advanceBoundsPullIfNeeded(currentTime: currentTime)
     }
 
     func reset() {
@@ -204,6 +209,8 @@ final class ImmersiveMapCameraAnimationRuntime {
         cameraBearingFollowIsActive = false
         pathFollowController.reset()
         flightController.reset()
+        boundsPullIsActive = false
+        boundsPullLastTickTime = nil
         refreshRenderingState()
     }
 
@@ -299,11 +306,43 @@ final class ImmersiveMapCameraAnimationRuntime {
         }
     }
 
+    /// The elastic bounds pull on every frame, gestures and the pan inertia
+    /// included, so the pull reads as a constant force a drag works against.
+    /// Only a flight or a path follow owns the center outright, and the
+    /// pull waits for it to finish. A center inside the area costs one clamp
+    /// and starts nothing.
+    private func advanceBoundsPullIfNeeded(currentTime: CFTimeInterval) {
+        guard flightController.isActive == false,
+              pathFollowController.isActive == false else {
+            boundsPullLastTickTime = nil
+            setBoundsPullActive(false)
+            return
+        }
+
+        // The same frame-gap cap as the pan inertia, so a hitch does not
+        // snap the camera back in one step.
+        let deltaTime = boundsPullLastTickTime.map {
+            GlobeCameraPanInertiaMath.clampedDeltaTime(currentTime - $0)
+        } ?? 0
+        let isPulling = cameraRuntime.advanceBoundsPull(deltaTime: deltaTime)
+        boundsPullLastTickTime = isPulling ? currentTime : nil
+        setBoundsPullActive(isPulling)
+    }
+
+    private func setBoundsPullActive(_ isActive: Bool) {
+        guard boundsPullIsActive != isActive else {
+            return
+        }
+        boundsPullIsActive = isActive
+        refreshRenderingState()
+    }
+
     func refreshRenderingState() {
         renderRuntime.setCameraAnimationRenderingActive(globeCameraPanInertiaIsActive
                                                         || flightController.isActive
                                                         || pathFollowController.isActive
                                                         || cameraPitchFollowIsActive
-                                                        || cameraBearingFollowIsActive)
+                                                        || cameraBearingFollowIsActive
+                                                        || boundsPullIsActive)
     }
 }

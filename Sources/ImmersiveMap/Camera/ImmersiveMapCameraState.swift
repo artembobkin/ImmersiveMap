@@ -9,7 +9,7 @@
 import simd
 
 /// The `Camera` folder: camera state, constraints (bearing, pitch, zoom
-/// limits) and the gesture-independent zoom and view-mode math that `UI`,
+/// limits, region bounds) and the gesture-independent zoom and view-mode math that `UI`,
 /// `Presentation`, tile visibility and `Render` share without owning camera
 /// policy. No gesture recognizers or views, no Metal or frame state, no tile
 /// loading or style configuration, no label, avatar or starfield state.
@@ -44,7 +44,10 @@ struct ImmersiveMapCameraState {
         let centerWorldMercator = ImmersiveMapProjection.worldMercator(latitude: latitudeRadians,
                                                               longitude: longitudeRadians)
         let clampedZoom = cameraSettings.clampZoom(cameraPosition.zoom)
-        self.init(centerWorldMercator: centerWorldMercator,
+        let boundedCenter = cameraSettings.bounds.map {
+            CameraBoundsConstraint(bounds: $0).apply(to: centerWorldMercator, zoom: clampedZoom)
+        } ?? centerWorldMercator
+        self.init(centerWorldMercator: boundedCenter,
                   zoom: clampedZoom,
                   bearing: cameraPosition.bearing,
                   pitch: cameraSettings.clampPitch(cameraPosition.pitch, at: clampedZoom))

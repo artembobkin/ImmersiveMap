@@ -320,10 +320,9 @@ public extension ImmersiveMapView {
     }
 
     /// Caps how far the camera may rotate away from north, in radians, symmetric
-    /// around it. `nil` (the default) leaves rotation unbounded on the flat map.
-    /// The globe still opens its bearing window with zoom
-    /// (`CameraSettings.globeBearingUnlockZoom`), and the cap becomes the widest
-    /// that window opens instead of the full half turn.
+    /// around it, on both surfaces. `nil` (the default) leaves rotation
+    /// unbounded. With a `globeBearingLimit` the cap becomes the widest the
+    /// globe's window opens instead of the full half turn.
     ///
     ///     ImmersiveMapView()
     ///         .bearingLimit(.pi / 2)   // at most a quarter turn from north
@@ -332,6 +331,65 @@ public extension ImmersiveMapView {
         var view = self
         var camera = view.settings.camera
         camera.maximumAbsoluteBearing = maximumAbsoluteBearing
+        view.settings = view.settings.cameraSettings(camera)
+        return view
+    }
+
+    /// Narrows how far a zoomed-out globe may rotate away from north: at zoom 0
+    /// at most `minimum` radians, opening linearly to the `bearingLimit` (or
+    /// the half turn) at `unlockZoom`. Off by default, so the globe turns as
+    /// freely as the flat map.
+    ///
+    ///     ImmersiveMapView()
+    ///         .globeBearingLimit(minimum: .pi / 12, unlockZoom: 6)
+    func globeBearingLimit(minimum: Float, unlockZoom: Double) -> ImmersiveMapView {
+        globeBearingLimit(ImmersiveMapSettings.CameraSettings.GlobeBearingLimit(minimumAbsoluteBearing: minimum,
+                                                                                unlockZoom: unlockZoom))
+    }
+
+    /// Sets or clears (`nil`) the globe's zoom-dependent rotation window.
+    func globeBearingLimit(_ limit: ImmersiveMapSettings.CameraSettings.GlobeBearingLimit?) -> ImmersiveMapView {
+        var view = self
+        var camera = view.settings.camera
+        camera.globeBearingLimit = limit
+        view.settings = view.settings.cameraSettings(camera)
+        return view
+    }
+
+    /// Holds the camera to a geographic region while keeping the globe. Up to
+    /// the lower bound of `pullZoomRange` the whole world is open, so the
+    /// zoomed-out globe turns freely. Across the range the area the map
+    /// center belongs in closes in on the region along `pullCurve`, and from
+    /// the upper bound it is the region itself. With the default elastic
+    /// `edgeBehavior` the camera may leave the area, and a pull that grows
+    /// with the distance draws it back all the time, during a gesture too. `.hard` makes the edge a wall that
+    /// gestures, camera commands and flights all stop at. Flights always
+    /// land inside the area. A west longitude greater than the east one
+    /// spans the antimeridian.
+    ///
+    ///     ImmersiveMapView()
+    ///         .cameraBounds(southWest: GeoCoordinate(latitude: 55.57, longitude: 37.36),
+    ///                       northEast: GeoCoordinate(latitude: 55.92, longitude: 37.86),
+    ///                       pullZoomRange: 1...2,
+    ///                       pullCurve: .init(x1: 0.2, y1: 0.8, x2: 0.4, y2: 1),
+    ///                       edgeBehavior: .elastic(maximumStretch: 150, pullHalfLife: 0.3, pullProgression: 2))
+    func cameraBounds(southWest: GeoCoordinate,
+                      northEast: GeoCoordinate,
+                      pullZoomRange: ClosedRange<Double> = 1...2,
+                      pullCurve: ImmersiveMapSettings.CameraSettings.Bounds.PullCurve = .easeInOut,
+                      edgeBehavior: ImmersiveMapSettings.CameraSettings.Bounds.EdgeBehavior = .elastic()) -> ImmersiveMapView {
+        cameraBounds(ImmersiveMapSettings.CameraSettings.Bounds(southWest: southWest,
+                                                                northEast: northEast,
+                                                                pullZoomRange: pullZoomRange,
+                                                                pullCurve: pullCurve,
+                                                                edgeBehavior: edgeBehavior))
+    }
+
+    /// Sets or clears (`nil`, the whole world) the region the camera is held to.
+    func cameraBounds(_ bounds: ImmersiveMapSettings.CameraSettings.Bounds?) -> ImmersiveMapView {
+        var view = self
+        var camera = view.settings.camera
+        camera.bounds = bounds
         view.settings = view.settings.cameraSettings(camera)
         return view
     }

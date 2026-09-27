@@ -7,9 +7,9 @@ import ImmersiveMap
 /// Every limit on where the camera may go, live. The same fields are what the
 /// `.zoomRange`, `.pitchRange` and `.bearingLimit` view modifiers write.
 ///
-/// One of these interacts with the globe: the bearing cap is the *widest*
-/// the camera gets, and the globe still eases it in with zoom
-/// (`globeBearingUnlockZoom`). The tilt ceiling is the same on both
+/// One of these interacts with the globe: with the globe window on
+/// (`globeBearingLimit`), the bearing cap is the *widest* the camera gets and
+/// the globe eases it in with zoom. The tilt ceiling is the same on both
 /// surfaces at every zoom.
 struct CameraPanel: View {
     @Binding var settings: ImmersiveMapSettings
@@ -61,12 +61,15 @@ struct CameraPanel: View {
 
                 Divider().frame(height: 20)
 
+                Toggle("Globe window", isOn: globeBearingLimitEnabled)
+                    .toggleStyle(.switch)
                 ValueSlider("Bearing unlock z",
-                            value: $settings.camera.globeBearingUnlockZoom,
+                            value: globeBearingUnlockZoom,
                             range: 0...10,
                             step: 0.5,
                             format: "%.1f",
                             width: 120)
+                    .disabled(settings.camera.globeBearingLimit == nil)
 
                 Divider().frame(height: 20)
 
@@ -104,6 +107,21 @@ struct CameraPanel: View {
                 set: { isEnabled in
                     settings.camera.maximumAbsoluteBearing = isEnabled ? .pi / 2 : nil
                 })
+    }
+
+    private var globeBearingLimitEnabled: Binding<Bool> {
+        Binding(get: { settings.camera.globeBearingLimit != nil },
+                set: { isEnabled in
+                    settings.camera.globeBearingLimit = isEnabled
+                        ? ImmersiveMapSettings.CameraSettings.GlobeBearingLimit(minimumAbsoluteBearing: .pi / 12,
+                                                                                unlockZoom: 6)
+                        : nil
+                })
+    }
+
+    private var globeBearingUnlockZoom: Binding<Double> {
+        Binding(get: { settings.camera.globeBearingLimit?.unlockZoom ?? 6 },
+                set: { settings.camera.globeBearingLimit?.unlockZoom = $0 })
     }
 
     private var maximumBearingDegrees: Binding<Double> {

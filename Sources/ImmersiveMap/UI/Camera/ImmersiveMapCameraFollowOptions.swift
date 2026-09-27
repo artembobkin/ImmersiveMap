@@ -8,9 +8,9 @@ public struct ImmersiveMapCameraFollowOptions: Equatable, Sendable {
     /// Where the camera looks while it travels.
     public enum Bearing: Equatable, Sendable {
         /// Turn to the trajectory, so the direction of travel points up the
-        /// screen. On a zoomed-out globe the engine limits how far the camera
-        /// may rotate (`CameraSettings.globeBearingUnlockZoom`), so the turn is
-        /// clamped there rather than fought for.
+        /// screen. Where the settings limit how far the camera may rotate
+        /// (`CameraSettings.maximumAbsoluteBearing`, `globeBearingLimit`),
+        /// the turn is clamped there rather than fought for.
         case course
         /// Keep whatever bearing the camera already has.
         case unchanged
