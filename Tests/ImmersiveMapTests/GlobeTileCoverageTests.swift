@@ -186,7 +186,8 @@ final class GlobeTileCoverageTests: XCTestCase {
                       "\(resolution.unlabelledTargets)")
         XCTAssertFalse(resolution.unlabelledTargets.contains(VisibleTile(x: 32, y: 32, z: 6)))
         XCTAssertTrue(resolution.linelessTargets.isEmpty, "the two switches are independent")
-        XCTAssertTrue(Self.resolve().unlabelledTargets.isEmpty, "the default labels every ring")
+        XCTAssertTrue(Self.resolve().unlabelledTargets.allSatisfy { $0.z < 6 },
+                      "the default labels the exact tiles and nothing past them")
     }
 
     /// The rules are read frame by frame, with nothing carried over: the

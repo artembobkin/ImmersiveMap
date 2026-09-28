@@ -94,8 +94,8 @@ final class FlatRingRuleCoverageTests: XCTestCase {
         XCTAssertEqual(FlatRingRules.default.rules.map(\.zoomDrop), [0, 1, 2, 4])
         XCTAssertEqual(FlatRingRules.default.rules.map(\.distance), [1, 2, 3, 9])
         XCTAssertEqual(FlatRingRules.default.rules.map(\.drawsLines), [true, true, false, false])
-        XCTAssertEqual(FlatRingRules.default.rules.map(\.drawsLabels), [true, true, true, true],
-                       "every default ring is labelled")
+        XCTAssertEqual(FlatRingRules.default.rules.map(\.drawsLabels), [true, false, false, false],
+                       "only the exact tiles are labelled")
         XCTAssertEqual(FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1, drawsLabels: false)])
                         .normalized().rules.map(\.drawsLabels), [false], "the label switch survives normalizing")
     }
@@ -111,7 +111,10 @@ final class FlatRingRuleCoverageTests: XCTestCase {
         XCTAssertTrue(resolution.unlabelledTargets.allSatisfy { $0.z == 14 }, "\(resolution.unlabelledTargets)")
         XCTAssertTrue(resolution.targets.filter { $0.z == 16 }.allSatisfy { resolution.unlabelledTargets.contains($0) == false })
         XCTAssertTrue(resolution.linelessTargets.isEmpty, "the two switches are independent")
-        XCTAssertTrue(Self.resolve(fixture, targetZoom: 16).unlabelledTargets.isEmpty, "the default labels every ring")
+        let defaultResolution = Self.resolve(fixture, targetZoom: 16)
+        XCTAssertFalse(defaultResolution.unlabelledTargets.isEmpty, "the default leaves the far rings unlabelled")
+        XCTAssertTrue(defaultResolution.targets.filter { $0.z == 16 }.allSatisfy { defaultResolution.unlabelledTargets.contains($0) == false },
+                      "the default labels the exact tiles")
     }
 
     // MARK: - The look-at tile and its squares

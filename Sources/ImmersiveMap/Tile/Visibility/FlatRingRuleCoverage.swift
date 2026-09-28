@@ -49,11 +49,12 @@ struct FlatRingRules: Hashable {
     /// The exact tiles to one ring around the look-at tile and one level
     /// coarser to ring 2, both with their lines, then two levels coarser
     /// to ring 3 and four levels coarser to ring 9, both without lines,
-    /// nothing beyond.
+    /// nothing beyond. Only the exact tiles carry labels: past ring 1 the
+    /// map recedes toward the horizon unlabelled.
     static let `default` = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1),
-                                                 FlatRingRule(zoomDrop: 1, distance: 2),
-                                                 FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false),
-                                                 FlatRingRule(zoomDrop: 4, distance: 9, drawsLines: false)])
+                                                 FlatRingRule(zoomDrop: 1, distance: 2, drawsLabels: false),
+                                                 FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false, drawsLabels: false),
+                                                 FlatRingRule(zoomDrop: 4, distance: 9, drawsLines: false, drawsLabels: false)])
 
     /// The rules as the coverage reads them: every value inside its range,
     /// sorted by distance, one rule per distance, at least one rule.
