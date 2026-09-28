@@ -33,8 +33,11 @@ public struct ImmersiveMapLandmark: Identifiable, Equatable, Sendable {
     public var model: ImmersiveMapSceneModel.Source
     /// Where the model's origin stands.
     public var coordinate: GeoCoordinate
-    /// The map building the model replaces, by its OSM outline.
-    public var replacedBuilding: ImmersiveMapOSMElement
+    /// The map building the model replaces, by its OSM outline. Nil for a
+    /// model that stands where the map has no building of its own (a
+    /// bridge, a monument): it replaces nothing and only adds the model,
+    /// still from `minimumZoom`.
+    public var replacedBuilding: ImmersiveMapOSMElement?
     /// Rotation about the local up axis, clockwise from north, in degrees.
     public var headingDegrees: Double
     /// Multiplier over the asset's meters.
@@ -46,7 +49,7 @@ public struct ImmersiveMapLandmark: Identifiable, Equatable, Sendable {
     public init(id: String,
                 model: ImmersiveMapSceneModel.Source,
                 coordinate: GeoCoordinate,
-                replacedBuilding: ImmersiveMapOSMElement,
+                replacedBuilding: ImmersiveMapOSMElement?,
                 headingDegrees: Double = 0,
                 scale: Double = 1,
                 minimumZoom: Int = 0) {

@@ -127,7 +127,7 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         // into every prepared tile (the cache identity carries it). The
         // models alone are read per frame.
         func replacement(_ settings: ImmersiveMapSettings) -> [String] {
-            settings.landmarks.map { "\($0.replacedBuilding)@\($0.minimumZoom)" }
+            settings.landmarks.map { "\($0.replacedBuilding.map { "\($0)" } ?? "none")@\($0.minimumZoom)" }
         }
         if replacement(oldValue) != replacement(newValue) {
             mark(.landmarks, actions: [.rebuildPreparedData, .recreateRenderer])

@@ -79,28 +79,53 @@ private struct MapScreen: View {
 /// environment points at another folder. The exports are Y-up meters with -Z
 /// north and their origin at the anchor coordinate, so they need no heading
 /// or scale. Each replaces the map's building by its OSM outline, the
-/// relation its geometry was modelled from, from zoom 15 on. Below it the
+/// element its geometry was modelled from, from zoom 15 on. Below it the
 /// map's own building stands. A missing file is skipped rather than
 /// reported.
+///
+/// The Kremlin is the tiled set (`Kremlin_Tiled/manifest.json`): one
+/// landmark per tower, wall section, building and monument, each at its
+/// own origin, read from the manifest at launch. The assembled
+/// `Kremlin_Ensemble` is for review in Blender only and is not loaded with
+/// the parts.
 private enum DevLandmarks {
     static let landmarks: [ImmersiveMapLandmark] = [
         landmark(id: "four-seasons",
                  file: "FourSeasons_Moscow_512/four_seasons_moscow_512.usdz",
                  coordinate: GeoCoordinate(latitude: 55.75734215, longitude: 37.6172596),
-                 replacedBuilding: .relation(225030),
-                 minimumZoom: 15),
+                 replacedBuilding: .relation(225030)),
         landmark(id: "bolshoi",
                  file: "Bolshoi_Theatre_512/bolshoi_theatre_512.usdz",
                  coordinate: GeoCoordinate(latitude: 55.76013, longitude: 37.61861),
-                 replacedBuilding: .relation(3334755),
-                 minimumZoom: 15),
-    ].compactMap { $0 }
+                 replacedBuilding: .relation(3334755)),
+        landmark(id: "gum",
+                 file: "GUM_512/gum_512.usdz",
+                 coordinate: GeoCoordinate(latitude: 55.7546967704, longitude: 37.6214240342),
+                 replacedBuilding: .relation(3330565)),
+        landmark(id: "historical-museum",
+                 file: "Historical_Museum_512/historical_museum_512.usdz",
+                 coordinate: GeoCoordinate(latitude: 55.75538, longitude: 37.61777),
+                 replacedBuilding: .relation(5963922)),
+        landmark(id: "tsum",
+                 file: "TSUM_512/tsum_512.usdz",
+                 coordinate: GeoCoordinate(latitude: 55.76065, longitude: 37.6198),
+                 replacedBuilding: .relation(2669485)),
+        landmark(id: "okhotny-ryad",
+                 file: "Okhotny_Ryad_512/okhotny_ryad_512.usdz",
+                 coordinate: GeoCoordinate(latitude: 55.7553, longitude: 37.6143),
+                 replacedBuilding: .relation(6233742)),
+        landmark(id: "metropol",
+                 file: "Metropol_512/metropol_512.usdz",
+                 coordinate: GeoCoordinate(latitude: 55.75848895051534, longitude: 37.62163281921604),
+                 replacedBuilding: .relation(85761)),
+    ].compactMap { $0 } + kremlinParts()
+
+    private static let minimumZoom = 15
 
     private static func landmark(id: String,
                                  file: String,
                                  coordinate: GeoCoordinate,
-                                 replacedBuilding: ImmersiveMapOSMElement,
-                                 minimumZoom: Int) -> ImmersiveMapLandmark? {
+                                 replacedBuilding: ImmersiveMapOSMElement?) -> ImmersiveMapLandmark? {
         let url = directory.appendingPathComponent(file)
         guard FileManager.default.fileExists(atPath: url.path) else {
             return nil
@@ -111,6 +136,79 @@ private enum DevLandmarks {
                                     replacedBuilding: replacedBuilding,
                                     minimumZoom: minimumZoom)
     }
+
+    // MARK: - The Kremlin
+
+    /// The part of `Kremlin_Tiled/manifest.json` the app reads.
+    private struct KremlinManifest: Decodable {
+        struct Part: Decodable {
+            struct Origin: Decodable {
+                let lat: Double
+                let lon: Double
+            }
+            struct Files: Decodable {
+                let usdz: String
+            }
+            let id: String
+            let origin: Origin
+            let files: Files
+        }
+        let parts: [Part]
+    }
+
+    private static let kremlinFolder = "Kremlin_Tiled"
+
+    private static func kremlinParts() -> [ImmersiveMapLandmark] {
+        let url = directory.appendingPathComponent(kremlinFolder).appendingPathComponent("manifest.json")
+        guard let data = try? Data(contentsOf: url),
+              let manifest = try? JSONDecoder().decode(KremlinManifest.self, from: data) else {
+            return []
+        }
+        return manifest.parts.compactMap { part in
+            landmark(id: "kremlin-\(part.id)",
+                     file: "\(kremlinFolder)/\(part.files.usdz)",
+                     coordinate: GeoCoordinate(latitude: part.origin.lat, longitude: part.origin.lon),
+                     replacedBuilding: kremlinElement(partID: part.id))
+        }
+    }
+
+    /// The OSM element a Kremlin part was modelled from. The manifest names
+    /// a part by the element's number and not its type: the towers, the
+    /// wall sections, the churches and most buildings are relations, and
+    /// the ways are listed. A part named in words takes the element of its
+    /// source inventory. The Troitsky bridge has none and replaces nothing,
+    /// and a monument that is a node replaces nothing either, since no
+    /// building is a node.
+    private static func kremlinElement(partID: String) -> ImmersiveMapOSMElement? {
+        if let named = kremlinNamedParts[partID] {
+            return named
+        }
+        guard let number = partID.split(separator: "_").last.flatMap({ UInt64($0) }) else {
+            return nil
+        }
+        return kremlinWays.contains(number) ? .way(number) : .relation(number)
+    }
+
+    private static let kremlinWays: Set<UInt64> = [
+        247_986_327, 534_095_307, 534_095_308, 534_095_310, 534_095_312, 534_095_313, 534_437_577,
+        1_214_065_860, 1_219_452_673, 1_219_452_674,
+    ]
+
+    private static let kremlinNamedParts: [String: ImmersiveMapOSMElement?] = [
+        "building_arsenal": .relation(51497),
+        "building_senate_palace": .relation(1_359_233),
+        "building_grand_kremlin_palace": .relation(225_033),
+        "building_state_kremlin_palace": .relation(3_031_379),
+        "building_armoury": .relation(1_359_335),
+        "building_poteshny_palace": .relation(1_359_337),
+        "building_faceted_palace": .relation(7_679_578),
+        "monument_cross": .way(535_143_215),
+        "monument_firebird": .way(1_219_480_806),
+        "monument_cannon": nil,
+        "monument_bell": nil,
+        "monument_cadets": nil,
+        "troitsky_bridge": nil,
+    ]
 
     private static let directory: URL = ProcessInfo.processInfo
         .environment["IMMERSIVEMAP_DEV_MODELS_DIR"]

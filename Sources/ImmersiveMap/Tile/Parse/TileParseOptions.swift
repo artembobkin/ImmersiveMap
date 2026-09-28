@@ -55,7 +55,8 @@ struct TileParseOptions: Equatable {
         let maximumTileZoom = settings.tiles.coverage.maximumZoomLevel
         var ids: [UInt64: Int] = [:]
         for landmark in settings.landmarks {
-            guard let id = schema?.tileFeatureID(of: landmark.replacedBuilding) else { continue }
+            guard let replacedBuilding = landmark.replacedBuilding,
+                  let id = schema?.tileFeatureID(of: replacedBuilding) else { continue }
             let zoom = landmark.effectiveMinimumZoom(maximumTileZoom: maximumTileZoom)
             // Two landmarks on one building: the earlier zoom wins.
             ids[id] = min(ids[id] ?? zoom, zoom)
