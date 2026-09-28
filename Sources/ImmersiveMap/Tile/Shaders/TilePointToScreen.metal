@@ -19,11 +19,13 @@ struct TilePointInputGpu {
     float2 _padding0;
     int3 tile;
     uint tileSlotIndex;
-    // The roof the point stands on (TilePointInput.roofHeight). Only the
-    // CPU projector of the base labels reads it.
+    // The roof over the point, whether it draws there, and whether a
+    // model stands in for that roof (TilePointInput.roofHeight,
+    // liftsToRoof, roofIsReplaced). Only the CPU projector of the base
+    // labels reads them.
     float roofHeight;
-    uint _padding2;
-    uint _padding3;
+    uint liftsToRoof;
+    uint roofIsReplaced;
 };
 
 struct FlatTileOriginDataGpu {

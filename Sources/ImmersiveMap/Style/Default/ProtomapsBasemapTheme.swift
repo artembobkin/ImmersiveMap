@@ -124,9 +124,9 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// monument, a named building) has nothing to draw but its name, and
         /// those names are the bulk of a city centre's POIs: bare text over the
         /// buildings, in the type size of a landmark, saying nothing about what
-        /// the place is. The default draws them with the plain marker from
-        /// `poiIconlessMinimumZoom` on. Set to `true` to leave them out
-        /// altogether.
+        /// the place is. The default draws their names alone, without an
+        /// icon, from `poiIconlessMinimumZoom` on. Set to `true` to leave them
+        /// out altogether.
         public var poiRequiresIcon: Bool
 
         /// Minimum camera zoom from which icon-less POIs (offices, companies, and
@@ -160,6 +160,18 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// Minimum camera zoom of the house numbers.
         public var addressMinimumZoom: Int
 
+        /// Whether the local detail, the icon-less POIs (a memorial, an
+        /// office, a ticket window) and the house numbers, shows only near
+        /// the camera (`PointLabelStyle.isLocal`): in the three by three
+        /// tiles around the look-at tile, and there within
+        /// `BaseSettings.localDetailMaximumDistanceMeters` of the camera.
+        /// They are what one reads standing next to them, and on a tilted
+        /// map the street beyond would fill with small text saying nothing
+        /// at that distance.
+        /// Off, they show wherever their zoom lets them. Baked into the
+        /// prepared tiles, so a change re-parses them.
+        public var localDetailInLookAtTileOnly: Bool
+
         public init(poiIconlessMinimumZoom: Int = 17,
                     poiMinimumZoom: Int = 0,
                     poiRequiresIcon: Bool = false,
@@ -167,7 +179,8 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
                     poiCategoryMinimumZoom: PoiCategoryZooms = PoiCategoryZooms(),
                     poiLongNameMinimumZoom: Int = 17,
                     poiLongNameCharacterCount: Int = 32,
-                    addressMinimumZoom: Int = 17) {
+                    addressMinimumZoom: Int = 17,
+                    localDetailInLookAtTileOnly: Bool = true) {
             self.poiIconlessMinimumZoom = poiIconlessMinimumZoom
             self.poiMinimumZoom = poiMinimumZoom
             self.poiRequiresIcon = poiRequiresIcon
@@ -176,6 +189,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
             self.poiLongNameMinimumZoom = poiLongNameMinimumZoom
             self.poiLongNameCharacterCount = poiLongNameCharacterCount
             self.addressMinimumZoom = addressMinimumZoom
+            self.localDetailInLookAtTileOnly = localDetailInLookAtTileOnly
         }
     }
 
@@ -462,9 +476,13 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// tiles, so a change re-parses them, like any other theme change.
         public var buildingExtrusion: Bool
         /// Whether the POIs and the house numbers inside an extruded
-        /// building stand on its roof rather than on the ground under it,
-        /// the way a skyscraper's name sits on its top. Baked into the
-        /// prepared tiles, so a change re-parses them.
+        /// building belong to it: the POI naming the building itself (a
+        /// hotel, a mall, the same OSM element as the building) stands on
+        /// its roof, the way a skyscraper's name sits on its top, and the
+        /// places inside it stay on the ground but are never hidden by the
+        /// building they are in, only by the buildings in front of it. Off,
+        /// every label stays on the ground and any building can hide it.
+        /// Baked into the prepared tiles, so a change re-parses them.
         public var labelsStandOnRoofs: Bool
 
         public init(buildingFillColor: SIMD4<Float>,
@@ -602,6 +620,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
                                 labelVisibility.poiLongNameMinimumZoom,
                                 labelVisibility.poiLongNameCharacterCount,
                                 labelVisibility.addressMinimumZoom].map(Float.init))
+        out.append(labelVisibility.localDetailInLookAtTileOnly ? 1 : 0)
         // The road metrics are baked into the tiles' line styles and decide
         // which classes a tile carries at all.
         out.append(contentsOf: roadMetrics.symbolWidthPoints.all)

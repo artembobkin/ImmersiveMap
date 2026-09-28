@@ -22,13 +22,29 @@ struct ParsedTextLabel {
     /// The route signs the label draws instead of its text, nil for a
     /// plain label.
     let routeShields: RouteShieldStyle?
-    /// Whether the label rises to the roof of the building it stands in
-    /// (`PointLabelStyle.standsOnRoof`).
+    /// Whether the label belongs to the building it stands in
+    /// (`PointLabelStyle.standsOnRoof`): it takes the roof over its anchor,
+    /// and rises to it when it names the building itself.
     let standsOnRoof: Bool
+    /// The tile feature's id, nil for a feature without one. A building
+    /// and a point made from the same OSM element share it, which is how
+    /// a label is known to name the building it stands in.
+    let featureId: UInt64?
+    /// Local detail, shown only near the camera (`PointLabelStyle.isLocal`).
+    let isLocal: Bool
     /// The roof over the anchor in tile units, the extrusion mesh's own
     /// height scale, set once the tile's buildings are resolved. Zero on
-    /// the ground.
+    /// open ground. The label draws at it only when `liftsToRoof`; the
+    /// others draw on the ground and are tested for view at the roof, so
+    /// the building they stand in never hides them.
     var roofHeight: Float = 0
+    /// Whether the label draws on the roof over it: it names the building
+    /// itself (the building's own OSM element), not something inside it.
+    var liftsToRoof: Bool = false
+    /// Whether the roof over the anchor is a building a landmark model
+    /// stands in for: the frame then takes the drawn model's top as the
+    /// roof, since the tile's volume is not drawn and may not match it.
+    var roofIsReplaced: Bool = false
 
     init(text: String,
          position: SIMD2<Int16>,
@@ -57,6 +73,8 @@ struct ParsedTextLabel {
         self.placement = placement
         self.routeShields = nil
         self.standsOnRoof = false
+        self.featureId = hasFeatureId ? featureId : nil
+        self.isLocal = false
     }
 
     init(text: String,
@@ -69,7 +87,9 @@ struct ParsedTextLabel {
          minCameraZoom: Float = 0,
          placement: LabelPlacement = .screen,
          routeShields: RouteShieldStyle? = nil,
-         standsOnRoof: Bool = false) {
+         standsOnRoof: Bool = false,
+         featureId: UInt64? = nil,
+         isLocal: Bool = false) {
         self.text = text
         self.position = position
         self.key = key
@@ -81,5 +101,7 @@ struct ParsedTextLabel {
         self.placement = placement
         self.routeShields = routeShields
         self.standsOnRoof = standsOnRoof
+        self.featureId = featureId
+        self.isLocal = isLocal
     }
 }

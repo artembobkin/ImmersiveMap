@@ -105,7 +105,9 @@ final class TileTextLabelsBuilder {
             let pointInput = TilePointInput(uv: uv,
                                             tile: tileIndices,
                                             tileSlotIndex: 0,
-                                            roofHeight: label.roofHeight)
+                                            roofHeight: label.roofHeight,
+                                            liftsToRoof: label.liftsToRoof ? 1 : 0,
+                                            roofIsReplaced: label.roofIsReplaced ? 1 : 0)
 
             if let routeShields = label.routeShields {
                 let geometry = makeRouteShieldGeometry(routeShields,
@@ -119,7 +121,8 @@ final class TileTextLabelsBuilder {
                                                           sortKey: label.sortKey,
                                                           collisionPriority: label.collisionPriority,
                                                           labelSizePoints: geometry.size,
-                                                          minCameraZoom: label.minCameraZoom)
+                                                          minCameraZoom: label.minCameraZoom,
+                                                          isLocal: label.isLocal)
                     ),
                     style: label.textStyle,
                     textVertices: [],
@@ -154,7 +157,8 @@ final class TileTextLabelsBuilder {
                                                   sortKey: label.sortKey,
                                                   collisionPriority: label.collisionPriority,
                                                   labelSizePoints: geometry.size,
-                                                  minCameraZoom: label.minCameraZoom)
+                                                  minCameraZoom: label.minCameraZoom,
+                                                  isLocal: label.isLocal)
             )
             builtLabels.append(BuiltBaseLabel(placementInput: placementInput,
                                              style: style,

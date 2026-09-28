@@ -22,8 +22,10 @@ final class RenderFrameVisibilityResolver {
         let zoomPlan = TileCoverageZoomPolicy.resolve(cameraZoom: cameraFrameState.mapCameraState.zoom,
                                                       renderSurfaceMode: resolvedPresentation.renderSurfaceMode,
                                                       maximumZoomLevel: tileSettings.coverage.maximumZoomLevel)
-        // The frame is drawn by the rules of the set its target zoom falls in.
-        let rules = ruleSets.rules(forTargetZoom: zoomPlan.baseZoom)
+        // The frame is drawn by the rules of the set its camera zoom falls
+        // in. Not the target zoom: that stops at the tileset's deepest zoom,
+        // and a set starting past it would never be reached.
+        let rules = ruleSets.rules(forZoom: Self.ruleSetZoom(cameraZoom: cameraFrameState.mapCameraState.zoom))
         // The coverage is a pure function of the camera pose, drawSize,
         // presentation state and rules: with an unchanged fingerprint the
         // previous result is reused (along with its coverageVersion, which
@@ -48,6 +50,13 @@ final class RenderFrameVisibilityResolver {
         cachedFingerprint = fingerprint
         cachedContent = content
         return content
+    }
+
+    /// The zoom a frame's rule set is chosen by: the camera zoom's whole
+    /// part, the zoom the panel's sets are named by (`RingRuleSets`).
+    static func ruleSetZoom(cameraZoom: Double) -> Int {
+        guard cameraZoom.isFinite else { return 0 }
+        return min(max(0, Int(cameraZoom.rounded(.down))), RingRuleSets.zoomRange.upperBound)
     }
 
     private static func makeFingerprint(cameraFrameState: CameraFrameState,

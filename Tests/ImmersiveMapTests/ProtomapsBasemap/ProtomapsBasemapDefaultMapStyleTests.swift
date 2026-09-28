@@ -405,14 +405,14 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
         XCTAssertEqual(fuelStyle.labelMinCameraZoom, 17)
         XCTAssertLessThan(hospitalStyle.labelRank, fuelStyle.labelRank, "the earlier POI ranks first")
 
-        // A category outside the icon set takes the plain marker.
+        // A category outside the icon set draws its name alone.
         let officeStyle = makeStyle(style, layerName: "pois", kind: "office", minZoom: 12, zoom: 14, geometry: .point)
         XCTAssertNotEqual(officeStyle.key, 0)
-        XCTAssertEqual(officeStyle.pointLabelStyle?.icon, .marker)
+        XCTAssertNil(officeStyle.pointLabelStyle?.icon)
 
         // The street furniture draws as well, each with its symbol.
-        for (kind, icon) in [("bus_stop", PoiSpriteIcon.transit), ("parking", .parking), ("atm", .bank),
-                             ("toilets", .toilets), ("station", .train), ("bench", .marker),
+        for (kind, icon) in [("bus_stop", PoiSpriteIcon?.some(.transit)), ("parking", .parking), ("atm", .bank),
+                             ("toilets", .toilets), ("station", .train), ("bench", nil),
                              ("place_of_worship", .worship), ("religious_administration", .worship)] {
             let poi = makeStyle(style, layerName: "pois", kind: kind, minZoom: 16, zoom: 15, geometry: .point)
             XCTAssertNotEqual(poi.key, 0, kind)
@@ -462,8 +462,7 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
                           ProtomapsBasemapDefaultMapStyle(theme: updated).cacheFingerprint)
     }
 
-    /// A POI the icon set cannot depict draws with the plain marker by
-    /// default, and a configuration can leave such POIs out or hold them
+    /// A POI the icon set cannot depict draws its name alone by default, and a configuration can leave such POIs out or hold them
     /// back to a zoom.
     func testAnIconlessPoiDrawsUnlessTheConfigurationLeavesItOut() {
         let byDefault = ProtomapsBasemapDefaultMapStyle(theme: .default)

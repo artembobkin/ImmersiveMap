@@ -111,6 +111,14 @@ final class ImmersiveMapDebugOverlayRuntime {
             controls?.setRingRuleSets(sets)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
+        hudView.onLocalLabelDistanceChanged = { [weak controls, weak renderRuntime] meters in
+            controls?.setLocalLabelMaximumDistanceMeters(meters)
+            renderRuntime?.requestFrame(reason: .externalStateChanged)
+        }
+        hudView.onLabelMinimumScaleChanged = { [weak controls, weak renderRuntime] scale in
+            controls?.setLabelPerspectiveMinimumScale(scale)
+            renderRuntime?.requestFrame(reason: .externalStateChanged)
+        }
         hudView.onShadowSettingsChanged = { [weak self] shadows in
             guard let self, var settings = currentSettings else { return }
             settingsOverride.shadows = shadows
@@ -175,6 +183,15 @@ final class ImmersiveMapDebugOverlayRuntime {
                       sunDirection: settings.scene.light.direction)
         hudView.apply(fogSettings: settings.scene.fog)
         hudView.apply(atmosphereSettings: settings.scene.atmosphere)
+        if settings.debug.enableDebugPanel == false {
+            // The panel's reach goes with the panel, like its other values.
+            controls.setLocalLabelMaximumDistanceMeters(nil)
+            controls.setLabelPerspectiveMinimumScale(nil)
+        }
+        hudView.apply(labelMinimumScale: controls.labelPerspectiveMinimum()
+            ?? settings.labels.base.perspectiveMinimumScale)
+        hudView.apply(localLabelDistanceMeters: controls.localLabelMaximumDistance()
+            ?? settings.labels.base.localDetailMaximumDistanceMeters)
         #endif
         hudView.apply(tileTraceSnapshot: tileTraceRecorder.snapshot())
         hudView.apply(baseLabelTraceSnapshot: baseLabelTraceRecorder.snapshot())

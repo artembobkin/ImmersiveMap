@@ -19,6 +19,8 @@ enum RenderGraphFactory {
                                                            metalDevice: context.metalContext.device,
                                                            screenComputePipelines: context.tilePointScreenPipelines,
                                                            roadPlacementPipeline: context.roadLabelPlacementPipeline,
+                                                           occlusionProbePipeline: context.labelOcclusionProbePipeline,
+                                                           depthDisabledState: context.depthDisabledState,
                                                            settings: settings.labels,
                                                            debugOverlayControls: debugOverlayControls)
         let baseLabelDrawSubsystem = BaseLabelDrawSubsystem(textRenderer: context.textRenderer,
@@ -29,6 +31,8 @@ enum RenderGraphFactory {
         let roadLabelDrawSubsystem = RoadLabelDrawSubsystem(textRenderer: context.textRenderer,
                                                             labelDepthState: context.labelDepthState,
                                                             depthDisabledState: context.depthDisabledState,
+                                                            fallbackDepthTexture: context.shadowFallbackTexture,
+                                                            hidesBehindBuildingsFromZoom: settings.labels.road.hidesBehindBuildingsFromZoom,
                                                             metalDevice: context.metalContext.device)
         let avatarSubsystem = AvatarRenderSubsystem(avatarsRenderer: context.avatarsRenderer,
                                                     avatarSource: context.avatarSource,
@@ -89,15 +93,18 @@ enum RenderGraphFactory {
                                                          textRenderer: context.textRenderer,
                                                          controls: debugOverlayControls)
 
+        // The scene models decide before the labels: the labels standing
+        // in a building a model replaces take the model's top as their
+        // roof (SceneModelFrameState.roofs) in the same frame.
         let subsystems: [any RenderSubsystem] = [
             tileWorkingSetSubsystem,
             tileProjectionIndexSubsystem,
+            sceneModelSubsystem,
             baseLabelSubsystem,
             baseLabelDrawSubsystem,
             roadLabelDrawSubsystem,
             avatarSubsystem,
             markerSubsystem,
-            sceneModelSubsystem,
             groundShadowMaskSubsystem,
             tileOwnershipSubsystem,
             flatMapSurfaceSubsystem,

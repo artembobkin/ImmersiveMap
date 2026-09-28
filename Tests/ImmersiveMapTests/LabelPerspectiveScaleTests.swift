@@ -20,7 +20,7 @@ final class LabelPerspectiveScaleTests: XCTestCase {
         XCTAssertEqual(LabelRuntimeMeta(duplicate: 0, visibleTileIndex: 0).perspectiveScale, 1)
     }
 
-    func testTheDefaultShrinksToHalf() {
-        XCTAssertEqual(ImmersiveMapSettings.default.labels.base.perspectiveMinimumScale, 0.5)
+    func testTheDefaultShrinksToThreeQuarters() {
+        XCTAssertEqual(ImmersiveMapSettings.default.labels.base.perspectiveMinimumScale, 0.75)
     }
 }

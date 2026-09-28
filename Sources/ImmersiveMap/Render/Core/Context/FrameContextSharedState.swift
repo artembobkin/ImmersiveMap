@@ -79,7 +79,8 @@ struct SceneModelFrameState {
                                             hasShadowCasters: false,
                                             hasDrawnModels: false,
                                             selectionSnapshot: .empty,
-                                            pathAnimationResults: [])
+                                            pathAnimationResults: [],
+                                            roofs: [])
 
     var hasActiveAnimations: Bool
     /// At least one model survived light-frustum culling this frame; feeds the
@@ -94,6 +95,10 @@ struct SceneModelFrameState {
     /// the model at; the engine forwards them so the controller's descriptor
     /// stays truthful and the app's completion fires exactly once.
     var pathAnimationResults: [SceneModelPathAnimationResult]
+    /// The tops of the models this frame draws, over the ground, for the
+    /// point labels standing in the buildings they stand for. Published in
+    /// `update`, before the labels decide, so the labels take this frame's.
+    var roofs: [SceneModelRoof]
 }
 
 struct MarkerFrameState {
@@ -113,4 +118,13 @@ final class FrameContextSharedState {
     var avatarState: AvatarState = .empty
     var sceneModelState: SceneModelFrameState = .empty
     var markerState: MarkerFrameState = .empty
+    /// Whether a label layer reads the world's depth this frame, asked in
+    /// `update` (`RoadLabelDrawSubsystem`): the world pass then keeps its
+    /// depth instead of dropping it when the pass ends.
+    var sceneDepthForLabelsRequested = false
+    /// The world's depth as the label pass reads it, single-sampled: set by
+    /// the pass plan when it was kept, nil otherwise. Only the buildings and
+    /// the models write real depth in it; the ground writes a band at the
+    /// far plane, farther than anything real.
+    var sceneDepthTexture: MTLTexture?
 }

@@ -27,6 +27,7 @@ final class RenderPersistentContext {
     let fxaaPipeline: FXAAPipeline
     let tilePointScreenPipelines: TilePointScreenPipelines
     let roadLabelPlacementPipeline: RoadLabelPlacementPipeline
+    let labelOcclusionProbePipeline: LabelOcclusionProbePipeline
 
     // MARK: - Scene Resources
 
@@ -138,6 +139,7 @@ final class RenderPersistentContext {
         self.fxaaPipeline = shared.fxaaPipeline
         self.tilePointScreenPipelines = shared.tilePointScreenPipelines
         self.roadLabelPlacementPipeline = shared.roadLabelPlacementPipeline
+        self.labelOcclusionProbePipeline = shared.labelOcclusionProbePipeline
         // The starfield renderer bakes the star-generation settings, so it
         // stays per renderer; only its pipeline is shared.
         self.starfieldRenderer = StarfieldRenderer(metalDevice: metal.device,

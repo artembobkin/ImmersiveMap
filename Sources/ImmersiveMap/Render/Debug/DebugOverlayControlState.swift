@@ -14,6 +14,12 @@ struct DebugOverlayControlSnapshot: Equatable {
     let tileGridDensity: Int
     /// The ring rules by target zoom (`RingRuleSets`), normalized.
     let ringRuleSets: RingRuleSets
+    /// The local detail's distance the panel has been dragged to, in
+    /// metres; nil keeps `BaseSettings.localDetailMaximumDistanceMeters`.
+    let localLabelMaximumDistanceMeters: Float?
+    /// The labels' shrink floor the panel has been dragged to; nil keeps
+    /// `BaseSettings.perspectiveMinimumScale`.
+    let labelPerspectiveMinimumScale: Float?
 
     init(axesEnabled: Bool,
          tileLayersEnabled: Bool,
@@ -23,7 +29,9 @@ struct DebugOverlayControlSnapshot: Equatable {
          roadLabelBoundsEnabled: Bool = false,
          tileGridEnabled: Bool = false,
          tileGridDensity: Int = DebugTileGridDensity.standard,
-         ringRuleSets: RingRuleSets = .default) {
+         ringRuleSets: RingRuleSets = .default,
+         localLabelMaximumDistanceMeters: Float? = nil,
+         labelPerspectiveMinimumScale: Float? = nil) {
         self.axesEnabled = axesEnabled
         self.tileLayersEnabled = tileLayersEnabled
         self.wireframeEnabled = wireframeEnabled
@@ -33,6 +41,8 @@ struct DebugOverlayControlSnapshot: Equatable {
         self.tileGridEnabled = tileGridEnabled
         self.tileGridDensity = DebugTileGridDensity.clamp(tileGridDensity)
         self.ringRuleSets = ringRuleSets.normalized()
+        self.localLabelMaximumDistanceMeters = localLabelMaximumDistanceMeters
+        self.labelPerspectiveMinimumScale = labelPerspectiveMinimumScale
     }
 }
 
@@ -47,6 +57,8 @@ final class DebugOverlayControlState {
     private var tileGridEnabled = false
     private var tileGridDensity = DebugTileGridDensity.standard
     private var ringRuleSets = RingRuleSets.default
+    private var localLabelMaximumDistanceMeters: Float?
+    private var labelPerspectiveMinimumScale: Float?
 
     /// The controls as a frame reads them.
     func snapshot() -> DebugOverlayControlSnapshot {
@@ -60,7 +72,35 @@ final class DebugOverlayControlState {
                                            roadLabelBoundsEnabled: roadLabelBoundsEnabled,
                                            tileGridEnabled: tileGridEnabled,
                                            tileGridDensity: tileGridDensity,
-                                           ringRuleSets: ringRuleSets)
+                                           ringRuleSets: ringRuleSets,
+                                           localLabelMaximumDistanceMeters: localLabelMaximumDistanceMeters,
+                                           labelPerspectiveMinimumScale: labelPerspectiveMinimumScale)
+    }
+
+    /// The local detail's distance in metres, nil for the setting's.
+    func localLabelMaximumDistance() -> Float? {
+        lock.lock()
+        defer { lock.unlock() }
+        return localLabelMaximumDistanceMeters
+    }
+
+    /// The labels' shrink floor, nil for the setting's.
+    func labelPerspectiveMinimum() -> Float? {
+        lock.lock()
+        defer { lock.unlock() }
+        return labelPerspectiveMinimumScale
+    }
+
+    func setLabelPerspectiveMinimumScale(_ scale: Float?) {
+        lock.lock()
+        labelPerspectiveMinimumScale = scale.map { min(max($0, 0), 1) }
+        lock.unlock()
+    }
+
+    func setLocalLabelMaximumDistanceMeters(_ meters: Float?) {
+        lock.lock()
+        localLabelMaximumDistanceMeters = meters.map { max(0, $0) }
+        lock.unlock()
     }
 
 

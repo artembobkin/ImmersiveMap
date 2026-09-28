@@ -84,6 +84,14 @@ final class DebugOverlayHUDView: NSView {
     private let baseLabelBoundsSwitch = NSSwitch()
     private let roadLabelBoundsLabel = NSTextField(labelWithString: "")
     private let roadLabelBoundsSwitch = NSSwitch()
+    private let localLabelDistanceLabel = NSTextField(labelWithString: "")
+    private let localLabelDistanceSlider = NSSlider()
+    private let labelMinimumScaleLabel = NSTextField(labelWithString: "")
+    private let labelMinimumScaleSlider = NSSlider()
+    /// How far a distant label may shrink, as a fraction of its size.
+    private static let labelMinimumScaleRange: ClosedRange<Double> = 0.3...1
+    /// The local detail's reach from the camera, in metres.
+    private static let localLabelDistanceRange: ClosedRange<Double> = 25...2000
 
     private let shadowsGroupLabel = NSTextField(labelWithString: "Shadows")
     private let shadowsEnabledLabel = NSTextField(labelWithString: "")
@@ -212,6 +220,10 @@ final class DebugOverlayHUDView: NSView {
     var onRoadLabelTilesEnabledChanged: ((Bool) -> Void)?
     var onBaseLabelBoundsEnabledChanged: ((Bool) -> Void)?
     var onRoadLabelBoundsEnabledChanged: ((Bool) -> Void)?
+    /// The local detail's reach from the camera, in metres, on every drag.
+    var onLocalLabelDistanceChanged: ((Float) -> Void)?
+    /// The labels' shrink floor, on every drag.
+    var onLabelMinimumScaleChanged: ((Float) -> Void)?
     var onSurfaceModeSwitchRequested: (() -> Void)?
     var onTileTraceRecordingToggle: (() -> Void)?
     var onBaseLabelTraceRecordingToggle: (() -> Void)?
@@ -257,6 +269,14 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(roadLabelTilesLabel, text: "Road label tiles")
         configureControlLabel(baseLabelBoundsLabel, text: "Base label boxes")
         configureControlLabel(roadLabelBoundsLabel, text: "Road label boxes")
+        configureControlLabel(localLabelDistanceLabel, text: "")
+        configureControlLabel(labelMinimumScaleLabel, text: "")
+        configureSlider(labelMinimumScaleSlider,
+                        range: Self.labelMinimumScaleRange,
+                        action: #selector(labelMinimumScaleSliderChanged))
+        configureSlider(localLabelDistanceSlider,
+                        range: Self.localLabelDistanceRange,
+                        action: #selector(localLabelDistanceSliderChanged))
         configureControlLabel(shadowsEnabledLabel, text: "Enabled")
         configureControlLabel(shadowStrengthLabel, text: "")
         configureControlLabel(shadowMapResolutionLabel, text: "Map px")
@@ -405,6 +425,8 @@ final class DebugOverlayHUDView: NSView {
          roadLabelTilesLabel, roadLabelTilesSwitch,
          baseLabelBoundsLabel, baseLabelBoundsSwitch,
          roadLabelBoundsLabel, roadLabelBoundsSwitch,
+         localLabelDistanceLabel, localLabelDistanceSlider,
+         labelMinimumScaleLabel, labelMinimumScaleSlider,
          shadowsGroupLabel, shadowsEnabledLabel, shadowsEnabledSwitch,
          shadowStrengthLabel, shadowStrengthSlider,
          shadowMapResolutionLabel, shadowMapResolutionControl,
@@ -716,6 +738,20 @@ final class DebugOverlayHUDView: NSView {
         needsLayout = true
     }
 
+    /// The local detail's reach, as the map runs with it: the panel's own
+    /// value once dragged, the setting's before.
+    func apply(localLabelDistanceMeters meters: Float) {
+        localLabelDistanceSlider.doubleValue = Double(meters)
+        localLabelDistanceLabel.stringValue = Self.localLabelDistanceTitle(meters)
+    }
+
+    /// The labels' shrink floor, as the map runs with it: the panel's own
+    /// value once dragged, the setting's before.
+    func apply(labelMinimumScale scale: Float) {
+        labelMinimumScaleSlider.doubleValue = Double(scale)
+        labelMinimumScaleLabel.stringValue = Self.labelMinimumScaleTitle(scale)
+    }
+
     /// The horizon group reflects the live settings, like the shadow group.
     func apply(fogSettings: ImmersiveMapSettings.FogSettings) {
         guard self.fogSettings != fogSettings else {
@@ -831,6 +867,8 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutSwitchRow(roadLabelTilesLabel, roadLabelTilesSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(baseLabelBoundsLabel, baseLabelBoundsSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(roadLabelBoundsLabel, roadLabelBoundsSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(localLabelDistanceLabel, localLabelDistanceSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(labelMinimumScaleLabel, labelMinimumScaleSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutFullWidthRow(baseLabelTraceButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutFullWidthRow(baseLabelTraceStatusLabel, at: cursor, contentWidth: contentWidth, height: Layout.traceStatusHeight)
         cursor += Layout.groupSpacing
@@ -1277,6 +1315,26 @@ final class DebugOverlayHUDView: NSView {
 
     @objc private func roadLabelBoundsSwitchChanged() {
         onRoadLabelBoundsEnabledChanged?(roadLabelBoundsSwitch.state == .on)
+    }
+
+    @objc private func localLabelDistanceSliderChanged() {
+        let meters = Float(localLabelDistanceSlider.doubleValue.rounded())
+        localLabelDistanceLabel.stringValue = Self.localLabelDistanceTitle(meters)
+        onLocalLabelDistanceChanged?(meters)
+    }
+
+    @objc private func labelMinimumScaleSliderChanged() {
+        let scale = Float((labelMinimumScaleSlider.doubleValue * 100).rounded() / 100)
+        labelMinimumScaleLabel.stringValue = Self.labelMinimumScaleTitle(scale)
+        onLabelMinimumScaleChanged?(scale)
+    }
+
+    private static func labelMinimumScaleTitle(_ scale: Float) -> String {
+        "Label min scale \(String(format: "%.2f", scale))"
+    }
+
+    private static func localLabelDistanceTitle(_ meters: Float) -> String {
+        "Local labels \(Int(meters.rounded())) m"
     }
 
     @objc private func surfaceModeButtonTapped() {

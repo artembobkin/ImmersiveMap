@@ -37,6 +37,17 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     private let collisionSolver = LabelCollisionSolver()
     private let baseFade = BaseLabelFadeState()
     private let roadFade = BaseLabelFadeState()
+    /// Which base labels the buildings and the models hide, asked of the
+    /// world pass and answered a few frames later.
+    private let occlusionProbe: LabelOcclusionProbe
+    /// `BaseSettings.hidesBehindBuildings`.
+    private let hidesBehindBuildings: Bool
+    /// `BaseSettings.localDetailMaximumDistanceMeters`, which the debug
+    /// panel overrides while it runs.
+    private let localDetailMaximumDistanceMeters: Float
+    /// The distance the local detail was last resolved for.
+    private var resolvedLocalDetailDistance: Float?
+    private let depthDisabledState: MTLDepthStencilState
     private let screenPositionsBufferStore: FrameSlottedDynamicMetalBuffer<ScreenPointOutput>
     private let roadRuntimeMetaBufferStore: FrameSlottedDynamicMetalBuffer<LabelRuntimeMeta>
     private let fallbackTileOriginDataBufferStore: FrameSlottedDynamicMetalBuffer<FlatTileOriginData>
@@ -47,8 +58,11 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     /// Half of `collisionSpacingPoints`: what every base label's collision
     /// box grows by on each side, so two kept labels never touch.
     private let collisionMarginPoints: Float
-    /// `BaseSettings.perspectiveMinimumScale`, clamped to 0...1.
+    /// `BaseSettings.perspectiveMinimumScale`, clamped to 0...1, which the
+    /// debug panel overrides while it runs.
     private let perspectiveMinimumScale: Float
+    /// The floor the base labels were last projected with.
+    private var projectedPerspectiveMinimumScale: Float?
 
     private var sourceEntriesVersionTracker = StagedHashChangeTracker()
     private var projectionVersionTracker = StagedHashChangeTracker()
@@ -67,11 +81,25 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     private var roofCoverage = BuildingRoofCoverage.none
     private var projectedRoofCoverage: BuildingRoofCoverage?
     private var solvedPixelsPerPoint: Float = 0
+    /// Counts the base projections: the occlusion probe stamps its answer
+    /// with the projection it was asked for, and a frame keeps coming
+    /// until the answer for the current one is in.
+    private var projectionGeneration: UInt64 = 0
 
     // Index-aligned with the base label set; sized at a topology change,
     // written in place every frame that needs them.
     private var baseScreenPoints: [ScreenPointOutput] = []
     private var baseHorizonVisible: [Bool] = []
+    /// Local detail outside the tile the camera looks at, hidden there.
+    private var baseLocalSuppressed: [Bool] = []
+    /// Where each anchor is tested for view, in the render world: at the
+    /// roof over it, see `TilePointScreenProjector`.
+    private var baseProbePositions: [SIMD4<Float>] = []
+    /// The tops of the frame's drawn models, the roofs of the buildings
+    /// they replace. A model arriving or leaving with the camera still
+    /// re-projects and re-solves like a camera move.
+    private var modelRoofs: [SceneModelRoof] = []
+    private var projectedModelRoofs: [SceneModelRoof]?
     /// Each label's shrink for its distance, from the projection.
     private var basePerspectiveScales: [Float] = []
     private var baseCenters: [SIMD2<Float>] = []
@@ -116,6 +144,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
          metalDevice: MTLDevice,
          screenComputePipelines: TilePointScreenPipelines,
          roadPlacementPipeline: RoadLabelPlacementPipeline,
+         occlusionProbePipeline: LabelOcclusionProbePipeline,
+         depthDisabledState: MTLDepthStencilState,
          settings: ImmersiveMapSettings.LabelSettings = ImmersiveMapSettings.default.labels,
          debugOverlayControls: DebugOverlayControlState? = nil) {
         self.baseLabelCache = baseLabelCache
@@ -125,6 +155,10 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         self.screenComputePipelines = screenComputePipelines
         self.roadPathScreenCompute = TilePointScreenCompute(metalDevice: metalDevice, pipelines: screenComputePipelines)
         self.roadPlacementCalculator = RoadLabelPlacementCalculator(pipeline: roadPlacementPipeline)
+        self.occlusionProbe = LabelOcclusionProbe(metalDevice: metalDevice, pipeline: occlusionProbePipeline)
+        self.hidesBehindBuildings = settings.base.hidesBehindBuildings
+        self.localDetailMaximumDistanceMeters = settings.base.localDetailMaximumDistanceMeters
+        self.depthDisabledState = depthDisabledState
         self.screenPositionsBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
                                                                          slotsCount: InFlightFramePool.inFlightFramesCount,
                                                                          options: [.storageModeShared])
@@ -180,25 +214,55 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
 
         roofCoverage = BuildingRoofCoverage(
             placeTilesContext: frameContext.sharedState.tilePlacementState.buildingPlaceTilesContext)
+        modelRoofs = frameContext.sharedState.sceneModelState.roofs
+        let minimumScale = debugOverlayControls?.labelPerspectiveMinimum() ?? perspectiveMinimumScale
         let cameraChanged = projectedCameraFingerprint != latestCameraFingerprint
             || projectedRoofCoverage != roofCoverage
+            || projectedModelRoofs != modelRoofs
+            || projectedPerspectiveMinimumScale != minimumScale
         if cameraChanged || topologyChanged {
-            projectBaseLabels(frameContext: frameContext)
+            projectBaseLabels(frameContext: frameContext, minimumScale: minimumScale)
+            projectedPerspectiveMinimumScale = minimumScale
             projectedCameraFingerprint = latestCameraFingerprint
             projectedRoofCoverage = roofCoverage
+            projectedModelRoofs = modelRoofs
+            projectionGeneration &+= 1
         }
+
+        // The buildings' answer from a few frames back, read now that the
+        // GPU is done with this frame's slot. The probe runs on the flat
+        // map only: that is where the buildings are drawn and the anchors
+        // lifted onto their roofs.
+        let probeActive = hidesBehindBuildings
+            && frameContext.renderSurfaceMode == .flat
+            && frameContext.screenSpaceProjectionMode == .flat
+            && baseLabelCache.activeLabelSpanCount > 0
+        // The local detail keeps to the tiles around the look-at point and
+        // to the distance from the camera, which the debug panel can move
+        // with the camera still: resolved on either change.
+        let localDetailDistance = debugOverlayControls?.localLabelMaximumDistance() ?? localDetailMaximumDistanceMeters
+        var localDetailChanged = false
+        if cameraChanged || topologyChanged || localDetailDistance != resolvedLocalDetailDistance {
+            localDetailChanged = resolveLocalDetail(frameContext: frameContext, maximumDistanceMeters: localDetailDistance)
+            resolvedLocalDetailDistance = localDetailDistance
+        }
+
+        let occlusionChanged = occlusionProbe.beginFrame(active: probeActive,
+                                                         slot: frameContext.frameSlotIndex,
+                                                         topologyGeneration: visibilityTopologyGeneration)
 
         let pixelsPerPoint = frameContext.screenScale.pixelsPerPoint
         if pixelsPerPoint != solvedPixelsPerPoint {
             rescaleBaseHalfSizes(pixelsPerPoint: pixelsPerPoint)
         }
         // The solve depends on the pose, the set, the road data the GPU
-        // hands back, and the fades (a label fading out keeps its space): a
-        // frame with none of them changing keeps the previous decision.
+        // hands back, the buildings' answer, and the fades (a label fading
+        // out keeps its space): a frame with none of them changing keeps
+        // the previous decision.
         let fadesActive = frameContext.sharedState.baseLabelState.hasActiveFadeAnimations
             || frameContext.sharedState.roadLabelState.hasActiveFadeAnimations
-        let needsSolve = cameraChanged || topologyChanged || roadPlacementDataPending || fadesActive
-            || solvedCameraFingerprint == nil
+        let needsSolve = cameraChanged || topologyChanged || roadPlacementDataPending || fadesActive || localDetailChanged
+            || occlusionChanged || solvedCameraFingerprint == nil
         if needsSolve {
             solveCollisions(frameContext: frameContext)
             solvedCameraFingerprint = latestCameraFingerprint
@@ -209,6 +273,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         BaseLabelVisibilityResolver.targetVisibility(inputs: baseLabelCache.presentationInputs,
                                                      collisionVisible: baseCollisionVisible,
                                                      horizonVisibility: baseHorizonVisible,
+                                                     occluded: occlusionProbe.occluded,
+                                                     localSuppressed: baseLocalSuppressed,
                                                      cameraZoom: cameraZoom,
                                                      into: &baseTargetVisible)
         let baseFadesActive = baseFade.advance(targetVisibility: baseTargetVisible,
@@ -227,9 +293,13 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         }
         frameContext.sharedState.baseLabelDebugBoxesState = makeDebugBoxesState(cameraZoom: cameraZoom,
                                                                                 screenScale: frameContext.screenScale)
+        // The buildings' answer for this projection is still on the GPU:
+        // frames keep coming until it is read, so a camera that stops
+        // gets the decision for where it stopped.
+        let occlusionAnswerPending = occlusionProbe.awaitsAnswer(projectionGeneration: projectionGeneration)
         publishBaseLabelState(frameContext: frameContext,
                               hasActiveFadeAnimations: baseFadesActive,
-                              needsFollowUpFrame: roadPlacementDataPending)
+                              needsFollowUpFrame: roadPlacementDataPending || occlusionAnswerPending)
 
         let roadState = buildRoadLabelState(frameContext: frameContext)
         frameContext.sharedState.roadLabelState = roadState
@@ -249,8 +319,18 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         // must not be committed.
         pendingPlacementStamps.removeAll(keepingCapacity: true)
         guard let commandBuffer = frameContext.commandBuffer else {
+            occlusionProbe.prepareGPU(slot: frameContext.frameSlotIndex,
+                                      probes: [],
+                                      screenPoints: [],
+                                      projectionGeneration: projectionGeneration,
+                                      topologyGeneration: visibilityTopologyGeneration)
             return
         }
+        occlusionProbe.prepareGPU(slot: frameContext.frameSlotIndex,
+                                  probes: baseProbePositions,
+                                  screenPoints: baseScreenPoints,
+                                  projectionGeneration: projectionGeneration,
+                                  topologyGeneration: visibilityTopologyGeneration)
         let tileOriginDataBuffer = resolveTileOriginDataBuffer(frameContext: frameContext)
 
         // Road records are gathered up front: all point-to-screen dispatches of
@@ -365,15 +445,27 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         frameContext.sharedState.roadLabelState.runtimeMetaBuffer = drawBatches.first?.runtimeMetaBuffer
     }
 
-    func encode(layer _: RenderLayer, encoder _: MTLRenderCommandEncoder, frameContext _: FrameContext) {}
+    /// The occlusion probes go into the world pass after the buildings and
+    /// the models; the labels themselves are drawn by `BaseLabelDrawSubsystem`.
+    func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
+        guard layer == .labelOcclusionProbe else {
+            return
+        }
+        occlusionProbe.encode(encoder: encoder,
+                              cameraUniform: frameContext.cameraUniform,
+                              slot: frameContext.frameSlotIndex,
+                              depthDisabledState: depthDisabledState)
+    }
 
     // The frame's command buffer is committed - the encoded placement compute
-    // is guaranteed to execute, so the data stamps can be committed.
+    // and the occlusion probes are guaranteed to execute, so the data stamps
+    // can be committed.
     func frameCommitted() {
         for pending in pendingPlacementStamps {
             pending.record.markPlacementEncoded(slot: pending.slot)
         }
         pendingPlacementStamps.removeAll(keepingCapacity: true)
+        occlusionProbe.frameCommitted()
     }
 
     func handleMemoryWarning() {
@@ -389,6 +481,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         roadLabelCache?.evict()
         baseFade.reset()
         roadFade.reset()
+        occlusionProbe.reset()
+        baseProbePositions.removeAll(keepingCapacity: false)
         roadDrawLabels.removeAll(keepingCapacity: false)
         latestRoadLabelNearCameraCullCounts = (path: 0, anchor: 0)
         roadPlacementDataPending = false
@@ -396,10 +490,14 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         sourceEntriesVersionTracker.invalidate()
         projectionVersionTracker.invalidate()
         projectedCameraFingerprint = nil
+        projectedModelRoofs = nil
+        projectedPerspectiveMinimumScale = nil
+        resolvedLocalDetailDistance = nil
         solvedCameraFingerprint = nil
         solvedPixelsPerPoint = 0
         baseScreenPoints.removeAll(keepingCapacity: false)
         baseHorizonVisible.removeAll(keepingCapacity: false)
+        baseLocalSuppressed.removeAll(keepingCapacity: false)
         baseCenters.removeAll(keepingCapacity: false)
         baseHalfSizesPx.removeAll(keepingCapacity: false)
         baseScaledHalfSizesPx.removeAll(keepingCapacity: false)
@@ -426,7 +524,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         let inputs = baseLabelCache.presentationInputs
         let candidates = baseLabelCache.labelCollisionAABBInputs
         let count = inputs.count
-        baseFade.rebind(keys: inputs.map { $0.isValid ? $0.labelKey : 0 }, time: time)
+        let keys = inputs.map { $0.isValid ? $0.labelKey : 0 }
+        baseFade.rebind(keys: keys, time: time)
+        occlusionProbe.rebind(keys: keys)
         collisionSolver.rebindBase(ranks: candidates.map(LabelCollisionRank.init(candidate:)))
         baseGroupIds = candidates.map(\.groupId)
         baseHalfSizesPx = candidates.map { $0.halfSize + collisionMarginPoints }
@@ -435,6 +535,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         solvedPixelsPerPoint = 0
         baseScreenPoints = Array(repeating: ScreenPointOutput(position: .zero, depth: 0, visible: 0), count: count)
         baseHorizonVisible = Array(repeating: false, count: count)
+        baseLocalSuppressed = Array(repeating: false, count: count)
+        baseProbePositions = Array(repeating: .zero, count: count)
         baseCenters = Array(repeating: .zero, count: count)
         baseReservesSpace = Array(repeating: false, count: count)
         baseCollisionVisible = Array(repeating: false, count: count)
@@ -459,7 +561,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
 
     /// The base anchors on screen for this camera, written in place; the
     /// same array is what the label shaders read, uploaded per frame slot.
-    private func projectBaseLabels(frameContext: FrameContext) {
+    private func projectBaseLabels(frameContext: FrameContext, minimumScale: Float) {
         guard baseLabelCache.activeLabelSpanCount > 0 else {
             return
         }
@@ -468,14 +570,43 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                               frameContext: frameContext,
                                                               tileOriginData: projectionIndexState.tileOriginData,
                                                               roofCoverage: roofCoverage,
-                                                              minimumPerspectiveScale: perspectiveMinimumScale,
+                                                              modelRoofs: modelRoofs,
+                                                              minimumPerspectiveScale: minimumScale,
                                                               screenPoints: &baseScreenPoints,
                                                               horizonVisibility: &baseHorizonVisible,
-                                                              perspectiveScales: &basePerspectiveScales)
+                                                              perspectiveScales: &basePerspectiveScales,
+                                                              probePositions: &baseProbePositions)
         for index in baseScreenPoints.indices {
             baseCenters[index] = baseScreenPoints[index].position
         }
         baseLabelCache.updatePerspectiveScales(basePerspectiveScales)
+    }
+
+    /// Which local labels are out of reach this frame: outside the three
+    /// by three tiles around the look-at point, or farther from the camera
+    /// than `maximumDistanceMeters`, measured to where the label draws. On
+    /// the flat map only is the distance measured; on the globe the tiles
+    /// alone decide. Returns whether any label changed.
+    private func resolveLocalDetail(frameContext: FrameContext, maximumDistanceMeters: Float) -> Bool {
+        var unitsPerMeter: Float?
+        if frameContext.screenSpaceProjectionMode == .flat {
+            let centre = frameContext.visibleContent.centerWorldMercator
+            let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: centre.y)
+            let units = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: latitude,
+                                                                  renderMapSize: frameContext.renderNormalizationState.flatRenderMapSize)
+            if units > 0, units.isFinite {
+                unitsPerMeter = Float(units)
+            }
+        }
+        let reach = BaseLabelVisibilityResolver.LocalDetailReach(eye: frameContext.cameraEye,
+                                                                 unitsPerMeter: unitsPerMeter,
+                                                                 maximumDistanceMeters: maximumDistanceMeters)
+        return BaseLabelVisibilityResolver.localSuppression(inputs: baseLabelCache.presentationInputs,
+                                                            pointInputs: baseLabelCache.tilePointInputs,
+                                                            anchors: baseProbePositions,
+                                                            centerWorldMercator: frameContext.visibleContent.centerWorldMercator,
+                                                            reach: reach,
+                                                            into: &baseLocalSuppressed)
     }
 
     // MARK: - Collisions
@@ -485,12 +616,15 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         let candidates = baseLabelCache.labelCollisionAABBInputs
         let inputs = baseLabelCache.presentationInputs
         let alphas = baseFade.currentAlphas
+        let occluded = occlusionProbe.occluded
         let count = min(candidates.count, min(baseScreenPoints.count, baseReservesSpace.count))
         for index in 0..<count {
             baseReservesSpace[index] = BaseLabelVisibilityResolver.reservesSpace(
                 candidateEnabled: candidates[index].isEnabled,
                 screenVisible: baseScreenPoints[index].visible != 0,
                 horizonVisible: index < baseHorizonVisible.count && baseHorizonVisible[index],
+                occluded: index < occluded.count && occluded[index],
+                localSuppressed: index < baseLocalSuppressed.count && baseLocalSuppressed[index],
                 currentAlpha: index < alphas.count ? alphas[index] : 0,
                 minCameraZoom: index < inputs.count ? inputs[index].minCameraZoom : 0,
                 cameraZoom: cameraZoom)

@@ -832,7 +832,13 @@ final class PreparedTileDiskCaching {
     // 120: a point label carries the roof it stands on
     // (`TilePointInput.roofHeight`), which the entry's placement inputs
     // store. A v119 entry has no such field.
-    static let preparedFormatVersion: UInt32 = 120
+    // 121: a point label in a building carries the roof over it whether or
+    // not it draws there, and says which (`TilePointInput.liftsToRoof`): only
+    // the label naming the building rises. A v120 entry lifts every label
+    // in a building and has no such field.
+    // 122: a POI with no icon of its own draws its name alone; a v121 entry
+    // carries the plain marker's sprite beside it.
+    static let preparedFormatVersion: UInt32 = 122
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

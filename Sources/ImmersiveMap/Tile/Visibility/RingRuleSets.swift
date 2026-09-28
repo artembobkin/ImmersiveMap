@@ -22,12 +22,22 @@ struct RingRuleSets: Hashable {
     /// default presentation settings, which finish the unroll at zoom 7.
     static let defaultStreetFirstZoom = 7
 
-    /// Two sets. The globe's zooms step down fast and drop their lines
-    /// early, since toward the limb a tile is seen edge on. The zooms past the unroll take the
-    /// plane's rules (`FlatRingRules.default`).
+    /// The first zoom of the near street set, where the camera comes down
+    /// among the buildings, and of the closest one.
+    static let defaultNearStreetFirstZoom = 15
+    static let defaultCloseStreetFirstZoom = 17
+
+    /// Four sets. The globe's zooms step down fast and drop their lines
+    /// early, since toward the limb a tile is seen edge on. The zooms past
+    /// the unroll take the plane's rules (`FlatRingRules.default`). Among
+    /// the buildings (`FlatRingRules.nearStreetDefault`) and closer still
+    /// (`FlatRingRules.closeStreetDefault`) the rings shrink, since a tilted
+    /// camera there sees the street and little else.
     static let `default` = RingRuleSets(sets: [
         RingRuleSet(firstZoom: 0, rules: .globeDefault),
-        RingRuleSet(firstZoom: defaultStreetFirstZoom, rules: .default)
+        RingRuleSet(firstZoom: defaultStreetFirstZoom, rules: .default),
+        RingRuleSet(firstZoom: defaultNearStreetFirstZoom, rules: .nearStreetDefault),
+        RingRuleSet(firstZoom: defaultCloseStreetFirstZoom, rules: .closeStreetDefault)
     ])
 
     /// The sets as a frame reads them: first zooms inside the range, sorted,
@@ -48,15 +58,16 @@ struct RingRuleSets: Hashable {
         return RingRuleSets(sets: unique)
     }
 
-    /// The index of the set `targetZoom` falls in, of normalized sets.
-    func setIndex(forTargetZoom targetZoom: Int) -> Int {
-        sets.lastIndex { $0.firstZoom <= targetZoom } ?? 0
+    /// The index of the set `zoom` falls in, of normalized sets. The frame
+    /// asks by its camera zoom (`RenderFrameVisibilityResolver`).
+    func setIndex(forZoom zoom: Int) -> Int {
+        sets.lastIndex { $0.firstZoom <= zoom } ?? 0
     }
 
-    /// The rules a frame at `targetZoom` is drawn by.
-    func rules(forTargetZoom targetZoom: Int) -> FlatRingRules {
+    /// The rules a frame at camera zoom `zoom` is drawn by.
+    func rules(forZoom zoom: Int) -> FlatRingRules {
         let normalizedSets = normalized()
-        return normalizedSets.sets[normalizedSets.setIndex(forTargetZoom: targetZoom)].rules
+        return normalizedSets.sets[normalizedSets.setIndex(forZoom: zoom)].rules
     }
 
     /// The last zoom of the set at `index`, nil for the last set.
@@ -72,5 +83,22 @@ extension FlatRingRules {
     static let globeDefault = FlatRingRules(rules: [
         FlatRingRule(zoomDrop: 0, distance: 1),
         FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false)
+    ])
+
+    /// Zooms 15 and 16: the exact tiles with their lines and labels to ring
+    /// 1, one level coarser to ring 2 and five levels coarser to ring 3, both
+    /// with their lines and without labels.
+    static let nearStreetDefault = FlatRingRules(rules: [
+        FlatRingRule(zoomDrop: 0, distance: 1),
+        FlatRingRule(zoomDrop: 1, distance: 2, drawsLabels: false),
+        FlatRingRule(zoomDrop: 5, distance: 3, drawsLabels: false)
+    ])
+
+    /// Zoom 17 and deeper: the exact tiles with their lines and labels to
+    /// ring 1, then two levels coarser to ring 2 with their lines and
+    /// without labels, nothing beyond.
+    static let closeStreetDefault = FlatRingRules(rules: [
+        FlatRingRule(zoomDrop: 0, distance: 1),
+        FlatRingRule(zoomDrop: 2, distance: 2, drawsLabels: false)
     ])
 }

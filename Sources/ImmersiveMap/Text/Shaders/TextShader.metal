@@ -117,10 +117,29 @@ fragment TextFragmentOut textFragment(VertexOut in [[stage_in]],
                       in.alpha);
 }
 
-fragment TextFragmentOut roadTextFragment(VertexOut in [[stage_in]],
+fragment TextFragmentOut roadTextFragment(RoadTextVertexOut roadIn [[stage_in]],
                                 texture2d<half> atlasTexture [[texture(0)]],
-                                constant TextStyle& style [[buffer(0)]]
+                                depth2d<float> sceneDepth [[texture(1)]],
+                                constant TextStyle& style [[buffer(0)]],
+                                constant RoadLabelSceneDepthUniforms& scene [[buffer(1)]]
                                 ) {
+    // The buildings and the models paint over the road names behind them:
+    // a pixel of the name is dropped where the world pass drew something
+    // nearer than the glyph's place on the road. The ground's depth is a
+    // band at the far plane, so only a building or a model cuts.
+    if (scene.enabled != 0) {
+        uint2 pixel = uint2(roadIn.position.xy);
+        if (pixel.x < sceneDepth.get_width() && pixel.y < sceneDepth.get_height()
+            && sceneDepth.read(pixel) < roadIn.anchorDepth) {
+            discard_fragment();
+        }
+    }
+
+    VertexOut in;
+    in.position = roadIn.position;
+    in.uv = roadIn.uv;
+    in.alpha = roadIn.alpha;
+    in.spriteUV = roadIn.spriteUV;
     TextDistance distance = computeTextDistance(in, atlasTexture);
 
     // A road label is rotated along its road, and `fwidth` sums the uv

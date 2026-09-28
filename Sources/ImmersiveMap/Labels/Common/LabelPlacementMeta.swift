@@ -13,4 +13,6 @@ struct LabelPlacementMeta {
     /// Resolved at runtime (via `frameContext.zoom`), not via `tile.z`, so it
     /// also works under overzoom (when tile.z is capped at the source's maxzoom).
     let minCameraZoom: Float
+    /// Local detail, shown only near the camera (`PointLabelStyle.isLocal`).
+    var isLocal: Bool = false
 }

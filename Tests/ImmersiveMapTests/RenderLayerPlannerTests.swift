@@ -20,6 +20,7 @@ final class RenderLayerPlannerTests: XCTestCase {
             .surfaceLabels,
             .buildingExtrusion,
             .sceneModels,
+            .labelOcclusionProbe,
             .horizon,
             .labels,
             .avatars,
@@ -44,12 +45,13 @@ final class RenderLayerPlannerTests: XCTestCase {
             .surfaceLabels,
             .buildingExtrusion,
             .sceneModels,
+            .labelOcclusionProbe,
             .horizon,
             .labels,
             .avatars,
             .debugOverlay
         ])
-        XCTAssertEqual(enabledLayers(in: plan), [.tileOwnership, .flatMapSurface, .surfaceLabels, .buildingExtrusion, .sceneModels, .horizon])
+        XCTAssertEqual(enabledLayers(in: plan), [.tileOwnership, .flatMapSurface, .surfaceLabels, .buildingExtrusion, .sceneModels, .labelOcclusionProbe, .horizon])
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)
         XCTAssertEqual(skipReason(for: .debugOverlay, in: plan), .debugOverlayDisabled)
@@ -149,6 +151,34 @@ final class RenderLayerPlannerTests: XCTestCase {
         XCTAssertFalse(RenderPassGraph.isOverlayLayer(.horizon))
     }
 
+
+    /// The label occlusion probes are asked after everything that can hide
+    /// a label and before the fog, which hides nothing, and only on the
+    /// flat map, where the buildings are.
+    func testTheLabelOcclusionProbeFollowsTheModelsOnTheFlatMap() {
+        let flatPlan = RenderLayerPlanner.plan(
+            availability: RenderPassAvailability(renderSurfaceMode: .flat,
+                                                 labelsEnabled: true,
+                                                 avatarsEnabled: false,
+                                                 debugOverlayEnabled: false,
+                                                 starfieldEnabled: true)
+        ).map(\.layer)
+        XCTAssertEqual(flatPlan.firstIndex(of: .labelOcclusionProbe),
+                       flatPlan.firstIndex(of: .sceneModels).map { $0 + 1 })
+        XCTAssertEqual(flatPlan.firstIndex(of: .horizon),
+                       flatPlan.firstIndex(of: .labelOcclusionProbe).map { $0 + 1 })
+        XCTAssertTrue(RenderPassGraph.isWorldLayer(.labelOcclusionProbe))
+        XCTAssertFalse(RenderPassGraph.isOverlayLayer(.labelOcclusionProbe))
+
+        let globePlan = RenderLayerPlanner.plan(
+            availability: RenderPassAvailability(renderSurfaceMode: .spherical,
+                                                 labelsEnabled: true,
+                                                 avatarsEnabled: false,
+                                                 debugOverlayEnabled: false,
+                                                 starfieldEnabled: true)
+        ).map(\.layer)
+        XCTAssertFalse(globePlan.contains(.labelOcclusionProbe))
+    }
 
     /// No scene models on screen: the model layer is left out of the world
     /// pass on both surfaces instead of encoding an empty group.

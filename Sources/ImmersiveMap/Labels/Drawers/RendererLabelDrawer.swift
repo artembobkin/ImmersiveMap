@@ -90,16 +90,29 @@ final class RendererLabelDrawer {
                           bindings: &bindings)
     }
 
+    /// `sceneDepth` is the world's depth the buildings paint over the road
+    /// names with, and `sceneDepthUniforms` says whether it is read at all
+    /// (`RoadLabelDrawSubsystem`); a texture is bound either way.
     static func drawRoadLabels(renderEncoder: MTLRenderCommandEncoder,
                                screenMatrix: matrix_float4x4,
                                screenScale: ScreenScale,
                                textRenderer: TextRenderer,
-                               roadDrawLabels: [DrawRoadLabels]) {
+                               roadDrawLabels: [DrawRoadLabels],
+                               sceneDepth: MTLTexture,
+                               sceneDepthUniforms: RoadLabelSceneDepthUniforms) {
         guard roadDrawLabels.isEmpty == false else {
             return
         }
 
         renderEncoder.setRenderPipelineState(textRenderer.roadLabelPipelineState)
+        var sceneDepthUniformsValue = sceneDepthUniforms
+        renderEncoder.setVertexBytes(&sceneDepthUniformsValue,
+                                     length: MemoryLayout<RoadLabelSceneDepthUniforms>.stride,
+                                     index: 8)
+        renderEncoder.setFragmentBytes(&sceneDepthUniformsValue,
+                                       length: MemoryLayout<RoadLabelSceneDepthUniforms>.stride,
+                                       index: 1)
+        renderEncoder.setFragmentTexture(sceneDepth, index: 1)
         var screenMatrixValue = screenMatrix
         renderEncoder.setVertexBytes(&screenMatrixValue, length: MemoryLayout<matrix_float4x4>.stride, index: 1)
         // Identical for all road labels - bound once per pass.

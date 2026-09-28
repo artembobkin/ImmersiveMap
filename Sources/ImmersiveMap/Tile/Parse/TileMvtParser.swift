@@ -264,27 +264,66 @@ final class TileMvtParser {
         groundReader.finish(tile: tile, addTestBorders: options.addTestBorders, into: &result)
 
         // Only once every layer is read: an outline can come after its parts.
-        let extrudedVolumes = buildingReader.appendExtrudedMeshes(
-            resolving: replacedBuildings.remaining(buildingExtrusionCandidates),
-            into: &result)
-        liftLabelsOntoRoofs(of: extrudedVolumes, into: &result)
+        let (standing, replaced) = replacedBuildings.partition(buildingExtrusionCandidates)
+        let extrudedVolumes = buildingReader.appendExtrudedMeshes(resolving: standing, into: &result)
+        // Every building's own top by its id, before the resolver clamps
+        // or drops volumes: what a label naming that building rises to.
+        var buildingTops: [UInt64: Float] = [:]
+        for candidate in buildingExtrusionCandidates {
+            buildingTops[candidate.buildingId] = max(buildingTops[candidate.buildingId] ?? 0, candidate.topHeight)
+        }
+        liftLabelsOntoRoofs(of: extrudedVolumes,
+                            replacedVolumes: replaced,
+                            buildingTops: buildingTops,
+                            replacedBuildings: replacedBuildings,
+                            into: &result)
 
         result.removeEmptyBuckets()
         return result
     }
 
-    /// The labels whose style stands them on a roof take the height of the
-    /// roof over their anchor, from the volumes the tile draws. A label on
-    /// open ground, or in a building a landmark model replaces, keeps zero.
+    /// The labels whose style stands them in buildings take the height of
+    /// the roof over their anchor: from the volumes the tile draws, or for
+    /// a building a landmark model replaces, from the tile's own volume of
+    /// it, which stands in for the model's height until the model is drawn
+    /// (the frame then takes the model's top). A label on open ground keeps
+    /// zero. Of the labels in a building, only the one naming the building
+    /// itself (the same OSM element as the building) rises to the roof,
+    /// and to that building's own roof: a part's label to the part's top,
+    /// not the outline's around it, and the outline's label, where a model
+    /// stands in for the outline, to the model's top. The rest stay on the
+    /// ground and only carry the roof over them for their view test.
     private func liftLabelsOntoRoofs(of volumes: [BuildingExtrusionCandidate],
+                                     replacedVolumes: [BuildingExtrusionCandidate],
+                                     buildingTops: [UInt64: Float],
+                                     replacedBuildings: ReplacedBuildingFilter,
                                      into result: inout ReadingStageResult) {
-        guard volumes.isEmpty == false,
+        guard volumes.isEmpty == false || replacedVolumes.isEmpty == false,
               result.textLabels.contains(where: \.standsOnRoof) else {
             return
         }
-        let roofs = BuildingRoofLookup(candidates: volumes)
+        let roofs = BuildingRoofLookup(candidates: volumes, replacedCandidates: replacedVolumes)
         for index in result.textLabels.indices where result.textLabels[index].standsOnRoof {
-            result.textLabels[index].roofHeight = roofs.roofHeight(atTilePoint: result.textLabels[index].position)
+            let label = result.textLabels[index]
+            let roof = roofs.roof(atTilePoint: label.position)
+            if let featureId = label.featureId, replacedBuildings.replaces(featureId) {
+                // Names the outline a model stands in for: the model's top
+                // at the frame, the tile's volume of it until then.
+                result.textLabels[index].roofHeight = max(buildingTops[featureId] ?? 0, roof.height)
+                result.textLabels[index].roofIsReplaced = true
+                result.textLabels[index].liftsToRoof = true
+            } else if let featureId = label.featureId, let ownTop = buildingTops[featureId], ownTop > 0 {
+                // Names a building the tile has: its own top, whatever
+                // stands over or around it.
+                result.textLabels[index].roofHeight = ownTop
+                result.textLabels[index].roofIsReplaced = false
+                result.textLabels[index].liftsToRoof = true
+            } else {
+                // Something inside: the roof over it, for the view test.
+                result.textLabels[index].roofHeight = roof.height
+                result.textLabels[index].roofIsReplaced = roof.isReplaced
+                result.textLabels[index].liftsToRoof = false
+            }
         }
     }
 

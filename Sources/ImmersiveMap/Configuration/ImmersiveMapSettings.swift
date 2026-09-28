@@ -676,19 +676,45 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// so the labels toward the horizon recede with the map instead
             /// of lying over it like stickers. The collisions measure the
             /// shrunk labels. 1 keeps every label at its size. Read once,
-            /// when the map is created, like the fades.
+            /// when the map is created, like the fades; the debug panel can
+            /// move it while the map runs.
             public var perspectiveMinimumScale: Float
+            /// Whether a point label whose anchor the extruded buildings or
+            /// the scene models hide from the camera is hidden with it, and
+            /// shown again as the camera brings the anchor back into view,
+            /// with the usual fades. A label in a building belongs to it
+            /// (`labelsStandOnRoofs` in the theme) and is tested at the
+            /// building's roof: its own building never hides it, only the
+            /// buildings and models in front of it. On the flat map only,
+            /// where the buildings are drawn. Off, every label draws over
+            /// the buildings as if they were flat. Read once, when the map
+            /// is created, like the fades.
+            public var hidesBehindBuildings: Bool
+            /// How near the camera, in metres, the local detail shows: the
+            /// labels the style marks local (`PointLabelStyle.isLocal`: the
+            /// house numbers, the plaques, the offices), which also keep to
+            /// the three by three tiles around the one the camera looks at.
+            /// Measured from the camera to the label's anchor, so on a tilted
+            /// map the detail at the foot of the frame shows and the detail
+            /// up the street does not, whatever the zoom. On the flat map;
+            /// on the globe the tiles alone decide. The debug panel can move
+            /// it while the map runs.
+            public var localDetailMaximumDistanceMeters: Float
 
             public init(gridCellSizePoints: Float,
                         fadeInSeconds: TimeInterval,
                         fadeOutSeconds: TimeInterval,
                         collisionSpacingPoints: Float = 10,
-                        perspectiveMinimumScale: Float = 0.5) {
+                        perspectiveMinimumScale: Float = 0.75,
+                        hidesBehindBuildings: Bool = true,
+                        localDetailMaximumDistanceMeters: Float = 400) {
                 self.gridCellSizePoints = gridCellSizePoints
                 self.fadeInSeconds = fadeInSeconds
                 self.fadeOutSeconds = fadeOutSeconds
                 self.collisionSpacingPoints = collisionSpacingPoints
                 self.perspectiveMinimumScale = perspectiveMinimumScale
+                self.hidesBehindBuildings = hidesBehindBuildings
+                self.localDetailMaximumDistanceMeters = localDetailMaximumDistanceMeters
             }
         }
 
@@ -696,11 +722,23 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// Collision grid cell in layout points, as for `BaseSettings`.
             public var gridCellSizePoints: Float
             public var maxGlyphTurnRadians: Float
+            /// The camera zoom from which the extruded buildings and the scene
+            /// models paint over the road names behind them, pixel by pixel,
+            /// like any other thing behind a wall. Each letter stands where it
+            /// touches its road: a wall behind the road leaves it whole, one in
+            /// front of it cuts it. The names keep their place in the
+            /// collisions and their fades. On the flat map only, and the frames
+            /// that do it keep the world's depth for the label pass, one more
+            /// full-screen depth texture. `.infinity` never paints over a road
+            /// name. Read once, when the map is created, like the fades.
+            public var hidesBehindBuildingsFromZoom: Float
 
             public init(gridCellSizePoints: Float,
-                        maxGlyphTurnRadians: Float) {
+                        maxGlyphTurnRadians: Float,
+                        hidesBehindBuildingsFromZoom: Float = 16) {
                 self.gridCellSizePoints = gridCellSizePoints
                 self.maxGlyphTurnRadians = maxGlyphTurnRadians
+                self.hidesBehindBuildingsFromZoom = hidesBehindBuildingsFromZoom
             }
         }
 

@@ -30,6 +30,26 @@ struct VertexOut {
     float2 spriteUV;
 };
 
+/// A road glyph's vertex output: `VertexOut` plus the depth of the glyph's
+/// place on the road, which the fragment tests the world's depth against.
+struct RoadTextVertexOut {
+    float4 position [[position]];
+    float2 uv;
+    float alpha;
+    float2 spriteUV;
+    float anchorDepth [[flat]];
+};
+
+/// The world's depth for the road names; mirrors RoadLabelSceneDepthUniforms
+/// (Swift). With `enabled` 0 nothing is tested and the depth is not read.
+struct RoadLabelSceneDepthUniforms {
+    float4x4 projectionView;
+    float4x4 inverseProjectionView;
+    float3 eye;
+    float2 viewportSize;
+    uint enabled;
+};
+
 /// The clip position of a hidden label's vertices: outside the clip volume
 /// on one side, so the rasterizer rejects the primitive whole and no
 /// fragment is ever shaded for a label that lost its collision, is a

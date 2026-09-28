@@ -116,6 +116,8 @@ final class SharedRenderResources {
     let sceneModelPipeline: SceneModelPipeline
     let tilePointScreenPipelines: TilePointScreenPipelines
     let roadLabelPlacementPipeline: RoadLabelPlacementPipeline
+    /// The point labels' occlusion probes in the world pass.
+    let labelOcclusionProbePipeline: LabelOcclusionProbePipeline
 
     // MARK: - Geometry and atlases
 
@@ -308,6 +310,7 @@ final class SharedRenderResources {
         self.sceneModelPipeline = compiled.sceneModelPipeline
         self.tilePointScreenPipelines = compiled.tilePointScreenPipelines
         self.roadLabelPlacementPipeline = compiled.roadLabelPlacementPipeline
+        self.labelOcclusionProbePipeline = compiled.labelOcclusionProbePipeline
         self.globeCap = compiled.globeCap
         self.avatars = compiled.avatars
         self.textRenderer = compiled.textRenderer
@@ -335,6 +338,7 @@ final class SharedRenderResources {
         let sceneModelPipeline: SceneModelPipeline
         let tilePointScreenPipelines: TilePointScreenPipelines
         let roadLabelPlacementPipeline: RoadLabelPlacementPipeline
+        let labelOcclusionProbePipeline: LabelOcclusionProbePipeline
         let globeCap: GlobeCapRenderer.SharedResources
         let avatars: AvatarsRenderer.SharedResources
         let textRenderer: TextRenderer
@@ -367,6 +371,7 @@ final class SharedRenderResources {
         var sceneModelPipeline: SceneModelPipeline?
         var tilePointScreenPipelines: TilePointScreenPipelines?
         var roadLabelPlacementPipeline: RoadLabelPlacementPipeline?
+        var labelOcclusionProbePipeline: LabelOcclusionProbePipeline?
         var globeCap: GlobeCapRenderer.SharedResources?
         var avatars: AvatarsRenderer.SharedResources?
         var textRenderer: TextRenderer?
@@ -427,7 +432,11 @@ final class SharedRenderResources {
                                                       library: library,
                                                       sampleCount: sampleCount) },
             { tilePointScreenPipelines = TilePointScreenPipelines(metalDevice: device, library: library) },
-            { roadLabelPlacementPipeline = RoadLabelPlacementPipeline(metalDevice: device, library: library) }
+            { roadLabelPlacementPipeline = RoadLabelPlacementPipeline(metalDevice: device, library: library) },
+            { labelOcclusionProbePipeline = LabelOcclusionProbePipeline(metalDevice: device,
+                                                                        pixelFormat: pixelFormat,
+                                                                        library: library,
+                                                                        sampleCount: sampleCount) }
         ]
         DispatchQueue.concurrentPerform(iterations: jobs.count) { jobs[$0]() }
 
@@ -445,6 +454,7 @@ final class SharedRenderResources {
             sceneModelPipeline: sceneModelPipeline!,
             tilePointScreenPipelines: tilePointScreenPipelines!,
             roadLabelPlacementPipeline: roadLabelPlacementPipeline!,
+            labelOcclusionProbePipeline: labelOcclusionProbePipeline!,
             globeCap: globeCap!,
             avatars: avatars!,
             textRenderer: textRenderer!

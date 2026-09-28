@@ -72,6 +72,7 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
         // Cleared up front so every early return below leaves an empty
         // snapshot: a model that stops being drawn must stop being tappable.
         frameContext.sharedState.sceneModelState.selectionSnapshot = .empty
+        frameContext.sharedState.sceneModelState.roofs = []
         frameContext.sharedState.sceneModelState.pathAnimationResults =
             presentationStateStore.consumePathAnimationResults()
 
@@ -105,6 +106,7 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
         var items: [SceneModelDrawItem] = []
         var shadowItems: [SceneModelDrawItem] = []
         var selectionEntries: [SceneModelSelectionEntry] = []
+        var roofs: [SceneModelRoof] = []
         items.reserveCapacity(presented.count)
         let landmarkStartIndex = presentedSceneModels.count
         for (index, model) in presented.enumerated() {
@@ -126,6 +128,12 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
                 continue
             }
             items.append(SceneModelDrawItem(mesh: mesh, modelMatrix: anchor.modelMatrix))
+            // The flat map's labels take a drawn model's top as the roof of
+            // the building it stands for. On the globe the labels are not
+            // tested against the models, so the roofs are not needed.
+            if frameContext.renderSurfaceMode == .flat {
+                roofs.append(SceneModelRoof(modelMatrix: anchor.modelMatrix, bounds: mesh.localBounds))
+            }
             // A landmark draws but is not tappable: it stands for a building.
             guard index < landmarkStartIndex else { continue }
             // Built from the drawn item, not from the presented list: the hit
@@ -139,6 +147,7 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
         }
         drawItems = items
         shadowCasterItems = shadowItems
+        frameContext.sharedState.sceneModelState.roofs = roofs
         frameContext.sharedState.sceneModelState.hasShadowCasters = shadowItems.isEmpty == false
         frameContext.sharedState.sceneModelState.hasDrawnModels = items.isEmpty == false
         frameContext.sharedState.sceneModelState.selectionSnapshot = SceneModelSelectionSnapshot(

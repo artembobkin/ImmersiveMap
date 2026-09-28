@@ -313,7 +313,7 @@ final class FlatRingRuleCoverageTests: XCTestCase {
         XCTAssertEqual(controls.snapshot().ringRuleSets, .default)
         let edited = FlatRingRules(rules: [FlatRingRule(zoomDrop: 1, distance: 3), FlatRingRule(zoomDrop: 0, distance: 1)])
         controls.setRingRuleSets(RingRuleSets(sets: [RingRuleSet(firstZoom: 0, rules: edited)]))
-        XCTAssertEqual(controls.snapshot().ringRuleSets.rules(forTargetZoom: 12), edited.normalized())
+        XCTAssertEqual(controls.snapshot().ringRuleSets.rules(forZoom: 12), edited.normalized())
         XCTAssertEqual(controls.snapshot().ringRuleSets.sets[0].rules.rules.map(\.distance), [1, 3], "stored sorted")
     }
 

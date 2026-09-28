@@ -179,16 +179,16 @@ extension ProtomapsBasemapDefaultMapStyle {
         if let name = props["name"]?.stringValue, name.count > visibility.poiLongNameCharacterCount {
             minCameraZoom = max(minCameraZoom, Float(visibility.poiLongNameMinimumZoom))
         }
-        var icon = Self.poiIcon(kind: kind)
-        if icon == nil {
-            // A category the icon set does not know draws with the plain
-            // marker, a small dot in the category colour, so the place
-            // still shows as a place and not as bare text. A theme that wants such POIs gone (`poiRequiresIcon`)
-            // or held back to a zoom (`poiIconlessMinimumZoom`) says so.
+        let icon = Self.poiIcon(kind: kind)
+        let isIconless = icon == nil
+        if isIconless {
+            // A category the icon set does not know draws its name alone, in
+            // the category colour: a stand-in dot says nothing the name does
+            // not. A theme that wants such POIs gone (`poiRequiresIcon`) or
+            // held back to a zoom (`poiIconlessMinimumZoom`) says so.
             guard theme.labelVisibility.poiRequiresIcon == false else {
                 return hiddenStyle
             }
-            icon = .marker
             minCameraZoom = max(minCameraZoom, Float(theme.labelVisibility.poiIconlessMinimumZoom))
         }
         // The global POI floor is an absolute visibility gate that may
@@ -204,13 +204,16 @@ extension ProtomapsBasemapDefaultMapStyle {
         case "aerodrome": key = 75
         default: key = 72
         }
+        // An icon-less POI is local detail: a plaque, an office, a ticket
+        // window, read standing next to it and left to the look-at tile.
         return pointLabel(key: key,
                           band: isLandmark ? .landmark : .poi,
                           rank: minZoomRank(props: props),
                           appearance: appearance,
                           minCameraZoom: minCameraZoom,
                           icon: icon,
-                          standsOnRoof: theme.features.labelsStandOnRoofs)
+                          standsOnRoof: theme.features.labelsStandOnRoofs,
+                          isLocal: isIconless && !isLandmark && visibility.localDetailInLookAtTileOnly)
     }
 
     /// A house number: the address points of the `buildings` layer, which
@@ -230,7 +233,8 @@ extension ProtomapsBasemapDefaultMapStyle {
                           rank: 0,
                           appearance: appearance,
                           minCameraZoom: Float(theme.labelVisibility.addressMinimumZoom),
-                          standsOnRoof: theme.features.labelsStandOnRoofs)
+                          standsOnRoof: theme.features.labelsStandOnRoofs,
+                          isLocal: theme.labelVisibility.localDetailInLookAtTileOnly)
     }
 
     /// The POI categories that wait for a zoom of their own
@@ -265,7 +269,7 @@ extension ProtomapsBasemapDefaultMapStyle {
 
     /// The sprite a POI draws beside its name, from its `kind`, the raw OSM
     /// value. Nil for a category with no symbol of its own, which draws
-    /// with the plain marker or not at all (`poiRequiresIcon`).
+    /// its name alone or not at all (`poiRequiresIcon`).
     static func poiIcon(kind: String?) -> PoiSpriteIcon? {
         switch kind {
         case "restaurant", "fast_food", "food_court", "ice_cream":
@@ -374,7 +378,8 @@ extension ProtomapsBasemapDefaultMapStyle {
                     minCameraZoom: Float = 0,
                     icon: PoiSpriteIcon? = nil,
                     placement: LabelPlacement = .screen,
-                    standsOnRoof: Bool = false) -> FeatureStyle {
+                    standsOnRoof: Bool = false,
+                    isLocal: Bool = false) -> FeatureStyle {
         FeatureStyle.pointLabel(key: key,
                                 labelTextStyle(key: Int(key), appearance: appearance),
                                 rank: rank,
@@ -382,7 +387,8 @@ extension ProtomapsBasemapDefaultMapStyle {
                                 minCameraZoom: minCameraZoom,
                                 icon: icon,
                                 placement: placement,
-                                standsOnRoof: standsOnRoof)
+                                standsOnRoof: standsOnRoof,
+                                isLocal: isLocal)
     }
 
     func labelTextStyle(key: Int,

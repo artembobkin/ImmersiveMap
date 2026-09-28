@@ -383,12 +383,25 @@ public struct PointLabelStyle: Sendable {
     /// map draws its text alone: the icon, the ranks and the minimum camera
     /// zoom belong to the screen labels.
     public var placement: LabelPlacement
-    /// Whether a screen label standing inside an extruded building rises to
-    /// its roof. The anchor is lifted to the top of the tallest volume whose
-    /// footprint holds it, wherever the frame draws that building, and
-    /// stays on the ground where it draws none (the globe, a zoom coarser
-    /// than the building tiles, beyond the near field).
+    /// Whether a screen label standing inside an extruded building belongs
+    /// to it. The label takes the roof over its anchor, the top of the
+    /// tallest volume whose footprint holds it (or of the model drawn in
+    /// its place), wherever the frame draws that building. A label naming
+    /// the building itself, the same OSM element as the building, rises to
+    /// the roof; one naming something inside it stays on the ground, and
+    /// is tested for view at the roof, so its own building never hides it
+    /// while another building or a model still can. On the ground where
+    /// the frame draws no buildings (the globe, a zoom coarser than the
+    /// building tiles, beyond the near field).
     public var standsOnRoof: Bool
+    /// Whether the label is local detail, shown only near the camera: the
+    /// house numbers, a memorial's plaque, a ticket office, the things one
+    /// reads standing next to them. It keeps to the three by three tiles
+    /// around the one the camera looks at, and within them to
+    /// `BaseSettings.localDetailMaximumDistanceMeters` from the camera, so
+    /// on a tilted map the detail up the street, where it would be a
+    /// scatter of small text saying nothing, is left out.
+    public var isLocal: Bool
 
     public init(key: UInt8,
                 text: LabelTextStyle,
@@ -397,7 +410,8 @@ public struct PointLabelStyle: Sendable {
                 minCameraZoom: Float = 0,
                 icon: PoiSpriteIcon? = nil,
                 placement: LabelPlacement = .screen,
-                standsOnRoof: Bool = false) {
+                standsOnRoof: Bool = false,
+                isLocal: Bool = false) {
         self.key = key
         self.text = text
         self.rank = rank
@@ -406,6 +420,7 @@ public struct PointLabelStyle: Sendable {
         self.icon = icon
         self.placement = placement
         self.standsOnRoof = standsOnRoof
+        self.isLocal = isLocal
     }
 }
 
@@ -541,8 +556,9 @@ public extension FeatureStyle {
     /// A point label. The text is the name the schema reading states, in
     /// the map's language; this says how it is drawn, how important it is
     /// (`rank`, lower first, and `collisionRank`, which defaults to the
-    /// rank), from which camera zoom, which sprite stands beside it, and
-    /// whether it stands on the screen or lies on the map.
+    /// rank), from which camera zoom, which sprite stands beside it,
+    /// whether it stands on the screen or lies on the map, and whether it
+    /// is local detail shown only near the camera.
     static func pointLabel(key: UInt8,
                            _ textStyle: LabelTextStyle,
                            rank: Int = 0,
@@ -550,7 +566,8 @@ public extension FeatureStyle {
                            minCameraZoom: Float = 0,
                            icon: PoiSpriteIcon? = nil,
                            placement: LabelPlacement = .screen,
-                           standsOnRoof: Bool = false) -> FeatureStyle {
+                           standsOnRoof: Bool = false,
+                           isLocal: Bool = false) -> FeatureStyle {
         .pointLabel(PointLabelStyle(key: key,
                                     text: Self.keyed(textStyle, key: key),
                                     rank: rank,
@@ -558,7 +575,8 @@ public extension FeatureStyle {
                                     minCameraZoom: minCameraZoom,
                                     icon: icon,
                                     placement: placement,
-                                    standsOnRoof: standsOnRoof))
+                                    standsOnRoof: standsOnRoof,
+                                    isLocal: isLocal))
     }
 
     /// A road drawn as a line of a width in tile units, with its name laid

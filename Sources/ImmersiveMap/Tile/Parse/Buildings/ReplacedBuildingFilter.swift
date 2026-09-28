@@ -63,21 +63,42 @@ struct ReplacedBuildingFilter {
 
     /// The candidates the landmarks leave standing.
     func remaining(_ candidates: [BuildingExtrusionCandidate]) -> [BuildingExtrusionCandidate] {
-        guard isActive else { return candidates }
-        return candidates.filter { candidate in
-            if replacedIDs.contains(candidate.buildingId) {
-                return false
+        partition(candidates).remaining
+    }
+
+    /// The candidates split into the ones the landmarks leave standing and
+    /// the ones they replace. The replaced ones are not drawn, but their
+    /// roofs still say how tall the building under a model is, for the
+    /// labels standing in it.
+    func partition(_ candidates: [BuildingExtrusionCandidate]) -> (remaining: [BuildingExtrusionCandidate],
+                                                                    replaced: [BuildingExtrusionCandidate]) {
+        guard isActive else { return (candidates, []) }
+        var remaining: [BuildingExtrusionCandidate] = []
+        var replaced: [BuildingExtrusionCandidate] = []
+        remaining.reserveCapacity(candidates.count)
+        for candidate in candidates {
+            if isReplaced(candidate) {
+                replaced.append(candidate)
+            } else {
+                remaining.append(candidate)
             }
-            let exterior = candidate.clippedExterior
-            guard exterior.isEmpty == false else { return true }
-            let minimum = exterior.reduce(exterior[0], simd_min)
-            let maximum = exterior.reduce(exterior[0], simd_max)
-            let reached = outlines.filter { outline in
-                all(minimum .<= outline.maximum) && all(outline.minimum .<= maximum)
-            }
-            guard reached.isEmpty == false else { return true }
-            return Self.shareInside(candidate, outlines: reached) <= Self.replacedShare
         }
+        return (remaining, replaced)
+    }
+
+    private func isReplaced(_ candidate: BuildingExtrusionCandidate) -> Bool {
+        if replacedIDs.contains(candidate.buildingId) {
+            return true
+        }
+        let exterior = candidate.clippedExterior
+        guard exterior.isEmpty == false else { return false }
+        let minimum = exterior.reduce(exterior[0], simd_min)
+        let maximum = exterior.reduce(exterior[0], simd_max)
+        let reached = outlines.filter { outline in
+            all(minimum .<= outline.maximum) && all(outline.minimum .<= maximum)
+        }
+        guard reached.isEmpty == false else { return false }
+        return Self.shareInside(candidate, outlines: reached) > Self.replacedShare
     }
 
     private func ringInRenderSpace(_ ring: [Point]) -> [SIMD2<Float>] {

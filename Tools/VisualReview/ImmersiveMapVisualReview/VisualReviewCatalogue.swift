@@ -103,6 +103,14 @@ enum VisualReviewCatalogue {
         return settings
     }
 
+    /// The default settings with every point label drawn over the
+    /// buildings, whatever stands between it and the camera.
+    static var labelsThroughBuildingsSettings: ImmersiveMapSettings {
+        var settings = ImmersiveMapSettings.default
+        settings.labels.base.hidesBehindBuildings = false
+        return settings
+    }
+
     /// Places chosen for what they contain rather than for sentiment: dense
     /// blocks with towers, water against a coastline, and mountains.
     private enum Place {
@@ -221,6 +229,15 @@ enum VisualReviewCatalogue {
         static let moscowRegion = ImmersiveMapCameraPosition(latitudeDegrees: 55.75,
                                                              longitudeDegrees: 37.62,
                                                              zoom: 9.5)
+        /// The Okhotny Ryad block from the south, tilted far and turned a
+        /// little: the low hotel in front, the tall shopping block behind
+        /// it, the Kremlin towers to the left, and the shops and cafés of
+        /// the block spread over its roofs and behind its walls.
+        static let moscowOkhotnyRyadTilted = ImmersiveMapCameraPosition(latitudeDegrees: 55.7562,
+                                                                        longitudeDegrees: 37.6150,
+                                                                        zoom: 17,
+                                                                        bearing: 0.35,
+                                                                        pitch: 1.0)
         /// Around Pushkinskaya square, served by the overzoomed z15 tiles:
         /// the house numbers, the street furniture and the route numbers.
         static let moscowStreets = ImmersiveMapCameraPosition(latitudeDegrees: 55.7650,
@@ -335,7 +352,7 @@ enum VisualReviewCatalogue {
             On the tilted map the labels shrink with their distance: at the \
             centre of the frame and below it they are their full size, and \
             toward the horizon they get smaller with the streets around \
-            them, down to about half size and no smaller. None grows larger \
+            them, down to three quarters of their size and no smaller. None grows larger \
             than its size near the camera. The far labels pack closer as \
             they shrink, without overlapping, and each stays crisp and \
             readable with an even halo.
@@ -353,6 +370,35 @@ enum VisualReviewCatalogue {
             """,
             settings: perspectiveOffSettings,
             subject: .still(camera: Place.moscowCentreTilted(zoom: 15))),
+
+        VisualReviewScenario(
+            id: "labels.occlusion.moscow",
+            title: "Okhotny Ryad, labels hidden behind the buildings",
+            lookFor: """
+            Only the names of the buildings themselves stand on the roofs: \
+            the hotel's on the hotel, the shopping centre's on its block. \
+            The shops and cafés inside the block stay at street level, \
+            drawn over the walls of their own building, and none of them \
+            is missing. No label from the street behind the tall block \
+            shows through it, and nothing shows through the Kremlin \
+            towers. The labels on the streets in front and beside the \
+            block are all there, with the icon touching the ground. \
+            Compare with the frame below, where the same labels come \
+            through the walls.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.moscowOkhotnyRyadTilted)),
+
+        VisualReviewScenario(
+            id: "labels.occlusion.off",
+            title: "Okhotny Ryad, labels drawn through the buildings",
+            lookFor: """
+            The control for the frame above, with `hidesBehindBuildings` \
+            off: the labels of the streets behind the block show through \
+            its walls, as if the buildings were flat.
+            """,
+            settings: labelsThroughBuildingsSettings,
+            subject: .still(camera: Place.moscowOkhotnyRyadTilted)),
 
         VisualReviewScenario(
             id: "labels.romanized.moscow",
@@ -409,7 +455,7 @@ enum VisualReviewCatalogue {
             regional ones. The land use is in its own colours (a faint green \
             over protected areas, the built tone over anything unnamed), the \
             lake names stay on the water, and the POIs the tiles carry show \
-            with their icons, a plain marker where there is no icon.
+            with their icons, the name alone where there is no icon.
             """,
             settings: .default,
             subject: .still(camera: Place.moscowRegion)),
@@ -419,9 +465,13 @@ enum VisualReviewCatalogue {
             title: "Everything the tiles ship, street zoom",
             lookFor: """
             Every POI in the z15 tiles is on the map: shops, bus stops, \
-            parking, ATMs, benches, each with its icon or the plain marker, as \
+            parking, ATMs, benches, each with its icon or its name alone, as \
             many as the collisions leave room for. House numbers are small \
             grey text on the buildings and give way to every other label. \
+            The numbers and the POIs without an icon (offices, plaques) show \
+            only near the camera, at the foot of the frame: none up the \
+            street toward the horizon, where they would be a scatter of \
+            small text. \
             Sidewalks, crossings and the subway (faint, in its tunnel) draw, \
             a road with a route number carries it in its label, and one-way \
             arrows are on the one-way streets. Nothing should flicker as the \

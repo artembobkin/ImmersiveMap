@@ -557,12 +557,15 @@ enum PreparedTileDiskCodec {
         let tileZ: Int32
         let tileSlotIndex: UInt32
         let roofHeight: Float
+        let liftsToRoof: Bool
+        let roofIsReplaced: Bool
         let key: UInt64
         let sortKey: Int32
         let collisionPriority: Int32
         let labelWidthPoints: Float
         let labelHeightPoints: Float
         let minCameraZoom: Float
+        let isLocal: Bool
 
         init(_ input: TextLabelPlacementInput) throws {
             uvX = input.pointInput.uv.x
@@ -572,12 +575,15 @@ enum PreparedTileDiskCodec {
             tileZ = input.pointInput.tile.z
             tileSlotIndex = input.pointInput.tileSlotIndex
             roofHeight = input.pointInput.roofHeight
+            liftsToRoof = input.pointInput.liftsToRoof != 0
+            roofIsReplaced = input.pointInput.roofIsReplaced != 0
             key = input.placementMeta.key
             sortKey = try encodeInt32(input.placementMeta.sortKey, field: "LabelPlacementMeta.sortKey")
             collisionPriority = try encodeInt32(input.placementMeta.collisionPriority, field: "LabelPlacementMeta.collisionPriority")
             labelWidthPoints = input.placementMeta.labelSizePoints.x
             labelHeightPoints = input.placementMeta.labelSizePoints.y
             minCameraZoom = input.placementMeta.minCameraZoom
+            isLocal = input.placementMeta.isLocal
         }
 
         func runtimeValue() -> TextLabelPlacementInput {
@@ -585,12 +591,15 @@ enum PreparedTileDiskCodec {
                 pointInput: TilePointInput(uv: SIMD2<Float>(uvX, uvY),
                                            tile: SIMD3<Int32>(tileX, tileY, tileZ),
                                            tileSlotIndex: tileSlotIndex,
-                                           roofHeight: roofHeight),
+                                           roofHeight: roofHeight,
+                                           liftsToRoof: liftsToRoof ? 1 : 0,
+                                           roofIsReplaced: roofIsReplaced ? 1 : 0),
                 placementMeta: LabelPlacementMeta(key: key,
                                                   sortKey: Int(sortKey),
                                                   collisionPriority: Int(collisionPriority),
                                                   labelSizePoints: SIMD2<Float>(labelWidthPoints, labelHeightPoints),
-                                                  minCameraZoom: minCameraZoom)
+                                                  minCameraZoom: minCameraZoom,
+                                                  isLocal: isLocal)
             )
         }
     }

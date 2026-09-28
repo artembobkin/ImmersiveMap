@@ -28,6 +28,7 @@ final class BaseLabelCache {
         var labelCollisionPriorities: [Int]
         var labelSizes: [SIMD2<Float>]
         var labelMinCameraZooms: [Float]
+        var labelIsLocal: [Bool]
         var labelsByStyleRuns: [LabelsByStyleRun]
         var poiIconRuns: [PoiIconRunBuffer]
         var routeShieldRuns: [RouteShieldRunBuffer]
@@ -251,7 +252,8 @@ final class BaseLabelCache {
                 presentationInputs[index] = BaseLabelPresentationInput(labelKey: labelKey,
                                                                        duplicate: duplicateFlag,
                                                                        isValid: true,
-                                                                       minCameraZoom: record.labelMinCameraZooms[index])
+                                                                       minCameraZoom: record.labelMinCameraZooms[index],
+                                                                       isLocal: record.labelIsLocal[index])
                 seenLabelKeys.insert(labelKey)
             }
 
@@ -311,6 +313,7 @@ final class BaseLabelCache {
                 existingRecord.labelCollisionPriorities = selectedTextLabelSet.placementInputs.map(\.placementMeta.collisionPriority)
                 existingRecord.labelSizes = selectedTextLabelSet.placementInputs.map(\.placementMeta.labelSizePoints)
                 existingRecord.labelMinCameraZooms = selectedTextLabelSet.placementInputs.map(\.placementMeta.minCameraZoom)
+                existingRecord.labelIsLocal = selectedTextLabelSet.placementInputs.map(\.placementMeta.isLocal)
                 existingRecord.labelsByStyleRuns = selectedTextLabelSet.labelsByStyleRuns
                 existingRecord.poiIconRuns = selectedTextLabelSet.poiIconRuns
                 existingRecord.routeShieldRuns = selectedTextLabelSet.routeShieldRuns
@@ -336,6 +339,7 @@ final class BaseLabelCache {
                                                            labelCollisionPriorities: selectedTextLabelSet.placementInputs.map(\.placementMeta.collisionPriority),
                                                            labelSizes: selectedTextLabelSet.placementInputs.map(\.placementMeta.labelSizePoints),
                                                            labelMinCameraZooms: selectedTextLabelSet.placementInputs.map(\.placementMeta.minCameraZoom),
+                                                           labelIsLocal: selectedTextLabelSet.placementInputs.map(\.placementMeta.isLocal),
                                                            labelsByStyleRuns: selectedTextLabelSet.labelsByStyleRuns,
                                                            poiIconRuns: selectedTextLabelSet.poiIconRuns,
                                                            routeShieldRuns: selectedTextLabelSet.routeShieldRuns)

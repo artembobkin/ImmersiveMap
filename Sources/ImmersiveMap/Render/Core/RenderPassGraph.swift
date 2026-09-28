@@ -8,7 +8,8 @@ final class RenderPassGraph {
     static func isWorldLayer(_ layer: RenderLayer) -> Bool {
         switch layer {
         case .starfield, .globeVectorSurface, .globeCap,
-             .tileOwnership, .flatMapSurface, .surfaceLabels, .buildingExtrusion, .sceneModels, .horizon:
+             .tileOwnership, .flatMapSurface, .surfaceLabels, .buildingExtrusion, .sceneModels,
+             .labelOcclusionProbe, .horizon:
             return true
         case .shadowCasters, .groundShadowMask, .postProcessing,
              .labels, .avatars, .debugOverlay:
@@ -22,7 +23,7 @@ final class RenderPassGraph {
             return true
         case .shadowCasters, .groundShadowMask, .starfield,
              .globeVectorSurface, .globeCap, .tileOwnership, .flatMapSurface, .surfaceLabels,
-             .buildingExtrusion, .sceneModels, .horizon, .postProcessing:
+             .buildingExtrusion, .sceneModels, .labelOcclusionProbe, .horizon, .postProcessing:
             return false
         }
     }
@@ -101,13 +102,19 @@ final class RenderPassGraph {
     private final class WorldDescriptorProvider: RenderPassDescriptorProvider {
         private let clearColor: MTLClearColor
         private let depthTexture: MTLTexture?
+        /// Where the world's depth is kept for the label pass: the depth
+        /// texture itself (stored) with one sample, a resolve target with
+        /// several; nil drops it when the pass ends, as always.
+        private let sceneDepthTexture: MTLTexture?
         private let outputPlan: RenderFrameOutputPlan
 
         init(clearColor: MTLClearColor,
              depthTexture: MTLTexture?,
+             sceneDepthTexture: MTLTexture? = nil,
              outputPlan: RenderFrameOutputPlan) {
             self.clearColor = clearColor
             self.depthTexture = depthTexture
+            self.sceneDepthTexture = sceneDepthTexture
             self.outputPlan = outputPlan
         }
 
@@ -152,6 +159,17 @@ final class RenderPassGraph {
                 descriptor.depthAttachment.loadAction = .clear
                 descriptor.depthAttachment.storeAction = .dontCare
                 descriptor.depthAttachment.clearDepth = 1.0
+                if let sceneDepthTexture {
+                    if sceneDepthTexture === depthTexture {
+                        descriptor.depthAttachment.storeAction = .store
+                    } else {
+                        // One sample serves: a road name is cut at a
+                        // building's edge to the pixel, not the sample.
+                        descriptor.depthAttachment.resolveTexture = sceneDepthTexture
+                        descriptor.depthAttachment.depthResolveFilter = .sample0
+                        descriptor.depthAttachment.storeAction = .multisampleResolve
+                    }
+                }
                 // The stencil half of the texture carries the tile-priority
                 // marks (TileSourceStencilPriority): cleared to 0, written by
                 // the ground's owner passes, never stored.
@@ -214,10 +232,22 @@ final class RenderPassGraph {
               target: FrameRenderTarget,
               renderGraph: RenderGraph) -> [RenderPassNode] {
         let resourceRegistry = renderGraph.resourceRegistry
-        let depthTexture = attachments.ensureDepthTexture(drawSize: frameContext.drawSize)
+        // A label layer that reads the world's depth (the road names under
+        // the buildings) keeps it past the world pass, on those frames only.
+        let keepsSceneDepth = frameContext.sharedState.sceneDepthForLabelsRequested
+            && attachments.supportsSceneDepth
+        let depthTexture = attachments.ensureDepthTexture(drawSize: frameContext.drawSize,
+                                                          keptForLabels: keepsSceneDepth)
         if let depthTexture {
             resourceRegistry.setTexture(depthTexture, named: .depthTexture)
         }
+        var sceneDepthTexture: MTLTexture?
+        if keepsSceneDepth {
+            sceneDepthTexture = attachments.sampleCount > 1
+                ? attachments.ensureSceneDepthResolveTexture(drawSize: frameContext.drawSize)
+                : depthTexture
+        }
+        frameContext.sharedState.sceneDepthTexture = sceneDepthTexture
 
         let clearColor = RenderFrameClearColor.make(transition: frameContext.transition,
                                                     settings: settings,
@@ -269,6 +299,7 @@ final class RenderPassGraph {
         nodes.append(RenderPassNode(name: .world,
                                     descriptorProvider: WorldDescriptorProvider(clearColor: clearColor,
                                                                                 depthTexture: depthTexture,
+                                                                                sceneDepthTexture: sceneDepthTexture,
                                                                                 outputPlan: outputPlan),
                                     layers: mergesOverlayIntoWorld ? worldLayers + overlayLayers : worldLayers))
         if outputPlan.includesPostProcessingPass {

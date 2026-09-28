@@ -113,10 +113,25 @@ final class BuildingRoofLabelTests: XCTestCase {
         XCTAssertFalse(BuildingRoofCoverage.none.drawsBuildings(tile: SIMD3(100, 200, 14), uv: SIMD2(0.5, 0.5)))
     }
 
-    /// The roof rides in what was padding: the stride stays the one the
-    /// GPU mirror (`TilePointInputGpu`) reads.
+    /// The roof and the lift flag ride in what was padding: the stride
+    /// stays the one the GPU mirror (`TilePointInputGpu`) reads.
     func testTheRoofKeepsThePointInputLayout() {
         XCTAssertEqual(MemoryLayout<TilePointInput>.stride, 48)
         XCTAssertEqual(MemoryLayout<TilePointInput>.offset(of: \.roofHeight), 36)
+        XCTAssertEqual(MemoryLayout<TilePointInput>.offset(of: \.liftsToRoof), 40)
+        XCTAssertEqual(MemoryLayout<TilePointInput>.offset(of: \.roofIsReplaced), 44)
+    }
+
+    /// A building a landmark model stands in for keeps its roof for the
+    /// labels in it, marked as replaced so the frame takes the model's top
+    /// there, and only there: the buildings around it keep their own.
+    func testAReplacedBuildingsRoofIsMarkedAsReplaced() {
+        let roofs = BuildingRoofLookup(
+            candidates: [makeCandidate(buildingId: 1, exterior: square(x: 1000, y: 1000, size: 200), topHeight: 12)],
+            replacedCandidates: [makeCandidate(buildingId: 2, exterior: square(x: 2000, y: 2000, size: 200), topHeight: 80)])
+
+        XCTAssertEqual(roofs.roof(atTilePoint: tilePoint(1100, 1100)), BuildingRoofLookup.Roof(height: 12, isReplaced: false))
+        XCTAssertEqual(roofs.roof(atTilePoint: tilePoint(2100, 2100)), BuildingRoofLookup.Roof(height: 80, isReplaced: true))
+        XCTAssertEqual(roofs.roof(atTilePoint: tilePoint(3000, 3000)), .none)
     }
 }
