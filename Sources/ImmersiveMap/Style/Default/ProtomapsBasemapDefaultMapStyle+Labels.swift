@@ -209,7 +209,8 @@ extension ProtomapsBasemapDefaultMapStyle {
                           rank: minZoomRank(props: props),
                           appearance: appearance,
                           minCameraZoom: minCameraZoom,
-                          icon: icon)
+                          icon: icon,
+                          standsOnRoof: theme.features.labelsStandOnRoofs)
     }
 
     /// A house number: the address points of the `buildings` layer, which
@@ -228,7 +229,8 @@ extension ProtomapsBasemapDefaultMapStyle {
                           band: .address,
                           rank: 0,
                           appearance: appearance,
-                          minCameraZoom: Float(theme.labelVisibility.addressMinimumZoom))
+                          minCameraZoom: Float(theme.labelVisibility.addressMinimumZoom),
+                          standsOnRoof: theme.features.labelsStandOnRoofs)
     }
 
     /// The POI categories that wait for a zoom of their own
@@ -371,14 +373,16 @@ extension ProtomapsBasemapDefaultMapStyle {
                     appearance: ProtomapsBasemapTheme.LabelAppearance,
                     minCameraZoom: Float = 0,
                     icon: PoiSpriteIcon? = nil,
-                    placement: LabelPlacement = .screen) -> FeatureStyle {
+                    placement: LabelPlacement = .screen,
+                    standsOnRoof: Bool = false) -> FeatureStyle {
         FeatureStyle.pointLabel(key: key,
                                 labelTextStyle(key: Int(key), appearance: appearance),
                                 rank: rank,
                                 collisionRank: Self.labelCollisionRank(band: band, rank: rank),
                                 minCameraZoom: minCameraZoom,
                                 icon: icon,
-                                placement: placement)
+                                placement: placement,
+                                standsOnRoof: standsOnRoof)
     }
 
     func labelTextStyle(key: Int,

@@ -829,7 +829,10 @@ final class PreparedTileDiskCaching {
     // shows a local name in that alphabet before the English one
     // (`VectorTileLabelLanguagePreferences`). A v118 entry holds the
     // English name.
-    static let preparedFormatVersion: UInt32 = 119
+    // 120: a point label carries the roof it stands on
+    // (`TilePointInput.roofHeight`), which the entry's placement inputs
+    // store. A v119 entry has no such field.
+    static let preparedFormatVersion: UInt32 = 120
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

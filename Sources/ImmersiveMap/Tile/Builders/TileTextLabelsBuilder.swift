@@ -102,7 +102,10 @@ final class TileTextLabelsBuilder {
             let uvX = Double(pos.x) / 4096.0
             let uvY = Double(pos.y) / 4096.0
             let uv = SIMD2<Float>(Float(uvX), Float(uvY))
-            let pointInput = TilePointInput(uv: uv, tile: tileIndices, tileSlotIndex: 0)
+            let pointInput = TilePointInput(uv: uv,
+                                            tile: tileIndices,
+                                            tileSlotIndex: 0,
+                                            roofHeight: label.roofHeight)
 
             if let routeShields = label.routeShields {
                 let geometry = makeRouteShieldGeometry(routeShields,

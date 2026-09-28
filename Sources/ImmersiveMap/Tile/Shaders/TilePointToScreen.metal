@@ -19,7 +19,9 @@ struct TilePointInputGpu {
     float2 _padding0;
     int3 tile;
     uint tileSlotIndex;
-    uint _padding1;
+    // The roof the point stands on (TilePointInput.roofHeight). Only the
+    // CPU projector of the base labels reads it.
+    float roofHeight;
     uint _padding2;
     uint _padding3;
 };

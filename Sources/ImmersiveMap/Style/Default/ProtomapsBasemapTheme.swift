@@ -461,11 +461,18 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// the way buildings draw on the globe. Baked into the prepared
         /// tiles, so a change re-parses them, like any other theme change.
         public var buildingExtrusion: Bool
+        /// Whether the POIs and the house numbers inside an extruded
+        /// building stand on its roof rather than on the ground under it,
+        /// the way a skyscraper's name sits on its top. Baked into the
+        /// prepared tiles, so a change re-parses them.
+        public var labelsStandOnRoofs: Bool
 
         public init(buildingFillColor: SIMD4<Float>,
-                    buildingExtrusion: Bool = true) {
+                    buildingExtrusion: Bool = true,
+                    labelsStandOnRoofs: Bool = true) {
             self.buildingFillColor = buildingFillColor
             self.buildingExtrusion = buildingExtrusion
+            self.labelsStandOnRoofs = labelsStandOnRoofs
         }
     }
 
@@ -579,6 +586,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         add(layers.roads.casing); add(layers.roads.marking)
         add(features.buildingFillColor)
         out.append(features.buildingExtrusion ? 1 : 0)
+        out.append(features.labelsStandOnRoofs ? 1 : 0)
         add(labels.city); add(labels.town); add(labels.country)
         add(labels.poi); add(labels.water); add(labels.road)
         // Not palette values, but they change which labels are drawn, so they

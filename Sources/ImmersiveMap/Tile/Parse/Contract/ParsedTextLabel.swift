@@ -22,6 +22,13 @@ struct ParsedTextLabel {
     /// The route signs the label draws instead of its text, nil for a
     /// plain label.
     let routeShields: RouteShieldStyle?
+    /// Whether the label rises to the roof of the building it stands in
+    /// (`PointLabelStyle.standsOnRoof`).
+    let standsOnRoof: Bool
+    /// The roof over the anchor in tile units, the extrusion mesh's own
+    /// height scale, set once the tile's buildings are resolved. Zero on
+    /// the ground.
+    var roofHeight: Float = 0
 
     init(text: String,
          position: SIMD2<Int16>,
@@ -49,6 +56,7 @@ struct ParsedTextLabel {
         self.minCameraZoom = minCameraZoom
         self.placement = placement
         self.routeShields = nil
+        self.standsOnRoof = false
     }
 
     init(text: String,
@@ -60,7 +68,8 @@ struct ParsedTextLabel {
          poiIcon: PoiSpriteIcon? = nil,
          minCameraZoom: Float = 0,
          placement: LabelPlacement = .screen,
-         routeShields: RouteShieldStyle? = nil) {
+         routeShields: RouteShieldStyle? = nil,
+         standsOnRoof: Bool = false) {
         self.text = text
         self.position = position
         self.key = key
@@ -71,5 +80,6 @@ struct ParsedTextLabel {
         self.minCameraZoom = minCameraZoom
         self.placement = placement
         self.routeShields = routeShields
+        self.standsOnRoof = standsOnRoof
     }
 }

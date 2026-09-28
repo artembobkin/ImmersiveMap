@@ -383,6 +383,12 @@ public struct PointLabelStyle: Sendable {
     /// map draws its text alone: the icon, the ranks and the minimum camera
     /// zoom belong to the screen labels.
     public var placement: LabelPlacement
+    /// Whether a screen label standing inside an extruded building rises to
+    /// its roof. The anchor is lifted to the top of the tallest volume whose
+    /// footprint holds it, wherever the frame draws that building, and
+    /// stays on the ground where it draws none (the globe, a zoom coarser
+    /// than the building tiles, beyond the near field).
+    public var standsOnRoof: Bool
 
     public init(key: UInt8,
                 text: LabelTextStyle,
@@ -390,7 +396,8 @@ public struct PointLabelStyle: Sendable {
                 collisionRank: Int? = nil,
                 minCameraZoom: Float = 0,
                 icon: PoiSpriteIcon? = nil,
-                placement: LabelPlacement = .screen) {
+                placement: LabelPlacement = .screen,
+                standsOnRoof: Bool = false) {
         self.key = key
         self.text = text
         self.rank = rank
@@ -398,6 +405,7 @@ public struct PointLabelStyle: Sendable {
         self.minCameraZoom = minCameraZoom
         self.icon = icon
         self.placement = placement
+        self.standsOnRoof = standsOnRoof
     }
 }
 
@@ -541,14 +549,16 @@ public extension FeatureStyle {
                            collisionRank: Int? = nil,
                            minCameraZoom: Float = 0,
                            icon: PoiSpriteIcon? = nil,
-                           placement: LabelPlacement = .screen) -> FeatureStyle {
+                           placement: LabelPlacement = .screen,
+                           standsOnRoof: Bool = false) -> FeatureStyle {
         .pointLabel(PointLabelStyle(key: key,
                                     text: Self.keyed(textStyle, key: key),
                                     rank: rank,
                                     collisionRank: collisionRank,
                                     minCameraZoom: minCameraZoom,
                                     icon: icon,
-                                    placement: placement))
+                                    placement: placement,
+                                    standsOnRoof: standsOnRoof))
     }
 
     /// A road drawn as a line of a width in tile units, with its name laid

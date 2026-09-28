@@ -264,11 +264,28 @@ final class TileMvtParser {
         groundReader.finish(tile: tile, addTestBorders: options.addTestBorders, into: &result)
 
         // Only once every layer is read: an outline can come after its parts.
-        buildingReader.appendExtrudedMeshes(resolving: replacedBuildings.remaining(buildingExtrusionCandidates),
-                                            into: &result)
+        let extrudedVolumes = buildingReader.appendExtrudedMeshes(
+            resolving: replacedBuildings.remaining(buildingExtrusionCandidates),
+            into: &result)
+        liftLabelsOntoRoofs(of: extrudedVolumes, into: &result)
 
         result.removeEmptyBuckets()
         return result
+    }
+
+    /// The labels whose style stands them on a roof take the height of the
+    /// roof over their anchor, from the volumes the tile draws. A label on
+    /// open ground, or in a building a landmark model replaces, keeps zero.
+    private func liftLabelsOntoRoofs(of volumes: [BuildingExtrusionCandidate],
+                                     into result: inout ReadingStageResult) {
+        guard volumes.isEmpty == false,
+              result.textLabels.contains(where: \.standsOnRoof) else {
+            return
+        }
+        let roofs = BuildingRoofLookup(candidates: volumes)
+        for index in result.textLabels.indices where result.textLabels[index].standsOnRoof {
+            result.textLabels[index].roofHeight = roofs.roofHeight(atTilePoint: result.textLabels[index].position)
+        }
     }
 
     /// A polygon feature by the case of its style: a fill (with the ocean

@@ -398,7 +398,7 @@ enum BuildingExtrusionResolver {
         }
     }
 
-    private static func pointInRing(_ point: SIMD2<Float>, ring: [SIMD2<Float>]) -> Bool {
+    static func pointInRing(_ point: SIMD2<Float>, ring: [SIMD2<Float>]) -> Bool {
         guard ring.count >= 3 else { return false }
 
         let epsilon: Float = 0.001

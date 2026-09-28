@@ -43,10 +43,13 @@ struct TilePointScreenProjector {
 
     /// The same projection written into the caller's arrays, which are
     /// resized to the snapshot only when they do not fit: a frame with a
-    /// stable label set projects without allocating.
+    /// stable label set projects without allocating. On the flat map a
+    /// point with a roof (`TilePointInput.roofHeight`) is lifted onto it
+    /// where `roofCoverage` says the frame draws the buildings.
     func projectWithHorizonVisibility(snapshot: TilePointToScreenPointSnapshot,
                                       frameContext: FrameContext,
                                       tileOriginData: [FlatTileOriginData],
+                                      roofCoverage: BuildingRoofCoverage = .none,
                                       screenPoints: inout [ScreenPointOutput],
                                       horizonVisibility: inout [Bool]) {
         let count = snapshot.pointsCount
@@ -65,6 +68,7 @@ struct TilePointScreenProjector {
             projectFlatScreenPoints(snapshot: snapshot,
                                     frameContext: frameContext,
                                     tileOriginData: tileOriginData,
+                                    roofCoverage: roofCoverage,
                                     into: &screenPoints)
             for index in 0..<count {
                 horizonVisibility[index] = screenPoints[index].visible != 0
@@ -130,6 +134,7 @@ struct TilePointScreenProjector {
     private func projectFlatScreenPoints(snapshot: TilePointToScreenPointSnapshot,
                                          frameContext: FrameContext,
                                          tileOriginData: [FlatTileOriginData],
+                                         roofCoverage: BuildingRoofCoverage = .none,
                                          into outputs: inout [ScreenPointOutput]) {
         let viewport = SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height))
         let cameraMatrix = frameContext.cameraMatrices.projectionView
@@ -157,7 +162,13 @@ struct TilePointScreenProjector {
             let local = SIMD2<Float>(input.uv.x * originData.size,
                                      (1.0 - input.uv.y) * originData.size)
             let worldPosition = originData.panRelativeOrigin + local
-            let world = SIMD4<Float>(worldPosition.x, worldPosition.y, 0.0, 1.0)
+            // The roof is in the tile's 4096 units, the extrusion mesh's
+            // scale, so the same tile size that places the point raises it
+            // to the roof the building draws.
+            let roofZ = input.roofHeight > 0 && roofCoverage.drawsBuildings(tile: input.tile, uv: input.uv)
+                ? input.roofHeight * originData.size / 4096.0
+                : 0.0
+            let world = SIMD4<Float>(worldPosition.x, worldPosition.y, roofZ, 1.0)
             let clip = cameraMatrix * world
             outputs[index] = screenPointFromClip(clip: clip, viewportSize: viewport)
         }

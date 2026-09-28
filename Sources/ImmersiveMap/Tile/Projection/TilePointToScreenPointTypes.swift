@@ -13,6 +13,11 @@ struct TilePointInput {
     var uv: SIMD2<Float>
     var tile: SIMD3<Int32>
     var tileSlotIndex: UInt32 = 0
+    /// The roof the point stands on in tile units (a 4096 extent), the
+    /// extrusion mesh's height scale. Zero on the ground. The flat
+    /// projection lifts the point by it where the frame draws buildings.
+    /// It sits in what was padding, so the stride stays the GPU mirror's.
+    var roofHeight: Float = 0
 }
 
 struct ScreenParams {

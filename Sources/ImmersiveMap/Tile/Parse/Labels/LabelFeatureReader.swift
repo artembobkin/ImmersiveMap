@@ -55,7 +55,8 @@ struct LabelFeatureReader {
                                                      textStyle: decision.style,
                                                      poiIcon: decision.poiIcon,
                                                      minCameraZoom: style.minCameraZoom,
-                                                     placement: style.placement))
+                                                     placement: style.placement,
+                                                     standsOnRoof: style.standsOnRoof && style.placement == .screen))
             if label.namesWaterBody {
                 result.waterNameTexts.insert(decision.text)
             }

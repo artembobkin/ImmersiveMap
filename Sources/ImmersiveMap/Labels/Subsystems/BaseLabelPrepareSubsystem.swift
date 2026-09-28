@@ -58,6 +58,12 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     /// reuses both.
     private var projectedCameraFingerprint: Int?
     private var solvedCameraFingerprint: Int?
+    /// Where the frame draws buildings, which the labels standing on roofs
+    /// are lifted inside. It changes as the building tiles arrive or leave
+    /// with the camera still, and a change re-projects and re-solves like
+    /// a camera move.
+    private var roofCoverage = BuildingRoofCoverage.none
+    private var projectedRoofCoverage: BuildingRoofCoverage?
     private var solvedPixelsPerPoint: Float = 0
 
     // Index-aligned with the base label set; sized at a topology change,
@@ -157,10 +163,14 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             }
         }
 
+        roofCoverage = BuildingRoofCoverage(
+            placeTilesContext: frameContext.sharedState.tilePlacementState.buildingPlaceTilesContext)
         let cameraChanged = projectedCameraFingerprint != latestCameraFingerprint
+            || projectedRoofCoverage != roofCoverage
         if cameraChanged || topologyChanged {
             projectBaseLabels(frameContext: frameContext)
             projectedCameraFingerprint = latestCameraFingerprint
+            projectedRoofCoverage = roofCoverage
         }
 
         let pixelsPerPoint = frameContext.screenScale.pixelsPerPoint
@@ -438,6 +448,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         tilePointScreenProjector.projectWithHorizonVisibility(snapshot: baseLabelCache.tilePointSnapshot,
                                                               frameContext: frameContext,
                                                               tileOriginData: projectionIndexState.tileOriginData,
+                                                              roofCoverage: roofCoverage,
                                                               screenPoints: &baseScreenPoints,
                                                               horizonVisibility: &baseHorizonVisible)
         for index in baseScreenPoints.indices {

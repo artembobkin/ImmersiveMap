@@ -103,6 +103,13 @@ enum VisualReviewCatalogue {
                                                           zoom: 16,
                                                           bearing: 0.6,
                                                           pitch: 0.9)
+        /// Midtown close and steep, so the towers stand tall in frame and
+        /// their POIs are in.
+        static let manhattanRoofs = ImmersiveMapCameraPosition(latitudeDegrees: 40.7549,
+                                                               longitudeDegrees: -73.9840,
+                                                               zoom: 16.5,
+                                                               bearing: 0.6,
+                                                               pitch: 1.0)
         static let manhattanFlat = ImmersiveMapCameraPosition(latitudeDegrees: 40.7549,
                                                               longitudeDegrees: -73.9840,
                                                               zoom: 15)
@@ -608,6 +615,35 @@ enum VisualReviewCatalogue {
             """,
             settings: .default.shadows(isEnabled: false),
             subject: .still(camera: Place.manhattan)),
+
+        VisualReviewScenario(
+            id: "labels.roofs.manhattan",
+            title: "Midtown, labels on the roofs",
+            lookFor: """
+            A POI or a house number inside a building stands on its roof: \
+            the icon and the name sit at the top of the tower, not at the \
+            foot of its walls, and a skyscraper's label is high above the \
+            street while a low building's is just over its roof. A label on \
+            open ground (a plaza, a park, a street corner) stays on the \
+            ground. Look for labels floating over empty air beside a tower \
+            (the anchor matched the wrong footprint), labels sunk into a \
+            roof or hovering above it (a height mismatch), and labels that \
+            jump while the frame is still.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.manhattanRoofs)),
+
+        VisualReviewScenario(
+            id: "labels.roofs.off",
+            title: "Midtown with labels on the ground",
+            lookFor: """
+            The control for the frame above: the same scene with \
+            `labelsStandOnRoofs` off, every label at the foot of its \
+            building. Compare where the two put the same label.
+            """,
+            settings: .default.mapStyle(AnyImmersiveMapMapStyle(ProtomapsBasemapMapStyle(
+                theme: ProtomapsBasemapTheme.default.features { $0.labelsStandOnRoofs = false }))),
+            subject: .still(camera: Place.manhattanRoofs)),
 
         VisualReviewScenario(
             id: "roads.carriageways.street",

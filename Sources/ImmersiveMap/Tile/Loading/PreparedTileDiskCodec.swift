@@ -556,6 +556,7 @@ enum PreparedTileDiskCodec {
         let tileY: Int32
         let tileZ: Int32
         let tileSlotIndex: UInt32
+        let roofHeight: Float
         let key: UInt64
         let sortKey: Int32
         let collisionPriority: Int32
@@ -570,6 +571,7 @@ enum PreparedTileDiskCodec {
             tileY = input.pointInput.tile.y
             tileZ = input.pointInput.tile.z
             tileSlotIndex = input.pointInput.tileSlotIndex
+            roofHeight = input.pointInput.roofHeight
             key = input.placementMeta.key
             sortKey = try encodeInt32(input.placementMeta.sortKey, field: "LabelPlacementMeta.sortKey")
             collisionPriority = try encodeInt32(input.placementMeta.collisionPriority, field: "LabelPlacementMeta.collisionPriority")
@@ -582,7 +584,8 @@ enum PreparedTileDiskCodec {
             TextLabelPlacementInput(
                 pointInput: TilePointInput(uv: SIMD2<Float>(uvX, uvY),
                                            tile: SIMD3<Int32>(tileX, tileY, tileZ),
-                                           tileSlotIndex: tileSlotIndex),
+                                           tileSlotIndex: tileSlotIndex,
+                                           roofHeight: roofHeight),
                 placementMeta: LabelPlacementMeta(key: key,
                                                   sortKey: Int(sortKey),
                                                   collisionPriority: Int(collisionPriority),
