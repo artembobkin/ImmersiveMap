@@ -159,6 +159,44 @@ final class HorizonFrameResolverTests: XCTestCase {
         XCTAssertTrue(haze.drawsGround, "Pitched almost to the horizon, the band is in the frame")
     }
 
+    func testTheHazeFadesOutWithTheZoomUnderAFullSky() {
+        let settings = ImmersiveMapSettings.default.fog(hazeZoomFade: .fadeOut(from: 18, to: 19))
+        let on = resolve(settings: settings, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 18)
+        let half = resolve(settings: settings, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 18.5)
+        let gone = resolve(settings: settings, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 19)
+        let plain = resolve(settings: .default, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 18)
+
+        XCTAssertEqual(on, plain, "Up to the fade's start the fog is exactly the fog without a fade")
+
+        // Past the fade's end the sky and the tint are still the fog's,
+        // and the ground wears the seam band alone, in the horizon colour.
+        XCTAssertEqual(gone.skyOpacity, plain.skyOpacity)
+        XCTAssertEqual(gone.skyColor, plain.skyColor)
+        XCTAssertEqual(gone.tint, plain.tint)
+        XCTAssertEqual(gone.groundGain, HorizonFrameResolver.fogGain, accuracy: 1e-6)
+        XCTAssertEqual(gone.groundBandRadians, HorizonFrameResolver.fogBandRadians, accuracy: 1e-6)
+        XCTAssertEqual(gone.cutoffStartRadians, HorizonFrameResolver.fogCutoffStartRadians, accuracy: 1e-6)
+        XCTAssertEqual(gone.cutoffEndRadians, HorizonFrameResolver.fogCutoffEndRadians, accuracy: 1e-6)
+        XCTAssertTrue(gone.drawsSky)
+        XCTAssertTrue(gone.drawsGround)
+
+        // Halfway: the ground profile between the two, the sky untouched.
+        XCTAssertEqual(half.skyOpacity, plain.skyOpacity)
+        XCTAssertEqual(half.tint, plain.tint)
+        XCTAssertEqual(half.groundGain, (on.groundGain + gone.groundGain) * 0.5, accuracy: 1e-6)
+        XCTAssertEqual(half.groundBandRadians, (on.groundBandRadians + gone.groundBandRadians) * 0.5, accuracy: 1e-6)
+        XCTAssertEqual(half.cutoffStartRadians, (on.cutoffStartRadians + gone.cutoffStartRadians) * 0.5, accuracy: 1e-6)
+        XCTAssertEqual(half.cutoffEndRadians, (on.cutoffEndRadians + gone.cutoffEndRadians) * 0.5, accuracy: 1e-6)
+    }
+
+    func testTheFogOffIgnoresTheHazeZoomFade() {
+        let settings = ImmersiveMapSettings.default.fog(isEnabled: false).fog(hazeZoomFade: .fadeOut(from: 18, to: 19))
+        let low = resolve(settings: settings, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 10)
+        let off = resolve(settings: ImmersiveMapSettings.default.fog(isEnabled: false),
+                          transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 10)
+        XCTAssertEqual(low, off)
+    }
+
     /// The plane's treatment does not depend on the atmosphere switch.
     func testTheFogBandIsRequired() {
         let on = resolve(settings: .default, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25)
@@ -315,7 +353,8 @@ final class HorizonFrameResolverTests: XCTestCase {
                          mode: ViewMode,
                          radius: Float? = nil,
                          pitch: Float = 0,
-                         heightPx: Float = 200) -> HorizonHaze {
+                         heightPx: Float = 200,
+                         zoom: Double = 8) -> HorizonHaze {
         let radius = radius ?? self.radius
         let pitchRotation = simd_quatf(angle: pitch, axis: SIMD3<Float>(1, 0, 0))
         let eye = simd_act(pitchRotation, SIMD3<Float>(0, 0, 1))
@@ -325,6 +364,7 @@ final class HorizonFrameResolverTests: XCTestCase {
         return HorizonFrameResolver.resolve(settings: settings,
                                             mapColor: mapColor,
                                             transition: transition,
+                                            zoom: zoom,
                                             globe: GlobeUniform(panX: 0, panY: 0, radius: radius, transition: geometryTransition),
                                             renderSurfaceMode: mode,
                                             cameraEye: eye,
@@ -377,6 +417,7 @@ final class HorizonBandMathTests: XCTestCase {
         return HorizonFrameResolver.resolve(settings: .default,
                                             mapColor: ProtomapsBasemapTheme.default.baseColors.map,
                                             transition: 0,
+                                            zoom: 2,
                                             globe: GlobeUniform(panX: 0, panY: 0, radius: radius, transition: 0),
                                             renderSurfaceMode: .spherical,
                                             cameraEye: eye,
@@ -404,6 +445,7 @@ final class HorizonBandMathTests: XCTestCase {
         let low = HorizonFrameResolver.resolve(settings: .default,
                                                mapColor: ProtomapsBasemapTheme.default.baseColors.map,
                                                transition: 0,
+                                               zoom: 2,
                                                globe: GlobeUniform(panX: 0, panY: 0, radius: 200, transition: 0),
                                                renderSurfaceMode: .spherical,
                                                cameraEye: eye,

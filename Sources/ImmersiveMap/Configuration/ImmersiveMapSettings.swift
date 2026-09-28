@@ -1014,15 +1014,31 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// Stated in camera distances rather than metres so the same
         /// fraction of the visible ground is hazy at every zoom.
         public var hazeRange: ClosedRange<Float>
+        /// How the haze over the far ground comes and goes with the camera
+        /// zoom. The sky is not touched. `.none` (the default) keeps the
+        /// haze at every zoom. A fade-out, say `.fadeOut(from: 18, to: 19)`,
+        /// thins it over that stretch of zoom, and from 19 on the ground
+        /// keeps only the thin band into the horizon colour at the line
+        /// that hides the seam with the sky. Evaluated against the camera
+        /// zoom each frame, so a zoom gesture plays the fade.
+        public var hazeZoomFade: ImmersiveMapZoomFade
 
         public init(isEnabled: Bool = true,
                     skyColor: SIMD3<Float> = SIMD3<Float>(0.40, 0.66, 1.0),
                     horizonColor: SIMD3<Float> = SIMD3<Float>(0.97, 0.97, 0.98),
-                    hazeRange: ClosedRange<Float> = 6...40) {
+                    hazeRange: ClosedRange<Float> = 6...40,
+                    hazeZoomFade: ImmersiveMapZoomFade = .none) {
             self.isEnabled = isEnabled
             self.skyColor = skyColor
             self.horizonColor = horizonColor
             self.hazeRange = hazeRange
+            self.hazeZoomFade = hazeZoomFade
+        }
+
+        /// How much of the haze is on at a camera zoom: 0 with the fog off,
+        /// otherwise the haze zoom fade's share, 1 for `.none`.
+        func hazeStrength(atZoom zoom: Double) -> Float {
+            isEnabled ? hazeZoomFade.alpha(atZoom: zoom) : 0
         }
     }
 
@@ -1589,6 +1605,14 @@ public extension ImmersiveMapSettings {
     func fog(isEnabled: Bool = true) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.fog.isEnabled = isEnabled
+        return settings
+    }
+
+    /// The flat map's haze over the far ground fading with the camera
+    /// zoom, the sky untouched; see `FogSettings.hazeZoomFade`.
+    func fog(hazeZoomFade: ImmersiveMapZoomFade) -> ImmersiveMapSettings {
+        var settings = self
+        settings.scene.fog.hazeZoomFade = hazeZoomFade
         return settings
     }
 

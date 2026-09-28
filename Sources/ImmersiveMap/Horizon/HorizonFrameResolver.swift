@@ -24,7 +24,12 @@ import simd
 ///   nothing at the near one, and the map under the camera stays
 ///   byte-clean. With the fog off nothing is painted above the line and
 ///   the ground keeps a thin band into the map's clear colour at it, so
-///   the far range still meets the sky with no seam.
+///   the far range still meets the sky with no seam. The haze's zoom fade
+///   (`FogSettings.hazeZoomFade`) thins the haze alone by the camera
+///   zoom: its profile is mixed from the seam band's to the haze's by the
+///   fade's strength, while the sky and the tint at the line stay the
+///   fog's, so a faded-out haze leaves the seam band in the horizon
+///   colour under a full sky.
 ///
 /// The three never share a frame. The resting globe wears the first two.
 /// As the morph starts the atmosphere fades out, gone by
@@ -156,12 +161,14 @@ enum HorizonFrameResolver {
 
     /// - Parameters:
     ///   - transition: the semantic transition (the fades' clock).
+    ///   - zoom: the camera zoom, the haze zoom fade's clock.
     ///   - globe: the geometry transition and the resting radius.
     ///   - verticalFovRadians: the render camera's vertical field of view,
     ///     which with the drawable height sizes the feather in pixels.
     static func resolve(settings: ImmersiveMapSettings,
                         mapColor: SIMD4<Float>,
                         transition: Float,
+                        zoom: Double,
                         globe: GlobeUniform,
                         renderSurfaceMode: ViewMode,
                         cameraEye: SIMD3<Float>,
@@ -171,6 +178,16 @@ enum HorizonFrameResolver {
         let atmosphere = settings.scene.atmosphere
         let isOn = atmosphere.isEnabled
         let fog = settings.scene.fog
+        // The haze's share at this zoom: 0 with the fog off or the haze
+        // faded out, 1 fully on. A ground profile value is mixed from the
+        // seam band's to the haze's by it, the ends exact so both looks
+        // are reached bit for bit.
+        let hazeStrength = fog.hazeStrength(atZoom: zoom)
+        func mixed(_ band: Float, _ haze: Float) -> Float {
+            if hazeStrength <= 0 { return band }
+            if hazeStrength >= 1 { return haze }
+            return band + (haze - band) * hazeStrength
+        }
         let radius = max(globe.radius, 1e-6)
         let curvature = renderSurfaceMode == .spherical
             ? max(1 - min(max(globe.transition, 0), 1), 0) / radius
@@ -206,15 +223,14 @@ enum HorizonFrameResolver {
         let cosPitch = max(-simd_dot(centerDirection, edge.up), 0)
         let hazeStart = max(fog.hazeRange.lowerBound, minimumHazeStart)
         let hazeEnd = max(fog.hazeRange.upperBound, hazeStart + minimumHazeStart)
-        let planeCutoffStart = fog.isEnabled
-            ? max(HorizonEdgeMath.depression(atCameraDistances: hazeEnd, cosPitch: cosPitch), minimumRadians)
-            : fogCutoffStartRadians
-        let planeCutoffEnd = fog.isEnabled
-            ? max(HorizonEdgeMath.depression(atCameraDistances: hazeStart, cosPitch: cosPitch),
-                  planeCutoffStart + minimumRadians)
-            : fogCutoffEndRadians
-        let planeBand = fog.isEnabled ? planeCutoffEnd * hazeBandCutoffWidths : fogBandRadians
-        let planeGain = fog.isEnabled ? hazeGain : fogGain
+        let hazeCutoffStart = max(HorizonEdgeMath.depression(atCameraDistances: hazeEnd, cosPitch: cosPitch),
+                                  minimumRadians)
+        let hazeCutoffEnd = max(HorizonEdgeMath.depression(atCameraDistances: hazeStart, cosPitch: cosPitch),
+                                hazeCutoffStart + minimumRadians)
+        let planeCutoffStart = mixed(fogCutoffStartRadians, hazeCutoffStart)
+        let planeCutoffEnd = mixed(fogCutoffEndRadians, hazeCutoffEnd)
+        let planeBand = mixed(fogBandRadians, hazeCutoffEnd * hazeBandCutoffWidths)
+        let planeGain = mixed(fogGain, hazeGain)
 
         let rimRadians = haloRadians(haloRimRadii)
         let featherRadians = max(featherPixels * verticalFovRadians / max(drawableHeightPx, 1), minimumRadians)

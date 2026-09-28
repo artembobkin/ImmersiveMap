@@ -830,6 +830,25 @@ enum VisualReviewCatalogue {
             settings: .default,
             subject: .still(camera: Place.moscowRegionTilted)),
 
+        VisualReviewScenario(
+            id: "flat.horizon.haze.zoom.fade",
+            title: "The flat horizon's haze halfway through its zoom fade",
+            lookFor: """
+            The same tilt at the horizon line with the haze fading out \
+            between zoom 8 and 9, seen at 8.5. The sky exactly as in the \
+            fog scene: blue, with the pale glow at the line. Below the \
+            line the haze at half its reach and strength, the far ground \
+            showing through it, yet still one colour with the sky at the \
+            line: no seam and no hairline. At the fade's end only the thin \
+            white band at the line would remain under the same sky.
+            """,
+            settings: ImmersiveMapSettings.default.fog(hazeZoomFade: .fadeOut(from: 8, to: 9)),
+            subject: .still(camera: ImmersiveMapCameraPosition(latitudeDegrees: 55.9,
+                                                               longitudeDegrees: 37.6,
+                                                               zoom: 8.5,
+                                                               bearing: 0.0,
+                                                               pitch: 1.25))),
+
         // The showcase: the scenes the README opens with. Tilted cities,
         // content the public API puts on the map, and the dark palette.
 

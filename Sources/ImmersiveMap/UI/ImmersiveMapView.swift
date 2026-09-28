@@ -834,6 +834,22 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// The flat map's haze over the far ground fading with the camera
+    /// zoom, the sky untouched. A fade-out thins the haze over a stretch of
+    /// zoom, and past it the ground keeps only the thin band at the horizon
+    /// line that hides the seam with the sky, so a street-level view wears
+    /// no haze under a full sky:
+    ///
+    ///     ImmersiveMapView()
+    ///         .fog(hazeZoomFade: .fadeOut(from: 18, to: 19))
+    ///
+    /// `.none` (the default) keeps the haze at every zoom. Applies live.
+    public func fog(hazeZoomFade: ImmersiveMapZoomFade) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.fog(hazeZoomFade: hazeZoomFade)
+        return view
+    }
+
     public func shadows(isEnabled: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.shadows(isEnabled: isEnabled)

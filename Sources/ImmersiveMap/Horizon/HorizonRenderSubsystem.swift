@@ -44,6 +44,7 @@ final class HorizonRenderSubsystem: RenderSubsystem {
         HorizonFrameResolver.resolve(settings: frameContext.services.settings,
                                      mapColor: frameContext.services.baseColors.map,
                                      transition: frameContext.transition,
+                                     zoom: frameContext.zoom,
                                      globe: frameContext.globeRenderUniform,
                                      renderSurfaceMode: frameContext.renderSurfaceMode,
                                      cameraEye: frameContext.cameraEye,
