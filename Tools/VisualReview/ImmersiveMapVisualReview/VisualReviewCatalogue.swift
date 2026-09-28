@@ -95,6 +95,14 @@ enum VisualReviewCatalogue {
     /// reason that has nothing to do with the code.
     static let sceneDate = Date(timeIntervalSince1970: 1_749_000_000)
 
+    /// The default settings with the labels kept at their size at every
+    /// distance.
+    static var perspectiveOffSettings: ImmersiveMapSettings {
+        var settings = ImmersiveMapSettings.default
+        settings.labels.base.perspectiveMinimumScale = 1
+        return settings
+    }
+
     /// Places chosen for what they contain rather than for sentiment: dense
     /// blocks with towers, water against a coastline, and mountains.
     private enum Place {
@@ -318,6 +326,32 @@ enum VisualReviewCatalogue {
             three-line names are not here yet: they come in at z16 and z17.
             """,
             settings: .default,
+            subject: .still(camera: Place.moscowCentreTilted(zoom: 15))),
+
+        VisualReviewScenario(
+            id: "labels.perspective.moscow",
+            title: "Moscow centre, labels recede with the map",
+            lookFor: """
+            On the tilted map the labels shrink with their distance: at the \
+            centre of the frame and below it they are their full size, and \
+            toward the horizon they get smaller with the streets around \
+            them, down to about half size and no smaller. None grows larger \
+            than its size near the camera. The far labels pack closer as \
+            they shrink, without overlapping, and each stays crisp and \
+            readable with an even halo.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.moscowCentreTilted(zoom: 15))),
+
+        VisualReviewScenario(
+            id: "labels.perspective.off",
+            title: "Moscow centre, every label at its size",
+            lookFor: """
+            The control for the frame above, with \
+            `perspectiveMinimumScale` at 1: every label the same size from \
+            the bottom of the frame to the horizon.
+            """,
+            settings: perspectiveOffSettings,
             subject: .still(camera: Place.moscowCentreTilted(zoom: 15))),
 
         VisualReviewScenario(

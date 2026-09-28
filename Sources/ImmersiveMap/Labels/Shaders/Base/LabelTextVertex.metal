@@ -25,8 +25,11 @@ vertex VertexOut labelTextVertex(LabelVertexIn in [[stage_in]],
     // Glyph geometry and the collision box are both in layout points; the screen
     // position the label hangs off is already in device pixels, so the whole
     // label-local offset converts in one multiply.
+    // The label shrinks about its anchor for its distance
+    // (LabelRuntimeMeta.perspectiveScale), glyphs and box alike.
     float2 halfSize = runtimeState.labelSizePoints * 0.5;
-    float2 pixelPosition = screenPoint.position + (in.position - halfSize) * pixelsPerPoint;
+    float2 pixelPosition = screenPoint.position
+        + (in.position - halfSize) * (pixelsPerPoint * runtimeState.perspectiveScale);
     out.position = matrix * float4(pixelPosition, 0.0, 1.0);
     // Far-plane depth: the cleared overlay depth (1.0) passes the labels'
     // lessEqual test, and the fill and halo depths written just short of it

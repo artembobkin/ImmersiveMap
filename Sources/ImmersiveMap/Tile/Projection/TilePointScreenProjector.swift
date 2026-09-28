@@ -33,11 +33,13 @@ struct TilePointScreenProjector {
                                       frameContext: FrameContext,
                                       tileOriginData: [FlatTileOriginData]) -> TilePointScreenProjectionResult {
         var result = TilePointScreenProjectionResult.empty
+        var perspectiveScales: [Float] = []
         projectWithHorizonVisibility(snapshot: snapshot,
                                      frameContext: frameContext,
                                      tileOriginData: tileOriginData,
                                      screenPoints: &result.screenPoints,
-                                     horizonVisibility: &result.horizonVisibility)
+                                     horizonVisibility: &result.horizonVisibility,
+                                     perspectiveScales: &perspectiveScales)
         return result
     }
 
@@ -46,12 +48,21 @@ struct TilePointScreenProjector {
     /// stable label set projects without allocating. On the flat map a
     /// point with a roof (`TilePointInput.roofHeight`) is lifted onto it
     /// where `roofCoverage` says the frame draws the buildings.
+    ///
+    /// `perspectiveScales` receives each point's shrink for its distance:
+    /// the camera's depth of its focus (the world origin the camera looks
+    /// at, on the flat map and the globe alike) over the depth of the
+    /// point, clamped to `minimumPerspectiveScale...1`. A point at the
+    /// focus or nearer keeps its size, one twice as far is half as big down
+    /// to the minimum. A minimum of 1 keeps every point at its size.
     func projectWithHorizonVisibility(snapshot: TilePointToScreenPointSnapshot,
                                       frameContext: FrameContext,
                                       tileOriginData: [FlatTileOriginData],
                                       roofCoverage: BuildingRoofCoverage = .none,
+                                      minimumPerspectiveScale: Float = 1,
                                       screenPoints: inout [ScreenPointOutput],
-                                      horizonVisibility: inout [Bool]) {
+                                      horizonVisibility: inout [Bool],
+                                      perspectiveScales: inout [Float]) {
         let count = snapshot.pointsCount
         if screenPoints.count != count {
             screenPoints = Array(repeating: ScreenPointOutput(position: .zero, depth: 0, visible: 0), count: count)
@@ -59,9 +70,14 @@ struct TilePointScreenProjector {
         if horizonVisibility.count != count {
             horizonVisibility = Array(repeating: false, count: count)
         }
+        if perspectiveScales.count != count {
+            perspectiveScales = Array(repeating: 1, count: count)
+        }
         guard count > 0 else {
             return
         }
+        let perspective = PerspectiveScale(focusDepth: Self.focusDepth(frameContext: frameContext),
+                                           minimum: minimumPerspectiveScale)
 
         switch frameContext.screenSpaceProjectionMode {
         case .flat:
@@ -69,16 +85,44 @@ struct TilePointScreenProjector {
                                     frameContext: frameContext,
                                     tileOriginData: tileOriginData,
                                     roofCoverage: roofCoverage,
-                                    into: &screenPoints)
+                                    perspective: perspective,
+                                    into: &screenPoints,
+                                    perspectiveScales: &perspectiveScales)
             for index in 0..<count {
                 horizonVisibility[index] = screenPoints[index].visible != 0
             }
         case .globe:
             projectGlobe(snapshot: snapshot,
                          frameContext: frameContext,
+                         perspective: perspective,
                          screenPoints: &screenPoints,
-                         horizonVisibility: &horizonVisibility)
+                         horizonVisibility: &horizonVisibility,
+                         perspectiveScales: &perspectiveScales)
         }
+    }
+
+    /// A label's shrink for its distance, from the clip-space w (the view
+    /// depth) of its anchor.
+    private struct PerspectiveScale {
+        let focusDepth: Float
+        let minimum: Float
+
+        func scale(clipW: Float) -> Float {
+            guard minimum < 1, focusDepth > 0, clipW > 0 else {
+                return 1
+            }
+            return min(max(focusDepth / clipW, minimum), 1)
+        }
+    }
+
+    /// The view depth of the point the camera looks at: the world origin,
+    /// which the pan moves the map under on the flat map, and the globe's
+    /// point under the camera.
+    private static func focusDepth(frameContext: FrameContext) -> Float {
+        let matrix = frameContext.screenSpaceProjectionMode == .flat
+            ? frameContext.cameraMatrices.projectionView
+            : frameContext.cameraUniform.matrix
+        return (matrix * SIMD4<Float>(0, 0, 0, 1)).w
     }
 
     /// Clip-space coordinates of flat-projection points, without perspective divide
@@ -124,10 +168,13 @@ struct TilePointScreenProjector {
                                          tileOriginData: [FlatTileOriginData]) -> [ScreenPointOutput] {
         var outputs = Array(repeating: ScreenPointOutput(position: .zero, depth: 0, visible: 0),
                             count: snapshot.pointsCount)
+        var perspectiveScales = Array(repeating: Float(1), count: snapshot.pointsCount)
         projectFlatScreenPoints(snapshot: snapshot,
                                 frameContext: frameContext,
                                 tileOriginData: tileOriginData,
-                                into: &outputs)
+                                perspective: PerspectiveScale(focusDepth: 0, minimum: 1),
+                                into: &outputs,
+                                perspectiveScales: &perspectiveScales)
         return outputs
     }
 
@@ -135,7 +182,9 @@ struct TilePointScreenProjector {
                                          frameContext: FrameContext,
                                          tileOriginData: [FlatTileOriginData],
                                          roofCoverage: BuildingRoofCoverage = .none,
-                                         into outputs: inout [ScreenPointOutput]) {
+                                         perspective: PerspectiveScale,
+                                         into outputs: inout [ScreenPointOutput],
+                                         perspectiveScales: inout [Float]) {
         let viewport = SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height))
         let cameraMatrix = frameContext.cameraMatrices.projectionView
         let invisible = ScreenPointOutput(position: .zero, depth: 0, visible: 0)
@@ -171,6 +220,7 @@ struct TilePointScreenProjector {
             let world = SIMD4<Float>(worldPosition.x, worldPosition.y, roofZ, 1.0)
             let clip = cameraMatrix * world
             outputs[index] = screenPointFromClip(clip: clip, viewportSize: viewport)
+            perspectiveScales[index] = perspective.scale(clipW: clip.w)
         }
     }
 
@@ -179,17 +229,22 @@ struct TilePointScreenProjector {
         var result = TilePointScreenProjectionResult(
             screenPoints: Array(repeating: ScreenPointOutput(position: .zero, depth: 0, visible: 0), count: snapshot.pointsCount),
             horizonVisibility: Array(repeating: false, count: snapshot.pointsCount))
+        var perspectiveScales = Array(repeating: Float(1), count: snapshot.pointsCount)
         projectGlobe(snapshot: snapshot,
                      frameContext: frameContext,
+                     perspective: PerspectiveScale(focusDepth: 0, minimum: 1),
                      screenPoints: &result.screenPoints,
-                     horizonVisibility: &result.horizonVisibility)
+                     horizonVisibility: &result.horizonVisibility,
+                     perspectiveScales: &perspectiveScales)
         return result
     }
 
     private func projectGlobe(snapshot: TilePointToScreenPointSnapshot,
                               frameContext: FrameContext,
+                              perspective: PerspectiveScale,
                               screenPoints outputs: inout [ScreenPointOutput],
-                              horizonVisibility: inout [Bool]) {
+                              horizonVisibility: inout [Bool],
+                              perspectiveScales: inout [Float]) {
         let viewport = SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height))
         let cameraUniform = frameContext.cameraUniform
         let globe = frameContext.globeRenderUniform
@@ -210,6 +265,7 @@ struct TilePointScreenProjector {
             }
             outputs[index] = output
             horizonVisibility[index] = horizonVisible
+            perspectiveScales[index] = perspective.scale(clipW: projection.clip.w)
         }
     }
 

@@ -110,6 +110,20 @@ final class BaseLabelCache {
         labelPresentationInputs
     }
 
+    /// Each label's shrink for its distance, index-aligned with the label
+    /// set like the fade alphas. A label past the given scales keeps 1.
+    func updatePerspectiveScales(_ scales: [Float]) {
+        let count = min(labelRuntimeMetaData.count, scales.count)
+        for index in 0..<count {
+            labelRuntimeMetaData[index].perspectiveScale = scales[index]
+        }
+        if count < labelRuntimeMetaData.count {
+            for index in count..<labelRuntimeMetaData.count {
+                labelRuntimeMetaData[index].perspectiveScale = 1
+            }
+        }
+    }
+
     func updateFadeAlphas(_ fadeAlphas: [Float], multiplier: Float = 1.0) {
         let count = min(labelRuntimeMetaData.count, fadeAlphas.count)
         if count > 0 {

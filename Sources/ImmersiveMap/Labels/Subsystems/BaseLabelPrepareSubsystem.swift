@@ -47,6 +47,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     /// Half of `collisionSpacingPoints`: what every base label's collision
     /// box grows by on each side, so two kept labels never touch.
     private let collisionMarginPoints: Float
+    /// `BaseSettings.perspectiveMinimumScale`, clamped to 0...1.
+    private let perspectiveMinimumScale: Float
 
     private var sourceEntriesVersionTracker = StagedHashChangeTracker()
     private var projectionVersionTracker = StagedHashChangeTracker()
@@ -70,8 +72,13 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     // written in place every frame that needs them.
     private var baseScreenPoints: [ScreenPointOutput] = []
     private var baseHorizonVisible: [Bool] = []
+    /// Each label's shrink for its distance, from the projection.
+    private var basePerspectiveScales: [Float] = []
     private var baseCenters: [SIMD2<Float>] = []
     private var baseHalfSizesPx: [SIMD2<Float>] = []
+    /// `baseHalfSizesPx` with each label shrunk for its distance, the boxes
+    /// the collisions measure.
+    private var baseScaledHalfSizesPx: [SIMD2<Float>] = []
     private var baseGroupIds: [UInt64] = []
     private var baseReservesSpace: [Bool] = []
     private var baseCollisionVisible: [Bool] = []
@@ -132,6 +139,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         self.maxGlyphTurnRadians = settings.road.maxGlyphTurnRadians
         self.collisionGridCellSizePoints = max(4.0, settings.base.gridCellSizePoints)
         self.collisionMarginPoints = max(0, settings.base.collisionSpacingPoints) * 0.5
+        self.perspectiveMinimumScale = min(max(settings.base.perspectiveMinimumScale, 0), 1)
     }
 
     func update(frameContext: FrameContext) {
@@ -387,6 +395,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         baseHorizonVisible.removeAll(keepingCapacity: false)
         baseCenters.removeAll(keepingCapacity: false)
         baseHalfSizesPx.removeAll(keepingCapacity: false)
+        baseScaledHalfSizesPx.removeAll(keepingCapacity: false)
+        basePerspectiveScales.removeAll(keepingCapacity: false)
         baseGroupIds.removeAll(keepingCapacity: false)
         baseReservesSpace.removeAll(keepingCapacity: false)
         baseCollisionVisible.removeAll(keepingCapacity: false)
@@ -413,6 +423,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         collisionSolver.rebindBase(ranks: candidates.map(LabelCollisionRank.init(candidate:)))
         baseGroupIds = candidates.map(\.groupId)
         baseHalfSizesPx = candidates.map { $0.halfSize + collisionMarginPoints }
+        baseScaledHalfSizesPx = baseHalfSizesPx
+        basePerspectiveScales = Array(repeating: 1, count: count)
         solvedPixelsPerPoint = 0
         baseScreenPoints = Array(repeating: ScreenPointOutput(position: .zero, depth: 0, visible: 0), count: count)
         baseHorizonVisible = Array(repeating: false, count: count)
@@ -449,11 +461,14 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                               frameContext: frameContext,
                                                               tileOriginData: projectionIndexState.tileOriginData,
                                                               roofCoverage: roofCoverage,
+                                                              minimumPerspectiveScale: perspectiveMinimumScale,
                                                               screenPoints: &baseScreenPoints,
-                                                              horizonVisibility: &baseHorizonVisible)
+                                                              horizonVisibility: &baseHorizonVisible,
+                                                              perspectiveScales: &basePerspectiveScales)
         for index in baseScreenPoints.indices {
             baseCenters[index] = baseScreenPoints[index].position
         }
+        baseLabelCache.updatePerspectiveScales(basePerspectiveScales)
     }
 
     // MARK: - Collisions
@@ -480,11 +495,19 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             roadCollisionVisible[index] = false
         }
 
+        // The box shrinks with the label, the spacing between two labels
+        // does not: the margin is added after the scale.
+        let pixelsPerPoint = frameContext.screenScale.pixelsPerPoint
+        let marginPx = SIMD2<Float>(repeating: collisionMarginPoints * pixelsPerPoint)
+        let scaledCount = min(baseHalfSizesPx.count, min(basePerspectiveScales.count, baseScaledHalfSizesPx.count))
+        for index in 0..<scaledCount {
+            baseScaledHalfSizesPx[index] = (baseHalfSizesPx[index] - marginPx) * basePerspectiveScales[index] + marginPx
+        }
         collisionSolver.solve(viewportSize: SIMD2<Float>(Float(frameContext.drawSize.width),
                                                          Float(frameContext.drawSize.height)),
                               cellSizePx: frameContext.screenScale.pixels(collisionGridCellSizePoints),
                               baseCenters: baseCenters,
-                              baseHalfSizes: baseHalfSizesPx,
+                              baseHalfSizes: baseScaledHalfSizesPx,
                               baseEnabled: baseReservesSpace,
                               baseGroupIds: baseGroupIds,
                               roadItems: roadItems,

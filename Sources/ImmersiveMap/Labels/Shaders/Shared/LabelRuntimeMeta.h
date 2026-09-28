@@ -18,7 +18,8 @@ struct LabelRuntimeMeta {
     ushort _padding;
     uint visibleTileIndex;
     float fadeAlpha;
-    float _padding1;
+    // LabelRuntimeMeta.perspectiveScale: the label's shrink for its distance.
+    float perspectiveScale;
     float2 labelSizePoints;
 };
 

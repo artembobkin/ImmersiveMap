@@ -669,15 +669,26 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// this on every side, meets no other. At zero the labels pack
             /// edge to edge and a busy street reads as one block of text.
             public var collisionSpacingPoints: Float
+            /// How small a point label gets with distance on a tilted map,
+            /// as a fraction of its size. A label keeps its size at the
+            /// point the camera looks at and nearer, and shrinks with its
+            /// distance beyond it (twice as far, half as big) down to this,
+            /// so the labels toward the horizon recede with the map instead
+            /// of lying over it like stickers. The collisions measure the
+            /// shrunk labels. 1 keeps every label at its size. Read once,
+            /// when the map is created, like the fades.
+            public var perspectiveMinimumScale: Float
 
             public init(gridCellSizePoints: Float,
                         fadeInSeconds: TimeInterval,
                         fadeOutSeconds: TimeInterval,
-                        collisionSpacingPoints: Float = 10) {
+                        collisionSpacingPoints: Float = 10,
+                        perspectiveMinimumScale: Float = 0.5) {
                 self.gridCellSizePoints = gridCellSizePoints
                 self.fadeInSeconds = fadeInSeconds
                 self.fadeOutSeconds = fadeOutSeconds
                 self.collisionSpacingPoints = collisionSpacingPoints
+                self.perspectiveMinimumScale = perspectiveMinimumScale
             }
         }
 

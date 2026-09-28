@@ -27,8 +27,11 @@ vertex VertexOut poiSpriteVertex(LabelVertexIn in [[stage_in]],
     ScreenPointOutput screenPoint = screenPositions[screenIndex];
     LabelRuntimeMeta runtimeState = labelMeta[screenIndex];
 
+    // The label shrinks about its anchor for its distance
+    // (LabelRuntimeMeta.perspectiveScale), glyphs and box alike.
     float2 halfSize = runtimeState.labelSizePoints * 0.5;
-    float2 pixelPosition = screenPoint.position + (in.position - halfSize) * pixelsPerPoint;
+    float2 pixelPosition = screenPoint.position
+        + (in.position - halfSize) * (pixelsPerPoint * runtimeState.perspectiveScale);
     out.position = matrix * float4(pixelPosition, 0.0, 1.0);
     // Far-plane depth: the cleared overlay depth (1.0) passes the labels'
     // lessEqual test, and the fill and halo depths written just short of it
