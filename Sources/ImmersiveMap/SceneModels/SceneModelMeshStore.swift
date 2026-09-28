@@ -99,8 +99,19 @@ final class SceneModelMeshStore: @unchecked Sendable {
         lock.unlock()
     }
 
+    /// Loads run one at a time on a queue of their own, never on the Swift
+    /// concurrency pool. A load blocks its thread: `MTKTextureLoader` hands
+    /// each texture to Metal's IO queue and waits on a semaphore for it. As
+    /// detached tasks, a few dozen landmarks loading at once put every
+    /// thread of the pool to sleep in that wait, and the tile loads, which
+    /// run on the same pool, could not start for as long as it lasted: the
+    /// map stood empty with its tiles "stalled in disk". One at a time the
+    /// same loads take milliseconds each, and a slow one delays only the
+    /// models behind it.
+    private let loadQueue = DispatchQueue(label: "ImmersiveMap.SceneModelMeshStore.load", qos: .utility)
+
     private func startLoad(url: URL) {
-        Task.detached(priority: .utility) { [weak self] in
+        loadQueue.async { [weak self] in
             guard let self else { return }
             do {
                 let mesh = try self.loadAsset(url, self.device)
