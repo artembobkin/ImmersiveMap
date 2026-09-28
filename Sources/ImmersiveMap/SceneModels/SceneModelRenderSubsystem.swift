@@ -14,6 +14,8 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
     /// World-pass draws: scene depth plus the surface mask bit, so the
     /// horizon's haze passes the models by.
     private let surfaceMaskState: MTLDepthStencilState
+    /// The ground cut's draws for the models that cut into the ground.
+    private let groundCutStates: SceneModelGroundCutStates
     private let depthDisabledState: MTLDepthStencilState
     private let shadowMapTextureProvider: () -> MTLTexture?
     private let shadowFallbackTexture: MTLTexture
@@ -32,6 +34,7 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
          pipeline: SceneModelPipeline,
          extrudedDepthState: MTLDepthStencilState,
          surfaceMaskState: MTLDepthStencilState,
+         groundCutStates: SceneModelGroundCutStates,
          depthDisabledState: MTLDepthStencilState,
          shadowMapTextureProvider: @escaping () -> MTLTexture?,
          shadowFallbackTexture: MTLTexture) {
@@ -40,6 +43,7 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
         self.pipeline = pipeline
         self.extrudedDepthState = extrudedDepthState
         self.surfaceMaskState = surfaceMaskState
+        self.groundCutStates = groundCutStates
         self.depthDisabledState = depthDisabledState
         self.shadowMapTextureProvider = shadowMapTextureProvider
         self.shadowFallbackTexture = shadowFallbackTexture
@@ -119,7 +123,10 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
             if let shadowFrustum,
                shadowFrustum.isSphereVisible(center: anchor.boundingSphereCenter,
                                              radius: anchor.boundingSphereRadius) {
-                shadowItems.append(SceneModelDrawItem(mesh: mesh, modelMatrix: anchor.modelMatrix))
+                shadowItems.append(SceneModelDrawItem(mesh: mesh,
+                                                      modelMatrix: anchor.modelMatrix,
+                                                      groundPlane: anchor.groundPlane,
+                                                      cutsIntoGround: model.cutsIntoGround))
             }
 
             guard anchor.passesHorizonGate,
@@ -127,7 +134,10 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
                                           radius: anchor.boundingSphereRadius) else {
                 continue
             }
-            items.append(SceneModelDrawItem(mesh: mesh, modelMatrix: anchor.modelMatrix))
+            items.append(SceneModelDrawItem(mesh: mesh,
+                                            modelMatrix: anchor.modelMatrix,
+                                            groundPlane: anchor.groundPlane,
+                                            cutsIntoGround: model.cutsIntoGround))
             // The flat map's labels take a drawn model's top as the roof of
             // the building it stands for. On the globe the labels are not
             // tested against the models, so the roofs are not needed.
@@ -184,8 +194,10 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
             ImmersiveMapSceneModel(id: UInt64(index),
                                    source: landmark.model,
                                    coordinate: landmark.coordinate,
+                                   altitudeMeters: landmark.altitudeMeters,
                                    headingDegrees: landmark.headingDegrees,
-                                   scale: landmark.scale)
+                                   scale: landmark.scale,
+                                   cutsIntoGround: landmark.cutsIntoGround)
         }
         let removedIds = (landmarks.count..<max(landmarks.count, appliedLandmarks.count)).map { UInt64($0) }
         landmarkSnapshotVersion &+= 1
@@ -218,6 +230,7 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
                                   items: drawItems,
                                   pipeline: pipeline,
                                   surfaceMaskState: surfaceMaskState,
+                                  groundCutStates: groundCutStates,
                                   depthDisabledState: depthDisabledState)
         case .shadowCasters:
             guard let shadowState = frameContext.shadowFrameState,

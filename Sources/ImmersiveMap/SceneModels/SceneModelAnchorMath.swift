@@ -4,11 +4,23 @@
 import Foundation
 import simd
 
+/// The map surface under a scene model's anchor, in render space: the
+/// surface point at altitude zero and the local up. A model's height above
+/// the ground is measured against it, and a model that cuts into the ground
+/// is flattened onto it for its ground hole (SceneModel.metal). Mirrors
+/// `SceneModelGroundPlane` in SceneModel.metal.
+struct SceneModelGroundPlane {
+    var surfacePosition: SIMD3<Float>
+    var up: SIMD3<Float>
+}
+
 /// A scene model's anchor resolved for the current frame: the model matrix
-/// placing the mesh on the (possibly mid-morph) map surface, the world-space
-/// bounding sphere for frustum culling, and the globe horizon visibility gate.
+/// placing the mesh on the (possibly mid-morph) map surface, the ground
+/// plane under it, the world-space bounding sphere for frustum culling, and
+/// the globe horizon visibility gate.
 struct SceneModelAnchor {
     let modelMatrix: matrix_float4x4
+    let groundPlane: SceneModelGroundPlane
     let boundingSphereCenter: SIMD3<Float>
     let boundingSphereRadius: Float
     /// False when the anchor is beyond the globe horizon gate: the depth test
@@ -53,6 +65,8 @@ enum SceneModelAnchorMath {
 
         let boundingCenter = modelMatrix * SIMD4<Float>(bounds.center, 1)
         return SceneModelAnchor(modelMatrix: modelMatrix,
+                                groundPlane: SceneModelGroundPlane(surfacePosition: frame.worldPosition,
+                                                                   up: frame.up),
                                 boundingSphereCenter: boundingCenter.xyz,
                                 boundingSphereRadius: bounds.radius * scale,
                                 passesHorizonGate: frame.passesHorizonGate)

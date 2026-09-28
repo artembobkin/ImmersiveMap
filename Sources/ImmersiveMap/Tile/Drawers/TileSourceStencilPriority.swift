@@ -29,6 +29,14 @@ enum TileSourceStencilPriority {
     /// the road sheet in Tile.metal.
     static let roadSheetBit: UInt32 = 0x20
 
+    /// The ground hole of a scene model that cuts into the ground
+    /// (`ImmersiveMapSceneModel.cutsIntoGround`): raised over the model's
+    /// outline flattened onto the surface before the model draws, so its
+    /// fragments below the surface pass only inside the outline and are
+    /// dropped outside it, and lowered again after the model, so the next
+    /// model's hole is its own. See the ground cut in SceneModel.metal.
+    static let groundHoleBit: UInt32 = 0x40
+
     /// The flat map's standing surfaces (buildings, scene models) raise this
     /// bit as they draw, on top of whatever priority mark is under them,
     /// and the horizon's ground-side draw fails where it is set: the haze

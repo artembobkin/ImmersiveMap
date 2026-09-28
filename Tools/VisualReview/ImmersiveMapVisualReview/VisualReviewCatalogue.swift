@@ -902,6 +902,23 @@ enum VisualReviewCatalogue {
             sceneModels: Showcase.parisModels()),
 
         VisualReviewScenario(
+            id: "showcase.models.ground.cut",
+            title: "A scene model cut into the ground",
+            lookFor: """
+            Two copies of the same model on the Champ de Mars, both sunk \
+            to half their height. The right one cuts into the ground: its \
+            lower half shows only inside its own outline, like a figure \
+            standing in a pit, and the ground beside it stays whole, with \
+            no legs showing through the lawn. The left one does not cut: \
+            its whole lower half shows through the ground from the side, \
+            which is the look the cut removes. Roads and lawn fills stay \
+            out of both pits.
+            """,
+            settings: .default,
+            subject: .still(camera: Place.parisTilted),
+            sceneModels: Showcase.parisGroundCutModels()),
+
+        VisualReviewScenario(
             id: "video.globe.to.street",
             title: "Flight from globe to street level",
             lookFor: """
@@ -1059,6 +1076,40 @@ enum Showcase {
                                    headingDegrees: 200,
                                    pitchDegrees: 8,
                                    fitDiameterMeters: 110),
+        ]
+        #endif
+    }
+
+    /// The same model twice, sunk to half its height: one drawn as it is
+    /// and one cutting into the ground (`cutsIntoGround`), side by side
+    /// across the view so the difference is one picture.
+    static func parisGroundCutModels() -> [ImmersiveMapSceneModel] {
+        #if os(iOS)
+        return []
+        #else
+        let url = VisualReviewPaths.repositoryRoot
+            .appending(path: "Examples/macOS/ImmersiveMapSceneModelsMac/ImmersiveMapSceneModelsMac/Resources/spot.usdz")
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return []
+        }
+        let spot = ImmersiveMapSceneModel.Source(url: url)
+        // The fitted diameter is the model's longest extent, so the sunk
+        // depth is roughly half of its height.
+        return [
+            ImmersiveMapSceneModel(id: 9101,
+                                   source: spot,
+                                   coordinate: GeoCoordinate(latitude: 48.8562, longitude: 2.2955),
+                                   altitudeMeters: -50,
+                                   headingDegrees: 200,
+                                   fitDiameterMeters: 160,
+                                   cutsIntoGround: false),
+            ImmersiveMapSceneModel(id: 9102,
+                                   source: spot,
+                                   coordinate: GeoCoordinate(latitude: 48.8562, longitude: 2.2990),
+                                   altitudeMeters: -50,
+                                   headingDegrees: 200,
+                                   fitDiameterMeters: 160,
+                                   cutsIntoGround: true),
         ]
         #endif
     }

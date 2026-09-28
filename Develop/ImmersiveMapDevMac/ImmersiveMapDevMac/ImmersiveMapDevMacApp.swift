@@ -110,10 +110,17 @@ private enum DevLandmarks {
                  file: "TSUM_512/tsum_512.usdz",
                  coordinate: GeoCoordinate(latitude: 55.76065, longitude: 37.6198),
                  replacedBuilding: .relation(2669485)),
+        // Okhotny Ryad is mostly underground: the model is built from the
+        // floor of its open pit, with the square on top of it. Sunk by the
+        // height of the square, so the square lies on the map surface, and
+        // cut into the ground, so the pit is seen from above and the walls
+        // below the square stay hidden from the streets around it.
         landmark(id: "okhotny-ryad",
                  file: "Okhotny_Ryad_512/okhotny_ryad_512.usdz",
                  coordinate: GeoCoordinate(latitude: 55.7553, longitude: 37.6143),
-                 replacedBuilding: .relation(6233742)),
+                 replacedBuilding: .relation(6233742),
+                 altitudeMeters: -6.5,
+                 cutsIntoGround: true),
         landmark(id: "metropol",
                  file: "Metropol_512/metropol_512.usdz",
                  coordinate: GeoCoordinate(latitude: 55.75848895051534, longitude: 37.62163281921604),
@@ -125,7 +132,9 @@ private enum DevLandmarks {
     private static func landmark(id: String,
                                  file: String,
                                  coordinate: GeoCoordinate,
-                                 replacedBuilding: ImmersiveMapOSMElement?) -> ImmersiveMapLandmark? {
+                                 replacedBuilding: ImmersiveMapOSMElement?,
+                                 altitudeMeters: Double = 0,
+                                 cutsIntoGround: Bool = false) -> ImmersiveMapLandmark? {
         let url = directory.appendingPathComponent(file)
         guard FileManager.default.fileExists(atPath: url.path) else {
             return nil
@@ -134,6 +143,8 @@ private enum DevLandmarks {
                                     model: .init(url: url),
                                     coordinate: coordinate,
                                     replacedBuilding: replacedBuilding,
+                                    altitudeMeters: altitudeMeters,
+                                    cutsIntoGround: cutsIntoGround,
                                     minimumZoom: minimumZoom)
     }
 

@@ -55,6 +55,15 @@ public struct ImmersiveMapSceneModel: Identifiable, Equatable, Sendable {
     /// When set, the asset is uniformly rescaled so the largest extent of its
     /// bounding box spans this many meters (applied before `scale`).
     public var fitDiameterMeters: Double?
+    /// Whether the model cuts into the ground where it stands. The map has
+    /// no terrain, so a model sunk below the surface (a negative
+    /// `altitudeMeters`) would otherwise show its underground part through
+    /// the ground from every side. With this on, the part below the surface
+    /// is shown only where it is seen through the model's own outline on the
+    /// ground, as if the ground were dug out under the model and left whole
+    /// around it: an open pit, a sunken court, a half-buried hall. Off, the
+    /// model is drawn as it is.
+    public var cutsIntoGround: Bool
 
     public init(id: UInt64,
                 source: Source,
@@ -64,7 +73,8 @@ public struct ImmersiveMapSceneModel: Identifiable, Equatable, Sendable {
                 pitchDegrees: Double = 0,
                 rollDegrees: Double = 0,
                 scale: Double = 1,
-                fitDiameterMeters: Double? = nil) {
+                fitDiameterMeters: Double? = nil,
+                cutsIntoGround: Bool = false) {
         self.id = id
         self.source = source
         self.coordinate = coordinate
@@ -74,5 +84,6 @@ public struct ImmersiveMapSceneModel: Identifiable, Equatable, Sendable {
         self.rollDegrees = rollDegrees
         self.scale = scale
         self.fitDiameterMeters = fitDiameterMeters
+        self.cutsIntoGround = cutsIntoGround
     }
 }

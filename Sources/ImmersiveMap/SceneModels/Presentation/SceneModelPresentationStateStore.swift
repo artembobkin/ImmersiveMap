@@ -18,6 +18,8 @@ struct PresentedSceneModel {
     let orientation: simd_quatf
     let scale: Double
     let altitudeMeters: Double
+    /// See `ImmersiveMapSceneModel.cutsIntoGround`.
+    let cutsIntoGround: Bool
 }
 
 private struct SceneModelPositionAnimation {
@@ -188,7 +190,8 @@ private struct SceneModelPresentationEntry {
                                    projectionBasis: projectionBasis,
                                    orientation: displayedOrientation,
                                    scale: displayedScale,
-                                   altitudeMeters: displayedAltitude)
+                                   altitudeMeters: displayedAltitude,
+                                   cutsIntoGround: model.cutsIntoGround)
     }
 
     mutating func update(with model: ImmersiveMapSceneModel,

@@ -3,10 +3,20 @@
 
 import MetalKit
 
-/// One opaque world-pass pipeline for every scene model: textured and
-/// constant-color submeshes share it, untextured ones bind `whiteTexture`.
+/// The world-pass pipelines of the scene models: one opaque pipeline every
+/// model draws with (textured and constant-color submeshes share it,
+/// untextured ones bind `whiteTexture`), its variant that drops the
+/// fragments below the ground and the stencil-only footprint pipeline, the
+/// two the ground cut adds (see SceneModel.metal), and the shadow caster
+/// pipeline.
 class SceneModelPipeline {
     let pipelineState: MTLRenderPipelineState
+    /// The opaque pipeline with `kSceneModelClipsBelowGround` on: the second
+    /// draw of a model that cuts into the ground, outside its ground hole.
+    let belowGroundClippedPipelineState: MTLRenderPipelineState
+    /// The model flattened onto the ground plane, writing neither colour
+    /// nor depth: the draw that raises or lowers the ground hole bit.
+    let groundFootprintPipelineState: MTLRenderPipelineState
     /// Depth-only replay into the shadow map: no color attachments and no
     /// fragment function, the rasterizer writes bare depth.
     let shadowPipelineState: MTLRenderPipelineState
@@ -18,7 +28,6 @@ class SceneModelPipeline {
          library: MTLLibrary,
          sampleCount: Int = 1) {
         let vertexFunction = library.makeFunction(name: "sceneModelVertexShader")
-        let fragmentFunction = library.makeFunction(name: "sceneModelFragmentShader")
 
         // The canonical interleaved layout produced by SceneModelAssetLoader.
         let vertexDescriptor = MTLVertexDescriptor()
@@ -34,16 +43,43 @@ class SceneModelPipeline {
         vertexDescriptor.layouts[0].stride = SceneModelAssetLoader.vertexStride
         vertexDescriptor.layouts[0].stepFunction = .perVertex
 
-        let pipelineDescriptor = MTLRenderPipelineDescriptor()
-        pipelineDescriptor.vertexFunction = vertexFunction
-        pipelineDescriptor.fragmentFunction = fragmentFunction
-        pipelineDescriptor.vertexDescriptor = vertexDescriptor
-        pipelineDescriptor.rasterSampleCount = sampleCount
-        pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-        pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-        pipelineDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
+        func makeFragmentFunction(clipsBelowGround: Bool) -> MTLFunction {
+            let constants = MTLFunctionConstantValues()
+            var clips = clipsBelowGround
+            constants.setConstantValue(&clips, type: .bool, index: 0)
+            return try! library.makeFunction(name: "sceneModelFragmentShader", constantValues: constants)
+        }
 
-        self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+        func makeMainDescriptor(clipsBelowGround: Bool) -> MTLRenderPipelineDescriptor {
+            let pipelineDescriptor = MTLRenderPipelineDescriptor()
+            pipelineDescriptor.vertexFunction = vertexFunction
+            pipelineDescriptor.fragmentFunction = makeFragmentFunction(clipsBelowGround: clipsBelowGround)
+            pipelineDescriptor.vertexDescriptor = vertexDescriptor
+            pipelineDescriptor.rasterSampleCount = sampleCount
+            pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
+            pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
+            pipelineDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
+            return pipelineDescriptor
+        }
+
+        self.pipelineState = try! metalDevice.makeRenderPipelineState(
+            descriptor: makeMainDescriptor(clipsBelowGround: false))
+        self.belowGroundClippedPipelineState = try! metalDevice.makeRenderPipelineState(
+            descriptor: makeMainDescriptor(clipsBelowGround: true))
+
+        // Stencil only: the colour attachment is the world pass's, masked
+        // off, and no fragment function runs. The depth-stencil state of the
+        // draw keeps the depth untouched.
+        let footprintDescriptor = MTLRenderPipelineDescriptor()
+        footprintDescriptor.vertexFunction = library.makeFunction(name: "sceneModelGroundFootprintVertexShader")
+        footprintDescriptor.fragmentFunction = nil
+        footprintDescriptor.vertexDescriptor = vertexDescriptor
+        footprintDescriptor.rasterSampleCount = sampleCount
+        footprintDescriptor.colorAttachments[0].pixelFormat = pixelFormat
+        footprintDescriptor.colorAttachments[0].writeMask = []
+        footprintDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
+        footprintDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
+        self.groundFootprintPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: footprintDescriptor)
 
         let shadowDescriptor = MTLRenderPipelineDescriptor()
         shadowDescriptor.vertexFunction = library.makeFunction(name: "sceneModelShadowVertexShader")
@@ -79,11 +115,15 @@ class SceneModelPipeline {
     }
 
     func selectPipeline(renderEncoder: MTLRenderCommandEncoder) {
-        selectMainPipeline(renderEncoder: renderEncoder)
+        renderEncoder.setRenderPipelineState(pipelineState)
     }
 
-    private func selectMainPipeline(renderEncoder: MTLRenderCommandEncoder) {
-        renderEncoder.setRenderPipelineState(pipelineState)
+    func selectBelowGroundClippedPipeline(renderEncoder: MTLRenderCommandEncoder) {
+        renderEncoder.setRenderPipelineState(belowGroundClippedPipelineState)
+    }
+
+    func selectGroundFootprintPipeline(renderEncoder: MTLRenderCommandEncoder) {
+        renderEncoder.setRenderPipelineState(groundFootprintPipelineState)
     }
 
     func selectShadowPipeline(renderEncoder: MTLRenderCommandEncoder) {

@@ -227,6 +227,29 @@ final class SceneModelAnchorMathTests: XCTestCase {
         XCTAssertEqual((liftedPosition.z - groundedPosition.z) / (100.0 * unitsPerMeter), 1, accuracy: 1e-3)
     }
 
+    func testGroundPlaneIsTheSurfaceUnderASunkAnchor() throws {
+        let latitude = 55.75
+        let environment = try makeEnvironment(
+            cameraState: makeCameraState(latitude: latitude, longitude: 37.61, zoom: 15.0))
+
+        let sunk = SceneModelAnchorMath.resolveAnchor(
+            presented: makePresented(latitude: latitude, longitude: 37.61, altitudeMeters: -20.0),
+            bounds: unitBounds,
+            constants: environment.constants)
+
+        // The plane is the surface at altitude zero: the sunk origin lies
+        // below it by the altitude, along the plane's up, which is the
+        // flat map's z.
+        let unitsPerMeter = Float(ImmersiveMapProjection.worldUnitsPerMeter(
+            latitudeRadians: latitude * .pi / 180.0,
+            renderMapSize: environment.presentation.flatRenderState.renderMapSize))
+        let origin = translation(of: sunk.modelMatrix)
+        let height = simd_dot(origin - sunk.groundPlane.surfacePosition, sunk.groundPlane.up)
+        XCTAssertEqual(height / (-20.0 * unitsPerMeter), 1, accuracy: 1e-3)
+        assertDirection(sunk.groundPlane.up, SIMD3<Float>(0, 0, 1))
+        XCTAssertEqual(sunk.groundPlane.surfacePosition.z, 0, accuracy: 1e-6)
+    }
+
     func testFitDiameterOverridesNativeSize() throws {
         let environment = try makeEnvironment(
             cameraState: makeCameraState(latitude: 0.0, longitude: 0.0, zoom: 15.0))
@@ -344,7 +367,8 @@ final class SceneModelAnchorMathTests: XCTestCase {
                                                                        pitchDegrees: pitchDegrees,
                                                                        rollDegrees: rollDegrees),
             scale: scale,
-            altitudeMeters: altitudeMeters)
+            altitudeMeters: altitudeMeters,
+            cutsIntoGround: false)
     }
 
     private func translation(of matrix: matrix_float4x4) -> SIMD3<Float> {

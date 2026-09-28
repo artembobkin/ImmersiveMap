@@ -61,6 +61,9 @@ final class SharedRenderResources {
     /// The world-pass scene models: scene depth plus the surface mask write
     /// (see `TileSourceStencilPriority.surfaceMaskBit`).
     let sceneModelSurfaceMaskState: MTLDepthStencilState
+    /// The four draws of a scene model that cuts into the ground (see
+    /// `TileSourceStencilPriority.groundHoleBit` and SceneModel.metal).
+    let sceneModelGroundCutStates: SceneModelGroundCutStates
     let depthDisabledState: MTLDepthStencilState
     /// The flat ground: tested against the depth the opaque buildings wrote
     /// before it (strictly closer wins, so a wall base never loses to the
@@ -240,6 +243,7 @@ final class SharedRenderResources {
         let tileOwnershipWriteState: MTLDepthStencilState
         let extrudedStencilTestState: MTLDepthStencilState
         let sceneModelSurfaceMaskState: MTLDepthStencilState
+        let sceneModelGroundCutStates: SceneModelGroundCutStates
         let shadowFallbackTexture: MTLTexture
         let groundShadowMaskFallbackTexture: MTLTexture
         let compiled: ConcurrentlyCompiledResources
@@ -270,6 +274,10 @@ final class SharedRenderResources {
                      tileOwnershipWriteState: device.makeDepthStencilState(descriptor: Self.makeTileOwnershipWriteDescriptor())!,
                      extrudedStencilTestState: device.makeDepthStencilState(descriptor: Self.makeExtrudedStencilTestDescriptor())!,
                      sceneModelSurfaceMaskState: device.makeDepthStencilState(descriptor: Self.makeSceneModelSurfaceMaskDescriptor())!,
+                     sceneModelGroundCutStates: SceneModelGroundCutStates(
+                        holeWrite: device.makeDepthStencilState(descriptor: Self.makeSceneModelGroundHoleDescriptor(raises: true))!,
+                        holeClear: device.makeDepthStencilState(descriptor: Self.makeSceneModelGroundHoleDescriptor(raises: false))!,
+                        holeTest: device.makeDepthStencilState(descriptor: Self.makeSceneModelGroundHoleTestDescriptor())!),
                      shadowFallbackTexture: Self.makeShadowFallbackTexture(device: device),
                      groundShadowMaskFallbackTexture: Self.makeGroundShadowMaskFallbackTexture(device: device),
                      compiled: compiled)
@@ -293,6 +301,7 @@ final class SharedRenderResources {
         self.tileOwnershipWriteState = built.tileOwnershipWriteState
         self.extrudedStencilTestState = built.extrudedStencilTestState
         self.sceneModelSurfaceMaskState = built.sceneModelSurfaceMaskState
+        self.sceneModelGroundCutStates = built.sceneModelGroundCutStates
         self.shadowFallbackTexture = built.shadowFallbackTexture
         self.groundShadowMaskFallbackTexture = built.groundShadowMaskFallbackTexture
 
@@ -695,6 +704,38 @@ final class SharedRenderResources {
         let descriptor = makeSceneDepthDescriptor()
         descriptor.frontFaceStencil = makeSurfaceMaskWrite(compare: .always)
         descriptor.backFaceStencil = makeSurfaceMaskWrite(compare: .always)
+        return descriptor
+    }
+
+    /// The ground hole's footprint draws (SceneModel.metal): depth neither
+    /// tested nor written, the ground hole bit raised on every pixel of the
+    /// flattened outline, or lowered again after the model.
+    private nonisolated static func makeSceneModelGroundHoleDescriptor(raises: Bool) -> MTLDepthStencilDescriptor {
+        let descriptor = makeDepthDisabledDescriptor()
+        let stencil = MTLStencilDescriptor()
+        stencil.stencilCompareFunction = .always
+        stencil.stencilFailureOperation = .keep
+        stencil.depthFailureOperation = .keep
+        // Replace writes the reference, which is the bit, through the mask;
+        // zero clears the bit through the same mask.
+        stencil.depthStencilPassOperation = raises ? .replace : .zero
+        stencil.readMask = 0
+        stencil.writeMask = TileSourceStencilPriority.groundHoleBit
+        descriptor.frontFaceStencil = stencil
+        descriptor.backFaceStencil = stencil
+        return descriptor
+    }
+
+    /// The two model draws of the ground cut: scene depth, the surface mask
+    /// bit raised where the model lands, and the ground hole bit tested
+    /// alone, equal to the reference's bit, which the drawer sets raised for
+    /// the draw inside the hole and clear for the draw outside it.
+    private nonisolated static func makeSceneModelGroundHoleTestDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = makeSceneDepthDescriptor()
+        let stencil = makeSurfaceMaskWrite(compare: .equal)
+        stencil.readMask = TileSourceStencilPriority.groundHoleBit
+        descriptor.frontFaceStencil = stencil
+        descriptor.backFaceStencil = stencil
         return descriptor
     }
 

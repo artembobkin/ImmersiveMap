@@ -42,6 +42,15 @@ public struct ImmersiveMapLandmark: Identifiable, Equatable, Sendable {
     public var headingDegrees: Double
     /// Multiplier over the asset's meters.
     public var scale: Double
+    /// Offset of the model's origin above the map surface, in meters.
+    /// Negative sinks the model: a building that is partly underground is
+    /// modelled from its lowest floor and sunk by the depth of that floor,
+    /// together with `cutsIntoGround`.
+    public var altitudeMeters: Double
+    /// Whether the model cuts into the ground where it stands, as
+    /// `ImmersiveMapSceneModel.cutsIntoGround`: the part below the surface
+    /// shows only through the model's own outline on the ground.
+    public var cutsIntoGround: Bool
     /// The camera zoom the model shows from, the map's building standing in
     /// below it. Zero shows it at every zoom that draws buildings.
     public var minimumZoom: Int
@@ -52,6 +61,8 @@ public struct ImmersiveMapLandmark: Identifiable, Equatable, Sendable {
                 replacedBuilding: ImmersiveMapOSMElement?,
                 headingDegrees: Double = 0,
                 scale: Double = 1,
+                altitudeMeters: Double = 0,
+                cutsIntoGround: Bool = false,
                 minimumZoom: Int = 0) {
         self.id = id
         self.model = model
@@ -59,6 +70,8 @@ public struct ImmersiveMapLandmark: Identifiable, Equatable, Sendable {
         self.replacedBuilding = replacedBuilding
         self.headingDegrees = headingDegrees
         self.scale = scale
+        self.altitudeMeters = altitudeMeters
+        self.cutsIntoGround = cutsIntoGround
         self.minimumZoom = minimumZoom
     }
 

@@ -58,6 +58,8 @@ final class RenderPersistentContext {
     let extrudedStencilTestState: MTLDepthStencilState
     /// See `SharedRenderResources.sceneModelSurfaceMaskState`.
     let sceneModelSurfaceMaskState: MTLDepthStencilState
+    /// See `SharedRenderResources.sceneModelGroundCutStates`.
+    let sceneModelGroundCutStates: SceneModelGroundCutStates
     /// Bound at the shadow-map slot when the shadow pass is skipped: receiver
     /// shaders reference the texture statically and Metal validation requires a
     /// bound depth texture even though strength = 0 skips the sampling branch.
@@ -122,6 +124,7 @@ final class RenderPersistentContext {
         self.tileOwnershipWriteState = shared.tileOwnershipWriteState
         self.extrudedStencilTestState = shared.extrudedStencilTestState
         self.sceneModelSurfaceMaskState = shared.sceneModelSurfaceMaskState
+        self.sceneModelGroundCutStates = shared.sceneModelGroundCutStates
         self.tileStencilTestState = shared.tileStencilTestState
         self.roadSheetStates = shared.roadSheetStates
         self.shadowFallbackTexture = shared.shadowFallbackTexture
