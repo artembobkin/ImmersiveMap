@@ -175,6 +175,20 @@ final class GlobeTileCoverageTests: XCTestCase {
         XCTAssertTrue(Self.resolve().linelessTargets.allSatisfy { $0.z < 5 }, "the default's lined rings stay lined")
     }
 
+    /// A rule that draws no labels names its tiles as a lineless one does,
+    /// the cover past the last rule following the last rule.
+    func testAnUnlabelledRuleNamesItsTiles() {
+        let rules = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1),
+                                          FlatRingRule(zoomDrop: 2, distance: 6, drawsLabels: false)])
+        let resolution = Self.resolve(rules: rules)
+        XCTAssertFalse(resolution.unlabelledTargets.isEmpty)
+        XCTAssertTrue(resolution.unlabelledTargets.allSatisfy { $0.z == 4 || $0.z == GlobeTileCoverage.floorZoom },
+                      "\(resolution.unlabelledTargets)")
+        XCTAssertFalse(resolution.unlabelledTargets.contains(VisibleTile(x: 32, y: 32, z: 6)))
+        XCTAssertTrue(resolution.linelessTargets.isEmpty, "the two switches are independent")
+        XCTAssertTrue(Self.resolve().unlabelledTargets.isEmpty, "the default labels every ring")
+    }
+
     /// The rules are read frame by frame, with nothing carried over: the
     /// same inputs give the same targets.
     func testTheWalkCarriesNothingOver() {

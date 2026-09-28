@@ -36,6 +36,7 @@ class TileCulling {
         let visibleTiles: [VisibleTile]
         var flatRingBands: [FlatRingBand] = []
         var linelessTiles = Set<VisibleTile>()
+        var unlabelledTiles = Set<VisibleTile>()
 
         switch resolvedPresentation.renderSurfaceMode {
         case .spherical:
@@ -47,6 +48,7 @@ class TileCulling {
             visibleTiles = resolution.targets
             flatRingBands = resolution.bands
             linelessTiles = resolution.linelessTargets
+            unlabelledTiles = resolution.unlabelledTargets
             recordGlobeMetrics(resolution.metrics, diagnostics: diagnostics)
         case .flat:
             let flatRenderState = resolvedPresentation.flatRenderState
@@ -63,6 +65,7 @@ class TileCulling {
                 visibleTiles = resolution.targets
                 flatRingBands = resolution.bands
                 linelessTiles = resolution.linelessTargets
+                unlabelledTiles = resolution.unlabelledTargets
                 diagnostics?.setCounter(.globeCullingVisitedNodes, value: resolution.visitedNodeCount)
             } else {
                 visibleTiles = []
@@ -79,7 +82,8 @@ class TileCulling {
                                    tileZoomLevel: targetZoom,
                                    coverageVersion: coverageVersion,
                                    flatRingBands: flatRingBands,
-                                   linelessTiles: linelessTiles)
+                                   linelessTiles: linelessTiles,
+                                   unlabelledTiles: unlabelledTiles)
     }
 
     static func makeCenter(centerWorldMercator: SIMD2<Double>,

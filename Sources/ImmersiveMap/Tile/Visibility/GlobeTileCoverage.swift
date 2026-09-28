@@ -30,6 +30,9 @@ struct GlobeCoverageResolution {
     /// nearer band's answer, and the cover past the last rule the last
     /// rule's.
     let linelessTargets: Set<VisibleTile>
+    /// The targets a rule that draws no labels placed
+    /// (`FlatRingRule.drawsLabels`), decided as for the lines.
+    let unlabelledTargets: Set<VisibleTile>
     let metrics: GlobeCullingMetrics
 }
 
@@ -77,6 +80,7 @@ enum GlobeTileCoverage {
         let lastRing: Int
         let zoom: Int
         let drawsLines: Bool
+        let drawsLabels: Bool
         var tileCount = 0
     }
 
@@ -89,20 +93,22 @@ enum GlobeTileCoverage {
         var targets: [VisibleTile] = []
         var placed: Set<Tile> = []
         var lineless: Set<VisibleTile> = []
+        var unlabelled: Set<VisibleTile> = []
         var metrics = GlobeCullingMetrics.zero
     }
 
     static func targets(targetZoom: Int, inputs: GlobeCoverageInputs, frustum: Frustum?) -> GlobeCoverageResolution {
         let startTime = CACurrentMediaTime()
         guard targetZoom >= 0, let frustum else {
-            return GlobeCoverageResolution(targets: [], bands: [], linelessTargets: [], metrics: .zero)
+            return GlobeCoverageResolution(targets: [], bands: [], linelessTargets: [], unlabelledTargets: [], metrics: .zero)
         }
         var bands: [Band] = []
         for rule in inputs.rules.normalized().rules {
             bands.append(Band(firstRing: bands.last.map { $0.lastRing + 1 } ?? 0,
                               lastRing: rule.distance,
                               zoom: min(targetZoom, max(Self.floorZoom, targetZoom - rule.zoomDrop)),
-                              drawsLines: rule.drawsLines))
+                              drawsLines: rule.drawsLines,
+                              drawsLabels: rule.drawsLabels))
         }
         var walk = Walk(targetZoom: targetZoom,
                         frustum: frustum,
@@ -116,6 +122,7 @@ enum GlobeTileCoverage {
                                            FlatRingBand(zoom: $0.zoom, distance: $0.lastRing, tileCount: $0.tileCount)
                                        },
                                        linelessTargets: walk.lineless,
+                                       unlabelledTargets: walk.unlabelled,
                                        metrics: walk.metrics)
     }
 
@@ -150,6 +157,7 @@ enum GlobeTileCoverage {
         let rings = GlobeRingMath.ringRange(of: tile, targetZoom: walk.targetZoom, lookAt: walk.lookAtTile)
         var placesTile = false
         var drawsLines = true
+        var drawsLabels = true
         var finestWanted = Self.floorZoom
         for index in walk.bands.indices {
             let band = walk.bands[index]
@@ -158,6 +166,7 @@ enum GlobeTileCoverage {
             if band.zoom == tile.z, placesTile == false {
                 placesTile = true
                 drawsLines = band.drawsLines
+                drawsLabels = band.drawsLabels
                 if walk.placed.contains(tile) == false {
                     walk.bands[index].tileCount += 1
                 }
@@ -167,11 +176,15 @@ enum GlobeTileCoverage {
         if placesTile == false, tile.z == Self.floorZoom, rings.upperBound > (walk.bands.last?.lastRing ?? -1) {
             placesTile = true
             drawsLines = walk.bands.last?.drawsLines ?? true
+            drawsLabels = walk.bands.last?.drawsLabels ?? true
         }
         if placesTile {
             if walk.placed.contains(tile) == false {
                 if drawsLines == false {
                     walk.lineless.insert(VisibleTile(tile: tile))
+                }
+                if drawsLabels == false {
+                    walk.unlabelled.insert(VisibleTile(tile: tile))
                 }
             }
             place(tile, walk: &walk)

@@ -146,9 +146,9 @@ final class DebugOverlayHUDView: NSView {
                                                             action: nil)
     private let wireframeLabel = NSTextField(labelWithString: "")
     private let wireframeSwitch = NSSwitch()
-    /// One ring rule's editor: the drop picker, the distance slider and
-    /// the line switch, each with its named row. Rebuilt when the number
-    /// of rules changes.
+    /// One ring rule's editor: the drop picker, the distance slider, the
+    /// line switch and the label switch, each with its named row. Rebuilt
+    /// when the number of rules changes.
     private struct RingRuleRow {
         let dropLabel: NSTextField
         let dropControl: NSSegmentedControl
@@ -156,8 +156,10 @@ final class DebugOverlayHUDView: NSView {
         let distanceSlider: NSSlider
         let linesLabel: NSTextField
         let linesSwitch: NSSwitch
+        let labelsLabel: NSTextField
+        let labelsSwitch: NSSwitch
         var views: [NSView] {
-            [dropLabel, dropControl, distanceLabel, distanceSlider, linesLabel, linesSwitch]
+            [dropLabel, dropControl, distanceLabel, distanceSlider, linesLabel, linesSwitch, labelsLabel, labelsSwitch]
         }
     }
     private var ringRuleRows: [RingRuleRow] = []
@@ -494,9 +496,16 @@ final class DebugOverlayHUDView: NSView {
             linesSwitch.target = self
             linesSwitch.action = #selector(ringRuleLinesSwitchChanged(_:))
             refuseFocus(linesSwitch)
+            let labelsLabel = NSTextField(labelWithString: "")
+            configureControlLabel(labelsLabel, text: "")
+            let labelsSwitch = NSSwitch()
+            labelsSwitch.target = self
+            labelsSwitch.action = #selector(ringRuleLabelsSwitchChanged(_:))
+            refuseFocus(labelsSwitch)
             return RingRuleRow(dropLabel: dropLabel, dropControl: dropControl,
                                 distanceLabel: distanceLabel, distanceSlider: distanceSlider,
-                                linesLabel: linesLabel, linesSwitch: linesSwitch)
+                                linesLabel: linesLabel, linesSwitch: linesSwitch,
+                                labelsLabel: labelsLabel, labelsSwitch: labelsSwitch)
         }
         for row in ringRuleRows {
             row.views.forEach(contentView.addSubview)
@@ -512,6 +521,8 @@ final class DebugOverlayHUDView: NSView {
             row.distanceLabel.stringValue = Self.ringRuleDistanceTitle(index: index, distance: rule.distance)
             row.linesLabel.stringValue = Self.ringRuleLinesTitle(index: index)
             row.linesSwitch.state = rule.drawsLines ? .on : .off
+            row.labelsLabel.stringValue = Self.ringRuleLabelsTitle(index: index)
+            row.labelsSwitch.state = rule.drawsLabels ? .on : .off
         }
         ringRulesRemoveButton.isEnabled = flatRingRules.rules.count > 1
     }
@@ -545,6 +556,17 @@ final class DebugOverlayHUDView: NSView {
         guard let index = ringRuleRows.firstIndex(where: { $0.linesSwitch === sender }),
               index < flatRingRules.rules.count else { return }
         flatRingRules.rules[index].drawsLines = sender.state == .on
+        onRingRuleSetsChanged?(ringRuleSets)
+    }
+
+    static func ringRuleLabelsTitle(index: Int) -> String {
+        "Rule \(index + 1): draw labels"
+    }
+
+    @objc private func ringRuleLabelsSwitchChanged(_ sender: NSSwitch) {
+        guard let index = ringRuleRows.firstIndex(where: { $0.labelsSwitch === sender }),
+              index < flatRingRules.rules.count else { return }
+        flatRingRules.rules[index].drawsLabels = sender.state == .on
         onRingRuleSetsChanged?(ringRuleSets)
     }
 
@@ -861,6 +883,7 @@ final class DebugOverlayHUDView: NSView {
             cursor = layoutControlRow(row.dropLabel, row.dropControl, at: cursor, contentWidth: contentWidth)
             cursor = layoutControlRow(row.distanceLabel, row.distanceSlider, at: cursor, contentWidth: contentWidth)
             cursor = layoutSwitchRow(row.linesLabel, row.linesSwitch, at: cursor, contentWidth: contentWidth)
+            cursor = layoutSwitchRow(row.labelsLabel, row.labelsSwitch, at: cursor, contentWidth: contentWidth)
         }
         cursor = layoutFullWidthRow(ringRulesAddButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutFullWidthRow(ringRulesRemoveButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)

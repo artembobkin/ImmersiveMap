@@ -19,13 +19,20 @@ struct FlatRingRule: Hashable {
     /// (rivers, borders) and every road bucket. Off, the band is fills
     /// only.
     var drawsLines: Bool = true
+    /// Whether the band's tiles draw their labels: the place and POI names,
+    /// the house numbers, the road names and signs, the water names. Off,
+    /// the band is unlabelled, so the far rings toward the horizon can be
+    /// left to the map.
+    var drawsLabels: Bool = true
 
     init(zoomDrop: Int,
          distance: Int,
-         drawsLines: Bool = true) {
+         drawsLines: Bool = true,
+         drawsLabels: Bool = true) {
         self.zoomDrop = zoomDrop
         self.distance = distance
         self.drawsLines = drawsLines
+        self.drawsLabels = drawsLabels
     }
 }
 
@@ -57,7 +64,8 @@ struct FlatRingRules: Hashable {
             let drop = min(max(rule.zoomDrop, Self.zoomDropRange.lowerBound), Self.zoomDropRange.upperBound)
             cleaned.append(FlatRingRule(zoomDrop: drop,
                                         distance: distance,
-                                        drawsLines: rule.drawsLines))
+                                        drawsLines: rule.drawsLines,
+                                        drawsLabels: rule.drawsLabels))
         }
         cleaned.sort { $0.distance < $1.distance }
         var unique: [FlatRingRule] = []
@@ -81,7 +89,8 @@ struct FlatRingBand: Hashable {
 
 struct FlatRingRuleCoverageResolution {
     static let empty = FlatRingRuleCoverageResolution(targets: [], bands: [],
-                                                      linelessTargets: [], visitedNodeCount: 0)
+                                                      linelessTargets: [], unlabelledTargets: [],
+                                                      visitedNodeCount: 0)
 
     let targets: [VisibleTile]
     let bands: [FlatRingBand]
@@ -89,6 +98,10 @@ struct FlatRingRuleCoverageResolution {
     /// (`FlatRingRule.drawsLines`). A tile two bands share takes the nearer
     /// band's answer.
     let linelessTargets: Set<VisibleTile>
+    /// The targets placed by a rule that draws no labels
+    /// (`FlatRingRule.drawsLabels`), the nearer band deciding as for the
+    /// lines.
+    let unlabelledTargets: Set<VisibleTile>
     /// How many tiles the enumeration looked at, for the diagnostics.
     let visitedNodeCount: Int
 }
@@ -136,6 +149,7 @@ enum FlatRingRuleCoverage {
 
         var placed = Set<VisibleTile>()
         var linelessTargets = Set<VisibleTile>()
+        var unlabelledTargets = Set<VisibleTile>()
         var bands: [FlatRingBand] = []
         var visited = 0
         var innerSquare: FlatRingSquare?
@@ -153,6 +167,9 @@ enum FlatRingRuleCoverage {
             if rule.drawsLines == false {
                 linelessTargets.formUnion(tiles.subtracting(placed))
             }
+            if rule.drawsLabels == false {
+                unlabelledTargets.formUnion(tiles.subtracting(placed))
+            }
             placed.formUnion(tiles)
             bands.append(FlatRingBand(zoom: zoom,
                                       distance: rule.distance,
@@ -162,6 +179,7 @@ enum FlatRingRuleCoverage {
         return FlatRingRuleCoverageResolution(targets: FlatTileCoverage.sorted(Array(placed)),
                                               bands: bands,
                                               linelessTargets: linelessTargets,
+                                              unlabelledTargets: unlabelledTargets,
                                               visitedNodeCount: visited)
     }
 

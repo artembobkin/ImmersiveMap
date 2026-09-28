@@ -143,7 +143,14 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     }
 
     func update(frameContext: FrameContext) {
-        let placeTiles = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
+        // A slot whose ring rule draws no labels (`FlatRingRule.drawsLabels`)
+        // offers none: a tile keeps its labels while any slot it fills is
+        // labelled, as a tile keeps its lines.
+        let unlabelledTiles = frameContext.visibleContent.unlabelledTiles
+        let allPlaceTiles = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
+        let placeTiles = unlabelledTiles.isEmpty
+            ? allPlaceTiles
+            : allPlaceTiles.filter { unlabelledTiles.contains($0.placeIn) == false }
         let projectionIndexState = frameContext.sharedState.tileProjectionIndexState
         let sourceEntries = BaseLabelSourceEntry.build(from: placeTiles)
         latestCameraFingerprint = makeVisibilityCameraFingerprint(frameContext: frameContext)

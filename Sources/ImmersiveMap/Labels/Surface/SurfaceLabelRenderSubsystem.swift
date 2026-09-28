@@ -42,7 +42,11 @@ final class SurfaceLabelRenderSubsystem: RenderSubsystem {
         let wrapsWorld = frameContext.renderSurfaceMode == .flat
         var seen = Set<FlatGroundSourceKey>()
         var sourceTiles: [(metalTile: MetalTile, worldWrap: Int8)] = []
-        for placement in placements where placement.metalTile.tileBuffers.surfaceLabels.labels.isEmpty == false {
+        // A slot whose ring rule draws no labels offers none
+        // (`FlatRingRule.drawsLabels`).
+        let unlabelledTiles = frameContext.visibleContent.unlabelledTiles
+        for placement in placements where placement.metalTile.tileBuffers.surfaceLabels.labels.isEmpty == false
+            && unlabelledTiles.contains(placement.placeIn) == false {
             let worldWrap = wrapsWorld ? placement.placeIn.worldWrap : 0
             if seen.insert(FlatGroundSourceKey(tile: placement.metalTile.tile, worldWrap: worldWrap)).inserted {
                 sourceTiles.append((placement.metalTile, worldWrap))

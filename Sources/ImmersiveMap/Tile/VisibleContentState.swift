@@ -29,6 +29,9 @@ struct VisibleContentState {
     /// The targets a rule that draws no lines placed
     /// (`FlatRingRule.drawsLines`), on either surface.
     let linelessTiles: Set<VisibleTile>
+    /// The targets a rule that draws no labels placed
+    /// (`FlatRingRule.drawsLabels`), on either surface.
+    let unlabelledTiles: Set<VisibleTile>
 
     init(centerWorldMercator: SIMD2<Double>,
          center: Center,
@@ -36,7 +39,8 @@ struct VisibleContentState {
          tileZoomLevel: Int,
          coverageVersion: UInt64,
          flatRingBands: [FlatRingBand] = [],
-         linelessTiles: Set<VisibleTile> = []) {
+         linelessTiles: Set<VisibleTile> = [],
+         unlabelledTiles: Set<VisibleTile> = []) {
         self.centerWorldMercator = centerWorldMercator
         self.center = center
         self.visibleTiles = visibleTiles
@@ -44,5 +48,6 @@ struct VisibleContentState {
         self.coverageVersion = coverageVersion
         self.flatRingBands = flatRingBands
         self.linelessTiles = linelessTiles
+        self.unlabelledTiles = unlabelledTiles
     }
 }
