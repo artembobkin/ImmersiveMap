@@ -37,21 +37,30 @@ private struct MapScreen: View {
             // The controls are drawn only when a camera controller is attached:
             // they drive it, so without one the modifier does nothing.
             .camera(camera, position: Self.start)
+            // Down to the ground: the default stops at 18, two levels past
+            // the deepest tile, because a street tilt past it lays the
+            // camera on a few tiles blown up to many screens and their fill
+            // fans can show slivers. Here the landmarks are reviewed up
+            // close, at about a dozen metres over the pavement at 22.
+            .zoomRange(maximum: 22)
+            // Close to the ground the haze over the far ground goes, the
+            // sky stays: from 19 on only the seam band is left at the line.
+            .fog(hazeZoomFade: .fadeOut(from: 18, to: 19))
             // Moscow inside the MKAD ring: the globe turns freely up to zoom
             // 1, the area closes in on the city between zoom 1 and 2, and
             // from zoom 2 on a pull that grows with the distance draws the
             // camera back into it, while a drag is still under way too.
-            .cameraBounds(southWest: GeoCoordinate(latitude: 55.57, longitude: 37.36),
-                          northEast: GeoCoordinate(latitude: 55.92, longitude: 37.86),
-                          pullZoomRange: 1...2,
-                          pullCurve: .easeInOut,
-                          edgeBehavior: .elastic(maximumStretch: 200, pullHalfLife: 0.35, pullProgression: 2))
+//            .cameraBounds(southWest: GeoCoordinate(latitude: 55.57, longitude: 37.36),
+//                          northEast: GeoCoordinate(latitude: 55.92, longitude: 37.86),
+//                          pullZoomRange: 1...2,
+//                          pullCurve: .easeInOut,
+//                          edgeBehavior: .elastic(maximumStretch: 200, pullHalfLife: 0.35, pullProgression: 2))
             .landmarks(DevLandmarks.landmarks)
             // A tileset under development is rebuilt and re-served under the
             // same coordinates, so a warm disk cache would keep showing the
             // previous build. Every launch here starts from the network.
-            .tileSettings(clearDiskCachesOnLaunch: true)
-            .labelSettings(language: .russian)
+            .tileSettings(clearDiskCachesOnLaunch: false)
+            .labelSettings(language: .english)
             // Camera coordinates and renderer diagnostics, drawn as host-view
             // chrome above the map. A development aid, off by default.
             .debugPanel()
