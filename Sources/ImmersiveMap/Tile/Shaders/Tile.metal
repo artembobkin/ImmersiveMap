@@ -38,6 +38,27 @@ constant bool kTileFillFields = !kTileLineFields;
 /// vertex band and the early depth test; every coarser source and the
 /// backdrop take this variant (FlatMapSurfaceDrawer decides by zoom).
 constant bool kTileExactRankDepth [[function_constant(3)]];
+/// The road ribbons: the road buckets of a tile whose ribbons are deferred
+/// (the centreline and a direction, extruded right here). The vertex stage
+/// puts the rim exactly on the style's edge, so the geometry is the road
+/// and the fragment stage computes no coverage: the edge is hard. The
+/// style's colour, with its fades folded into the alpha, rides from the
+/// vertex stage, and the depth is the road's rank in its band
+/// (RoadRankDepth), which is what orders the roads, not the order they are
+/// drawn in. A lines class like every ribbon (kTileLineFields is set too).
+constant bool kTileRoadRibbons [[function_constant(4)]];
+/// The road ribbons that are not opaque this frame: a translucent colour, a
+/// fade under way, a dash pattern. Blended, with the gaps of a dashed style
+/// discarded. Without it a road ribbon is opaque: no blending, no discard,
+/// so the GPU resolves which road owns a pixel before it shades one.
+constant bool kTileRoadBlended [[function_constant(5)]];
+/// What each variant carries to its fragment stage: the resolved colour
+/// (the fills and the roads), the fields of the analytic coverage (every
+/// ribbon but a road), and the style index with the arc length (every
+/// ribbon that may cut a dash pattern).
+constant bool kTileColorField = kTileFillFields || kTileRoadRibbons;
+constant bool kTileCoverageFields = kTileLineFields && !kTileRoadRibbons;
+constant bool kTileStyleIndexField = kTileLineFields && (!kTileRoadRibbons || kTileRoadBlended);
 constant bool kSamplesShadowCascades = !kGroundShadowMaskEnabled;
 
 // Mask pixels per drawable pixel; mirrors
@@ -72,6 +93,14 @@ constant float kFlatCameraNearPlane = 0.01;
 // of the tile, past which a width on screen is a camera at the vertex's
 // own depth and the triangle only needs to stay finite.
 constant float kTileDeferredRibbonMaximumUnits = 1024.0;
+// The narrowest a road ribbon is extruded, in pixels from the centreline:
+// half a pixel a side, so a road far down a tilted view is still a pixel
+// wide for the rasterizer to hit in every row, instead of a sliver it hits
+// and misses.
+constant float kTileRoadMinimumHalfWidthPx = 0.5;
+// The style ranks of one road band (RoadRankDepth.ranksPerBand, pinned by
+// RoadRankDepthContractTests): a style past the last rank shares it.
+constant float kTileRoadBandRanks = 12.0;
 
 // lineStyle packs the per-style constants (edge threshold, width points,
 // dash points, gap points); constant per primitive, so half is exact enough.
@@ -82,24 +111,25 @@ struct VertexOut {
     // painted (TileSourceStencilPriority), the same mechanism the sphere
     // uses. The one clip distance below is the road distance cut.
     float3 worldPos;
-    half4 color [[function_constant(kTileFillFields)]];
+    half4 color [[function_constant(kTileColorField)]];
     // Lines classes: the style index rides flat and the fragment resolves
     // colour, fade and line style itself; only the two genuinely
     // per-vertex line fields interpolate (the longitudinal parameter raw,
-    // its decode scale being a style constant).
-    uint styleIndex [[flat, function_constant(kTileLineFields)]];
-    float lineDistance [[function_constant(kTileLineFields)]];
-    float lineParameterRaw [[function_constant(kTileLineFields)]];
+    // its decode scale being a style constant). A road ribbon carries the
+    // index and the parameter only where it may cut a dash pattern.
+    uint styleIndex [[flat, function_constant(kTileStyleIndexField)]];
+    float lineDistance [[function_constant(kTileCoverageFields)]];
+    float lineParameterRaw [[function_constant(kTileStyleIndexField)]];
     // A deferred ribbon's visible half-width in pixels, resolved here from
     // the style and the vertex's own scale on screen (the rim is extruded
     // one feather past it); zero for a pre-extruded ribbon.
-    float deferredEdgePx [[flat, function_constant(kTileLineFields)]];
+    float deferredEdgePx [[flat, function_constant(kTileCoverageFields)]];
     // The ground direction a deferred ribbon's width is laid in: the
     // extrusion direction, interpolated, so across a fan it sweeps with the
     // rim and across a segment it keeps its axis (the sign flips through
     // the centreline, and only the axis is read). Zero where nothing is
     // deferred.
-    float2 widthAxis [[function_constant(kTileLineFields)]];
+    float2 widthAxis [[function_constant(kTileCoverageFields)]];
     // The exact variant: the layer's rank depth, flat, written by the
     // fragment stage as the fragment's depth.
     float rankDepth [[flat, function_constant(kTileExactRankDepth)]];
@@ -113,12 +143,12 @@ struct VertexOut {
 struct FragmentIn {
     float4 position [[position]];
     float3 worldPos;
-    half4 color [[function_constant(kTileFillFields)]];
-    uint styleIndex [[flat, function_constant(kTileLineFields)]];
-    float lineDistance [[function_constant(kTileLineFields)]];
-    float lineParameterRaw [[function_constant(kTileLineFields)]];
-    float deferredEdgePx [[flat, function_constant(kTileLineFields)]];
-    float2 widthAxis [[function_constant(kTileLineFields)]];
+    half4 color [[function_constant(kTileColorField)]];
+    uint styleIndex [[flat, function_constant(kTileStyleIndexField)]];
+    float lineDistance [[function_constant(kTileCoverageFields)]];
+    float lineParameterRaw [[function_constant(kTileStyleIndexField)]];
+    float deferredEdgePx [[flat, function_constant(kTileCoverageFields)]];
+    float2 widthAxis [[function_constant(kTileCoverageFields)]];
     float rankDepth [[flat, function_constant(kTileExactRankDepth)]];
 };
 
@@ -205,11 +235,18 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                 }
                 units = rimEdgePx / pixelsPerUnit;
             }
-            // The feather at this vertex's scale on screen. Behind the
-            // near plane the floored span is far too many pixels a unit
-            // and the feather vanishes, which the cut vertex never shows.
-            units = min(units + kTileDeferredRibbonFeatherPx / pixelsPerUnit,
-                        kTileDeferredRibbonMaximumUnits);
+            if (kTileRoadRibbons) {
+                // A road: the rim is the style's edge itself, no feather,
+                // and never under half a pixel from the centreline.
+                units = max(units, kTileRoadMinimumHalfWidthPx / pixelsPerUnit);
+            } else {
+                // The feather at this vertex's scale on screen. Behind the
+                // near plane the floored span is far too many pixels a unit
+                // and the feather vanishes, which the cut vertex never
+                // shows.
+                units += kTileDeferredRibbonFeatherPx / pixelsPerUnit;
+            }
+            units = min(units, kTileDeferredRibbonMaximumUnits);
             localPosition += normal * units;
         }
     }
@@ -225,9 +262,14 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     // buildings' depth test keeps working unchanged. The per-draw offset
     // places the group: ground fills at 0, ground ribbons one class band
     // nearer, the road buckets and the bridge overlay nearer still
-    // (GlobeSurfaceDepthRank mirrors the constants).
+    // (GlobeSurfaceDepthRank mirrors the constants). A road's offset is its
+    // band (RoadRankDepth), and its style ranks stay inside the band.
+    float styleRank = float(vertexIn.styleIndex);
+    if (kTileRoadRibbons) {
+        styleRank = min(styleRank, kTileRoadBandRanks - 1.0);
+    }
     float layerNdcZ = 1.0 - depthBandOffset
-        - (float(vertexIn.styleIndex) + 1.0) * kFlatTileLayerDepthStep;
+        - (styleRank + 1.0) * kFlatTileLayerDepthStep;
     out.position.z = layerNdcZ * out.position.w;
     if (kTileExactRankDepth) {
         out.rankDepth = layerNdcZ;
@@ -236,13 +278,29 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     // The near plane, in the clip space w (the view depth): what the z clip
     // would have cut had z been the projection's.
     out.clipDistance[0] = out.position.w - kFlatCameraNearPlane;
-    if (kTileLineFields) {
+    if (kTileStyleIndexField) {
         out.styleIndex = uint(vertexIn.styleIndex);
-        out.lineDistance = float(vertexIn.lineDistance) / 127.0;
         out.lineParameterRaw = float(vertexIn.lineParameter);
+    }
+    if (kTileCoverageFields) {
+        out.lineDistance = float(vertexIn.lineDistance) / 127.0;
         out.deferredEdgePx = deferredEdgePx;
         out.widthAxis = widthAxis;
-    } else {
+    }
+    if (kTileRoadRibbons) {
+        // The road's colour is final here: the style's, with the zoom fade
+        // and the width ramp's alpha, all functions of the style and the
+        // frame only.
+        out.color = half4(styles[vertexIn.styleIndex].color);
+        out.color.a *= tileStyleFade(styleZoomFades[vertexIn.styleIndex], overviewFade);
+        out.color.a *= half(tilePointWidthRampAlpha(lineStyles[vertexIn.styleIndex], overviewFade.cameraZoom));
+        // A road that is invisible this frame is cut whole, so it writes no
+        // rank over the roads under it.
+        if (out.color.a <= 0.0h) {
+            out.clipDistance[0] = -1.0;
+        }
+    }
+    if (kTileFillFields) {
         TileVertexStyle style = tileVertexStyle(vertexIn, styles, styleZoomFades, lineStyles);
         out.color = style.color;
         // The zoom fade folds into the alpha here: a function of the style
@@ -272,6 +330,27 @@ static inline float tileFragmentDeferredEdgePx(FragmentIn in,
     return deferredEdgePx;
 }
 
+/// How much of the sun reaches the ground at a fragment: the flat world
+/// pass reads the per-pixel mask, the atlas bake samples the cascades.
+static inline float tileGroundShadowFactor(FragmentIn in,
+                                           constant Shadow& shadow,
+                                           depth2d<float> shadowMap,
+                                           texture2d<half> groundShadowMask) {
+    if (kGroundShadowMaskEnabled) {
+        // One bilinear tap of the mask instead of a cascade lookup in every
+        // ground layer. The strength guard mirrors sampleShadowFactor's, so a
+        // frame without the mask pass (shadows off, no casters) never samples
+        // the 1x1 fallback.
+        constexpr sampler maskSampler(coord::pixel, filter::linear, address::clamp_to_edge);
+        return shadow.strength > 0.0
+            ? float(groundShadowMask.sample(maskSampler, in.position.xy * kGroundShadowMaskScale).r)
+            : 1.0;
+    }
+    // Zero normal: the ground always faces the sun and keeps its tight
+    // contact (no normal-offset shift).
+    return sampleShadowFactor(shadow, shadowMap, in.worldPos, float3(0.0));
+}
+
 // Nothing here discards: a retained substitute is kept out of covered
 // slots by the tile-priority stencil test (early, before shading), so the
 // GPU can resolve visibility before the fragment runs. The body is shared
@@ -286,19 +365,7 @@ static inline half4 tileFragmentColor(FragmentIn in,
                                       constant LineStyle* lineStyles,
                                       depth2d<float> shadowMap,
                                       texture2d<half> groundShadowMask) {
-    float shadowFactor;
-    if (kGroundShadowMaskEnabled) {
-        // One bilinear tap of the mask instead of a cascade lookup in every
-        // ground layer; the strength guard mirrors sampleShadowFactor's, so a
-        // frame without the mask pass (shadows off, no casters) never samples
-        // the 1x1 fallback.
-        constexpr sampler maskSampler(coord::pixel, filter::linear, address::clamp_to_edge);
-        shadowFactor = shadow.strength > 0.0
-            ? float(groundShadowMask.sample(maskSampler, in.position.xy * kGroundShadowMaskScale).r)
-            : 1.0;
-    } else {
-        shadowFactor = sampleShadowFactor(shadow, shadowMap, in.worldPos, float3(0.0));
-    }
+    float shadowFactor = tileGroundShadowFactor(in, shadow, shadowMap, groundShadowMask);
     // The fills classes carry no line fields: their coverage is identically
     // 1 and the colour (fade already folded in the vertex stage) is final.
     // The lines classes resolve colour, fade and coverage from the flat
@@ -312,8 +379,6 @@ static inline half4 tileFragmentColor(FragmentIn in,
     } else {
         color = in.color;
     }
-    // Zero normal (passed above): the ground always faces the sun and
-    // keeps its tight contact (no normal-offset shift).
     color.rgb *= shadowColorMultiplier(shadow, half(shadowFactor));
     return color;
 }
@@ -352,113 +417,82 @@ fragment TileExactDepthFragmentOut tileExactDepthFragmentShader(FragmentIn in [[
     return out;
 }
 
-// The road sheet: the roads drawn as one sheet, every pixel blended once,
-// whatever overlaps there: the segments and the join fan of a bend, two
-// streets at a junction, a flyover across the road under it, the stitching
-// margins of two tiles, a cap over the next piece. A translucent road (a
-// tunnel, a translucent theme colour) otherwise composites twice in every
-// overlap and stamps a darker
-// patch there. A sheet is one role of the roads that read as one network
-// (FlatMapSurfaceDrawer decides: the carriageways of the ground and of the
-// bridges together, whatever their class).
-//
-// Two draws per sheet over the same geometry, both writing the fragment's
-// depth as a constant. A fragment inside a ribbon's body (full coverage)
-// takes a rank in the sheet's band from its alpha, the more opaque the
-// nearer, a fragment of the antialiasing fringe takes the band's far end,
-// and a fragment outside the visible line takes the far plane, which fails
-// every test.
-// - The depth stage (no colour) writes the nearest body rank per pixel, so
-//   the pixel belongs to the most opaque road that covers it with a body:
-//   a faded side street never punches a lighter hole in the avenue it
-//   meets, and a fringe never takes a pixel from the body of another road.
-// - The colour stage tests lessEqual without writing, one rank nearer than
-//   its alpha says, so the two stages, compiled apart, may round an alpha
-//   to neighbouring ranks and the pixel's owner still draws. A fringe draws
-//   only where no body of the sheet is. The sheet's stencil bit lets one
-//   fragment through per pixel (TileSourceStencilPriority.roadSheetBit),
-//   which settles equal and neighbouring ranks.
-// Every depth is an integer count of power-of-two steps under a base that
-// is a multiple of the step, so both stages compute the same bits.
-struct RoadSheetUniform {
-    // The far end of the sheet's band: the fringe's depth in the colour
-    // stage.
-    float baseDepth;
-    float depthStep;
-    // What a fringe fragment writes: the base in the colour stage, the far
-    // plane in the depth stage, where a fringe claims nothing.
-    float fringeDepth;
-    // The alpha ranks of the band: an alpha of one is this rank.
-    float maximumRank;
-    // The coverage a fragment is a body from. The depth stage asks for a
-    // little more than the colour stage, so a fragment the two stages round
-    // differently at the threshold is a body in the colour stage whenever
-    // it was one in the depth stage, and never a hole in its own road.
-    float bodyCoverage;
-    // The ranks the colour stage tests nearer than its alpha says: zero in
-    // the depth stage, one in the colour stage.
-    float rankBias;
-};
-
-/// A road fragment's alpha apart from its coverage: the style's and the
-/// zoom fades, the factors tileFragmentColor applies.
-static inline float tileRoadSheetAlpha(FragmentIn in,
-                                       constant Style* styles,
-                                       constant float2* styleZoomFades,
-                                       constant LineStyle* lineStyles,
-                                       constant OverviewFadeUniform& overviewFade,
-                                       float deferredEdgePx) {
-    float alpha = styles[in.styleIndex].color.a
-        * float(tileStyleFade(styleZoomFades[in.styleIndex], overviewFade))
-        * tilePointWidthRampAlpha(lineStyles[in.styleIndex], overviewFade.cameraZoom);
-    return clamp(alpha, 0.0, 1.0);
-}
-
-static inline float tileRoadSheetDepth(half coverage, float alpha, constant RoadSheetUniform& roadSheet) {
-    if (float(coverage) >= roadSheet.bodyCoverage) {
-        float rank = floor(alpha * roadSheet.maximumRank) + 1.0 + roadSheet.rankBias;
-        return roadSheet.baseDepth - rank * roadSheet.depthStep;
+// The road ribbons (kTileRoadRibbons): the geometry is the road, so there
+// is no coverage to compute. Which road owns a pixel is the depth test's
+// work, over the rank the vertex stage wrote (RoadRankDepth):
+// - An opaque road writes its rank with blending off, so a pixel several
+//   roads cover is shaded once, by the road of the highest rank, whatever
+//   order they are drawn in.
+// - A road that is not opaque this frame (kTileRoadBlended) blends, and
+//   writes its rank too, under a test that fails an equal rank: every pixel
+//   takes one fragment of a rank, so a translucent road does not darken
+//   where two pieces of it overlap. The drawer draws these nearest first,
+//   so the pixel belongs to the highest road that covers it. The gaps of a
+//   dash pattern are discarded and claim nothing.
+// - The edge lines of every road, its rim as one-pixel line primitives
+//   over the same rim vertices, draw last through the blended variant at a
+//   share of the road's alpha (the draw's alpha scale), tested against the
+//   ranks and writing none. A line is one pixel wide and lands on the
+//   pixels the body's edge passes through without covering.
+//   An equal rank fails the test, so a line shows only on the pixels
+//   beside the body, where it softens the steps of the hard edge, and
+//   never across the body of its own road or of another road of its
+//   style, which is what keeps a junction free of seams.
+static inline half4 tileRoadFragmentColor(FragmentIn in,
+                                          constant float& alphaScale,
+                                          constant Shadow& shadow,
+                                          constant LineDashUniform& lineDash,
+                                          constant LineStyle* lineStyles,
+                                          depth2d<float> shadowMap,
+                                          texture2d<half> groundShadowMask) {
+    half4 color = in.color;
+    float shadowFactor = tileGroundShadowFactor(in, shadow, shadowMap, groundShadowMask);
+    if (kTileRoadBlended) {
+        color.a *= half(alphaScale);
+        // The derivative is taken before the discard: fwidth needs the
+        // whole 2x2 quad.
+        float parameterSpan = fwidth(in.lineParameterRaw);
+        LineStyle lineStyle = lineStyles[in.styleIndex];
+        // A vanishing gradient is a saturated parameter (a decoration
+        // sharing the style), not an arc: no pattern there.
+        if (lineStyle.dashLengthPoints > 0.0 && parameterSpan > 2e-5) {
+            // The arc length rides in half tile units (TileVertexIn).
+            float unitScale = lineStyle.dashInTileUnits > 0.0 ? 1.0 : lineDash.unitsPerPoint;
+            float dashUnits = lineStyle.dashLengthPoints * unitScale;
+            float gapUnits = lineStyle.dashGapPoints * unitScale;
+            if (dashUnits > 0.0 && gapUnits > 0.0
+                && tileDashEdgeDistance(in.lineParameterRaw * 0.5, dashUnits, dashUnits + gapUnits) < 0.0) {
+                discard_fragment();
+            }
+        }
+    } else {
+        color.a = 1.0h;
     }
-    return coverage > 0.001h ? roadSheet.fringeDepth : 1.0;
+    color.rgb *= shadowColorMultiplier(shadow, half(shadowFactor));
+    return color;
 }
 
-struct TileRoadSheetDepthOut {
-    float depth [[depth(any)]];
-};
-
-fragment TileRoadSheetDepthOut tileRoadSheetDepthFragmentShader(FragmentIn in [[stage_in]],
-                                                                constant OverviewFadeUniform& overviewFade [[buffer(0)]],
-                                                                constant LineDashUniform& lineDash [[buffer(4)]],
-                                                                constant Style* styles [[buffer(5)]],
-                                                                constant float2* styleZoomFades [[buffer(6)]],
-                                                                constant LineStyle* lineStyles [[buffer(7)]],
-                                                                constant RoadSheetUniform& roadSheet [[buffer(11)]]) {
-    float deferredEdgePx = tileFragmentDeferredEdgePx(in, lineStyles, overviewFade);
-    half coverage = tileLineFragmentCoverage(in.styleIndex, in.lineDistance, in.lineParameterRaw,
-                                             lineStyles, overviewFade, lineDash, deferredEdgePx);
-    float alpha = tileRoadSheetAlpha(in, styles, styleZoomFades, lineStyles, overviewFade, deferredEdgePx);
-    TileRoadSheetDepthOut out;
-    out.depth = tileRoadSheetDepth(coverage, alpha, roadSheet);
-    return out;
+fragment half4 tileRoadFragmentShader(FragmentIn in [[stage_in]],
+                                      constant float& alphaScale [[buffer(11), function_constant(kTileRoadBlended)]],
+                                      constant Shadow& shadow [[buffer(3)]],
+                                      constant LineDashUniform& lineDash [[buffer(4), function_constant(kTileRoadBlended)]],
+                                      constant LineStyle* lineStyles [[buffer(7), function_constant(kTileRoadBlended)]],
+                                      depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
+                                      texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
+    return tileRoadFragmentColor(in, alphaScale, shadow, lineDash, lineStyles, shadowMap, groundShadowMask);
 }
 
-fragment TileExactDepthFragmentOut tileRoadSheetFragmentShader(FragmentIn in [[stage_in]],
-                                                               constant OverviewFadeUniform& overviewFade [[buffer(0)]],
-                                                               constant Shadow& shadow [[buffer(3)]],
-                                                               constant LineDashUniform& lineDash [[buffer(4)]],
-                                                               constant Style* styles [[buffer(5)]],
-                                                               constant float2* styleZoomFades [[buffer(6)]],
-                                                               constant LineStyle* lineStyles [[buffer(7)]],
-                                                               constant RoadSheetUniform& roadSheet [[buffer(11)]],
-                                                               depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
-                                                               texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
-    float deferredEdgePx = tileFragmentDeferredEdgePx(in, lineStyles, overviewFade);
-    half coverage = tileLineFragmentCoverage(in.styleIndex, in.lineDistance, in.lineParameterRaw,
-                                             lineStyles, overviewFade, lineDash, deferredEdgePx);
-    float alpha = tileRoadSheetAlpha(in, styles, styleZoomFades, lineStyles, overviewFade, deferredEdgePx);
+// The exact rank depth of a road (kTileExactRankDepth), for the sources
+// whose triangles are too large for the vertex band.
+fragment TileExactDepthFragmentOut tileRoadExactDepthFragmentShader(FragmentIn in [[stage_in]],
+                                                                    constant float& alphaScale [[buffer(11), function_constant(kTileRoadBlended)]],
+                                                                    constant Shadow& shadow [[buffer(3)]],
+                                                                    constant LineDashUniform& lineDash [[buffer(4), function_constant(kTileRoadBlended)]],
+                                                                    constant LineStyle* lineStyles [[buffer(7), function_constant(kTileRoadBlended)]],
+                                                                    depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
+                                                                    texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
     TileExactDepthFragmentOut out;
-    out.color = tileFragmentColor(in, overviewFade, shadow, lineDash, styles, styleZoomFades, lineStyles,
-                                  shadowMap, groundShadowMask);
-    out.depth = tileRoadSheetDepth(coverage, alpha, roadSheet);
+    out.color = tileRoadFragmentColor(in, alphaScale, shadow, lineDash, lineStyles, shadowMap, groundShadowMask);
+    out.depth = in.rankDepth;
     return out;
 }

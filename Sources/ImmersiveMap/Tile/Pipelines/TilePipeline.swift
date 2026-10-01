@@ -30,11 +30,14 @@ class TilePipeline {
     let flatExactPipelineState: MTLRenderPipelineState?
     let flatExactFillsPipelineState: MTLRenderPipelineState?
     let flatExactOpaquePipelineState: MTLRenderPipelineState?
-    /// Flat surface only: the road sheet's two stages over the line-fields
-    /// vertex stage (Tile.metal, the road sheet). The depth stage writes no
-    /// colour, the colour stage blends like every other line.
-    let flatRoadSheetDepthPipelineState: MTLRenderPipelineState?
-    let flatRoadSheetColorPipelineState: MTLRenderPipelineState?
+    /// Flat surface only: the road ribbons (Tile.metal, kTileRoadRibbons),
+    /// whose geometry is the road and whose depth is the road's rank. The
+    /// opaque ones draw unblended, the rest blend, and each has its exact
+    /// rank depth variant.
+    let flatRoadOpaquePipelineState: MTLRenderPipelineState?
+    let flatRoadBlendedPipelineState: MTLRenderPipelineState?
+    let flatExactRoadOpaquePipelineState: MTLRenderPipelineState?
+    let flatExactRoadBlendedPipelineState: MTLRenderPipelineState?
     /// Sphere surface only: the resting-sphere fills class, blended (the
     /// translucent fill layers). Carries no line fields. The morph keeps
     /// `pipelineState` (tileSphereMorphVertexShader), the only sphere
@@ -77,21 +80,33 @@ class TilePipeline {
         var flatExactFragmentFunction: MTLFunction?
         var flatExactFillsVertexFunction: MTLFunction?
         var flatExactFillsFragmentFunction: MTLFunction?
-        var flatRoadSheetDepthFragmentFunction: MTLFunction?
-        var flatRoadSheetColorFragmentFunction: MTLFunction?
+        // The road ribbons, keyed by exact rank depth: the opaque and the
+        // blended vertex and fragment pairs.
+        var flatRoadFunctions: [Bool: (opaqueVertex: MTLFunction, opaqueFragment: MTLFunction,
+                                       blendedVertex: MTLFunction, blendedFragment: MTLFunction)] = [:]
         switch surface {
         case .flat:
             func flatFunction(_ name: String,
                               lineFields: Bool,
-                              exactRankDepth: Bool = false) -> MTLFunction {
+                              exactRankDepth: Bool = false,
+                              roadRibbons: Bool = false,
+                              roadBlended: Bool = false) -> MTLFunction {
                 let values = MTLFunctionConstantValues()
                 var readsMask = readsGroundShadowMask
                 var lineFieldsValue = lineFields
                 var exactRankDepthValue = exactRankDepth
+                var roadRibbonsValue = roadRibbons
+                var roadBlendedValue = roadBlended
                 values.setConstantValue(&readsMask, type: .bool, index: 0)
                 values.setConstantValue(&lineFieldsValue, type: .bool, index: 1)
                 values.setConstantValue(&exactRankDepthValue, type: .bool, index: 3)
+                values.setConstantValue(&roadRibbonsValue, type: .bool, index: 4)
+                values.setConstantValue(&roadBlendedValue, type: .bool, index: 5)
                 return try! library.makeFunction(name: name, constantValues: values)
+            }
+            func roadFunction(_ name: String, exactRankDepth: Bool, blended: Bool) -> MTLFunction {
+                flatFunction(name, lineFields: true, exactRankDepth: exactRankDepth,
+                             roadRibbons: true, roadBlended: blended)
             }
             vertexFunction = flatFunction("tileVertexShader", lineFields: true)
             fragmentFunction = flatFunction("tileFragmentShader", lineFields: true)
@@ -101,8 +116,15 @@ class TilePipeline {
             flatExactFragmentFunction = flatFunction("tileExactDepthFragmentShader", lineFields: true, exactRankDepth: true)
             flatExactFillsVertexFunction = flatFunction("tileVertexShader", lineFields: false, exactRankDepth: true)
             flatExactFillsFragmentFunction = flatFunction("tileExactDepthFragmentShader", lineFields: false, exactRankDepth: true)
-            flatRoadSheetDepthFragmentFunction = flatFunction("tileRoadSheetDepthFragmentShader", lineFields: true)
-            flatRoadSheetColorFragmentFunction = flatFunction("tileRoadSheetFragmentShader", lineFields: true)
+            for exact in [false, true] {
+                let fragmentName = exact ? "tileRoadExactDepthFragmentShader" : "tileRoadFragmentShader"
+                flatRoadFunctions[exact] = (
+                    opaqueVertex: roadFunction("tileVertexShader", exactRankDepth: exact, blended: false),
+                    opaqueFragment: roadFunction(fragmentName, exactRankDepth: exact, blended: false),
+                    blendedVertex: roadFunction("tileVertexShader", exactRankDepth: exact, blended: true),
+                    blendedFragment: roadFunction(fragmentName, exactRankDepth: exact, blended: true)
+                )
+            }
         case .sphere:
             func sphereFunction(_ name: String, fog: Bool, lineFields: Bool) -> MTLFunction {
                 let values = MTLFunctionConstantValues()
@@ -235,20 +257,33 @@ class TilePipeline {
             pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
             self.flatExactOpaquePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
             pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
-            // The road sheet: the line-fields vertex stage under the two
-            // sheet fragment entries.
-            pipelineDescriptor.vertexFunction = vertexFunction
-            pipelineDescriptor.fragmentFunction = flatRoadSheetColorFragmentFunction
-            self.flatRoadSheetColorPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
-            pipelineDescriptor.fragmentFunction = flatRoadSheetDepthFragmentFunction
-            pipelineDescriptor.colorAttachments[0].writeMask = []
-            self.flatRoadSheetDepthPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
-            pipelineDescriptor.colorAttachments[0].writeMask = .all
+            // The road ribbons: the blended pair, then the opaque pair
+            // with blending off.
+            func makeRoadStates(exact: Bool) -> (opaque: MTLRenderPipelineState?, blended: MTLRenderPipelineState?) {
+                guard let functions = flatRoadFunctions[exact] else { return (nil, nil) }
+                pipelineDescriptor.vertexFunction = functions.blendedVertex
+                pipelineDescriptor.fragmentFunction = functions.blendedFragment
+                let blended = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+                pipelineDescriptor.vertexFunction = functions.opaqueVertex
+                pipelineDescriptor.fragmentFunction = functions.opaqueFragment
+                pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
+                let opaque = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+                pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
+                return (opaque, blended)
+            }
+            let roadStates = makeRoadStates(exact: false)
+            let exactRoadStates = makeRoadStates(exact: true)
+            self.flatRoadOpaquePipelineState = roadStates.opaque
+            self.flatRoadBlendedPipelineState = roadStates.blended
+            self.flatExactRoadOpaquePipelineState = exactRoadStates.opaque
+            self.flatExactRoadBlendedPipelineState = exactRoadStates.blended
             pipelineDescriptor.vertexFunction = vertexFunction
             pipelineDescriptor.fragmentFunction = fragmentFunction
         } else {
-            self.flatRoadSheetDepthPipelineState = nil
-            self.flatRoadSheetColorPipelineState = nil
+            self.flatRoadOpaquePipelineState = nil
+            self.flatRoadBlendedPipelineState = nil
+            self.flatExactRoadOpaquePipelineState = nil
+            self.flatExactRoadBlendedPipelineState = nil
             self.flatFillsPipelineState = nil
             self.flatOpaquePipelineState = nil
             self.flatExactPipelineState = nil
@@ -272,14 +307,17 @@ class TilePipeline {
         selectPipeline(renderEncoder: renderEncoder)
     }
 
-    /// The road sheet's stage pipeline; false when the pipeline has none (a
-    /// sphere pipeline), and the caller draws the roads the plain way.
+    /// The road ribbons' pipeline, opaque or blended, with the exact rank
+    /// depth when asked. False when the pipeline has none (a sphere
+    /// pipeline), and the caller draws the roads as plain ribbons.
     @discardableResult
-    func selectFlatRoadSheetPipeline(renderEncoder: MTLRenderCommandEncoder, stage: RoadSheetDepth.Stage) -> Bool {
+    func selectFlatRoadPipeline(renderEncoder: MTLRenderCommandEncoder, blended: Bool, exactRankDepth: Bool) -> Bool {
         let state: MTLRenderPipelineState?
-        switch stage {
-        case .depth: state = flatRoadSheetDepthPipelineState
-        case .color: state = flatRoadSheetColorPipelineState
+        switch (blended, exactRankDepth) {
+        case (false, false): state = flatRoadOpaquePipelineState
+        case (true, false): state = flatRoadBlendedPipelineState
+        case (false, true): state = flatExactRoadOpaquePipelineState
+        case (true, true): state = flatExactRoadBlendedPipelineState
         }
         guard let state else { return false }
         renderEncoder.setRenderPipelineState(state)

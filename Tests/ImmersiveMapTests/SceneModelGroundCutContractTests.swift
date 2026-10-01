@@ -5,15 +5,13 @@ import XCTest
 @testable import ImmersiveMap
 
 /// The ground cut of a scene model (SceneModel.metal): its stencil bit has
-/// to stay out of the tile priority, the road sheet's bit and the surface
-/// mask, and the ground plane the shader reads has to be laid out as the
+/// to stay out of the tile priority and the surface mask, and the ground plane the shader reads has to be laid out as the
 /// Swift mirror is. The plane's values are checked with the anchor math
 /// (SceneModelAnchorMathTests).
 final class SceneModelGroundCutContractTests: XCTestCase {
     func testTheGroundHoleBitSitsOutsideEveryOtherStencilUse() {
         let bit = TileSourceStencilPriority.groundHoleBit
         XCTAssertEqual(bit & TileSourceStencilPriority.priorityMask, 0)
-        XCTAssertEqual(bit & TileSourceStencilPriority.roadSheetBit, 0)
         XCTAssertEqual(bit & TileSourceStencilPriority.surfaceMaskBit, 0)
         XCTAssertEqual(bit.nonzeroBitCount, 1)
         XCTAssertLessThanOrEqual(bit, 0xFF, "the stencil is eight bits")

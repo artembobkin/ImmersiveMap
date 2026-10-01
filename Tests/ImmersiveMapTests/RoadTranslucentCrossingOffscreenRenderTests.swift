@@ -4,41 +4,42 @@
 @testable import ImmersiveMap
 import XCTest
 
-/// End to end: translucent roads that overlap draw as one sheet, every pixel
-/// blended once. Two streets cross at the centre of the frame, and the
-/// crossing must be the colour of a street on its own, not the darker patch
-/// two composited layers leave. One case crosses two ground streets (one
-/// group of the sheet), the other a ground street and a bridge (two road
-/// structures in one sheet). Requires the compiled Metal library, so it
-/// skips under `swift test` and runs in the xcodebuild workspace suite.
-final class RoadSheetOffscreenRenderTests: XCTestCase {
+/// End to end: translucent roads that overlap are blended once in every
+/// pixel. Two streets cross at the centre of the frame, and the crossing
+/// must be the colour of a street on its own, not the darker patch two
+/// composited layers leave. The roads that blend write their rank and are
+/// drawn nearest first (`RoadRankDepth`), so a pixel takes one fragment:
+/// one case crosses two ground streets (one rank), the other a ground
+/// street and a bridge (two bands, the bridge the nearer). Requires the
+/// compiled Metal library, so it skips under `swift test` and runs in the
+/// xcodebuild workspace suite.
+final class RoadTranslucentCrossingOffscreenRenderTests: XCTestCase {
     /// A road colour that appears nowhere else, at half opacity so a second
     /// composite is far outside the tolerance.
     private static let fixtureRoad = SIMD4<Float>(1, 0, 0, 0.5)
     private static let tile = Tile(x: 9908, y: 5140, z: 14)
 
     @MainActor
-    func testTwoGroundStreetsCrossAsOneSheet() async throws {
-        try await assertCrossingIsOneSheet(crossingProperties: ProtomapsRoadSpelling.properties(forClass: "primary"))
+    func testTwoGroundStreetsAreBlendedOnceWhereTheyCross() async throws {
+        try await assertCrossingIsBlendedOnce(crossingProperties: ProtomapsRoadSpelling.properties(forClass: "primary"))
     }
 
     @MainActor
-    func testABridgeOverAStreetCrossesAsOneSheet() async throws {
-        try await assertCrossingIsOneSheet(crossingProperties: ProtomapsRoadSpelling.properties(forClass: "primary")
+    func testABridgeOverAStreetIsBlendedOnceWhereTheyCross() async throws {
+        try await assertCrossingIsBlendedOnce(crossingProperties: ProtomapsRoadSpelling.properties(forClass: "primary")
             .merging(["is_bridge": "true"]) { _, new in new })
     }
 
-    /// The sheet writes its depth from the fragment stage, and under
-    /// multisampling that depth and the sheet's stencil bit are per sample.
+    /// Under multisampling the rank is tested and written per sample.
     @MainActor
-    func testABridgeOverAStreetCrossesAsOneSheetUnderMultisampling() async throws {
-        try await assertCrossingIsOneSheet(crossingProperties: ProtomapsRoadSpelling.properties(forClass: "primary")
+    func testABridgeOverAStreetIsBlendedOnceWhereTheyCrossUnderMultisampling() async throws {
+        try await assertCrossingIsBlendedOnce(crossingProperties: ProtomapsRoadSpelling.properties(forClass: "primary")
             .merging(["is_bridge": "true"]) { _, new in new },
                                            multisampled: true)
     }
 
     @MainActor
-    private func assertCrossingIsOneSheet(crossingProperties: [String: String],
+    private func assertCrossingIsBlendedOnce(crossingProperties: [String: String],
                                           multisampled: Bool = false,
                                           file: StaticString = #filePath,
                                           line: UInt = #line) async throws {

@@ -41,7 +41,8 @@ final class TilePreparedDataBuilder {
                                                  indices: phase.drawing.indices,
                                                  styles: phase.styles,
                                                  styleZoomFades: phase.styleZoomFades,
-                                                 lineStyles: phase.lineStyles)
+                                                 lineStyles: phase.lineStyles,
+                                                 edgeLineIndexStart: phase.drawing.edgeLineIndexStart)
                 }
             },
             bridgeOverlay: PreparedTileCPU.GeometryLayer(vertices: parsedTile.drawingBridgePolygon.vertices,

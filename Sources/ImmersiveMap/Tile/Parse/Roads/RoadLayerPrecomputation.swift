@@ -29,9 +29,9 @@ struct RoadLayerPrecomputation {
     /// directions differ, the cuts leave a wedge of ground open on the
     /// outside of the bend, a hairline at a fraction of a degree. The
     /// line reader rounds a connected end at one of these nodes off with a
-    /// cap: the overlap of two ribbons of one style is invisible under the
-    /// road sheet, which blends each pixel once, and the wedge is filled
-    /// at any angle. A node shared with a road of another style is a
+    /// cap: the overlap of two ribbons of one style is invisible, since
+    /// the two are one rank and a pixel takes one fragment of a rank
+    /// (`RoadRankDepth`), and the wedge is filled at any angle. A node shared with a road of another style is a
     /// junction, and its ends stay square.
     let continuationKeysByPoint: [RoadConnectionPointKey: Set<UInt8>]
     let linesByFeatureIndex: [[PreparedRoadLine]]

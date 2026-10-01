@@ -25,6 +25,12 @@ struct ParsedPolygon {
     /// join's or a cap's hub). Empty for pre-extruded ribbons and fills,
     /// whose vertices are final. Lockstep with `vertices` when non-empty.
     var lineNormals: [SIMD2<Int8>] = []
+    /// A deferred ribbon's edge lines: the rim as a list of line segments,
+    /// two indices each, over the rim vertices `indices` reads too. The
+    /// road buckets draw them apart from the body, as one-pixel lines at
+    /// half the road's alpha that soften its hard edge
+    /// (`TileUnificationStage`). Empty for everything else.
+    var edgeLineIndices: [UInt32] = []
 
     /// A line ribbon carries per-vertex line attributes (extruded stroke
     /// geometry); a fill does not, including the decoration polygons that

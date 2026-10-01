@@ -115,6 +115,7 @@ final class MetalTileFactory: @unchecked Sendable {
             spans: plan.spans,
             backingBuffer: backingBuffer,
             groundStyleRuns: GroundStyleRunScanner.scan(ground: preparedTile.ground),
+            roadEdgeLineIndexStarts: preparedTile.roadEdgeLineIndexStarts,
             textLabels: Self.textLabelSetMeta(from: preparedTile.textLabels),
             roadLabels: Self.roadLabelsMeta(from: preparedTile.roadLabels),
             surfaceLabels: preparedTile.surfaceLabels.labels
@@ -212,6 +213,7 @@ final class MetalTileFactory: @unchecked Sendable {
         guard let tileBuffers = Self.buildTileBuffers(spans: image.spans,
                                                       backingBuffer: backingBuffer,
                                                       groundStyleRuns: image.groundStyleRuns,
+                                                      roadEdgeLineIndexStarts: image.roadEdgeLineIndexStarts,
                                                       textLabels: image.textLabels,
                                                       roadLabels: image.roadLabels,
                                                       surfaceLabels: image.surfaceLabels) else {
@@ -251,6 +253,7 @@ final class MetalTileFactory: @unchecked Sendable {
     private static func buildTileBuffers(spans: [TileArenaSpan],
                                          backingBuffer: MTLBuffer?,
                                          groundStyleRuns: [GroundStyleRun],
+                                         roadEdgeLineIndexStarts: [UInt32],
                                          textLabels: PreparedTileArenaImage.TextLabelSetMeta,
                                          roadLabels: PreparedTileArenaImage.RoadLabelsMeta,
                                          surfaceLabels: [SurfaceLabelRecord]) -> TileBuffers? {
@@ -267,11 +270,14 @@ final class MetalTileFactory: @unchecked Sendable {
                                            lineStyles: ground.lineStyles,
                                            indexType: ground.indexType,
                                            styleRuns: groundStyleRuns)
+        // The stored boundaries are in the arena's layer order, the order
+        // the layers are taken in here.
+        var edgeLineIndexStarts = roadEdgeLineIndexStarts.makeIterator()
         let roads = RoadStructureBuckets(
-            tunnel: takeRoadPhases(.tunnel, cursor: &cursor),
-            ground: takeRoadPhases(.ground, cursor: &cursor),
-            automobileGround: takeRoadPhases(.automobileGround, cursor: &cursor),
-            bridge: takeRoadPhases(.bridge, cursor: &cursor)
+            tunnel: takeRoadPhases(.tunnel, edgeLineIndexStarts: &edgeLineIndexStarts, cursor: &cursor),
+            ground: takeRoadPhases(.ground, edgeLineIndexStarts: &edgeLineIndexStarts, cursor: &cursor),
+            automobileGround: takeRoadPhases(.automobileGround, edgeLineIndexStarts: &edgeLineIndexStarts, cursor: &cursor),
+            bridge: takeRoadPhases(.bridge, edgeLineIndexStarts: &edgeLineIndexStarts, cursor: &cursor)
         )
         let bridgeOverlay = takeGeometryLayer(.bridgeOverlay, cursor: &cursor)
 
@@ -332,12 +338,44 @@ final class MetalTileFactory: @unchecked Sendable {
     }
 
     private static func takeRoadPhases(_ structureKind: RoadStructureKind,
+                                       edgeLineIndexStarts: inout IndexingIterator<[UInt32]>,
                                        cursor: inout SpanCursor) -> RoadGeometryPhases<TileBuffers.GeometryLayer> {
-        RoadGeometryPhases(shadow: takeGeometryLayer(.road(structureKind, .shadow), cursor: &cursor),
-                           casing: takeGeometryLayer(.road(structureKind, .casing), cursor: &cursor),
-                           fill: takeGeometryLayer(.road(structureKind, .fill), cursor: &cursor),
-                           detail: takeGeometryLayer(.road(structureKind, .detail), cursor: &cursor),
-                           overlay: takeGeometryLayer(.road(structureKind, .overlay), cursor: &cursor))
+        // Taken in `RoadPassRole.drawOrder`, the arena's span order and the
+        // order of the stored boundaries.
+        let shadow = takeRoadLayer(.road(structureKind, .shadow), edgeLineIndexStarts: &edgeLineIndexStarts, cursor: &cursor)
+        let casing = takeRoadLayer(.road(structureKind, .casing), edgeLineIndexStarts: &edgeLineIndexStarts, cursor: &cursor)
+        let fill = takeRoadLayer(.road(structureKind, .fill), edgeLineIndexStarts: &edgeLineIndexStarts, cursor: &cursor)
+        let detail = takeRoadLayer(.road(structureKind, .detail), edgeLineIndexStarts: &edgeLineIndexStarts, cursor: &cursor)
+        let overlay = takeRoadLayer(.road(structureKind, .overlay), edgeLineIndexStarts: &edgeLineIndexStarts, cursor: &cursor)
+        return RoadGeometryPhases(shadow: shadow, casing: casing, fill: fill, detail: detail, overlay: overlay)
+    }
+
+    /// A road layer, with what its styles say about the pass it draws in
+    /// (`RoadLayerStyles`) and where its edge lines start. The boundary of
+    /// a cached image is untrusted input like its span table: it is kept
+    /// inside the indices, on a whole triangle, with a whole number of
+    /// line segments after it, or the layer draws whole as bodies.
+    private static func takeRoadLayer(_ layerID: TileArenaGeometryLayerID,
+                                      edgeLineIndexStarts: inout IndexingIterator<[UInt32]>,
+                                      cursor: inout SpanCursor) -> TileBuffers.GeometryLayer {
+        let layer = takeGeometryLayer(layerID, cursor: &cursor)
+        let indexCount = layer.indicesCount
+        var edgeLineIndexStart = edgeLineIndexStarts.next().map(Int.init) ?? indexCount
+        if edgeLineIndexStart > indexCount
+            || edgeLineIndexStart % 3 != 0
+            || (indexCount - edgeLineIndexStart) % 2 != 0 {
+            edgeLineIndexStart = indexCount
+        }
+        return TileBuffers.GeometryLayer(vertices: layer.vertices,
+                                         indices: layer.indices,
+                                         styles: layer.styles,
+                                         styleZoomFade: layer.styleZoomFade,
+                                         lineStyles: layer.lineStyles,
+                                         indexType: layer.indexType,
+                                         roadStyles: RoadLayerStyles(styles: layer.styles,
+                                                                     styleZoomFades: layer.styleZoomFade,
+                                                                     lineStyles: layer.lineStyles),
+                                         roadEdgeLineIndexStart: edgeLineIndexStart)
     }
 
     private static func takeTextLabelSet(_ meta: PreparedTileArenaImage.TextLabelSetMeta,

@@ -91,4 +91,8 @@ struct PreparedTileArenaImage: Sendable {
     /// The records of the labels painted on the map; their glyph quads are
     /// the arena's surface label span.
     var surfaceLabels: [SurfaceLabelRecord] = []
+    /// Where the edge lines start in each road layer's indices, in the
+    /// arena's layer order (`PreparedTileCPU.roadEdgeLineIndexStarts`). A
+    /// layer the list does not reach draws whole as bodies.
+    var roadEdgeLineIndexStarts: [UInt32] = []
 }

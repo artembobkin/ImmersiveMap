@@ -21,13 +21,19 @@ struct PreparedTileCPU: Sendable {
         /// in ascending style order (`unifyPolygonLayer(splitLinesClass:)`).
         /// Layers that are not class-split keep the whole range as fills.
         let fillsIndexCount: Int
+        /// The boundary of a road bucket: indices below it are the bodies
+        /// of the roads, as triangles, indices from it on are their edge
+        /// lines, as line segments (`unifyOrderedRoadLayer`). A layer
+        /// without edge lines keeps the whole range as bodies.
+        let edgeLineIndexStart: Int
 
         init(vertices: [TileVertexIn],
              indices: [UInt32],
              styles: [TilePolygonStyle],
              styleZoomFades: [SIMD2<Float>],
              lineStyles: [TileLineStyle]? = nil,
-             fillsIndexCount: Int? = nil) {
+             fillsIndexCount: Int? = nil,
+             edgeLineIndexStart: Int? = nil) {
             self.vertices = vertices
             self.indices = indices
             self.styles = styles
@@ -36,6 +42,7 @@ struct PreparedTileCPU: Sendable {
             // lockstep with `styles`: the vertex shader indexes it per style.
             self.lineStyles = lineStyles ?? Array(repeating: .polygon, count: styles.count)
             self.fillsIndexCount = fillsIndexCount ?? indices.count
+            self.edgeLineIndexStart = edgeLineIndexStart ?? indices.count
         }
     }
 
@@ -115,6 +122,17 @@ struct PreparedTileCPU: Sendable {
     let textLabels: TextLabelSet
     let roadLabels: RoadLabels
     var surfaceLabels: SurfaceLabelSet = .empty
+
+    /// Where the edge lines start in each road layer's indices
+    /// (`GeometryLayer.edgeLineIndexStart`), in the arena's layer order:
+    /// the structures in draw order, in each the roles in draw order. What
+    /// the prepared tile stores beside its spans, since the index span
+    /// itself does not say where its triangles end.
+    var roadEdgeLineIndexStarts: [UInt32] {
+        roads.drawOrderBuckets.flatMap { bucket in
+            bucket.drawOrderLayers.map { UInt32(clamping: $0.edgeLineIndexStart) }
+        }
+    }
 }
 
 /// One label painted on the map: what draws it and where its glyph quads

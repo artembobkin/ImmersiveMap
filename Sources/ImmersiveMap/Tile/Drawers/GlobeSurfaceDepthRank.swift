@@ -14,7 +14,7 @@ enum GlobeSurfaceDepthRank {
     /// styles plus one step of separation.
     static let classDepthBand: Float = 257 * layerDepthStep
     /// The flat road buckets and the bridge overlay: nearer than both
-    /// ground bands, so painter's order among them stays free while they
-    /// still pass the depth test over the opaque ground's writes.
+    /// ground bands, so they pass the depth test over the opaque ground's
+    /// writes. The roads' own ranks start here (`RoadRankDepth`).
     static let flatRoadsDepthOffset: Float = 600 * layerDepthStep
 }

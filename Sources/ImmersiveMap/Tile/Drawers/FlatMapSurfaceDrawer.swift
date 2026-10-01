@@ -12,6 +12,12 @@ struct FlatGroundSourceKey: Hashable {
 }
 
 enum FlatMapSurfaceDrawer {
+    /// The share of a road's alpha its edge lines draw with: a line is one
+    /// pixel wide and lands on the pixels the body's edge passes through
+    /// without covering, so half the road's colour there softens the
+    /// edge's steps.
+    static let roadEdgeLineAlpha: Float = 0.5
+
     /// Whether a source draws with the exact rank depth (Tile.metal,
     /// kTileExactRankDepth): every source below `exactRankDepthBelowZoom`.
     /// The rank depth in the vertex z survives the near cut only while a
@@ -53,10 +59,8 @@ enum FlatMapSurfaceDrawer {
     /// - Parameter exactRankDepthBelowZoom: the sources below this zoom
     ///   write their rank depth from the fragment stage
     ///   (`usesExactRankDepth`). The main coverage passes the target zoom.
-    /// - Parameter roadSheetStates: the road sheet's states. With them each
-    ///   road group draws as one sheet, every pixel blended once (the road
-    ///   sheet in Tile.metal); without them the groups draw the plain way,
-    ///   in painter's order.
+    /// - Parameter roadRankState: the road buckets' state, the rank depth
+    ///   tested and written (`RoadRankDepth`).
     static func draw(renderEncoder: MTLRenderCommandEncoder,
                      cameraUniform: CameraUniform,
                      cameraZoom: Double,
@@ -68,7 +72,7 @@ enum FlatMapSurfaceDrawer {
                      tilePipeline: TilePipeline,
                      groundOwnerState: MTLDepthStencilState,
                      tileStencilTestState: MTLDepthStencilState,
-                     roadSheetStates: RoadSheetStates? = nil,
+                     roadRankState: MTLDepthStencilState,
                      isWireframeEnabled: Bool,
                      exactRankDepthBelowZoom: Int,
                      linelessTiles: Set<VisibleTile> = []) {
@@ -146,13 +150,11 @@ enum FlatMapSurfaceDrawer {
             case lines
             case fills
             case opaqueFills
+            case roadOpaque
+            case roadBlended
         }
         var selectedPipeline: (GroundPipeline, Bool)?
-        // Set while a road group draws as a sheet: the stage has bound its
-        // own pipeline, and the per-source selection stands aside.
-        var roadSheetStage: RoadSheetDepth.Stage?
         func selectPipeline(_ pipeline: GroundPipeline, exactRankDepth: Bool) {
-            if roadSheetStage != nil { return }
             if let selectedPipeline, selectedPipeline == (pipeline, exactRankDepth) { return }
             selectedPipeline = (pipeline, exactRankDepth)
             switch pipeline {
@@ -162,6 +164,14 @@ enum FlatMapSurfaceDrawer {
                 tilePipeline.selectFlatFillsPipeline(renderEncoder: renderEncoder, exactRankDepth: exactRankDepth)
             case .opaqueFills:
                 tilePipeline.selectFlatOpaquePipeline(renderEncoder: renderEncoder, exactRankDepth: exactRankDepth)
+            case .roadOpaque, .roadBlended:
+                // A pipeline without the road variants draws the roads as
+                // plain ribbons.
+                if tilePipeline.selectFlatRoadPipeline(renderEncoder: renderEncoder,
+                                                       blended: pipeline == .roadBlended,
+                                                       exactRankDepth: exactRankDepth) == false {
+                    tilePipeline.selectFlatLinesPipeline(renderEncoder: renderEncoder, exactRankDepth: exactRankDepth)
+                }
             }
         }
 
@@ -217,91 +227,121 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.popDebugGroup()
 
         // The road buckets: whatever the tiles carry. A tile whose roads the
-        // style drew as ground lines carries none, and the casing's zoom is
-        // the style's too, baked as the pass's fade band.
-        func drawRoadLayer(_ structureKind: RoadStructureKind, role: RoadPassRole) {
-            for source in linedSources {
-                selectPipeline(.lines, exactRankDepth: source.exactRankDepth)
-                let structureBucket = source.metalTile.tileBuffers.roads.bucket(for: structureKind)
-                drawFlatGeometryLayer(renderEncoder: renderEncoder,
-                                      buffers: structureBucket.layer(for: role),
-                                      tile: source.metalTile.tile,
-                                      worldWrap: source.worldWrap,
-                                      flatRenderState: flatRenderState,
-                                      pixelsPerPoint: pixelsPerPoint,
-                                      drawableHeightPx: drawableSizePx.y,
-                                      overviewFade: overviewFadeUniform,
-                                      bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset)
-            }
+        // style drew as ground lines carries none. The roads are ordered by
+        // depth, not by the order of the draws: every layer of every
+        // structure has its band of ranks (`RoadRankDepth`), and the state
+        // tests and writes them.
+        // - A layer whose styles are all opaque this frame draws unblended.
+        //   The GPU shades a pixel once, by the highest road that covers
+        //   it.
+        // - A layer with a translucent, a fading or a dashed style blends.
+        //   These draw after every opaque road, so what lies under them is
+        //   already there, and nearest first, so a pixel takes one of them,
+        //   the highest, and a translucent road never darkens where two
+        //   pieces of it overlap.
+        // - A sphere-era tile's road ribbons are baked with their feather,
+        //   not deferred (`LineFeatureReader`), and draw with the blended
+        //   layers through the plain line coverage.
+        // - The edge lines of every deferred road, its rim as one-pixel
+        //   line primitives, draw after all of them, blended at half the
+        //   road's alpha, tested against the ranks and writing none: a line
+        //   shows over the ground and over a lower road, and never across a
+        //   body of its own rank. That softens the steps of the hard edge.
+        enum RoadLayerPass {
+            case opaque
+            case blended
+            case baked
         }
-        func roadLayerIsEmpty(_ structureKind: RoadStructureKind, role: RoadPassRole) -> Bool {
-            linedSources.allSatisfy {
-                $0.metalTile.tileBuffers.roads.bucket(for: structureKind).layer(for: role).indicesCount == 0
-            }
-        }
-
-        // One group of roads as one sheet: the depth stage, then the colour
-        // stage, over the same draws (the road sheet in Tile.metal). Each
-        // group takes the next band of the sheet's depths, so it paints
-        // over the groups before it, the order the groups are drawn in.
-        var roadSheetGroup = 0
-        func drawRoadSheet(isEmpty: Bool, _ drawGroup: () -> Void) {
-            guard isEmpty == false else { return }
-            guard let roadSheetStates else {
-                drawGroup()
-                return
-            }
-            for stage in [RoadSheetDepth.Stage.depth, .color] {
-                guard tilePipeline.selectFlatRoadSheetPipeline(renderEncoder: renderEncoder, stage: stage) else {
-                    drawGroup()
-                    return
-                }
-                roadSheetStage = stage
-                renderEncoder.setDepthStencilState(stage == .depth
-                    ? roadSheetStates.depthStage
-                    : roadSheetStates.colorStage)
-                var sheetUniform = RoadSheetDepth.uniform(group: roadSheetGroup, stage: stage)
-                renderEncoder.setFragmentBytes(&sheetUniform,
-                                               length: MemoryLayout<RoadSheetUniform>.stride,
-                                               index: 11)
-                drawGroup()
-            }
-            roadSheetStage = nil
-            selectedPipeline = nil
-            roadSheetGroup += 1
-        }
-        // One sheet per role over the structures that read as one network.
-        func drawRoadSheets(_ structureKinds: [RoadStructureKind]) {
-            for role in [RoadPassRole.shadow, .casing, .fill, .detail] {
-                drawRoadSheet(isEmpty: structureKinds.allSatisfy { roadLayerIsEmpty($0, role: role) }) {
-                    for structureKind in structureKinds {
-                        drawRoadLayer(structureKind, role: role)
+        var roadDraws: [(source: Int, layer: TileBuffers.GeometryLayer, band: Int, pass: RoadLayerPass)] = []
+        for entry in RoadRankDepth.layersNearestFirst {
+            for (sourceIndex, source) in linedSources.enumerated() {
+                let layer = source.metalTile.tileBuffers.roads.bucket(for: entry.structureKind).layer(for: entry.role)
+                guard layer.indicesCount > 0 else { continue }
+                let pass: RoadLayerPass
+                if GroundGeometrySubdivider.step(forTileZoom: source.metalTile.tile.z) != nil {
+                    pass = .baked
+                } else {
+                    switch layer.roadStyles.pass(overviewFade: overviewFadeUniform) {
+                    case .hidden: continue
+                    case .opaque: pass = .opaque
+                    case .blended: pass = .blended
                     }
                 }
+                roadDraws.append((sourceIndex, layer, entry.band, pass))
+            }
+        }
+        func drawRoad(_ roadDraw: (source: Int, layer: TileBuffers.GeometryLayer, band: Int, pass: RoadLayerPass),
+                      pipeline: GroundPipeline,
+                      indexRange: Range<Int>,
+                      primitiveType: MTLPrimitiveType = .triangle) {
+            let source = linedSources[roadDraw.source]
+            selectPipeline(pipeline, exactRankDepth: source.exactRankDepth)
+            if pipeline == .roadBlended {
+                // The blended road variant's alpha scale (Tile.metal,
+                // buffer 11): one for a body, the edge lines' share for
+                // them.
+                var alphaScale: Float = primitiveType == .line ? roadEdgeLineAlpha : 1
+                renderEncoder.setFragmentBytes(&alphaScale, length: MemoryLayout<Float>.stride, index: 11)
+            }
+            drawFlatGeometryLayer(renderEncoder: renderEncoder,
+                                  buffers: roadDraw.layer,
+                                  tile: source.metalTile.tile,
+                                  worldWrap: source.worldWrap,
+                                  flatRenderState: flatRenderState,
+                                  pixelsPerPoint: pixelsPerPoint,
+                                  drawableHeightPx: drawableSizePx.y,
+                                  overviewFade: overviewFadeUniform,
+                                  bandOffset: RoadRankDepth.depthOffset(band: roadDraw.band),
+                                  indexRange: indexRange,
+                                  primitiveType: primitiveType)
+        }
+        // A deferred layer's indices are its bodies, as triangles, then its
+        // edge lines, as line segments.
+        func edgeLineIndexStart(_ layer: TileBuffers.GeometryLayer) -> Int {
+            min(max(layer.roadEdgeLineIndexStart ?? layer.indicesCount, 0), layer.indicesCount)
+        }
+        func drawRoads(opaque: Bool) {
+            for roadDraw in roadDraws where (roadDraw.pass == .opaque) == opaque {
+                switch roadDraw.pass {
+                case .opaque:
+                    drawRoad(roadDraw, pipeline: .roadOpaque, indexRange: 0 ..< edgeLineIndexStart(roadDraw.layer))
+                case .blended:
+                    drawRoad(roadDraw, pipeline: .roadBlended, indexRange: 0 ..< edgeLineIndexStart(roadDraw.layer))
+                case .baked:
+                    drawRoad(roadDraw, pipeline: .lines, indexRange: 0 ..< roadDraw.layer.indicesCount)
+                }
+            }
+        }
+        func drawRoadEdgeLines() {
+            for roadDraw in roadDraws where roadDraw.pass != .baked {
+                drawRoad(roadDraw,
+                         pipeline: .roadBlended,
+                         indexRange: edgeLineIndexStart(roadDraw.layer) ..< roadDraw.layer.indicesCount,
+                         primitiveType: .line)
             }
         }
 
         renderEncoder.pushDebugGroup("roads")
-        drawRoadSheets([.tunnel])
-        drawRoadSheets([.ground])
-        // The carriageways of the ground and of the bridges are one sheet
-        // per role: a flyover over an avenue, a ramp leaving it and the
-        // avenue itself are one network on screen, and a translucent road
-        // must not darken where one of them passes over another. The
-        // bridges follow the ground inside the sheet, so where the alphas
-        // tie, the ground's pixel is the one that draws. The price is the
-        // kerb of a bridge, which no longer cuts across the road under it.
-        drawRoadSheets([.automobileGround, .bridge])
-        drawRoadSheet(isEmpty: linedSources.allSatisfy { $0.metalTile.tileBuffers.bridgeOverlay.indicesCount == 0 }) {
-            drawLayer(\.bridgeOverlay, pipeline: .lines, bandOffset: GlobeSurfaceDepthRank.flatRoadsDepthOffset,
-                      linesOnly: true)
-        }
-
-        drawRoadSheet(isEmpty: RoadStructureKind.drawOrder.allSatisfy { roadLayerIsEmpty($0, role: .overlay) }) {
-            for structureKind in RoadStructureKind.drawOrder {
-                drawRoadLayer(structureKind, role: .overlay)
-            }
-        }
+        renderEncoder.setDepthStencilState(roadRankState)
+        renderEncoder.pushDebugGroup("roads.opaque")
+        drawRoads(opaque: true)
+        renderEncoder.popDebugGroup()
+        renderEncoder.pushDebugGroup("roads.blended")
+        drawRoads(opaque: false)
+        renderEncoder.popDebugGroup()
+        renderEncoder.pushDebugGroup("roads.edgeLines")
+        renderEncoder.setDepthStencilState(tileStencilTestState)
+        drawRoadEdgeLines()
+        renderEncoder.popDebugGroup()
+        // The bridge overlay is plain ground geometry laid over the roads:
+        // tested against the ranks the roads wrote, in its own band, and
+        // writing none.
+        renderEncoder.pushDebugGroup("roads.bridgeOverlay")
+        drawLayer(\.bridgeOverlay,
+                  pipeline: .lines,
+                  bandOffset: RoadRankDepth.depthOffset(band: RoadRankDepth.bridgeOverlayBand),
+                  linesOnly: true)
+        renderEncoder.popDebugGroup()
         renderEncoder.popDebugGroup()
         if isWireframeEnabled {
             renderEncoder.setTriangleFillMode(.fill)
@@ -320,7 +360,9 @@ enum FlatMapSurfaceDrawer {
                                               drawableHeightPx: Float,
                                               overviewFade: TileOverviewFadeUniform,
                                               bandOffset: Float,
-                                              runFilter: ((GroundStyleRun) -> Bool)? = nil) {
+                                              runFilter: ((GroundStyleRun) -> Bool)? = nil,
+                                              indexRange: Range<Int>? = nil,
+                                              primitiveType: MTLPrimitiveType = .triangle) {
         let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
                                                                          y: tile.y,
                                                                          z: tile.z,
@@ -331,12 +373,19 @@ enum FlatMapSurfaceDrawer {
 
         // A run whose zoom fade is exactly 0 this frame would rasterize
         // with alpha 0: the ground bucket carries a run table (the road
-        // buckets do not and draw whole, as before), so its invisible runs
+        // buckets do not and draw whole), so its invisible runs
         // are skipped, the class filter picks the pass's runs, and the
         // visible spans coalesce, before any binding.
-        let visibleSpans = visibleRunSpans(buffers: buffers,
+        // A road layer draws a part of its indices at a time instead: its
+        // bodies, or its edge lines.
+        let visibleSpans: [(start: Int, count: Int)]
+        if let indexRange {
+            visibleSpans = indexRange.isEmpty ? [] : [(indexRange.lowerBound, indexRange.count)]
+        } else {
+            visibleSpans = visibleRunSpans(buffers: buffers,
                                            overviewFade: overviewFade,
                                            runFilter: runFilter)
+        }
         guard buffers.indicesCount > 0,
               visibleSpans.isEmpty == false,
               let indices = buffers.indices,
@@ -385,7 +434,7 @@ enum FlatMapSurfaceDrawer {
 
         let indexByteWidth = buffers.indexType == .uint16 ? 2 : 4
         for span in visibleSpans {
-            renderEncoder.drawIndexedPrimitives(type: .triangle,
+            renderEncoder.drawIndexedPrimitives(type: primitiveType,
                                                 indexCount: span.count,
                                                 indexType: buffers.indexType,
                                                 indexBuffer: indices.buffer,

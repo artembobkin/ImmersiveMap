@@ -14,7 +14,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     private let tilePipeline: TilePipeline
     private let groundOwnerState: MTLDepthStencilState
     private let tileStencilTestState: MTLDepthStencilState
-    private let roadSheetStates: RoadSheetStates
+    private let roadRankState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
     private let debugOverlayControls: DebugOverlayControlState
     private let groundShadowMaskTextureProvider: () -> MTLTexture?
@@ -23,7 +23,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     init(tilePipeline: TilePipeline,
          groundOwnerState: MTLDepthStencilState,
          tileStencilTestState: MTLDepthStencilState,
-         roadSheetStates: RoadSheetStates,
+         roadRankState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState,
          debugOverlayControls: DebugOverlayControlState,
          groundShadowMaskTextureProvider: @escaping () -> MTLTexture?,
@@ -31,7 +31,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         self.tilePipeline = tilePipeline
         self.groundOwnerState = groundOwnerState
         self.tileStencilTestState = tileStencilTestState
-        self.roadSheetStates = roadSheetStates
+        self.roadRankState = roadRankState
         self.depthDisabledState = depthDisabledState
         self.debugOverlayControls = debugOverlayControls
         self.groundShadowMaskTextureProvider = groundShadowMaskTextureProvider
@@ -57,10 +57,10 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         let drawableSizePx = SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height))
         // The drawer sets its own depth-stencil states per group: the
         // ground owns the tile-priority stencil (depth tested against the
-        // buildings, never written), the road buckets only test it. The
-        // layered ground writes rank depth, so everything draws
-        // finest-first (the sphere's rule) and the stencil settles which
-        // source owns a pixel.
+        // buildings, never written), the road buckets only test it and
+        // write their ranks. The layered ground writes rank depth, so
+        // everything draws finest-first (the sphere's rule) and the stencil
+        // settles which source owns a pixel.
         FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   cameraZoom: frameContext.zoom,
@@ -72,7 +72,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   tilePipeline: tilePipeline,
                                   groundOwnerState: groundOwnerState,
                                   tileStencilTestState: tileStencilTestState,
-                                  roadSheetStates: roadSheetStates,
+                                  roadRankState: roadRankState,
                                   isWireframeEnabled: isWireframeEnabled,
                                   // The target zoom's tiles keep the rank depth in
                                   // the vertex z, every coarser band writes it

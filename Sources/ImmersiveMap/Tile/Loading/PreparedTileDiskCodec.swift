@@ -332,6 +332,9 @@ enum PreparedTileDiskCodec {
         /// per-style runs in paint order.
         let groundStyleRuns: Data
         let groundStyleRunCount: UInt32
+        /// Where the edge lines start in each road layer's indices, in the
+        /// arena's layer order (`PreparedTileCPU.roadEdgeLineIndexStarts`).
+        let roadEdgeLineIndexStarts: [UInt32]
         let text: TextLabelSetMetaValue
         let roadPathInputs: Data
         let roadPathInputCount: UInt32
@@ -749,6 +752,7 @@ enum PreparedTileDiskCodec {
             fileBlobChecksum: fileBlob.map(PreparedTileBlobChecksum.checksum),
             groundStyleRuns: encodePODArray(groundStyleRuns),
             groundStyleRunCount: encodeUInt32(groundStyleRuns.count, field: "Ground.styleRuns.count"),
+            roadEdgeLineIndexStarts: preparedTile.roadEdgeLineIndexStarts,
             text: TextLabelSetMetaValue(preparedTile.textLabels),
             roadPathInputs: encodePODArray(preparedTile.roadLabels.pathInputs),
             roadPathInputCount: encodeUInt32(preparedTile.roadLabels.pathInputs.count, field: "RoadLabels.pathInputs.count"),
@@ -879,7 +883,8 @@ enum PreparedTileDiskCodec {
                 anchors: entry.roadAnchors.map { $0.runtimeValue() }
             ),
             blob: blob,
-            surfaceLabels: try entry.surfaceLabels.map { try $0.runtimeValue() }
+            surfaceLabels: try entry.surfaceLabels.map { try $0.runtimeValue() },
+            roadEdgeLineIndexStarts: entry.roadEdgeLineIndexStarts
         )
         return PreparedTileDiskCacheHit(image: image,
                                         sourceETag: entry.sourceETag.isEmpty ? nil : entry.sourceETag)

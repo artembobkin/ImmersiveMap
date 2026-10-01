@@ -167,9 +167,27 @@ enum TileUnificationStage {
                              widthRamp: pass.pointWidthRamp)
     }
 
+    /// One road layer: a role of a structure. The flat drawer orders the
+    /// roads by depth, and a road's depth inside its layer's band is its
+    /// style index (`RoadRankDepth`), so the indices are handed out by class
+    /// priority, the lowest class first: a style takes the highest priority
+    /// any road draws it with, and the key breaks a tie. The indices then
+    /// go out nearest first, the highest style leading, which is the order
+    /// the roads that blend need (a pixel takes the first fragment of the
+    /// highest rank that reaches it) and the cheapest one for the opaque
+    /// roads on a GPU that tests depth in submission order. A road's
+    /// `layer` no longer orders it against another class: a depth rank per
+    /// style cannot state it.
+    ///
+    /// The index stream is two segments: the bodies of every road as
+    /// triangles, then the edge lines of every road as line segments
+    /// (`ParsedPolygon.edgeLineIndices`), each nearest first. The drawer
+    /// draws the two apart, at the boundary recorded in
+    /// `DrawingPolygonBytes.edgeLineIndexStart`.
+    ///
     /// Expects the polygons already sorted by `OrderedRoadPolygon.sort`; the
     /// caller buckets and sorts once per structure/pass combination.
-    private static func unifyOrderedRoadLayer(sortedRoadPolygons: [OrderedRoadPolygon],
+    static func unifyOrderedRoadLayer(sortedRoadPolygons: [OrderedRoadPolygon],
                                               stylesByKey: [UInt8: BakedStyle]) -> (drawing: DrawingPolygonBytes,
                                                                                       styles: [TilePolygonStyle],
                                                                                       styleZoomFades: [SIMD2<Float>],
@@ -182,10 +200,18 @@ enum TileUnificationStage {
             partial + polygon.polygon.vertices.count
         }
         let totalPolygonIndexCount = sortedRoadPolygons.reduce(0) { partial, polygon in
-            partial + polygon.polygon.indices.count
+            partial + polygon.polygon.indices.count + polygon.polygon.edgeLineIndices.count
         }
 
-        let styleKeys = Array(Set(sortedRoadPolygons.map(\.styleKey))).sorted()
+        var priorityByKey: [UInt8: Int] = [:]
+        for polygon in sortedRoadPolygons {
+            priorityByKey[polygon.styleKey] = max(priorityByKey[polygon.styleKey] ?? Int.min, polygon.classPriority)
+        }
+        let styleKeys = priorityByKey.keys.sorted { lhs, rhs in
+            let lhsPriority = priorityByKey[lhs] ?? Int.min
+            let rhsPriority = priorityByKey[rhs] ?? Int.min
+            return lhsPriority != rhsPriority ? lhsPriority < rhsPriority : lhs < rhs
+        }
         var styleIndexByKey: [UInt8: UInt8] = [:]
         styleIndexByKey.reserveCapacity(styleKeys.count)
         styles.reserveCapacity(styleKeys.count)
@@ -204,7 +230,16 @@ enum TileUnificationStage {
             }
         }
 
+        // Stable, so the roads of one style keep the order they were sorted
+        // in.
+        let nearestFirstPolygons = sortedRoadPolygons.enumerated().sorted { lhs, rhs in
+            let lhsIndex = styleIndexByKey[lhs.element.styleKey] ?? 0
+            let rhsIndex = styleIndexByKey[rhs.element.styleKey] ?? 0
+            return lhsIndex != rhsIndex ? lhsIndex > rhsIndex : lhs.offset < rhs.offset
+        }.map(\.element)
+
         var unifiedIndices: [UInt32] = []
+        var edgeLineIndexStart = 0
         let unifiedVertices = [TileVertexIn](
             unsafeUninitializedCapacity: totalPolygonVertexCount
         ) { vertexBuffer, initializedVertexCount in
@@ -213,7 +248,10 @@ enum TileUnificationStage {
             ) { indexBuffer, initializedIndexCount in
                 var vertexCount = 0
                 var indexCount = 0
-                for orderedPolygon in sortedRoadPolygons {
+                var vertexOffsets: [UInt32] = []
+                vertexOffsets.reserveCapacity(nearestFirstPolygons.count)
+                for orderedPolygon in nearestFirstPolygons {
+                    vertexOffsets.append(UInt32(vertexCount))
                     Self.appendPolygon(orderedPolygon.polygon,
                                        styleBufferIndex: styleIndexByKey[orderedPolygon.styleKey] ?? 0,
                                        vertices: &vertexBuffer,
@@ -221,13 +259,21 @@ enum TileUnificationStage {
                                        vertexCount: &vertexCount,
                                        indexCount: &indexCount)
                 }
+                edgeLineIndexStart = indexCount
+                for (orderedPolygon, vertexOffset) in zip(nearestFirstPolygons, vertexOffsets) {
+                    for index in orderedPolygon.polygon.edgeLineIndices {
+                        indexBuffer.initializeElement(at: indexCount, to: index &+ vertexOffset)
+                        indexCount += 1
+                    }
+                }
                 initializedVertexCount = vertexCount
                 initializedIndexCount = indexCount
             }
         }
 
         return (drawing: DrawingPolygonBytes(vertices: unifiedVertices,
-                                             indices: unifiedIndices),
+                                             indices: unifiedIndices,
+                                             edgeLineIndexStart: edgeLineIndexStart),
                 styles: styles,
                 styleZoomFades: styleZoomFades,
                 lineStyles: lineStyles)

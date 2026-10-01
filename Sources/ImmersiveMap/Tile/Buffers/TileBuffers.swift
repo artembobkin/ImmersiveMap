@@ -53,6 +53,14 @@ struct TileBuffers {
         /// Ground only: the index buffer's per-style runs in paint order,
         /// what the sphere drawer layers the ground by. Empty elsewhere.
         let styleRuns: [GroundStyleRun]
+        /// The road buckets only: what the layer's styles say about the
+        /// pass it draws in. Empty elsewhere.
+        let roadStyles: RoadLayerStyles
+        /// The road buckets only: the index element the layer's edge lines
+        /// start at, the bodies of its roads lying before it
+        /// (`PreparedTileCPU.GeometryLayer.edgeLineIndexStart`). Nil
+        /// elsewhere.
+        let roadEdgeLineIndexStart: Int?
 
         init(vertices: TileBufferView?,
              indices: TileBufferView?,
@@ -60,7 +68,9 @@ struct TileBuffers {
              styleZoomFade: TileBufferView?,
              lineStyles: TileBufferView?,
              indexType: MTLIndexType,
-             styleRuns: [GroundStyleRun] = []) {
+             styleRuns: [GroundStyleRun] = [],
+             roadStyles: RoadLayerStyles = .empty,
+             roadEdgeLineIndexStart: Int? = nil) {
             self.vertices = vertices
             self.indices = indices
             self.styles = styles
@@ -68,6 +78,8 @@ struct TileBuffers {
             self.lineStyles = lineStyles
             self.indexType = indexType
             self.styleRuns = styleRuns
+            self.roadStyles = roadStyles
+            self.roadEdgeLineIndexStart = roadEdgeLineIndexStart
         }
 
         var indicesCount: Int {

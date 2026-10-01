@@ -232,6 +232,15 @@ class ParseLine {
         /// line, in tile units.
         var parameters: [Float] = []
         var indices: [UInt32] = []
+        /// The edge lines of a deferred ribbon
+        /// (`ParsedPolygon.edgeLineIndices`).
+        var edgeLineIndices: [UInt32] = []
+
+        /// One segment of the rim, between two neighbouring rim vertices.
+        mutating func appendEdgeLine(_ rimA: UInt32, _ rimB: UInt32) {
+            edgeLineIndices.append(rimA)
+            edgeLineIndices.append(rimB)
+        }
     }
 
     /// One clipped-ring vertex with its interpolated distance attributes.
@@ -315,17 +324,23 @@ class ParseLine {
         polygon.distances.reserveCapacity(polygon.vertices.capacity)
         polygon.parameters.reserveCapacity(polygon.vertices.capacity)
 
+        // A deferred ribbon is a road of a flat-era tile, whose edges are
+        // hard: its geometry is the road, and a free end is cut where the
+        // line ends, with no feather rows past it.
+        let feathersEnds = emitsArcLength == false && deferredExtrusion == false
         appendSegments(precomputed: precomputed,
                        extrudedHalfWidth: extrudedHalfWidth,
-                       featherStart: featherStart && startCapRound == false && emitsArcLength == false,
-                       featherEnd: featherEnd && endCapRound == false && emitsArcLength == false,
+                       featherStart: featherStart && startCapRound == false && feathersEnds,
+                       featherEnd: featherEnd && endCapRound == false && feathersEnds,
                        emitsArcLength: emitsArcLength,
+                       emitsEdgeLines: deferredExtrusion,
                        polygon: &polygon)
 
         if lineJoinRound {
             appendRoundJoins(precomputed: precomputed,
                              extrudedHalfWidth: extrudedHalfWidth,
                              emitsArcLength: emitsArcLength,
+                             emitsEdgeLines: deferredExtrusion,
                              polygon: &polygon)
         }
 
@@ -336,6 +351,7 @@ class ParseLine {
                           radius: extrudedHalfWidth,
                           flipDirection: true,
                           parameter: emitsArcLength ? precomputed.pointArcLengths[0] : 1.0,
+                          emitsEdgeLines: deferredExtrusion,
                           polygon: &polygon)
             }
         }
@@ -349,6 +365,7 @@ class ParseLine {
                           parameter: emitsArcLength
                               ? precomputed.pointArcLengths[points.count - 1]
                               : 1.0,
+                          emitsEdgeLines: deferredExtrusion,
                           polygon: &polygon)
             }
         }
@@ -388,7 +405,8 @@ class ParseLine {
                              lineParameters: polygon.parameters.map {
                                  Self.quantizeParameter($0, emitsArcLength: emitsArcLength)
                              },
-                             lineNormals: polygon.normals.map(Self.quantizeNormal))
+                             lineNormals: polygon.normals.map(Self.quantizeNormal),
+                             edgeLineIndices: polygon.edgeLineIndices)
     }
 
     static func quantizeNormal(_ direction: SIMD2<Float>) -> SIMD2<Int8> {
@@ -568,11 +586,16 @@ class ParseLine {
     /// end on its zero isoline. A segment shorter than the feather pulls the
     /// ring to its midpoint, keeping the ramp's gradient exact rather than
     /// compressing it.
+    ///
+    /// With `emitsEdgeLines` (a deferred ribbon) each side of the segment
+    /// gets its edge line. The ends get none: a connected end lies under
+    /// the next piece, and the cut of a free end stays hard.
     private func appendSegments(precomputed: PrecomputedLine,
                                 extrudedHalfWidth: Float,
                                 featherStart: Bool,
                                 featherEnd: Bool,
                                 emitsArcLength: Bool,
+                                emitsEdgeLines: Bool,
                                 polygon: inout GeneratedPolygon) {
         let feather = Self.featherTileUnits
         for index in 0..<precomputed.segmentLengths.count {
@@ -636,12 +659,21 @@ class ParseLine {
                 polygon.indices.append(rowBase + 3)
                 polygon.indices.append(rowBase + 2)
             }
+
+            if emitsEdgeLines {
+                for rowIndex in 0..<(rows.count - 1) {
+                    let rowBase = base + UInt32(rowIndex * 2)
+                    polygon.appendEdgeLine(rowBase, rowBase + 2)
+                    polygon.appendEdgeLine(rowBase + 1, rowBase + 3)
+                }
+            }
         }
     }
 
     private func appendRoundJoins(precomputed: PrecomputedLine,
                                   extrudedHalfWidth: Float,
                                   emitsArcLength: Bool,
+                                  emitsEdgeLines: Bool,
                                   polygon: inout GeneratedPolygon) {
         guard precomputed.points.count > 2 else { return }
 
@@ -716,6 +748,11 @@ class ParseLine {
                 polygon.indices.append(innerIsLeft ? rim0 : rim1)
                 polygon.indices.append(base)
             }
+            if emitsEdgeLines {
+                for step in 0..<stepCount {
+                    polygon.appendEdgeLine(base + 1 + UInt32(step), base + 2 + UInt32(step))
+                }
+            }
         }
     }
 
@@ -724,6 +761,7 @@ class ParseLine {
                            radius: Float,
                            flipDirection: Bool,
                            parameter: Float,
+                           emitsEdgeLines: Bool,
                            polygon: inout GeneratedPolygon) {
         let forward = flipDirection ? -direction : direction
         let right = SIMD2<Float>(-forward.y, forward.x)
@@ -749,6 +787,11 @@ class ParseLine {
             polygon.indices.append(base + UInt32(index))
             polygon.indices.append(base + UInt32(index + 1))
             polygon.indices.append(base)
+        }
+        if emitsEdgeLines {
+            for index in 1..<Self.capUnitSemicircle.count {
+                polygon.appendEdgeLine(base + UInt32(index), base + UInt32(index + 1))
+            }
         }
     }
 

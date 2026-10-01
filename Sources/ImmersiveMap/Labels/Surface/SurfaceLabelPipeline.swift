@@ -95,9 +95,10 @@ enum SurfaceLabelScale {
 }
 
 /// Where the labels painted on the map sit in the ground's far-plane depth
-/// band: nearer than the ground's layers and every road sheet (whose bands
-/// end about 2 900 steps of 2^-23 under one), so the text lies over them,
-/// and still farther than the buildings and the models, which hide it.
+/// band: nearer than the ground's layers and every road rank (whose bands
+/// end about 3 700 steps of 2^-23 under one even for a layer of 256 styles,
+/// `RoadRankDepth`), so the text lies over them, and still farther than the
+/// buildings and the models, which hide it.
 enum SurfaceLabelDepth {
     static let depth: Float = 1 - 4_096 * 0x1p-23
 }

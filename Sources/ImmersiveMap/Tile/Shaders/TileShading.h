@@ -239,6 +239,19 @@ static inline TileVertexStyle tileVertexStyle(VertexIn vertexIn,
     return out;
 }
 
+/// The signed distance from a point of a dashed line to the nearest dash
+/// boundary, in the units of the arc length: positive inside a dash,
+/// negative in a gap. The pattern wraps around its period.
+static inline float tileDashEdgeDistance(float lineParameter, float dashUnits, float period) {
+    float phase = fmod(lineParameter, period);
+    if (phase < 0.0) {
+        phase += period;
+    }
+    float centered = phase - dashUnits * 0.5;
+    centered -= period * round(centered / period);
+    return dashUnits * 0.5 - abs(centered);
+}
+
 /// Analytic coverage of line geometry: the tessellator extrudes lines wider
 /// than their styled width and stores a signed distance field in the vertices
 /// (see `TileVertexIn`), so the visible edge is an isoline of the
@@ -331,16 +344,8 @@ static inline half tileLineCoverage(float lineDistance,
         float gapUnits = float(lineStyle.w) * unitScale;
         float period = dashUnits + gapUnits;
         if (unitsPerPixel > 1e-5 && dashUnits > 0.0 && gapUnits > 0.0) {
-            // Signed distance to the nearest dash boundary, wrapped around
-            // the period, so both edges
-            // of every dash carry the full antialiasing band.
-            float phase = fmod(lineParameter, period);
-            if (phase < 0.0) {
-                phase += period;
-            }
-            float centered = phase - dashUnits * 0.5;
-            centered -= period * round(centered / period);
-            float distanceToEdgeUnits = dashUnits * 0.5 - abs(centered);
+            // Both edges of every dash carry the full antialiasing band.
+            float distanceToEdgeUnits = tileDashEdgeDistance(lineParameter, dashUnits, period);
             coverage *= smoothstep(-0.5, 0.5, distanceToEdgeUnits / unitsPerPixel);
         }
     } else {
@@ -363,8 +368,7 @@ static inline half tileStyleFade(float2 zoomFade, constant OverviewFadeUniform& 
 }
 
 /// The analytic coverage of a lines-class fragment from the flat style
-/// index, apart from the colour: what the road sheet's depth stage reads to
-/// tell a ribbon's body from its antialiasing fringe (Tile.metal).
+/// index, apart from the colour.
 static inline half tileLineFragmentCoverage(uint styleIndex,
                                             float lineDistance,
                                             float lineParameterRaw,

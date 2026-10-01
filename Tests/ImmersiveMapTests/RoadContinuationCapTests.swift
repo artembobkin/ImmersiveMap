@@ -10,9 +10,9 @@ import XCTest
 /// its own last segment, and a bend between them opens a wedge of ground
 /// on the outside of the turn. A connected end where the road goes on as
 /// another piece of the SAME style is rounded off with a cap, which fills
-/// the wedge at any angle and overlaps the next piece invisibly under the
-/// road sheet. A junction with a road of another style keeps its square
-/// ends, and so does a genuine free end.
+/// the wedge at any angle and overlaps the next piece invisibly: the two
+/// are one rank (`RoadRankDepth`). A junction with a road of another style
+/// keeps its square ends, and so does a genuine free end.
 final class RoadContinuationCapTests: XCTestCase {
     private let tile = Tile(x: 39615, y: 20486, z: 16)
 

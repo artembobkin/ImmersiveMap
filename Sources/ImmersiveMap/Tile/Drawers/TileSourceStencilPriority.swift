@@ -22,13 +22,6 @@ enum TileSourceStencilPriority {
     /// stay out of its way.
     static let priorityMask: UInt32 = 0x1F
 
-    /// The road sheet's bit: raised by the first fragment of a road group's
-    /// colour stage to land on a pixel and failing every later one, so a
-    /// pixel of the sheet is blended once. The group's depth stage clears
-    /// it under the group's geometry before the colour stage reads it. See
-    /// the road sheet in Tile.metal.
-    static let roadSheetBit: UInt32 = 0x20
-
     /// The ground hole of a scene model that cuts into the ground
     /// (`ImmersiveMapSceneModel.cutsIntoGround`): raised over the model's
     /// outline flattened onto the surface before the model draws, so its

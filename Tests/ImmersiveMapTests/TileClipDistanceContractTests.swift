@@ -52,13 +52,15 @@ final class TileClipDistanceContractTests: XCTestCase {
         XCTAssertTrue(source.contains("constant bool kTileExactRankDepth [[function_constant(3)]];"))
         XCTAssertTrue(source.contains("fragment half4 tileFragmentShader("))
         XCTAssertTrue(source.contains("fragment TileExactDepthFragmentOut tileExactDepthFragmentShader("))
-        // Two fragment outputs write a depth, and nothing else does: the
-        // exact variant's return struct, and the road sheet's depth pre-pass,
-        // which lays the sheet's rank before its colour pass. The plain
-        // fills entry writes none.
-        XCTAssertEqual(source.components(separatedBy: "float depth [[depth(any)]];").count - 1, 2,
-                       "Depth is written by the exact variant and the road sheet's depth pass only")
-        for structName in ["TileExactDepthFragmentOut", "TileRoadSheetDepthOut"] {
+        // One fragment output writes a depth, and nothing else does: the
+        // exact variants' return struct, the ground's and the roads'. The
+        // plain entries write none, and the roads' ranks come from the
+        // vertex stage like every other layer's.
+        XCTAssertEqual(source.components(separatedBy: "float depth [[depth(any)]];").count - 1, 1,
+                       "Depth is written by the exact variants only")
+        XCTAssertTrue(source.contains("fragment half4 tileRoadFragmentShader("))
+        XCTAssertTrue(source.contains("fragment TileExactDepthFragmentOut tileRoadExactDepthFragmentShader("))
+        for structName in ["TileExactDepthFragmentOut"] {
             let declaration = try XCTUnwrap(source.range(of: "struct \(structName) {"), structName)
             let closing = try XCTUnwrap(source.range(of: "};", range: declaration.upperBound ..< source.endIndex), structName)
             XCTAssertTrue(source[declaration.upperBound ..< closing.lowerBound].contains("float depth [[depth(any)]];"),

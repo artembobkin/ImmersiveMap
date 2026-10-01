@@ -331,9 +331,12 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// The camera zoom from which a road is its full symbol.
         public var symbolZoom: Float
 
-        /// The opacity of the overview stroke, a veil that lets the ground
-        /// colours stay the picture over a country view. It grows to one
-        /// along with the width, by `symbolZoom`.
+        /// The opacity of the overview stroke. It grows to one along with
+        /// the width, by `symbolZoom`. One by default: a road is opaque at
+        /// every zoom, which is what lets the engine shade each of its
+        /// pixels once, with no blending. Below one the stroke is a veil
+        /// that lets the ground colours stay the picture over a country
+        /// view, and the roads blend until `symbolZoom`.
         public var overviewOpacity: Float
 
         /// The camera zoom from which a road's width is fixed on the ground
@@ -364,7 +367,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
                     overviewWidthPoints: RoadClassValues<Float> = RoadMetrics.defaultOverviewWidthPoints,
                     overviewZoom: Float = 6,
                     symbolZoom: Float = 14,
-                    overviewOpacity: Float = 0.6,
+                    overviewOpacity: Float = 1,
                     worldLockZoom: Float = 15,
                     drawsCasing: Bool = false,
                     minimumTileZoom: RoadClassValues<Int> = RoadMetrics.defaultMinimumTileZoom) {

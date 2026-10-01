@@ -838,7 +838,16 @@ final class PreparedTileDiskCaching {
     // in a building and has no such field.
     // 122: a POI with no icon of its own draws its name alone; a v121 entry
     // carries the plain marker's sprite beside it.
-    static let preparedFormatVersion: UInt32 = 122
+    // 126: the road buckets are ordered by depth (`RoadRankDepth`): a road
+    // layer's style indices follow the class priority and its indices go
+    // out nearest first. A deferred ribbon's free end carries no feather
+    // rows, and its rim follows the bodies in the layer's indices as edge
+    // lines over the same vertices, from the index the entry stores
+    // (`PreparedTileCPU.roadEdgeLineIndexStarts`). A v122 entry indexes
+    // the styles by key, paints bottom to top, feathers its ends and has
+    // no edge lines. The versions 123 to 125 were steps of this work that
+    // were never released.
+    static let preparedFormatVersion: UInt32 = 126
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

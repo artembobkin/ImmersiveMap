@@ -5,8 +5,12 @@ import Foundation
 
 /// A polygon of the separate-road path with the keys it sorts by: the
 /// unification stage buckets these by structure and pass role and sorts
-/// each bucket with `sort`, so a road's casing lies under its fill and a
-/// higher class over a lower one whatever order the tile shipped them.
+/// each bucket with `sort`. Which road lies over which is the rank depth's
+/// work (`RoadRankDepth`): the bucket gives the band, so a road's casing
+/// lies under its fill, and the class priority gives the style's rank in
+/// it, so a higher class lies over a lower one
+/// (`TileUnificationStage.unifyOrderedRoadLayer`), whatever order the tile
+/// shipped them.
 struct OrderedRoadPolygon {
     let polygon: ParsedPolygon
     let styleKey: UInt8

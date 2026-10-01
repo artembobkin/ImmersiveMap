@@ -17,8 +17,8 @@ public enum LinePlacement: Sendable {
 
 /// The passes a road is drawn in, bottom to top. A `RoadStyle` states one
 /// stroke per role it wants (any number of paint strokes); the roads of a
-/// tile are then drawn role by role, so every casing lies under every fill
-/// of its tier.
+/// tile are then stacked role by role, so every casing lies under every
+/// fill of its tier.
 public enum RoadPassRole: Int, CaseIterable, Sendable {
     case shadow
     case casing
