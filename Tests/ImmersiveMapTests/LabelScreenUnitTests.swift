@@ -82,8 +82,7 @@ final class LabelScreenUnitTests: XCTestCase {
         // by the display's pixels per point next to the screen position it
         // pairs with (BaseLabelPrepareSubsystem.rescaleBaseHalfSizes), and a
         // label with a drawable point reserves its space.
-        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(candidateEnabled: candidate.isEnabled,
-                                                                screenVisible: screenPoints[0].visible != 0,
+        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(screenVisible: screenPoints[0].visible != 0,
                                                                 horizonVisible: true,
                                                                 currentAlpha: 1,
                                                                 minCameraZoom: 0,

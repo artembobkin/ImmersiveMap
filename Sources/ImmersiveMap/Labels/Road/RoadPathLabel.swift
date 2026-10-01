@@ -17,13 +17,10 @@ struct RoadLabelAnchorRange {
     let count: Int
 }
 
-struct RoadPathRangeGpu {
-    let start: UInt32
-    let count: UInt32
-    let _padding0: UInt32 = 0
-    let _padding1: UInt32 = 0
-}
-
+/// One glyph of a road label as the road text vertex shader reads it
+/// (`RoadGlyphInput` in RoadLabelCommon.h): which instance it belongs to
+/// and where it sits in the label's layout, in points. Built once per tile
+/// record and uploaded once. The CPU placement reads the same array.
 struct RoadGlyphInput {
     let pathIndex: UInt32
     let instanceIndex: UInt32
@@ -36,34 +33,23 @@ struct RoadGlyphInput {
     let minLength: Float
 }
 
+/// Where a glyph is drawn this frame, in device pixels, as the road text
+/// vertex shader reads it (`RoadGlyphPlacementOutput` in
+/// RoadLabelCommon.h). Written by `RoadLabelPlacer` on the CPU and uploaded
+/// per frame slot.
 struct RoadGlyphPlacementOutput {
     var position: SIMD2<Float>
     var angle: Float
     var visible: UInt32
-    // Glyph placed by extrapolation beyond the path ends - it is drawn, but
-    // does not become a collision candidate (see roadLabelPlacementKernel).
-    var extrapolated: UInt32
+
+    static let hidden = RoadGlyphPlacementOutput(position: .zero, angle: 0, visible: 0)
 }
 
-struct RoadGlyphCollisionOutput {
-    let halfSizeAABB: SIMD2<Float>
-    let _padding: SIMD2<Float> = .zero
-}
-
+/// An anchor of a road label in the tile's data: the segment of its path
+/// and the parameter along it, and its ordinal among the label's anchors.
 struct RoadLabelAnchor {
     let pathIndex: UInt32
     let segmentIndex: UInt32
     let t: Float
     let anchorOrdinal: UInt32
-}
-
-// GPU mirror of the Metal RoadLabelAnchor (RoadLabelCommon.h). The placement
-// kernel reads the anchor's screen position from its own projected path point
-// at `pointIndex` instead of re-deriving it from `t`: a screen-space lerp is
-// not the projection of the world-space anchor under a tilted camera.
-struct RoadLabelAnchorGpu {
-    let pathIndex: UInt32
-    let segmentIndex: UInt32
-    let pointIndex: UInt32
-    let _padding: UInt32 = 0
 }

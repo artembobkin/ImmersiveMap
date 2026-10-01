@@ -117,8 +117,6 @@ final class SharedRenderResources {
     /// The air around the surface's edge, on both surfaces.
     let horizonPipeline: HorizonPipeline
     let sceneModelPipeline: SceneModelPipeline
-    let tilePointScreenPipelines: TilePointScreenPipelines
-    let roadLabelPlacementPipeline: RoadLabelPlacementPipeline
     /// The point labels' occlusion probes in the world pass.
     let labelOcclusionProbePipeline: LabelOcclusionProbePipeline
 
@@ -317,8 +315,6 @@ final class SharedRenderResources {
         self.starfieldPipeline = compiled.starfieldPipeline
         self.horizonPipeline = compiled.horizonPipeline
         self.sceneModelPipeline = compiled.sceneModelPipeline
-        self.tilePointScreenPipelines = compiled.tilePointScreenPipelines
-        self.roadLabelPlacementPipeline = compiled.roadLabelPlacementPipeline
         self.labelOcclusionProbePipeline = compiled.labelOcclusionProbePipeline
         self.globeCap = compiled.globeCap
         self.avatars = compiled.avatars
@@ -345,8 +341,6 @@ final class SharedRenderResources {
         let starfieldPipeline: StarfieldPipeline
         let horizonPipeline: HorizonPipeline
         let sceneModelPipeline: SceneModelPipeline
-        let tilePointScreenPipelines: TilePointScreenPipelines
-        let roadLabelPlacementPipeline: RoadLabelPlacementPipeline
         let labelOcclusionProbePipeline: LabelOcclusionProbePipeline
         let globeCap: GlobeCapRenderer.SharedResources
         let avatars: AvatarsRenderer.SharedResources
@@ -378,8 +372,6 @@ final class SharedRenderResources {
         var starfieldPipeline: StarfieldPipeline?
         var horizonPipeline: HorizonPipeline?
         var sceneModelPipeline: SceneModelPipeline?
-        var tilePointScreenPipelines: TilePointScreenPipelines?
-        var roadLabelPlacementPipeline: RoadLabelPlacementPipeline?
         var labelOcclusionProbePipeline: LabelOcclusionProbePipeline?
         var globeCap: GlobeCapRenderer.SharedResources?
         var avatars: AvatarsRenderer.SharedResources?
@@ -440,8 +432,6 @@ final class SharedRenderResources {
                                                       pixelFormat: pixelFormat,
                                                       library: library,
                                                       sampleCount: sampleCount) },
-            { tilePointScreenPipelines = TilePointScreenPipelines(metalDevice: device, library: library) },
-            { roadLabelPlacementPipeline = RoadLabelPlacementPipeline(metalDevice: device, library: library) },
             { labelOcclusionProbePipeline = LabelOcclusionProbePipeline(metalDevice: device,
                                                                         pixelFormat: pixelFormat,
                                                                         library: library,
@@ -461,8 +451,6 @@ final class SharedRenderResources {
             starfieldPipeline: starfieldPipeline!,
             horizonPipeline: horizonPipeline!,
             sceneModelPipeline: sceneModelPipeline!,
-            tilePointScreenPipelines: tilePointScreenPipelines!,
-            roadLabelPlacementPipeline: roadLabelPlacementPipeline!,
             labelOcclusionProbePipeline: labelOcclusionProbePipeline!,
             globeCap: globeCap!,
             avatars: avatars!,

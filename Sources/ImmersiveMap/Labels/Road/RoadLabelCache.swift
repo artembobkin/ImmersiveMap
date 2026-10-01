@@ -10,66 +10,49 @@ import Foundation
 import Metal
 import simd
 
-struct RoadLabelEntry {
-    let entryKey: UInt64
-    let sourceKey: UInt64
-    let text: String
-    let style: LabelTextStyle
-    let pointInputs: [TilePointInput]
-    let canonicalPoints: [SIMD2<Float>]
-    let canonicalTotalLength: Float
-    let anchors: [RoadLabelAnchor]
-    let templateVertices: [LabelVertex]
-    let glyphBounds: [SIMD4<Float>]
-    let labelSize: SIMD2<Float>
-    let sourcePriority: Int
-}
-
+/// One tile's road labels in the working set: the roads and glyphs the
+/// placer reads, the glyph data the shader reads, and the frame's placement
+/// of the glyphs, kept here so a tile culled from the near set keeps
+/// drawing its last placement while its labels fade out.
 final class RoadLabelTileRecord {
     let ownerKey: VisibleTile
-    var metalTileIdentity: ObjectIdentifier
-    var sourcePriority: Int
+    let metalTileIdentity: ObjectIdentifier
+    private(set) var sourcePriority: Int
     var visibleTileIndex: UInt32
+    /// Where the record's instances start in the cache's instance set.
     var instanceStart: Int = 0
 
     let labelStyle: LabelTextStyle
-    private(set) var entries: [RoadLabelEntry]
+    let geometry: RoadLabelPlacer.Geometry
     let instanceKeys: [UInt64]
     let instanceLabelSizes: [SIMD2<Float>]
-    // An instance's glyphs are contiguous in glyphInputs (makeTileRecord build
-    // order): the ranges make it possible to read an instance's collision AABBs
-    // from GPU buffers without CPU reprojection.
-    let instanceGlyphRanges: [Range<Int>]
     let instanceAnchorOrdinals: [UInt32]
     private(set) var instanceSourcePriorities: [Int]
-
-    let pathPointCount: Int
-    let glyphCount: Int
+    /// The number of roads the record labels, for the diagnostics.
+    let pathCount: Int
 
     let localGlyphVertices: TileBufferView?
-
-    var localGlyphVertexCount: Int {
-        localGlyphVertices?.count ?? 0
-    }
-    let pathInputsBuffer: MTLBuffer?
-    let pathRangesBuffer: MTLBuffer?
-    let anchorsBuffer: MTLBuffer?
+    /// The glyph data the road text vertex shader reads, uploaded once.
     let glyphInputsBuffer: MTLBuffer?
-    let collisionInputsBuffer: MTLBuffer?
 
-    // Slots into which this record's placement compute has been encoded at least
-    // once: before the first GPU pass the slot buffers contain garbage and must
-    // not be read. Reuse of a slot by frame N implies frame N-slots has completed,
-    // so read data always comes from a completed frame of the same glyph layout.
-    private var placementEncodedSlots: [Bool]
+    /// The last placement of the record's glyphs (`RoadLabelPlacer`),
+    /// hidden until the record is first placed.
+    var placement = RoadLabelPlacer.Output()
 
-    private let visibleTileIndexBufferStore: DynamicMetalBuffer<UInt32>
-    private(set) var visibleTileIndexBuffer: MTLBuffer
     private let placementBufferStore: FrameSlottedDynamicMetalBuffer<RoadGlyphPlacementOutput>
     private let runtimeMetaBufferStore: FrameSlottedDynamicMetalBuffer<LabelRuntimeMeta>
-    private let pathPointScreenBufferStore: FrameSlottedDynamicMetalBuffer<ScreenPointOutput>
-    private let glyphScreenPointBufferStore: FrameSlottedDynamicMetalBuffer<ScreenPointOutput>
-    private let collisionAabbBufferStore: FrameSlottedDynamicMetalBuffer<RoadGlyphCollisionOutput>
+
+    var glyphCount: Int {
+        geometry.glyphCount
+    }
+
+    var instanceCount: Int {
+        instanceKeys.count
+    }
+
+    var instanceGlyphRanges: [Range<Int>] {
+        geometry.instanceGlyphRanges
+    }
 
     init(metalDevice: MTLDevice,
          ownerKey: VisibleTile,
@@ -77,152 +60,65 @@ final class RoadLabelTileRecord {
          sourcePriority: Int,
          visibleTileIndex: UInt32,
          labelStyle: LabelTextStyle,
-         entries: [RoadLabelEntry],
+         geometry: RoadLabelPlacer.Geometry,
+         pathCount: Int,
          instanceKeys: [UInt64],
          instanceLabelSizes: [SIMD2<Float>],
-         instanceGlyphRanges: [Range<Int>],
          instanceAnchorOrdinals: [UInt32],
-         instanceSourcePriorities: [Int],
-         pathInputs: [TilePointInput],
-         pathRanges: [RoadPathRangeGpu],
-         anchors: [RoadLabelAnchorGpu],
-         glyphInputs: [RoadGlyphInput],
-         collisionInputs: [ScreenCollisionInput],
          localGlyphVertices: TileBufferView?) {
         self.ownerKey = ownerKey
         self.metalTileIdentity = metalTileIdentity
         self.sourcePriority = sourcePriority
         self.visibleTileIndex = visibleTileIndex
         self.labelStyle = labelStyle
-        self.entries = entries
+        self.geometry = geometry
+        self.pathCount = pathCount
         self.instanceKeys = instanceKeys
         self.instanceLabelSizes = instanceLabelSizes
-        self.instanceGlyphRanges = instanceGlyphRanges
         self.instanceAnchorOrdinals = instanceAnchorOrdinals
-        self.instanceSourcePriorities = instanceSourcePriorities
-        self.placementEncodedSlots = Array(repeating: false, count: InFlightFramePool.inFlightFramesCount)
-        self.pathPointCount = pathInputs.count
-        self.glyphCount = glyphInputs.count
+        self.instanceSourcePriorities = Array(repeating: sourcePriority, count: instanceKeys.count)
         self.localGlyphVertices = localGlyphVertices
-        self.pathInputsBuffer = Self.makeBuffer(device: metalDevice, values: pathInputs)
-        self.pathRangesBuffer = Self.makeBuffer(device: metalDevice, values: pathRanges)
-        self.anchorsBuffer = Self.makeBuffer(device: metalDevice, values: anchors)
-        self.glyphInputsBuffer = Self.makeBuffer(device: metalDevice, values: glyphInputs)
-        self.collisionInputsBuffer = Self.makeBuffer(device: metalDevice, values: collisionInputs)
-        self.visibleTileIndexBufferStore = DynamicMetalBuffer(metalDevice: metalDevice, options: [.storageModeShared])
-        self.visibleTileIndexBuffer = visibleTileIndexBufferStore.buffer
+        self.glyphInputsBuffer = Self.makeBuffer(device: metalDevice, values: geometry.glyphs)
         self.placementBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
                                                                    slotsCount: InFlightFramePool.inFlightFramesCount,
                                                                    options: [.storageModeShared])
         self.runtimeMetaBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
                                                                      slotsCount: InFlightFramePool.inFlightFramesCount,
                                                                      options: [.storageModeShared])
-        self.pathPointScreenBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
-                                                                         slotsCount: InFlightFramePool.inFlightFramesCount,
-                                                                         options: [.storageModeShared])
-        self.glyphScreenPointBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
-                                                                          slotsCount: InFlightFramePool.inFlightFramesCount,
-                                                                          options: [.storageModeShared])
-        self.collisionAabbBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
-                                                                       slotsCount: InFlightFramePool.inFlightFramesCount,
-                                                                       options: [.storageModeShared])
-        updateVisibleTileIndex(visibleTileIndex)
+        placement.resize(glyphCount: geometry.glyphCount)
     }
 
     var hasRenderableGlyphs: Bool {
-        glyphCount > 0 && localGlyphVertexCount > 0
-    }
-
-    func updateVisibleTileIndex(_ value: UInt32) {
-        visibleTileIndex = value
-        visibleTileIndexBuffer = visibleTileIndexBufferStore.ensureCapacity(count: 1)
-        var visibleIndex = value
-        withUnsafeBytes(of: &visibleIndex) { bytes in
-            visibleTileIndexBuffer.contents().copyMemory(from: bytes.baseAddress!,
-                                                         byteCount: MemoryLayout<UInt32>.stride)
-        }
+        glyphCount > 0 && (localGlyphVertices?.count ?? 0) > 0 && glyphInputsBuffer != nil
     }
 
     func updateMetadata(sourcePriority: Int) {
         self.sourcePriority = sourcePriority
-        if entries.isEmpty == false {
-            entries = entries.map { entry in
-                RoadLabelEntry(entryKey: entry.entryKey,
-                               sourceKey: entry.sourceKey,
-                               text: entry.text,
-                               style: entry.style,
-                               pointInputs: entry.pointInputs,
-                               canonicalPoints: entry.canonicalPoints,
-                               canonicalTotalLength: entry.canonicalTotalLength,
-                               anchors: entry.anchors,
-                               templateVertices: entry.templateVertices,
-                               glyphBounds: entry.glyphBounds,
-                               labelSize: entry.labelSize,
-                               sourcePriority: sourcePriority)
-            }
-        }
         if instanceSourcePriorities.isEmpty == false {
             instanceSourcePriorities = Array(repeating: sourcePriority, count: instanceSourcePriorities.count)
         }
     }
 
-    func markPlacementEncoded(slot: Int) {
-        guard placementEncodedSlots.indices.contains(slot) else {
-            return
-        }
-        placementEncodedSlots[slot] = true
-    }
-
-    // The record fell out of the active set (near-camera cull): prepareGPU stops
-    // encoding its compute and the slot buffers freeze. Resetting the stamps keeps
-    // the first cycle after returning from reading positions of arbitrary age:
-    // decisions are deferred until fresh data (the pending re-trigger mechanism).
-    func invalidatePlacementData() {
-        for index in placementEncodedSlots.indices {
-            placementEncodedSlots[index] = false
-        }
-    }
-
-    func hasPlacementData(slot: Int) -> Bool {
-        placementEncodedSlots.indices.contains(slot) && placementEncodedSlots[slot]
-    }
-
-    // The record is eligible for the placement compute (mirrors the prepareGPU
-    // guard): waiting for data from a record that will never be encoded
-    // (MTLBuffer allocation failure) is not allowed, since pending would hang forever.
-    var canEncodePlacements: Bool {
-        pathPointCount > 0 && glyphCount > 0
-            && pathInputsBuffer != nil && pathRangesBuffer != nil
-            && anchorsBuffer != nil && glyphInputsBuffer != nil
-            && collisionInputsBuffer != nil
-    }
-
+    /// The frame slot's copy of the record's placement, for the shader.
     func placementBuffer(slot: Int) -> MTLBuffer {
-        placementBufferStore.ensureCapacity(slot: slot, count: max(1, glyphCount))
-    }
-
-    func runtimeMetaBuffer(slot: Int, meta: [LabelRuntimeMeta]) -> MTLBuffer {
-        let buffer = runtimeMetaBufferStore.ensureCapacity(slot: slot, count: max(1, meta.count))
-        guard meta.isEmpty == false else {
-            return buffer
-        }
-        meta.withUnsafeBytes { bytes in
-            buffer.contents().copyMemory(from: bytes.baseAddress!,
-                                         byteCount: meta.count * MemoryLayout<LabelRuntimeMeta>.stride)
+        let buffer = placementBufferStore.ensureCapacity(slot: slot, count: max(1, glyphCount))
+        placement.placements.withUnsafeBytes { bytes in
+            if bytes.count > 0 {
+                buffer.contents().copyMemory(from: bytes.baseAddress!, byteCount: bytes.count)
+            }
         }
         return buffer
     }
 
-    func pathPointScreenBuffer(slot: Int) -> MTLBuffer {
-        pathPointScreenBufferStore.ensureCapacity(slot: slot, count: max(1, pathPointCount))
-    }
-
-    func glyphScreenPointBuffer(slot: Int) -> MTLBuffer {
-        glyphScreenPointBufferStore.ensureCapacity(slot: slot, count: max(1, glyphCount))
-    }
-
-    func collisionAabbBuffer(slot: Int) -> MTLBuffer {
-        collisionAabbBufferStore.ensureCapacity(slot: slot, count: max(1, glyphCount))
+    /// The frame slot's copy of the record's instance meta (the fades).
+    func runtimeMetaBuffer(slot: Int, meta: [LabelRuntimeMeta]) -> MTLBuffer {
+        let buffer = runtimeMetaBufferStore.ensureCapacity(slot: slot, count: max(1, meta.count))
+        meta.withUnsafeBytes { bytes in
+            if bytes.count > 0 {
+                buffer.contents().copyMemory(from: bytes.baseAddress!, byteCount: bytes.count)
+            }
+        }
+        return buffer
     }
 
     private static func makeBuffer<T>(device: MTLDevice, values: [T]) -> MTLBuffer? {
@@ -237,147 +133,143 @@ final class RoadLabelTileRecord {
     }
 }
 
+/// The road labels of the frame's tiles: one record per tile in the base
+/// labels' winner order, the records' instances packed end to end into one
+/// instance set the fades and the collision decisions are index-aligned
+/// with. A tile that stays keeps its record; a topology change repacks the
+/// instance set and reports the runs that survived.
 final class RoadLabelCache {
     private let metalDevice: MTLDevice
 
     private var tileRecordsByOwnerKey: [VisibleTile: RoadLabelTileRecord] = [:]
-    private var ownerOrder: [VisibleTile] = []
 
-    private(set) var roadLabelStyle: LabelTextStyle?
     private(set) var instanceKeys: [UInt64] = []
     private(set) var instanceLabelSizes: [SIMD2<Float>] = []
 
-    var entries: [RoadLabelEntry] {
-        orderedTileRecords.flatMap(\.entries)
-    }
-
-    // Materialized: membership changes only in synchronize/evict while this
-    // property is read at several hot spots every frame. The computed version
-    // did a dictionary lookup per tile and allocated an array on every access.
+    /// The records in the set's order. Materialized: membership changes only
+    /// in synchronize and evict, and the frame reads this in several places.
     private(set) var orderedTileRecords: [RoadLabelTileRecord] = []
 
-    init(metalDevice: MTLDevice,
-         textRenderer _: TextRenderer) {
+    init(metalDevice: MTLDevice) {
         self.metalDevice = metalDevice
     }
 
+    @discardableResult
     func rebuild(sourceEntries: [BaseLabelSourceEntry],
-                 tileIndexAllocator: VisibleTileIndexAllocator) {
+                 tileIndexAllocator: VisibleTileIndexAllocator) -> LabelWorkingSetChange {
         synchronize(sourceEntries: sourceEntries,
                     tileIndexAllocator: tileIndexAllocator,
                     trackedTilesChanged: true,
-                    projectionChanged: true)
+                    projectionChanged: true) ?? .empty
     }
 
+    /// Brings the set up to `sourceEntries`. With `trackedTilesChanged` the
+    /// instance set is repacked and the change returned; otherwise nil,
+    /// and with `projectionChanged` only the tiles' projection indices are
+    /// refreshed.
+    @discardableResult
     func synchronize(sourceEntries: [BaseLabelSourceEntry],
                      tileIndexAllocator: VisibleTileIndexAllocator,
                      trackedTilesChanged: Bool,
-                     projectionChanged: Bool) {
+                     projectionChanged: Bool) -> LabelWorkingSetChange? {
+        var change: LabelWorkingSetChange?
         if trackedTilesChanged {
-            synchronizeTrackedTiles(sourceEntries: sourceEntries,
-                                    tileIndexAllocator: tileIndexAllocator)
-            orderedTileRecords = ownerOrder.compactMap { tileRecordsByOwnerKey[$0] }
-            rebuildAggregatedState()
+            change = synchronizeTrackedTiles(sourceEntries: sourceEntries,
+                                             tileIndexAllocator: tileIndexAllocator)
         } else if projectionChanged {
-            updateVisibleTileIndices(sourceEntries: sourceEntries,
-                                     tileIndexAllocator: tileIndexAllocator)
+            for sourceEntry in sourceEntries {
+                tileRecordsByOwnerKey[sourceEntry.ownerKey]?.visibleTileIndex =
+                    tileIndexAllocator.tileIndex(for: sourceEntry.ownerKey)
+            }
         }
-
-        roadLabelStyle = orderedTileRecords.first?.labelStyle
+        return change
     }
 
     func evict() {
         tileRecordsByOwnerKey.removeAll(keepingCapacity: false)
-        ownerOrder.removeAll(keepingCapacity: false)
         orderedTileRecords.removeAll(keepingCapacity: false)
-        roadLabelStyle = nil
         instanceKeys.removeAll(keepingCapacity: false)
         instanceLabelSizes.removeAll(keepingCapacity: false)
     }
 
     private func synchronizeTrackedTiles(sourceEntries: [BaseLabelSourceEntry],
-                                         tileIndexAllocator: VisibleTileIndexAllocator) {
-        let nextOwnerKeys = sourceEntries.map(\.ownerKey)
-        let nextOwnerKeySet = Set(nextOwnerKeys)
-        let removedOwnerKeys = ownerOrder.filter { nextOwnerKeySet.contains($0) == false }
-        for removedOwnerKey in removedOwnerKeys {
-            tileRecordsByOwnerKey.removeValue(forKey: removedOwnerKey)
+                                         tileIndexAllocator: VisibleTileIndexAllocator) -> LabelWorkingSetChange {
+        var previousStartByOwnerKey: [VisibleTile: (identity: ObjectIdentifier, start: Int)] = [:]
+        previousStartByOwnerKey.reserveCapacity(orderedTileRecords.count)
+        for record in orderedTileRecords {
+            previousStartByOwnerKey[record.ownerKey] = (record.metalTileIdentity, record.instanceStart)
         }
 
-        for sourceEntry in sourceEntries {
-            let visibleTileIndex = UInt32(tileIndexAllocator.tileIndex(for: sourceEntry.ownerKey))
-            upsertTileRecord(sourceEntry, visibleTileIndex: visibleTileIndex)
-        }
-
-        ownerOrder = nextOwnerKeys
-    }
-
-    private func updateVisibleTileIndices(sourceEntries: [BaseLabelSourceEntry],
-                                          tileIndexAllocator: VisibleTileIndexAllocator) {
-        for sourceEntry in sourceEntries {
-            guard let record = tileRecordsByOwnerKey[sourceEntry.ownerKey] else {
-                continue
-            }
-            let visibleTileIndex = UInt32(tileIndexAllocator.tileIndex(for: sourceEntry.ownerKey))
-            record.updateVisibleTileIndex(visibleTileIndex)
-        }
-    }
-
-    private func upsertTileRecord(_ sourceEntry: BaseLabelSourceEntry,
-                                  visibleTileIndex: UInt32) {
-        let ownerKey = sourceEntry.ownerKey
-        let metalTileIdentity = sourceEntry.metalTileIdentity
-        let sourcePriority = BaseLabelSourceEntry.priorityRank(for: sourceEntry)
-
-        if let existingRecord = tileRecordsByOwnerKey[ownerKey] {
-            let payloadChanged = existingRecord.metalTileIdentity != metalTileIdentity
-            if payloadChanged == false {
-                existingRecord.metalTileIdentity = metalTileIdentity
-                existingRecord.updateMetadata(sourcePriority: sourcePriority)
-                existingRecord.updateVisibleTileIndex(visibleTileIndex)
-                return
-            }
-        }
-
-        tileRecordsByOwnerKey[ownerKey] = makeTileRecord(sourceEntry: sourceEntry,
-                                                         visibleTileIndex: visibleTileIndex)
-    }
-
-    private func rebuildAggregatedState() {
+        var nextRecordsByOwnerKey: [VisibleTile: RoadLabelTileRecord] = [:]
+        nextRecordsByOwnerKey.reserveCapacity(sourceEntries.count)
+        var nextOrdered: [RoadLabelTileRecord] = []
+        nextOrdered.reserveCapacity(sourceEntries.count)
+        var moves: [LabelBlockMove] = []
         instanceKeys.removeAll(keepingCapacity: true)
         instanceLabelSizes.removeAll(keepingCapacity: true)
 
-        var runningInstanceStart = 0
-        for ownerKey in ownerOrder {
-            guard let record = tileRecordsByOwnerKey[ownerKey] else {
-                continue
+        var start = 0
+        for sourceEntry in sourceEntries {
+            let ownerKey = sourceEntry.ownerKey
+            let visibleTileIndex = tileIndexAllocator.tileIndex(for: ownerKey)
+            let sourcePriority = BaseLabelSourceEntry.priorityRank(for: sourceEntry)
+            let record: RoadLabelTileRecord
+            if let existing = tileRecordsByOwnerKey[ownerKey],
+               existing.metalTileIdentity == sourceEntry.metalTileIdentity {
+                record = existing
+                record.updateMetadata(sourcePriority: sourcePriority)
+                if record.instanceCount > 0, let previous = previousStartByOwnerKey[ownerKey] {
+                    moves.append(LabelBlockMove(oldStart: previous.start, newStart: start, count: record.instanceCount))
+                }
+            } else {
+                record = makeTileRecord(sourceEntry: sourceEntry,
+                                        sourcePriority: sourcePriority,
+                                        visibleTileIndex: visibleTileIndex)
             }
-            record.instanceStart = runningInstanceStart
+            record.visibleTileIndex = visibleTileIndex
+            record.instanceStart = start
             instanceKeys.append(contentsOf: record.instanceKeys)
             instanceLabelSizes.append(contentsOf: record.instanceLabelSizes)
-            runningInstanceStart += record.instanceKeys.count
+            start += record.instanceCount
+            nextRecordsByOwnerKey[ownerKey] = record
+            nextOrdered.append(record)
         }
+
+        // A road instance's key holds its tile, so an instance never
+        // outlives its record: the surviving records' runs are all there
+        // is to carry.
+        tileRecordsByOwnerKey = nextRecordsByOwnerKey
+        orderedTileRecords = nextOrdered
+        return LabelWorkingSetChange(count: start, moves: moves)
     }
 
     private func makeTileRecord(sourceEntry: BaseLabelSourceEntry,
+                                sourcePriority: Int,
                                 visibleTileIndex: UInt32) -> RoadLabelTileRecord {
         let roadLabels = sourceEntry.metalTile.tileBuffers.roadLabels
         let style = roadLabels.labelStyle ?? Self.fallbackStyle
-        let sourcePriority = BaseLabelSourceEntry.priorityRank(for: sourceEntry)
 
-        var entries: [RoadLabelEntry] = []
         var instanceKeys: [UInt64] = []
         var instanceLabelSizes: [SIMD2<Float>] = []
-        var instanceGlyphRanges: [Range<Int>] = []
         var instanceAnchorOrdinals: [UInt32] = []
-        var instanceSourcePriorities: [Int] = []
-        var pathInputs: [TilePointInput] = []
-        var pathRanges: [RoadPathRangeGpu] = []
-        var anchors: [RoadLabelAnchorGpu] = []
-        var glyphInputs: [RoadGlyphInput] = []
-        var collisionInputs: [ScreenCollisionInput] = []
+        var pathPoints: [TilePointInput] = []
+        var pathRanges: [Range<Int>] = []
+        var pathInstanceRanges: [Range<Int>] = []
+        var anchors: [RoadLabelPlacer.Anchor] = []
+        var instanceGlyphRanges: [Range<Int>] = []
+        var glyphs: [RoadGlyphInput] = []
+        var glyphHalfSizes: [SIMD2<Float>] = []
 
-        entries.reserveCapacity(roadLabels.pathRanges.count)
+        // Every path's points first, then the anchors' own points, so a
+        // path's points stay contiguous.
+        var anchorPointInputs: [TilePointInput] = []
+        struct PendingAnchor {
+            let pathIndex: Int32
+            let segmentIndex: Int32
+            let anchorPointOffset: Int
+        }
+        var pendingAnchors: [PendingAnchor] = []
+
         for pathRange in roadLabels.pathRanges {
             let labelIndex = pathRange.labelIndex
             guard labelIndex >= 0,
@@ -394,15 +286,12 @@ final class RoadLabelCache {
                   pointRangeEnd <= roadLabels.pathInputs.count else {
                 continue
             }
-
             let localPathInputs = roadLabels.pathInputs[pathRange.start..<pointRangeEnd].map { input -> TilePointInput in
                 var updated = input
                 updated.tileSlotIndex = 0
                 return updated
             }
-            let canonicalPoints = localPathInputs.map(Self.makeCanonicalPoint)
-            let canonicalTotalLength = Self.totalLength(points: canonicalPoints)
-            guard canonicalTotalLength > 0 else {
+            guard Self.totalLength(points: localPathInputs.map(Self.makeCanonicalPoint)) > 0 else {
                 continue
             }
 
@@ -422,93 +311,79 @@ final class RoadLabelCache {
                   anchorEnd <= roadLabels.anchors.count else {
                 continue
             }
-            let localPathIndex = UInt32(pathRanges.count)
+            let pathIndex = Int32(pathRanges.count)
             let entryKey = Self.makeEntryKey(ownerKey: sourceEntry.ownerKey,
                                              sourceKey: roadLabels.pathLabels[labelIndex].key,
                                              labelIndex: labelIndex,
                                              pathRange: pathRange)
             let labelSize = roadLabels.sizes[labelIndex]
-            let roadPathLabel = roadLabels.pathLabels[labelIndex]
-            let entryAnchors = Array(roadLabels.anchors[anchorRange.start..<anchorEnd])
 
-            entries.append(RoadLabelEntry(entryKey: entryKey,
-                                          sourceKey: roadPathLabel.key,
-                                          text: roadPathLabel.text,
-                                          style: style,
-                                          pointInputs: localPathInputs,
-                                          canonicalPoints: canonicalPoints,
-                                          canonicalTotalLength: canonicalTotalLength,
-                                          anchors: entryAnchors,
-                                          templateVertices: [],
-                                          glyphBounds: glyphBounds,
-                                          labelSize: labelSize,
-                                          sourcePriority: sourcePriority))
+            let pathStart = pathPoints.count
+            pathPoints.append(contentsOf: localPathInputs)
+            pathRanges.append(pathStart..<pathPoints.count)
 
-            let pathStart = pathInputs.count
-            pathInputs.append(contentsOf: localPathInputs)
-            pathRanges.append(RoadPathRangeGpu(start: UInt32(pathStart),
-                                               count: UInt32(localPathInputs.count)))
+            let labelMinY = glyphBounds.reduce(Float.greatestFiniteMagnitude) { min($0, $1.z) }
+            let labelMaxY = glyphBounds.reduce(-Float.greatestFiniteMagnitude) { max($0, $1.w) }
+            let labelCenterY = (labelMinY + labelMaxY) * 0.5
 
-            for anchor in entryAnchors {
+            let firstInstance = instanceKeys.count
+            for anchor in roadLabels.anchors[anchorRange.start..<anchorEnd] {
                 let instanceIndex = UInt32(instanceKeys.count)
-                let instanceKey = Self.makeInstanceKey(entryKey: entryKey,
-                                                       anchorOrdinal: anchor.anchorOrdinal)
-                instanceKeys.append(instanceKey)
+                instanceKeys.append(Self.makeInstanceKey(entryKey: entryKey, anchorOrdinal: anchor.anchorOrdinal))
                 instanceLabelSizes.append(labelSize)
-                // The anchor rides the point stream as its own point (outside
-                // the path range), so the placement kernel reads the anchor's
-                // true projected screen position instead of lerping `t` along
-                // the projected segment, which drifts under perspective.
-                let anchorPointIndex = UInt32(pathInputs.count)
-                pathInputs.append(Self.makeAnchorPointInput(anchor: anchor,
-                                                            path: localPathInputs))
-                anchors.append(RoadLabelAnchorGpu(pathIndex: localPathIndex,
-                                                  segmentIndex: anchor.segmentIndex,
-                                                  pointIndex: anchorPointIndex))
-
-                let labelMinY = glyphBounds.reduce(Float.greatestFiniteMagnitude) { min($0, $1.z) }
-                let labelMaxY = glyphBounds.reduce(-Float.greatestFiniteMagnitude) { max($0, $1.w) }
-                let labelCenterY = (labelMinY + labelMaxY) * 0.5
-                let instanceGlyphStart = glyphInputs.count
                 instanceAnchorOrdinals.append(anchor.anchorOrdinal)
-                instanceSourcePriorities.append(sourcePriority)
+                // The anchor rides the point stream as its own point, so the
+                // placer reads the anchor's true projected position instead of
+                // lerping along the projected segment, which drifts under
+                // perspective.
+                pendingAnchors.append(PendingAnchor(pathIndex: pathIndex,
+                                                    segmentIndex: Int32(anchor.segmentIndex),
+                                                    anchorPointOffset: anchorPointInputs.count))
+                anchorPointInputs.append(Self.makeAnchorPointInput(anchor: anchor, path: localPathInputs))
 
-                for glyphBounds in glyphBounds {
-                    let glyphCenter = (glyphBounds.x + glyphBounds.y) * 0.5
-                    glyphInputs.append(RoadGlyphInput(pathIndex: localPathIndex,
-                                                      instanceIndex: instanceIndex,
-                                                      labelInstanceIndex: instanceIndex,
-                                                      glyphCenter: glyphCenter,
-                                                      labelCenterY: labelCenterY,
-                                                      labelWidth: labelSize.x,
-                                                      spacing: 0,
-                                                      minLength: labelSize.x))
-                    collisionInputs.append(ScreenCollisionInput(halfSize: SIMD2<Float>((glyphBounds.y - glyphBounds.x) * 0.5,
-                                                                                       (glyphBounds.w - glyphBounds.z) * 0.5),
-                                                               radius: 0,
-                                                               shapeType: .rect))
+                let instanceGlyphStart = glyphs.count
+                for bounds in glyphBounds {
+                    glyphs.append(RoadGlyphInput(pathIndex: UInt32(pathIndex),
+                                                 instanceIndex: instanceIndex,
+                                                 labelInstanceIndex: instanceIndex,
+                                                 glyphCenter: (bounds.x + bounds.y) * 0.5,
+                                                 labelCenterY: labelCenterY,
+                                                 labelWidth: labelSize.x,
+                                                 spacing: 0,
+                                                 minLength: labelSize.x))
+                    glyphHalfSizes.append(SIMD2<Float>((bounds.y - bounds.x) * 0.5, (bounds.w - bounds.z) * 0.5))
                 }
-                instanceGlyphRanges.append(instanceGlyphStart..<glyphInputs.count)
+                instanceGlyphRanges.append(instanceGlyphStart..<glyphs.count)
             }
+            pathInstanceRanges.append(firstInstance..<instanceKeys.count)
         }
 
+        let anchorPointsStart = pathPoints.count
+        pathPoints.append(contentsOf: anchorPointInputs)
+        for pending in pendingAnchors {
+            anchors.append(RoadLabelPlacer.Anchor(pathIndex: pending.pathIndex,
+                                                  segmentIndex: pending.segmentIndex,
+                                                  pointIndex: Int32(anchorPointsStart + pending.anchorPointOffset)))
+        }
+
+        let geometry = RoadLabelPlacer.Geometry(pathPoints: pathPoints,
+                                                pathRanges: pathRanges,
+                                                pathInstanceRanges: pathInstanceRanges,
+                                                anchors: anchors,
+                                                instanceGlyphRanges: instanceGlyphRanges,
+                                                glyphs: glyphs,
+                                                glyphHalfSizes: glyphHalfSizes)
         return RoadLabelTileRecord(metalDevice: metalDevice,
                                    ownerKey: sourceEntry.ownerKey,
                                    metalTileIdentity: sourceEntry.metalTileIdentity,
                                    sourcePriority: sourcePriority,
                                    visibleTileIndex: visibleTileIndex,
                                    labelStyle: style,
-                                   entries: entries,
+                                   geometry: geometry,
+                                   pathCount: pathRanges.count,
                                    instanceKeys: instanceKeys,
                                    instanceLabelSizes: instanceLabelSizes,
-                                   instanceGlyphRanges: instanceGlyphRanges,
                                    instanceAnchorOrdinals: instanceAnchorOrdinals,
-                                   instanceSourcePriorities: instanceSourcePriorities,
-                                   pathInputs: pathInputs,
-                                   pathRanges: pathRanges,
-                                   anchors: anchors,
-                                   glyphInputs: glyphInputs,
-                                   collisionInputs: collisionInputs,
                                    localGlyphVertices: roadLabels.localGlyphVertices)
     }
 

@@ -12,13 +12,10 @@ using namespace metal;
 #ifndef LABEL_RUNTIME_META
 #define LABEL_RUNTIME_META
 
+// LabelRuntimeMeta.swift: 16 bytes per label, written every frame.
 struct LabelRuntimeMeta {
-    uchar duplicate;
-    uchar _padding0;
-    ushort _padding;
-    uint visibleTileIndex;
     float fadeAlpha;
-    // LabelRuntimeMeta.perspectiveScale: the label's shrink for its distance.
+    // The label's shrink for its distance.
     float perspectiveScale;
     float2 labelSizePoints;
 };

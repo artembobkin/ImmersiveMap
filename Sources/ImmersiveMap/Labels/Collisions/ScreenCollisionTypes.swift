@@ -3,11 +3,9 @@
 
 import simd
 
-enum ScreenCollisionShapeType: UInt32 {
-    case rect = 0
-    case circle = 1
-}
-
+/// A base label as the collision solve ranks it, fixed when the working set
+/// is packed: the box in layout points, the rank, and the key that is the
+/// group its copies from other tiles share.
 struct ScreenCollisionCandidate {
     var position: SIMD2<Float>
     var halfSize: SIMD2<Float>
@@ -34,17 +32,5 @@ struct ScreenCollisionCandidate {
         self.stableOrderKey = stableOrderKey
         self.groupId = groupId
         self.isEnabled = isEnabled
-    }
-}
-
-struct ScreenCollisionInput {
-    var halfSize: SIMD2<Float>
-    var radius: Float
-    var shapeType: UInt32
-
-    init(halfSize: SIMD2<Float>, radius: Float, shapeType: ScreenCollisionShapeType) {
-        self.halfSize = halfSize
-        self.radius = radius
-        self.shapeType = shapeType.rawValue
     }
 }

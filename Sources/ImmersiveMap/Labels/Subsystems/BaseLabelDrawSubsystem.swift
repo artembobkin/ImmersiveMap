@@ -50,9 +50,7 @@ final class BaseLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
         }
 
         let baseLabelState = frameContext.sharedState.baseLabelState
-        let labelCount = baseLabelState.labelInputsCount
-        let activeLabelSpanCount = baseLabelState.activeLabelSpanCount
-        guard labelCount > 0, activeLabelSpanCount > 0 else {
+        guard baseLabelState.labelInputsCount > 0 else {
             return
         }
 

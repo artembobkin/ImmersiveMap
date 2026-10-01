@@ -17,8 +17,6 @@ enum RenderGraphFactory {
                                                            roadLabelCache: context.roadLabelCache,
                                                            baseLabelTraceRecorder: context.baseLabelTraceRecorder,
                                                            metalDevice: context.metalContext.device,
-                                                           screenComputePipelines: context.tilePointScreenPipelines,
-                                                           roadPlacementPipeline: context.roadLabelPlacementPipeline,
                                                            occlusionProbePipeline: context.labelOcclusionProbePipeline,
                                                            depthDisabledState: context.depthDisabledState,
                                                            settings: settings.labels,

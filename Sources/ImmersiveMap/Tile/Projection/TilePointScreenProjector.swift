@@ -48,8 +48,7 @@ struct TilePointScreenProjector {
     /// The same projection written into the caller's arrays, which are
     /// resized to the snapshot only when they do not fit: a frame with a
     /// stable label set projects without allocating. On the flat map a
-    /// point with a roof (`TilePointInput.roofHeight`) is lifted onto it
-    /// where `roofCoverage` says the frame draws the buildings.
+    /// point with a roof (`TilePointInput.roofHeight`) is lifted onto it.
     ///
     /// `perspectiveScales` receives each point's shrink for its distance:
     /// the camera's depth of its focus (the world origin the camera looks
@@ -68,7 +67,6 @@ struct TilePointScreenProjector {
     func projectWithHorizonVisibility(snapshot: TilePointToScreenPointSnapshot,
                                       frameContext: FrameContext,
                                       tileOriginData: [FlatTileOriginData],
-                                      roofCoverage: BuildingRoofCoverage = .none,
                                       modelRoofs: [SceneModelRoof] = [],
                                       minimumPerspectiveScale: Float = 1,
                                       screenPoints: inout [ScreenPointOutput],
@@ -99,7 +97,6 @@ struct TilePointScreenProjector {
             projectFlatScreenPoints(snapshot: snapshot,
                                     frameContext: frameContext,
                                     tileOriginData: tileOriginData,
-                                    roofCoverage: roofCoverage,
                                     modelRoofs: modelRoofs,
                                     perspective: perspective,
                                     into: &screenPoints,
@@ -169,8 +166,7 @@ struct TilePointScreenProjector {
             }
 
             let originData = tileOriginData[visibleTileIndex]
-            // v grows from the NORTH edge, the flat render world is y-up:
-            // the same 1 - v as the GPU kernel (TilePointToScreen.metal).
+            // v grows from the NORTH edge, the flat render world is y-up.
             let local = SIMD2<Float>(input.uv.x * originData.size,
                                      (1.0 - input.uv.y) * originData.size)
             let worldPosition = originData.panRelativeOrigin + local
@@ -201,7 +197,6 @@ struct TilePointScreenProjector {
     private func projectFlatScreenPoints(snapshot: TilePointToScreenPointSnapshot,
                                          frameContext: FrameContext,
                                          tileOriginData: [FlatTileOriginData],
-                                         roofCoverage: BuildingRoofCoverage = .none,
                                          modelRoofs: [SceneModelRoof] = [],
                                          perspective: PerspectiveScale,
                                          into outputs: inout [ScreenPointOutput],
@@ -210,54 +205,57 @@ struct TilePointScreenProjector {
         let viewport = SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height))
         let cameraMatrix = frameContext.cameraMatrices.projectionView
         let invisible = ScreenPointOutput(position: .zero, depth: 0, visible: 0)
+        let count = snapshot.pointInputs.count
+        let hasModelRoofs = modelRoofs.isEmpty == false
 
-        for index in snapshot.pointInputs.indices {
-            let input = snapshot.pointInputs[index]
-            let tileSlotIndex = Int(input.tileSlotIndex)
-            guard tileSlotIndex >= 0,
-                  tileSlotIndex < snapshot.tileSlotVisibleTileIndices.count else {
-                outputs[index] = invisible
-                probePositions[index] = .zero
-                continue
-            }
+        snapshot.pointInputs.withUnsafeBufferPointer { inputs in
+        snapshot.tileSlotVisibleTileIndices.withUnsafeBufferPointer { slots in
+        tileOriginData.withUnsafeBufferPointer { origins in
+        outputs.withUnsafeMutableBufferPointer { outputs in
+        perspectiveScales.withUnsafeMutableBufferPointer { perspectiveScales in
+        probePositions.withUnsafeMutableBufferPointer { probePositions in
+            var index = 0
+            while index < count {
+                let input = inputs[index]
+                let tileSlotIndex = Int(input.tileSlotIndex)
+                guard tileSlotIndex < slots.count else {
+                    outputs[index] = invisible
+                    probePositions[index] = .zero
+                    index += 1
+                    continue
+                }
+                let visibleTileIndex = Int(slots[tileSlotIndex])
+                guard visibleTileIndex < origins.count else {
+                    outputs[index] = invisible
+                    probePositions[index] = .zero
+                    index += 1
+                    continue
+                }
 
-            let visibleTileIndex = Int(snapshot.tileSlotVisibleTileIndices[tileSlotIndex])
-            guard visibleTileIndex >= 0,
-                  visibleTileIndex < tileOriginData.count else {
-                outputs[index] = invisible
-                probePositions[index] = .zero
-                continue
+                let originData = origins[visibleTileIndex]
+                // v grows from the NORTH edge, the flat render world is y-up.
+                let local = SIMD2<Float>(input.uv.x * originData.size,
+                                         (1.0 - input.uv.y) * originData.size)
+                let worldPosition = originData.panRelativeOrigin + local
+                // The roof is in the tile's 4096 units, the extrusion mesh's
+                // scale, so the same tile size that places the point raises it
+                // to the roof the building draws. Where a landmark model stands
+                // in for that building, the drawn model's top is the roof.
+                var roofZ = input.roofHeight > 0 ? input.roofHeight * originData.size / 4096.0 : 0.0
+                if input.roofIsReplaced != 0, hasModelRoofs {
+                    roofZ = SceneModelRoof.height(over: worldPosition, roofs: modelRoofs, floor: roofZ)
+                }
+                // The label naming the building draws on its roof; one of the
+                // things inside it draws on the ground, and is only tested for
+                // view at the roof.
+                let drawnZ = input.liftsToRoof != 0 ? roofZ : 0.0
+                let clip = cameraMatrix * SIMD4<Float>(worldPosition.x, worldPosition.y, drawnZ, 1.0)
+                outputs[index] = screenPointFromClip(clip: clip, viewportSize: viewport)
+                perspectiveScales[index] = perspective.scale(clipW: clip.w)
+                probePositions[index] = SIMD4<Float>(worldPosition.x, worldPosition.y, drawnZ, roofZ)
+                index += 1
             }
-
-            let originData = tileOriginData[visibleTileIndex]
-            // v grows from the NORTH edge, the flat render world is y-up:
-            // the same 1 - v as the GPU kernel (TilePointToScreen.metal).
-            let local = SIMD2<Float>(input.uv.x * originData.size,
-                                     (1.0 - input.uv.y) * originData.size)
-            let worldPosition = originData.panRelativeOrigin + local
-            // The roof is in the tile's 4096 units, the extrusion mesh's
-            // scale, so the same tile size that places the point raises it
-            // to the roof the building draws. Where a landmark model stands
-            // in for that building, the drawn model's top is the roof: the
-            // tile's volume is not drawn and may not match the model. Only
-            // there: a model's bounds are a box and can cover the buildings
-            // around it, whose own roofs stay their own.
-            var roofZ = input.roofHeight > 0 && roofCoverage.drawsBuildings(tile: input.tile, uv: input.uv)
-                ? input.roofHeight * originData.size / 4096.0
-                : 0.0
-            if input.roofIsReplaced != 0, modelRoofs.isEmpty == false {
-                roofZ = SceneModelRoof.height(over: worldPosition, roofs: modelRoofs, floor: roofZ)
-            }
-            // The label naming the building draws on its roof; one of the
-            // things inside it draws on the ground, and is only tested for
-            // view at the roof.
-            let drawnZ = input.liftsToRoof != 0 ? roofZ : 0.0
-            let world = SIMD4<Float>(worldPosition.x, worldPosition.y, drawnZ, 1.0)
-            let clip = cameraMatrix * world
-            outputs[index] = screenPointFromClip(clip: clip, viewportSize: viewport)
-            perspectiveScales[index] = perspective.scale(clipW: clip.w)
-            probePositions[index] = SIMD4<Float>(worldPosition.x, worldPosition.y, drawnZ, roofZ)
-        }
+        }}}}}}
     }
 
     private func projectGlobe(snapshot: TilePointToScreenPointSnapshot,

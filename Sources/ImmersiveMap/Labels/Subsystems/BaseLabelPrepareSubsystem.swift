@@ -13,16 +13,21 @@ import simd
 /// The frame's label decisions on the CPU: which base and road labels show,
 /// and how far each has faded.
 ///
-/// The working set (the labels of the frame's tiles) changes only when the
-/// tiles do; everything sized by it is allocated then and reused since. A
-/// frame with a moving camera projects the base labels' anchors, solves the
-/// collisions of base labels and road instances together in one pass
-/// (`LabelCollisionSolver`), advances the fades in place and writes the
-/// runtime meta and the screen positions the label shaders read. A frame
-/// with a still camera and no fade in flight does none of that. There is no
-/// GPU projection of the base labels any more and no visibility cycle spread
-/// over frames: the decision for a pose is made in the frame that renders
-/// the pose.
+/// The working set (the labels of the frame's tiles) is packed when the
+/// tiles change and reused since: the base labels as one span in tile
+/// order (`BaseLabelCache`), the road label instances as another
+/// (`RoadLabelCache`), and the per-label state of a tile that stays is
+/// carried by copying its run. A frame with a moving camera projects the
+/// base labels' anchors, lays the road glyphs along their roads
+/// (`RoadLabelPlacer`), solves the collisions of base labels and road
+/// instances together in one pass (`LabelCollisionSolver`), which also
+/// finds the copies of one feature that several tiles brought and hides
+/// all but the placed one, advances the fades in place and writes the
+/// runtime meta, the screen positions and the glyph placements the label
+/// shaders read. A frame with a still camera and no fade in flight does
+/// none of that. Nothing is asked of the GPU but the occlusion probes: the
+/// decision for a pose is made in the frame that renders the pose, from
+/// the numbers that frame draws.
 final class BaseLabelPrepareSubsystem: RenderSubsystem {
     let name: String = "BaseLabels"
     private static let traceLocale = Locale(identifier: "en_US_POSIX")
@@ -31,9 +36,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     private let roadLabelCache: RoadLabelCache?
     private let baseLabelTraceRecorder: BaseLabelTraceRecorder
     private let tilePointScreenProjector = TilePointScreenProjector()
-    private let screenComputePipelines: TilePointScreenPipelines
-    private let roadPathScreenCompute: TilePointScreenCompute
-    private let roadPlacementCalculator: RoadLabelPlacementCalculator
     private let collisionSolver = LabelCollisionSolver()
     private let baseFade = BaseLabelFadeState()
     private let roadFade = BaseLabelFadeState()
@@ -50,7 +52,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     private let depthDisabledState: MTLDepthStencilState
     private let screenPositionsBufferStore: FrameSlottedDynamicMetalBuffer<ScreenPointOutput>
     private let roadRuntimeMetaBufferStore: FrameSlottedDynamicMetalBuffer<LabelRuntimeMeta>
-    private let fallbackTileOriginDataBufferStore: FrameSlottedDynamicMetalBuffer<FlatTileOriginData>
     private let fadeInSeconds: TimeInterval
     private let fadeOutSeconds: TimeInterval
     private let maxGlyphTurnRadians: Float
@@ -74,12 +75,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     /// reuses both.
     private var projectedCameraFingerprint: Int?
     private var solvedCameraFingerprint: Int?
-    /// Where the frame draws buildings, which the labels standing on roofs
-    /// are lifted inside. It changes as the building tiles arrive or leave
-    /// with the camera still, and a change re-projects and re-solves like
-    /// a camera move.
-    private var roofCoverage = BuildingRoofCoverage.none
-    private var projectedRoofCoverage: BuildingRoofCoverage?
     private var solvedPixelsPerPoint: Float = 0
     /// Counts the base projections: the occlusion probe stamps its answer
     /// with the projection it was asked for, and a frame keeps coming
@@ -110,12 +105,15 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     private var baseGroupIds: [UInt64] = []
     private var baseReservesSpace: [Bool] = []
     private var baseCollisionVisible: [Bool] = []
+    /// The placed copy each label is a duplicate of, from the solve, -1
+    /// for a label that is nobody's copy.
+    private var baseDuplicateOf: [Int32] = []
     private var baseTargetVisible: [Bool] = []
-    private var baseFadeAlphaScratch: [Float] = []
 
     // Index-aligned with the road instance set.
     private var roadCollisionVisible: [Bool] = []
     private var roadTargetVisible: [Bool] = []
+    /// Per road tile record: whether it is near enough for its names.
     private var roadRecordActive: [Bool] = []
     /// The road instances offered to the solver this frame and their glyph
     /// boxes, flat, reused between frames.
@@ -124,16 +122,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     private var roadBoxHalfSizes: [SIMD2<Float>] = []
     private var roadRuntimeMetaScratch: [LabelRuntimeMeta] = []
     private var roadRecordMetaScratch: [LabelRuntimeMeta] = []
+    private var roadPlacerScratch = RoadLabelPlacer.Scratch()
 
     private var latestRoadLabelNearCameraCullCounts = (path: 0, anchor: 0)
-    // Some active records have no GPU placement data yet (fresh tile, return
-    // from culling): the flag keeps frames coming until the data arrives,
-    // otherwise with a stationary camera labels of such tiles would never
-    // appear.
-    private var roadPlacementDataPending = false
-    // (record, slot) pairs whose placement compute is encoded into the current
-    // frame's command buffer; committed to stamps only after commit().
-    private var pendingPlacementStamps: [(record: RoadLabelTileRecord, slot: Int)] = []
 
     private let roadPriorityBase: Int = 1_000_000_000
     private let debugOverlayControls: DebugOverlayControlState?
@@ -142,8 +133,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
          roadLabelCache: RoadLabelCache? = nil,
          baseLabelTraceRecorder: BaseLabelTraceRecorder = BaseLabelTraceRecorder(),
          metalDevice: MTLDevice,
-         screenComputePipelines: TilePointScreenPipelines,
-         roadPlacementPipeline: RoadLabelPlacementPipeline,
          occlusionProbePipeline: LabelOcclusionProbePipeline,
          depthDisabledState: MTLDepthStencilState,
          settings: ImmersiveMapSettings.LabelSettings = ImmersiveMapSettings.default.labels,
@@ -152,9 +141,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         self.roadLabelCache = roadLabelCache
         self.baseLabelTraceRecorder = baseLabelTraceRecorder
         self.debugOverlayControls = debugOverlayControls
-        self.screenComputePipelines = screenComputePipelines
-        self.roadPathScreenCompute = TilePointScreenCompute(metalDevice: metalDevice, pipelines: screenComputePipelines)
-        self.roadPlacementCalculator = RoadLabelPlacementCalculator(pipeline: roadPlacementPipeline)
         self.occlusionProbe = LabelOcclusionProbe(metalDevice: metalDevice, pipeline: occlusionProbePipeline)
         self.hidesBehindBuildings = settings.base.hidesBehindBuildings
         self.localDetailMaximumDistanceMeters = settings.base.localDetailMaximumDistanceMeters
@@ -165,9 +151,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         self.roadRuntimeMetaBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
                                                                          slotsCount: InFlightFramePool.inFlightFramesCount,
                                                                          options: [.storageModeShared])
-        self.fallbackTileOriginDataBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
-                                                                                slotsCount: InFlightFramePool.inFlightFramesCount,
-                                                                                options: [.storageModeShared])
         self.fadeInSeconds = settings.base.fadeInSeconds
         self.fadeOutSeconds = settings.base.fadeOutSeconds
         self.maxGlyphTurnRadians = settings.road.maxGlyphTurnRadians
@@ -194,16 +177,20 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         let projectionChanged = projectionVersionTracker.stage(Int(truncatingIfNeeded: projectionIndexState.sourceIndexVersion))
         let topologyChanged = sourceTilesChanged || projectionChanged
         if topologyChanged {
-            baseLabelCache.synchronize(sourceEntries: sourceEntries,
-                                       tileIndexAllocator: projectionIndexState.tileIndexAllocator,
-                                       trackedTilesChanged: sourceTilesChanged,
-                                       projectionChanged: projectionChanged)
-            roadLabelCache?.synchronize(sourceEntries: sourceEntries,
-                                        tileIndexAllocator: projectionIndexState.tileIndexAllocator,
-                                        trackedTilesChanged: sourceTilesChanged,
-                                        projectionChanged: projectionChanged)
+            let baseChange = baseLabelCache.synchronize(sourceEntries: sourceEntries,
+                                                        tileIndexAllocator: projectionIndexState.tileIndexAllocator,
+                                                        trackedTilesChanged: sourceTilesChanged,
+                                                        projectionChanged: projectionChanged)
+            let roadChange = roadLabelCache?.synchronize(sourceEntries: sourceEntries,
+                                                         tileIndexAllocator: projectionIndexState.tileIndexAllocator,
+                                                         trackedTilesChanged: sourceTilesChanged,
+                                                         projectionChanged: projectionChanged)
             visibilityTopologyGeneration &+= 1
-            rebindWorkingSet(time: frameContext.time)
+            if let baseChange {
+                rebindWorkingSet(base: baseChange, road: roadChange ?? .empty, time: frameContext.time)
+            }
+            projectedCameraFingerprint = nil
+            solvedCameraFingerprint = nil
             if sourceTilesChanged {
                 sourceEntriesVersionTracker.commitPending()
             }
@@ -212,19 +199,16 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             }
         }
 
-        roofCoverage = BuildingRoofCoverage(
-            placeTilesContext: frameContext.sharedState.tilePlacementState.buildingPlaceTilesContext)
         modelRoofs = frameContext.sharedState.sceneModelState.roofs
         let minimumScale = debugOverlayControls?.labelPerspectiveMinimum() ?? perspectiveMinimumScale
         let cameraChanged = projectedCameraFingerprint != latestCameraFingerprint
-            || projectedRoofCoverage != roofCoverage
             || projectedModelRoofs != modelRoofs
             || projectedPerspectiveMinimumScale != minimumScale
         if cameraChanged || topologyChanged {
             projectBaseLabels(frameContext: frameContext, minimumScale: minimumScale)
+            placeRoadLabels(frameContext: frameContext, projectionIndexState: projectionIndexState)
             projectedPerspectiveMinimumScale = minimumScale
             projectedCameraFingerprint = latestCameraFingerprint
-            projectedRoofCoverage = roofCoverage
             projectedModelRoofs = modelRoofs
             projectionGeneration &+= 1
         }
@@ -236,7 +220,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         let probeActive = hidesBehindBuildings
             && frameContext.renderSurfaceMode == .flat
             && frameContext.screenSpaceProjectionMode == .flat
-            && baseLabelCache.activeLabelSpanCount > 0
+            && baseLabelCache.labelInputsCount > 0
         // The local detail keeps to the tiles around the look-at point and
         // to the distance from the camera, which the debug panel can move
         // with the camera still: resolved on either change.
@@ -255,13 +239,12 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         if pixelsPerPoint != solvedPixelsPerPoint {
             rescaleBaseHalfSizes(pixelsPerPoint: pixelsPerPoint)
         }
-        // The solve depends on the pose, the set, the road data the GPU
-        // hands back, the buildings' answer, and the fades (a label fading
-        // out keeps its space): a frame with none of them changing keeps
-        // the previous decision.
+        // The solve depends on the pose, the set, the buildings' answer,
+        // and the fades (a label fading out keeps its space): a frame with
+        // none of them changing keeps the previous decision.
         let fadesActive = frameContext.sharedState.baseLabelState.hasActiveFadeAnimations
             || frameContext.sharedState.roadLabelState.hasActiveFadeAnimations
-        let needsSolve = cameraChanged || topologyChanged || roadPlacementDataPending || fadesActive || localDetailChanged
+        let needsSolve = cameraChanged || topologyChanged || fadesActive || localDetailChanged
             || occlusionChanged || solvedCameraFingerprint == nil
         if needsSolve {
             solveCollisions(frameContext: frameContext)
@@ -299,7 +282,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         let occlusionAnswerPending = occlusionProbe.awaitsAnswer(projectionGeneration: projectionGeneration)
         publishBaseLabelState(frameContext: frameContext,
                               hasActiveFadeAnimations: baseFadesActive,
-                              needsFollowUpFrame: roadPlacementDataPending || occlusionAnswerPending)
+                              needsFollowUpFrame: occlusionAnswerPending)
 
         let roadState = buildRoadLabelState(frameContext: frameContext)
         frameContext.sharedState.roadLabelState = roadState
@@ -313,12 +296,10 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                      value: latestRoadLabelNearCameraCullCounts.anchor)
     }
 
+    /// The occlusion probes for the frame's projection, into the slot the
+    /// world pass draws them from.
     func prepareGPU(frameContext: FrameContext, resourceRegistry _: RenderResourceRegistry) {
-        // Stamps from the previous frame that never reached frameCommitted (the
-        // frame was dropped without commit) - the compute never ran, so they
-        // must not be committed.
-        pendingPlacementStamps.removeAll(keepingCapacity: true)
-        guard let commandBuffer = frameContext.commandBuffer else {
+        guard frameContext.commandBuffer != nil else {
             occlusionProbe.prepareGPU(slot: frameContext.frameSlotIndex,
                                       probes: [],
                                       screenPoints: [],
@@ -331,118 +312,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                   screenPoints: baseScreenPoints,
                                   projectionGeneration: projectionGeneration,
                                   topologyGeneration: visibilityTopologyGeneration)
-        let tileOriginDataBuffer = resolveTileOriginDataBuffer(frameContext: frameContext)
-
-        // Road records are gathered up front: all point-to-screen dispatches of
-        // the frame (base labels + road paths) go into one compute encoder, all
-        // placement dispatches into a second, instead of a pair of encoders per record.
-        struct RoadPathDispatch {
-            let pointCount: Int
-            let inputBuffer: MTLBuffer
-            let tileSlotVisibleTileIndicesBuffer: MTLBuffer
-            let outputBuffer: MTLBuffer
-        }
-        var roadPathDispatches: [RoadPathDispatch] = []
-        var placementDispatches: [RoadLabelPlacementCalculator.RecordDispatch] = []
-        var drawBatches: [DrawRoadLabels] = []
-        var hasRoadRecords = false
-
-        if let roadLabelCache, roadLabelCache.orderedTileRecords.isEmpty == false {
-            hasRoadRecords = true
-            let staticBatches = frameContext.sharedState.roadLabelState.drawLabels
-            let records = roadLabelCache.orderedTileRecords
-            drawBatches.reserveCapacity(records.count)
-
-            for (index, record) in records.enumerated() {
-                if index < roadRecordActive.count, roadRecordActive[index] == false {
-                    continue
-                }
-
-                guard record.pathPointCount > 0,
-                      record.glyphCount > 0,
-                      let pathInputsBuffer = record.pathInputsBuffer,
-                      let pathRangesBuffer = record.pathRangesBuffer,
-                      let anchorsBuffer = record.anchorsBuffer,
-                      let glyphInputsBuffer = record.glyphInputsBuffer,
-                      let collisionInputsBuffer = record.collisionInputsBuffer else {
-                    continue
-                }
-
-                let pathPointsBuffer = record.pathPointScreenBuffer(slot: frameContext.frameSlotIndex)
-                roadPathDispatches.append(RoadPathDispatch(
-                    pointCount: record.pathPointCount,
-                    inputBuffer: pathInputsBuffer,
-                    tileSlotVisibleTileIndicesBuffer: record.visibleTileIndexBuffer,
-                    outputBuffer: pathPointsBuffer
-                ))
-
-                let placementBuffer = record.placementBuffer(slot: frameContext.frameSlotIndex)
-                let glyphScreenPointsBuffer = record.glyphScreenPointBuffer(slot: frameContext.frameSlotIndex)
-                let collisionAabbBuffer = record.collisionAabbBuffer(slot: frameContext.frameSlotIndex)
-                placementDispatches.append(RoadLabelPlacementCalculator.RecordDispatch(
-                    pathPointsBuffer: pathPointsBuffer,
-                    pathRangesBuffer: pathRangesBuffer,
-                    anchorsBuffer: anchorsBuffer,
-                    glyphInputsBuffer: glyphInputsBuffer,
-                    placementsBuffer: placementBuffer,
-                    screenPointsBuffer: glyphScreenPointsBuffer,
-                    collisionInputsBuffer: collisionInputsBuffer,
-                    collisionAabbBuffer: collisionAabbBuffer,
-                    glyphCount: record.glyphCount
-                ))
-                // The stamp is committed only in frameCommitted(): the frame may
-                // be dropped after prepareGPU (no drawable), and the encoded
-                // compute would never execute.
-                pendingPlacementStamps.append((record: record, slot: frameContext.frameSlotIndex))
-
-                if index < staticBatches.count {
-                    let existingBatch = staticBatches[index]
-                    drawBatches.append(DrawRoadLabels(placementBuffer: placementBuffer,
-                                                      glyphInputBuffer: glyphInputsBuffer,
-                                                      runtimeMetaBuffer: existingBatch.runtimeMetaBuffer,
-                                                      localGlyphVertices: record.localGlyphVertices,
-                                                      glyphCount: record.glyphCount,
-                                                      labelStyle: record.labelStyle))
-                }
-            }
-        }
-
-        // Encoder 1: the road paths' point-to-screen computations (the base
-        // labels are projected on the CPU in update, see projectBaseLabels).
-        // Pass constants (PSO, camera, screenParams, origin buffer) are
-        // bound once; dispatches attach only their own buffers.
-        if roadPathDispatches.isEmpty == false,
-           let encoder = MetalDebugComputePass.begin(commandBuffer: commandBuffer,
-                                                     label: TilePointScreenCompute.passLabel(for: frameContext)) {
-            if TilePointScreenCompute.beginPass(encoder: encoder,
-                                                frameContext: frameContext,
-                                                pipelines: screenComputePipelines,
-                                                tileOriginDataBuffer: tileOriginDataBuffer) {
-                for pathDispatch in roadPathDispatches {
-                    roadPathScreenCompute.encodeDispatch(encoder: encoder,
-                                                         frameContext: frameContext,
-                                                         pointCount: pathDispatch.pointCount,
-                                                         inputBuffer: pathDispatch.inputBuffer,
-                                                         tileSlotVisibleTileIndicesBuffer: pathDispatch.tileSlotVisibleTileIndicesBuffer,
-                                                         outputBuffer: pathDispatch.outputBuffer)
-                }
-            }
-            MetalDebugComputePass.end(commandBuffer: commandBuffer, encoder: encoder)
-        }
-
-        guard hasRoadRecords else {
-            return
-        }
-
-        // Encoder 2: glyph placement for all records of the frame.
-        roadPlacementCalculator.run(commandBuffer: commandBuffer,
-                                    screenScale: frameContext.screenScale,
-                                    dispatches: placementDispatches)
-
-        frameContext.sharedState.roadLabelState.drawLabels = drawBatches
-        frameContext.sharedState.roadLabelState.placementBuffer = drawBatches.first?.placementBuffer
-        frameContext.sharedState.roadLabelState.glyphInputBuffer = drawBatches.first?.glyphInputBuffer
-        frameContext.sharedState.roadLabelState.runtimeMetaBuffer = drawBatches.first?.runtimeMetaBuffer
     }
 
     /// The occlusion probes go into the world pass after the buildings and
@@ -457,14 +326,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                               depthDisabledState: depthDisabledState)
     }
 
-    // The frame's command buffer is committed - the encoded placement compute
-    // and the occlusion probes are guaranteed to execute, so the data stamps
-    // can be committed.
+    /// The frame's command buffer is committed: the encoded occlusion
+    /// probes are guaranteed to run, so their answer can be waited for.
     func frameCommitted() {
-        for pending in pendingPlacementStamps {
-            pending.record.markPlacementEncoded(slot: pending.slot)
-        }
-        pendingPlacementStamps.removeAll(keepingCapacity: true)
         occlusionProbe.frameCommitted()
     }
 
@@ -482,11 +346,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         baseFade.reset()
         roadFade.reset()
         occlusionProbe.reset()
-        baseProbePositions.removeAll(keepingCapacity: false)
         roadDrawLabels.removeAll(keepingCapacity: false)
         latestRoadLabelNearCameraCullCounts = (path: 0, anchor: 0)
-        roadPlacementDataPending = false
-        pendingPlacementStamps.removeAll(keepingCapacity: false)
         sourceEntriesVersionTracker.invalidate()
         projectionVersionTracker.invalidate()
         projectedCameraFingerprint = nil
@@ -498,6 +359,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         baseScreenPoints.removeAll(keepingCapacity: false)
         baseHorizonVisible.removeAll(keepingCapacity: false)
         baseLocalSuppressed.removeAll(keepingCapacity: false)
+        baseProbePositions.removeAll(keepingCapacity: false)
         baseCenters.removeAll(keepingCapacity: false)
         baseHalfSizesPx.removeAll(keepingCapacity: false)
         baseScaledHalfSizesPx.removeAll(keepingCapacity: false)
@@ -505,6 +367,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         baseGroupIds.removeAll(keepingCapacity: false)
         baseReservesSpace.removeAll(keepingCapacity: false)
         baseCollisionVisible.removeAll(keepingCapacity: false)
+        baseDuplicateOf.removeAll(keepingCapacity: false)
         baseTargetVisible.removeAll(keepingCapacity: false)
         roadCollisionVisible.removeAll(keepingCapacity: false)
         roadTargetVisible.removeAll(keepingCapacity: false)
@@ -517,17 +380,30 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
 
     // MARK: - The working set
 
-    /// Sizes everything index-aligned with the new base and road sets: the
-    /// one place the frame path allocates, and it runs only when the tiles
-    /// change.
-    private func rebindWorkingSet(time: TimeInterval) {
-        let inputs = baseLabelCache.presentationInputs
+    /// Sizes everything index-aligned with the new base and road sets and
+    /// carries the fades and occlusion answers to their new places, the
+    /// surviving tiles' by run and the swapped tiles' lit labels by key:
+    /// the one place the frame path allocates, and it runs only when the
+    /// tiles change.
+    private func rebindWorkingSet(base: LabelWorkingSetChange, road: LabelWorkingSetChange, time: TimeInterval) {
+        // A feature whose tile was swapped for another in this change (a
+        // zoom step, a tile boundary in a pan) keeps its fade: the lit
+        // labels of the tiles that left seed the same keys in the tiles
+        // that arrived. The road instances have no such case, their keys
+        // hold their tile.
+        let base = base.seeded(oldAlphas: baseFade.currentAlphas,
+                               threshold: BaseLabelVisibilityResolver.activeAlphaThreshold)
         let candidates = baseLabelCache.labelCollisionAABBInputs
-        let count = inputs.count
-        let keys = inputs.map { $0.isValid ? $0.labelKey : 0 }
-        baseFade.rebind(keys: keys, time: time)
-        occlusionProbe.rebind(keys: keys)
-        collisionSolver.rebindBase(ranks: candidates.map(LabelCollisionRank.init(candidate:)))
+        let tileOrders = baseLabelCache.labelTileOrders
+        let count = base.count
+        baseFade.rebind(change: base, time: time)
+        occlusionProbe.rebind(change: base)
+        var ranks: [LabelCollisionRank] = []
+        ranks.reserveCapacity(count)
+        for index in candidates.indices {
+            ranks.append(LabelCollisionRank(candidate: candidates[index], tileOrder: tileOrders[index]))
+        }
+        collisionSolver.rebindBase(ranks: ranks)
         baseGroupIds = candidates.map(\.groupId)
         baseHalfSizesPx = candidates.map { $0.halfSize + collisionMarginPoints }
         baseScaledHalfSizesPx = baseHalfSizesPx
@@ -540,44 +416,55 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         baseCenters = Array(repeating: .zero, count: count)
         baseReservesSpace = Array(repeating: false, count: count)
         baseCollisionVisible = Array(repeating: false, count: count)
+        baseDuplicateOf = Array(repeating: -1, count: count)
         baseTargetVisible = Array(repeating: false, count: count)
 
-        let roadCount = roadLabelCache?.instanceKeys.count ?? 0
-        roadFade.rebind(keys: roadLabelCache?.instanceKeys ?? [], time: time)
-        roadCollisionVisible = Array(repeating: false, count: roadCount)
-        roadTargetVisible = Array(repeating: false, count: roadCount)
+        roadFade.rebind(change: road, time: time)
+        roadCollisionVisible = Array(repeating: false, count: road.count)
+        roadTargetVisible = Array(repeating: false, count: road.count)
         roadRecordActive = Array(repeating: true, count: roadLabelCache?.orderedTileRecords.count ?? 0)
-        projectedCameraFingerprint = nil
-        solvedCameraFingerprint = nil
     }
 
     private func rescaleBaseHalfSizes(pixelsPerPoint: Float) {
         let candidates = baseLabelCache.labelCollisionAABBInputs
+        let margin = collisionMarginPoints
         let count = min(candidates.count, baseHalfSizesPx.count)
-        for index in 0..<count {
-            baseHalfSizesPx[index] = (candidates[index].halfSize + collisionMarginPoints) * pixelsPerPoint
+        candidates.withUnsafeBufferPointer { candidates in
+            baseHalfSizesPx.withUnsafeMutableBufferPointer { halfSizes in
+                var index = 0
+                while index < count {
+                    halfSizes[index] = (candidates[index].halfSize + margin) * pixelsPerPoint
+                    index += 1
+                }
+            }
         }
     }
 
     /// The base anchors on screen for this camera, written in place; the
     /// same array is what the label shaders read, uploaded per frame slot.
     private func projectBaseLabels(frameContext: FrameContext, minimumScale: Float) {
-        guard baseLabelCache.activeLabelSpanCount > 0 else {
+        guard baseLabelCache.labelInputsCount > 0 else {
             return
         }
         let projectionIndexState = frameContext.sharedState.tileProjectionIndexState
         tilePointScreenProjector.projectWithHorizonVisibility(snapshot: baseLabelCache.tilePointSnapshot,
                                                               frameContext: frameContext,
                                                               tileOriginData: projectionIndexState.tileOriginData,
-                                                              roofCoverage: roofCoverage,
                                                               modelRoofs: modelRoofs,
                                                               minimumPerspectiveScale: minimumScale,
                                                               screenPoints: &baseScreenPoints,
                                                               horizonVisibility: &baseHorizonVisible,
                                                               perspectiveScales: &basePerspectiveScales,
                                                               probePositions: &baseProbePositions)
-        for index in baseScreenPoints.indices {
-            baseCenters[index] = baseScreenPoints[index].position
+        let count = min(baseScreenPoints.count, baseCenters.count)
+        baseScreenPoints.withUnsafeBufferPointer { points in
+            baseCenters.withUnsafeMutableBufferPointer { centers in
+                var index = 0
+                while index < count {
+                    centers[index] = points[index].position
+                    index += 1
+                }
+            }
         }
         baseLabelCache.updatePerspectiveScales(basePerspectiveScales)
     }
@@ -609,41 +496,144 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                             into: &baseLocalSuppressed)
     }
 
+    // MARK: - Road placement
+
+    /// Lays every near road tile's glyphs along their roads for this
+    /// camera, on the flat map. A tile too far or too flat on screen for
+    /// its names (`RoadLabelNearCameraFilter`) keeps its last placement
+    /// and offers nothing to the solve, so its names fade out where they
+    /// were.
+    private func placeRoadLabels(frameContext: FrameContext, projectionIndexState: TileProjectionIndexState) {
+        guard let roadLabelCache,
+              frameContext.renderSurfaceMode == .flat,
+              roadLabelCache.orderedTileRecords.isEmpty == false else {
+            latestRoadLabelNearCameraCullCounts = (path: 0, anchor: 0)
+            return
+        }
+        let records = roadLabelCache.orderedTileRecords
+        if roadRecordActive.count != records.count {
+            roadRecordActive = Array(repeating: true, count: records.count)
+        }
+        let viewportSize = SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height))
+        let cameraMatrix = frameContext.cameraMatrices.projectionView
+        let pixelsPerPoint = frameContext.screenScale.pixelsPerPoint
+        let tileOriginData = projectionIndexState.tileOriginData
+        var culledPathCount = 0
+
+        for (recordIndex, record) in records.enumerated() {
+            let tileClipCorners = projectRoadRecordTileCorners(record: record,
+                                                               frameContext: frameContext,
+                                                               tileOriginData: tileOriginData)
+            guard RoadLabelNearCameraFilter.shouldKeepTile(clipCorners: tileClipCorners,
+                                                           viewportWidth: viewportSize.x,
+                                                           viewportHeight: viewportSize.y,
+                                                           screenScale: frameContext.screenScale,
+                                                           underzoomLevels: max(0, frameContext.visibleContent.tileZoomLevel - record.ownerKey.z)) else {
+                culledPathCount += record.pathCount
+                roadRecordActive[recordIndex] = false
+                continue
+            }
+            roadRecordActive[recordIndex] = true
+            let originIndex = Int(record.visibleTileIndex)
+            guard record.glyphCount > 0, originIndex < tileOriginData.count else {
+                record.placement.hideAll()
+                continue
+            }
+            RoadLabelPlacer.place(geometry: record.geometry,
+                                  origin: tileOriginData[originIndex],
+                                  cameraMatrix: cameraMatrix,
+                                  viewportSize: viewportSize,
+                                  pixelsPerPoint: pixelsPerPoint,
+                                  scratch: &roadPlacerScratch,
+                                  output: &record.placement)
+        }
+        latestRoadLabelNearCameraCullCounts = (path: culledPathCount, anchor: 0)
+    }
+
+    private func projectRoadRecordTileCorners(record: RoadLabelTileRecord,
+                                              frameContext: FrameContext,
+                                              tileOriginData: [FlatTileOriginData]) -> [SIMD4<Float>] {
+        let snapshot = TilePointToScreenPointSnapshot(pointInputs: RoadLabelNearCameraFilter.makeTileCornerInputs(tile: record.ownerKey),
+                                                      tileSlotVisibleTileIndices: [record.visibleTileIndex])
+        return tilePointScreenProjector.projectFlatClipSpacePoints(snapshot: snapshot,
+                                                                   frameContext: frameContext,
+                                                                   tileOriginData: tileOriginData)
+    }
+
+    /// The road instances for the solve from the frame's placement: an
+    /// instance whose glyphs all sit on the road, none past an end, none
+    /// turning too sharply against its neighbour, offered with its glyph
+    /// boxes as one; the others get no decision and stay hidden.
+    private func prepareRoadInstances(frameContext: FrameContext) {
+        roadItems.removeAll(keepingCapacity: true)
+        roadBoxCenters.removeAll(keepingCapacity: true)
+        roadBoxHalfSizes.removeAll(keepingCapacity: true)
+        guard let roadLabelCache,
+              frameContext.renderSurfaceMode == .flat,
+              roadLabelCache.orderedTileRecords.isEmpty == false else {
+            return
+        }
+        for (recordIndex, record) in roadLabelCache.orderedTileRecords.enumerated() {
+            guard recordIndex < roadRecordActive.count, roadRecordActive[recordIndex] else {
+                continue
+            }
+            let placement = record.placement
+            let glyphRanges = record.instanceGlyphRanges
+            for localIndex in record.instanceKeys.indices {
+                let boxStart = roadBoxCenters.count
+                guard RoadLabelPlacer.appendInstanceBoxes(glyphRange: glyphRanges[localIndex],
+                                                          output: placement,
+                                                          maxGlyphTurnRadians: maxGlyphTurnRadians,
+                                                          centers: &roadBoxCenters,
+                                                          halfSizes: &roadBoxHalfSizes) else {
+                    continue
+                }
+                let instanceKey = record.instanceKeys[localIndex]
+                let anchorOrdinal = Int(record.instanceAnchorOrdinals[localIndex])
+                roadItems.append(LabelCollisionRoadItem(
+                    rank: LabelCollisionRank(priority: roadPriorityBase,
+                                             secondaryPriority: record.instanceSourcePriorities[localIndex] * 1024 + anchorOrdinal,
+                                             sortPriority: anchorOrdinal,
+                                             tileOrder: recordIndex,
+                                             stableOrderKey: instanceKey),
+                    groupId: instanceKey,
+                    boxRange: boxStart..<roadBoxCenters.count,
+                    targetIndex: record.instanceStart + localIndex))
+            }
+        }
+    }
+
     // MARK: - Collisions
 
     private func solveCollisions(frameContext: FrameContext) {
         let cameraZoom = Float(frameContext.zoom)
-        let candidates = baseLabelCache.labelCollisionAABBInputs
-        let inputs = baseLabelCache.presentationInputs
-        let alphas = baseFade.currentAlphas
-        let occluded = occlusionProbe.occluded
-        let count = min(candidates.count, min(baseScreenPoints.count, baseReservesSpace.count))
-        for index in 0..<count {
-            baseReservesSpace[index] = BaseLabelVisibilityResolver.reservesSpace(
-                candidateEnabled: candidates[index].isEnabled,
-                screenVisible: baseScreenPoints[index].visible != 0,
-                horizonVisible: index < baseHorizonVisible.count && baseHorizonVisible[index],
-                occluded: index < occluded.count && occluded[index],
-                localSuppressed: index < baseLocalSuppressed.count && baseLocalSuppressed[index],
-                currentAlpha: index < alphas.count ? alphas[index] : 0,
-                minCameraZoom: index < inputs.count ? inputs[index].minCameraZoom : 0,
-                cameraZoom: cameraZoom)
-        }
+        BaseLabelVisibilityResolver.reservesSpace(inputs: baseLabelCache.presentationInputs,
+                                                  screenPoints: baseScreenPoints,
+                                                  horizonVisibility: baseHorizonVisible,
+                                                  occluded: occlusionProbe.occluded,
+                                                  localSuppressed: baseLocalSuppressed,
+                                                  currentAlphas: baseFade.currentAlphas,
+                                                  cameraZoom: cameraZoom,
+                                                  into: &baseReservesSpace)
 
-        prepareRoadInstances(frameContext: frameContext,
-                             projectionIndexState: frameContext.sharedState.tileProjectionIndexState)
-        for index in roadCollisionVisible.indices {
-            roadCollisionVisible[index] = false
+        prepareRoadInstances(frameContext: frameContext)
+        roadCollisionVisible.withUnsafeMutableBufferPointer { visible in
+            visible.update(repeating: false)
         }
 
         // The box shrinks with the label, the spacing between two labels
         // does not: the margin is added after the scale.
-        let pixelsPerPoint = frameContext.screenScale.pixelsPerPoint
-        let marginPx = SIMD2<Float>(repeating: collisionMarginPoints * pixelsPerPoint)
+        let marginPx = SIMD2<Float>(repeating: collisionMarginPoints * frameContext.screenScale.pixelsPerPoint)
         let scaledCount = min(baseHalfSizesPx.count, min(basePerspectiveScales.count, baseScaledHalfSizesPx.count))
-        for index in 0..<scaledCount {
-            baseScaledHalfSizesPx[index] = (baseHalfSizesPx[index] - marginPx) * basePerspectiveScales[index] + marginPx
-        }
+        baseHalfSizesPx.withUnsafeBufferPointer { halfSizes in
+        basePerspectiveScales.withUnsafeBufferPointer { scales in
+        baseScaledHalfSizesPx.withUnsafeMutableBufferPointer { scaled in
+            var index = 0
+            while index < scaledCount {
+                scaled[index] = (halfSizes[index] - marginPx) * scales[index] + marginPx
+                index += 1
+            }
+        }}}
         collisionSolver.solve(viewportSize: SIMD2<Float>(Float(frameContext.drawSize.width),
                                                          Float(frameContext.drawSize.height)),
                               cellSizePx: frameContext.screenScale.pixels(collisionGridCellSizePoints),
@@ -655,7 +645,14 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                               roadCenters: roadBoxCenters,
                               roadHalfSizes: roadBoxHalfSizes,
                               baseVisible: &baseCollisionVisible,
+                              baseDuplicateOf: &baseDuplicateOf,
                               roadVisible: &roadCollisionVisible)
+
+        // A copy of a placed label hands its fade to the placed one and
+        // goes out at once: one feature draws once.
+        for index in baseDuplicateOf.indices where baseDuplicateOf[index] >= 0 {
+            baseFade.transfer(from: index, to: Int(baseDuplicateOf[index]))
+        }
     }
 
     private func makeVisibilityCameraFingerprint(frameContext: FrameContext) -> Int {
@@ -681,230 +678,16 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         return hasher.finalize()
     }
 
-    // Road collision boxes are read from the placement compute's GPU
-    // buffers: the GPU already projects the paths, picks the orientation, and
-    // writes the rotated glyph AABBs for drawing - a CPU reprojection would
-    // duplicate the same work and could diverge from the actually drawn glyphs.
-    // The current frame's slot is read BEFORE prepareGPU and holds data from
-    // the completed frame N-slots back, a few frames of lag on the road
-    // decisions. Fills `roadItems` and the road box arrays in place; an
-    // instance without data this frame is not offered and stays hidden
-    // until its data arrives (`roadPlacementDataPending` keeps frames
-    // coming).
-    private func prepareRoadInstances(frameContext: FrameContext,
-                                      projectionIndexState: TileProjectionIndexState) {
-        roadItems.removeAll(keepingCapacity: true)
-        roadBoxCenters.removeAll(keepingCapacity: true)
-        roadBoxHalfSizes.removeAll(keepingCapacity: true)
-        guard let roadLabelCache,
-              frameContext.renderSurfaceMode == .flat,
-              roadLabelCache.orderedTileRecords.isEmpty == false else {
-            latestRoadLabelNearCameraCullCounts = (path: 0, anchor: 0)
-            roadPlacementDataPending = false
-            for index in roadRecordActive.indices {
-                roadRecordActive[index] = true
-            }
-            return
-        }
-
-        var nearCameraCulledPathCount = 0
-        var hasRecordsAwaitingPlacementData = false
-        if roadRecordActive.count != roadLabelCache.orderedTileRecords.count {
-            roadRecordActive = Array(repeating: true, count: roadLabelCache.orderedTileRecords.count)
-        }
-
-        let viewportWidth = Float(frameContext.drawSize.width)
-        let viewportHeight = Float(frameContext.drawSize.height)
-        let slot = frameContext.frameSlotIndex
-
-        for (recordIndex, record) in roadLabelCache.orderedTileRecords.enumerated() {
-            let tileClipCorners = projectRoadRecordTileCorners(record: record,
-                                                               frameContext: frameContext,
-                                                               projectionIndexState: projectionIndexState)
-            guard RoadLabelNearCameraFilter.shouldKeepTile(clipCorners: tileClipCorners,
-                                                           viewportWidth: viewportWidth,
-                                                           viewportHeight: viewportHeight,
-                                                           screenScale: frameContext.screenScale,
-                                                           underzoomLevels: max(0, frameContext.visibleContent.tileZoomLevel - record.ownerKey.z)) else {
-                nearCameraCulledPathCount += record.entries.count
-                roadRecordActive[recordIndex] = false
-                // prepareGPU will stop encoding this record's compute and the
-                // buffers will freeze - reset the stamps so that after the
-                // record returns we don't read arbitrarily stale positions.
-                record.invalidatePlacementData()
-                continue
-            }
-
-            // Record activity drives the GPU compute in prepareGPU and does not
-            // depend on readback - otherwise a new record would never receive
-            // any data.
-            roadRecordActive[recordIndex] = true
-
-            guard record.canEncodePlacements else {
-                continue
-            }
-            guard record.hasPlacementData(slot: slot) else {
-                hasRecordsAwaitingPlacementData = true
-                continue
-            }
-
-            let placementsBuffer = record.placementBuffer(slot: slot)
-            let collisionAabbBuffer = record.collisionAabbBuffer(slot: slot)
-            let placements = UnsafeBufferPointer(start: placementsBuffer.contents()
-                                                     .assumingMemoryBound(to: RoadGlyphPlacementOutput.self),
-                                                 count: record.glyphCount)
-            let collisionAabbs = UnsafeBufferPointer(start: collisionAabbBuffer.contents()
-                                                         .assumingMemoryBound(to: RoadGlyphCollisionOutput.self),
-                                                     count: record.glyphCount)
-
-            for localIndex in record.instanceKeys.indices {
-                let instanceKey = record.instanceKeys[localIndex]
-                let secondaryPriority = record.instanceSourcePriorities[localIndex] * 1024
-                    + Int(record.instanceAnchorOrdinals[localIndex])
-                let boxStart = roadBoxCenters.count
-                guard Self.appendRoadInstanceBoxes(glyphRange: record.instanceGlyphRanges[localIndex],
-                                                   placements: placements,
-                                                   collisionAabbs: collisionAabbs,
-                                                   maxGlyphTurnRadians: maxGlyphTurnRadians,
-                                                   centers: &roadBoxCenters,
-                                                   halfSizes: &roadBoxHalfSizes) else {
-                    roadBoxCenters.removeSubrange(boxStart...)
-                    roadBoxHalfSizes.removeSubrange(boxStart...)
-                    continue
-                }
-                roadItems.append(LabelCollisionRoadItem(
-                    rank: LabelCollisionRank(priority: roadPriorityBase,
-                                             secondaryPriority: secondaryPriority,
-                                             sortPriority: Int(record.instanceAnchorOrdinals[localIndex]),
-                                             stableOrderKey: instanceKey),
-                    groupId: instanceKey,
-                    boxRange: boxStart..<roadBoxCenters.count,
-                    targetIndex: record.instanceStart + localIndex))
-            }
-        }
-
-        latestRoadLabelNearCameraCullCounts = (path: nearCameraCulledPathCount, anchor: 0)
-        roadPlacementDataPending = hasRecordsAwaitingPlacementData
-    }
-
-    /// Appends the glyph boxes of one road instance from the GPU's per-glyph
-    /// outputs. Returns false when the instance gets no decision: an
-    /// invisible glyph (path behind the camera / shorter than the label), a
-    /// glyph extrapolated beyond the path ends, or exceeding the turn between
-    /// adjacent glyphs (maxGlyphTurnRadians).
-    static func appendRoadInstanceBoxes(glyphRange: Range<Int>,
-                                        placements: UnsafeBufferPointer<RoadGlyphPlacementOutput>,
-                                        collisionAabbs: UnsafeBufferPointer<RoadGlyphCollisionOutput>,
-                                        maxGlyphTurnRadians: Float,
-                                        centers: inout [SIMD2<Float>],
-                                        halfSizes: inout [SIMD2<Float>]) -> Bool {
-        guard glyphRange.isEmpty == false,
-              glyphRange.lowerBound >= 0,
-              glyphRange.upperBound <= placements.count,
-              glyphRange.upperBound <= collisionAabbs.count else {
-            return false
-        }
-        var previousAngle: Float?
-        for glyphIndex in glyphRange {
-            let placement = placements[glyphIndex]
-            guard placement.visible != 0,
-                  placement.extrapolated == 0 else {
-                return false
-            }
-            if let previousAngle,
-               abs(Self.normalizedAngleDelta(lhs: previousAngle, rhs: placement.angle)) > maxGlyphTurnRadians {
-                return false
-            }
-            previousAngle = placement.angle
-            centers.append(placement.position)
-            halfSizes.append(collisionAabbs[glyphIndex].halfSizeAABB)
-        }
-        return true
-    }
-
-    // Instance candidates from the GPU's per-glyph outputs. nil - no decision
-    // is made for the instance: an invisible glyph (path behind the camera /
-    // shorter than the label), a glyph extrapolated beyond the path ends, or
-    // exceeding the turn between adjacent glyphs (maxGlyphTurnRadians) - the
-    // same rules as the old CPU path, but using the angles of the actually
-    // drawn glyphs.
-    static func makeRoadInstanceCandidates(instanceKey: UInt64,
-                                           secondaryPriority: Int,
-                                           anchorOrdinal: UInt32,
-                                           glyphRange: Range<Int>,
-                                           placements: UnsafeBufferPointer<RoadGlyphPlacementOutput>,
-                                           collisionAabbs: UnsafeBufferPointer<RoadGlyphCollisionOutput>,
-                                           roadPriorityBase: Int,
-                                           maxGlyphTurnRadians: Float) -> [ScreenCollisionCandidate]? {
-        guard glyphRange.isEmpty == false,
-              glyphRange.lowerBound >= 0,
-              glyphRange.upperBound <= placements.count,
-              glyphRange.upperBound <= collisionAabbs.count else {
-            return nil
-        }
-
-        var collisionCandidates: [ScreenCollisionCandidate] = []
-        collisionCandidates.reserveCapacity(glyphRange.count)
-        var previousAngle: Float?
-        for glyphIndex in glyphRange {
-            let placement = placements[glyphIndex]
-            guard placement.visible != 0,
-                  placement.extrapolated == 0 else {
-                return nil
-            }
-            if let previousAngle,
-               abs(Self.normalizedAngleDelta(lhs: previousAngle, rhs: placement.angle)) > maxGlyphTurnRadians {
-                return nil
-            }
-            previousAngle = placement.angle
-            collisionCandidates.append(ScreenCollisionCandidate(position: placement.position,
-                                                                halfSize: collisionAabbs[glyphIndex].halfSizeAABB,
-                                                                priority: roadPriorityBase,
-                                                                secondaryPriority: secondaryPriority,
-                                                                sortPriority: Int(anchorOrdinal),
-                                                                stableOrderKey: instanceKey,
-                                                                groupId: instanceKey,
-                                                                isEnabled: true))
-        }
-        return collisionCandidates
-    }
-
-    private static func normalizedAngleDelta(lhs: Float, rhs: Float) -> Float {
-        var delta = rhs - lhs
-        while delta > .pi {
-            delta -= 2 * .pi
-        }
-        while delta < -.pi {
-            delta += 2 * .pi
-        }
-        return delta
-    }
-
-    private func appendRoadRecordInstanceIndices(record: RoadLabelTileRecord,
-                                                 into indices: inout [Int]) {
-        guard record.instanceKeys.isEmpty == false else {
-            return
-        }
-
-        indices.append(contentsOf: record.instanceStart..<(record.instanceStart + record.instanceKeys.count))
-    }
-
-    private func projectRoadRecordTileCorners(record: RoadLabelTileRecord,
-                                              frameContext: FrameContext,
-                                              projectionIndexState: TileProjectionIndexState) -> [SIMD4<Float>] {
-        let snapshot = TilePointToScreenPointSnapshot(pointInputs: RoadLabelNearCameraFilter.makeTileCornerInputs(tile: record.ownerKey),
-                                                      tileSlotVisibleTileIndices: [record.visibleTileIndex])
-        return tilePointScreenProjector.projectFlatClipSpacePoints(snapshot: snapshot,
-                                                                   frameContext: frameContext,
-                                                                   tileOriginData: projectionIndexState.tileOriginData)
-    }
-
     // MARK: - Road label state
 
+    /// Advances the road fades and hands the frame's placements and fades
+    /// to the road text shader: every record's glyph placement and
+    /// instance meta into the frame's slot, one draw batch per record.
     private func buildRoadLabelState(frameContext: FrameContext) -> RoadLabelState {
         guard let roadLabelCache,
               frameContext.renderSurfaceMode == .flat,
               roadLabelCache.instanceKeys.isEmpty == false else {
+            roadDrawLabels = []
             return .empty
         }
 
@@ -912,8 +695,19 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         if roadTargetVisible.count != instanceCount {
             roadTargetVisible = Array(repeating: false, count: instanceCount)
         }
-        for index in 0..<instanceCount {
-            roadTargetVisible[index] = index < roadCollisionVisible.count && roadCollisionVisible[index]
+        let visibleCount = min(instanceCount, roadCollisionVisible.count)
+        roadTargetVisible.withUnsafeMutableBufferPointer { target in
+            roadCollisionVisible.withUnsafeBufferPointer { collision in
+                var index = 0
+                while index < visibleCount {
+                    target[index] = collision[index]
+                    index += 1
+                }
+                while index < instanceCount {
+                    target[index] = false
+                    index += 1
+                }
+            }
         }
         let hasActiveAnimations = roadFade.advance(targetVisibility: roadTargetVisible,
                                                    time: frameContext.time,
@@ -932,28 +726,31 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
 
         for record in roadLabelCache.orderedTileRecords {
             let start = record.instanceStart
-            let end = start + record.instanceKeys.count
+            let end = start + record.instanceCount
             roadRecordMetaScratch.removeAll(keepingCapacity: true)
             for index in start..<end {
                 let alpha = index < fadeAlphas.count ? fadeAlphas[index] : 0
                 if alpha > 0.0001 {
                     hasVisibleRoadLabels = true
                 }
-                let meta = LabelRuntimeMeta(duplicate: 0,
-                                            visibleTileIndex: 0,
-                                            fadeAlpha: alpha,
+                let meta = LabelRuntimeMeta(fadeAlpha: alpha,
+                                            perspectiveScale: 1,
                                             labelSizePoints: roadLabelCache.instanceLabelSizes[index])
                 roadRecordMetaScratch.append(meta)
                 roadRuntimeMetaScratch.append(meta)
             }
-            let runtimeMetaBuffer = record.runtimeMetaBuffer(slot: frameSlotIndex, meta: roadRecordMetaScratch)
-            drawBatches.append(DrawRoadLabels(placementBuffer: nil,
-                                              glyphInputBuffer: record.glyphInputsBuffer,
-                                              runtimeMetaBuffer: runtimeMetaBuffer,
-                                              localGlyphVertices: record.localGlyphVertices,
-                                              glyphCount: record.glyphCount,
-                                              labelStyle: record.labelStyle))
             totalGlyphCount += record.glyphCount
+            guard record.hasRenderableGlyphs,
+                  let localGlyphVertices = record.localGlyphVertices,
+                  let glyphInputsBuffer = record.glyphInputsBuffer else {
+                continue
+            }
+            drawBatches.append(DrawRoadLabels(placementBuffer: record.placementBuffer(slot: frameSlotIndex),
+                                              glyphInputBuffer: glyphInputsBuffer,
+                                              runtimeMetaBuffer: record.runtimeMetaBuffer(slot: frameSlotIndex,
+                                                                                          meta: roadRecordMetaScratch),
+                                              localGlyphVertices: localGlyphVertices,
+                                              labelStyle: record.labelStyle))
         }
 
         guard hasActiveAnimations || hasVisibleRoadLabels else {
@@ -963,14 +760,16 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
 
         let runtimeMetaBuffer = roadRuntimeMetaBufferStore.ensureCapacity(slot: frameSlotIndex,
                                                                           count: max(1, roadRuntimeMetaScratch.count))
-        upload(values: roadRuntimeMetaScratch, into: runtimeMetaBuffer)
+        roadRuntimeMetaScratch.withUnsafeBytes { bytes in
+            if bytes.count > 0 {
+                runtimeMetaBuffer.contents().copyMemory(from: bytes.baseAddress!, byteCount: bytes.count)
+            }
+        }
         roadDrawLabels = drawBatches
         return RoadLabelState(instanceCount: instanceCount,
                               glyphCount: totalGlyphCount,
                               activeRoadLabelTiles: activeRoadLabelTiles,
                               runtimeMetaBuffer: runtimeMetaBuffer,
-                              placementBuffer: nil,
-                              glyphInputBuffer: drawBatches.first?.glyphInputBuffer,
                               drawLabels: drawBatches,
                               hasActiveFadeAnimations: hasActiveAnimations)
     }
@@ -987,70 +786,28 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         }
     }
 
-    private func upload<T>(values: [T], into buffer: MTLBuffer) {
-        guard values.isEmpty == false else {
-            return
-        }
-        values.withUnsafeBytes { bytes in
-            buffer.contents().copyMemory(from: bytes.baseAddress!,
-                                         byteCount: values.count * MemoryLayout<T>.stride)
-        }
-    }
-
-    private func copy<T>(values: [T], into buffer: MTLBuffer) {
-        guard values.isEmpty == false else {
-            return
-        }
-        values.withUnsafeBytes { bytes in
-            buffer.contents().copyMemory(from: bytes.baseAddress!,
-                                         byteCount: values.count * MemoryLayout<T>.stride)
-        }
-    }
-
-    private func upload(screenPoints: [ScreenPointOutput],
-                        into buffer: MTLBuffer,
-                        expectedCount: Int) {
-        if screenPoints.isEmpty {
-            writeDefaultScreenPoint(into: buffer)
-            return
-        }
-
-        screenPoints.withUnsafeBytes { bytes in
-            buffer.contents().copyMemory(from: bytes.baseAddress!,
-                                         byteCount: screenPoints.count * MemoryLayout<ScreenPointOutput>.stride)
-        }
-
-        let missingCount = max(0, expectedCount - screenPoints.count)
-        if missingCount > 0 {
-            let byteOffset = screenPoints.count * MemoryLayout<ScreenPointOutput>.stride
-            buffer.contents().advanced(by: byteOffset).initializeMemory(as: UInt8.self,
-                                                                        repeating: 0,
-                                                                        count: missingCount * MemoryLayout<ScreenPointOutput>.stride)
-        }
-    }
-
-    private func writeDefaultScreenPoint(into buffer: MTLBuffer) {
-        var point = ScreenPointOutput(position: .zero, depth: 0, visible: 0, visibilityAlpha: 0.0)
-        withUnsafeBytes(of: &point) { bytes in
-            buffer.contents().copyMemory(from: bytes.baseAddress!,
-                                         byteCount: MemoryLayout<ScreenPointOutput>.stride)
-        }
-    }
-
     // MARK: - Publication
 
     private func publishBaseLabelState(frameContext: FrameContext,
                                        hasActiveFadeAnimations: Bool,
                                        needsFollowUpFrame: Bool) {
-        let count = baseLabelCache.activeLabelSpanCount
+        let count = baseLabelCache.labelInputsCount
         var screenPositionsBuffer: MTLBuffer?
         if count > 0 {
             let buffer = screenPositionsBufferStore.ensureCapacity(slot: frameContext.frameSlotIndex, count: count)
-            upload(screenPoints: baseScreenPoints, into: buffer, expectedCount: count)
+            let byteCount = min(baseScreenPoints.count, count) * MemoryLayout<ScreenPointOutput>.stride
+            baseScreenPoints.withUnsafeBytes { bytes in
+                if byteCount > 0 {
+                    buffer.contents().copyMemory(from: bytes.baseAddress!, byteCount: byteCount)
+                }
+            }
+            let missingBytes = count * MemoryLayout<ScreenPointOutput>.stride - byteCount
+            if missingBytes > 0 {
+                buffer.contents().advanced(by: byteCount).initializeMemory(as: UInt8.self, repeating: 0, count: missingBytes)
+            }
             screenPositionsBuffer = buffer
         }
-        frameContext.sharedState.baseLabelState.labelInputsCount = baseLabelCache.labelInputsCount
-        frameContext.sharedState.baseLabelState.activeLabelSpanCount = count
+        frameContext.sharedState.baseLabelState.labelInputsCount = count
         frameContext.sharedState.baseLabelState.labelRuntimeMetaBuffer = baseLabelCache.labelRuntimeMetaBuffer(frameSlotIndex: frameContext.frameSlotIndex)
         frameContext.sharedState.baseLabelState.screenPositionsBuffer = screenPositionsBuffer
         frameContext.sharedState.baseLabelState.baseLabelsDrawBatches = baseLabelCache.baseLabelsDrawBatches
@@ -1082,9 +839,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             boxes.reserveCapacity(count)
 
             for index in 0..<count {
-                let candidate = candidates[index]
                 let screenPoint = baseScreenPoints[index]
-                guard candidate.isEnabled, screenPoint.visible != 0 else {
+                guard screenPoint.visible != 0 else {
                     continue
                 }
                 if index < presentationInputs.count,
@@ -1093,7 +849,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                 }
                 let alpha = index < alphas.count ? alphas[index] : 0.0
                 boxes.append(BaseLabelDebugBox(center: screenPoint.position,
-                                               halfSize: screenScale.pixels(candidate.halfSize),
+                                               halfSize: screenScale.pixels(candidates[index].halfSize),
                                                isVisible: alpha > 0.01))
             }
         }
@@ -1114,25 +870,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         return BaseLabelDebugBoxesState(boxes: boxes, roadBoxes: roadBoxes)
     }
 
-    private func resolveTileOriginDataBuffer(frameContext: FrameContext) -> MTLBuffer? {
-        if let buffer = frameContext.sharedState.tileProjectionIndexState.tileOriginDataBuffer {
-            return buffer
-        }
-
-        let tileOriginData = frameContext.sharedState.tileProjectionIndexState.tileOriginData
-        guard tileOriginData.isEmpty == false else {
-            return nil
-        }
-
-        let buffer = fallbackTileOriginDataBufferStore.ensureCapacity(slot: frameContext.frameSlotIndex,
-                                                                      count: max(1, tileOriginData.count))
-        tileOriginData.withUnsafeBytes { bytes in
-            buffer.contents().copyMemory(from: bytes.baseAddress!,
-                                         byteCount: tileOriginData.count * MemoryLayout<FlatTileOriginData>.stride)
-        }
-        return buffer
-    }
-
     // MARK: - Trace
 
     private func recordBaseLabelTraceFrame(frameContext: FrameContext,
@@ -1142,7 +879,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                            overviewFadeAlpha: Float) {
         let inputs = baseLabelCache.presentationInputs
         let fadeAlphas = baseFade.currentAlphas
-        var validLabelCount = 0
         var duplicateLabelCount = 0
         var collisionVisibleCount = 0
         var collisionHiddenCount = 0
@@ -1152,11 +888,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         var fadeAnimatingCount = 0
 
         for index in inputs.indices {
-            let input = inputs[index]
-            if input.isValid {
-                validLabelCount += 1
-            }
-            if input.duplicate != 0 {
+            if index < baseDuplicateOf.count, baseDuplicateOf[index] >= 0 {
                 duplicateLabelCount += 1
             }
             if index < baseCollisionVisible.count, baseCollisionVisible[index] {
@@ -1197,6 +929,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         let labels = includeFullLabels ? Self.makeBaseLabelTraceLabels(inputs: inputs,
                                                                        screenPoints: baseScreenPoints,
                                                                        collisionVisibility: baseCollisionVisible,
+                                                                       duplicateOf: baseDuplicateOf,
                                                                        targetVisibility: baseTargetVisible,
                                                                        horizonVisibility: baseHorizonVisible,
                                                                        fadeAlphas: fadeAlphas,
@@ -1211,9 +944,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                       baseTrackedTilesChanged: trackedTilesChanged,
                                                       roadTrackedTilesChanged: trackedTilesChanged,
                                                       projectionChanged: projectionChanged,
-                                                      activeLabelSpanCount: baseLabelCache.activeLabelSpanCount,
+                                                      activeLabelSpanCount: baseLabelCache.labelInputsCount,
                                                       labelInputsCount: baseLabelCache.labelInputsCount,
-                                                      validLabelCount: validLabelCount,
+                                                      validLabelCount: inputs.count,
                                                       duplicateLabelCount: duplicateLabelCount,
                                                       collisionVisibleCount: collisionVisibleCount,
                                                       collisionHiddenCount: collisionHiddenCount,
@@ -1234,6 +967,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     private static func makeBaseLabelTraceLabels(inputs: [BaseLabelPresentationInput],
                                                  screenPoints: [ScreenPointOutput],
                                                  collisionVisibility: [Bool],
+                                                 duplicateOf: [Int32],
                                                  targetVisibility: [Bool],
                                                  horizonVisibility: [Bool],
                                                  fadeAlphas: [Float],
@@ -1251,6 +985,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             let point = index < screenPoints.count ? screenPoints[index] : nil
             let candidate = index < collisionCandidates.count ? collisionCandidates[index] : nil
             let visibility = index < collisionVisibility.count && collisionVisibility[index]
+            let duplicate = index < duplicateOf.count && duplicateOf[index] >= 0 ? 1 : 0
             let targetVisible = index < targetVisibility.count && targetVisibility[index]
             let horizonVisible = index < horizonVisibility.count && horizonVisibility[index]
             let fadeAlpha = traceFadeAlpha(index: index,
@@ -1262,7 +997,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             let priority = candidate?.priority ?? Int.max
             let secondaryPriority = candidate?.secondaryPriority ?? Int.max
 
-            labels.append("\(index)|\(input.labelKey)|v=\(input.isValid ? 1 : 0)|d=\(input.duplicate)|cv=\(visibility ? "visible" : "hidden")|t=\(targetVisible ? 1 : 0)|hz=\(horizonVisible ? 1 : 0)|a=\(formatTraceFloat(fadeAlpha))|x=\(formatTraceFloat(position.x))|y=\(formatTraceFloat(position.y))|sv=\(screenVisible ? 1 : 0)|p=\(priority)|sp=\(secondaryPriority)|hw=\(formatTraceFloat(halfSize.x))|hh=\(formatTraceFloat(halfSize.y))")
+            labels.append("\(index)|\(input.labelKey)|v=1|d=\(duplicate)|cv=\(visibility ? "visible" : "hidden")|t=\(targetVisible ? 1 : 0)|hz=\(horizonVisible ? 1 : 0)|a=\(formatTraceFloat(fadeAlpha))|x=\(formatTraceFloat(position.x))|y=\(formatTraceFloat(position.y))|sv=\(screenVisible ? 1 : 0)|p=\(priority)|sp=\(secondaryPriority)|hw=\(formatTraceFloat(halfSize.x))|hh=\(formatTraceFloat(halfSize.y))")
         }
         return labels.joined(separator: ";")
     }
@@ -1274,12 +1009,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                      maxBucketCount: Int) -> BaseLabelTraceHotBucketSummary {
         let cellSize: Float = 64
         var buckets: [String: BaseLabelTraceBucket] = [:]
-        for index in inputs.indices {
-            guard inputs[index].isValid,
-                  index < screenPoints.count else {
-                continue
-            }
-
+        for index in inputs.indices where index < screenPoints.count {
             let point = screenPoints[index]
             guard point.visible != 0 else {
                 continue
@@ -1327,7 +1057,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     private static func formatTraceFloat(_ value: Float) -> String {
         String(format: "%.2f", locale: traceLocale, Double(value))
     }
-
 }
 
 private struct BaseLabelTraceBucket {

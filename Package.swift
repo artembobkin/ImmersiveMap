@@ -56,7 +56,6 @@ let package = Package(
                 .process("Avatars/Shaders"),
                 .process("Globe/Shaders"),
                 .process("Horizon/Shaders"),
-                .process("Labels/Compute/Shaders"),
                 .process("Labels/Shaders"),
                 .process("Render/Debug/Shaders"),
                 .process("Render/PostProcessing/Shaders"),

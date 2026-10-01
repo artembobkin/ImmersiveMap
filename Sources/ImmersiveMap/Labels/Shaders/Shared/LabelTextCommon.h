@@ -52,8 +52,8 @@ struct RoadLabelSceneDepthUniforms {
 
 /// The clip position of a hidden label's vertices: outside the clip volume
 /// on one side, so the rasterizer rejects the primitive whole and no
-/// fragment is ever shaded for a label that lost its collision, is a
-/// duplicate or lies beyond the horizon. Every vertex of a label shares
+/// fragment is ever shaded for a label that lost its collision, is faded
+/// out or lies beyond the horizon. Every vertex of a label shares
 /// the label's visibility, so the whole quad moves together and never
 /// straddles the volume. Alpha 0 alone would leave the quads rasterized
 /// at full fragment cost for nothing.

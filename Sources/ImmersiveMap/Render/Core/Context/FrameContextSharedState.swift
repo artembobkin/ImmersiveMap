@@ -10,7 +10,6 @@ import Metal
 
 struct BaseLabelState {
     nonisolated(unsafe) static let empty = BaseLabelState(labelInputsCount: 0,
-                                      activeLabelSpanCount: 0,
                                       labelRuntimeMetaBuffer: nil,
                                       screenPositionsBuffer: nil,
                                       baseLabelsDrawBatches: [],
@@ -18,7 +17,6 @@ struct BaseLabelState {
                                       hasActiveVisibilityCycle: false)
 
     var labelInputsCount: Int
-    var activeLabelSpanCount: Int
     var labelRuntimeMetaBuffer: MTLBuffer?
     var screenPositionsBuffer: MTLBuffer?
     var baseLabelsDrawBatches: [BaseLabelDrawBatch]
@@ -51,8 +49,6 @@ struct RoadLabelState {
                                       glyphCount: 0,
                                       activeRoadLabelTiles: [],
                                       runtimeMetaBuffer: nil,
-                                      placementBuffer: nil,
-                                      glyphInputBuffer: nil,
                                       drawLabels: [],
                                       hasActiveFadeAnimations: false)
 
@@ -60,8 +56,6 @@ struct RoadLabelState {
     var glyphCount: Int
     var activeRoadLabelTiles: [VisibleTile]
     var runtimeMetaBuffer: MTLBuffer?
-    var placementBuffer: MTLBuffer?
-    var glyphInputBuffer: MTLBuffer?
     var drawLabels: [DrawRoadLabels]
     var hasActiveFadeAnimations: Bool
 }

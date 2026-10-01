@@ -25,8 +25,6 @@ final class RenderPersistentContext {
     let tileOwnershipPipeline: TileOwnershipPipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
     let fxaaPipeline: FXAAPipeline
-    let tilePointScreenPipelines: TilePointScreenPipelines
-    let roadLabelPlacementPipeline: RoadLabelPlacementPipeline
     let labelOcclusionProbePipeline: LabelOcclusionProbePipeline
 
     // MARK: - Scene Resources
@@ -140,8 +138,6 @@ final class RenderPersistentContext {
         self.tileOwnershipPipeline = shared.tileOwnershipPipeline
         self.groundShadowMaskPipeline = shared.groundShadowMaskPipeline
         self.fxaaPipeline = shared.fxaaPipeline
-        self.tilePointScreenPipelines = shared.tilePointScreenPipelines
-        self.roadLabelPlacementPipeline = shared.roadLabelPlacementPipeline
         self.labelOcclusionProbePipeline = shared.labelOcclusionProbePipeline
         // The starfield renderer bakes the star-generation settings, so it
         // stays per renderer; only its pipeline is shared.
@@ -167,8 +163,7 @@ final class RenderPersistentContext {
                                                tileLoadingStatusReporter: tileLoadingStatusReporter)
         self.tileRenderStore.eventSink = eventSink
         self.baseLabelCache = BaseLabelCache(metalDevice: metal.device)
-        self.roadLabelCache = RoadLabelCache(metalDevice: metal.device,
-                                             textRenderer: textRenderer)
+        self.roadLabelCache = RoadLabelCache(metalDevice: metal.device)
 
         self.sceneModelSource = sceneModelSource
         self.sceneModelMeshStore = SceneModelMeshStore(device: metal.device)

@@ -6,14 +6,15 @@ import simd
 import XCTest
 
 /// The per-frame collision solve: one strict rank order over base labels
-/// and road instances, first placed keeps the space, a road instance is
-/// accepted only with all its glyph boxes, and the answer is the same
-/// whatever order the inputs came in.
+/// and road instances, first placed keeps the space, a copy of a placed
+/// label is found to be its duplicate, a road instance is accepted only
+/// with all its glyph boxes, and the answer is the same whatever order the
+/// inputs came in.
 final class LabelCollisionSolverTests: XCTestCase {
     private let viewport = SIMD2<Float>(1000, 1000)
 
-    private func rank(_ priority: Int, secondary: Int = 0, sort: Int = 0, key: UInt64) -> LabelCollisionRank {
-        LabelCollisionRank(priority: priority, secondaryPriority: secondary, sortPriority: sort, stableOrderKey: key)
+    private func rank(_ priority: Int, secondary: Int = 0, sort: Int = 0, tile: Int = 0, key: UInt64) -> LabelCollisionRank {
+        LabelCollisionRank(priority: priority, secondaryPriority: secondary, sortPriority: sort, tileOrder: tile, stableOrderKey: key)
     }
 
     private func solve(solver: LabelCollisionSolver,
@@ -24,8 +25,9 @@ final class LabelCollisionSolverTests: XCTestCase {
                        roadItems: [LabelCollisionRoadItem] = [],
                        roadCenters: [SIMD2<Float>] = [],
                        roadHalfSizes: [SIMD2<Float>] = [],
-                       roadCount: Int = 0) -> (base: [Bool], road: [Bool]) {
+                       roadCount: Int = 0) -> (base: [Bool], duplicates: [Int32], road: [Bool]) {
         var base: [Bool] = []
+        var duplicates: [Int32] = []
         var road = [Bool](repeating: false, count: roadCount)
         solver.solve(viewportSize: viewport,
                      cellSizePx: 32,
@@ -37,8 +39,9 @@ final class LabelCollisionSolverTests: XCTestCase {
                      roadCenters: roadCenters,
                      roadHalfSizes: roadHalfSizes,
                      baseVisible: &base,
+                     baseDuplicateOf: &duplicates,
                      roadVisible: &road)
-        return (base, road)
+        return (base, duplicates, road)
     }
 
     func testTheHigherRankKeepsTheSpaceWhateverTheIndexOrder() {
@@ -94,11 +97,39 @@ final class LabelCollisionSolverTests: XCTestCase {
         XCTAssertEqual(result.base, [true, false])
     }
 
-    func testASharedGroupNeverCollidesWithItself() {
+    /// The same feature from two tiles: both carry the key as their group,
+    /// so the second is not blocked but found to be the first's copy, and
+    /// named so the caller can hand its fade over.
+    func testACopyOfAPlacedLabelIsItsDuplicate() {
         let solver = LabelCollisionSolver()
-        solver.rebindBase(ranks: [rank(0, key: 1), rank(1, key: 2)])
-        let result = solve(solver: solver, centers: [SIMD2<Float>(100, 100), SIMD2<Float>(105, 100)], groups: [7, 7])
-        XCTAssertEqual(result.base, [true, true])
+        solver.rebindBase(ranks: [rank(0, key: 7), rank(0, tile: 1, key: 7), rank(0, key: 3)])
+        let result = solve(solver: solver,
+                           centers: [SIMD2<Float>(100, 100), SIMD2<Float>(100, 100), SIMD2<Float>(300, 300)],
+                           groups: [7, 7, 3])
+        XCTAssertEqual(result.base, [true, false, true])
+        XCTAssertEqual(result.duplicates, [-1, 0, -1])
+    }
+
+    /// Two copies rank alike down to the tile order, the set's winner
+    /// order: the copy of the earlier tile is placed, whatever its index.
+    func testTheTileOrderDecidesBetweenCopies() {
+        let solver = LabelCollisionSolver()
+        solver.rebindBase(ranks: [rank(0, tile: 3, key: 7), rank(0, tile: 1, key: 7)])
+        let result = solve(solver: solver, centers: [SIMD2<Float>(100, 100), SIMD2<Float>(100, 100)], groups: [7, 7])
+        XCTAssertEqual(result.base, [false, true])
+        XCTAssertEqual(result.duplicates, [1, -1])
+    }
+
+    /// A road instance's glyphs share its group and never block each other.
+    func testARoadInstancesOwnGlyphsNeverBlockEachOther() {
+        let solver = LabelCollisionSolver()
+        solver.rebindBase(ranks: [])
+        let roadCenters = [SIMD2<Float>(200, 500), SIMD2<Float>(205, 500)]
+        let items = [LabelCollisionRoadItem(rank: rank(9, key: 100), groupId: 100, boxRange: 0..<2, targetIndex: 0)]
+        let result = solve(solver: solver, centers: [],
+                           roadItems: items, roadCenters: roadCenters,
+                           roadHalfSizes: Array(repeating: SIMD2<Float>(12, 8), count: 2), roadCount: 1)
+        XCTAssertEqual(result.road, [true])
     }
 
     func testARoadInstanceIsAcceptedOnlyWithAllItsGlyphs() {
@@ -132,12 +163,13 @@ final class LabelCollisionSolverTests: XCTestCase {
         let solver = LabelCollisionSolver()
         solver.rebindBase(ranks: [])
         var base: [Bool] = []
+        var duplicates: [Int32] = []
         var road = [false, true]
         solver.solve(viewportSize: viewport, cellSizePx: 32,
                      baseCenters: [], baseHalfSizes: [], baseEnabled: [], baseGroupIds: [],
                      roadItems: [LabelCollisionRoadItem(rank: rank(1, key: 5), groupId: 5, boxRange: 0..<1, targetIndex: 0)],
                      roadCenters: [SIMD2<Float>(100, 100)], roadHalfSizes: [SIMD2<Float>(5, 5)],
-                     baseVisible: &base, roadVisible: &road)
+                     baseVisible: &base, baseDuplicateOf: &duplicates, roadVisible: &road)
         XCTAssertEqual(road, [true, true], "Index 1 was not offered and stays as it was")
     }
 

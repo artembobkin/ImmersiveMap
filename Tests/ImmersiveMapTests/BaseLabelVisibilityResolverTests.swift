@@ -7,8 +7,8 @@ import XCTest
 /// The per-label rules of the frame path: which labels reserve collision
 /// space and which want to be shown, written in place.
 final class BaseLabelVisibilityResolverTests: XCTestCase {
-    private func input(key: UInt64 = 1, duplicate: UInt8 = 0, valid: Bool = true, minZoom: Float = 0) -> BaseLabelPresentationInput {
-        BaseLabelPresentationInput(labelKey: key, duplicate: duplicate, isValid: valid, minCameraZoom: minZoom)
+    private func input(key: UInt64 = 1, minZoom: Float = 0) -> BaseLabelPresentationInput {
+        BaseLabelPresentationInput(labelKey: key, minCameraZoom: minZoom)
     }
 
     func testTargetVisibilityRequiresHorizonAndCollisionAndZoom() {
@@ -21,17 +21,6 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
                                                      into: &target)
         XCTAssertEqual(target, [true, false, false, false],
                        "Behind the horizon, lost the collision, below its zoom: each hides")
-    }
-
-    func testTargetVisibilityHidesDuplicatesAndEmptySlots() {
-        let inputs = [input(key: 1, duplicate: 1), input(key: 0, valid: false), input(key: 3)]
-        var target = [Bool](repeating: true, count: 3)
-        BaseLabelVisibilityResolver.targetVisibility(inputs: inputs,
-                                                     collisionVisible: [true, true, true],
-                                                     horizonVisibility: [true, true, true],
-                                                     cameraZoom: 14,
-                                                     into: &target)
-        XCTAssertEqual(target, [false, false, true])
     }
 
     func testTargetVisibilityResizesTheOutputToTheInputs() {
@@ -67,11 +56,11 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
     /// Behind a building a label keeps its space only while it fades out,
     /// like one behind the horizon, so the labels around it do not jump.
     func testReservationBehindABuildingLastsTheFadeOut() {
-        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(candidateEnabled: true, screenVisible: true, horizonVisible: true,
+        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(screenVisible: true, horizonVisible: true,
                                                                 occluded: true, currentAlpha: 0.4, minCameraZoom: 0, cameraZoom: 14))
-        XCTAssertFalse(BaseLabelVisibilityResolver.reservesSpace(candidateEnabled: true, screenVisible: true, horizonVisible: true,
+        XCTAssertFalse(BaseLabelVisibilityResolver.reservesSpace(screenVisible: true, horizonVisible: true,
                                                                  occluded: true, currentAlpha: 0, minCameraZoom: 0, cameraZoom: 14))
-        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(candidateEnabled: true, screenVisible: true, horizonVisible: true,
+        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(screenVisible: true, horizonVisible: true,
                                                                 occluded: false, currentAlpha: 0, minCameraZoom: 0, cameraZoom: 14))
     }
 
@@ -79,8 +68,8 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
     /// tiles around the look-at tile, counted in its own tile's grid, and a
     /// coarser stand-in holding the look-at point counts as inside.
     func testLocalDetailKeepsToTheBlockAroundTheLookAtTile() {
-        let local = BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isValid: true, minCameraZoom: 0, isLocal: true)
-        let plain = BaseLabelPresentationInput(labelKey: 2, duplicate: 0, isValid: true, minCameraZoom: 0, isLocal: false)
+        let local = BaseLabelPresentationInput(labelKey: 1, minCameraZoom: 0, isLocal: true)
+        let plain = BaseLabelPresentationInput(labelKey: 2, minCameraZoom: 0, isLocal: false)
         let inputs = [local, local, local, plain, local]
         // The look-at point is in z15 tile (10, 20), inside z14 tile (5, 10).
         let mercator = SIMD2<Double>(10.5 / 32768, 20.5 / 32768)
@@ -115,7 +104,7 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
     /// Inside the block, the distance from the camera decides, measured in
     /// metres through the look-at point's scale.
     func testLocalDetailKeepsToTheDistanceFromTheCamera() {
-        let local = BaseLabelPresentationInput(labelKey: 1, duplicate: 0, isValid: true, minCameraZoom: 0, isLocal: true)
+        let local = BaseLabelPresentationInput(labelKey: 1, minCameraZoom: 0, isLocal: true)
         let mercator = SIMD2<Double>(10.5 / 32768, 20.5 / 32768)
         let tile = TilePointInput(uv: .zero, tile: SIMD3(10, 20, 15))
         // Two units per metre: 300 m is 600 units.
@@ -143,36 +132,53 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
     /// Outside the look-at tile a local label keeps its space only while
     /// it fades out, like one below its zoom.
     func testLocalDetailOutsideTheLookAtTileReservesNothingOnceInvisible() {
-        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(candidateEnabled: true, screenVisible: true, horizonVisible: true,
+        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(screenVisible: true, horizonVisible: true,
                                                                 localSuppressed: true, currentAlpha: 0.4, minCameraZoom: 0, cameraZoom: 17))
-        XCTAssertFalse(BaseLabelVisibilityResolver.reservesSpace(candidateEnabled: true, screenVisible: true, horizonVisible: true,
+        XCTAssertFalse(BaseLabelVisibilityResolver.reservesSpace(screenVisible: true, horizonVisible: true,
                                                                  localSuppressed: true, currentAlpha: 0, minCameraZoom: 0, cameraZoom: 17))
     }
 
     func testReservationRemainsDuringFadeOutBehindHorizon() {
-        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(candidateEnabled: true, screenVisible: true, horizonVisible: false,
+        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(screenVisible: true, horizonVisible: false,
                                                                 currentAlpha: 0.4, minCameraZoom: 0, cameraZoom: 14),
                       "Still fading out behind the horizon: keeps its space so neighbours do not jump")
-        XCTAssertFalse(BaseLabelVisibilityResolver.reservesSpace(candidateEnabled: true, screenVisible: true, horizonVisible: false,
+        XCTAssertFalse(BaseLabelVisibilityResolver.reservesSpace(screenVisible: true, horizonVisible: false,
                                                                  currentAlpha: 0, minCameraZoom: 0, cameraZoom: 14),
                        "Fully transparent behind the horizon: reserves nothing")
     }
 
-    func testReservationNeedsADrawablePointAndAnEnabledCandidate() {
-        XCTAssertFalse(BaseLabelVisibilityResolver.reservesSpace(candidateEnabled: true, screenVisible: false, horizonVisible: true,
-                                                                 currentAlpha: 1, minCameraZoom: 0, cameraZoom: 14))
-        XCTAssertFalse(BaseLabelVisibilityResolver.reservesSpace(candidateEnabled: false, screenVisible: true, horizonVisible: true,
+    func testReservationNeedsADrawablePoint() {
+        XCTAssertFalse(BaseLabelVisibilityResolver.reservesSpace(screenVisible: false, horizonVisible: true,
                                                                  currentAlpha: 1, minCameraZoom: 0, cameraZoom: 14))
     }
 
+    /// The whole-set pass answers what the single rule answers, label by
+    /// label, and a missing occlusion entry counts as in view.
+    func testReservationPassMatchesTheRule() {
+        let inputs = [input(key: 1), input(key: 2, minZoom: 15), input(key: 3)]
+        let points = [ScreenPointOutput(position: .zero, depth: 0, visible: 1),
+                      ScreenPointOutput(position: .zero, depth: 0, visible: 1),
+                      ScreenPointOutput(position: .zero, depth: 0, visible: 0)]
+        var reserves: [Bool] = []
+        BaseLabelVisibilityResolver.reservesSpace(inputs: inputs,
+                                                  screenPoints: points,
+                                                  horizonVisibility: [true, true, true],
+                                                  occluded: [],
+                                                  localSuppressed: [],
+                                                  currentAlphas: [0, 0, 1],
+                                                  cameraZoom: 14,
+                                                  into: &reserves)
+        XCTAssertEqual(reserves, [true, false, false], "In view, below its zoom and invisible, no drawable point")
+    }
+
     func testReservationIsSuppressedBelowMinCameraZoomWhileInvisible() {
-        XCTAssertFalse(BaseLabelVisibilityResolver.reservesSpace(candidateEnabled: true, screenVisible: true, horizonVisible: true,
+        XCTAssertFalse(BaseLabelVisibilityResolver.reservesSpace(screenVisible: true, horizonVisible: true,
                                                                  currentAlpha: 0, minCameraZoom: 15, cameraZoom: 14),
                        "A zoom-hidden POI must not displace visible labels")
-        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(candidateEnabled: true, screenVisible: true, horizonVisible: true,
+        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(screenVisible: true, horizonVisible: true,
                                                                 currentAlpha: 0.5, minCameraZoom: 15, cameraZoom: 14),
                       "but one still fading out after crossing the zoom keeps its spot")
-        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(candidateEnabled: true, screenVisible: true, horizonVisible: true,
+        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(screenVisible: true, horizonVisible: true,
                                                                 currentAlpha: 0, minCameraZoom: 15, cameraZoom: 16))
     }
 }

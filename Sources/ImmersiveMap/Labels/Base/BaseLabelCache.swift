@@ -16,40 +16,51 @@ import simd
 /// It never knows the raw tile schema, the language fallback or the label
 /// identity rules, and holds no Metal, no tile loading or parsing, and no
 /// views.
+///
+/// The base labels of the frame's tiles as one packed working set: the
+/// tiles in winner order (`BaseLabelSourceEntry`), each tile's labels one
+/// run in tile-local order, the runs laid end to end. A label's global
+/// index is its tile's start plus its index in the tile, the number the
+/// tile's vertices carry and the shaders add the tile's start to.
+///
+/// Everything here is rebuilt when the tile set changes and read
+/// otherwise: the per-label static arrays (anchor, collision box and rank,
+/// presentation), the per-frame runtime meta the shaders read, and the
+/// draw batches. Repacking the set is a loop over the tiles writing runs;
+/// the change it hands back (`LabelWorkingSetChange`) says which runs
+/// survived and where they went, so the frame's per-label state is
+/// carried by copying runs, never by looking a label up.
 final class BaseLabelCache {
     private struct TileRecord {
         let ownerKey: VisibleTile
-        var metalTileIdentity: ObjectIdentifier
-        var tileSlotIndex: UInt32
-        var allocation: BaseLabelTileArena.Allocation
-        var labelsCount: Int
-        var labelKeys: [UInt64]
-        var labelSortKeys: [Int]
-        var labelCollisionPriorities: [Int]
-        var labelSizes: [SIMD2<Float>]
-        var labelMinCameraZooms: [Float]
-        var labelIsLocal: [Bool]
-        var labelsByStyleRuns: [LabelsByStyleRun]
-        var poiIconRuns: [PoiIconRunBuffer]
-        var routeShieldRuns: [RouteShieldRunBuffer]
+        let metalTileIdentity: ObjectIdentifier
+        let labelSet: TileBuffers.TextLabelSet
+        let sourcePriorityRank: Int
+        let start: Int
+        let count: Int
     }
 
-    private let arena = BaseLabelTileArena()
     private let labelRuntimeMetaBufferStore: FrameSlottedDynamicMetalBuffer<LabelRuntimeMeta>
 
-    private var tileRecordsByOwnerKey: [VisibleTile: TileRecord] = [:]
-    private var tilePointInputByOwnerKey: [VisibleTile: [TilePointInput]] = [:]
-    private var ownerOrder: [VisibleTile] = []
+    private var records: [TileRecord] = []
     private var tileSlotVisibleTileIndices: [UInt32] = []
     private var labelRuntimeMetaData: [LabelRuntimeMeta] = []
     private var labelPresentationInputs: [BaseLabelPresentationInput] = []
 
     private(set) var baseLabelsDrawBatches: [BaseLabelDrawBatch] = []
 
+    /// The number of labels in the set, the length of every per-label array.
     private(set) var labelInputsCount: Int = 0
-    private(set) var activeLabelSpanCount: Int = 0
     private(set) var tilePointInputs: [TilePointInput] = []
     private(set) var labelCollisionAABBInputs: [ScreenCollisionCandidate] = []
+    /// Each label's tile's position in the set: the tile order the
+    /// collision rank breaks ties by, so the set's preferred copy of a
+    /// feature is placed before the others.
+    private(set) var labelTileOrders: [Int] = []
+    /// Each label's key, the identity a feature keeps across tiles: what a
+    /// topology change matches a departing tile's lit labels to an arriving
+    /// tile's by (`LabelWorkingSetChange.seeded`).
+    private(set) var labelKeys: [UInt64] = []
 
     init(metalDevice: MTLDevice) {
         self.labelRuntimeMetaBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
@@ -57,42 +68,44 @@ final class BaseLabelCache {
                                                                           options: [.storageModeShared])
     }
 
+    @discardableResult
     func rebuild(sourceEntries: [BaseLabelSourceEntry],
-                 tileIndexAllocator: VisibleTileIndexAllocator) {
+                 tileIndexAllocator: VisibleTileIndexAllocator) -> LabelWorkingSetChange {
         synchronize(sourceEntries: sourceEntries,
                     tileIndexAllocator: tileIndexAllocator,
                     trackedTilesChanged: true,
-                    projectionChanged: true)
+                    projectionChanged: true) ?? .empty
     }
 
+    /// Brings the set up to `sourceEntries`. With `trackedTilesChanged` the
+    /// set is repacked and the change returned; otherwise nil, and with
+    /// `projectionChanged` only the tiles' projection indices are refreshed.
+    @discardableResult
     func synchronize(sourceEntries: [BaseLabelSourceEntry],
                      tileIndexAllocator: VisibleTileIndexAllocator,
                      trackedTilesChanged: Bool,
-                     projectionChanged: Bool) {
+                     projectionChanged: Bool) -> LabelWorkingSetChange? {
+        var change: LabelWorkingSetChange?
         if trackedTilesChanged {
-            synchronizeTrackedTiles(sourceEntries)
-            rebuildDrawBatches(sourceEntries)
-            rebuildRuntimeMetaAndCollisionInputs(sourceEntries)
+            change = repack(sourceEntries)
         }
-
         if trackedTilesChanged || projectionChanged {
-            rebuildTileSlotVisibleTileIndices(sourceEntries, tileIndexAllocator: tileIndexAllocator)
+            rebuildTileSlotVisibleTileIndices(tileIndexAllocator: tileIndexAllocator)
         }
+        return change
     }
 
     func reset() {
-        arena.reset()
-        tileRecordsByOwnerKey.removeAll(keepingCapacity: false)
-        tilePointInputByOwnerKey.removeAll(keepingCapacity: false)
-        ownerOrder.removeAll(keepingCapacity: false)
+        records.removeAll(keepingCapacity: false)
         tileSlotVisibleTileIndices.removeAll(keepingCapacity: false)
         baseLabelsDrawBatches.removeAll(keepingCapacity: false)
         tilePointInputs.removeAll(keepingCapacity: false)
         labelCollisionAABBInputs.removeAll(keepingCapacity: false)
+        labelTileOrders.removeAll(keepingCapacity: false)
+        labelKeys.removeAll(keepingCapacity: false)
         labelRuntimeMetaData.removeAll(keepingCapacity: false)
         labelPresentationInputs.removeAll(keepingCapacity: false)
         labelInputsCount = 0
-        activeLabelSpanCount = 0
     }
 
     var tilePointSnapshot: TilePointToScreenPointSnapshot {
@@ -100,10 +113,20 @@ final class BaseLabelCache {
                                        tileSlotVisibleTileIndices: tileSlotVisibleTileIndices)
     }
 
+    /// The runtime meta of the set for the frame's slot, uploaded whole.
     func labelRuntimeMetaBuffer(frameSlotIndex: Int) -> MTLBuffer {
         let buffer = labelRuntimeMetaBufferStore.ensureCapacity(slot: frameSlotIndex,
-                                                                count: max(1, activeLabelSpanCount))
-        uploadRuntimeMeta(into: buffer)
+                                                                count: max(1, labelInputsCount))
+        if labelRuntimeMetaData.isEmpty {
+            var runtimeMeta = LabelRuntimeMeta()
+            withUnsafeBytes(of: &runtimeMeta) { bytes in
+                buffer.contents().copyMemory(from: bytes.baseAddress!, byteCount: MemoryLayout<LabelRuntimeMeta>.stride)
+            }
+        } else {
+            labelRuntimeMetaData.withUnsafeBytes { bytes in
+                buffer.contents().copyMemory(from: bytes.baseAddress!, byteCount: bytes.count)
+            }
+        }
         return buffer
     }
 
@@ -111,398 +134,180 @@ final class BaseLabelCache {
         labelPresentationInputs
     }
 
-    /// Each label's shrink for its distance, index-aligned with the label
-    /// set like the fade alphas. A label past the given scales keeps 1.
+    /// Each label's shrink for its distance, index-aligned with the set.
     func updatePerspectiveScales(_ scales: [Float]) {
         let count = min(labelRuntimeMetaData.count, scales.count)
-        for index in 0..<count {
-            labelRuntimeMetaData[index].perspectiveScale = scales[index]
-        }
-        if count < labelRuntimeMetaData.count {
-            for index in count..<labelRuntimeMetaData.count {
-                labelRuntimeMetaData[index].perspectiveScale = 1
+        labelRuntimeMetaData.withUnsafeMutableBufferPointer { meta in
+            scales.withUnsafeBufferPointer { scales in
+                var index = 0
+                while index < count {
+                    meta[index].perspectiveScale = scales[index]
+                    index += 1
+                }
+                while index < meta.count {
+                    meta[index].perspectiveScale = 1
+                    index += 1
+                }
             }
         }
     }
 
+    /// Each label's fade alpha times `multiplier`, index-aligned with the
+    /// set, into the runtime meta the shaders read.
     func updateFadeAlphas(_ fadeAlphas: [Float], multiplier: Float = 1.0) {
         let count = min(labelRuntimeMetaData.count, fadeAlphas.count)
-        if count > 0 {
-            for index in 0..<count {
-                labelRuntimeMetaData[index].fadeAlpha = fadeAlphas[index] * multiplier
-            }
-        }
-
-        if count < labelRuntimeMetaData.count {
-            for index in count..<labelRuntimeMetaData.count {
-                labelRuntimeMetaData[index].fadeAlpha = 0
-            }
-        }
-    }
-
-    private func synchronizeTrackedTiles(_ sourceEntries: [BaseLabelSourceEntry]) {
-        let nextOwnerKeys = sourceEntries.map(\.ownerKey)
-        let nextOwnerKeySet = Set(nextOwnerKeys)
-        let removedOwnerKeys = ownerOrder.filter { nextOwnerKeySet.contains($0) == false }
-        for removedOwnerKey in removedOwnerKeys {
-            removeTileRecord(for: removedOwnerKey)
-        }
-
-        for sourceEntry in sourceEntries {
-            upsertTileRecord(sourceEntry)
-        }
-
-        ownerOrder = nextOwnerKeys
-        labelInputsCount = ownerOrder.reduce(0) { partialResult, ownerKey in
-            partialResult + (tileRecordsByOwnerKey[ownerKey]?.labelsCount ?? 0)
-        }
-        activeLabelSpanCount = arena.activeRangeSpanCount
-        resizeTilePointInputs(to: activeLabelSpanCount)
-        resizeLabelCollisionAABBInputs(to: activeLabelSpanCount)
-        resizeLabelPresentationInputs(to: activeLabelSpanCount)
-    }
-
-    private func rebuildDrawBatches(_ sourceEntries: [BaseLabelSourceEntry]) {
-        baseLabelsDrawBatches.removeAll(keepingCapacity: true)
-        baseLabelsDrawBatches.reserveCapacity(sourceEntries.count)
-
-        for sourceEntry in sourceEntries {
-            guard let record = tileRecordsByOwnerKey[sourceEntry.ownerKey] else {
-                continue
-            }
-            baseLabelsDrawBatches.append(BaseLabelDrawBatch(labelsByStyleRuns: record.labelsByStyleRuns,
-                                                            poiIconRuns: record.poiIconRuns,
-                                                            routeShieldRuns: record.routeShieldRuns,
-                                                            globalLabelStart: record.allocation.start,
-                                                            labelInstanceCount: record.labelsCount))
-        }
-    }
-
-    private func rebuildRuntimeMetaAndCollisionInputs(_ sourceEntries: [BaseLabelSourceEntry]) {
-        guard activeLabelSpanCount > 0 else {
-            labelRuntimeMetaData.removeAll(keepingCapacity: true)
-            labelCollisionAABBInputs.removeAll(keepingCapacity: true)
-            labelPresentationInputs.removeAll(keepingCapacity: true)
-            return
-        }
-
-        resizeLabelRuntimeMetaData(to: activeLabelSpanCount)
-        resizeLabelPresentationInputs(to: activeLabelSpanCount)
-        for index in labelRuntimeMetaData.indices {
-            labelRuntimeMetaData[index] = LabelRuntimeMeta(duplicate: 0,
-                                                           visibleTileIndex: 0,
-                                                           fadeAlpha: 0,
-                                                           labelSizePoints: .zero)
-        }
-        for index in labelCollisionAABBInputs.indices {
-            labelCollisionAABBInputs[index] = ScreenCollisionCandidate(position: .zero,
-                                                                       halfSize: .zero,
-                                                                       priority: .max,
-                                                                       secondaryPriority: .max,
-                                                                       isEnabled: false)
-        }
-        for index in labelPresentationInputs.indices {
-            labelPresentationInputs[index] = .empty
-        }
-
-        var seenLabelKeys: Set<UInt64> = []
-        seenLabelKeys.reserveCapacity(labelInputsCount)
-        for sourceEntry in sourceEntries {
-            guard let record = tileRecordsByOwnerKey[sourceEntry.ownerKey] else {
-                continue
-            }
-
-            let rangeStart = record.allocation.start
-            let validCount = record.labelsCount
-            let rangeCapacity = record.allocation.capacity
-            var runtimeMeta = Array(repeating: LabelRuntimeMeta(duplicate: 0,
-                                                                visibleTileIndex: 0,
-                                                                fadeAlpha: 0,
-                                                                labelSizePoints: .zero),
-                                    count: rangeCapacity)
-            var aabbs = Array(repeating: ScreenCollisionCandidate(position: .zero,
-                                                                  halfSize: .zero,
-                                                                  priority: .max,
-                                                                  secondaryPriority: .max,
-                                                                  isEnabled: false),
-                              count: rangeCapacity)
-            var presentationInputs = Array(repeating: BaseLabelPresentationInput.empty,
-                                           count: rangeCapacity)
-            let sourcePriorityRank = BaseLabelSourceEntry.priorityRank(for: sourceEntry)
-
-            for index in 0..<validCount {
-                let labelKey = record.labelKeys[index]
-                let duplicateFlag: UInt8 = seenLabelKeys.contains(labelKey) ? 1 : 0
-                let labelSize = record.labelSizes[index]
-                let labelCollisionPriority = record.labelCollisionPriorities[index]
-                let labelSortKey = record.labelSortKeys[index]
-                runtimeMeta[index] = LabelRuntimeMeta(duplicate: duplicateFlag,
-                                                      visibleTileIndex: 0,
-                                                      fadeAlpha: 0,
-                                                      labelSizePoints: labelSize)
-                aabbs[index] = ScreenCollisionCandidate(position: .zero,
-                                                        halfSize: SIMD2<Float>(labelSize.x * 0.5,
-                                                                               labelSize.y * 0.5),
-                                                        priority: labelCollisionPriority,
-                                                        secondaryPriority: sourcePriorityRank,
-                                                        sortPriority: labelSortKey,
-                                                        stableOrderKey: labelKey,
-                                                        groupId: labelKey,
-                                                        isEnabled: duplicateFlag == 0)
-                presentationInputs[index] = BaseLabelPresentationInput(labelKey: labelKey,
-                                                                       duplicate: duplicateFlag,
-                                                                       isValid: true,
-                                                                       minCameraZoom: record.labelMinCameraZooms[index],
-                                                                       isLocal: record.labelIsLocal[index])
-                seenLabelKeys.insert(labelKey)
-            }
-
-            writeRuntimeMeta(runtimeMeta, start: rangeStart)
-            writeCollisionAABBs(aabbs, start: rangeStart)
-            writePresentationInputs(presentationInputs, start: rangeStart)
-        }
-    }
-
-    private func rebuildTileSlotVisibleTileIndices(_ sourceEntries: [BaseLabelSourceEntry],
-                                                   tileIndexAllocator: VisibleTileIndexAllocator) {
-        let slotSpanCount = arena.activeTileSlotSpanCount
-        if tileSlotVisibleTileIndices.count < slotSpanCount {
-            tileSlotVisibleTileIndices.append(contentsOf: repeatElement(0, count: slotSpanCount - tileSlotVisibleTileIndices.count))
-        } else if tileSlotVisibleTileIndices.count > slotSpanCount {
-            tileSlotVisibleTileIndices.removeLast(tileSlotVisibleTileIndices.count - slotSpanCount)
-        }
-
-        if slotSpanCount > 0 {
-            for index in 0..<slotSpanCount {
-                tileSlotVisibleTileIndices[index] = 0
-            }
-        }
-
-        for sourceEntry in sourceEntries {
-            guard let record = tileRecordsByOwnerKey[sourceEntry.ownerKey] else {
-                continue
-            }
-            let visibleTileIndex = tileIndexAllocator.tileIndex(for: sourceEntry.ownerKey)
-            tileSlotVisibleTileIndices[Int(record.tileSlotIndex)] = visibleTileIndex
-        }
-    }
-
-    private func upsertTileRecord(_ sourceEntry: BaseLabelSourceEntry) {
-        let ownerKey = sourceEntry.ownerKey
-        let metalTile = sourceEntry.metalTile
-        let selectedTextLabelSet = metalTile.tileBuffers.textLabels
-        let metalTileIdentity = sourceEntry.metalTileIdentity
-
-        if var existingRecord = tileRecordsByOwnerKey[ownerKey] {
-            let payloadChanged = existingRecord.metalTileIdentity != metalTileIdentity
-            let requiresReallocation = selectedTextLabelSet.labelsCount > existingRecord.allocation.capacity
-            if payloadChanged || requiresReallocation {
-                if requiresReallocation {
-                    releaseAllocation(existingRecord.allocation)
-                    existingRecord.allocation = arena.allocateRange(requiredCount: selectedTextLabelSet.labelsCount)
+        labelRuntimeMetaData.withUnsafeMutableBufferPointer { meta in
+            fadeAlphas.withUnsafeBufferPointer { alphas in
+                var index = 0
+                while index < count {
+                    meta[index].fadeAlpha = alphas[index] * multiplier
+                    index += 1
                 }
-
-                let pointInputs = makeTilePointInputs(for: selectedTextLabelSet, tileSlotIndex: existingRecord.tileSlotIndex)
-                resizeTilePointInputs(to: arena.activeRangeSpanCount)
-                tilePointInputByOwnerKey[ownerKey] = pointInputs
-                writePointInputs(pointInputs, at: existingRecord.allocation.start)
-                existingRecord.metalTileIdentity = metalTileIdentity
-                existingRecord.labelsCount = selectedTextLabelSet.labelsCount
-                existingRecord.labelKeys = selectedTextLabelSet.placementInputs.map(\.placementMeta.key)
-                existingRecord.labelSortKeys = selectedTextLabelSet.placementInputs.map(\.placementMeta.sortKey)
-                existingRecord.labelCollisionPriorities = selectedTextLabelSet.placementInputs.map(\.placementMeta.collisionPriority)
-                existingRecord.labelSizes = selectedTextLabelSet.placementInputs.map(\.placementMeta.labelSizePoints)
-                existingRecord.labelMinCameraZooms = selectedTextLabelSet.placementInputs.map(\.placementMeta.minCameraZoom)
-                existingRecord.labelIsLocal = selectedTextLabelSet.placementInputs.map(\.placementMeta.isLocal)
-                existingRecord.labelsByStyleRuns = selectedTextLabelSet.labelsByStyleRuns
-                existingRecord.poiIconRuns = selectedTextLabelSet.poiIconRuns
-                existingRecord.routeShieldRuns = selectedTextLabelSet.routeShieldRuns
+                while index < meta.count {
+                    meta[index].fadeAlpha = 0
+                    index += 1
+                }
             }
+        }
+    }
 
-            tileRecordsByOwnerKey[ownerKey] = existingRecord
+    // MARK: - Packing
+
+    /// Lays the tiles of `sourceEntries` out end to end and rewrites every
+    /// per-label array from the tiles' label sets. A tile that stays with
+    /// the same payload is a run that survived: its old and new place go
+    /// into the change. A tile whose payload was replaced counts as new,
+    /// so its labels fade in like a fresh tile's.
+    private func repack(_ sourceEntries: [BaseLabelSourceEntry]) -> LabelWorkingSetChange {
+        let previousRecords = records
+        var previousIndexByOwnerKey: [VisibleTile: Int] = [:]
+        previousIndexByOwnerKey.reserveCapacity(previousRecords.count)
+        for (index, record) in previousRecords.enumerated() {
+            previousIndexByOwnerKey[record.ownerKey] = index
+        }
+
+        var nextRecords: [TileRecord] = []
+        nextRecords.reserveCapacity(sourceEntries.count)
+        var moves: [LabelBlockMove] = []
+        var arrivedRuns: [Range<Int>] = []
+        var survived = [Bool](repeating: false, count: previousRecords.count)
+        var start = 0
+        for entry in sourceEntries {
+            let labelSet = entry.metalTile.tileBuffers.textLabels
+            let count = labelSet.labelsCount
+            let identity = entry.metalTileIdentity
+            if let previousIndex = previousIndexByOwnerKey[entry.ownerKey],
+               previousRecords[previousIndex].metalTileIdentity == identity {
+                survived[previousIndex] = true
+                if count > 0 {
+                    moves.append(LabelBlockMove(oldStart: previousRecords[previousIndex].start,
+                                                newStart: start,
+                                                count: count))
+                }
+            } else if count > 0 {
+                arrivedRuns.append(start..<(start + count))
+            }
+            nextRecords.append(TileRecord(ownerKey: entry.ownerKey,
+                                          metalTileIdentity: identity,
+                                          labelSet: labelSet,
+                                          sourcePriorityRank: BaseLabelSourceEntry.priorityRank(for: entry),
+                                          start: start,
+                                          count: count))
+            start += count
+        }
+        var departedRuns: [Range<Int>] = []
+        for (index, record) in previousRecords.enumerated() where survived[index] == false && record.count > 0 {
+            departedRuns.append(record.start..<(record.start + record.count))
+        }
+        let previousKeys = labelKeys
+        records = nextRecords
+        labelInputsCount = start
+
+        rewriteLabelArrays()
+        rebuildDrawBatches()
+        return LabelWorkingSetChange(count: start,
+                                     moves: moves,
+                                     departedRuns: departedRuns,
+                                     arrivedRuns: arrivedRuns,
+                                     previousKeys: previousKeys,
+                                     keys: labelKeys)
+    }
+
+    private func rewriteLabelArrays() {
+        let total = labelInputsCount
+        tilePointInputs = Array(repeating: TilePointInput(uv: .zero, tile: .zero, tileSlotIndex: 0), count: total)
+        labelCollisionAABBInputs = Array(repeating: ScreenCollisionCandidate(position: .zero, halfSize: .zero, isEnabled: false),
+                                         count: total)
+        labelTileOrders = Array(repeating: 0, count: total)
+        labelKeys = Array(repeating: 0, count: total)
+        labelPresentationInputs = Array(repeating: BaseLabelPresentationInput(labelKey: 0, minCameraZoom: 0), count: total)
+        labelRuntimeMetaData = Array(repeating: LabelRuntimeMeta(), count: total)
+        guard total > 0 else {
             return
         }
 
-        let tileSlotIndex = arena.allocateTileSlot()
-        let allocation = arena.allocateRange(requiredCount: selectedTextLabelSet.labelsCount)
-        let pointInputs = makeTilePointInputs(for: selectedTextLabelSet, tileSlotIndex: tileSlotIndex)
-        resizeTilePointInputs(to: arena.activeRangeSpanCount)
-        tilePointInputByOwnerKey[ownerKey] = pointInputs
-        writePointInputs(pointInputs, at: allocation.start)
-        tileRecordsByOwnerKey[ownerKey] = TileRecord(ownerKey: ownerKey,
-                                                           metalTileIdentity: metalTileIdentity,
-                                                           tileSlotIndex: tileSlotIndex,
-                                                           allocation: allocation,
-                                                           labelsCount: selectedTextLabelSet.labelsCount,
-                                                           labelKeys: selectedTextLabelSet.placementInputs.map(\.placementMeta.key),
-                                                           labelSortKeys: selectedTextLabelSet.placementInputs.map(\.placementMeta.sortKey),
-                                                           labelCollisionPriorities: selectedTextLabelSet.placementInputs.map(\.placementMeta.collisionPriority),
-                                                           labelSizes: selectedTextLabelSet.placementInputs.map(\.placementMeta.labelSizePoints),
-                                                           labelMinCameraZooms: selectedTextLabelSet.placementInputs.map(\.placementMeta.minCameraZoom),
-                                                           labelIsLocal: selectedTextLabelSet.placementInputs.map(\.placementMeta.isLocal),
-                                                           labelsByStyleRuns: selectedTextLabelSet.labelsByStyleRuns,
-                                                           poiIconRuns: selectedTextLabelSet.poiIconRuns,
-                                                           routeShieldRuns: selectedTextLabelSet.routeShieldRuns)
+        tilePointInputs.withUnsafeMutableBufferPointer { points in
+        labelCollisionAABBInputs.withUnsafeMutableBufferPointer { candidates in
+        labelTileOrders.withUnsafeMutableBufferPointer { tileOrders in
+        labelKeys.withUnsafeMutableBufferPointer { keys in
+        labelPresentationInputs.withUnsafeMutableBufferPointer { presentation in
+        labelRuntimeMetaData.withUnsafeMutableBufferPointer { meta in
+            for (tileOrder, record) in records.enumerated() where record.count > 0 {
+                let tileSlotIndex = UInt32(tileOrder)
+                let sourcePriorityRank = record.sourcePriorityRank
+                record.labelSet.placementInputs.withUnsafeBufferPointer { inputs in
+                    let count = min(record.count, inputs.count)
+                    var offset = 0
+                    while offset < count {
+                        let input = inputs[offset]
+                        let placementMeta = input.placementMeta
+                        let index = record.start + offset
+                        var point = input.pointInput
+                        point.tileSlotIndex = tileSlotIndex
+                        points[index] = point
+                        candidates[index] = ScreenCollisionCandidate(position: .zero,
+                                                                     halfSize: placementMeta.labelSizePoints * 0.5,
+                                                                     priority: placementMeta.collisionPriority,
+                                                                     secondaryPriority: sourcePriorityRank,
+                                                                     sortPriority: placementMeta.sortKey,
+                                                                     stableOrderKey: placementMeta.key,
+                                                                     groupId: placementMeta.key,
+                                                                     isEnabled: true)
+                        tileOrders[index] = tileOrder
+                        keys[index] = placementMeta.key
+                        presentation[index] = BaseLabelPresentationInput(labelKey: placementMeta.key,
+                                                                         minCameraZoom: placementMeta.minCameraZoom,
+                                                                         isLocal: placementMeta.isLocal)
+                        meta[index] = LabelRuntimeMeta(fadeAlpha: 0,
+                                                       perspectiveScale: 1,
+                                                       labelSizePoints: placementMeta.labelSizePoints)
+                        offset += 1
+                    }
+                }
+            }
+        }}}}}}
     }
 
-    private func removeTileRecord(for ownerKey: VisibleTile) {
-        guard let record = tileRecordsByOwnerKey.removeValue(forKey: ownerKey) else {
-            return
-        }
-
-        tilePointInputByOwnerKey.removeValue(forKey: ownerKey)
-        zeroPointInputRange(start: record.allocation.start, count: record.allocation.capacity)
-        zeroCollisionAABBRange(start: record.allocation.start, count: record.allocation.capacity)
-        releaseAllocation(record.allocation)
-        arena.releaseTileSlot(record.tileSlotIndex)
-    }
-
-    private func releaseAllocation(_ allocation: BaseLabelTileArena.Allocation) {
-        arena.releaseRange(allocation)
-    }
-
-    private func makeTilePointInputs(for selectedTextLabelSet: TileBuffers.TextLabelSet,
-                                     tileSlotIndex: UInt32) -> [TilePointInput] {
-        var pointInputs: [TilePointInput] = []
-        pointInputs.reserveCapacity(selectedTextLabelSet.placementInputs.count)
-        for label in selectedTextLabelSet.placementInputs {
-            var pointInput = label.pointInput
-            pointInput.tileSlotIndex = tileSlotIndex
-            pointInputs.append(pointInput)
-        }
-        return pointInputs
-    }
-
-    private func resizeTilePointInputs(to count: Int) {
-        if tilePointInputs.count < count {
-            tilePointInputs.append(contentsOf: repeatElement(TilePointInput(uv: .zero,
-                                                                            tile: .zero,
-                                                                            tileSlotIndex: 0),
-                                                            count: count - tilePointInputs.count))
-        } else if tilePointInputs.count > count {
-            tilePointInputs.removeLast(tilePointInputs.count - count)
+    private func rebuildDrawBatches() {
+        baseLabelsDrawBatches.removeAll(keepingCapacity: true)
+        baseLabelsDrawBatches.reserveCapacity(records.count)
+        for record in records where record.count > 0 {
+            baseLabelsDrawBatches.append(BaseLabelDrawBatch(labelsByStyleRuns: record.labelSet.labelsByStyleRuns,
+                                                            poiIconRuns: record.labelSet.poiIconRuns,
+                                                            routeShieldRuns: record.labelSet.routeShieldRuns,
+                                                            globalLabelStart: record.start,
+                                                            labelInstanceCount: record.count))
         }
     }
 
-    private func resizeLabelCollisionAABBInputs(to count: Int) {
-        let zeroAABB = ScreenCollisionCandidate(position: .zero,
-                                                halfSize: .zero,
-                                                priority: .max,
-                                                secondaryPriority: .max,
-                                                isEnabled: false)
-        if labelCollisionAABBInputs.count < count {
-            labelCollisionAABBInputs.append(contentsOf: repeatElement(zeroAABB, count: count - labelCollisionAABBInputs.count))
-        } else if labelCollisionAABBInputs.count > count {
-            labelCollisionAABBInputs.removeLast(labelCollisionAABBInputs.count - count)
+    /// Each tile's index in the frame's tile origin table, by the tile's
+    /// position in the set, which is the `tileSlotIndex` its labels carry.
+    private func rebuildTileSlotVisibleTileIndices(tileIndexAllocator: VisibleTileIndexAllocator) {
+        if tileSlotVisibleTileIndices.count != records.count {
+            tileSlotVisibleTileIndices = Array(repeating: 0, count: records.count)
         }
-    }
-
-    private func resizeLabelRuntimeMetaData(to count: Int) {
-        let zeroRuntimeMeta = LabelRuntimeMeta(duplicate: 0,
-                                               visibleTileIndex: 0,
-                                               fadeAlpha: 0,
-                                               labelSizePoints: .zero)
-        if labelRuntimeMetaData.count < count {
-            labelRuntimeMetaData.append(contentsOf: repeatElement(zeroRuntimeMeta, count: count - labelRuntimeMetaData.count))
-        } else if labelRuntimeMetaData.count > count {
-            labelRuntimeMetaData.removeLast(labelRuntimeMetaData.count - count)
-        }
-    }
-
-    private func resizeLabelPresentationInputs(to count: Int) {
-        if labelPresentationInputs.count < count {
-            labelPresentationInputs.append(contentsOf: repeatElement(.empty, count: count - labelPresentationInputs.count))
-        } else if labelPresentationInputs.count > count {
-            labelPresentationInputs.removeLast(labelPresentationInputs.count - count)
-        }
-    }
-
-    private func writePointInputs(_ pointInputs: [TilePointInput], at start: Int) {
-        guard pointInputs.isEmpty == false else {
-            return
-        }
-
-        for (offset, pointInput) in pointInputs.enumerated() {
-            tilePointInputs[start + offset] = pointInput
-        }
-    }
-
-    private func zeroPointInputRange(start: Int, count: Int) {
-        guard count > 0, start < tilePointInputs.count else {
-            return
-        }
-
-        let upperBound = min(tilePointInputs.count, start + count)
-        for index in start..<upperBound {
-            tilePointInputs[index] = TilePointInput(uv: .zero, tile: .zero, tileSlotIndex: 0)
-        }
-    }
-
-    private func writeRuntimeMeta(_ runtimeMeta: [LabelRuntimeMeta], start: Int) {
-        guard runtimeMeta.isEmpty == false else {
-            return
-        }
-
-        for (offset, meta) in runtimeMeta.enumerated() {
-            labelRuntimeMetaData[start + offset] = meta
-        }
-    }
-
-    private func writeCollisionAABBs(_ aabbs: [ScreenCollisionCandidate], start: Int) {
-        guard aabbs.isEmpty == false else {
-            return
-        }
-
-        for (offset, aabb) in aabbs.enumerated() {
-            labelCollisionAABBInputs[start + offset] = aabb
-        }
-    }
-
-    private func writePresentationInputs(_ inputs: [BaseLabelPresentationInput], start: Int) {
-        guard inputs.isEmpty == false else {
-            return
-        }
-
-        for (offset, input) in inputs.enumerated() {
-            labelPresentationInputs[start + offset] = input
-        }
-    }
-
-    private func zeroCollisionAABBRange(start: Int, count: Int) {
-        guard count > 0, start < labelCollisionAABBInputs.count else {
-            return
-        }
-
-        let zeroAABB = ScreenCollisionCandidate(position: .zero,
-                                                halfSize: .zero,
-                                                priority: .max,
-                                                secondaryPriority: .max,
-                                                isEnabled: false)
-        let upperBound = min(labelCollisionAABBInputs.count, start + count)
-        for index in start..<upperBound {
-            labelCollisionAABBInputs[index] = zeroAABB
-        }
-    }
-
-    private func uploadRuntimeMeta(into buffer: MTLBuffer) {
-        if labelRuntimeMetaData.isEmpty {
-            writeDefaultRuntimeMeta(into: buffer)
-            return
-        }
-
-        labelRuntimeMetaData.withUnsafeBytes { bytes in
-            buffer.contents().copyMemory(from: bytes.baseAddress!,
-                                         byteCount: labelRuntimeMetaData.count * MemoryLayout<LabelRuntimeMeta>.stride)
-        }
-    }
-
-    private func writeDefaultRuntimeMeta(into buffer: MTLBuffer) {
-        var runtimeMeta = LabelRuntimeMeta(duplicate: 0,
-                                           visibleTileIndex: 0,
-                                           fadeAlpha: 0)
-        withUnsafeBytes(of: &runtimeMeta) { bytes in
-            buffer.contents().copyMemory(from: bytes.baseAddress!,
-                                         byteCount: MemoryLayout<LabelRuntimeMeta>.stride)
+        for (index, record) in records.enumerated() {
+            tileSlotVisibleTileIndices[index] = tileIndexAllocator.tileIndex(for: record.ownerKey)
         }
     }
 }

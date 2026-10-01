@@ -14,16 +14,16 @@ import simd
 /// anchor, depth-tested and never painted, and its fragment writes 1 into
 /// the label's slot of a shared buffer (`LabelOcclusionProbe.metal`). The
 /// CPU reads that buffer in the frame that reuses the slot, when the GPU
-/// is done with it, the same lag the road label placement lives with, and
-/// the fades hide the lag. A label on a roof stands exactly on the roof
+/// is done with it, a few frames of lag that the fades hide. A label on a roof stands exactly on the roof
 /// its building drew and passes: the probe steps a little toward the eye
 /// to keep clear of the surface it stands on.
 ///
 /// The answers are index-aligned with the working set and carried across
-/// a topology change by label key, like the fades. A label new to the set
-/// counts as hidden until its first answer, so it fades in once, in view,
-/// instead of appearing over a building and fading out again. The answer
-/// for a projection (a pose, a set, a roof coverage) is asked for in every
+/// a topology change with each surviving tile's run, like the fades. A
+/// label new to the set counts as hidden until its first answer, so it
+/// fades in once, in view, instead of appearing over a building and fading
+/// out again. The answer
+/// for a projection (a pose, a set, the drawn models) is asked for in every
 /// frame until it comes back, so a camera that stops still gets the answer
 /// for where it stopped.
 final class LabelOcclusionProbe {
@@ -57,7 +57,6 @@ final class LabelOcclusionProbe {
     /// until the command buffer is committed: a frame dropped after
     /// prepareGPU never runs it.
     private var pendingStamp: (slot: Int, stamp: Stamp)?
-    private var keys: [UInt64] = []
     /// Whether the probe ran in the last frame that began: what a label
     /// new to the set is assumed to be until answered.
     private var wasActive = false
@@ -81,49 +80,17 @@ final class LabelOcclusionProbe {
 
     // MARK: - The working set
 
-    /// Binds the answers to `newKeys`. A key of the old set keeps its
-    /// answer (the copy in view wins when a key sits at several indices,
-    /// as the copy with the most alpha wins for the fades). A new key is
-    /// hidden until answered while the probe runs, and in view while it
-    /// does not, so switching the probe on hides nothing that was shown.
-    func rebind(keys newKeys: [UInt64]) {
-        guard newKeys != keys else {
-            return
-        }
-        occluded = Self.carriedAnswers(keys: keys,
-                                       occluded: occluded,
-                                       newKeys: newKeys,
-                                       unknownOccluded: wasActive)
-        keys = newKeys
+    /// Binds the answers to the set after a topology change. A run that
+    /// survived keeps its answers at its new place. A new label is hidden
+    /// until answered while the probe runs, and in view while it does
+    /// not, so switching the probe on hides nothing that was shown.
+    func rebind(change: LabelWorkingSetChange) {
+        occluded = change.carry(occluded, initial: wasActive)
         // The answers in flight were asked for the old indices.
         for index in stamps.indices {
             stamps[index] = nil
         }
         pendingStamp = nil
-    }
-
-    /// The answers of `keys` carried over to `newKeys`: a key that was in
-    /// the old set keeps its answer, in view when any of its copies was,
-    /// a key not in it gets `unknownOccluded`. Key 0 is the empty slot and
-    /// carries nothing.
-    static func carriedAnswers(keys: [UInt64],
-                               occluded: [Bool],
-                               newKeys: [UInt64],
-                               unknownOccluded: Bool) -> [Bool] {
-        var previousByKey: [UInt64: Bool] = [:]
-        previousByKey.reserveCapacity(keys.count)
-        for index in keys.indices where keys[index] != 0 {
-            let occludedHere = index < occluded.count && occluded[index]
-            previousByKey[keys[index]] = (previousByKey[keys[index]] ?? true) && occludedHere
-        }
-        var next = [Bool](repeating: unknownOccluded, count: newKeys.count)
-        for index in newKeys.indices {
-            guard newKeys[index] != 0, let previous = previousByKey[newKeys[index]] else {
-                continue
-            }
-            next[index] = previous
-        }
-        return next
     }
 
     // MARK: - The frame
@@ -244,7 +211,6 @@ final class LabelOcclusionProbe {
     }
 
     func reset() {
-        keys.removeAll(keepingCapacity: false)
         occluded.removeAll(keepingCapacity: false)
         for index in stamps.indices {
             stamps[index] = nil

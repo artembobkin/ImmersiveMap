@@ -5,8 +5,8 @@
 import XCTest
 
 /// A label standing on a roof: the roof over its anchor from the volumes a
-/// tile draws (`BuildingRoofLookup`), and the slots where the frame draws
-/// buildings, the only places the label is lifted (`BuildingRoofCoverage`).
+/// tile draws (`BuildingRoofLookup`), which the flat projection lifts the
+/// label by wherever the tile came from.
 final class BuildingRoofLabelTests: XCTestCase {
     /// A candidate over a square given in render space (y up), the space
     /// the resolver's candidates live in.
@@ -83,38 +83,8 @@ final class BuildingRoofLabelTests: XCTestCase {
         XCTAssertEqual(roofs.roofHeight(atTilePoint: tilePoint(590, 590)), 50)
     }
 
-    // MARK: - Coverage
-
-    private func coverage(slots: [VisibleTile]) throws -> BuildingRoofCoverage {
-        let metalTile = MetalTile(tile: Tile(x: 0, y: 0, z: 14),
-                                  tileBuffers: try TileBuffersFixtures.makeEmptyTileBuffers())
-        return BuildingRoofCoverage(placeTilesContext: PlaceTilesContext(
-            tilePlacements: slots.map { PlaceTile(metalTile: metalTile, placeIn: $0) }))
-    }
-
-    func testAPointIsLiftedOnlyInsideASlotThatDrawsBuildings() throws {
-        let coverage = try coverage(slots: [VisibleTile(x: 100, y: 200, z: 14)])
-
-        // A z15 label tile inside the z14 slot, and one beside it.
-        XCTAssertTrue(coverage.drawsBuildings(tile: SIMD3(201, 401, 15), uv: SIMD2(0.5, 0.5)))
-        XCTAssertFalse(coverage.drawsBuildings(tile: SIMD3(202, 401, 15), uv: SIMD2(0.5, 0.5)))
-    }
-
-    /// A clipped slot finer than the label's tile covers only its own part
-    /// of that tile.
-    func testAFinerSlotCoversOnlyItsPartOfACoarserLabelTile() throws {
-        let coverage = try coverage(slots: [VisibleTile(x: 200, y: 400, z: 15)])
-
-        XCTAssertTrue(coverage.drawsBuildings(tile: SIMD3(100, 200, 14), uv: SIMD2(0.25, 0.25)))
-        XCTAssertFalse(coverage.drawsBuildings(tile: SIMD3(100, 200, 14), uv: SIMD2(0.75, 0.25)))
-    }
-
-    func testNoCoverageLiftsNothing() {
-        XCTAssertFalse(BuildingRoofCoverage.none.drawsBuildings(tile: SIMD3(100, 200, 14), uv: SIMD2(0.5, 0.5)))
-    }
-
-    /// The roof and the lift flag ride in what was padding: the stride
-    /// stays the one the GPU mirror (`TilePointInputGpu`) reads.
+    /// The roof and the lift flag sit after the tile slot, in the layout
+    /// the prepared tile format writes.
     func testTheRoofKeepsThePointInputLayout() {
         XCTAssertEqual(MemoryLayout<TilePointInput>.stride, 48)
         XCTAssertEqual(MemoryLayout<TilePointInput>.offset(of: \.roofHeight), 36)

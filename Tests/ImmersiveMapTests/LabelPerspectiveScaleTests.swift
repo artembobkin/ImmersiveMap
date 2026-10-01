@@ -10,14 +10,16 @@ final class LabelPerspectiveScaleTests: XCTestCase {
     /// The Metal mirror (`LabelRuntimeMeta.h`) reads the scale after the
     /// fade alpha, and the stride stays the one it reads.
     func testTheScaleKeepsTheRuntimeMetaLayout() {
-        XCTAssertEqual(MemoryLayout<LabelRuntimeMeta>.stride, 24)
-        XCTAssertEqual(MemoryLayout<LabelRuntimeMeta>.offset(of: \.perspectiveScale), 12)
+        XCTAssertEqual(MemoryLayout<LabelRuntimeMeta>.stride, 16)
+        XCTAssertEqual(MemoryLayout<LabelRuntimeMeta>.offset(of: \.fadeAlpha), 0)
+        XCTAssertEqual(MemoryLayout<LabelRuntimeMeta>.offset(of: \.perspectiveScale), 4)
+        XCTAssertEqual(MemoryLayout<LabelRuntimeMeta>.offset(of: \.labelSizePoints), 8)
     }
 
     /// A label nobody scales is its full size: the road labels, which share
     /// the meta, and a base label before its first projection.
     func testAnUnscaledLabelIsFullSize() {
-        XCTAssertEqual(LabelRuntimeMeta(duplicate: 0, visibleTileIndex: 0).perspectiveScale, 1)
+        XCTAssertEqual(LabelRuntimeMeta().perspectiveScale, 1)
     }
 
     func testTheDefaultShrinksToThreeQuarters() {

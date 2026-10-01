@@ -6,11 +6,10 @@
 //  ImmersiveMap
 //
 
+/// What the label shaders read per label besides its screen point, mirrored
+/// by `LabelRuntimeMeta` in LabelRuntimeMeta.h: 16 bytes, uploaded whole
+/// every frame.
 struct LabelRuntimeMeta {
-    var duplicate: UInt8
-    var _padding0: UInt8 = 0
-    var _padding: UInt16 = 0
-    var visibleTileIndex: UInt32
     var fadeAlpha: Float = 0
     /// How much the label is shrunk for its distance
     /// (`BaseSettings.perspectiveMinimumScale`): 1 at the camera's focus and

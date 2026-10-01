@@ -4,18 +4,11 @@
 import simd
 
 /// What the frame needs to know about a label besides its geometry: its
-/// key (the fades follow it across topology changes), whether it is a
-/// duplicate of another visible label (never shown), whether the slot
-/// holds a label at all, and the camera zoom it appears from.
+/// key (the identity two copies of one feature share, and what the trace
+/// names it by), the camera zoom it appears from, and whether it is local
+/// detail. Every slot of the working set holds a label: the set is packed.
 struct BaseLabelPresentationInput {
-    static let empty = BaseLabelPresentationInput(labelKey: 0,
-                                                  duplicate: 0,
-                                                  isValid: false,
-                                                  minCameraZoom: 0)
-
     let labelKey: UInt64
-    let duplicate: UInt8
-    let isValid: Bool
     /// Minimum camera zoom at which the label is visible (0 = always).
     let minCameraZoom: Float
     /// Local detail, shown only near the camera (`LabelPlacementMeta.isLocal`).
@@ -23,7 +16,8 @@ struct BaseLabelPresentationInput {
 }
 
 /// The per-label rules between the projection, the collision solve and the
-/// fades, written as in-place passes so a frame allocates nothing.
+/// fades, written as in-place passes over raw buffers so a frame allocates
+/// nothing and pays no per-element check.
 enum BaseLabelVisibilityResolver {
     static let activeAlphaThreshold: Float = 0.0001
 
@@ -34,15 +28,15 @@ enum BaseLabelVisibilityResolver {
     /// camera zoom, or local detail outside the look-at tile
     /// (`localSuppressed`), reserves nothing while it is fully invisible,
     /// otherwise a hidden POI would displace visible ones.
-    static func reservesSpace(candidateEnabled: Bool,
-                              screenVisible: Bool,
+    @inline(__always)
+    static func reservesSpace(screenVisible: Bool,
                               horizonVisible: Bool,
                               occluded: Bool = false,
                               localSuppressed: Bool = false,
                               currentAlpha: Float,
                               minCameraZoom: Float,
                               cameraZoom: Float) -> Bool {
-        guard candidateEnabled, screenVisible else {
+        guard screenVisible else {
             return false
         }
         let active = (horizonVisible && occluded == false) || currentAlpha > activeAlphaThreshold
@@ -50,12 +44,53 @@ enum BaseLabelVisibilityResolver {
         return active && suppressed == false
     }
 
-    /// Whether a label wants to be shown: valid, not a duplicate, not a
-    /// retained substitute's, accepted by the collision solve, in front of
-    /// the horizon, not behind a building (`occluded`, a missing entry
-    /// counts as in view), not local detail outside the look-at tile
+    /// `reservesSpace` for the whole set, written into `reserves`, which
+    /// is sized to `inputs`. `occluded` and `localSuppressed` may be
+    /// shorter than the set or empty: a missing entry counts as in view.
+    static func reservesSpace(inputs: [BaseLabelPresentationInput],
+                              screenPoints: [ScreenPointOutput],
+                              horizonVisibility: [Bool],
+                              occluded: [Bool],
+                              localSuppressed: [Bool],
+                              currentAlphas: [Float],
+                              cameraZoom: Float,
+                              into reserves: inout [Bool]) {
+        let count = inputs.count
+        if reserves.count != count {
+            reserves = [Bool](repeating: false, count: count)
+        }
+        let limit = min(count, min(screenPoints.count, min(horizonVisibility.count, currentAlphas.count)))
+        inputs.withUnsafeBufferPointer { inputs in
+        screenPoints.withUnsafeBufferPointer { screenPoints in
+        horizonVisibility.withUnsafeBufferPointer { horizon in
+        occluded.withUnsafeBufferPointer { occluded in
+        localSuppressed.withUnsafeBufferPointer { local in
+        currentAlphas.withUnsafeBufferPointer { alphas in
+        reserves.withUnsafeMutableBufferPointer { reserves in
+            var index = 0
+            while index < limit {
+                reserves[index] = reservesSpace(screenVisible: screenPoints[index].visible != 0,
+                                                horizonVisible: horizon[index],
+                                                occluded: index < occluded.count && occluded[index],
+                                                localSuppressed: index < local.count && local[index],
+                                                currentAlpha: alphas[index],
+                                                minCameraZoom: inputs[index].minCameraZoom,
+                                                cameraZoom: cameraZoom)
+                index += 1
+            }
+            while index < count {
+                reserves[index] = false
+                index += 1
+            }
+        }}}}}}}
+    }
+
+    /// Whether a label wants to be shown: accepted by the collision solve
+    /// (which also hides a duplicate of a placed copy), in front of the
+    /// horizon, not behind a building (`occluded`, a missing entry counts
+    /// as in view), not local detail outside the look-at tile
     /// (`localSuppressed`, likewise) and at or above its minimum camera
-    /// zoom.
+    /// zoom. A missing collision or horizon entry counts as hidden.
     static func targetVisibility(inputs: [BaseLabelPresentationInput],
                                  collisionVisible: [Bool],
                                  horizonVisibility: [Bool],
@@ -63,23 +98,30 @@ enum BaseLabelVisibilityResolver {
                                  localSuppressed: [Bool] = [],
                                  cameraZoom: Float,
                                  into target: inout [Bool]) {
-        if target.count != inputs.count {
-            target = [Bool](repeating: false, count: inputs.count)
+        let count = inputs.count
+        if target.count != count {
+            target = [Bool](repeating: false, count: count)
         }
-        for index in inputs.indices {
-            let input = inputs[index]
-            let accepted = index < collisionVisible.count && collisionVisible[index]
-            let horizonVisible = index < horizonVisibility.count && horizonVisibility[index]
-            let hidden = index < occluded.count && occluded[index]
-            let outsideLookAt = index < localSuppressed.count && localSuppressed[index]
-            target[index] = input.isValid &&
-                input.duplicate == 0 &&
-                accepted &&
-                horizonVisible &&
-                hidden == false &&
-                outsideLookAt == false &&
-                input.minCameraZoom <= cameraZoom
-        }
+        inputs.withUnsafeBufferPointer { inputs in
+        collisionVisible.withUnsafeBufferPointer { collision in
+        horizonVisibility.withUnsafeBufferPointer { horizon in
+        occluded.withUnsafeBufferPointer { occluded in
+        localSuppressed.withUnsafeBufferPointer { local in
+        target.withUnsafeMutableBufferPointer { target in
+            var index = 0
+            while index < count {
+                let accepted = index < collision.count && collision[index]
+                let horizonVisible = index < horizon.count && horizon[index]
+                let hidden = index < occluded.count && occluded[index]
+                let outsideLookAt = index < local.count && local[index]
+                target[index] = accepted
+                    && horizonVisible
+                    && hidden == false
+                    && outsideLookAt == false
+                    && inputs[index].minCameraZoom <= cameraZoom
+                index += 1
+            }
+        }}}}}}
     }
 
     /// How far the local detail may be, for `localSuppression`.
@@ -109,26 +151,35 @@ enum BaseLabelVisibilityResolver {
                                  centerWorldMercator: SIMD2<Double>,
                                  reach: LocalDetailReach,
                                  into suppressed: inout [Bool]) -> Bool {
-        if suppressed.count != inputs.count {
-            suppressed = [Bool](repeating: false, count: inputs.count)
+        let count = inputs.count
+        if suppressed.count != count {
+            suppressed = [Bool](repeating: false, count: count)
         }
         let maximumDistance = reach.unitsPerMeter.map { $0 * max(0, reach.maximumDistanceMeters) }
+        let eye = reach.eye
         var changed = false
-        for index in inputs.indices {
-            var outOfReach = false
-            if inputs[index].isLocal, index < pointInputs.count {
-                outOfReach = isWithinLookAtBlock(pointInputs[index].tile, mercator: centerWorldMercator) == false
-                if outOfReach == false, let maximumDistance, index < anchors.count {
-                    let anchor = anchors[index]
-                    let distance = simd_length(SIMD3<Float>(anchor.x, anchor.y, anchor.z) - reach.eye)
-                    outOfReach = distance > maximumDistance
+        inputs.withUnsafeBufferPointer { inputs in
+        pointInputs.withUnsafeBufferPointer { points in
+        anchors.withUnsafeBufferPointer { anchors in
+        suppressed.withUnsafeMutableBufferPointer { suppressed in
+            var index = 0
+            while index < count {
+                var outOfReach = false
+                if inputs[index].isLocal, index < points.count {
+                    outOfReach = isWithinLookAtBlock(points[index].tile, mercator: centerWorldMercator) == false
+                    if outOfReach == false, let maximumDistance, index < anchors.count {
+                        let anchor = anchors[index]
+                        let distance = simd_length(SIMD3<Float>(anchor.x, anchor.y, anchor.z) - eye)
+                        outOfReach = distance > maximumDistance
+                    }
                 }
+                if suppressed[index] != outOfReach {
+                    suppressed[index] = outOfReach
+                    changed = true
+                }
+                index += 1
             }
-            if suppressed[index] != outOfReach {
-                suppressed[index] = outOfReach
-                changed = true
-            }
-        }
+        }}}}
         return changed
     }
 

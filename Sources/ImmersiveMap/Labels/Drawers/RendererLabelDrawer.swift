@@ -127,20 +127,16 @@ final class RendererLabelDrawer {
 
         var bindings = EncoderBindings()
         for drawLabel in roadDrawLabels {
-            guard let placementBuffer = drawLabel.placementBuffer,
-                  let glyphInputBuffer = drawLabel.glyphInputBuffer,
-                  let runtimeMetaBuffer = drawLabel.runtimeMetaBuffer,
-                  let localGlyphVertices = drawLabel.localGlyphVertices,
-                  drawLabel.localGlyphVertexCount > 0 else {
+            guard drawLabel.localGlyphVertexCount > 0 else {
                 continue
             }
 
-            renderEncoder.setVertexBuffer(placementBuffer, offset: 0, index: 2)
-            renderEncoder.setVertexBuffer(glyphInputBuffer, offset: 0, index: 3)
-            renderEncoder.setVertexBuffer(runtimeMetaBuffer, offset: 0, index: 4)
-            setVertexBuffer0(localGlyphVertices, renderEncoder: renderEncoder, bindings: &bindings)
+            renderEncoder.setVertexBuffer(drawLabel.placementBuffer, offset: 0, index: 2)
+            renderEncoder.setVertexBuffer(drawLabel.glyphInputBuffer, offset: 0, index: 3)
+            renderEncoder.setVertexBuffer(drawLabel.runtimeMetaBuffer, offset: 0, index: 4)
+            setVertexBuffer0(drawLabel.localGlyphVertices, renderEncoder: renderEncoder, bindings: &bindings)
 
-            let style = drawLabel.labelStyle ?? RoadLabelCache.fallbackStyle
+            let style = drawLabel.labelStyle
             let texture = style.weight == .bold ? textRenderer.texture : textRenderer.thinTexture
             setFragmentTexture(texture, renderEncoder: renderEncoder, bindings: &bindings)
 
