@@ -15,13 +15,16 @@ struct ModelTileDrawItem {
 enum ModelTileDrawer {
     /// The models in the world pass: opaque, depth tested and written,
     /// raising the surface mask bit where they land so the horizon's haze
-    /// passes them by. A tile binds its buffer and its texture array once
+    /// passes them by. They are drawn nearer in depth than they stand by
+    /// `depthBias`, a share of their distance from the eye
+    /// (`ModelArchiveSettings.depthBias`). A tile binds its buffer and its texture array once
     /// and draws its merged models in one call. A model that cuts into the
     /// ground takes the four draws of the ground cut after it (ModelTile.metal).
     static func draw(renderEncoder: MTLRenderCommandEncoder,
                      cameraUniform: CameraUniform,
                      shadowBinding: ShadowReceiverBinding,
                      items: [ModelTileDrawItem],
+                     depthBias: Float,
                      pipeline: ModelTilePipeline,
                      surfaceMaskState: MTLDepthStencilState,
                      groundCutStates: SceneModelGroundCutStates,
@@ -33,6 +36,8 @@ enum ModelTileDrawer {
         // The models are counterclockwise-wound; Metal defaults to clockwise.
         renderEncoder.setFrontFacing(.counterClockwise)
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
+        var depthBiasValue = depthBias
+        renderEncoder.setVertexBytes(&depthBiasValue, length: MemoryLayout<Float>.stride, index: 3)
 
         var shadowUniformValue = shadowBinding.uniform
         renderEncoder.setFragmentBytes(&shadowUniformValue, length: MemoryLayout<ShadowUniform>.stride, index: 4)

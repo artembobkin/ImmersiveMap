@@ -652,11 +652,19 @@ public extension ImmersiveMapView {
     /// map is never missing either. The models show on the flat map,
     /// wherever the map draws tiles of the archive's zoom or deeper.
     ///
+    /// `depthBias` draws the models nearer in depth than they stand, by a
+    /// share of their distance from the camera, so a model covers the
+    /// map's own building it stands in for where the map could not leave
+    /// it out, and a building well in front of it still covers the model.
+    /// Nil keeps the value set, 0.05 by default. See
+    /// ``ImmersiveMapSettings/ModelArchiveSettings/depthBias``.
+    ///
     /// The budgets are set with `modelArchiveSettings(_:)`.
     public func modelArchive(_ archiveURL: URL,
-                             headers: [String: String] = [:]) -> ImmersiveMapView {
+                             headers: [String: String] = [:],
+                             depthBias: Float? = nil) -> ImmersiveMapView {
         var view = self
-        view.settings = view.settings.modelArchive(archiveURL, headers: headers)
+        view.settings = view.settings.modelArchive(archiveURL, headers: headers, depthBias: depthBias)
         return view
     }
 

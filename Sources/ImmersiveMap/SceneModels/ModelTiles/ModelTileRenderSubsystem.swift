@@ -42,6 +42,7 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
     static let neighbourRing = 1
 
     private let store: ModelTileStore?
+    private let depthBias: Float
     private let pipeline: ModelTilePipeline
     private let extrudedDepthState: MTLDepthStencilState
     private let surfaceMaskState: MTLDepthStencilState
@@ -55,6 +56,7 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
     /// `store` is nil for a map without a model archive: the subsystem then
     /// does nothing.
     init(store: ModelTileStore?,
+         depthBias: Float,
          pipeline: ModelTilePipeline,
          extrudedDepthState: MTLDepthStencilState,
          surfaceMaskState: MTLDepthStencilState,
@@ -63,6 +65,7 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
          shadowMapTextureProvider: @escaping () -> MTLTexture?,
          shadowFallbackTexture: MTLTexture) {
         self.store = store
+        self.depthBias = depthBias
         self.pipeline = pipeline
         self.extrudedDepthState = extrudedDepthState
         self.surfaceMaskState = surfaceMaskState
@@ -212,6 +215,7 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
                                  cameraUniform: frameContext.cameraUniform,
                                  shadowBinding: shadowBinding,
                                  items: drawItems,
+                                 depthBias: depthBias,
                                  pipeline: pipeline,
                                  surfaceMaskState: surfaceMaskState,
                                  groundCutStates: groundCutStates,

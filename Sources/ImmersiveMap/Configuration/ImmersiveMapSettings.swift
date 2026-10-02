@@ -1247,6 +1247,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     public struct ModelArchiveSettings: Equatable, Sendable {
         public static let defaultMemoryBudgetInBytes: Int = 128 * 1_024 * 1_024
         public static let defaultDiskCacheSizeInBytes: Int = 512 * 1_024 * 1_024
+        public static let defaultDepthBias: Float = 0.05
+        public static let maximumDepthBias: Float = 0.25
 
         /// The archive, over HTTP(S) range requests or from disk for a file
         /// URL. A query string is sent as written, so a key can live there.
@@ -1262,15 +1264,39 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// The byte quota of the model tiles kept on disk, where a tile
         /// seen before comes back from without the network.
         public var diskCacheSizeInBytes: Int
+        /// How much nearer in depth than it stands a model is drawn, as a
+        /// share of its distance from the camera: 0.05 draws a model two
+        /// kilometres away as if it were a hundred metres closer. Its place on
+        /// the screen does not change, only what it covers and is covered
+        /// by.
+        ///
+        /// It puts a model over the map's own building it stands in for
+        /// where the map could not leave that building out, as in the map
+        /// tiles whose buildings are merged into groups: the building
+        /// reaches a little out of the model, by less than the bias takes
+        /// the model forward. A building standing well in front of the
+        /// model is nearer than that and still covers it. The cost of a
+        /// larger share is a model showing over a neighbour that stands
+        /// right before it. Zero draws a model where it stands. Kept
+        /// within 0...`maximumDepthBias`.
+        public var depthBias: Float {
+            didSet { depthBias = Self.clampedDepthBias(depthBias) }
+        }
 
         public init(archiveURL: URL,
                     requestHeaders: [String: String] = [:],
                     memoryBudgetInBytes: Int = ModelArchiveSettings.defaultMemoryBudgetInBytes,
-                    diskCacheSizeInBytes: Int = ModelArchiveSettings.defaultDiskCacheSizeInBytes) {
+                    diskCacheSizeInBytes: Int = ModelArchiveSettings.defaultDiskCacheSizeInBytes,
+                    depthBias: Float = ModelArchiveSettings.defaultDepthBias) {
             self.archiveURL = archiveURL
             self.requestHeaders = requestHeaders
             self.memoryBudgetInBytes = memoryBudgetInBytes
             self.diskCacheSizeInBytes = diskCacheSizeInBytes
+            self.depthBias = Self.clampedDepthBias(depthBias)
+        }
+
+        private static func clampedDepthBias(_ value: Float) -> Float {
+            value.isFinite ? min(max(value, 0), maximumDepthBias) : 0
         }
     }
 
@@ -1482,13 +1508,18 @@ public extension ImmersiveMapSettings {
     }
 
     /// Points the map at an archive of model tiles, keeping the budgets
-    /// already set. See `ModelArchiveSettings`.
+    /// already set, and the depth bias too when `depthBias` is nil. See
+    /// `ModelArchiveSettings`.
     func modelArchive(_ archiveURL: URL,
-                      headers: [String: String] = [:]) -> ImmersiveMapSettings {
+                      headers: [String: String] = [:],
+                      depthBias: Float? = nil) -> ImmersiveMapSettings {
         var settings = self
         var archive = settings.modelArchive ?? ModelArchiveSettings(archiveURL: archiveURL)
         archive.archiveURL = archiveURL
         archive.requestHeaders = headers
+        if let depthBias {
+            archive.depthBias = depthBias
+        }
         settings.modelArchive = archive
         return settings
     }

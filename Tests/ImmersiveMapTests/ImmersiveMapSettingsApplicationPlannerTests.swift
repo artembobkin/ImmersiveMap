@@ -211,4 +211,22 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         XCTAssertEqual(plan.actions, [.recreateRenderer])
         XCTAssertTrue(plan.requiresRendererRecreation)
     }
+
+    /// The depth bias of the models is kept within its range, and a value
+    /// that is not a number draws the models where they stand.
+    func testTheModelDepthBiasIsKeptWithinItsRange() {
+        typealias Archive = ImmersiveMapSettings.ModelArchiveSettings
+        let url = URL(string: "https://tiles.example.com/models.pmtiles")!
+
+        XCTAssertEqual(Archive(archiveURL: url).depthBias, Archive.defaultDepthBias)
+        XCTAssertEqual(Archive(archiveURL: url, depthBias: -1).depthBias, 0)
+        XCTAssertEqual(Archive(archiveURL: url, depthBias: 3).depthBias, Archive.maximumDepthBias)
+        XCTAssertEqual(Archive(archiveURL: url, depthBias: .nan).depthBias, 0)
+        var archive = Archive(archiveURL: url)
+        archive.depthBias = 9
+        XCTAssertEqual(archive.depthBias, Archive.maximumDepthBias)
+
+        let kept = ImmersiveMapSettings.default.modelArchive(url, depthBias: 0.02).modelArchive(url)
+        XCTAssertEqual(kept.modelArchive?.depthBias, 0.02, "pointing at an archive again keeps the bias set")
+    }
 }

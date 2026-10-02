@@ -22,6 +22,15 @@ using namespace metal;
 // hole bit, and the clipped variant of the fragment function drops what
 // lies below the surface outside the hole. The ground is the plane Z = 0.
 
+// A model is drawn a little nearer in depth than it stands (depthBias, a
+// share of its distance from the eye): every vertex moves toward the eye
+// along its own ray, which leaves it where it was on the screen and takes
+// only its depth forward. The map's own building a model stands in for,
+// where a tile did not leave it out, reaches a little out of the model, and
+// this is what puts the model over it. A building standing well in front
+// of the model is nearer than the share takes the model, and still covers
+// it. The shadow and the ground hole take a vertex where it stands.
+
 // The clipped variant of the fragment function: below-ground fragments are
 // dropped. Its own pipeline, so the plain variant keeps early depth.
 constant bool kModelTileClipsBelowGround [[function_constant(0)]];
@@ -47,11 +56,13 @@ struct ModelTileVertexOut {
 
 vertex ModelTileVertexOut modelTileVertexShader(ModelTileVertexIn vertexIn [[stage_in]],
                                                 constant Camera& camera [[buffer(1)]],
-                                                constant float4x4& modelMatrix [[buffer(2)]]) {
+                                                constant float4x4& modelMatrix [[buffer(2)]],
+                                                constant float& depthBias [[buffer(3)]]) {
     float4 worldPosition = modelMatrix * float4(vertexIn.position, 1.0);
+    float3 drawnPosition = worldPosition.xyz + (camera.eye - worldPosition.xyz) * depthBias;
 
     ModelTileVertexOut out;
-    out.position = camera.matrix * worldPosition;
+    out.position = camera.matrix * float4(drawnPosition, 1.0);
     out.worldPosition = worldPosition.xyz;
     // A translation and a uniform scale leave a direction as it is.
     out.worldNormal = normalize(vertexIn.normal);

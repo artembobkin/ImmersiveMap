@@ -46,6 +46,7 @@ enum RenderGraphFactory {
                                                             shadowMapTextureProvider: shadowMapTextureProvider,
                                                             shadowFallbackTexture: context.shadowFallbackTexture)
         let modelTileSubsystem = ModelTileRenderSubsystem(store: context.modelTileStore,
+                                                          depthBias: settings.modelArchive?.depthBias ?? 0,
                                                           pipeline: context.modelTilePipeline,
                                                           extrudedDepthState: context.extrudedDepthState,
                                                           surfaceMaskState: context.sceneModelSurfaceMaskState,

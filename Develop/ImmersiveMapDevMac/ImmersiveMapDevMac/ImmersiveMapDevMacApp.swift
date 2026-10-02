@@ -58,7 +58,11 @@ private struct MapScreen: View {
             // The landmarks of the centre of Moscow, from the model archive:
             // loaded by tile as the camera moves, each in place of the map's
             // own building once it is there.
-            .modelArchive(devModelArchive)
+            // The depth bias is the share of a model's distance from the
+            // camera it is drawn nearer by, so it covers the map's own
+            // building under it in the tiles that could not leave it out.
+            // The value to tune by eye: 0 turns it off.
+            .modelArchive(devModelArchive, depthBias: 0.05)
             // A tileset under development is rebuilt and re-served under the
             // same coordinates, so a warm disk cache would keep showing the
             // previous build. Every launch here starts from the network.
