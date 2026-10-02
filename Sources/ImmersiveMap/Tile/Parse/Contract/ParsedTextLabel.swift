@@ -41,10 +41,6 @@ struct ParsedTextLabel {
     /// Whether the label draws on the roof over it: it names the building
     /// itself (the building's own OSM element), not something inside it.
     var liftsToRoof: Bool = false
-    /// Whether the roof over the anchor is a building a landmark model
-    /// stands in for: the frame then takes the drawn model's top as the
-    /// roof, since the tile's volume is not drawn and may not match it.
-    var roofIsReplaced: Bool = false
 
     init(text: String,
          position: SIMD2<Int16>,

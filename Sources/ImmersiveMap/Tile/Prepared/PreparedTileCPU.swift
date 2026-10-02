@@ -50,6 +50,19 @@ struct PreparedTileCPU: Sendable {
         let vertices: [ExtrudedVertexIn]
         let indices: [UInt32]
         let styles: [TilePolygonStyle]
+        /// Each building's place in `indices`, sorted by feature id, see
+        /// `TileBuildingRange`.
+        let buildingRanges: [TileBuildingRange]
+
+        init(vertices: [ExtrudedVertexIn],
+             indices: [UInt32],
+             styles: [TilePolygonStyle],
+             buildingRanges: [TileBuildingRange] = []) {
+            self.vertices = vertices
+            self.indices = indices
+            self.styles = styles
+            self.buildingRanges = buildingRanges
+        }
     }
 
     struct TextGlyphRun {

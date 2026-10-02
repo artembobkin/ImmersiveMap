@@ -157,8 +157,8 @@ final class TileMvtParser {
         let tools = TileParseTools()
         var result = ReadingStageResult()
         var buildingExtrusionCandidates: [BuildingExtrusionCandidate] = []
-        var replacedBuildings = ReplacedBuildingFilter(replacedIDs: options.replacedBuildingIDs,
-                                                       tileZoom: tile.z)
+        // The ids of the building outlines the tile carries, raised or not.
+        var buildingOutlineIDs = Set<UInt64>()
 
         for preparedLayer in prepareLayers(decodedTile: decodedTile, tile: tile) {
             let layerStart = DispatchTime.now().uptimeNanoseconds
@@ -205,9 +205,6 @@ final class TileMvtParser {
                 let attributes = featureAttributes[featureIndex]
                 let facts = featureFacts[featureIndex]
                 let style = featureStyles[featureIndex]
-                if feature.type == .polygon, facts.building != nil, replacedBuildings.replaces(feature.id) {
-                    replacedBuildings.record(outline: layerGeometry.polygons(of: feature))
-                }
                 if case .hidden = style {
                     // The style declines the feature: nothing to draw.
                     continue
@@ -223,6 +220,7 @@ final class TileMvtParser {
                                  tile: tile,
                                  tools: tools,
                                  extrusionCandidates: &buildingExtrusionCandidates,
+                                 buildingOutlineIDs: &buildingOutlineIDs,
                                  into: &result)
                 } else if feature.type == .linestring {
                     lineReader.read(feature: feature,
@@ -264,8 +262,8 @@ final class TileMvtParser {
         groundReader.finish(tile: tile, addTestBorders: options.addTestBorders, into: &result)
 
         // Only once every layer is read: an outline can come after its parts.
-        let (standing, replaced) = replacedBuildings.partition(buildingExtrusionCandidates)
-        let extrudedVolumes = buildingReader.appendExtrudedMeshes(resolving: standing, into: &result)
+        let extrudedVolumes = buildingReader.appendExtrudedMeshes(resolving: buildingExtrusionCandidates,
+                                                                  into: &result)
         // Every building's own top by its id, before the resolver clamps
         // or drops volumes: what a label naming that building rises to.
         var buildingTops: [UInt64: Float] = [:]
@@ -273,9 +271,8 @@ final class TileMvtParser {
             buildingTops[candidate.buildingId] = max(buildingTops[candidate.buildingId] ?? 0, candidate.topHeight)
         }
         liftLabelsOntoRoofs(of: extrudedVolumes,
-                            replacedVolumes: replaced,
                             buildingTops: buildingTops,
-                            replacedBuildings: replacedBuildings,
+                            buildingOutlineIDs: buildingOutlineIDs,
                             into: &result)
 
         result.removeEmptyBuckets()
@@ -283,48 +280,59 @@ final class TileMvtParser {
     }
 
     /// The labels whose style stands them in buildings take the height of
-    /// the roof over their anchor: from the volumes the tile draws, or for
-    /// a building a landmark model replaces, from the tile's own volume of
-    /// it, which stands in for the model's height until the model is drawn
-    /// (the frame then takes the model's top). A label on open ground keeps
-    /// zero. Of the labels in a building, only the one naming the building
-    /// itself (the same OSM element as the building) rises to the roof,
-    /// and to that building's own roof: a part's label to the part's top,
-    /// not the outline's around it, and the outline's label, where a model
-    /// stands in for the outline, to the model's top. The rest stay on the
+    /// the roof over their anchor, from the volumes the tile draws. A label
+    /// on open ground keeps zero. Of the labels in a building, only the one
+    /// naming the building itself (the same OSM element as the building)
+    /// rises to the roof, and to that building's own roof: a part's label
+    /// to the part's top, not the outline's around it. The rest stay on the
     /// ground and only carry the roof over them for their view test.
+    ///
+    /// A label naming an outline the tile does not raise itself (an outline
+    /// whose volume is its parts) names its building too: it rises to the
+    /// roof of the parts over its anchor. A model drawn in a building's
+    /// place changes none of this: the labels know nothing of the models,
+    /// and the tile's volumes say the height whether they are drawn or not.
     private func liftLabelsOntoRoofs(of volumes: [BuildingExtrusionCandidate],
-                                     replacedVolumes: [BuildingExtrusionCandidate],
                                      buildingTops: [UInt64: Float],
-                                     replacedBuildings: ReplacedBuildingFilter,
+                                     buildingOutlineIDs: Set<UInt64>,
                                      into result: inout ReadingStageResult) {
-        guard volumes.isEmpty == false || replacedVolumes.isEmpty == false,
+        guard volumes.isEmpty == false,
               result.textLabels.contains(where: \.standsOnRoof) else {
             return
         }
-        let roofs = BuildingRoofLookup(candidates: volumes, replacedCandidates: replacedVolumes)
+        let roofs = BuildingRoofLookup(candidates: volumes)
         for index in result.textLabels.indices where result.textLabels[index].standsOnRoof {
             let label = result.textLabels[index]
-            let roof = roofs.roof(atTilePoint: label.position)
-            if let featureId = label.featureId, replacedBuildings.replaces(featureId) {
-                // Names the outline a model stands in for: the model's top
-                // at the frame, the tile's volume of it until then.
-                result.textLabels[index].roofHeight = max(buildingTops[featureId] ?? 0, roof.height)
-                result.textLabels[index].roofIsReplaced = true
-                result.textLabels[index].liftsToRoof = true
-            } else if let featureId = label.featureId, let ownTop = buildingTops[featureId], ownTop > 0 {
-                // Names a building the tile has: its own top, whatever
-                // stands over or around it.
-                result.textLabels[index].roofHeight = ownTop
-                result.textLabels[index].roofIsReplaced = false
-                result.textLabels[index].liftsToRoof = true
-            } else {
-                // Something inside: the roof over it, for the view test.
-                result.textLabels[index].roofHeight = roof.height
-                result.textLabels[index].roofIsReplaced = roof.isReplaced
-                result.textLabels[index].liftsToRoof = false
-            }
+            let roof = Self.labelRoof(featureId: label.featureId,
+                                      buildingTops: buildingTops,
+                                      buildingOutlineIDs: buildingOutlineIDs,
+                                      roofOverAnchor: roofs.roofHeight(atTilePoint: label.position))
+            result.textLabels[index].roofHeight = roof.height
+            result.textLabels[index].liftsToRoof = roof.lifts
         }
+    }
+
+    /// The roof a label in a building takes and whether it draws on it,
+    /// from the element it names. `roofOverAnchor` is the top of the
+    /// volumes over its anchor, zero on open ground.
+    static func labelRoof(featureId: UInt64?,
+                          buildingTops: [UInt64: Float],
+                          buildingOutlineIDs: Set<UInt64>,
+                          roofOverAnchor: @autoclosure () -> Float) -> (height: Float, lifts: Bool) {
+        if let featureId, let ownTop = buildingTops[featureId], ownTop > 0 {
+            // Names a volume the tile has: its own top, whatever stands
+            // over or around it.
+            return (ownTop, true)
+        }
+        let roofOverAnchor = roofOverAnchor()
+        if let featureId, buildingOutlineIDs.contains(featureId) {
+            // Names an outline raised only by its parts: the roof of the
+            // parts over the anchor. In a courtyard there is none, and the
+            // label stays on the ground.
+            return (roofOverAnchor, roofOverAnchor > 0)
+        }
+        // Something inside: the roof over it, for the view test.
+        return (roofOverAnchor, false)
     }
 
     /// A polygon feature by the case of its style: a fill (with the ocean
@@ -342,6 +350,7 @@ final class TileMvtParser {
                               tile: Tile,
                               tools: TileParseTools,
                               extrusionCandidates: inout [BuildingExtrusionCandidate],
+                              buildingOutlineIDs: inout Set<UInt64>,
                               into result: inout ReadingStageResult) {
         let polygons = geometry.polygons(of: feature)
         switch style {
@@ -375,6 +384,11 @@ final class TileMvtParser {
                                                          polygons: polygons,
                                                          partInfo: buildingPartInfo,
                                                          tile: tile)
+            // Every outline, raised or not: a label can name an outline
+            // whose volume is its parts.
+            if tile.z >= options.buildingMinimumSourceZoom, facts.building?.isPart == false, feature.id != 0 {
+                buildingOutlineIDs.insert(feature.id)
+            }
             for polygon in polygons {
                 guard let parsedGeometry = tools.parsePolygon.parseGeometry(polygon: polygon,
                                                                             tileExtent: tileExtent) else {

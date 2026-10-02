@@ -118,6 +118,8 @@ final class SharedRenderResources {
     /// The air around the surface's edge, on both surfaces.
     let horizonPipeline: HorizonPipeline
     let sceneModelPipeline: SceneModelPipeline
+    /// The models of the model tiles, see `ModelTilePipeline`.
+    let modelTilePipeline: ModelTilePipeline
     /// The point labels' occlusion probes in the world pass.
     let labelOcclusionProbePipeline: LabelOcclusionProbePipeline
 
@@ -314,6 +316,7 @@ final class SharedRenderResources {
         self.starfieldPipeline = compiled.starfieldPipeline
         self.horizonPipeline = compiled.horizonPipeline
         self.sceneModelPipeline = compiled.sceneModelPipeline
+        self.modelTilePipeline = compiled.modelTilePipeline
         self.labelOcclusionProbePipeline = compiled.labelOcclusionProbePipeline
         self.globeCap = compiled.globeCap
         self.avatars = compiled.avatars
@@ -340,6 +343,7 @@ final class SharedRenderResources {
         let starfieldPipeline: StarfieldPipeline
         let horizonPipeline: HorizonPipeline
         let sceneModelPipeline: SceneModelPipeline
+        let modelTilePipeline: ModelTilePipeline
         let labelOcclusionProbePipeline: LabelOcclusionProbePipeline
         let globeCap: GlobeCapRenderer.SharedResources
         let avatars: AvatarsRenderer.SharedResources
@@ -371,6 +375,7 @@ final class SharedRenderResources {
         var starfieldPipeline: StarfieldPipeline?
         var horizonPipeline: HorizonPipeline?
         var sceneModelPipeline: SceneModelPipeline?
+        var modelTilePipeline: ModelTilePipeline?
         var labelOcclusionProbePipeline: LabelOcclusionProbePipeline?
         var globeCap: GlobeCapRenderer.SharedResources?
         var avatars: AvatarsRenderer.SharedResources?
@@ -431,6 +436,10 @@ final class SharedRenderResources {
                                                       pixelFormat: pixelFormat,
                                                       library: library,
                                                       sampleCount: sampleCount) },
+            { modelTilePipeline = ModelTilePipeline(metalDevice: device,
+                                                    pixelFormat: pixelFormat,
+                                                    library: library,
+                                                    sampleCount: sampleCount) },
             { labelOcclusionProbePipeline = LabelOcclusionProbePipeline(metalDevice: device,
                                                                         pixelFormat: pixelFormat,
                                                                         library: library,
@@ -450,6 +459,7 @@ final class SharedRenderResources {
             starfieldPipeline: starfieldPipeline!,
             horizonPipeline: horizonPipeline!,
             sceneModelPipeline: sceneModelPipeline!,
+            modelTilePipeline: modelTilePipeline!,
             labelOcclusionProbePipeline: labelOcclusionProbePipeline!,
             globeCap: globeCap!,
             avatars: avatars!,

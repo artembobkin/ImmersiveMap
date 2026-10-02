@@ -45,6 +45,14 @@ enum RenderGraphFactory {
                                                             depthDisabledState: context.depthDisabledState,
                                                             shadowMapTextureProvider: shadowMapTextureProvider,
                                                             shadowFallbackTexture: context.shadowFallbackTexture)
+        let modelTileSubsystem = ModelTileRenderSubsystem(store: context.modelTileStore,
+                                                          pipeline: context.modelTilePipeline,
+                                                          extrudedDepthState: context.extrudedDepthState,
+                                                          surfaceMaskState: context.sceneModelSurfaceMaskState,
+                                                          groundCutStates: context.sceneModelGroundCutStates,
+                                                          depthDisabledState: context.depthDisabledState,
+                                                          shadowMapTextureProvider: shadowMapTextureProvider,
+                                                          shadowFallbackTexture: context.shadowFallbackTexture)
         let flatMapSurfaceSubsystem = FlatMapSurfaceRenderSubsystem(tilePipeline: context.tilePipeline,
                                                                     groundOwnerState: context.groundOwnerState,
                                                                     tileStencilTestState: context.tileStencilTestState,
@@ -92,13 +100,13 @@ enum RenderGraphFactory {
                                                          textRenderer: context.textRenderer,
                                                          controls: debugOverlayControls)
 
-        // The scene models decide before the labels: the labels standing
-        // in a building a model replaces take the model's top as their
-        // roof (SceneModelFrameState.roofs) in the same frame.
+        // The model tiles follow the scene models, which start the
+        // frame's model state over, and add to it.
         let subsystems: [any RenderSubsystem] = [
             tileWorkingSetSubsystem,
             tileProjectionIndexSubsystem,
             sceneModelSubsystem,
+            modelTileSubsystem,
             baseLabelSubsystem,
             baseLabelDrawSubsystem,
             roadLabelDrawSubsystem,
@@ -121,6 +129,7 @@ enum RenderGraphFactory {
             roadLabelDrawSubsystem,
             avatarSubsystem,
             sceneModelSubsystem,
+            modelTileSubsystem,
             starfieldSubsystem,
             debugSubsystem
         ]

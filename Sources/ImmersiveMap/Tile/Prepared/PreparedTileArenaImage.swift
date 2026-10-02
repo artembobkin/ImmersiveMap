@@ -95,4 +95,7 @@ struct PreparedTileArenaImage: Sendable {
     /// arena's layer order (`PreparedTileCPU.roadEdgeLineIndexStarts`). A
     /// layer the list does not reach draws whole as bodies.
     var roadEdgeLineIndexStarts: [UInt32] = []
+    /// Each building's place in the extruded indices
+    /// (`PreparedTileCPU.Extruded.buildingRanges`).
+    var buildingRanges: [TileBuildingRange] = []
 }

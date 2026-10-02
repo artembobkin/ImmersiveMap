@@ -80,6 +80,9 @@ final class RenderPersistentContext {
     let sceneModelSource: SceneModelRenderSource
     let sceneModelMeshStore: SceneModelMeshStore
     let sceneModelPipeline: SceneModelPipeline
+    /// The models of the model archive, nil for a map without one.
+    let modelTileStore: ModelTileStore?
+    let modelTilePipeline: ModelTilePipeline
 
     // MARK: - Avatar and Debug Resources
 
@@ -169,6 +172,11 @@ final class RenderPersistentContext {
         self.sceneModelMeshStore = SceneModelMeshStore(device: metal.device)
         self.sceneModelMeshStore.eventSink = eventSink
         self.sceneModelPipeline = shared.sceneModelPipeline
+        self.modelTilePipeline = shared.modelTilePipeline
+        self.modelTileStore = ModelTileStore.make(settings: config,
+                                                  device: metal.device,
+                                                  schema: styleRuntime.schema)
+        self.modelTileStore?.eventSink = eventSink
 
         self.avatarSource = avatarSource
         self.markerSource = markerSource

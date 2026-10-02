@@ -14,6 +14,7 @@ public enum ImmersiveMapSettingsChangeDomain: String, CaseIterable, Equatable {
     case postProcessing
     case debug
     case landmarks
+    case modelArchive
 }
 
 public enum ImmersiveMapSettingsApplyAction: String, CaseIterable, Equatable {
@@ -123,16 +124,17 @@ public enum ImmersiveMapSettingsApplicationPlanner {
             }
         }
 
-        // Which buildings the landmarks replace, and from which zoom, is baked
-        // into every prepared tile (the cache identity carries it). The
-        // models alone are read per frame.
-        func replacement(_ settings: ImmersiveMapSettings) -> [String] {
-            settings.landmarks.map { "\($0.replacedBuilding.map { "\($0)" } ?? "none")@\($0.minimumZoom)" }
-        }
-        if replacement(oldValue) != replacement(newValue) {
-            mark(.landmarks, actions: [.rebuildPreparedData, .recreateRenderer])
-        } else if oldValue.landmarks != newValue.landmarks {
+        // The landmarks are read per frame, the buildings they replace
+        // included: a tile keeps every building, and the frame leaves out
+        // the ones a drawn model stands in for.
+        if oldValue.landmarks != newValue.landmarks {
             mark(.landmarks, actions: [.liveApply])
+        }
+        // The archive client, the disk cache and the memory budget are
+        // built with the renderer. The map's own tiles are untouched: they
+        // do not depend on the models.
+        if oldValue.modelArchive != newValue.modelArchive {
+            mark(.modelArchive, actions: [.recreateRenderer])
         }
 
         return ImmersiveMapSettingsApplicationPlan(changedDomains: changedDomains, actions: actions)

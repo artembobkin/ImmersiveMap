@@ -7,8 +7,9 @@ import simd
 /// Keeps the rendered shadow map alive across frames. The sun is static and
 /// the buildings do not move, so a rendered map only goes stale when the
 /// camera leaves the fitted window, the light or resolution changes, the
-/// set of tiles with buildings changes, or scene models (which animate)
-/// cast.
+/// set of tiles with buildings changes, the buildings left out for models
+/// or the models of the model tiles change, or scene models (which
+/// animate) cast.
 /// Everything else is the common case: the receivers keep sampling the map
 /// rendered some frames ago, through matrices re-materialized for the
 /// current pan, and the whole caster pass simply does not run.
@@ -41,6 +42,8 @@ final class ShadowMapReuseController {
     private var renderedGeneration: UInt64?
     private var renderedTextureIdentity: ObjectIdentifier?
     private var renderedCasterKeys: Set<CasterKey> = []
+    private var renderedStaticModelCasters: Set<StaticModelCasterKey> = []
+    private var renderedHiddenBuildings = ReplacedBuildings.none
 
     /// The per-frame shadow state: a cached fit re-materialized under the
     /// current pan when it still covers the frame, a fresh (margined) fit
@@ -80,19 +83,30 @@ final class ShadowMapReuseController {
     /// planning. Returns true when the caster pass must run this frame, and
     /// then also records the render, so the next frames can reuse it.
     func planShadowRender(frameContext: FrameContext, texture: MTLTexture) -> Bool {
-        planShadowRender(casterKeys: Self.casterKeys(tilePlacementState: frameContext.sharedState.tilePlacementState),
-                         hasModelCasters: frameContext.sharedState.sceneModelState.hasShadowCasters,
-                         texture: texture)
+        let sceneModelState = frameContext.sharedState.sceneModelState
+        return planShadowRender(casterKeys: Self.casterKeys(tilePlacementState: frameContext.sharedState.tilePlacementState),
+                                hasModelCasters: sceneModelState.hasMovingShadowCasters,
+                                staticModelCasters: sceneModelState.staticShadowCasters,
+                                hiddenBuildings: sceneModelState.replacedBuildings,
+                                texture: texture)
     }
 
+    /// `hasModelCasters` counts the models that can move. The models of the
+    /// model tiles never do and come as `staticModelCasters`.
     func planShadowRender(casterKeys: Set<CasterKey>,
                           hasModelCasters: Bool,
+                          staticModelCasters: Set<StaticModelCasterKey> = [],
+                          hiddenBuildings: ReplacedBuildings = .none,
                           texture: MTLTexture) -> Bool {
         let needsRender = renderedGeneration != fitGeneration
             || renderedTextureIdentity != ObjectIdentifier(texture)
             // Scene models animate and move: with model casters in the frame
             // the map is re-rendered every frame, exactly as before.
             || hasModelCasters
+            // A model of a model tile arriving or leaving, and a building
+            // left out or brought back for one, change what the map holds.
+            || staticModelCasters != renderedStaticModelCasters
+            || hiddenBuildings != renderedHiddenBuildings
             // Any change of the caster set: a caster arriving is not in the
             // rendered map, and a caster leaving may leave its shadows on
             // ground whose buildings are no longer drawn (a cell handing
@@ -104,6 +118,8 @@ final class ShadowMapReuseController {
         renderedGeneration = fitGeneration
         renderedTextureIdentity = ObjectIdentifier(texture)
         renderedCasterKeys = casterKeys
+        renderedStaticModelCasters = staticModelCasters
+        renderedHiddenBuildings = hiddenBuildings
         return true
     }
 

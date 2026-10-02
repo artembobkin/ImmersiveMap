@@ -8,7 +8,37 @@ final class PreparedTileDiskCodecTests: XCTestCase {
     private static let testBlobURL = URL(fileURLWithPath: "/nonexistent/test.ptgeo")
 
     func testPreparedTileCacheFormatVersionIncludesArenaImageRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 126)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 129)
+    }
+
+    /// Each building's place in the extruded indices travels with the
+    /// entry: the frame leaves a building out by it without a parse.
+    func testPreparedTileCodecRoundTripsBuildingRanges() throws {
+        let tile = Tile(x: 9904, y: 5121, z: 14)
+        let cacheIdentity = makeCacheIdentity(labelLanguage: .english)
+        let base = PreparedTileCPUTestFixtures.empty(tile: tile)
+        let ranges = [TileBuildingRange(featureID: 3 << 44 | 3_334_755, indexStart: 0, indexCount: 36),
+                      TileBuildingRange(featureID: 3 << 44 | 3_334_755, indexStart: 90, indexCount: 12),
+                      TileBuildingRange(featureID: UInt64.max, indexStart: 36, indexCount: 54)]
+        let preparedTile = PreparedTileCPU(tile: tile,
+                                           ground: base.ground,
+                                           roads: base.roads,
+                                           bridgeOverlay: base.bridgeOverlay,
+                                           extruded: PreparedTileCPU.Extruded(vertices: [],
+                                                                              indices: [],
+                                                                              styles: [],
+                                                                              buildingRanges: ranges),
+                                           textLabels: base.textLabels,
+                                           roadLabels: base.roadLabels)
+
+        let encoded = try PreparedTileDiskCodec.encode(preparedTile: preparedTile,
+                                                       cacheIdentity: cacheIdentity).metadata
+        let decoded = try PreparedTileDiskCodec.decode(data: encoded,
+                                                       expectedTile: tile,
+                                                       cacheIdentity: cacheIdentity,
+                                                       blobFileURL: Self.testBlobURL)
+
+        XCTAssertEqual(decoded.image.buildingRanges, ranges)
     }
 
     func testPreparedTileCodecCompressesEnvelopeAndRoundTrips() throws {

@@ -335,6 +335,10 @@ enum PreparedTileDiskCodec {
         /// Where the edge lines start in each road layer's indices, in the
         /// arena's layer order (`PreparedTileCPU.roadEdgeLineIndexStarts`).
         let roadEdgeLineIndexStarts: [UInt32]
+        /// POD array of `TileBuildingRange`: each building's place in the
+        /// extruded indices.
+        let buildingRanges: Data
+        let buildingRangeCount: UInt32
         let text: TextLabelSetMetaValue
         let roadPathInputs: Data
         let roadPathInputCount: UInt32
@@ -561,7 +565,6 @@ enum PreparedTileDiskCodec {
         let tileSlotIndex: UInt32
         let roofHeight: Float
         let liftsToRoof: Bool
-        let roofIsReplaced: Bool
         let key: UInt64
         let sortKey: Int32
         let collisionPriority: Int32
@@ -579,7 +582,6 @@ enum PreparedTileDiskCodec {
             tileSlotIndex = input.pointInput.tileSlotIndex
             roofHeight = input.pointInput.roofHeight
             liftsToRoof = input.pointInput.liftsToRoof != 0
-            roofIsReplaced = input.pointInput.roofIsReplaced != 0
             key = input.placementMeta.key
             sortKey = try encodeInt32(input.placementMeta.sortKey, field: "LabelPlacementMeta.sortKey")
             collisionPriority = try encodeInt32(input.placementMeta.collisionPriority, field: "LabelPlacementMeta.collisionPriority")
@@ -595,8 +597,7 @@ enum PreparedTileDiskCodec {
                                            tile: SIMD3<Int32>(tileX, tileY, tileZ),
                                            tileSlotIndex: tileSlotIndex,
                                            roofHeight: roofHeight,
-                                           liftsToRoof: liftsToRoof ? 1 : 0,
-                                           roofIsReplaced: roofIsReplaced ? 1 : 0),
+                                           liftsToRoof: liftsToRoof ? 1 : 0),
                 placementMeta: LabelPlacementMeta(key: key,
                                                   sortKey: Int(sortKey),
                                                   collisionPriority: Int(collisionPriority),
@@ -753,6 +754,9 @@ enum PreparedTileDiskCodec {
             groundStyleRuns: encodePODArray(groundStyleRuns),
             groundStyleRunCount: encodeUInt32(groundStyleRuns.count, field: "Ground.styleRuns.count"),
             roadEdgeLineIndexStarts: preparedTile.roadEdgeLineIndexStarts,
+            buildingRanges: encodePODArray(preparedTile.extruded.buildingRanges),
+            buildingRangeCount: encodeUInt32(preparedTile.extruded.buildingRanges.count,
+                                             field: "Extruded.buildingRanges.count"),
             text: TextLabelSetMetaValue(preparedTile.textLabels),
             roadPathInputs: encodePODArray(preparedTile.roadLabels.pathInputs),
             roadPathInputCount: encodeUInt32(preparedTile.roadLabels.pathInputs.count, field: "RoadLabels.pathInputs.count"),
@@ -884,7 +888,11 @@ enum PreparedTileDiskCodec {
             ),
             blob: blob,
             surfaceLabels: try entry.surfaceLabels.map { try $0.runtimeValue() },
-            roadEdgeLineIndexStarts: entry.roadEdgeLineIndexStarts
+            roadEdgeLineIndexStarts: entry.roadEdgeLineIndexStarts,
+            buildingRanges: try decodePODArray(entry.buildingRanges,
+                                               count: Int(entry.buildingRangeCount),
+                                               as: TileBuildingRange.self,
+                                               field: "Entry.buildingRanges")
         )
         return PreparedTileDiskCacheHit(image: image,
                                         sourceETag: entry.sourceETag.isEmpty ? nil : entry.sourceETag)

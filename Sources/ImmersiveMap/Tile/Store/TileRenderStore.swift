@@ -30,7 +30,7 @@ final class TileRenderStore: @unchecked Sendable {
         tileLoadingStatusReporter: TileLoadingStatusReporter?
     ) {
         self.tileTraceRecorder = tileTraceRecorder
-        let parseOptions = TileParseOptions(settings: config, schema: styleRuntime.schema)
+        let parseOptions = TileParseOptions(settings: config)
         let preparedTileCacheIdentity = PreparedTileCacheIdentity(
             preparedFormatVersion: PreparedTileDiskCaching.preparedFormatVersion,
             styleRevision: styleRuntime.preparedTileStyleRevision,
@@ -43,8 +43,7 @@ final class TileRenderStore: @unchecked Sendable {
             smallSettlementMaximumZoom: UInt32(max(0, config.labels.settlementVisibility.smallSettlementMaximumZoom)),
             landmarkMinimumZoom: UInt32(max(0, config.labels.landmarks.minimumZoom)),
             addTestBorders: config.tiles.parsing.addTestBorders,
-            labelsEnabled: config.labels.isEnabled,
-            replacedBuildingsFingerprint: parseOptions.replacedBuildingsFingerprint
+            labelsEnabled: config.labels.isEnabled
         )
         let labelDecisions = TileLabelDecisions(style: styleRuntime.style,
                                                 glyphCoverage: textRenderer.glyphCoverage,

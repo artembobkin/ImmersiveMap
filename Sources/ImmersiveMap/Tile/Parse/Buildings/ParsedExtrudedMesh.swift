@@ -14,4 +14,7 @@ struct ParsedExtrudedVertex {
 struct ParsedExtrudedMesh {
     var vertices: [ParsedExtrudedVertex]
     var indices: [UInt32]
+    /// The tile feature id of the building the volume is, zero for a
+    /// feature without one.
+    var buildingID: UInt64 = 0
 }

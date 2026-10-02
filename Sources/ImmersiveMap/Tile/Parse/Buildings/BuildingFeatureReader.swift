@@ -125,19 +125,20 @@ struct BuildingFeatureReader {
     }
 
     /// After the whole tile is read: resolves the candidates against each
-    /// other and builds a mesh for each survivor. Returns the survivors,
-    /// the volumes the tile draws.
+    /// other and builds a mesh for each survivor, marked with its
+    /// building's id. Returns the survivors, the volumes the tile draws.
     @discardableResult
     func appendExtrudedMeshes(resolving candidates: [BuildingExtrusionCandidate],
                               into result: inout ReadingStageResult) -> [BuildingExtrusionCandidate] {
         let resolved = BuildingExtrusionResolver.resolveExterior(candidates)
         for candidate in resolved {
-            if let extrudedMesh = BuildingExtrusionMeshBuilder.build(clippedExterior: candidate.clippedExterior,
+            if var extrudedMesh = BuildingExtrusionMeshBuilder.build(clippedExterior: candidate.clippedExterior,
                                                                      clippedInteriors: candidate.clippedInteriors,
                                                                      roof: candidate.roof,
                                                                      baseHeight: candidate.baseHeight,
                                                                      topHeight: candidate.topHeight,
                                                                      tileExtent: Float(tileExtent)) {
+                extrudedMesh.buildingID = candidate.buildingId
                 result.extrudedByStyle[candidate.styleKey, default: []].append(extrudedMesh)
             }
         }

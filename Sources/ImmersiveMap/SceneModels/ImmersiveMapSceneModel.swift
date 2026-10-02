@@ -8,9 +8,20 @@ import Foundation
 // presentation state (position, orientation, scale, altitude, the flight
 // along an `ImmersiveMapGeoPath` through the shared sampler in `Geo`) and the
 // hit volumes `Selection` resolves a tap against, plus the Model I/O
-// loading, the meshes, the pipeline, the shader and the drawer. No tile,
-// style or label logic, no views, and no networking, since sources are
-// local file URLs only.
+// loading, the meshes, the pipeline, the shader and the drawer. No map tile,
+// style or label logic and no views.
+//
+// A scene model and a landmark are local files: their sources are file URLs
+// and nothing here fetches them. The one part of the folder that reaches a
+// network is `ModelTiles`, the models of a model archive: its format
+// (`ModelTileContents`), the archive and disk cache behind it
+// (`ModelTileSource`), the store that loads and releases tiles with the
+// camera (`ModelTileStore`), and its own pipeline, drawer and subsystem.
+// A tile's models are one mesh in the tile's own space, placed like the
+// map's buildings of that tile and not by `SceneModelAnchorMath`. It shares
+// the ground cut and the frame state with the scene models, and nothing
+// with the map's tile loading: a model tile is requested, cached and
+// released on its own.
 
 /// A 3D model (USDZ or OBJ, loaded via Model I/O) anchored at a geographic
 /// coordinate. Rendered inside the map world pass in flat, globe, and the

@@ -7,4 +7,6 @@ struct DrawingExtrudedBytes {
     var vertices: [ExtrudedVertexIn]
     var indices: [UInt32]
     var styles: [TilePolygonStyle]
+    /// Each building's place in `indices`, sorted by feature id.
+    var buildingRanges: [TileBuildingRange] = []
 }

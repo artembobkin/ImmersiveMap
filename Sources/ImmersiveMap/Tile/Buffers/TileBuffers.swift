@@ -97,6 +97,9 @@ struct TileBuffers {
         let styles: TileBufferView?
         /// Element width of `indices`; see `GeometryLayer.indexType`.
         let indexType: MTLIndexType
+        /// Each building's place in `indices`, sorted by feature id, see
+        /// `TileBuildingRange`.
+        var buildingRanges: [TileBuildingRange] = []
 
         var indicesCount: Int {
             indices?.count ?? 0
@@ -104,6 +107,13 @@ struct TileBuffers {
 
         var verticesCount: Int {
             vertices?.count ?? 0
+        }
+
+        /// The runs of `indices` to draw when the buildings in
+        /// `hiddenFeatureIDs` are left out, in ascending order, nil when
+        /// the tile has none of them and draws whole.
+        func indexRuns(hiding hiddenFeatureIDs: Set<UInt64>) -> [Range<Int>]? {
+            TileBuildingRange.indexRuns(of: buildingRanges, indexCount: indicesCount, hiding: hiddenFeatureIDs)
         }
     }
 

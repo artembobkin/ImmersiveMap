@@ -4,28 +4,31 @@
 import Foundation
 
 /// A 3D model that takes the place of one of the map's own buildings: the
-/// map stops extruding that building and draws the model where it stood.
+/// map leaves that building out and draws the model where it stood.
 ///
-/// The building is named by its OSM outline (`replacedBuilding`). The
-/// outline is not extruded, and neither is any building part that stands
-/// inside it, so a building mapped as an outline plus dozens of parts is
-/// replaced by naming the outline alone. The footprint's flat ground fill
-/// stays, under the model. Which tile feature the outline is, the map
-/// style's schema answers (`ImmersiveMapTileSchema.tileFeatureID(of:)`). A
-/// schema whose tiles carry no OSM ids replaces nothing and only adds the
-/// model.
+/// The building is named by its OSM elements (`replacedBuildings`): the
+/// outline, and each `building:part` the map draws inside it. The map
+/// leaves out exactly the elements named, so a part not listed stays
+/// standing inside the model. The footprint's flat ground fill stays,
+/// under the model. Which tile feature an element is, the map style's
+/// schema answers (`ImmersiveMapTileSchema.tileFeatureID(of:)`). A schema
+/// whose tiles carry no OSM ids replaces nothing and only adds the model.
+///
+/// The swap is made in the frame that draws the model: until the model is
+/// loaded, the map's own building stands, and it comes back if the model
+/// goes away. There is never a frame with neither.
 ///
 /// A landmark can hold back to a zoom (`minimumZoom`): below it the model is
 /// not drawn and the map's own building stands in its place, so the model
-/// shows only where it reads as more than a block. The swap is made per tile
-/// zoom: from `minimumZoom` on the tiles leave the building out and the model
-/// draws. A zoom deeper than the tileset's deepest tile zoom acts as that
-/// zoom, since one deepest tile serves every camera zoom past it.
+/// shows only where it reads as more than a block. The zoom compared is
+/// the tile zoom the frame draws. A zoom deeper than the tileset's deepest
+/// tile zoom acts as that zoom.
 ///
-/// Landmarks are map configuration, set with `.landmarks(_:)` like the style:
-/// a change to the set of replaced buildings prepares the tiles again, and
-/// a change to a model alone applies in place. For models that move, animate
-/// or answer taps, use `ImmersiveMapSceneModelsController`.
+/// Landmarks are map configuration, set with `.landmarks(_:)`, and a change
+/// to them applies in place. They suit a handful of models an app ships.
+/// A city's worth of models comes from a model archive instead, loaded and
+/// released by map tile (`.modelArchive(_:headers:)`). For models that
+/// move, animate or answer taps, use `ImmersiveMapSceneModelsController`.
 public struct ImmersiveMapLandmark: Identifiable, Equatable, Sendable {
     public var id: String
     /// The model: USDZ or OBJ, local file URL, Y-up meters with -Z north,
@@ -33,11 +36,11 @@ public struct ImmersiveMapLandmark: Identifiable, Equatable, Sendable {
     public var model: ImmersiveMapSceneModel.Source
     /// Where the model's origin stands.
     public var coordinate: GeoCoordinate
-    /// The map building the model replaces, by its OSM outline. Nil for a
-    /// model that stands where the map has no building of its own (a
-    /// bridge, a monument): it replaces nothing and only adds the model,
-    /// still from `minimumZoom`.
-    public var replacedBuilding: ImmersiveMapOSMElement?
+    /// The map buildings the model replaces, by their OSM elements: the
+    /// outline and each of its parts. Empty for a model that stands where
+    /// the map has no building of its own (a bridge, a monument): it
+    /// replaces nothing and only adds the model, still from `minimumZoom`.
+    public var replacedBuildings: [ImmersiveMapOSMElement]
     /// Rotation about the local up axis, clockwise from north, in degrees.
     public var headingDegrees: Double
     /// Multiplier over the asset's meters.
@@ -58,7 +61,7 @@ public struct ImmersiveMapLandmark: Identifiable, Equatable, Sendable {
     public init(id: String,
                 model: ImmersiveMapSceneModel.Source,
                 coordinate: GeoCoordinate,
-                replacedBuilding: ImmersiveMapOSMElement?,
+                replacedBuildings: [ImmersiveMapOSMElement],
                 headingDegrees: Double = 0,
                 scale: Double = 1,
                 altitudeMeters: Double = 0,
@@ -67,7 +70,7 @@ public struct ImmersiveMapLandmark: Identifiable, Equatable, Sendable {
         self.id = id
         self.model = model
         self.coordinate = coordinate
-        self.replacedBuilding = replacedBuilding
+        self.replacedBuildings = replacedBuildings
         self.headingDegrees = headingDegrees
         self.scale = scale
         self.altitudeMeters = altitudeMeters

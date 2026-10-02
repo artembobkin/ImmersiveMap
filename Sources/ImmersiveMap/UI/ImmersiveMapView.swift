@@ -585,6 +585,11 @@ public extension ImmersiveMapView {
     /// other schema pairs the archive with
     /// `VectorTileMapStyle(style:schema:)`.
     ///
+    /// An archive may be replaced under the same URL. The engine notices by
+    /// the ETag the host gives the file, checked once a session, and loads
+    /// again the tiles it kept from the older upload. A host that sends no
+    /// ETag needs a new URL for a new archive.
+    ///
     /// A file URL reads the archive from disk, which is how an app ships a
     /// map in its bundle and renders it with no network at all:
     ///
@@ -618,14 +623,48 @@ public extension ImmersiveMapView {
         return view
     }
 
-    /// Models that take the place of the map's own buildings: each one's
-    /// building (its OSM outline and the parts standing inside it) is no
-    /// longer extruded, and the model is drawn where it stood. See
-    /// ``ImmersiveMapLandmark``. Changing which buildings are replaced
-    /// prepares the tiles again, like a style change.
+    /// Models that take the place of the map's own buildings: the OSM
+    /// elements each one lists (its building's outline and parts) are left
+    /// out once the model is loaded, and the model is drawn where they
+    /// stood. See ``ImmersiveMapLandmark``. A change applies in place.
     public func landmarks(_ landmarks: [ImmersiveMapLandmark]) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.landmarks(landmarks)
+        return view
+    }
+
+    /// Loads the 3D models of the map's buildings from an archive of model
+    /// tiles:
+    ///
+    ///     ImmersiveMapView()
+    ///         .modelArchive(URL(string: "https://tiles.example.com/models.pmtiles")!)
+    ///
+    /// The archive is one PMTiles v3 file whose zoom 14 tiles hold models
+    /// ready for the GPU (`ModelTileContents` is the format). It is read over HTTP
+    /// range requests like the map's archive, and apart from it: the models
+    /// of the tiles in view are requested as the camera moves, kept on disk
+    /// once loaded, and released from memory when the camera has left them
+    /// and the budget is passed. `headers` are added to every request, and a
+    /// file URL reads the archive from disk.
+    ///
+    /// A model stands in for the map's own building: the building is drawn
+    /// until its model is loaded, and left out from that frame on, so the
+    /// map is never missing either. The models show on the flat map,
+    /// wherever the map draws tiles of the archive's zoom or deeper.
+    ///
+    /// The budgets are set with `modelArchiveSettings(_:)`.
+    public func modelArchive(_ archiveURL: URL,
+                             headers: [String: String] = [:]) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.modelArchive(archiveURL, headers: headers)
+        return view
+    }
+
+    /// The model archive with its memory and disk budgets, or nil to turn
+    /// the models off. See ``ImmersiveMapSettings/ModelArchiveSettings``.
+    public func modelArchiveSettings(_ modelArchive: ImmersiveMapSettings.ModelArchiveSettings?) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.modelArchiveSettings(modelArchive)
         return view
     }
 

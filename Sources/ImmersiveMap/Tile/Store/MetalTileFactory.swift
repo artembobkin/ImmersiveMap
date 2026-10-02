@@ -17,7 +17,7 @@ import MetalKit
 final class MetalTileFactory: @unchecked Sendable {
     private let metalDevice: MTLDevice
 #if !targetEnvironment(simulator)
-    /// Resolved at init on Metal 3 devices (see `sharedIOCommandQueue`): tile
+    /// Resolved at init on Metal 3 devices (see `MetalIOCommandQueues`): tile
     /// loads materialize concurrently from their own tasks, so lazy creation
     /// would race. The simulator SDK has no MTLIO surface at all.
     private let ioCommandQueue: MTLIOCommandQueue?
@@ -26,14 +26,13 @@ final class MetalTileFactory: @unchecked Sendable {
     init(metalDevice: MTLDevice) {
         self.metalDevice = metalDevice
 #if !targetEnvironment(simulator)
-        self.ioCommandQueue = MetalTileFactory.sharedIOCommandQueue(for: metalDevice)
+        self.ioCommandQueue = MTLIOPreparedTileGeometryTransport.isSupported(metalDevice: metalDevice)
+            ? MetalIOCommandQueues.shared(for: metalDevice)
+            : nil
 #endif
     }
 
 #if !targetEnvironment(simulator)
-    private static let ioCommandQueueLock = NSLock()
-    nonisolated(unsafe) private static var ioCommandQueuesByDevice: [ObjectIdentifier: MTLIOCommandQueue] = [:]
-
     /// How long one MTLIO load may take before the materialize gives up on
     /// it. A tile's container is a few megabytes at most and a healthy load
     /// ends in tens of milliseconds, so this is reached only by a request
@@ -43,38 +42,6 @@ final class MetalTileFactory: @unchecked Sendable {
     /// because one slow answer (a saturated disk, a paused process) says
     /// nothing about the next.
     static let fileBlobLoadTimeout: TimeInterval = 15
-
-    /// One IO command queue per device, shared by every factory.
-    ///
-    /// The queue is a device-level object, and an app runs one engine, so
-    /// per-factory queues bought nothing. They cost, though: each queue
-    /// spawns four IO threads that sit parked in the driver
-    /// (`IOGPUIOCommandQueuePerformIO`, their idle state, not a hang) and
-    /// holds kernel-side resources for as long as it lives. A process that
-    /// builds engines in a loop (the test suite creates dozens through
-    /// `ImmersiveMapStillRecorder` and the video export; a host app that
-    /// recreates its renderer does the same) piles those up, and past some
-    /// count loads on freshly created queues stopped completing in the test
-    /// suite. Sharing keeps the count at one per device no matter how many
-    /// engines come and go.
-    private static func sharedIOCommandQueue(for metalDevice: MTLDevice) -> MTLIOCommandQueue? {
-        guard MTLIOPreparedTileGeometryTransport.isSupported(metalDevice: metalDevice) else {
-            return nil
-        }
-        let key = ObjectIdentifier(metalDevice)
-        ioCommandQueueLock.lock()
-        defer { ioCommandQueueLock.unlock() }
-        if let existing = ioCommandQueuesByDevice[key] {
-            return existing
-        }
-        let descriptor = MTLIOCommandQueueDescriptor()
-        descriptor.type = .concurrent
-        guard let queue = try? metalDevice.makeIOCommandQueue(descriptor: descriptor) else {
-            return nil
-        }
-        ioCommandQueuesByDevice[key] = queue
-        return queue
-    }
 #endif
 
     /// Whether this factory can DMA-load `.file` geometry blobs: Metal 3
@@ -116,6 +83,7 @@ final class MetalTileFactory: @unchecked Sendable {
             backingBuffer: backingBuffer,
             groundStyleRuns: GroundStyleRunScanner.scan(ground: preparedTile.ground),
             roadEdgeLineIndexStarts: preparedTile.roadEdgeLineIndexStarts,
+            buildingRanges: preparedTile.extruded.buildingRanges,
             textLabels: Self.textLabelSetMeta(from: preparedTile.textLabels),
             roadLabels: Self.roadLabelsMeta(from: preparedTile.roadLabels),
             surfaceLabels: preparedTile.surfaceLabels.labels
@@ -214,6 +182,7 @@ final class MetalTileFactory: @unchecked Sendable {
                                                       backingBuffer: backingBuffer,
                                                       groundStyleRuns: image.groundStyleRuns,
                                                       roadEdgeLineIndexStarts: image.roadEdgeLineIndexStarts,
+                                                      buildingRanges: image.buildingRanges,
                                                       textLabels: image.textLabels,
                                                       roadLabels: image.roadLabels,
                                                       surfaceLabels: image.surfaceLabels) else {
@@ -254,6 +223,7 @@ final class MetalTileFactory: @unchecked Sendable {
                                          backingBuffer: MTLBuffer?,
                                          groundStyleRuns: [GroundStyleRun],
                                          roadEdgeLineIndexStarts: [UInt32],
+                                         buildingRanges: [TileBuildingRange],
                                          textLabels: PreparedTileArenaImage.TextLabelSetMeta,
                                          roadLabels: PreparedTileArenaImage.RoadLabelsMeta,
                                          surfaceLabels: [SurfaceLabelRecord]) -> TileBuffers? {
@@ -283,10 +253,19 @@ final class MetalTileFactory: @unchecked Sendable {
 
         let extrudedVertices = cursor.takeView(.extrudedVertices)
         let extrudedIndices = cursor.takeIndexView(.extrudedIndices)
+        // A range past the indices would have the drawer skip or draw what
+        // is not there: the ranges of a cached image are untrusted input.
+        let extrudedIndexCount = extrudedIndices.view?.count ?? 0
+        guard buildingRanges.allSatisfy({ range in
+            Int(range.indexStart) + Int(range.indexCount) <= extrudedIndexCount
+        }) else {
+            return nil
+        }
         let extruded = TileBuffers.Extruded(vertices: extrudedVertices,
                                             indices: extrudedIndices.view,
                                             styles: cursor.takeView(.extrudedStyles),
-                                            indexType: extrudedIndices.indexType)
+                                            indexType: extrudedIndices.indexType,
+                                            buildingRanges: buildingRanges)
 
         let textLabelBuffers = takeTextLabelSet(textLabels, cursor: &cursor)
         let roadGlyphVertices = cursor.takeView(.roadLabelGlyphVertices)

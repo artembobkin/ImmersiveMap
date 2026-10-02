@@ -15,6 +15,7 @@ enum BuildingExtrusionDrawer {
                               cameraUniform: CameraUniform,
                               shadowBinding: ShadowReceiverBinding,
                               placeTilesContext: PlaceTilesContext,
+                              indexBuffers: HiddenBuildingIndexBuffers,
                               flatRenderState: FlatRenderState,
                               extrudedTilePipeline: ExtrudedTilePipeline,
                               extrudedStencilTestState: MTLDepthStencilState,
@@ -48,6 +49,7 @@ enum BuildingExtrusionDrawer {
 
         drawExtrudedSources(renderEncoder: renderEncoder,
                             placeTilesContext: placeTilesContext,
+                            indexBuffers: indexBuffers,
                             flatRenderState: flatRenderState)
 
         renderEncoder.setCullMode(.none)
@@ -66,6 +68,7 @@ enum BuildingExtrusionDrawer {
     static func drawShadowCasters(renderEncoder: MTLRenderCommandEncoder,
                                   lightProjectionView: matrix_float4x4,
                                   placeTilesContext: PlaceTilesContext,
+                                  indexBuffers: HiddenBuildingIndexBuffers,
                                   flatRenderState: FlatRenderState,
                                   extrudedTilePipeline: ExtrudedTilePipeline,
                                   extrudedDepthState: MTLDepthStencilState) {
@@ -77,8 +80,8 @@ enum BuildingExtrusionDrawer {
         renderEncoder.setVertexBytes(&castersValue, length: MemoryLayout<ShadowCasterUniform>.stride, index: 1)
         drawClippedCasterGeometry(renderEncoder: renderEncoder,
                                   placeTilesContext: placeTilesContext,
-                                  flatRenderState: flatRenderState,
-                                  instanceCount: 1)
+                                  indexBuffers: indexBuffers,
+                                  flatRenderState: flatRenderState)
         renderEncoder.setDepthClipMode(.clip)
     }
 
@@ -87,9 +90,11 @@ enum BuildingExtrusionDrawer {
     /// parent filling a slot its finer tiles do not cover) is cut open at
     /// the slot's edge, so it draws both faces: through the cut the inside
     /// of the far walls and the underside of the roof read as a solid block
-    /// instead of a hollow shell.
+    /// instead of a hollow shell. The buildings a model stands in for are
+    /// left out of each tile's draw (`indexBuffers`).
     private static func drawExtrudedSources(renderEncoder: MTLRenderCommandEncoder,
                                             placeTilesContext: PlaceTilesContext,
+                                            indexBuffers: HiddenBuildingIndexBuffers,
                                             flatRenderState: FlatRenderState) {
         var cullMode = MTLCullMode.back
         for placeTile in placeTilesContext.tilePlacements {
@@ -138,21 +143,47 @@ enum BuildingExtrusionDrawer {
             ) * Matrix.scaleMatrix(sx: scale, sy: scale, sz: scale)
             renderEncoder.setVertexBytes(&modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
 
+            drawIndices(of: metalTile,
+                        indices: extrudedIndices,
+                        indexBuffers: indexBuffers,
+                        renderEncoder: renderEncoder)
+        }
+    }
+
+    /// The tile's buildings in one draw: from the tile's own index buffer,
+    /// or from its working buffer when the frame leaves some buildings out
+    /// (`HiddenBuildingIndexBuffers`).
+    private static func drawIndices(of metalTile: MetalTile,
+                                    indices: TileBufferView,
+                                    indexBuffers: HiddenBuildingIndexBuffers,
+                                    renderEncoder: MTLRenderCommandEncoder) {
+        let extruded = metalTile.tileBuffers.extruded
+        switch indexBuffers.indices(of: metalTile) {
+        case .whole:
             renderEncoder.drawIndexedPrimitives(type: .triangle,
-                                                indexCount: extrudedIndices.count,
-                                                indexType: buffers.extruded.indexType,
-                                                indexBuffer: extrudedIndices.buffer,
-                                                indexBufferOffset: extrudedIndices.offset)
+                                                indexCount: indices.count,
+                                                indexType: extruded.indexType,
+                                                indexBuffer: indices.buffer,
+                                                indexBufferOffset: indices.offset)
+        case .working(let buffer, let indexCount):
+            renderEncoder.drawIndexedPrimitives(type: .triangle,
+                                                indexCount: indexCount,
+                                                indexType: extruded.indexType,
+                                                indexBuffer: buffer,
+                                                indexBufferOffset: 0)
+        case .none:
+            break
         }
     }
 
     /// Shadow-caster draws: per placement, with the vertex stage's slot clip
     /// bounds set from the placement, so a parent filling a slot casts only
-    /// from that slot, exactly what the world pass draws of it.
+    /// from that slot, exactly what the world pass draws of it: a building
+    /// the frame leaves out casts no shadow either.
     private static func drawClippedCasterGeometry(renderEncoder: MTLRenderCommandEncoder,
                                                   placeTilesContext: PlaceTilesContext,
-                                                  flatRenderState: FlatRenderState,
-                                                  instanceCount: Int) {
+                                                  indexBuffers: HiddenBuildingIndexBuffers,
+                                                  flatRenderState: FlatRenderState) {
         for placeTile in placeTilesContext.tilePlacements {
             let metalTile = placeTile.metalTile
             let tile = metalTile.tile
@@ -187,12 +218,10 @@ enum BuildingExtrusionDrawer {
             ) * Matrix.scaleMatrix(sx: scale, sy: scale, sz: scale)
             renderEncoder.setVertexBytes(&modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
 
-            renderEncoder.drawIndexedPrimitives(type: .triangle,
-                                                indexCount: extrudedIndices.count,
-                                                indexType: buffers.extruded.indexType,
-                                                indexBuffer: extrudedIndices.buffer,
-                                                indexBufferOffset: extrudedIndices.offset,
-                                                instanceCount: instanceCount)
+            drawIndices(of: metalTile,
+                        indices: extrudedIndices,
+                        indexBuffers: indexBuffers,
+                        renderEncoder: renderEncoder)
         }
     }
 }

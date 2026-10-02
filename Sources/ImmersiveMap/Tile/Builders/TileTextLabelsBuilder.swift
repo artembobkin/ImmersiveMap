@@ -106,8 +106,7 @@ final class TileTextLabelsBuilder {
                                             tile: tileIndices,
                                             tileSlotIndex: 0,
                                             roofHeight: label.roofHeight,
-                                            liftsToRoof: label.liftsToRoof ? 1 : 0,
-                                            roofIsReplaced: label.roofIsReplaced ? 1 : 0)
+                                            liftsToRoof: label.liftsToRoof ? 1 : 0)
 
             if let routeShields = label.routeShields {
                 let geometry = makeRouteShieldGeometry(routeShields,

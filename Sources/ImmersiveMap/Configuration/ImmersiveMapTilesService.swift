@@ -9,7 +9,10 @@ import Foundation
 /// the map elsewhere is one `.tileArchive(_:headers:)` call.
 public enum ImmersiveMapTilesService {
     /// The hosted PMTiles archive. The file name carries the planet's date:
-    /// a new planet is a new URL, which starts new cache namespaces.
+    /// a new planet is a new URL, which starts new cache namespaces. An
+    /// archive may also be overwritten under one fixed name: the engine
+    /// tells the uploads apart by the ETag the host gives the file, and
+    /// parses again the tiles it kept from the older one.
     public static let tileArchiveURL = URL(string: "https://tiles.immersivemap.dev/20260922.pmtiles")!
 
     /// The deepest zoom the hosted archive ships.

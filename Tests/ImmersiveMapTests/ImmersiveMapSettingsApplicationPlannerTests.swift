@@ -5,6 +5,56 @@
 import XCTest
 
 final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
+    /// The landmarks are read per frame, the buildings they replace
+    /// included: the tiles keep every building, so nothing is prepared again.
+    func testLandmarkChangeIsLiveApplied() {
+        let oldSettings = ImmersiveMapSettings.default
+        let landmark = ImmersiveMapLandmark(id: "bolshoi",
+                                            model: .init(url: URL(fileURLWithPath: "/models/bolshoi.usdz")),
+                                            coordinate: GeoCoordinate(latitude: 55.76013, longitude: 37.61861),
+                                            replacedBuildings: [.relation(3_334_755), .way(84_653_688)])
+        let newSettings = oldSettings.landmarks([landmark])
+
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
+
+        XCTAssertEqual(plan.changedDomains, [.landmarks])
+        XCTAssertEqual(plan.actions, [.liveApply])
+        XCTAssertFalse(plan.requiresRendererRecreation)
+    }
+
+    /// The archive client, the disk cache and the memory budget are built
+    /// with the renderer. The map's own tiles do not depend on the models,
+    /// so no cache is invalidated and nothing is prepared again.
+    func testModelArchiveChangeRecreatesTheRendererAndKeepsTheTiles() {
+        let oldSettings = ImmersiveMapSettings.default
+        let newSettings = oldSettings.modelArchive(URL(string: "https://tiles.example.com/models.pmtiles")!)
+
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
+
+        XCTAssertEqual(plan.changedDomains, [.modelArchive])
+        XCTAssertEqual(plan.actions, [.recreateRenderer])
+
+        var resized = newSettings
+        resized.modelArchive?.memoryBudgetInBytes = 32 * 1_024 * 1_024
+        XCTAssertEqual(ImmersiveMapSettingsApplicationPlanner.makePlan(from: newSettings, to: resized).actions,
+                       [.recreateRenderer])
+        XCTAssertTrue(ImmersiveMapSettingsApplicationPlanner.makePlan(from: newSettings, to: newSettings).actions.isEmpty)
+    }
+
+    /// The modifier keeps the budgets a map already set.
+    func testModelArchiveModifierKeepsTheBudgets() {
+        let settings = ImmersiveMapSettings.default
+            .modelArchiveSettings(.init(archiveURL: URL(string: "https://tiles.example.com/a.pmtiles")!,
+                                        memoryBudgetInBytes: 1_000,
+                                        diskCacheSizeInBytes: 2_000))
+            .modelArchive(URL(string: "https://tiles.example.com/b.pmtiles")!, headers: ["Authorization": "Bearer x"])
+
+        XCTAssertEqual(settings.modelArchive?.archiveURL.lastPathComponent, "b.pmtiles")
+        XCTAssertEqual(settings.modelArchive?.requestHeaders, ["Authorization": "Bearer x"])
+        XCTAssertEqual(settings.modelArchive?.memoryBudgetInBytes, 1_000)
+        XCTAssertEqual(settings.modelArchive?.diskCacheSizeInBytes, 2_000)
+        XCTAssertNil(ImmersiveMapSettings.default.modelArchive)
+    }
 
 
     func testSceneLightDirectionChangeIsLiveApplied() {

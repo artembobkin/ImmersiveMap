@@ -39,7 +39,8 @@ enum TileBuffersFixtures {
 
     /// An empty-but-cacheable tile: every layer empty, one tiny backing
     /// allocation so the memory cache still sees a nonzero byte cost.
-    static func makeEmptyTileBuffers(textLabels: TileBuffers.TextLabelSet? = nil) throws -> TileBuffers {
+    static func makeEmptyTileBuffers(textLabels: TileBuffers.TextLabelSet? = nil,
+                                     extruded: TileBuffers.Extruded? = nil) throws -> TileBuffers {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw XCTSkip("Metal device is required for MetalTile test fixture.")
         }
@@ -58,10 +59,10 @@ enum TileBuffersFixtures {
                                                        automobileGround: phases,
                                                        bridge: phases),
                            bridgeOverlay: ground,
-                           extruded: TileBuffers.Extruded(vertices: nil,
-                                                          indices: nil,
-                                                          styles: nil,
-                                                          indexType: .uint16),
+                           extruded: extruded ?? TileBuffers.Extruded(vertices: nil,
+                                                                      indices: nil,
+                                                                      styles: nil,
+                                                                      indexType: .uint16),
                            textLabels: textLabels ?? emptyTextLabelSet(),
                            roadLabels: emptyRoadLabels())
     }

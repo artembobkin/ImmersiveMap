@@ -71,6 +71,9 @@ package final class PMTilesArchiveClient: @unchecked Sendable {
     package static let leafCacheCostLimit = 16 * 1024 * 1024
 
     package let archiveURL: URL
+    /// What the archive's tiles must be for this client to read it: MVT for
+    /// the map, `unknown` for an archive of the engine's model tiles.
+    package let tileType: PMTilesTileType
     private let requestHeaders: [String: String]
     private let fetchRange: RangeFetcher
 
@@ -80,8 +83,12 @@ package final class PMTilesArchiveClient: @unchecked Sendable {
     private var leafDirectories = PMTilesDirectoryCache(costLimit: PMTilesArchiveClient.leafCacheCostLimit)
     private var leafTasks: [UInt64: Task<PMTilesDirectory, Error>] = [:]
 
-    package init(archiveURL: URL, requestHeaders: [String: String], session: URLSession) {
+    package init(archiveURL: URL,
+                 requestHeaders: [String: String],
+                 session: URLSession,
+                 tileType: PMTilesTileType = .mvt) {
         self.archiveURL = archiveURL
+        self.tileType = tileType
         self.requestHeaders = requestHeaders
         self.fetchRange = archiveURL.isFileURL
             ? Self.makeFileFetcher(archiveURL: archiveURL)
@@ -92,8 +99,12 @@ package final class PMTilesArchiveClient: @unchecked Sendable {
 
     /// The test seam: a fetcher in place of the session. Not a protocol, a
     /// function, so the tile source stays one URL plus headers.
-    package init(archiveURL: URL, requestHeaders: [String: String], fetchRange: @escaping RangeFetcher) {
+    package init(archiveURL: URL,
+                 requestHeaders: [String: String],
+                 tileType: PMTilesTileType = .mvt,
+                 fetchRange: @escaping RangeFetcher) {
         self.archiveURL = archiveURL
+        self.tileType = tileType
         self.requestHeaders = requestHeaders
         self.fetchRange = fetchRange
     }
@@ -114,6 +125,14 @@ package final class PMTilesArchiveClient: @unchecked Sendable {
     }
 
     private static let archiveReplacedReason = "archive replaced"
+
+    /// The ETag the archive's header was read under, nil for a host that
+    /// sends none (or a weak one) and for an archive read from disk. Reads
+    /// the header if it is not read yet. A caller that keeps tiles of its
+    /// own tells one upload of the archive from the next by it.
+    package func archiveETag() async throws -> String? {
+        try await loadIndex().etag
+    }
 
     private func lookup(z: Int, x: Int, y: Int) async throws -> Outcome {
         let index = try await loadIndex()
@@ -191,7 +210,7 @@ package final class PMTilesArchiveClient: @unchecked Sendable {
                                        expectedETag: nil)
         let header: PMTilesHeader
         do {
-            header = try PMTilesHeader(parsing: response.body)
+            header = try PMTilesHeader(parsing: response.body, tileType: tileType)
         } catch {
             throw Failure.archiveUnreadable("header: \(error)")
         }

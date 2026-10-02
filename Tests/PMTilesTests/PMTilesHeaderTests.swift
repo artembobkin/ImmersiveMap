@@ -60,6 +60,22 @@ final class PMTilesHeaderTests: XCTestCase {
         }
     }
 
+    /// An archive of the engine's model tiles states the specification's
+    /// "other" type. A reader of models takes it and turns map tiles away,
+    /// and a reader of the map does the opposite.
+    func testAReaderTakesOnlyTheTileTypeItReads() throws {
+        var bytes = validHeaderBytes()
+        bytes[99] = PMTilesTileType.unknown.rawValue
+
+        XCTAssertEqual(try PMTilesHeader(parsing: bytes, tileType: .unknown).tileType, .unknown)
+        XCTAssertThrowsError(try PMTilesHeader(parsing: bytes)) { error in
+            XCTAssertEqual(error as? PMTilesFormatError, .unsupportedTileType(0))
+        }
+        XCTAssertThrowsError(try PMTilesHeader(parsing: validHeaderBytes(), tileType: .unknown)) { error in
+            XCTAssertEqual(error as? PMTilesFormatError, .unsupportedTileType(1))
+        }
+    }
+
     func testAShortBufferIsTruncated() {
         XCTAssertThrowsError(try PMTilesHeader(parsing: validHeaderBytes().prefix(100))) { error in
             XCTAssertEqual(error as? PMTilesFormatError, .truncated)

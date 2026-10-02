@@ -59,15 +59,13 @@ struct TilePointScreenProjector {
     ///
     /// `probePositions` receives each point's occlusion probe, in the
     /// render world the frame draws with: where the point draws (xyz) and
-    /// the roof over it (w: the tile's, or a drawn model's from
-    /// `modelRoofs` where that is higher, the ground's level on open
+    /// the roof over it (w: the tile's, the ground's level on open
     /// ground). The probe climbs the eye ray to that roof, so the building
     /// a point stands in never hides it. Zero for a point without a
     /// projection.
     func projectWithHorizonVisibility(snapshot: TilePointToScreenPointSnapshot,
                                       frameContext: FrameContext,
                                       tileOriginData: [FlatTileOriginData],
-                                      modelRoofs: [SceneModelRoof] = [],
                                       minimumPerspectiveScale: Float = 1,
                                       screenPoints: inout [ScreenPointOutput],
                                       horizonVisibility: inout [Bool],
@@ -97,7 +95,6 @@ struct TilePointScreenProjector {
             projectFlatScreenPoints(snapshot: snapshot,
                                     frameContext: frameContext,
                                     tileOriginData: tileOriginData,
-                                    modelRoofs: modelRoofs,
                                     perspective: perspective,
                                     into: &screenPoints,
                                     perspectiveScales: &perspectiveScales,
@@ -197,7 +194,6 @@ struct TilePointScreenProjector {
     private func projectFlatScreenPoints(snapshot: TilePointToScreenPointSnapshot,
                                          frameContext: FrameContext,
                                          tileOriginData: [FlatTileOriginData],
-                                         modelRoofs: [SceneModelRoof] = [],
                                          perspective: PerspectiveScale,
                                          into outputs: inout [ScreenPointOutput],
                                          perspectiveScales: inout [Float],
@@ -206,7 +202,6 @@ struct TilePointScreenProjector {
         let cameraMatrix = frameContext.cameraMatrices.projectionView
         let invisible = ScreenPointOutput(position: .zero, depth: 0, visible: 0)
         let count = snapshot.pointInputs.count
-        let hasModelRoofs = modelRoofs.isEmpty == false
 
         snapshot.pointInputs.withUnsafeBufferPointer { inputs in
         snapshot.tileSlotVisibleTileIndices.withUnsafeBufferPointer { slots in
@@ -239,16 +234,13 @@ struct TilePointScreenProjector {
                 let worldPosition = originData.panRelativeOrigin + local
                 // The roof is in the tile's 4096 units, the extrusion mesh's
                 // scale, so the same tile size that places the point raises it
-                // to the roof the building draws. Where a landmark model stands
-                // in for that building, the drawn model's top is the roof.
-                var roofZ = input.roofHeight > 0 ? input.roofHeight * originData.size / 4096.0 : 0.0
-                if input.roofIsReplaced != 0, hasModelRoofs {
-                    roofZ = SceneModelRoof.height(over: worldPosition, roofs: modelRoofs, floor: roofZ)
-                }
+                // to the roof the building draws.
+                let roofZ = input.roofHeight > 0 ? input.roofHeight * originData.size / 4096.0 : 0.0
                 // The label naming the building draws on its roof; one of the
                 // things inside it draws on the ground, and is only tested for
                 // view at the roof.
-                let drawnZ = input.liftsToRoof != 0 ? roofZ : 0.0
+                let drawsOnRoof = input.liftsToRoof != 0
+                let drawnZ = drawsOnRoof ? roofZ : 0.0
                 let clip = cameraMatrix * SIMD4<Float>(worldPosition.x, worldPosition.y, drawnZ, 1.0)
                 outputs[index] = screenPointFromClip(clip: clip, viewportSize: viewport)
                 perspectiveScales[index] = perspective.scale(clipW: clip.w)

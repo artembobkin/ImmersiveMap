@@ -169,6 +169,14 @@ class TileDownloader: @unchecked Sendable {
         return configuration
     }
 
+    /// The ETag the host gives the archive, nil for a host that sends none
+    /// and for an archive read from disk. Throws when the archive cannot be
+    /// reached. One request for the first caller of a session, an answer
+    /// from memory after that.
+    func archiveETag() async throws -> String? {
+        try await archive.archiveETag()
+    }
+
     func download(tile: Tile) async -> Data? {
         let result = await downloadResult(tile: tile)
         if case let .success(data, _) = result {

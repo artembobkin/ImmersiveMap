@@ -20,15 +20,8 @@ struct PreparedTileCacheIdentity {
     /// is identity: a tile prepared without labels must not answer a map
     /// that wants them, and vice versa.
     let labelsEnabled: Bool
-    /// The buildings the landmarks replace are not extruded
-    /// (`TileParseOptions.replacedBuildingsFingerprint`). Zero, the usual
-    /// case, adds nothing to the namespace.
-    var replacedBuildingsFingerprint: UInt64 = 0
     var namespaceComponent: String {
-        let replacedBuildings = replacedBuildingsFingerprint == 0
-            ? ""
-            : "-r\(String(replacedBuildingsFingerprint, radix: 16))"
-        return "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)" + replacedBuildings
+        return "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)"
     }
 
     static func tileSourceRevision(for network: ImmersiveMapSettings.TileSettings.NetworkSettings) -> UInt64 {
@@ -40,8 +33,10 @@ struct PreparedTileCacheIdentity {
         // the bearer token is: rotating a key must not cold-start the
         // prepared cache. The archive's ETag is not part of the namespace
         // (it is computed before any request) and travels in every tile's
-        // source ETag instead, so a re-upload at the same URL cannot match a
-        // tile parsed from the previous one.
+        // source ETag instead: the disk stage takes only the entries of the
+        // archive's current upload (`TileArchiveVersion`), so a re-upload
+        // at the same URL does not go on serving the tiles parsed from the
+        // previous one.
         hasher.combine(network.tileArchiveURL.absoluteString)
         for field in network.tileRequestHeaders.keys.sorted() {
             hasher.combine("header:\(field)")
@@ -847,7 +842,17 @@ final class PreparedTileDiskCaching {
     // the styles by key, paints bottom to top, feathers its ends and has
     // no edge lines. The versions 123 to 125 were steps of this work that
     // were never released.
-    static let preparedFormatVersion: UInt32 = 126
+    // 129: a tile keeps every building and says where each one sits in the
+    // extruded indices by its feature id (`TileBuildingRange`, the entry's
+    // `buildingRanges`), so the frame leaves out the buildings a model
+    // names. A point label knows nothing of the models: the mark of a roof
+    // a landmark replaces is gone from the point input. A v126 entry has
+    // no ranges, carries that mark, and was parsed without the buildings
+    // its map's landmarks replaced. A label naming an outline raised only
+    // by its parts stands on the roof of the parts over its anchor, where
+    // an older entry left it on the ground. The versions 127 and 128 were
+    // steps of this work that were never released.
+    static let preparedFormatVersion: UInt32 = 129
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

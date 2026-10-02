@@ -1233,6 +1233,47 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
     }
 
+    /// Where the 3D models of the map's buildings come from: one archive of
+    /// model tiles, read tile by tile as the camera moves.
+    ///
+    /// The archive is a PMTiles v3 file whose tiles hold models and not map
+    /// data: each zoom 14 tile carries every model whose origin lies in it,
+    /// merged into one mesh ready for the GPU (the format is
+    /// `ModelTileContents`), so a tile of models is one draw. It is requested on
+    /// its own, apart from the map's tiles: the models of the tiles in view
+    /// are loaded, each stands in for the map's own building once it is
+    /// loaded, and the models of the tiles left behind are released when
+    /// the memory budget is passed.
+    public struct ModelArchiveSettings: Equatable, Sendable {
+        public static let defaultMemoryBudgetInBytes: Int = 128 * 1_024 * 1_024
+        public static let defaultDiskCacheSizeInBytes: Int = 512 * 1_024 * 1_024
+
+        /// The archive, over HTTP(S) range requests or from disk for a file
+        /// URL. A query string is sent as written, so a key can live there.
+        public var archiveURL: URL
+        /// HTTP header fields added to every archive request, for
+        /// credentials that travel as headers.
+        public var requestHeaders: [String: String]
+        /// The GPU memory the loaded model tiles may hold. The tiles in view
+        /// stay whatever they cost. The ones left behind stay too, for a
+        /// quick return, until the total passes this budget, and then the
+        /// longest unused go first.
+        public var memoryBudgetInBytes: Int
+        /// The byte quota of the model tiles kept on disk, where a tile
+        /// seen before comes back from without the network.
+        public var diskCacheSizeInBytes: Int
+
+        public init(archiveURL: URL,
+                    requestHeaders: [String: String] = [:],
+                    memoryBudgetInBytes: Int = ModelArchiveSettings.defaultMemoryBudgetInBytes,
+                    diskCacheSizeInBytes: Int = ModelArchiveSettings.defaultDiskCacheSizeInBytes) {
+            self.archiveURL = archiveURL
+            self.requestHeaders = requestHeaders
+            self.memoryBudgetInBytes = memoryBudgetInBytes
+            self.diskCacheSizeInBytes = diskCacheSizeInBytes
+        }
+    }
+
     public var renderLoop: RenderLoopSettings
     public var camera: CameraSettings
     public var presentation: PresentationSettings
@@ -1248,6 +1289,9 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     /// Models that take the place of the map's own buildings, see
     /// `ImmersiveMapLandmark`.
     public var landmarks: [ImmersiveMapLandmark]
+    /// The archive the map loads building models from by tile, nil for a
+    /// map without one. See `ModelArchiveSettings`.
+    public var modelArchive: ModelArchiveSettings?
 
     public init(renderLoop: RenderLoopSettings,
                 camera: CameraSettings,
@@ -1261,7 +1305,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                 postProcessing: PostProcessingSettings = PostProcessingSettings(),
                 viewReuse: ViewReuseSettings = ViewReuseSettings(),
                 debug: DebugSettings,
-                landmarks: [ImmersiveMapLandmark] = []) {
+                landmarks: [ImmersiveMapLandmark] = [],
+                modelArchive: ModelArchiveSettings? = nil) {
         self.renderLoop = renderLoop
         self.camera = camera
         self.presentation = presentation
@@ -1275,6 +1320,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         self.viewReuse = viewReuse
         self.debug = debug
         self.landmarks = landmarks
+        self.modelArchive = modelArchive
     }
 
     public static let `default` = ImmersiveMapSettings(
@@ -1432,6 +1478,25 @@ public extension ImmersiveMapSettings {
     func landmarks(_ landmarks: [ImmersiveMapLandmark]) -> ImmersiveMapSettings {
         var settings = self
         settings.landmarks = landmarks
+        return settings
+    }
+
+    /// Points the map at an archive of model tiles, keeping the budgets
+    /// already set. See `ModelArchiveSettings`.
+    func modelArchive(_ archiveURL: URL,
+                      headers: [String: String] = [:]) -> ImmersiveMapSettings {
+        var settings = self
+        var archive = settings.modelArchive ?? ModelArchiveSettings(archiveURL: archiveURL)
+        archive.archiveURL = archiveURL
+        archive.requestHeaders = headers
+        settings.modelArchive = archive
+        return settings
+    }
+
+    /// The model archive in full, nil for a map without one.
+    func modelArchiveSettings(_ modelArchive: ModelArchiveSettings?) -> ImmersiveMapSettings {
+        var settings = self
+        settings.modelArchive = modelArchive
         return settings
     }
 

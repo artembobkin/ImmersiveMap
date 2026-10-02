@@ -12,7 +12,9 @@ package enum PMTilesCompression: UInt8, Sendable, Equatable {
     case zstd = 4
 }
 
-/// What a tile's bytes are. The engine reads Mapbox Vector Tiles only.
+/// What a tile's bytes are. The map's archive holds Mapbox Vector Tiles.
+/// `unknown` is the specification's value for a payload it has no name
+/// for, which is what an archive of the engine's own model tiles carries.
 package enum PMTilesTileType: UInt8, Sendable, Equatable {
     case unknown = 0
     case mvt = 1
@@ -59,9 +61,10 @@ package struct PMTilesHeader: Sendable, Equatable {
     package var centerLatitude: Double
 
     /// Reads the header from the first bytes of an archive. Rejects anything
-    /// the engine cannot read: another version, brotli or zstd, a raster
-    /// tile type. `data` may be longer than the header.
-    package init(parsing data: Data) throws {
+    /// the engine cannot read: another version, brotli or zstd, and a tile
+    /// type other than the one the caller reads (`tileType`, MVT for the
+    /// map's archive). `data` may be longer than the header.
+    package init(parsing data: Data, tileType expectedTileType: PMTilesTileType = .mvt) throws {
         guard data.count >= Self.byteCount else {
             throw PMTilesFormatError.truncated
         }
@@ -109,7 +112,7 @@ package struct PMTilesHeader: Sendable, Equatable {
         isClustered = bytes[96] == 1
         internalCompression = try compression(at: 97)
         tileCompression = try compression(at: 98)
-        guard let type = PMTilesTileType(rawValue: bytes[99]), type == .mvt else {
+        guard let type = PMTilesTileType(rawValue: bytes[99]), type == expectedTileType else {
             throw PMTilesFormatError.unsupportedTileType(bytes[99])
         }
         tileType = type

@@ -22,10 +22,6 @@ struct TilePointInput {
     /// building itself), 0 when it draws on the ground (a label of
     /// something inside the building). In the padding after the roof.
     var liftsToRoof: UInt32 = 0
-    /// 1 when the roof over the point is a building a landmark model
-    /// stands in for: the flat projection takes the drawn model's top
-    /// where it covers the point. The last of the padding.
-    var roofIsReplaced: UInt32 = 0
 }
 
 struct ScreenPointOutput {

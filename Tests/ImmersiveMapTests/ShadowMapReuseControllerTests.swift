@@ -192,6 +192,55 @@ final class ShadowMapReuseControllerTests: XCTestCase {
                       "Scene models animate: their casters re-render every frame")
     }
 
+    /// A building left out for a model, or brought back when the model
+    /// goes, changes what the rendered map holds.
+    func testAChangeOfTheHiddenBuildingsForcesRender() throws {
+        let controller = ShadowMapReuseController()
+        let texture = try makeTexture()
+        let keys = makeKeys([DummyCaster()])
+
+        XCTAssertNotNil(resolve(controller))
+        XCTAssertTrue(controller.planShadowRender(casterKeys: keys, hasModelCasters: false, texture: texture))
+        XCTAssertNotNil(resolve(controller))
+        let hidden = ReplacedBuildings(byMapTileZoom: [15: [42]])
+        XCTAssertTrue(controller.planShadowRender(casterKeys: keys,
+                                                  hasModelCasters: false,
+                                                  hiddenBuildings: hidden,
+                                                  texture: texture),
+                      "The hidden building's shadow is still in the map")
+        XCTAssertNotNil(resolve(controller))
+        XCTAssertFalse(controller.planShadowRender(casterKeys: keys,
+                                                   hasModelCasters: false,
+                                                   hiddenBuildings: hidden,
+                                                   texture: texture))
+        XCTAssertNotNil(resolve(controller))
+        XCTAssertTrue(controller.planShadowRender(casterKeys: keys, hasModelCasters: false, texture: texture),
+                      "The building is back and its shadow is not in the map")
+    }
+
+    /// The model tiles never move: the map is rendered again when one
+    /// arrives or leaves, and reused in between.
+    func testStaticModelCastersRenderOnlyWhenTheirSetChanges() throws {
+        let controller = ShadowMapReuseController()
+        let texture = try makeTexture()
+        let keys = makeKeys([DummyCaster()])
+        let modelTile = DummyCaster()
+        let otherModelTile = DummyCaster()
+        let one: Set<StaticModelCasterKey> = [StaticModelCasterKey(tile: ObjectIdentifier(modelTile), worldWrap: 0)]
+        let two = one.union([StaticModelCasterKey(tile: ObjectIdentifier(otherModelTile), worldWrap: 0)])
+
+        XCTAssertNotNil(resolve(controller))
+        XCTAssertTrue(controller.planShadowRender(casterKeys: keys, hasModelCasters: false,
+                                                  staticModelCasters: one, texture: texture))
+        XCTAssertNotNil(resolve(controller))
+        XCTAssertFalse(controller.planShadowRender(casterKeys: keys, hasModelCasters: false,
+                                                   staticModelCasters: one, texture: texture),
+                       "A tile of models that do not move is in the map already")
+        XCTAssertNotNil(resolve(controller))
+        XCTAssertTrue(controller.planShadowRender(casterKeys: keys, hasModelCasters: false,
+                                                  staticModelCasters: two, texture: texture))
+    }
+
     func testTextureIdentityChangeForcesRender() throws {
         let controller = ShadowMapReuseController()
         let texture = try makeTexture()

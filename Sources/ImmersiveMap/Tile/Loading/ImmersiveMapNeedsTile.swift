@@ -317,8 +317,10 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
     }
 
     // Disk stage: asks the prepared cache before the network. A hit is final
-    // (freshness is the cache's TTL and identity namespace), so the load ends
-    // here without a download; a miss, or an entry that cannot be
+    // (freshness is the cache's TTL, its identity namespace, and the upload
+    // of the archive the entry was parsed from, which the pipeline checks,
+    // see `TileArchiveVersion`), so the load ends here without a download; a
+    // miss, an entry of an older upload, or an entry that cannot be
     // materialized, releases the disk slot and continues to the network stage
     // with its own slots. The read and its materialize are one "disk" stage
     // in the status report.

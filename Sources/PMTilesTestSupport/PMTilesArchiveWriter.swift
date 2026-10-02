@@ -32,6 +32,9 @@ package struct PMTilesArchiveWriter {
     /// The tile data section used with `explicitEntries`.
     package var explicitTileData: Data?
     package var tileCompression: PMTilesCompression = .gzip
+    /// What the header says the tiles are: MVT unless a test writes an
+    /// archive of another payload.
+    package var tileType: PMTilesTileType = .mvt
     package var internalCompression: PMTilesCompression = .gzip
     /// A root directory with more entries than this is split into leaves.
     package var maximumRootEntries = 16_384
@@ -121,7 +124,7 @@ package struct PMTilesArchiveWriter {
         header.append(isClustered ? 1 : 0)
         header.append(internalCompression.rawValue)
         header.append(tileCompression.rawValue)
-        header.append(PMTilesTileType.mvt.rawValue)
+        header.append(tileType.rawValue)
         header.append(minZoom)
         header.append(maxZoom)
         Self.appendInt32(&header, -180_0000000)

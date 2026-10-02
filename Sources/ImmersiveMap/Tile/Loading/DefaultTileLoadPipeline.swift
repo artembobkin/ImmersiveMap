@@ -13,6 +13,10 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
     // nil when offline regions are disabled.
     private let offlineTileStore: OfflineTileStore?
     private let offlineMode: ImmersiveMapSettings.TileSettings.OfflineSettings.Mode
+    // Which upload of the archive the prepared tiles on disk must be of.
+    // nil when nothing is checked: no network transport, or a caller that
+    // wires none.
+    private let archiveVersion: TileArchiveVersion?
     private weak var tileRenderStore: TileRenderStore?
 
     convenience init(tileRenderStore: TileRenderStore,
@@ -28,14 +32,20 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
                       : nil,
                   tileDownloader: offlineMode == .offlineOnly ? nil : TileDownloader(config: config),
                   offlineTileStore: offlineMode == .disabled ? nil : OfflineTileStore(network: config.tiles.network),
-                  offlineMode: offlineMode)
+                  offlineMode: offlineMode,
+                  archiveVersion: offlineMode == .offlineOnly
+                      ? nil
+                      : TileArchiveVersion(sourceRevision: preparedTileCacheIdentity.tileSourceRevision,
+                                           clearsRemembered: config.tiles.cache.clearDiskCachesOnLaunch))
     }
 
     init(tileRenderStore: TileRenderStore?,
          preparedTileDiskCaching: PreparedTileDiskCaching?,
          tileDownloader: TileDownloader?,
          offlineTileStore: OfflineTileStore?,
-         offlineMode: ImmersiveMapSettings.TileSettings.OfflineSettings.Mode) {
+         offlineMode: ImmersiveMapSettings.TileSettings.OfflineSettings.Mode,
+         archiveVersion: TileArchiveVersion? = nil) {
+        self.archiveVersion = archiveVersion
         self.preparedTileDiskCaching = preparedTileDiskCaching
         self.tileDownloader = tileDownloader
         self.offlineTileStore = offlineTileStore
@@ -51,8 +61,31 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
         preparedTileDiskCaching?.isPreparedOnDisk(tile) ?? false
     }
 
+    /// The disk stage asks with no ETag of its own. It then gets only an
+    /// entry of the archive's current upload, as far as that is known
+    /// (`TileArchiveVersion`): an archive overwritten under the same URL
+    /// leaves its old entries behind, and each is parsed again from the
+    /// new archive.
     func requestPreparedDiskCached(tile: Tile, matchingETag: String?) async -> PreparedTileDiskCacheHit? {
-        await preparedTileDiskCaching?.requestPreparedDiskCached(tile: tile, matchingETag: matchingETag)
+        startArchiveCheckIfNeeded()
+        let expectedETag = matchingETag ?? archiveVersion?.expectedSourceETag(for: tile)
+        return await preparedTileDiskCaching?.requestPreparedDiskCached(tile: tile, matchingETag: expectedETag)
+    }
+
+    /// Asks the archive for its ETag once a session, off the caller's
+    /// task: a map whose tiles are all on disk downloads nothing, and
+    /// would otherwise never learn that the archive was uploaded again.
+    private func startArchiveCheckIfNeeded() {
+        guard let archiveVersion, let tileDownloader, archiveVersion.beginSessionCheck() else {
+            return
+        }
+        Task.detached(priority: .utility) {
+            do {
+                archiveVersion.observe(archiveETag: try await tileDownloader.archiveETag())
+            } catch {
+                archiveVersion.observeUnreachable()
+            }
+        }
     }
 
     func download(tile: Tile) async -> TileDownloader.DownloadResult {
@@ -77,7 +110,18 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
         guard let tileDownloader else {
             return .failure(.network)
         }
-        return await tileDownloader.downloadResult(tile: tile)
+        let result = await tileDownloader.downloadResult(tile: tile)
+        // Every answer says which upload the archive is now, and a request
+        // that did not arrive says the disk is all there is for the moment.
+        switch result {
+        case .success(_, let etag):
+            archiveVersion?.observe(sourceETag: etag)
+        case .failure(.network):
+            archiveVersion?.observeUnreachable()
+        case .failure:
+            break
+        }
+        return result
     }
 
     func savePreparedOnDisk(tile: Tile,

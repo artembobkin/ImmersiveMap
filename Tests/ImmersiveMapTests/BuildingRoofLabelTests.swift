@@ -89,19 +89,55 @@ final class BuildingRoofLabelTests: XCTestCase {
         XCTAssertEqual(MemoryLayout<TilePointInput>.stride, 48)
         XCTAssertEqual(MemoryLayout<TilePointInput>.offset(of: \.roofHeight), 36)
         XCTAssertEqual(MemoryLayout<TilePointInput>.offset(of: \.liftsToRoof), 40)
-        XCTAssertEqual(MemoryLayout<TilePointInput>.offset(of: \.roofIsReplaced), 44)
     }
 
-    /// A building a landmark model stands in for keeps its roof for the
-    /// labels in it, marked as replaced so the frame takes the model's top
-    /// there, and only there: the buildings around it keep their own.
-    func testAReplacedBuildingsRoofIsMarkedAsReplaced() {
-        let roofs = BuildingRoofLookup(
-            candidates: [makeCandidate(buildingId: 1, exterior: square(x: 1000, y: 1000, size: 200), topHeight: 12)],
-            replacedCandidates: [makeCandidate(buildingId: 2, exterior: square(x: 2000, y: 2000, size: 200), topHeight: 80)])
+    /// A label naming a volume the tile has rises to that volume's own
+    /// top, whatever stands over its anchor.
+    func testALabelNamingAVolumeTakesItsOwnTop() {
+        let roof = TileMvtParser.labelRoof(featureId: 7,
+                                           buildingTops: [7: 60],
+                                           buildingOutlineIDs: [7],
+                                           roofOverAnchor: 300)
 
-        XCTAssertEqual(roofs.roof(atTilePoint: tilePoint(1100, 1100)), BuildingRoofLookup.Roof(height: 12, isReplaced: false))
-        XCTAssertEqual(roofs.roof(atTilePoint: tilePoint(2100, 2100)), BuildingRoofLookup.Roof(height: 80, isReplaced: true))
-        XCTAssertEqual(roofs.roof(atTilePoint: tilePoint(3000, 3000)), .none)
+        XCTAssertEqual(roof.height, 60)
+        XCTAssertTrue(roof.lifts)
+    }
+
+    /// An outline raised only by its parts has no top of its own: its
+    /// label rises to the roof of the parts over its anchor.
+    func testALabelNamingAnOutlineOfPartsTakesTheRoofOverItsAnchor() {
+        let roof = TileMvtParser.labelRoof(featureId: 7,
+                                           buildingTops: [8: 40],
+                                           buildingOutlineIDs: [7],
+                                           roofOverAnchor: 40)
+
+        XCTAssertEqual(roof.height, 40)
+        XCTAssertTrue(roof.lifts)
+    }
+
+    /// The same label over a courtyard, where no part stands, stays on
+    /// the ground.
+    func testALabelNamingAnOutlineOfPartsStaysDownOverACourtyard() {
+        let roof = TileMvtParser.labelRoof(featureId: 7,
+                                           buildingTops: [:],
+                                           buildingOutlineIDs: [7],
+                                           roofOverAnchor: 0)
+
+        XCTAssertEqual(roof.height, 0)
+        XCTAssertFalse(roof.lifts)
+    }
+
+    /// Something inside a building (a shop, a sight) is not the building:
+    /// it draws on the ground and carries the roof for its view test.
+    func testALabelOfSomethingInsideStaysOnTheGround() {
+        for featureId in [UInt64?.none, 99] {
+            let roof = TileMvtParser.labelRoof(featureId: featureId,
+                                               buildingTops: [7: 60],
+                                               buildingOutlineIDs: [7],
+                                               roofOverAnchor: 60)
+
+            XCTAssertEqual(roof.height, 60)
+            XCTAssertFalse(roof.lifts)
+        }
     }
 }

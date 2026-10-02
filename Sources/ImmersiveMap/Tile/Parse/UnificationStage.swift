@@ -379,6 +379,7 @@ enum TileUnificationStage {
                                             stylesByKey: readingStageResult.bridgeStyles)
         var unifiedExtrudedVertices: [ExtrudedVertexIn] = []
         var unifiedExtrudedIndices: [UInt32] = []
+        var buildingRanges: [TileBuildingRange] = []
         var currentExtrudedVertexOffset: UInt32 = 0
         let totalExtrudedVertexCount = extrudedByStyle.values.reduce(0) { partial, meshes in
             partial + meshes.reduce(0) { meshPartial, mesh in
@@ -421,8 +422,16 @@ enum TileUnificationStage {
                                                                         normal: vertex.normal,
                                                                         styleIndex: styleBufferIndex))
                     }
+                    // A mesh is one building's volume and its indices go
+                    // in as one run: the run is that building's place.
+                    let indexStart = UInt32(unifiedExtrudedIndices.count)
                     for index in extrudedMesh.indices {
                         unifiedExtrudedIndices.append(index + currentExtrudedVertexOffset)
+                    }
+                    if extrudedMesh.buildingID != 0, extrudedMesh.indices.isEmpty == false {
+                        buildingRanges.append(TileBuildingRange(featureID: extrudedMesh.buildingID,
+                                                                indexStart: indexStart,
+                                                                indexCount: UInt32(extrudedMesh.indices.count)))
                     }
                     currentExtrudedVertexOffset += UInt32(extrudedMesh.vertices.count)
                 }
@@ -436,7 +445,10 @@ enum TileUnificationStage {
             drawingExtruded: DrawingExtrudedBytes(
                 vertices: unifiedExtrudedVertices,
                 indices: unifiedExtrudedIndices,
-                styles: extrudedStyles
+                styles: extrudedStyles,
+                buildingRanges: buildingRanges.sorted { lhs, rhs in
+                    lhs.featureID != rhs.featureID ? lhs.featureID < rhs.featureID : lhs.indexStart < rhs.indexStart
+                }
             ),
             styles: groundLayer.styles,
             styleZoomFades: groundLayer.styleZoomFades,

@@ -90,11 +90,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     /// Where each anchor is tested for view, in the render world: at the
     /// roof over it, see `TilePointScreenProjector`.
     private var baseProbePositions: [SIMD4<Float>] = []
-    /// The tops of the frame's drawn models, the roofs of the buildings
-    /// they replace. A model arriving or leaving with the camera still
-    /// re-projects and re-solves like a camera move.
-    private var modelRoofs: [SceneModelRoof] = []
-    private var projectedModelRoofs: [SceneModelRoof]?
     /// Each label's shrink for its distance, from the projection.
     private var basePerspectiveScales: [Float] = []
     private var baseCenters: [SIMD2<Float>] = []
@@ -199,17 +194,14 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             }
         }
 
-        modelRoofs = frameContext.sharedState.sceneModelState.roofs
         let minimumScale = debugOverlayControls?.labelPerspectiveMinimum() ?? perspectiveMinimumScale
         let cameraChanged = projectedCameraFingerprint != latestCameraFingerprint
-            || projectedModelRoofs != modelRoofs
             || projectedPerspectiveMinimumScale != minimumScale
         if cameraChanged || topologyChanged {
             projectBaseLabels(frameContext: frameContext, minimumScale: minimumScale)
             placeRoadLabels(frameContext: frameContext, projectionIndexState: projectionIndexState)
             projectedPerspectiveMinimumScale = minimumScale
             projectedCameraFingerprint = latestCameraFingerprint
-            projectedModelRoofs = modelRoofs
             projectionGeneration &+= 1
         }
 
@@ -351,7 +343,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         sourceEntriesVersionTracker.invalidate()
         projectionVersionTracker.invalidate()
         projectedCameraFingerprint = nil
-        projectedModelRoofs = nil
         projectedPerspectiveMinimumScale = nil
         resolvedLocalDetailDistance = nil
         solvedCameraFingerprint = nil
@@ -450,7 +441,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         tilePointScreenProjector.projectWithHorizonVisibility(snapshot: baseLabelCache.tilePointSnapshot,
                                                               frameContext: frameContext,
                                                               tileOriginData: projectionIndexState.tileOriginData,
-                                                              modelRoofs: modelRoofs,
                                                               minimumPerspectiveScale: minimumScale,
                                                               screenPoints: &baseScreenPoints,
                                                               horizonVisibility: &baseHorizonVisible,
