@@ -122,6 +122,34 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             }
         }
 
+        /// Keeps a zoomed-out globe upright, north up and seen from straight
+        /// above, so the planet is never left lying on its side. Across
+        /// `zoomRange` the bearing and the pitch the camera may rest at close
+        /// in linearly, from the camera's own limits at the upper bound to
+        /// north up and the pitch floor at the lower bound and below it.
+        ///
+        /// It is a pull, not a wall. A camera outside what its zoom allows is
+        /// eased back on every frame, during a gesture too, so zooming out of
+        /// a turned and tilted view straightens the globe on the way, and a
+        /// rotation past the allowed bearing springs back when the fingers
+        /// let go. A tilt stops at the allowed pitch. A flight or a path
+        /// follow owns the camera, and the pull waits for it to finish.
+        /// The globe only: the flat map is never pulled.
+        public struct GlobeUprightPull: Equatable, Sendable {
+            /// The zooms over which the globe is straightened: upright at the
+            /// lower bound and below it, free from the upper bound on.
+            public var zoomRange: ClosedRange<Double>
+            /// The seconds in which the pull closes half of what is left of
+            /// the way back. Zero straightens at once.
+            public var halfLife: Double
+
+            public init(zoomRange: ClosedRange<Double> = 3...6,
+                        halfLife: Double = 0.2) {
+                self.zoomRange = zoomRange
+                self.halfLife = halfLife
+            }
+        }
+
         /// A geographic region the camera is held to. Below the pull's zoom
         /// range the whole world is open, so a zoomed-out globe turns freely.
         /// Across the range the area the map center belongs in closes in on
@@ -234,6 +262,10 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// The globe's zoom-dependent rotation window, `nil` (the default)
         /// for none: the globe then turns as freely as the flat map.
         public var globeBearingLimit: GlobeBearingLimit?
+        /// The pull that keeps a zoomed-out globe upright, on by default.
+        /// `nil` turns it off: the globe then keeps any bearing and pitch at
+        /// every zoom.
+        public var globeUprightPull: GlobeUprightPull?
         /// The region the camera is held to, `nil` (the default) for the
         /// whole world.
         public var bounds: Bounds?
@@ -282,6 +314,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     focusedMarkerZoom: Double,
                     maximumAbsoluteBearing: Float? = nil,
                     globeBearingLimit: GlobeBearingLimit? = nil,
+                    globeUprightPull: GlobeUprightPull? = GlobeUprightPull(),
                     bounds: Bounds? = nil,
                     highZoomPitchExtension: Float = 0,
                     highZoomPitchExtensionStartZoom: Double = 15.0,
@@ -318,6 +351,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.focusedMarkerZoom = focusedMarkerZoom
             self.maximumAbsoluteBearing = maximumAbsoluteBearing
             self.globeBearingLimit = globeBearingLimit
+            self.globeUprightPull = globeUprightPull
             self.bounds = bounds
             self.highZoomPitchExtension = highZoomPitchExtension
             self.highZoomPitchExtensionStartZoom = highZoomPitchExtensionStartZoom

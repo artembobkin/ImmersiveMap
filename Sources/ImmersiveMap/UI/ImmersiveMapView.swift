@@ -356,6 +356,36 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Tunes the pull that keeps a zoomed-out globe upright, north up and
+    /// seen from straight above. It is on by default. Across `zoomRange` the
+    /// bearing and the pitch the camera may rest at close in, from the
+    /// camera's own limits at the upper bound to upright at the lower bound
+    /// and below it. A camera outside that is eased back, halving what is
+    /// left every `halfLife` seconds: zooming out straightens the globe on
+    /// the way, and a rotation past the allowed bearing springs back when
+    /// the fingers let go.
+    ///
+    ///     ImmersiveMapView()
+    ///         .globeUprightPull(zoomRange: 2...5, halfLife: 0.3)
+    func globeUprightPull(zoomRange: ClosedRange<Double> = 3...6,
+                          halfLife: Double = 0.2) -> ImmersiveMapView {
+        globeUprightPull(ImmersiveMapSettings.CameraSettings.GlobeUprightPull(zoomRange: zoomRange,
+                                                                              halfLife: halfLife))
+    }
+
+    /// Sets the globe's upright pull, or turns it off with `nil`: the globe
+    /// then keeps any bearing and pitch at every zoom.
+    ///
+    ///     ImmersiveMapView()
+    ///         .globeUprightPull(nil)
+    func globeUprightPull(_ pull: ImmersiveMapSettings.CameraSettings.GlobeUprightPull?) -> ImmersiveMapView {
+        var view = self
+        var camera = view.settings.camera
+        camera.globeUprightPull = pull
+        view.settings = view.settings.cameraSettings(camera)
+        return view
+    }
+
     /// Holds the camera to a geographic region while keeping the globe. Up to
     /// the lower bound of `pullZoomRange` the whole world is open, so the
     /// zoomed-out globe turns freely. Across the range the area the map

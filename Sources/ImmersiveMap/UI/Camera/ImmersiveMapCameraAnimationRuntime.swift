@@ -32,6 +32,8 @@ final class ImmersiveMapCameraAnimationRuntime {
     private var cameraBearingFollowIsActive = false
     private var boundsPullIsActive = false
     private var boundsPullLastTickTime: CFTimeInterval?
+    private var globeUprightPullIsActive = false
+    private var globeUprightPullLastTickTime: CFTimeInterval?
 
     init(cameraRuntime: ImmersiveMapCameraRuntime,
          interactionRuntime: ImmersiveMapInteractionRuntime,
@@ -74,7 +76,11 @@ final class ImmersiveMapCameraAnimationRuntime {
     /// Accepts a target pitch. Instead of applying instantly, it sets a goal toward which the actual
     /// pitch is eased per frame (smoothing). If follow is disabled, applies instantly.
     func setPitchTarget(_ pitch: Float, currentTime: CFTimeInterval = CACurrentMediaTime()) {
-        let clampedTarget = min(max(cameraRuntime.currentMinimumPitch(), pitch), cameraRuntime.currentMaximumPitch())
+        // A target above what the globe's upright pull allows would only be
+        // pulled back, so the tilt stops there.
+        let maximumPitch = min(cameraRuntime.currentMaximumPitch(),
+                               cameraRuntime.currentGlobeUprightWindow()?.maximumPitch ?? .infinity)
+        let clampedTarget = min(max(cameraRuntime.currentMinimumPitch(), pitch), maximumPitch)
         guard cameraPitchFollow.retarget(clampedTarget, currentTime: currentTime) else {
             cameraPitchFollowIsActive = false
             cameraRuntime.setCameraPitch(clampedTarget)
@@ -90,7 +96,8 @@ final class ImmersiveMapCameraAnimationRuntime {
     /// Accepts a target bearing. The actual bearing is eased toward the goal per frame along the
     /// shortest angular path. If follow is disabled, applies instantly.
     func setBearingTarget(_ bearing: Float, currentTime: CFTimeInterval = CACurrentMediaTime()) {
-        let maximumAbsoluteBearing = cameraRuntime.currentMaximumAbsoluteBearing()
+        let maximumAbsoluteBearing = min(cameraRuntime.currentMaximumAbsoluteBearing(),
+                                         cameraRuntime.currentGlobeUprightWindow()?.maximumAbsoluteBearing ?? .pi)
         let clampedTarget = min(max(bearing, -maximumAbsoluteBearing), maximumAbsoluteBearing)
         guard cameraBearingFollow.retarget(clampedTarget, currentTime: currentTime) else {
             cameraBearingFollowIsActive = false
@@ -195,9 +202,10 @@ final class ImmersiveMapCameraAnimationRuntime {
         advanceGlobeCameraPanInertiaIfNeeded(currentTime: currentTime)
         pathFollowController.advanceIfNeeded(currentTime: currentTime)
         flightController.advanceIfNeeded(currentTime: currentTime)
-        // Last, so the pull acts on the center every other animation left
+        // Last, so the pulls act on the camera every other animation left
         // this frame, and a flight that ended hands over in the same frame.
         advanceBoundsPullIfNeeded(currentTime: currentTime)
+        advanceGlobeUprightPullIfNeeded(currentTime: currentTime)
     }
 
     func reset() {
@@ -211,6 +219,8 @@ final class ImmersiveMapCameraAnimationRuntime {
         flightController.reset()
         boundsPullIsActive = false
         boundsPullLastTickTime = nil
+        globeUprightPullIsActive = false
+        globeUprightPullLastTickTime = nil
         refreshRenderingState()
     }
 
@@ -337,12 +347,60 @@ final class ImmersiveMapCameraAnimationRuntime {
         refreshRenderingState()
     }
 
+    /// The globe's upright pull on every frame, gestures included, the way
+    /// the bounds pull runs: zooming out straightens the globe while the
+    /// pinch is still under way, and a rotation works against the pull and
+    /// springs back when it ends. A flight or a path follow owns the angles
+    /// outright, and the pull waits for it to finish.
+    private func advanceGlobeUprightPullIfNeeded(currentTime: CFTimeInterval) {
+        guard flightController.isActive == false,
+              pathFollowController.isActive == false,
+              let window = cameraRuntime.currentGlobeUprightWindow(),
+              let bearing = cameraRuntime.currentBearing,
+              let pitch = cameraRuntime.currentPitch else {
+            globeUprightPullLastTickTime = nil
+            setGlobeUprightPullActive(false)
+            return
+        }
+
+        let deltaTime = globeUprightPullLastTickTime.map {
+            GlobeCameraPanInertiaMath.clampedDeltaTime(currentTime - $0)
+        } ?? 0
+        let halfLife = cameraRuntime.currentSettings.camera.globeUprightPull?.halfLife ?? 0
+        let step = GlobeUprightPull.step(bearing: bearing,
+                                         pitch: pitch,
+                                         window: window,
+                                         deltaTime: deltaTime,
+                                         halfLife: halfLife)
+        // A follow whose target was set under a wider window would hold the
+        // angle against the pull for good, so the pull takes the angle over.
+        if step.bearing != bearing {
+            cancelCameraBearingFollow()
+            cameraRuntime.setCameraBearing(step.bearing)
+        }
+        if step.pitch != pitch {
+            cancelCameraPitchFollow()
+            cameraRuntime.setCameraPitch(step.pitch)
+        }
+        globeUprightPullLastTickTime = step.isPulling ? currentTime : nil
+        setGlobeUprightPullActive(step.isPulling)
+    }
+
+    private func setGlobeUprightPullActive(_ isActive: Bool) {
+        guard globeUprightPullIsActive != isActive else {
+            return
+        }
+        globeUprightPullIsActive = isActive
+        refreshRenderingState()
+    }
+
     func refreshRenderingState() {
         renderRuntime.setCameraAnimationRenderingActive(globeCameraPanInertiaIsActive
                                                         || flightController.isActive
                                                         || pathFollowController.isActive
                                                         || cameraPitchFollowIsActive
                                                         || cameraBearingFollowIsActive
-                                                        || boundsPullIsActive)
+                                                        || boundsPullIsActive
+                                                        || globeUprightPullIsActive)
     }
 }

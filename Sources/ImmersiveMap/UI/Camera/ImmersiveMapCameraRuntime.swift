@@ -162,6 +162,16 @@ final class ImmersiveMapCameraRuntime {
         return currentCameraConstraints(cameraState: cameraState).pitch.clampedMinimumPitch
     }
 
+    /// The window the globe's upright pull holds the camera to right now,
+    /// nil where it holds nothing.
+    func currentGlobeUprightWindow() -> GlobeUprightWindow? {
+        guard let cameraState = renderCamera?.currentCameraState() else {
+            return nil
+        }
+
+        return presentationStateResolver.globeUprightWindow(cameraState: cameraState)
+    }
+
     func isSphericalRenderSurfaceActive() -> Bool {
         guard let cameraState = renderCamera?.currentCameraState() else {
             return false

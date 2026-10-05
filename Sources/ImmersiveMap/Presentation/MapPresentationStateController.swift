@@ -45,4 +45,16 @@ final class MapPresentationStateController {
                                          cameraSettings: settings.camera,
                                          renderSurfaceMode: resolve(cameraState: cameraState).renderSurfaceMode)
     }
+
+    /// The window the globe's upright pull holds the camera to, nil where it
+    /// holds nothing.
+    func globeUprightWindow(cameraState: ImmersiveMapCameraState) -> GlobeUprightWindow? {
+        let renderSurfaceMode = resolve(cameraState: cameraState).renderSurfaceMode
+        return GlobeUprightPull.window(zoom: cameraState.zoom,
+                                       settings: settings.camera.globeUprightPull,
+                                       renderSurfaceMode: renderSurfaceMode,
+                                       constraints: CameraConstraintResolver.resolve(cameraState: cameraState,
+                                                                                     cameraSettings: settings.camera,
+                                                                                     renderSurfaceMode: renderSurfaceMode))
+    }
 }
