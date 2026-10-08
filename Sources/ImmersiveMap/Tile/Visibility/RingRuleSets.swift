@@ -31,8 +31,9 @@ struct RingRuleSets: Hashable {
     /// early, since toward the limb a tile is seen edge on. The zooms past
     /// the unroll take the plane's rules (`FlatRingRules.default`). Among
     /// the buildings (`FlatRingRules.nearStreetDefault`) and closer still
-    /// (`FlatRingRules.closeStreetDefault`) the rings shrink, since a tilted
-    /// camera there sees the street and little else.
+    /// (`FlatRingRules.closeStreetDefault`) the near rings are tighter, and
+    /// every set past the globe's draws its far rings from textures
+    /// (`FlatRingRule.rasterSize`).
     static let `default` = RingRuleSets(sets: [
         RingRuleSet(firstZoom: 0, rules: .globeDefault),
         RingRuleSet(firstZoom: defaultStreetFirstZoom, rules: .default),
@@ -86,19 +87,20 @@ extension FlatRingRules {
     ])
 
     /// Zooms 15 and 16: the exact tiles with their lines and labels to ring
-    /// 1, one level coarser to ring 2 and five levels coarser to ring 3, both
-    /// with their lines and without labels.
+    /// 1, two levels coarser to ring 4 as geometry with its lines and
+    /// without labels, then the same zoom to ring 13 as 256-texel textures,
+    /// without lines or labels.
     static let nearStreetDefault = FlatRingRules(rules: [
         FlatRingRule(zoomDrop: 0, distance: 1),
-        FlatRingRule(zoomDrop: 1, distance: 2, drawsLabels: false),
-        FlatRingRule(zoomDrop: 5, distance: 3, drawsLabels: false)
+        FlatRingRule(zoomDrop: 2, distance: 4, drawsLabels: false),
+        FlatRingRule(zoomDrop: 2, distance: 13, drawsLines: false, drawsLabels: false, rasterSize: 256)
     ])
 
     /// Zoom 17 and deeper: the exact tiles with their lines and labels to
-    /// ring 1, then two levels coarser to ring 2 with their lines and
-    /// without labels, nothing beyond.
+    /// ring 1, then two levels coarser to ring 2 as 128-texel textures,
+    /// without lines or labels, nothing beyond.
     static let closeStreetDefault = FlatRingRules(rules: [
         FlatRingRule(zoomDrop: 0, distance: 1),
-        FlatRingRule(zoomDrop: 2, distance: 2, drawsLabels: false)
+        FlatRingRule(zoomDrop: 2, distance: 2, drawsLines: false, drawsLabels: false, rasterSize: 128)
     ])
 }

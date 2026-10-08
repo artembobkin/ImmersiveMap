@@ -112,6 +112,8 @@ final class SharedRenderResources {
     let extrudedTilePipeline: ExtrudedTilePipeline
     /// The tile-ownership stencil prepass of the flat passes.
     let tileOwnershipPipeline: TileOwnershipPipeline
+    /// The raster tiles: their bake and their draws on both surfaces.
+    let rasterTilePipeline: RasterTilePipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
     let fxaaPipeline: FXAAPipeline
     let starfieldPipeline: StarfieldPipeline
@@ -309,6 +311,7 @@ final class SharedRenderResources {
         self.surfaceLabelPipeline = compiled.surfaceLabelPipeline
         self.extrudedTilePipeline = compiled.extrudedTilePipeline
         self.tileOwnershipPipeline = compiled.tileOwnershipPipeline
+        self.rasterTilePipeline = compiled.rasterTilePipeline
         self.groundShadowMaskPipeline = compiled.groundShadowMaskPipeline
         self.fxaaPipeline = compiled.fxaaPipeline
         self.starfieldPipeline = compiled.starfieldPipeline
@@ -335,6 +338,7 @@ final class SharedRenderResources {
         let surfaceLabelPipeline: SurfaceLabelPipeline
         let extrudedTilePipeline: ExtrudedTilePipeline
         let tileOwnershipPipeline: TileOwnershipPipeline
+        let rasterTilePipeline: RasterTilePipeline
         let groundShadowMaskPipeline: GroundShadowMaskPipeline
         let fxaaPipeline: FXAAPipeline
         let starfieldPipeline: StarfieldPipeline
@@ -366,6 +370,7 @@ final class SharedRenderResources {
         var surfaceLabelPipeline: SurfaceLabelPipeline?
         var extrudedTilePipeline: ExtrudedTilePipeline?
         var tileOwnershipPipeline: TileOwnershipPipeline?
+        var rasterTilePipeline: RasterTilePipeline?
         var groundShadowMaskPipeline: GroundShadowMaskPipeline?
         var fxaaPipeline: FXAAPipeline?
         var starfieldPipeline: StarfieldPipeline?
@@ -407,6 +412,10 @@ final class SharedRenderResources {
                                                             pixelFormat: pixelFormat,
                                                             library: library,
                                                             sampleCount: sampleCount) },
+            { rasterTilePipeline = RasterTilePipeline(metalDevice: device,
+                                                      pixelFormat: pixelFormat,
+                                                      library: library,
+                                                      sampleCount: sampleCount) },
             { globeVectorSurfacePipeline = TilePipeline(metalDevice: device,
                                                         pixelFormat: pixelFormat,
                                                         library: library,
@@ -445,6 +454,7 @@ final class SharedRenderResources {
             surfaceLabelPipeline: surfaceLabelPipeline!,
             extrudedTilePipeline: extrudedTilePipeline!,
             tileOwnershipPipeline: tileOwnershipPipeline!,
+            rasterTilePipeline: rasterTilePipeline!,
             groundShadowMaskPipeline: groundShadowMaskPipeline!,
             fxaaPipeline: fxaaPipeline!,
             starfieldPipeline: starfieldPipeline!,

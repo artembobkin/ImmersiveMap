@@ -37,8 +37,10 @@ final class TileOwnershipRenderSubsystem: RenderSubsystem {
               frameContext.renderSurfaceMode == .flat else {
             return
         }
-        let placements = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
-        guard placements.isEmpty == false else { return }
+        let placementState = frameContext.sharedState.tilePlacementState
+        let placements = placementState.placeTilesContext.tilePlacements
+        let rasterPlacements = placementState.rasterPlacements
+        guard placements.isEmpty == false || rasterPlacements.isEmpty == false else { return }
 
         // The same dedupe key as the flat surface drawer: the world-wrap
         // copies at the seam are distinct quads of the same tile.
@@ -49,10 +51,23 @@ final class TileOwnershipRenderSubsystem: RenderSubsystem {
         var seenSources = Set<SourceKey>()
         var uniqueSources: [(tile: Tile, worldWrap: Int8)] = []
         uniqueSources.reserveCapacity(placements.count)
-        for placeTile in placements {
+        // A vector source placed only in raster targets' slots draws no
+        // ground there (`FlatMapSurfaceDrawer`), only its lines: it owns
+        // nothing, or a finer stand-in would keep a texture out of its own
+        // place.
+        let rasterTiles = frameContext.visibleContent.rasterTiles
+        for placeTile in placements where rasterTiles[placeTile.placeIn] == nil {
             let key = SourceKey(tile: placeTile.metalTile.tile, worldWrap: placeTile.placeIn.worldWrap)
             if seenSources.insert(key).inserted {
                 uniqueSources.append((placeTile.metalTile.tile, placeTile.placeIn.worldWrap))
+            }
+        }
+        // The raster tiles own their pixels as the vector tiles do, so a
+        // coarser source's fills stay out of a texture's place.
+        for placement in rasterPlacements {
+            let key = SourceKey(tile: placement.placeIn.tile, worldWrap: placement.placeIn.worldWrap)
+            if seenSources.insert(key).inserted {
+                uniqueSources.append((placement.placeIn.tile, placement.placeIn.worldWrap))
             }
         }
 

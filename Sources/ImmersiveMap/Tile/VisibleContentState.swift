@@ -32,6 +32,12 @@ struct VisibleContentState {
     /// The targets a rule that draws no labels placed
     /// (`FlatRingRule.drawsLabels`), on either surface.
     let unlabelledTiles: Set<VisibleTile>
+    /// The targets a rule that draws its ground from a texture placed
+    /// (`FlatRingRule.rasterSize`), with how each is baked, on either
+    /// surface. Such a target's ground is its raster or nothing, and its
+    /// vector tile is wanted only for what it draws over the raster (its
+    /// lines and labels) or to bake the raster from.
+    let rasterTiles: [VisibleTile: RasterTileSpec]
 
     init(centerWorldMercator: SIMD2<Double>,
          center: Center,
@@ -40,7 +46,8 @@ struct VisibleContentState {
          coverageVersion: UInt64,
          flatRingBands: [FlatRingBand] = [],
          linelessTiles: Set<VisibleTile> = [],
-         unlabelledTiles: Set<VisibleTile> = []) {
+         unlabelledTiles: Set<VisibleTile> = [],
+         rasterTiles: [VisibleTile: RasterTileSpec] = [:]) {
         self.centerWorldMercator = centerWorldMercator
         self.center = center
         self.visibleTiles = visibleTiles
@@ -49,5 +56,12 @@ struct VisibleContentState {
         self.flatRingBands = flatRingBands
         self.linelessTiles = linelessTiles
         self.unlabelledTiles = unlabelledTiles
+        self.rasterTiles = rasterTiles
+    }
+
+    /// Whether a raster target draws anything from its vector tile: its
+    /// lines or its labels.
+    func rasterTargetWantsVector(_ target: VisibleTile) -> Bool {
+        linelessTiles.contains(target) == false || unlabelledTiles.contains(target) == false
     }
 }

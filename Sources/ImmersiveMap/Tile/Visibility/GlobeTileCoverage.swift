@@ -33,6 +33,10 @@ struct GlobeCoverageResolution {
     /// The targets a rule that draws no labels placed
     /// (`FlatRingRule.drawsLabels`), decided as for the lines.
     let unlabelledTargets: Set<VisibleTile>
+    /// The targets a rule that draws its ground from a texture placed
+    /// (`FlatRingRule.rasterSize`), with how it is baked, decided as for
+    /// the lines.
+    let rasterTargets: [VisibleTile: RasterTileSpec]
     let metrics: GlobeCullingMetrics
 }
 
@@ -81,6 +85,8 @@ enum GlobeTileCoverage {
         let zoom: Int
         let drawsLines: Bool
         let drawsLabels: Bool
+        let rasterSize: Int?
+        let zoomDrop: Int
         var tileCount = 0
     }
 
@@ -94,13 +100,15 @@ enum GlobeTileCoverage {
         var placed: Set<Tile> = []
         var lineless: Set<VisibleTile> = []
         var unlabelled: Set<VisibleTile> = []
+        var raster: [VisibleTile: RasterTileSpec] = [:]
         var metrics = GlobeCullingMetrics.zero
     }
 
     static func targets(targetZoom: Int, inputs: GlobeCoverageInputs, frustum: Frustum?) -> GlobeCoverageResolution {
         let startTime = CACurrentMediaTime()
         guard targetZoom >= 0, let frustum else {
-            return GlobeCoverageResolution(targets: [], bands: [], linelessTargets: [], unlabelledTargets: [], metrics: .zero)
+            return GlobeCoverageResolution(targets: [], bands: [], linelessTargets: [], unlabelledTargets: [],
+                                           rasterTargets: [:], metrics: .zero)
         }
         var bands: [Band] = []
         for rule in inputs.rules.normalized().rules {
@@ -108,7 +116,9 @@ enum GlobeTileCoverage {
                               lastRing: rule.distance,
                               zoom: min(targetZoom, max(Self.floorZoom, targetZoom - rule.zoomDrop)),
                               drawsLines: rule.drawsLines,
-                              drawsLabels: rule.drawsLabels))
+                              drawsLabels: rule.drawsLabels,
+                              rasterSize: rule.rasterSize,
+                              zoomDrop: rule.zoomDrop))
         }
         var walk = Walk(targetZoom: targetZoom,
                         frustum: frustum,
@@ -123,6 +133,7 @@ enum GlobeTileCoverage {
                                        },
                                        linelessTargets: walk.lineless,
                                        unlabelledTargets: walk.unlabelled,
+                                       rasterTargets: walk.raster,
                                        metrics: walk.metrics)
     }
 
@@ -158,6 +169,8 @@ enum GlobeTileCoverage {
         var placesTile = false
         var drawsLines = true
         var drawsLabels = true
+        var rasterSize: Int?
+        var zoomDrop = 0
         var finestWanted = Self.floorZoom
         for index in walk.bands.indices {
             let band = walk.bands[index]
@@ -167,6 +180,8 @@ enum GlobeTileCoverage {
                 placesTile = true
                 drawsLines = band.drawsLines
                 drawsLabels = band.drawsLabels
+                rasterSize = band.rasterSize
+                zoomDrop = band.zoomDrop
                 if walk.placed.contains(tile) == false {
                     walk.bands[index].tileCount += 1
                 }
@@ -177,6 +192,8 @@ enum GlobeTileCoverage {
             placesTile = true
             drawsLines = walk.bands.last?.drawsLines ?? true
             drawsLabels = walk.bands.last?.drawsLabels ?? true
+            rasterSize = walk.bands.last?.rasterSize
+            zoomDrop = walk.bands.last?.zoomDrop ?? 0
         }
         if placesTile {
             if walk.placed.contains(tile) == false {
@@ -185,6 +202,9 @@ enum GlobeTileCoverage {
                 }
                 if drawsLabels == false {
                     walk.unlabelled.insert(VisibleTile(tile: tile))
+                }
+                if let rasterSize {
+                    walk.raster[VisibleTile(tile: tile)] = RasterTileSpec(size: rasterSize, fadeZoom: tile.z + zoomDrop)
                 }
             }
             place(tile, walk: &walk)

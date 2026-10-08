@@ -95,6 +95,12 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         if oldValue.tiles.parsing != newValue.tiles.parsing {
             mark(.tiles, actions: [.invalidateCaches, .rebuildPreparedData, .recreateRenderer])
         }
+        // The raster store, its sampler and its budgets are built with the
+        // renderer. The textures on disk stay valid: they are of the tiles,
+        // not of these settings.
+        if oldValue.tiles.rasterization != newValue.tiles.rasterization {
+            mark(.tiles, actions: [.recreateRenderer])
+        }
         // The offline mode decides which transports the load pipeline is even
         // built with (offline-only maps never create a downloader), so it
         // applies by recreating the renderer; caches stay valid because the

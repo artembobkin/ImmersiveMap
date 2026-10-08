@@ -54,8 +54,10 @@ struct PreparedTileCacheIdentity {
 /// and one root-wide index. This prevents two map views from racing atomic
 /// replacements/pruning and avoids rescanning every namespace after each save.
 /// Internally synchronized: the registry is guarded by `registryLock`, all other
-/// state is mutated only on the serial `queue`.
-private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
+/// state is mutated only on the serial `queue`. The raster tiles of a
+/// namespace (`RasterTileDiskCache`) keep their files under the same root
+/// through the same coordinator, so they share its quota and its TTL.
+final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
     private struct Policy {
         var byteQuota: Int64
         var timeToLive: TimeInterval
@@ -177,7 +179,7 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
         var entries: [Tile: Date] = [:]
         for entry in indexedFilesByPath.values
         where Self.availabilityDirectoryKey(for: entry.url.deletingLastPathComponent()) == directoryKey {
-            if let tile = PreparedTileAvailabilityIndex.tile(forPreparedTileFileName: entry.url.lastPathComponent) {
+            if let tile = PreparedTileAvailabilityIndex.tile(forIndexedFileName: entry.url.lastPathComponent) {
                 entries[tile] = entry.lastAccessDate
             }
         }
@@ -213,6 +215,19 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
         }
         seedAvailabilityIndex(forDirectory: currentCacheDirectory, timeToLive: timeToLive)
         prune()
+    }
+
+    /// Seeds the availability index of a directory a derived cache keeps
+    /// its files in (the raster tiles of a namespace), from the root-wide
+    /// index, preparing that index first when no prepared cache of the
+    /// root has yet. Run on the queue after the prepared cache's own
+    /// `prepare`, which is enqueued first.
+    func prepareAuxiliaryDirectory(_ directory: URL, timeToLive: TimeInterval) {
+        if isRootIndexPrepared == false {
+            rebuildRootIndex()
+            isRootIndexPrepared = true
+        }
+        seedAvailabilityIndex(forDirectory: directory, timeToLive: timeToLive)
     }
 
     func clearAndCreate(currentCacheDirectory: URL) throws {
@@ -460,7 +475,7 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
             indexedByteCount = subtractClamped(indexedByteCount, replaced.byteCount)
         }
         indexedByteCount = addClamped(indexedByteCount, entry.byteCount)
-        if let tile = PreparedTileAvailabilityIndex.tile(forPreparedTileFileName: entry.url.lastPathComponent),
+        if let tile = PreparedTileAvailabilityIndex.tile(forIndexedFileName: entry.url.lastPathComponent),
            let index = availabilityIndex(forDirectoryKey: Self.availabilityDirectoryKey(for: entry.url.deletingLastPathComponent())) {
             index.insert(tile, lastAccessDate: entry.lastAccessDate)
         }
@@ -470,7 +485,7 @@ private final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
         // The entry or its blob: losing either makes the tile unreadable (a
         // pruned `.ptgeo` leaves a `.ptile` that fails at materialize), so
         // both take the tile out of the index.
-        if let tile = PreparedTileAvailabilityIndex.tile(forPreparedTileFileName: fileName)
+        if let tile = PreparedTileAvailabilityIndex.tile(forIndexedFileName: fileName)
             ?? PreparedTileAvailabilityIndex.tile(forPreparedBlobFileName: fileName),
            let index = availabilityIndex(forDirectoryKey: directoryKey) {
             index.remove(tile)
@@ -892,12 +907,10 @@ final class PreparedTileDiskCaching {
         self.compressionEnabled = config.tiles.cache.preparedDiskCompressionEnabled
         self.geometryTransport = geometryTransport
 
-        let cachesDirectory = baseCachesDirectory
-            ?? fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        let rootDirectory = cachesDirectory.appendingPathComponent("MapPreparedTiles")
-        let currentDirectory = rootDirectory
-            .appendingPathComponent("v\(cacheIdentity.preparedFormatVersion)")
-            .appendingPathComponent("\(cacheIdentity.namespaceComponent)-\(geometryTransport.cacheNamespaceMarker)")
+        let rootDirectory = Self.rootDirectory(fileManager: fileManager, baseCachesDirectory: baseCachesDirectory)
+        let currentDirectory = Self.namespaceDirectory(rootDirectory: rootDirectory,
+                                                       cacheIdentity: cacheIdentity,
+                                                       geometryTransport: geometryTransport)
         self.cacheDirectory = currentDirectory
         self.ioCoordinator = PreparedTileDiskIOCoordinator.shared(rootDirectory: rootDirectory,
                                                                   fileManager: fileManager)
@@ -920,6 +933,23 @@ final class PreparedTileDiskCaching {
 #endif
             }
         }
+    }
+
+    /// The root every prepared namespace lives under.
+    static func rootDirectory(fileManager: FileManager = .default, baseCachesDirectory: URL? = nil) -> URL {
+        let cachesDirectory = baseCachesDirectory
+            ?? fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        return cachesDirectory.appendingPathComponent("MapPreparedTiles")
+    }
+
+    /// The directory of one namespace: its format, its identity and its
+    /// geometry transport.
+    static func namespaceDirectory(rootDirectory: URL,
+                                   cacheIdentity: PreparedTileCacheIdentity,
+                                   geometryTransport: any PreparedTileGeometryTransporting) -> URL {
+        rootDirectory
+            .appendingPathComponent("v\(cacheIdentity.preparedFormatVersion)")
+            .appendingPathComponent("\(cacheIdentity.namespaceComponent)-\(geometryTransport.cacheNamespaceMarker)")
     }
 
     /// Loads the cached prepared tile. When `matchingETag` is non-nil the entry is

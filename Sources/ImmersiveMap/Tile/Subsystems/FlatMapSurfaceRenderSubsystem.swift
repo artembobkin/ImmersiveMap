@@ -5,7 +5,9 @@ import Metal
 import simd
 
 /// The flat ground: the main coverage's sources through the vector drawer
-/// (`FlatMapSurfaceDrawer`), every tile as geometry at every distance.
+/// (`FlatMapSurfaceDrawer`), every tile as geometry, but where a ring rule
+/// draws the ground from a texture (`RasterTileRenderSubsystem`, which
+/// draws first in this layer).
 /// Nothing is drawn under them: beyond the last rule the haze paints the
 /// horizon.
 final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
@@ -75,7 +77,8 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   tileStencilTestState: tileStencilTestState,
                                   roadRankState: roadRankState,
                                   isWireframeEnabled: isWireframeEnabled,
-                                  linelessTiles: frameContext.visibleContent.linelessTiles)
+                                  linelessTiles: frameContext.visibleContent.linelessTiles,
+                                  rasterTiles: frameContext.visibleContent.rasterTiles)
         encoder.setDepthStencilState(depthDisabledState)
     }
 

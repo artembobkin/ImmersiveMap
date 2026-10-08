@@ -158,8 +158,8 @@ final class DebugOverlayHUDView: NSView {
     private let wireframeLabel = NSTextField(labelWithString: "")
     private let wireframeSwitch = NSSwitch()
     /// One ring rule's editor: the drop picker, the distance slider, the
-    /// line switch and the label switch, each with its named row. Rebuilt
-    /// when the number of rules changes.
+    /// line switch, the label switch and the raster picker, each with its
+    /// named row. Rebuilt when the number of rules changes.
     private struct RingRuleRow {
         let dropLabel: NSTextField
         let dropControl: NSSegmentedControl
@@ -169,8 +169,11 @@ final class DebugOverlayHUDView: NSView {
         let linesSwitch: NSSwitch
         let labelsLabel: NSTextField
         let labelsSwitch: NSSwitch
+        let rasterLabel: NSTextField
+        let rasterControl: NSSegmentedControl
         var views: [NSView] {
-            [dropLabel, dropControl, distanceLabel, distanceSlider, linesLabel, linesSwitch, labelsLabel, labelsSwitch]
+            [dropLabel, dropControl, distanceLabel, distanceSlider, linesLabel, linesSwitch, labelsLabel, labelsSwitch,
+             rasterLabel, rasterControl]
         }
     }
     private var ringRuleRows: [RingRuleRow] = []
@@ -580,10 +583,18 @@ final class DebugOverlayHUDView: NSView {
             labelsSwitch.target = self
             labelsSwitch.action = #selector(ringRuleLabelsSwitchChanged(_:))
             refuseFocus(labelsSwitch)
+            let rasterLabel = NSTextField(labelWithString: "")
+            configureControlLabel(rasterLabel, text: "")
+            let rasterControl = NSSegmentedControl(labels: Self.ringRuleRasterChoiceTitles,
+                                                   trackingMode: .selectOne,
+                                                   target: self,
+                                                   action: #selector(ringRuleRasterControlChanged(_:)))
+            refuseFocus(rasterControl)
             return RingRuleRow(dropLabel: dropLabel, dropControl: dropControl,
                                 distanceLabel: distanceLabel, distanceSlider: distanceSlider,
                                 linesLabel: linesLabel, linesSwitch: linesSwitch,
-                                labelsLabel: labelsLabel, labelsSwitch: labelsSwitch)
+                                labelsLabel: labelsLabel, labelsSwitch: labelsSwitch,
+                                rasterLabel: rasterLabel, rasterControl: rasterControl)
         }
         for row in ringRuleRows {
             row.views.forEach(contentView.addSubview)
@@ -601,6 +612,8 @@ final class DebugOverlayHUDView: NSView {
             row.linesSwitch.state = rule.drawsLines ? .on : .off
             row.labelsLabel.stringValue = Self.ringRuleLabelsTitle(index: index)
             row.labelsSwitch.state = rule.drawsLabels ? .on : .off
+            row.rasterLabel.stringValue = Self.ringRuleRasterTitle(index: index)
+            row.rasterControl.selectedSegment = Self.ringRuleRasterChoiceIndex(rasterSize: rule.rasterSize)
         }
         ringRulesRemoveButton.isEnabled = flatRingRules.rules.count > 1
     }
@@ -645,6 +658,30 @@ final class DebugOverlayHUDView: NSView {
         guard let index = ringRuleRows.firstIndex(where: { $0.labelsSwitch === sender }),
               index < flatRingRules.rules.count else { return }
         flatRingRules.rules[index].drawsLabels = sender.state == .on
+        onRingRuleSetsChanged?(ringRuleSets)
+    }
+
+    static func ringRuleRasterTitle(index: Int) -> String {
+        "Rule \(index + 1): ground from a texture"
+    }
+
+    /// The raster picker's choices: geometry, then every texture edge
+    /// (`FlatRingRules.rasterSizes`).
+    static let ringRuleRasterChoiceTitles = ["Off"] + FlatRingRules.rasterSizes.map(String.init)
+
+    static func ringRuleRasterChoiceIndex(rasterSize: Int?) -> Int {
+        guard let rasterSize, let index = FlatRingRules.rasterSizes.firstIndex(of: rasterSize) else { return 0 }
+        return index + 1
+    }
+
+    static func ringRuleRasterSize(choiceIndex: Int) -> Int? {
+        FlatRingRules.rasterSizes.indices.contains(choiceIndex - 1) ? FlatRingRules.rasterSizes[choiceIndex - 1] : nil
+    }
+
+    @objc private func ringRuleRasterControlChanged(_ sender: NSSegmentedControl) {
+        guard let index = ringRuleRows.firstIndex(where: { $0.rasterControl === sender }),
+              index < flatRingRules.rules.count else { return }
+        flatRingRules.rules[index].rasterSize = Self.ringRuleRasterSize(choiceIndex: sender.selectedSegment)
         onRingRuleSetsChanged?(ringRuleSets)
     }
 
@@ -1090,6 +1127,7 @@ final class DebugOverlayHUDView: NSView {
             cursor = layoutControlRow(row.distanceLabel, row.distanceSlider, at: cursor, contentWidth: contentWidth)
             cursor = layoutSwitchRow(row.linesLabel, row.linesSwitch, at: cursor, contentWidth: contentWidth)
             cursor = layoutSwitchRow(row.labelsLabel, row.labelsSwitch, at: cursor, contentWidth: contentWidth)
+            cursor = layoutControlRow(row.rasterLabel, row.rasterControl, at: cursor, contentWidth: contentWidth)
         }
         cursor = layoutFullWidthRow(ringRulesAddButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutFullWidthRow(ringRulesRemoveButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)

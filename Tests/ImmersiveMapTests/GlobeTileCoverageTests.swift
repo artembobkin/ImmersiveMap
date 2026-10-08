@@ -172,7 +172,7 @@ final class GlobeTileCoverageTests: XCTestCase {
                       "\(resolution.linelessTargets)")
         XCTAssertTrue(resolution.linelessTargets.contains(VisibleTile(x: 0, y: 0, z: GlobeTileCoverage.floorZoom)))
         XCTAssertFalse(resolution.linelessTargets.contains(VisibleTile(x: 32, y: 32, z: 6)))
-        XCTAssertTrue(Self.resolve().linelessTargets.allSatisfy { $0.z < 5 }, "the default's lined rings stay lined")
+        XCTAssertTrue(Self.resolve().linelessTargets.allSatisfy { $0.z < 6 }, "the default's exact tiles stay lined")
     }
 
     /// A rule that draws no labels names its tiles as a lineless one does,
@@ -188,6 +188,25 @@ final class GlobeTileCoverageTests: XCTestCase {
         XCTAssertTrue(resolution.linelessTargets.isEmpty, "the two switches are independent")
         XCTAssertTrue(Self.resolve().unlabelledTargets.allSatisfy { $0.z < 6 },
                       "the default labels the exact tiles and nothing past them")
+    }
+
+    /// A rule that draws its ground from a texture names its tiles with
+    /// the texture's edge and the zoom its fades are baked at (the tile's
+    /// zoom plus the rule's drop), the cover past the last rule following
+    /// the last rule, as for the lines.
+    func testARasterRuleNamesItsTiles() {
+        let rules = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1),
+                                          FlatRingRule(zoomDrop: 2, distance: 6, rasterSize: 128)])
+        let resolution = Self.resolve(rules: rules)
+        XCTAssertFalse(resolution.rasterTargets.isEmpty)
+        XCTAssertTrue(resolution.rasterTargets.allSatisfy {
+            ($0.key.z == 4 || $0.key.z == GlobeTileCoverage.floorZoom) && $0.value == RasterTileSpec(size: 128, fadeZoom: $0.key.z + 2)
+        }, "\(resolution.rasterTargets)")
+        XCTAssertEqual(resolution.rasterTargets[VisibleTile(x: 0, y: 0, z: GlobeTileCoverage.floorZoom)],
+                       RasterTileSpec(size: 128, fadeZoom: GlobeTileCoverage.floorZoom + 2))
+        XCTAssertNil(resolution.rasterTargets[VisibleTile(x: 32, y: 32, z: 6)])
+        XCTAssertTrue(Self.resolve().rasterTargets.allSatisfy { $0.key.z < 6 }, "the default's exact tiles are geometry")
+        XCTAssertTrue(Self.resolve(rules: FlatRingRules.globeDefault).rasterTargets.isEmpty, "the globe's zooms draw geometry")
     }
 
     /// The rules are read frame by frame, with nothing carried over: the

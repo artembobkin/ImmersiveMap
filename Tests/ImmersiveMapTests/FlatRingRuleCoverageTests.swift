@@ -93,9 +93,11 @@ final class FlatRingRuleCoverageTests: XCTestCase {
         XCTAssertEqual(FlatRingRules.default.normalized(), FlatRingRules.default, "the default is already normal")
         XCTAssertEqual(FlatRingRules.default.rules.map(\.zoomDrop), [0, 1, 2, 4])
         XCTAssertEqual(FlatRingRules.default.rules.map(\.distance), [1, 2, 3, 9])
-        XCTAssertEqual(FlatRingRules.default.rules.map(\.drawsLines), [true, true, false, false])
+        XCTAssertEqual(FlatRingRules.default.rules.map(\.drawsLines), [true, false, false, false])
         XCTAssertEqual(FlatRingRules.default.rules.map(\.drawsLabels), [true, false, false, false],
                        "only the exact tiles are labelled")
+        XCTAssertEqual(FlatRingRules.default.rules.map(\.rasterSize), [nil, 512, 512, 128],
+                       "past the exact tiles the ground is textures")
         XCTAssertEqual(FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1, drawsLabels: false)])
                         .normalized().rules.map(\.drawsLabels), [false], "the label switch survives normalizing")
     }
@@ -115,6 +117,36 @@ final class FlatRingRuleCoverageTests: XCTestCase {
         XCTAssertFalse(defaultResolution.unlabelledTargets.isEmpty, "the default leaves the far rings unlabelled")
         XCTAssertTrue(defaultResolution.targets.filter { $0.z == 16 }.allSatisfy { defaultResolution.unlabelledTargets.contains($0) == false },
                       "the default labels the exact tiles")
+    }
+
+    /// A rule that draws its ground from a texture names its band's tiles
+    /// with the texture's edge and the zoom its fades are baked at, the
+    /// target zoom the band draws them for, the nearer band deciding: the
+    /// exact tiles stay geometry.
+    func testARasterRuleNamesItsTilesWithTheirSize() throws {
+        let rules = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1),
+                                          FlatRingRule(zoomDrop: 2, distance: 20, rasterSize: 256)])
+        let fixture = try Self.makeFixture(zoom: 16, pitchDegrees: 75, bearingDegrees: 47)
+        let resolution = Self.resolve(fixture, targetZoom: 16, rules: rules)
+        XCTAssertFalse(resolution.rasterTargets.isEmpty)
+        XCTAssertTrue(resolution.rasterTargets.allSatisfy { $0.key.z == 14 && $0.value == RasterTileSpec(size: 256, fadeZoom: 16) },
+                      "\(resolution.rasterTargets)")
+        XCTAssertTrue(resolution.targets.filter { $0.z == 16 }.allSatisfy { resolution.rasterTargets[$0] == nil })
+        let defaultResolution = Self.resolve(fixture, targetZoom: 16)
+        XCTAssertFalse(defaultResolution.rasterTargets.isEmpty, "the default draws its far rings from textures")
+        XCTAssertTrue(defaultResolution.targets.filter { $0.z == 16 }.allSatisfy { defaultResolution.rasterTargets[$0] == nil },
+                      "the default draws the exact tiles as geometry")
+    }
+
+    /// The raster size survives normalizing, snapped to the nearest edge a
+    /// texture may have.
+    func testTheRasterSizeIsNormalized() {
+        let rules = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1),
+                                          FlatRingRule(zoomDrop: 1, distance: 2, rasterSize: 300),
+                                          FlatRingRule(zoomDrop: 2, distance: 3, rasterSize: 1),
+                                          FlatRingRule(zoomDrop: 3, distance: 4, rasterSize: 100_000)])
+        XCTAssertEqual(rules.normalized().rules.map(\.rasterSize), [nil, 256, 64, 1024])
+        XCTAssertTrue(FlatRingRules.rasterSizes.allSatisfy { $0.nonzeroBitCount == 1 }, "powers of two")
     }
 
     // MARK: - The look-at tile and its squares
@@ -330,6 +362,19 @@ final class FlatRingRuleCoverageTests: XCTestCase {
             XCTAssertEqual(DebugOverlayHUDView.ringRuleDistance(sliderValue: value), distance)
         }
         XCTAssertEqual(DebugOverlayHUDView.ringRuleDistance(sliderValue: 1_000), FlatRingRules.distanceRange.upperBound)
+    }
+
+    /// The panel's raster picker: geometry first, then every texture edge,
+    /// each coming back from its own choice.
+    @MainActor
+    func testThePanelsRasterPickerReadsEverySize() {
+        XCTAssertEqual(DebugOverlayHUDView.ringRuleRasterChoiceTitles.count, FlatRingRules.rasterSizes.count + 1)
+        XCTAssertEqual(DebugOverlayHUDView.ringRuleRasterChoiceIndex(rasterSize: nil), 0)
+        XCTAssertNil(DebugOverlayHUDView.ringRuleRasterSize(choiceIndex: 0))
+        for size in FlatRingRules.rasterSizes {
+            let index = DebugOverlayHUDView.ringRuleRasterChoiceIndex(rasterSize: size)
+            XCTAssertEqual(DebugOverlayHUDView.ringRuleRasterSize(choiceIndex: index), size)
+        }
     }
     #endif
 }

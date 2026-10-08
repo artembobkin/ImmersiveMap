@@ -767,6 +767,30 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// The tiles drawn from a texture: a ring rule with a raster size draws
+    /// its tiles' ground from a texture of their fills, drawn once and kept
+    /// on disk. `memoryBudgetInBytes` is what the textures the frame does
+    /// not draw may hold in GPU memory, `bakesPerFrame` how many new ones
+    /// one frame draws, `maximumAnisotropy` their anisotropic filtering
+    /// (1 to 16) and `mipLevelBias` how soft the far ground is (above 0
+    /// softer, below 0 sharper). An omitted value is left as configured:
+    ///
+    ///     ImmersiveMapView()
+    ///         .tileRasterization(bakesPerFrame: 2, mipLevelBias: 0.5)
+    ///
+    /// See `ImmersiveMapSettings.TileSettings.RasterizationSettings`.
+    public func tileRasterization(memoryBudgetInBytes: Int? = nil,
+                                  bakesPerFrame: Int? = nil,
+                                  maximumAnisotropy: Int? = nil,
+                                  mipLevelBias: Float? = nil) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.tileRasterization(memoryBudgetInBytes: memoryBudgetInBytes,
+                                                        bakesPerFrame: bakesPerFrame,
+                                                        maximumAnisotropy: maximumAnisotropy,
+                                                        mipLevelBias: mipLevelBias)
+        return view
+    }
+
     /// The flattened ground on or off. Off, every tile keeps its layers at
     /// every zoom, as before the flattening.
     public func groundFlattening(isEnabled: Bool) -> ImmersiveMapView {

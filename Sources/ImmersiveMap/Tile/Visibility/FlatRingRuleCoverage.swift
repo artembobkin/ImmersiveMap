@@ -24,16 +24,38 @@ struct FlatRingRule: Hashable {
     /// the band is unlabelled, so the far rings toward the horizon can be
     /// left to the map.
     var drawsLabels: Bool = true
+    /// The edge, in texels, of the texture the band's tiles draw their
+    /// ground from, nil for the ground as geometry. A tile's fills are
+    /// drawn into the texture once, kept on disk and drawn from then on as
+    /// one textured grid (`RasterTileStore`), with its mipmaps, which is
+    /// what a far band wants: few vertices and no shimmer. The lines are
+    /// never in the texture: with `drawsLines` they draw as geometry over
+    /// it. One of `FlatRingRules.rasterSizes`.
+    var rasterSize: Int?
 
     init(zoomDrop: Int,
          distance: Int,
          drawsLines: Bool = true,
-         drawsLabels: Bool = true) {
+         drawsLabels: Bool = true,
+         rasterSize: Int? = nil) {
         self.zoomDrop = zoomDrop
         self.distance = distance
         self.drawsLines = drawsLines
         self.drawsLabels = drawsLabels
+        self.rasterSize = rasterSize
     }
+}
+
+/// How a raster target's ground is drawn (`FlatRingRule.rasterSize`): the
+/// texture's edge, and the camera zoom its style's zoom fades are
+/// evaluated at when it is baked, the zoom the band draws the tile for
+/// (the tile's zoom plus the rule's drop). A fill the style has faded out
+/// at that zoom is left out of the texture, as the vector ground leaves it
+/// out, and a partly faded one is baked at its alpha there. Evaluated once:
+/// the texture never fades with the camera.
+struct RasterTileSpec: Hashable {
+    let size: Int
+    let fadeZoom: Int
 }
 
 /// The rules, nearest first. Any number of them. The debug panel edits
@@ -45,16 +67,28 @@ struct FlatRingRules: Hashable {
 
     static let zoomDropRange = 0 ... 8
     static let distanceRange = 0 ... 256
+    /// The texture edges a rule may draw its ground from
+    /// (`FlatRingRule.rasterSize`): powers of two, so every mip level
+    /// halves the one above it down to a single texel.
+    static let rasterSizes = [64, 128, 256, 512, 1024]
 
-    /// The exact tiles to one ring around the look-at tile and one level
-    /// coarser to ring 2, both with their lines, then two levels coarser
-    /// to ring 3 and four levels coarser to ring 9, both without lines,
-    /// nothing beyond. Only the exact tiles carry labels: past ring 1 the
-    /// map recedes toward the horizon unlabelled.
-    static let `default` = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1),
-                                                 FlatRingRule(zoomDrop: 1, distance: 2, drawsLabels: false),
-                                                 FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false, drawsLabels: false),
-                                                 FlatRingRule(zoomDrop: 4, distance: 9, drawsLines: false, drawsLabels: false)])
+    /// The allowed edge nearest to `size`, nil for nil.
+    static func normalizedRasterSize(_ size: Int?) -> Int? {
+        guard let size else { return nil }
+        return rasterSizes.min { abs($0 - size) < abs($1 - size) }
+    }
+
+    /// The exact tiles to one ring around the look-at tile, as geometry
+    /// with their lines and labels. Past it the ground is textures, without
+    /// lines or labels: one level coarser to ring 2 and two levels coarser
+    /// to ring 3 at 512 texels, four levels coarser to ring 9 at 128,
+    /// nothing beyond. The map recedes toward the horizon soft and quiet.
+    static let `default` = FlatRingRules(rules: [
+        FlatRingRule(zoomDrop: 0, distance: 1),
+        FlatRingRule(zoomDrop: 1, distance: 2, drawsLines: false, drawsLabels: false, rasterSize: 512),
+        FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false, drawsLabels: false, rasterSize: 512),
+        FlatRingRule(zoomDrop: 4, distance: 9, drawsLines: false, drawsLabels: false, rasterSize: 128)
+    ])
 
     /// The rules as the coverage reads them: every value inside its range,
     /// sorted by distance, one rule per distance, at least one rule.
@@ -66,7 +100,8 @@ struct FlatRingRules: Hashable {
             cleaned.append(FlatRingRule(zoomDrop: drop,
                                         distance: distance,
                                         drawsLines: rule.drawsLines,
-                                        drawsLabels: rule.drawsLabels))
+                                        drawsLabels: rule.drawsLabels,
+                                        rasterSize: Self.normalizedRasterSize(rule.rasterSize)))
         }
         cleaned.sort { $0.distance < $1.distance }
         var unique: [FlatRingRule] = []
@@ -91,6 +126,7 @@ struct FlatRingBand: Hashable {
 struct FlatRingRuleCoverageResolution {
     static let empty = FlatRingRuleCoverageResolution(targets: [], bands: [],
                                                       linelessTargets: [], unlabelledTargets: [],
+                                                      rasterTargets: [:],
                                                       visitedNodeCount: 0)
 
     let targets: [VisibleTile]
@@ -103,6 +139,10 @@ struct FlatRingRuleCoverageResolution {
     /// (`FlatRingRule.drawsLabels`), the nearer band deciding as for the
     /// lines.
     let unlabelledTargets: Set<VisibleTile>
+    /// The targets placed by a rule that draws its ground from a texture
+    /// (`FlatRingRule.rasterSize`), with how it is baked, the nearer band
+    /// deciding as for the lines.
+    let rasterTargets: [VisibleTile: RasterTileSpec]
     /// How many tiles the enumeration looked at, for the diagnostics.
     let visitedNodeCount: Int
 }
@@ -151,6 +191,7 @@ enum FlatRingRuleCoverage {
         var placed = Set<VisibleTile>()
         var linelessTargets = Set<VisibleTile>()
         var unlabelledTargets = Set<VisibleTile>()
+        var rasterTargets: [VisibleTile: RasterTileSpec] = [:]
         var bands: [FlatRingBand] = []
         var visited = 0
         var innerSquare: FlatRingSquare?
@@ -171,6 +212,12 @@ enum FlatRingRuleCoverage {
             if rule.drawsLabels == false {
                 unlabelledTargets.formUnion(tiles.subtracting(placed))
             }
+            if let rasterSize = rule.rasterSize {
+                let spec = RasterTileSpec(size: rasterSize, fadeZoom: zoom + rule.zoomDrop)
+                for tile in tiles.subtracting(placed) {
+                    rasterTargets[tile] = spec
+                }
+            }
             placed.formUnion(tiles)
             bands.append(FlatRingBand(zoom: zoom,
                                       distance: rule.distance,
@@ -181,6 +228,7 @@ enum FlatRingRuleCoverage {
                                               bands: bands,
                                               linelessTargets: linelessTargets,
                                               unlabelledTargets: unlabelledTargets,
+                                              rasterTargets: rasterTargets,
                                               visitedNodeCount: visited)
     }
 

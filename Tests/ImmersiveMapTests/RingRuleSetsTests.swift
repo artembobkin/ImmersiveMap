@@ -49,15 +49,17 @@ final class RingRuleSetsTests: XCTestCase {
         XCTAssertEqual(sets.rules(forZoom: 22), FlatRingRules.closeStreetDefault)
 
         let near = FlatRingRules.nearStreetDefault.rules
-        XCTAssertEqual(near.map(\.zoomDrop), [0, 1, 5])
-        XCTAssertEqual(near.map(\.distance), [1, 2, 3])
-        XCTAssertEqual(near.map(\.drawsLines), [true, true, true])
+        XCTAssertEqual(near.map(\.zoomDrop), [0, 2, 2])
+        XCTAssertEqual(near.map(\.distance), [1, 4, 13])
+        XCTAssertEqual(near.map(\.drawsLines), [true, true, false])
         XCTAssertEqual(near.map(\.drawsLabels), [true, false, false])
+        XCTAssertEqual(near.map(\.rasterSize), [nil, nil, 256])
         let close = FlatRingRules.closeStreetDefault.rules
         XCTAssertEqual(close.map(\.zoomDrop), [0, 2])
         XCTAssertEqual(close.map(\.distance), [1, 2])
-        XCTAssertEqual(close.map(\.drawsLines), [true, true])
+        XCTAssertEqual(close.map(\.drawsLines), [true, false])
         XCTAssertEqual(close.map(\.drawsLabels), [true, false])
+        XCTAssertEqual(close.map(\.rasterSize), [nil, 128])
         XCTAssertEqual(FlatRingRules.nearStreetDefault.normalized(), .nearStreetDefault)
         XCTAssertEqual(FlatRingRules.closeStreetDefault.normalized(), .closeStreetDefault)
         XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.zoomDrop), [0, 2])

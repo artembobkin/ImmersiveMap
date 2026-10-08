@@ -76,6 +76,19 @@ final class PreparedTileAvailabilityIndex: @unchecked Sendable {
         tile(forFileName: fileName, suffix: ".ptile")
     }
 
+    /// The tile a raster tile's file name stands for: `z_x_y.ptraster`
+    /// (`RasterTileDiskCache`).
+    static func tile(forRasterTileFileName fileName: String) -> Tile? {
+        tile(forFileName: fileName, suffix: ".ptraster")
+    }
+
+    /// The tile a file the availability index of its directory keeps
+    /// stands for: a prepared entry, or a raster tile, which live in
+    /// directories of their own.
+    static func tile(forIndexedFileName fileName: String) -> Tile? {
+        tile(forPreparedTileFileName: fileName) ?? tile(forRasterTileFileName: fileName)
+    }
+
     /// The tile a blob file name stands for: `z_x_y.ptgeo`. Nil for anything
     /// else, staged `.tmp-<UUID>` files included.
     static func tile(forPreparedBlobFileName fileName: String) -> Tile? {

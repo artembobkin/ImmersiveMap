@@ -669,25 +669,67 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             }
         }
 
+        /// The tiles drawn from a texture: a ring rule that names a raster
+        /// size draws its tiles' ground from a texture of their fills,
+        /// drawn once, kept on disk next to the prepared tiles and drawn
+        /// from then on with its mipmaps (`RasterTileStore`). These are how
+        /// much of it the GPU keeps, how fast new ones are made, and how
+        /// they are sampled. The size is the rule's.
+        public struct RasterizationSettings: Equatable, Sendable {
+            /// What the textures the frame does not draw may hold in GPU
+            /// memory before the longest unused leave: a camera that comes
+            /// back finds them without reading the disk. The ones the frame
+            /// draws stay whatever this says. Raise it for a map that pans
+            /// back and forth over wide far rings, lower it on a device
+            /// short of memory.
+            public var memoryBudgetInBytes: Int
+            /// How many textures are drawn from their tiles in one frame. A
+            /// texture is drawn once, so this matters only the first time
+            /// a camera crosses an area: more fills the far rings sooner,
+            /// fewer keeps those frames short.
+            public var bakesPerFrame: Int
+            /// The anisotropic filtering of the textures, 1 to 16 samples.
+            /// The far rings are seen almost edge on, where a texture
+            /// without it blurs along the view. Lower it only on a GPU short
+            /// of bandwidth.
+            public var maximumAnisotropy: Int
+            /// Added to the mip level the GPU picks: above 0 the far ground
+            /// is softer and quieter, below 0 sharper and busier.
+            public var mipLevelBias: Float
+
+            public init(memoryBudgetInBytes: Int = 96 * 1_024 * 1_024,
+                        bakesPerFrame: Int = 4,
+                        maximumAnisotropy: Int = 16,
+                        mipLevelBias: Float = 0) {
+                self.memoryBudgetInBytes = memoryBudgetInBytes
+                self.bakesPerFrame = bakesPerFrame
+                self.maximumAnisotropy = maximumAnisotropy
+                self.mipLevelBias = mipLevelBias
+            }
+        }
+
         public var coverage: CoverageSettings
         public var network: NetworkSettings
         public var cache: CacheSettings
         public var parsing: ParsingSettings
         public var groundFlattening: GroundFlatteningSettings
         public var offline: OfflineSettings
+        public var rasterization: RasterizationSettings
 
         public init(coverage: CoverageSettings,
                     network: NetworkSettings,
                     cache: CacheSettings,
                     parsing: ParsingSettings,
                     offline: OfflineSettings = OfflineSettings(),
-                    groundFlattening: GroundFlatteningSettings = GroundFlatteningSettings()) {
+                    groundFlattening: GroundFlatteningSettings = GroundFlatteningSettings(),
+                    rasterization: RasterizationSettings = RasterizationSettings()) {
             self.coverage = coverage
             self.network = network
             self.cache = cache
             self.parsing = parsing
             self.offline = offline
             self.groundFlattening = groundFlattening
+            self.rasterization = rasterization
         }
 
         func resolvedCoverageZoomLevel(forCameraZoom cameraZoom: Double) -> Int {
@@ -1675,6 +1717,28 @@ public extension ImmersiveMapSettings {
         }
         if let grid {
             settings.tiles.groundFlattening.grid = grid
+        }
+        return settings
+    }
+
+    /// The tiles drawn from a texture (`TileSettings.RasterizationSettings`),
+    /// a nil leaving a value as configured.
+    func tileRasterization(memoryBudgetInBytes: Int? = nil,
+                           bakesPerFrame: Int? = nil,
+                           maximumAnisotropy: Int? = nil,
+                           mipLevelBias: Float? = nil) -> ImmersiveMapSettings {
+        var settings = self
+        if let memoryBudgetInBytes {
+            settings.tiles.rasterization.memoryBudgetInBytes = memoryBudgetInBytes
+        }
+        if let bakesPerFrame {
+            settings.tiles.rasterization.bakesPerFrame = bakesPerFrame
+        }
+        if let maximumAnisotropy {
+            settings.tiles.rasterization.maximumAnisotropy = maximumAnisotropy
+        }
+        if let mipLevelBias {
+            settings.tiles.rasterization.mipLevelBias = mipLevelBias
         }
         return settings
     }

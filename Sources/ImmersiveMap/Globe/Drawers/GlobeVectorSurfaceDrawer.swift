@@ -44,7 +44,8 @@ enum GlobeVectorSurfaceDrawer {
                      isWireframeEnabled: Bool,
                      pureSphere: Bool,
                      globeFrame: GlobeFrameConstantsUniform,
-                     linelessTiles: Set<VisibleTile> = []) {
+                     linelessTiles: Set<VisibleTile> = [],
+                     rasterTiles: [VisibleTile: RasterTileSpec] = [:]) {
         guard placeTilesContext.tilePlacements.isEmpty == false else {
             return
         }
@@ -110,6 +111,14 @@ enum GlobeVectorSurfaceDrawer {
                 linedSourceTiles.insert(placement.metalTile)
             }
             let linedSources = uniqueSources.filter { linedSourceTiles.contains($0) }
+            // The sources that draw their fills: not where every slot a
+            // source is placed in draws its ground from a texture, as on
+            // the plane.
+            var groundSourceTiles = Set<MetalTile>()
+            for placement in placeTilesContext.tilePlacements where rasterTiles[placement.placeIn] == nil {
+                groundSourceTiles.insert(placement.metalTile)
+            }
+            let groundSources = rasterTiles.isEmpty ? uniqueSources : uniqueSources.filter { groundSourceTiles.contains($0) }
 
             // The opaque fill layers, depth-written and unblended.
             renderEncoder.pushDebugGroup("ground.opaqueFills")
@@ -119,7 +128,7 @@ enum GlobeVectorSurfaceDrawer {
                 run.isFillsClass && isOpaque(run, overviewFade: overviewFadeUniform)
             }
             forEachSource(renderEncoder: renderEncoder,
-                          sources: uniqueSources,
+                          sources: groundSources,
                           renderMapSize: renderMapSize,
                           pixelsPerPoint: pixelsPerPoint,
                           drawableHeightPx: drawableHeightPx,
@@ -144,7 +153,7 @@ enum GlobeVectorSurfaceDrawer {
                     && TileStyleFadeMath.fadeIsZero(zoomFade: run.zoomFade, overviewFade: overviewFadeUniform) == false
             }
             forEachSource(renderEncoder: renderEncoder,
-                          sources: uniqueSources,
+                          sources: groundSources,
                           renderMapSize: renderMapSize,
                           pixelsPerPoint: pixelsPerPoint,
                           drawableHeightPx: drawableHeightPx,

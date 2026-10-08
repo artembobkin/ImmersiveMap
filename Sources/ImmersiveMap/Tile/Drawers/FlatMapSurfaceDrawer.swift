@@ -61,7 +61,8 @@ enum FlatMapSurfaceDrawer {
                      tileStencilTestState: MTLDepthStencilState,
                      roadRankState: MTLDepthStencilState,
                      isWireframeEnabled: Bool,
-                     linelessTiles: Set<VisibleTile> = []) {
+                     linelessTiles: Set<VisibleTile> = [],
+                     rasterTiles: [VisibleTile: RasterTileSpec] = [:]) {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder)
         // Every tile triangle (ground, road buckets, bridge overlay) is
         // counter-clockwise in render space, the parser's contract
@@ -130,6 +131,17 @@ enum FlatMapSurfaceDrawer {
         let linedSources = uniqueSources.filter {
             linedSourceKeys.contains(SourceKey(tile: $0.metalTile.tile, worldWrap: $0.worldWrap))
         }
+        // The sources that draw their fills: a source does while any slot
+        // it is placed in draws its ground as geometry. A raster target's
+        // ground is its texture (`RasterTileRenderSubsystem`) or nothing,
+        // so its own tile and its stand-ins draw only their lines there.
+        var groundSourceKeys = Set<SourceKey>()
+        for placeTile in placeTilesContext.tilePlacements where rasterTiles[placeTile.placeIn] == nil {
+            groundSourceKeys.insert(SourceKey(tile: placeTile.metalTile.tile, worldWrap: placeTile.placeIn.worldWrap))
+        }
+        let groundSources = rasterTiles.isEmpty
+            ? uniqueSources
+            : uniqueSources.filter { groundSourceKeys.contains(SourceKey(tile: $0.metalTile.tile, worldWrap: $0.worldWrap)) }
 
         // Each group selects its pipeline once.
         enum GroundPipeline {
@@ -163,10 +175,10 @@ enum FlatMapSurfaceDrawer {
         func drawLayer(_ keyPath: KeyPath<TileBuffers, TileBuffers.GeometryLayer>,
                        pipeline: GroundPipeline,
                        bandOffset: Float,
-                       linesOnly: Bool = false,
+                       sources: [(metalTile: MetalTile, worldWrap: Int8)],
                        runFilter: ((GroundStyleRun) -> Bool)? = nil) {
             selectPipeline(pipeline)
-            for source in linesOnly ? linedSources : uniqueSources {
+            for source in sources {
                 let layer = source.metalTile.tileBuffers[keyPath: keyPath]
                 // The fills of a flattened ground take one depth: no rank
                 // step between their styles (Tile.metal, FlatDepthBand).
@@ -205,18 +217,18 @@ enum FlatMapSurfaceDrawer {
         }
         renderEncoder.pushDebugGroup("ground.opaqueFills")
         renderEncoder.setDepthStencilState(groundOwnerState)
-        drawLayer(\.ground, pipeline: .opaqueFills, bandOffset: 0, runFilter: isOpaqueFillRun)
+        drawLayer(\.ground, pipeline: .opaqueFills, bandOffset: 0, sources: groundSources, runFilter: isOpaqueFillRun)
         renderEncoder.popDebugGroup()
         // Everything after only tests the priority.
         renderEncoder.pushDebugGroup("ground.translucentFills")
         renderEncoder.setDepthStencilState(tileStencilTestState)
-        drawLayer(\.ground, pipeline: .fills, bandOffset: 0, runFilter: isTranslucentFillRun)
+        drawLayer(\.ground, pipeline: .fills, bandOffset: 0, sources: groundSources, runFilter: isTranslucentFillRun)
         renderEncoder.popDebugGroup()
         renderEncoder.pushDebugGroup("ground.lineRibbons")
         drawLayer(\.ground,
                   pipeline: .lines,
                   bandOffset: GlobeSurfaceDepthRank.classDepthBand,
-                  linesOnly: true,
+                  sources: linedSources,
                   runFilter: { $0.isLinesClass })
         renderEncoder.popDebugGroup()
 
@@ -334,7 +346,7 @@ enum FlatMapSurfaceDrawer {
         drawLayer(\.bridgeOverlay,
                   pipeline: .lines,
                   bandOffset: RoadRankDepth.depthOffset(band: RoadRankDepth.bridgeOverlayBand),
-                  linesOnly: true)
+                  sources: linedSources)
         renderEncoder.popDebugGroup()
         renderEncoder.popDebugGroup()
         if isWireframeEnabled {

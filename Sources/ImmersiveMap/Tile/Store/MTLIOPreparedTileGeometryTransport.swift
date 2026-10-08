@@ -32,8 +32,8 @@ struct MTLIOPreparedTileGeometryTransport: PreparedTileGeometryTransporting {
     /// writes on the shared cache IO queue; this queue keeps the one-writer
     /// pattern (the only one v30 ever exercised against the IOGPU driver)
     /// without putting the CPU work back where cache reads would wait
-    /// behind it.
-    private static let containerWriteQueue = DispatchQueue(
+    /// behind it. The raster tiles write their containers here too.
+    static let containerWriteQueue = DispatchQueue(
         label: "ImmersiveMap.MTLIOPreparedTileGeometryTransport.containerWrite",
         qos: .utility
     )

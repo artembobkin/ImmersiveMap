@@ -23,6 +23,7 @@ final class RenderPersistentContext {
     let surfaceLabelPipeline: SurfaceLabelPipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
     let tileOwnershipPipeline: TileOwnershipPipeline
+    let rasterTilePipeline: RasterTilePipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
     let fxaaPipeline: FXAAPipeline
 
@@ -69,6 +70,8 @@ final class RenderPersistentContext {
     // MARK: - Tile and Label Resources
 
     let tileRenderStore: TileRenderStore
+    /// The textures the raster targets draw their ground from.
+    let rasterTileStore: RasterTileStore
     let textRenderer: TextRenderer
     let poiSpriteAtlas: PoiSpriteAtlas
     let baseLabelCache: BaseLabelCache
@@ -138,6 +141,7 @@ final class RenderPersistentContext {
         self.surfaceLabelPipeline = shared.surfaceLabelPipeline
         self.extrudedTilePipeline = shared.extrudedTilePipeline
         self.tileOwnershipPipeline = shared.tileOwnershipPipeline
+        self.rasterTilePipeline = shared.rasterTilePipeline
         self.groundShadowMaskPipeline = shared.groundShadowMaskPipeline
         self.fxaaPipeline = shared.fxaaPipeline
         // The starfield renderer bakes the star-generation settings, so it
@@ -163,6 +167,12 @@ final class RenderPersistentContext {
                                                tileTraceRecorder: tileTraceRecorder,
                                                tileLoadingStatusReporter: tileLoadingStatusReporter)
         self.tileRenderStore.eventSink = eventSink
+        self.rasterTileStore = RasterTileStore(device: metal.device,
+                                               pipeline: shared.rasterTilePipeline,
+                                               diskCache: tileRenderStore.rasterTileDiskCache,
+                                               settings: config.tiles.rasterization,
+                                               baseColor: styleRuntime.baseColors.map)
+        self.rasterTileStore.eventSink = eventSink
         self.baseLabelCache = BaseLabelCache(metalDevice: metal.device)
         self.roadLabelCache = RoadLabelCache(metalDevice: metal.device)
 

@@ -18,6 +18,10 @@ final class TileRenderStore: @unchecked Sendable {
     private let preparedDataBuilder: TilePreparedDataBuilder
     private let metalTileFactory: MetalTileFactory
     private let tileTraceRecorder: TileTraceRecorder
+    /// Where the raster tiles of this store's namespace are kept
+    /// (`RasterTileStore`): next to the prepared tiles, nil when the
+    /// prepared cache is off, and the raster tiles then live in memory only.
+    let rasterTileDiskCache: RasterTileDiskCache?
 
     weak var eventSink: RenderFrameEventSink?
 
@@ -71,6 +75,11 @@ final class TileRenderStore: @unchecked Sendable {
                 ? MTLIOPreparedTileGeometryTransport(
                     compressionEnabled: config.tiles.cache.preparedDiskCompressionEnabled)
                 : InlinePreparedTileGeometryTransport()
+        rasterTileDiskCache = config.tiles.cache.preparedTileCacheEnabled
+            ? RasterTileDiskCache(config: config,
+                                  cacheIdentity: preparedTileCacheIdentity,
+                                  geometryTransport: geometryTransport)
+            : nil
         mapNeedsTile = ImmersiveMapNeedsTile(tileRenderStore: self,
                                              config: config,
                                              preparedTileCacheIdentity: preparedTileCacheIdentity,
