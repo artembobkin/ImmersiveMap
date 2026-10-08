@@ -46,33 +46,38 @@ struct PolyHeader {
 /// A growable array of plain values without the uniqueness and bounds checks of `Array`.
 /// The sweep touches its scratch lists many times per event, and those checks dominate otherwise.
 /// The owner must call `deallocate`.
+///
+/// The hot members are `@_transparent`, which the compiler inlines even without optimization:
+/// the list is generic, and a debug build neither specializes nor inlines a generic call, so
+/// every element access was a call into unspecialized code that looked the pointer type's
+/// metadata up in the runtime's cache, most of a debug build's parse. Inlined into the sweep,
+/// the access is concrete. `!` is lowered by the compiler where `unsafelyUnwrapped` is a call.
 struct UnsafeList<Element> {
     private var storage: UnsafeMutablePointer<Element>?
     private(set) var count = 0
     private var capacity = 0
 
-    @inline(__always)
-    var base: UnsafeMutablePointer<Element> { storage.unsafelyUnwrapped }
+    @_transparent
+    var base: UnsafeMutablePointer<Element> { storage! }
 
-    @inline(__always)
     subscript(index: Int) -> Element {
-        get { storage.unsafelyUnwrapped[index] }
-        nonmutating set { storage.unsafelyUnwrapped[index] = newValue }
+        @_transparent get { storage![index] }
+        @_transparent nonmutating set { storage![index] = newValue }
     }
 
-    @inline(__always)
+    @_transparent
     mutating func append(_ element: Element) {
         if count == capacity { grow() }
-        (storage.unsafelyUnwrapped + count).initialize(to: element)
+        (storage! + count).initialize(to: element)
         count += 1
     }
 
-    @inline(__always)
+    @_transparent
     mutating func removeAll() {
         count = 0
     }
 
-    @inline(__always)
+    @_transparent
     mutating func truncate(to newCount: Int) {
         count = newCount
     }
@@ -94,6 +99,40 @@ struct UnsafeList<Element> {
         storage = nil
         count = 0
         capacity = 0
+    }
+}
+
+/// The integers from `lowerBound` up to, not including, `upperBound`, as a loop walks them.
+/// A `for` over `Range<Int>` goes through the standard library's generic iterator, which a
+/// debug build neither specializes nor inlines: every step was a witness-table call and a
+/// metadata lookup. This sequence is concrete and its members are `@_transparent`, so a debug
+/// build compiles the loop to a counter, as an optimized build does for a `Range`.
+struct IndexRange: Sequence, IteratorProtocol {
+    @usableFromInline var current: Int
+    @usableFromInline let upperBound: Int
+
+    /// `lower..<upper`. Empty when `upper <= lower`, where `Range` would trap.
+    @_transparent
+    init(_ lower: Int, _ upper: Int) {
+        current = lower
+        upperBound = upper
+    }
+
+    /// `lower...upper`.
+    @_transparent
+    init(_ lower: Int, through upper: Int) {
+        current = lower
+        upperBound = upper + 1
+    }
+
+    @_transparent
+    func makeIterator() -> IndexRange { self }
+
+    @_transparent
+    mutating func next() -> Int? {
+        if current >= upperBound { return nil }
+        defer { current += 1 }
+        return current
     }
 }
 
@@ -250,7 +289,7 @@ struct Sweep {
     // MARK: Winding
 
     @inline(__always)
-    private func addWinding(paint: UInt16, delta: Int32) {
+    private mutating func addWinding(paint: UInt16, delta: Int32) {
         let p = Int(paint)
         let old = counts[p]
         let new = old + delta
@@ -264,7 +303,7 @@ struct Sweep {
 
     /// The color seen from above for the current set of covering paints.
     @inline(__always)
-    private func visibleColor() -> UInt32 {
+    private mutating func visibleColor() -> UInt32 {
         var w = mask.count - 1
         while w >= 0 {
             let bits = mask[w]
@@ -280,7 +319,7 @@ struct Sweep {
 
     /// Composites translucent paints over whatever lies below them.
     @inline(never)
-    private func blendedColor(from top: Int) -> UInt32 {
+    private mutating func blendedColor(from top: Int) -> UInt32 {
         // Find the topmost opaque paint below. Nothing under it is visible.
         var bottom = top
         var p = top - 1
@@ -292,7 +331,7 @@ struct Sweep {
             p -= 1
         }
         var r = 0.0, g = 0.0, b = 0.0, a = 0.0
-        for p in bottom...top where mask[p >> 6] & (1 << UInt64(p & 63)) != 0 {
+        for p in IndexRange(bottom, through: top) where mask[p >> 6] & (1 << UInt64(p & 63)) != 0 {
             let c = FlatColor(packed: paintColor[p])
             let sa = Double(c.a) / 255
             let outA = sa + a * (1 - sa)
@@ -320,7 +359,7 @@ struct Sweep {
             paintOpaque.append(paint.a == 255)
             counts.append(0)
         }
-        for _ in 0..<max(1, (paints.count + 63) / 64) { mask.append(0) }
+        for _ in IndexRange(0, max(1, (paints.count + 63) / 64)) { mask.append(0) }
         defer { releaseScratch() }
 
         let pieceCount = pieces.count
@@ -342,7 +381,7 @@ struct Sweep {
             }
             var yNext = maxY
             var kept = 0
-            for k in 0..<active.count {
+            for k in IndexRange(0, active.count) {
                 let yBot = active[k].yBot
                 if yBot > y {
                     if kept != k { active[kept] = active[k] }
@@ -385,7 +424,7 @@ struct Sweep {
 
     /// Sorts the active edges from left to right for the beam that starts at `y`, and shortens the
     /// beam to the first crossing inside it. Returns the bottom of the beam.
-    private func orderActiveEdges(from y: Double, to limit: Double) -> Double {
+    private mutating func orderActiveEdges(from y: Double, to limit: Double) -> Double {
         let n = active.count
         if n == 0 { return limit }
         let edges = active.base
@@ -393,7 +432,7 @@ struct Sweep {
         // same point (a vertex, or a crossing that ended the beam above) are ordered by slope,
         // which is their order just below that point. The list is nearly sorted already.
         if n > 1 {
-            for k in 1..<n {
+            for k in IndexRange(1, n) {
                 // Most edges are in place already: look before moving anything.
                 let d = edges[k].xa - edges[k - 1].xa
                 if !(d < -Sweep.epsX || (d <= Sweep.epsX && edges[k].dxdy < edges[k - 1].dxdy)) { continue }
@@ -413,12 +452,12 @@ struct Sweep {
             }
         }
         var yNext = limit
-        for k in 0..<n { edges[k].xb = edges[k].x(at: yNext) }
+        for k in IndexRange(0, n) { edges[k].xb = edges[k].x(at: yNext) }
         // Neighbours that are swapped at the bottom cross inside the beam. The first crossing in
         // the beam is always between neighbours, so the smallest one found here is the first.
         var cut = yNext
         if n > 1 {
-            for k in 0..<(n - 1) {
+            for k in IndexRange(0, n - 1) {
                 let db = edges[k].xb - edges[k + 1].xb
                 if db > Sweep.epsX {
                     let da = edges[k].xa - edges[k + 1].xa
@@ -433,7 +472,7 @@ struct Sweep {
         }
         if cut < yNext {
             yNext = cut
-            for k in 0..<n { edges[k].xb = edges[k].x(at: yNext) }
+            for k in IndexRange(0, n) { edges[k].xb = edges[k].x(at: yNext) }
         }
         return yNext
     }
@@ -454,7 +493,7 @@ struct Sweep {
         var lastA = wallL
         var lastB = wallL
 
-        for k in 0..<n {
+        for k in IndexRange(0, n) {
             let edge = active.base + k
             lastA = min(max(edge.pointee.xa, lastA), wallR)
             lastB = min(max(edge.pointee.xb, lastB), wallR)
@@ -495,7 +534,7 @@ struct Sweep {
 
         if n > 0 {
             let edges = active.base
-            for k in 0..<n {
+            for k in IndexRange(0, n) {
                 addWinding(paint: edges[k].paint, delta: -Int32(edges[k].dir))
             }
         }
@@ -549,7 +588,7 @@ struct Sweep {
 
         // A node where the outline does not simply pass through along one edge is a vertex.
         if !forced {
-            for n in 0..<nodeCount {
+            for n in IndexRange(0, nodeCount) {
                 let node = nodes[n]
                 if node.countP != 1 || node.countC != 1 {
                     nodes[n].marked = true
@@ -565,7 +604,7 @@ struct Sweep {
         // vertices, also for the neighbours that carry on past them.
         if nC > 1 {
             let current = current.base
-            for j in 0..<(nC - 1) {
+            for j in IndexRange(0, nC - 1) {
                 let color = current[j].color
                 if color == 0 { continue }
                 let left = Int(current[j].node)
@@ -600,17 +639,17 @@ struct Sweep {
             }
         }
         if nP > 1 {
-            for i in 0..<(nP - 1) where previous[i].span >= 0 {
+            for i in IndexRange(0, nP - 1) where previous[i].span >= 0 {
                 nodes[Int(previous[i].node)].marked = true
                 nodes[Int(previous[i + 1].node)].marked = true
             }
-            for i in 0..<(nP - 1) where previous[i].span >= 0 {
+            for i in IndexRange(0, nP - 1) where previous[i].span >= 0 {
                 closeSpan(previous[i].span, from: Int(previous[i].node), to: Int(previous[i + 1].node), y: y)
             }
         }
         if nC > 1 {
             let current = current.base
-            for j in 0..<(nC - 1) {
+            for j in IndexRange(0, nC - 1) {
                 let span = current[j].span
                 let left = Int(current[j].node)
                 let right = Int(current[j + 1].node)
@@ -645,7 +684,7 @@ struct Sweep {
 
     private mutating func openSpan(color: UInt32, flags: UInt8, from: Int, to: Int, y: Double) -> Int32 {
         let topStart = Int32(topPool.count)
-        for n in from...to { topPool.append(nodes[n].x) }
+        for n in IndexRange(from, through: to) { topPool.append(nodes[n].x) }
         let span = OpenSpan(
             color: color, flags: flags, yTop: y,
             topStart: topStart, topCount: Int32(to - from + 1),
@@ -672,8 +711,8 @@ struct Sweep {
         }
         let offset = polyData.count
         let topStart = Int(span.topStart)
-        for k in 0..<Int(span.topCount) { polyData.append(topPool[topStart + k]) }
-        for n in from...to { polyData.append(nodes[n].x) }
+        for k in IndexRange(0, Int(span.topCount)) { polyData.append(topPool[topStart + k]) }
+        for n in IndexRange(from, through: to) { polyData.append(nodes[n].x) }
         var point = span.leftHead
         while point >= 0 {
             polyData.append(chain[Int(point)].x)

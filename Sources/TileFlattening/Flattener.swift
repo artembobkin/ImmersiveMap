@@ -70,13 +70,13 @@ public enum Flattener {
         }
 
         var walls = [Double](repeating: 0, count: columns + 1)
-        for t in 0...columns {
+        for t in IndexRange(0, through: columns) {
             walls[t] = options.minX + (options.maxX - options.minX) * Double(t) / Double(columns)
         }
         walls[columns] = options.maxX
         var rowYs: [Double] = []
         if rows > 1 {
-            for r in 1..<rows {
+            for r in IndexRange(1, rows) {
                 rowYs.append(options.minY + (options.maxY - options.minY) * Double(r) / Double(rows))
             }
         }
@@ -96,7 +96,7 @@ public enum Flattener {
 
         // Both sides of a wall must agree on the vertices that lie on it.
         var wallMarks = [[Double]](repeating: [], count: columns + 1)
-        for t in 0...columns {
+        for t in IndexRange(0, through: columns) {
             let fromRight = t < columns ? strips[t].sweep.leftMarks : []
             let fromLeft = t > 0 ? strips[t - 1].sweep.rightMarks : []
             wallMarks[t] = mergeAscending(fromLeft, fromRight)
@@ -138,7 +138,7 @@ public enum Flattener {
             var base: UInt32 = 0
             for strip in strips {
                 let source = strip.triangulator.indices
-                for k in 0..<source.count { buffer[offset + k] = source[k] &+ base }
+                for k in IndexRange(0, source.count) { buffer[offset + k] = source[k] &+ base }
                 offset += source.count
                 base += UInt32(strip.triangulator.vertices.count)
             }
@@ -162,7 +162,7 @@ public enum Flattener {
         if parallel && count > 1 {
             DispatchQueue.concurrentPerform(iterations: count, execute: body)
         } else {
-            for t in 0..<count { body(t) }
+            for t in IndexRange(0, count) { body(t) }
         }
     }
 
@@ -207,7 +207,7 @@ public enum Flattener {
         var pieces = [[EdgePiece]](repeating: [], count: columns)
         var wallEvents = [[WallEvent]](repeating: [], count: columns)
         let estimate = input.pointCount / columns + 16
-        for t in 0..<columns { pieces[t].reserveCapacity(estimate) }
+        for t in IndexRange(0, columns) { pieces[t].reserveCapacity(estimate) }
 
         // -1 is left of the bounds, `columns` is right of them (including the right border itself).
         @inline(__always) func stripIndex(_ x: Double) -> Int {
@@ -245,7 +245,7 @@ public enum Flattener {
                 var ax = coords[start + 2 * (count - 1)]
                 var ay = coords[start + 2 * (count - 1) + 1]
                 var sa = stripIndex(ax)
-                for k in 0..<count {
+                for k in IndexRange(0, count) {
                     let bx = coords[start + 2 * k]
                     let by = coords[start + 2 * k + 1]
                     let sb = stripIndex(bx)
@@ -263,7 +263,7 @@ public enum Flattener {
                         if sa < sb {
                             // Moving right through the walls sa+1...sb.
                             var strip = sa
-                            for t in (sa + 1)...sb {
+                            for t in IndexRange(sa + 1, through: sb) {
                                 let wx = walls[t]
                                 let wy = wx == bx ? by : min(max(ay + (wx - ax) * dydx, yLo), yHi)
                                 if strip >= 0 { addPiece(strip, px, py, wx, wy, dxdy, paint) }

@@ -72,7 +72,7 @@ extension FlattenInput {
         addPoint(x: a.x - d.y * h, y: a.y + d.x * h)
 
         if count > 2 {
-            for i in 1..<(count - 1) {
+            for i in IndexRange(1, count - 1) {
                 let v = b
                 let next = strokePoints[i + 1]
                 let nextDelta = next - v
@@ -133,7 +133,7 @@ extension FlattenInput {
         addPoint(x: end.x + endNormal.x, y: end.y + endNormal.y)
         if cap == .round {
             // Rotating the normal by a negative angle passes through the line direction.
-            for s in 1..<capSteps {
+            for s in IndexRange(1, capSteps) {
                 let p = end + rotate(endNormal, by: -Double.pi * Double(s) / Double(capSteps))
                 addPoint(x: p.x, y: p.y)
             }
@@ -151,7 +151,7 @@ extension FlattenInput {
         let startNormal = SIMD2(-firstDirection.y, firstDirection.x) * h
         addPoint(x: firstPoint.x - startNormal.x, y: firstPoint.y - startNormal.y)
         if cap == .round {
-            for s in 1..<capSteps {
+            for s in IndexRange(1, capSteps) {
                 let p = firstPoint - rotate(startNormal, by: -Double.pi * Double(s) / Double(capSteps))
                 addPoint(x: p.x, y: p.y)
             }
@@ -183,7 +183,7 @@ extension FlattenInput {
             let steps = Int((angle / stepAngle).rounded(.up))
             if steps > 1 {
                 let step = (cross > 0 ? angle : -angle) / Double(steps)
-                for s in 1..<steps { emitStrokePoint(v + rotate(o0, by: step * Double(s)), toRight) }
+                for s in IndexRange(1, steps) { emitStrokePoint(v + rotate(o0, by: step * Double(s)), toRight) }
             }
         }
         emitStrokePoint(v + o1, toRight)

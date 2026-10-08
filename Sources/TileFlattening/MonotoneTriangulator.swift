@@ -58,7 +58,7 @@ struct MonotoneTriangulator {
         left.append(first)
         right.append(first)
         if topCount > 1 {
-            for k in 1..<topCount {
+            for k in IndexRange(1, topCount) {
                 let x = data[offset + k]
                 right.append(ChainVertex(x: x, y: poly.yTop, index: emit(x, poly.yTop), onLeft: false))
             }
@@ -71,7 +71,7 @@ struct MonotoneTriangulator {
                 k += 1
             }
         } else {
-            for k in 0..<Int(poly.rightCount) {
+            for k in IndexRange(0, Int(poly.rightCount)) {
                 let x = data[rightStart + 2 * k]
                 let y = data[rightStart + 2 * k + 1]
                 right.append(ChainVertex(x: x, y: y, index: emit(x, y), onLeft: false))
@@ -85,14 +85,14 @@ struct MonotoneTriangulator {
                 k += 1
             }
         } else {
-            for k in 0..<Int(poly.leftCount) {
+            for k in IndexRange(0, Int(poly.leftCount)) {
                 let x = data[leftStart + 2 * k]
                 let y = data[leftStart + 2 * k + 1]
                 left.append(ChainVertex(x: x, y: y, index: emit(x, y), onLeft: true))
             }
         }
 
-        for k in 0..<bottomCount {
+        for k in IndexRange(0, bottomCount) {
             let x = data[bottomStart + k]
             left.append(ChainVertex(x: x, y: poly.yBot, index: emit(x, poly.yBot), onLeft: true))
         }
@@ -144,11 +144,11 @@ struct MonotoneTriangulator {
         stack.append(order[0])
         stack.append(order[1])
         if count > 3 {
-            for k in 2..<(count - 1) {
+            for k in IndexRange(2, count - 1) {
                 let u = order[k]
                 if u.onLeft != stack[stack.count - 1].onLeft {
                     let stackOnLeft = stack[stack.count - 1].onLeft
-                    for s in 0..<(stack.count - 1) { addTriangle(u, stack[s], stack[s + 1], reversed: stackOnLeft) }
+                    for s in IndexRange(0, stack.count - 1) { addTriangle(u, stack[s], stack[s + 1], reversed: stackOnLeft) }
                     let top = stack[stack.count - 1]
                     stack.removeAll(keepingCapacity: true)
                     stack.append(top)
@@ -181,7 +181,7 @@ struct MonotoneTriangulator {
         }
         let u = order[count - 1]
         let stackOnLeft = stack[stack.count - 1].onLeft
-        for s in 0..<(stack.count - 1) { addTriangle(u, stack[s], stack[s + 1], reversed: stackOnLeft) }
+        for s in IndexRange(0, stack.count - 1) { addTriangle(u, stack[s], stack[s + 1], reversed: stackOnLeft) }
     }
 
     /// The order comes from the structure of the polygon, not from the sign of the area: a
