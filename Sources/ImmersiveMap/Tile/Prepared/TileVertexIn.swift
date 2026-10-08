@@ -9,8 +9,13 @@ import simd
 /// (span strides, see `TileArenaImageMath`), and the parser that emits the
 /// vertices. Changing the layout is therefore a shader change and a
 /// prepared-cache format change (bump `PreparedTileDiskCaching.preparedFormatVersion`).
+/// One vertex of a ground, road or bridge layer, 16 bytes as the vertex
+/// descriptor in `TilePipeline` reads it. The position is float render
+/// space (x east, y up, tile units): what the tessellators and the ground
+/// flattener produce, unrounded, so two triangles that share an edge share
+/// it exactly and the mesh is watertight at any zoom.
 struct TileVertexIn: Sendable {
-    let position: SIMD2<Int16>
+    let position: SIMD2<Float>
     let styleIndex: UInt8
     /// Analytic line antialiasing: the signed distance from the line's
     /// centerline, normalized so the extruded geometry rim is ±`Int8.max`.
@@ -36,7 +41,7 @@ struct TileVertexIn: Sendable {
     /// pre-extruded ribbons of the sphere-era tiles and all fills.
     let normal: SIMD2<Int8>
 
-    init(position: SIMD2<Int16>,
+    init(position: SIMD2<Float>,
          styleIndex: UInt8,
          lineDistance: Int8 = 0,
          lineParameter: Int16 = Int16.max,

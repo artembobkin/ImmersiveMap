@@ -130,17 +130,17 @@ class TilePipeline {
         }
 
         let vertexDescriptor = MTLVertexDescriptor()
-        vertexDescriptor.attributes[0].format = .short2
-        vertexDescriptor.attributes[0].offset = 0
+        vertexDescriptor.attributes[0].format = .float2
+        vertexDescriptor.attributes[0].offset = MemoryLayout<TileVertexIn>.offset(of: \.position)!
         vertexDescriptor.attributes[0].bufferIndex = 0
         vertexDescriptor.attributes[1].format = .uchar
-        vertexDescriptor.attributes[1].offset = MemoryLayout<SIMD2<Int16>>.size
+        vertexDescriptor.attributes[1].offset = MemoryLayout<TileVertexIn>.offset(of: \.styleIndex)!
         vertexDescriptor.attributes[1].bufferIndex = 0
         vertexDescriptor.attributes[2].format = .char
-        vertexDescriptor.attributes[2].offset = MemoryLayout<SIMD2<Int16>>.size + 1
+        vertexDescriptor.attributes[2].offset = MemoryLayout<TileVertexIn>.offset(of: \.lineDistance)!
         vertexDescriptor.attributes[2].bufferIndex = 0
         vertexDescriptor.attributes[3].format = .short
-        vertexDescriptor.attributes[3].offset = MemoryLayout<SIMD2<Int16>>.size + 2
+        vertexDescriptor.attributes[3].offset = MemoryLayout<TileVertexIn>.offset(of: \.lineParameter)!
         vertexDescriptor.attributes[3].bufferIndex = 0
         // The deferred ribbons' extrusion direction, snorm to a unit float2.
         vertexDescriptor.attributes[4].format = .char2Normalized

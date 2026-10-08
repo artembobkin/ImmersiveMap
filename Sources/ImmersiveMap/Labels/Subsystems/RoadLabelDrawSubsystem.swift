@@ -95,10 +95,14 @@ final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
         // depth orders halo under fill.
         encoder.setDepthStencilState(labelDepthState)
         let sceneDepth = frameContext.sharedState.sceneDepthTexture
-        let projectionView = frameContext.cameraMatrices.projectionView
+        // The eye ray through a pixel comes from the CPU's matrix, whose
+        // inverse unprojects. The anchor's depth is compared with the
+        // scene depth the GPU wrote, so it is projected with the uniform's
+        // matrix, whose z is the GPU's (RenderCamera.gpuClipDepthAdjustment):
+        // the roads lie under it there, the walls over it.
         let sceneDepthUniforms = RoadLabelSceneDepthUniforms(
-            projectionView: projectionView,
-            inverseProjectionView: projectionView.inverse,
+            projectionView: frameContext.cameraUniform.matrix,
+            inverseProjectionView: frameContext.cameraMatrices.projectionView.inverse,
             eye: frameContext.cameraEye,
             viewportSize: SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height)),
             enabled: sceneDepth == nil ? 0 : 1)

@@ -868,7 +868,10 @@ final class PreparedTileDiskCaching {
     // 140: a tile's ground fills may be flattened into one layer that does
     // not overlap (`GroundFlattening`), which its fill runs say
     // (`GroundStyleRun.flattenedFlag`). A v139 entry stacks every fill.
-    static let preparedFormatVersion: UInt32 = 140
+    // 141: `TileVertexIn.position` is float render space (stride 16): the
+    // vertices are the tessellators' and the flattener's, unrounded. A
+    // v140 entry stores Int16 positions in a 12-byte vertex.
+    static let preparedFormatVersion: UInt32 = 141
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

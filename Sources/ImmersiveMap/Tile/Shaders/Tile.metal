@@ -22,12 +22,12 @@ constant bool kTileLineFields [[function_constant(1)]];
 /// flat style index and the fragment resolves the style itself
 /// (tileLineFragmentColor), cutting a line vertex's interpolants to a third.
 constant bool kTileFillFields = !kTileLineFields;
-/// The rank depth rides in the vertex z (out.position.z = layerNdcZ * w)
-/// and survives the near cut only while a triangle is small against the
-/// near distance: the clipper builds the cut vertex from the two ends in
-/// float, and the error grows with the triangle, doubling with each zoom
-/// level a tile is blown up past its own. The band holds a level past the
-/// tiles' zoom and no further (FlatGroundStreetTiltOffscreenRenderTests).
+/// The rank depth rides in the vertex z as a scale of the projection's z
+/// (out.position.z *= layerDepthScale / kFlatRealDepthScale): the depth
+/// stays the ground plane's, perspective-correct under any blow-up of a
+/// tile, the hardware clips at the real near plane, and a layer's rank is
+/// a per-pixel scale, the same for every layer at a pixel, so the ranks
+/// order the layers at every distance (FlatGroundStreetTiltOffscreenRenderTests).
 /// The road ribbons: the road buckets of a tile whose ribbons are deferred
 /// (the centreline and a direction, extruded right here). The vertex stage
 /// puts the rim exactly on the style's edge, so the geometry is the road
@@ -66,7 +66,7 @@ constant float kGroundShadowMaskScale = 0.4;
 // The flat rank-depth step, one value with the sphere's
 // (kTileSphereLayerDepthStep; mirrored by GlobeSurfaceDepthRank and pinned
 // by TileClipDistanceContractTests).
-constant float kFlatTileLayerDepthStep = 4e-7;
+constant float kFlatTileLayerDepthStep = 3.2e-6;
 // The place of a draw in the rank-depth band (FlatMapSurfaceDrawer, buffer
 // 7): the group's offset, and the step from one style rank to the next,
 // kFlatTileLayerDepthStep for the layered ground and 0 for a flattened
@@ -82,8 +82,14 @@ struct FlatDepthBand {
 // then cut at the eye's own plane (w = 0) and its cut vertex projects to
 // infinity, which the rasterizer resolves differently from frame to
 // frame, blocks of the near ground dropping out at a street tilt on the
-// deepest zoom. The near clip distance below cuts at the real plane.
+// deepest zoom.
 constant float kFlatCameraNearPlane = 0.01;
+// The scale the camera's projection applies to the z of everything real
+// (RenderCamera.realDepthScale, pinned by TileClipDistanceContractTests):
+// the ground divides it out and applies its own layer's scale, 1 minus
+// the layer's rank depth, so a wall is nearer than every ground layer by
+// at least one step at every pixel, and the ground never covers its base.
+constant float kFlatRealDepthScale = 1.0 - 1536.0 * kFlatTileLayerDepthStep;
 // The farthest a deferred ribbon's vertex moves, in tile units: a quarter
 // of the tile, past which a width on screen is a camera at the vertex's
 // own depth and the triangle only needs to stay finite.
@@ -125,8 +131,9 @@ struct VertexOut {
     // the centreline, and only the axis is read). Zero where nothing is
     // deferred.
     float2 widthAxis [[function_constant(kTileCoverageFields)]];
-    // One cut, not a slot clip (see above): the camera's near plane, which
-    // the rank depth took away from the z clip (kFlatCameraNearPlane).
+    // No slot clip (see above) and no near cut: the depth is the
+    // projection's, so the hardware clips at the near plane. The one use
+    // is a road ribbon invisible this frame, cut whole.
     float clipDistance [[clip_distance]] [1];
 };
 
@@ -182,6 +189,24 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
             float pixelsPerUnit = max(length(screenSpan), 1e-4);
             deferredEdgePx = tileLineEdgePixels(lineStyle, pixelsPerUnit,
                                                 overviewFade.pixelsPerPoint, overviewFade.cameraZoom);
+            // The pixels a unit spans at this depth whatever the direction:
+            // the across-the-view scale at the screen centre, brought to
+            // this depth. The span of the direction is nothing for a vertex
+            // behind the near plane, whose screen point is nowhere, and a
+            // floor or a feather stated in pixels over it would push the
+            // rim a quarter tile out (kTileDeferredRibbonMaximumUnits),
+            // which distorts the visible part of every triangle the vertex
+            // shapes. The width itself keeps the span: a width in pixels
+            // over it cancels back to units, and a point width never
+            // reads it.
+            float isotropicPixelsPerUnit = pixelsPerUnit;
+            if (overviewFade.pointWidthReferenceDepth > 0.0
+                && overviewFade.pointWidthCentrePixelsPerWorldUnit > 0.0) {
+                isotropicPixelsPerUnit = max(overviewFade.pointWidthCentrePixelsPerWorldUnit
+                                                 * overviewFade.pointWidthReferenceDepth / w0
+                                                 * max(length(modelMatrix[0].xyz), 1e-9),
+                                             1e-4);
+            }
             float units;
             if (lineStyle.widthPoints > 0.0
                 && overviewFade.pointWidthReferenceDepth > 0.0
@@ -222,13 +247,13 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
             if (kTileRoadRibbons) {
                 // A road: the rim is the style's edge itself, no feather,
                 // and never under half a pixel from the centreline.
-                units = max(units, kTileRoadMinimumHalfWidthPx / pixelsPerUnit);
+                units = max(units, kTileRoadMinimumHalfWidthPx / isotropicPixelsPerUnit);
             } else {
                 // The feather at this vertex's scale on screen. Behind the
                 // near plane the floored span is far too many pixels a unit
                 // and the feather vanishes, which the cut vertex never
                 // shows.
-                units += kTileDeferredRibbonFeatherPx / pixelsPerUnit;
+                units += kTileDeferredRibbonFeatherPx / isotropicPixelsPerUnit;
             }
             units = min(units, kTileDeferredRibbonMaximumUnits);
             localPosition += normal * units;
@@ -238,31 +263,32 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
 
     VertexOut out;
     out.position = camera.matrix * worldPosition;
-    // The flat surface carries no geometric depth of its own (every layer
-    // lies on one plane): its z is the layer rank in a band at the far
-    // plane, like the sphere's, so the opaque fill layers can draw under a
-    // depth write and a pixel is shaded once by its topmost opaque layer,
-    // while the whole band stays farther than every real fragment and the
-    // buildings' depth test keeps working unchanged. The per-draw offset
-    // places the group: ground fills at 0, ground ribbons one class band
-    // nearer, the road buckets and the bridge overlay nearer still
-    // (GlobeSurfaceDepthRank mirrors the constants). A road's offset is its
-    // band (RoadRankDepth), and its style ranks stay inside the band.
+    // The flat surface lies on one plane, so its depth is the projection's
+    // z of that plane, scaled by the layer's rank: a scale of 1 minus a
+    // place in the rank band, at most 1220 steps, under the real
+    // geometry's kFlatRealDepthScale, which the projection already
+    // applied and the ground divides out. At a pixel every layer shares
+    // the plane's z, so the scales alone order the layers, and the opaque
+    // fill layers can draw under a depth write (a pixel is shaded once by
+    // its topmost opaque layer) while every real fragment stays nearer.
+    // The per-draw offset places the group: ground fills at 0, ground
+    // ribbons one class band nearer, the road buckets and the bridge
+    // overlay nearer still (GlobeSurfaceDepthRank mirrors the constants).
+    // A road's offset is its band (RoadRankDepth), and its style ranks
+    // stay inside the band.
     // The rank step is the draw's: a flattened ground's fills
     // (GroundFlattening) overlap nowhere and all take one depth, the
-    // band's first step, so the near plane's cut of a blown-up triangle,
-    // which moves a rank depth, has nothing to reorder.
+    // band's first step.
     float styleRank = float(vertexIn.styleIndex);
     if (kTileRoadRibbons) {
         styleRank = min(styleRank, kTileRoadBandRanks - 1.0);
     }
-    float layerNdcZ = 1.0 - depthBand.offset
+    float layerDepthScale = 1.0 - depthBand.offset
         - styleRank * depthBand.rankStep - kFlatTileLayerDepthStep;
-    out.position.z = layerNdcZ * out.position.w;
+    out.position.z *= layerDepthScale / kFlatRealDepthScale;
     out.worldPos = worldPosition.xyz;
-    // The near plane, in the clip space w (the view depth): what the z clip
-    // would have cut had z been the projection's.
-    out.clipDistance[0] = out.position.w - kFlatCameraNearPlane;
+    // Nothing cut: the hardware clips at the near plane.
+    out.clipDistance[0] = 1.0;
     if (kTileStyleIndexField) {
         out.styleIndex = uint(vertexIn.styleIndex);
         out.lineParameterRaw = float(vertexIn.lineParameter);

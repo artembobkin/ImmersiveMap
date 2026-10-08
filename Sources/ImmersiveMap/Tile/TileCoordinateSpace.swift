@@ -63,11 +63,4 @@ enum TileCoordinateSpace {
         tileExtent - renderY
     }
 
-    /// The shared vertex quantizer (round and clamp to the Int16 the vertex
-    /// format stores): one copy instead of one per decoration builder.
-    @inline(__always)
-    static func quantized(_ point: SIMD2<Float>) -> SIMD2<Int16> {
-        SIMD2<Int16>(Int16(clamping: Int(point.x.rounded())),
-                     Int16(clamping: Int(point.y.rounded())))
-    }
 }

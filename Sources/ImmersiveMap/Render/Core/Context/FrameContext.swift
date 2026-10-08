@@ -40,8 +40,14 @@ struct FrameContext {
     /// serves (see ShadowMapReuseController).
     let shadowMapReuse: ShadowMapReuseController
 
+    /// The matrix the GPU draws with: the CPU projection's clip z moved
+    /// to the GPU far plane and scaled for the real geometry
+    /// (`RenderCamera.gpuClipDepthAdjustment`), which the CPU's own
+    /// matrices never carry.
     var cameraUniform: CameraUniform {
-        CameraUniform(matrix: cameraMatrices.projectionView, eye: cameraEye, padding: 0)
+        CameraUniform(matrix: RenderCamera.gpuClipDepthAdjustment * cameraMatrices.projectionView,
+                      eye: cameraEye,
+                      padding: 0)
     }
 
     /// `pixelsPerPoint` in the form the label, marker and collision code takes

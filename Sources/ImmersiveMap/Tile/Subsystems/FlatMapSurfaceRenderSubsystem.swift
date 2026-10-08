@@ -63,6 +63,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         // settles which source owns a pixel.
         FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
+                                  cpuCameraMatrix: frameContext.cameraMatrices.projectionView,
                                   cameraZoom: frameContext.zoom,
                                   pixelsPerPoint: Float(frameContext.pixelsPerPoint),
                                   drawableSizePx: drawableSizePx,

@@ -102,7 +102,7 @@ constant float kTileSphereExtent = 4096.0;
 // depth-tests with real geometry (caps, models). The step is about
 // 7 float32 ULP at 1.0; z is constant within a draw call. Mirrored by
 // GlobeSurfaceDepthRank.swift (pinned by TileClipDistanceContractTests).
-constant float kTileSphereLayerDepthStep = 4e-7;
+constant float kTileSphereLayerDepthStep = 3.2e-6;
 constant float kTileSphereRibbonDepthBand = 257.0 * kTileSphereLayerDepthStep;
 
 /// The tile-local vertex position as a world uv (x east in turns, y the

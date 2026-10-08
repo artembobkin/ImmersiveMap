@@ -4,7 +4,7 @@
 @testable import ImmersiveMap
 import XCTest
 
-/// The ground at a street tilt, the camera up to five levels past the
+/// The ground at a street tilt, the camera up to seven levels past the
 /// tiles' zoom: a z15 tile blown up to many screens, its fills running
 /// behind the camera and cut at the near plane. Every pixel of the near
 /// ground has to show the fill that covers it: a fill that lies over the
@@ -45,7 +45,7 @@ final class FlatGroundStreetTiltOffscreenRenderTests: XCTestCase {
         // From half a level past the tiles' zoom to the street: a layered
         // ground would lose pixels of the near ground from 16.5 and blocks
         // of it from 17.
-        for (zoomIndex, zoom) in [15.5, 16.0, 17.0, 19.6].enumerated() {
+        for (zoomIndex, zoom) in [15.5, 16.0, 17.0, 19.6, 22.0].enumerated() {
             var zoomLeak = 0
             for frameIndex in 0 ..< 12 {
                 // A slow pan at the street tilt: the cut vertices move a little

@@ -69,36 +69,45 @@ enum GroundFlattening {
         options.rows = max(1, grid)
         let mesh = Flattener.flatten(input, options: options)
 
-        // One polygon per style, the mesh's vertices renumbered per style.
-        // The mesh shares a vertex within one paint only, so a vertex has
-        // one style, and the triangles come out with a positive signed
-        // area, the counter-clockwise winding of render space.
-        var byStyle: [UInt8: (vertices: [SIMD2<Int16>], indices: [UInt32], remap: [UInt32: UInt32])] = [:]
+        // One polygon per style, the mesh's vertices renumbered per style,
+        // the coordinates as the flattener left them: unrounded, so the
+        // triangles stay watertight and keep their positive signed area,
+        // the counter-clockwise winding of render space. The mesh shares a
+        // vertex within one paint only, so a vertex has one style and one
+        // place in its style's polygon: one renumbering table over the
+        // mesh's vertices, filled on first use, and per-style streams that
+        // grow in place.
+        var localIndex = [UInt32](repeating: .max, count: mesh.vertices.count)
+        var verticesByStyle = [[SIMD2<Float>]](repeating: [], count: paintStyles.count)
+        var indicesByStyle = [[UInt32]](repeating: [], count: paintStyles.count)
+        var slotOfStyle = [Int](repeating: -1, count: 256)
+        for (slot, style) in paintStyles.enumerated() {
+            slotOfStyle[Int(style)] = slot
+        }
         var triangle = 0
         while triangle + 2 < mesh.indices.count {
             let first = mesh.indices[triangle]
-            let style = FlatColor(packed: mesh.vertices[Int(first)].color).r
-            var entry = byStyle[style] ?? ([], [], [:])
-            for corner in 0 ..< 3 {
-                let source = mesh.indices[triangle + corner]
-                if let local = entry.remap[source] {
-                    entry.indices.append(local)
-                } else {
-                    let vertex = mesh.vertices[Int(source)]
-                    let local = UInt32(entry.vertices.count)
-                    entry.vertices.append(SIMD2<Int16>(Int16(vertex.x.rounded()), Int16(vertex.y.rounded())))
-                    entry.remap[source] = local
-                    entry.indices.append(local)
-                }
+            let slot = slotOfStyle[Int(FlatColor(packed: mesh.vertices[Int(first)].color).r)]
+            guard slot >= 0 else {
+                triangle += 3
+                continue
             }
-            byStyle[style] = entry
+            for corner in 0 ..< 3 {
+                let source = Int(mesh.indices[triangle + corner])
+                var local = localIndex[source]
+                if local == .max {
+                    let vertex = mesh.vertices[source]
+                    local = UInt32(verticesByStyle[slot].count)
+                    verticesByStyle[slot].append(SIMD2<Float>(vertex.x, vertex.y))
+                    localIndex[source] = local
+                }
+                indicesByStyle[slot].append(local)
+            }
             triangle += 3
         }
         var result = kept
-        for (style, entry) in byStyle where entry.indices.isEmpty == false {
-            var polygon = ParsedPolygon(vertices: entry.vertices, indices: entry.indices)
-            polygon.windCounterClockwise()
-            result[style, default: []].append(polygon)
+        for (slot, style) in paintStyles.enumerated() where indicesByStyle[slot].isEmpty == false {
+            result[style, default: []].append(ParsedPolygon(vertices: verticesByStyle[slot], indices: indicesByStyle[slot]))
         }
         return result
     }

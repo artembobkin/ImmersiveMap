@@ -38,12 +38,12 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
     func testVertexLayoutMatchesThePipelineContract() throws {
         // TilePipeline's vertex descriptor and the arena image format both
         // hard-code these offsets; a layout drift is a rendering bug.
-        XCTAssertEqual(MemoryLayout<TileVertexIn>.stride, 12)
+        XCTAssertEqual(MemoryLayout<TileVertexIn>.stride, 16)
         XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.position), 0)
-        XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.styleIndex), 4)
-        XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.lineDistance), 5)
-        XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.lineParameter), 6)
-        XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.normal), 8)
+        XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.styleIndex), 8)
+        XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.lineDistance), 9)
+        XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.lineParameter), 10)
+        XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.normal), 12)
         // The per-style line parameters are an arena span and a shader struct.
         XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 48)
         // The per-style colour is one float4, in the arena span and in the
@@ -126,8 +126,8 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
         XCTAssertTrue(polygon.isLineRibbon)
         // The first segment's rows: both vertices on the centreline (render
         // space flips y), the directions straight up and down.
-        XCTAssertEqual(polygon.vertices[0], SIMD2<Int16>(100, Int16(tileExtent) - 100))
-        XCTAssertEqual(polygon.vertices[1], SIMD2<Int16>(100, Int16(tileExtent) - 100))
+        XCTAssertEqual(polygon.vertices[0], SIMD2<Float>(100, Float(tileExtent) - 100))
+        XCTAssertEqual(polygon.vertices[1], SIMD2<Float>(100, Float(tileExtent) - 100))
         XCTAssertEqual(polygon.lineNormals[0], SIMD2<Int8>(0, Int8.max))
         XCTAssertEqual(polygon.lineNormals[1], SIMD2<Int8>(0, -Int8.max))
         XCTAssertEqual(polygon.lineDistances[0], Int8.max)
@@ -224,7 +224,7 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
         // than half a unit inside the rim.
         let center = SIMD2<Float>(200, 3996)
         let radius = ParseLine.extrudedHalfWidth(halfWidth: Float(width) * 0.5)
-        XCTAssertEqual(fanVertices[0], SIMD2<Int16>(200, 3996))
+        XCTAssertEqual(fanVertices[0], SIMD2<Float>(200, 3996))
         let rim = fanVertices.dropFirst().map { SIMD2<Float>(Float($0.x), Float($0.y)) }
         XCTAssertEqual(rim.first, SIMD2<Float>(200, 3996 + radius), "starts at the first segment's outer corner")
         XCTAssertEqual(rim.last, SIMD2<Float>(200 + radius, 3996), "ends at the second segment's outer corner")
@@ -280,13 +280,13 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
     }
 
     func testPlainPolygonGeometryHasNoLineAttributes() {
-        let polygon = ParsedPolygon(vertices: [SIMD2<Int16>(0, 0)], indices: [0])
+        let polygon = ParsedPolygon(vertices: [SIMD2<Float>(0, 0)], indices: [0])
         XCTAssertTrue(polygon.lineDistances.isEmpty)
         XCTAssertTrue(polygon.lineParameters.isEmpty)
         // The vertex an attribute-less polygon produces saturates the
         // parameter, so decoration polygons sharing a line style read as line
         // interior.
-        let vertex = TileVertexIn(position: SIMD2<Int16>(0, 0), styleIndex: 0)
+        let vertex = TileVertexIn(position: SIMD2<Float>(0, 0), styleIndex: 0)
         XCTAssertEqual(vertex.lineDistance, 0)
         XCTAssertEqual(vertex.lineParameter, Int16.max)
     }

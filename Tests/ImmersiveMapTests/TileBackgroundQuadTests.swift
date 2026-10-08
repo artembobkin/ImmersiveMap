@@ -11,7 +11,10 @@ import XCTest
 /// surface has unfurled and nothing is drawn on the sphere.
 final class TileBackgroundQuadTests: XCTestCase {
     private func parseBackgroundOnly(_ tile: Tile) throws -> DrawingPolygonBytes {
-        let config = ImmersiveMapSettings.default
+        // The layered ground: the flattened ground cuts the background to
+        // its own grid instead (GroundFlatteningParseTests).
+        var config = ImmersiveMapSettings.default
+        config.tiles.groundFlattening.fromTileZoom = nil
         let parser = TileMvtParser.forTests(settings: config)
         let parsed = try parser.parse(tile: tile,
                                       mvtData: VectorTileFixture.layerTile(layerName: "landcover", features: []))

@@ -399,7 +399,7 @@ class ParseLine {
         guard polygon.indices.isEmpty == false,
               polygon.centres.count == polygon.vertices.count,
               polygon.normals.count == polygon.vertices.count else { return nil }
-        return ParsedPolygon(vertices: polygon.centres.map(toShortVector),
+        return ParsedPolygon(vertices: polygon.centres,
                              indices: polygon.indices,
                              lineDistances: polygon.distances.map(Self.quantizeDistance),
                              lineParameters: polygon.parameters.map {
@@ -795,11 +795,6 @@ class ParseLine {
         }
     }
 
-    private func toShortVector(_ value: SIMD2<Float>) -> SIMD2<Int16> {
-        let x = Int16(clamping: Int(value.x.rounded()))
-        let y = Int16(clamping: Int(value.y.rounded()))
-        return SIMD2<Int16>(x, y)
-    }
 
     private func clipToTile(polygon: GeneratedPolygon,
                             tileExtent: Float,
@@ -809,7 +804,7 @@ class ParseLine {
             return quantize(polygon: polygon, emitsArcLength: emitsArcLength)
         }
 
-        var clippedVertices: [SIMD2<Int16>] = []
+        var clippedVertices: [SIMD2<Float>] = []
         var clippedDistances: [Int8] = []
         var clippedParameters: [Int16] = []
         var clippedIndices: [UInt32] = []
@@ -844,7 +839,7 @@ class ParseLine {
 
             let base = UInt32(clippedVertices.count)
             for point in clippedRing {
-                clippedVertices.append(toShortVector(point.position))
+                clippedVertices.append(point.position)
                 clippedDistances.append(Self.quantizeDistance(point.distance))
                 clippedParameters.append(Self.quantizeParameter(point.parameter,
                                                                 emitsArcLength: emitsArcLength))
@@ -909,7 +904,7 @@ class ParseLine {
     }
 
     private func quantize(polygon: GeneratedPolygon, emitsArcLength: Bool) -> ParsedPolygon {
-        ParsedPolygon(vertices: polygon.vertices.map(toShortVector),
+        ParsedPolygon(vertices: polygon.vertices,
                                     indices: polygon.indices,
                                     lineDistances: polygon.distances.map(Self.quantizeDistance),
                                     lineParameters: polygon.parameters.map {

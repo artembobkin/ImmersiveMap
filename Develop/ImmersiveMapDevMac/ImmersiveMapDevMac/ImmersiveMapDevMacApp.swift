@@ -32,6 +32,7 @@ private struct MapScreen: View {
             .mapStyle(.default.apply { theme in
                 theme.features.buildingExtrusion = true
             })
+            .extrusion(risesFromTheGround: false)
             .shadows(isEnabled: true)
             .labels(isEnabled: true)
             // The controls are drawn only when a camera controller is attached:

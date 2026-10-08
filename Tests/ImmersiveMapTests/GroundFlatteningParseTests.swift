@@ -88,6 +88,49 @@ final class GroundFlatteningParseTests: XCTestCase {
         XCTAssertEqual(areas.crossingCells, 0, "No triangle crosses a cell of the grid")
     }
 
+    /// A slanted edge crossing the grid: the sweep cuts it into slivers far
+    /// thinner than a tile unit, which rounding the vertices used to flip
+    /// or collapse into cracks. The vertices are the flattener's floats, so
+    /// the mesh stays watertight: every interior edge is shared by two
+    /// triangles in opposite directions, and no triangle is degenerate.
+    func testAFlattenedTileIsWatertightAcrossASlantedEdge() throws {
+        let e = Self.extent
+        let park: [(Int32, Int32)] = [(0, 0), (e, 0), (e, e), (0, e)]
+        let lake: [(Int32, Int32)] = [(100, 300), (3900, 1100), (3500, 3700), (700, 2900)]
+        let data = VectorTileFixture.layersTile([
+            (layerName: "landuse",
+             features: [VectorTileFixture.Feature(id: 1, geometry: .polygon(ring: park), properties: ["kind": "park"])]),
+            (layerName: "water",
+             features: [VectorTileFixture.Feature(id: 2, geometry: .polygon(ring: lake), properties: ["kind": "lake"])])
+        ])
+        let parsed = try makeParser(fromTileZoom: 15).parse(tile: Tile(x: 9651, y: 12319, z: 15), mvtData: data)
+        let vertices = parsed.drawingPolygon.vertices
+        let indices = parsed.drawingPolygon.indices
+        let fills = parsed.drawingPolygon.fillsIndexCount ?? indices.count
+        var directedEdges: [SIMD4<Float>: Int] = [:]
+        var degenerate = 0
+        var i = 0
+        while i + 2 < fills {
+            let a = vertices[Int(indices[i])].position, b = vertices[Int(indices[i + 1])].position, c = vertices[Int(indices[i + 2])].position
+            if ParsedPolygon.doubledArea(a, b, c) <= 0 { degenerate += 1 }
+            for (s, t) in [(a, b), (b, c), (c, a)] {
+                directedEdges[SIMD4<Float>(s.x, s.y, t.x, t.y), default: 0] += 1
+            }
+            i += 3
+        }
+        var open = 0
+        for (edge, count) in directedEdges {
+            let reverse = SIMD4<Float>(edge.z, edge.w, edge.x, edge.y)
+            guard directedEdges[reverse] == nil else { continue }
+            let onBorder = (edge.x == edge.z && (edge.x == 0 || edge.x == Float(e)))
+                || (edge.y == edge.w && (edge.y == 0 || edge.y == Float(e)))
+            if onBorder == false { open += count }
+        }
+        XCTAssertGreaterThan(fills / 3, 600, "The slanted lake cuts the grid into many triangles")
+        XCTAssertEqual(degenerate, 0, "No triangle collapsed or flipped")
+        XCTAssertEqual(open, 0, "Every interior edge is shared: no crack")
+    }
+
     func testACoarserTileKeepsItsLayers() throws {
         let parsed = try makeParser(fromTileZoom: 15).parse(tile: Tile(x: 4825, y: 6159, z: 14),
                                                            mvtData: Self.parkAndLakeTile())

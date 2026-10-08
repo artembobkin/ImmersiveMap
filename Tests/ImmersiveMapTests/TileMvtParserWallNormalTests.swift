@@ -14,7 +14,7 @@ import XCTest
 final class TileMvtParserWallNormalTests: XCTestCase {
     private func makeMesh(exterior: [SIMD2<Float>],
                           interiors: [[SIMD2<Float>]] = []) -> ParsedExtrudedMesh? {
-        let roofVertices = exterior.map { SIMD2<Int16>(Int16($0.x), Int16($0.y)) }
+        let roofVertices = exterior.map { SIMD2<Float>($0.x, $0.y) }
         return BuildingExtrusionMeshBuilder.build(clippedExterior: exterior,
                                         clippedInteriors: interiors,
                                         roof: ParsedPolygon(vertices: roofVertices,

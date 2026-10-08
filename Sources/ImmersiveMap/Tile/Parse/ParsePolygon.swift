@@ -9,7 +9,7 @@ class ParsePolygon {
     private let clipper = Clipper()
     private var earcutCoordinates: [Double] = []
     private var earcutHoleIndices: [Int] = []
-    private var earcutVertices: [SIMD2<Int16>] = []
+    private var earcutVertices: [SIMD2<Float>] = []
     private static let epsilon: Float = 0.0001
 
     /// Rings in TILE space (y down, raw MVT), clipped to the tile square:
@@ -106,8 +106,8 @@ class ParsePolygon {
         let renderInteriors = clipped.interiors.map(TileCoordinateSpace.renderPoints)
         guard var polygon = triangulateEarcut(exterior: renderExterior,
                                               interiors: renderInteriors) else { return nil }
-        // The tessellators wind on the float ring; the rounded vertices are
-        // what draws, so the winding is settled on them last.
+        // Earcut can hand back the odd inverted ear: the winding is
+        // settled on the triangles last.
         polygon.windCounterClockwise()
         return ParsedGeometry(clipped: clipped,
                               parsedPolygon: polygon)
@@ -116,11 +116,7 @@ class ParsePolygon {
     private func triangulateConvexExterior(exterior: [SIMD2<Float>]) -> ParsedPolygon? {
         guard exterior.count >= 3, isConvex(ring: exterior) else { return nil }
 
-        var vertices: [SIMD2<Int16>] = []
-        vertices.reserveCapacity(exterior.count)
-        for point in exterior {
-            vertices.append(toShortVector(point))
-        }
+        let vertices = exterior
 
         let isClockwise = signedArea(of: exterior) < 0
         var indices: [UInt32] = []
@@ -168,7 +164,7 @@ class ParsePolygon {
 
     private func appendRing(_ ring: [SIMD2<Float>]) {
         for point in ring {
-            earcutVertices.append(toShortVector(point))
+            earcutVertices.append(point)
             earcutCoordinates.append(Double(point.x))
             earcutCoordinates.append(Double(point.y))
         }
@@ -275,9 +271,4 @@ class ParsePolygon {
         simd_length_squared(lhs - rhs) <= Self.epsilon * Self.epsilon
     }
 
-    private func toShortVector(_ value: SIMD2<Float>) -> SIMD2<Int16> {
-        let x = Int16(clamping: Int(value.x.rounded()))
-        let y = Int16(clamping: Int(value.y.rounded()))
-        return SIMD2<Int16>(x, y)
-    }
 }

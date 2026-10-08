@@ -931,14 +931,15 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// to the shadows on screen. Set it too low and a building above it
         /// stops casting into the window at all.
         ///
-        /// The default is the range's floor. It is chosen for the sharpness of
-        /// the shadows in a street view, where the margin is pure cost: the
-        /// window is fitted to the visible ground anyway, and a taller limit
-        /// only widens the rim that a caster standing at the window's edge
-        /// would need. What it costs is exactly that rim: a tall building at
-        /// the edge of the visible ground loses the part of its shadow thrown
-        /// from above 10 m. Scenes staged around towers (a skyline flyover)
-        /// want it raised to the height of the buildings in frame.
+        /// The default is the range's ceiling: every building casts its whole
+        /// shadow into the window, a tower at the edge of the visible ground
+        /// included, and the texels it costs are paid back by the 4K shadow
+        /// map and the window's floor in meters (`minimumCoverageMeters`).
+        /// A map of low buildings can lower it to the tallest one around for
+        /// sharper shadows in a street view, where the margin is pure cost:
+        /// the window is fitted to the visible ground anyway, and a taller
+        /// limit only widens the rim that a caster standing at the window's
+        /// edge would need.
         public var maxCasterHeightMeters: Float
         /// How far a receiver's shadow lookup steps off its own surface, along
         /// the surface normal, measured in shadow-map texels. Expected range:
@@ -992,7 +993,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     mapResolution: Int = 4096,
                     coverageCameraDistances: Float = 3.0,
                     minimumCoverageMeters: Float = 500,
-                    maxCasterHeightMeters: Float = 10,
+                    maxCasterHeightMeters: Float = 500,
                     normalOffsetTexels: Float = 2.5,
                     softness: Float = 1.5,
                     tint: SIMD3<Float> = SIMD3<Float>(0.88, 0.92, 1.0)) {
@@ -1872,6 +1873,34 @@ public extension ImmersiveMapSettings {
     func fog(horizonBandZoomFade: ImmersiveMapZoomFade) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.fog.horizonBandZoomFade = horizonBandZoomFade
+        return settings
+    }
+
+    /// The extruded buildings' zoom and the rise out of the ground
+    /// (`ExtrusionSettings`), a nil leaving a value as configured.
+    func extrusion(buildingsMinimumZoom: Double? = nil, riseSeconds: TimeInterval? = nil) -> ImmersiveMapSettings {
+        var settings = self
+        if let buildingsMinimumZoom {
+            settings.scene.extrusion.buildingsMinimumZoom = buildingsMinimumZoom
+        }
+        if let riseSeconds {
+            settings.scene.extrusion.riseSeconds = max(riseSeconds, 0)
+        }
+        return settings
+    }
+
+    /// The rise out of the ground on or off. Off, a layer stands up at
+    /// once. On, it takes the configured time, or the default when the
+    /// configured time is zero.
+    func extrusion(risesFromTheGround: Bool) -> ImmersiveMapSettings {
+        var settings = self
+        if risesFromTheGround {
+            if settings.scene.extrusion.riseSeconds <= 0 {
+                settings.scene.extrusion.riseSeconds = ExtrusionSettings().riseSeconds
+            }
+        } else {
+            settings.scene.extrusion.riseSeconds = 0
+        }
         return settings
     }
 

@@ -104,7 +104,7 @@ struct GroundFeatureReader {
         // background is exactly as fine as the ground around it. A 64x64
         // mesh built here carried 8192 triangles into every tile of every
         // zoom, most of them under a flat plane.
-        let extent = Int16(tileExtent)
+        let extent = Float(tileExtent)
         let parsedPolygon = ParsedPolygon(vertices: [SIMD2(0, 0), SIMD2(extent, 0), SIMD2(extent, extent), SIMD2(0, extent)],
                                           indices: [0, 1, 2, 0, 2, 3])
 
@@ -112,18 +112,18 @@ struct GroundFeatureReader {
         result.styles[style.key] = BakedStyle(fill: style)
     }
 
-    private func appendBorder(width borderWidth: Int16, into result: inout ReadingStageResult) {
+    private func appendBorder(width borderWidth: Float, into result: inout ReadingStageResult) {
         let style = mapStyle.debugBorderStyle()
         let bakedStyle = BakedStyle(fill: style)
 
-        let tileSize: Int16 = 4096
+        let tileSize: Float = 4096
         var polygons = [ParsedPolygon]()
 
         // Every rectangle lists bottom-left, bottom-right, top-left,
         // top-right; the two triangles are counter-clockwise in render space
         // like every other tile triangle.
         // Bottom border
-        var vertices: [SIMD2<Int16>] = [
+        var vertices: [SIMD2<Float>] = [
             SIMD2(0, 0),
             SIMD2(tileSize, 0),
             SIMD2(0, borderWidth),

@@ -42,7 +42,7 @@ final class RoadRankDepthContractTests: XCTestCase {
         XCTAssertEqual(drawn, drawn.sorted(by: >), "the layers that blend draw nearest first")
     }
 
-    func testAHigherBandIsNearerAndTheLadderStaysShallow() {
+    func testAHigherBandIsNearerAndTheLadderStaysShallow() throws {
         for band in 0 ..< RoadRankDepth.bandCount - 1 {
             // The nearest rank of a band is still farther than the next
             // band's farthest.
@@ -63,6 +63,12 @@ final class RoadRankDepthContractTests: XCTestCase {
         // clamped to a band.
         XCTAssertLessThan(SurfaceLabelDepth.depth,
                           1 - deepest - 257 * GlobeSurfaceDepthRank.layerDepthStep)
+        // And under every wall: the real geometry's scale is nearer than
+        // the labels' by at least a step (RenderCamera.realDepthScale).
+        XCTAssertLessThan(RenderCamera.realDepthScale,
+                          SurfaceLabelDepth.depth - GlobeSurfaceDepthRank.layerDepthStep)
+        let labelSource = try shaderSource("Labels/Shaders/Surface/SurfaceLabel.metal")
+        XCTAssertTrue(labelSource.contains("constant float kSurfaceLabelRealDepthScale = 1.0 - 1536.0 * 3.2e-6;"))
     }
 
     func testTheShaderClampsAStyleToTheBand() throws {
@@ -74,14 +80,14 @@ final class RoadRankDepthContractTests: XCTestCase {
     }
 
     func testARoadLayerRanksItsStylesByClassPriorityAndGoesOutNearestFirst() {
-        func polygon(_ x: Int16) -> ParsedPolygon {
+        func polygon(_ x: Float) -> ParsedPolygon {
             ParsedPolygon(vertices: [SIMD2(x, 0), SIMD2(x + 1, 0), SIMD2(x, 1)],
                           indices: [0, 1, 2],
                           lineDistances: [0, 0, 0],
                           lineParameters: [0, 0, 0])
         }
         func road(_ x: Int16, key: UInt8, priority: Int, sequence: Int) -> OrderedRoadPolygon {
-            OrderedRoadPolygon(polygon: polygon(x),
+            OrderedRoadPolygon(polygon: polygon(Float(x)),
                                styleKey: key,
                                structureKind: .automobileGround,
                                layer: 0,

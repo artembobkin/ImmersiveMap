@@ -29,20 +29,27 @@ final class TileClipDistanceContractTests: XCTestCase {
         // substitute draws at full extent and the tile-priority stencil
         // rejects it wherever a finer tile painted, exactly like the
         // sphere. The buildings carry none either (TileExtruded).
-        // The one clip distance here is the camera's near plane, which the
-        // rank depth takes away from the z clip; no slot's edge, and no
-        // road distance cut: the roads draw wherever their tile does.
+        // The one clip distance here cuts a road ribbon invisible this
+        // frame; no near cut (the depth is the projection's, so the
+        // hardware clips at the near plane), no slot's edge, and no road
+        // distance cut: the roads draw wherever their tile does.
         XCTAssertNil(source.range(of: "localClipBounds"))
         XCTAssertNil(source.range(of: "[[clip_distance]] [4]"))
         XCTAssertTrue(source.contains("float clipDistance [[clip_distance]] [1];"))
-        XCTAssertTrue(source.contains("out.clipDistance[0] = out.position.w - kFlatCameraNearPlane;"),
-                      "A ground triangle running behind the eye is cut at the near plane, not at w = 0")
+        XCTAssertTrue(source.contains("out.clipDistance[0] = 1.0;"))
+        XCTAssertNil(source.range(of: "out.position.w - kFlatCameraNearPlane"),
+                     "No near cut by clip distance: a triangle cut by it at w = 0 overflows the rasterizer")
         XCTAssertTrue(source.contains("constant float kFlatCameraNearPlane = \(RenderCamera.nearPlane);"),
                       "The shader's near plane is the camera's")
+        // The ground's depth is the projection's z scaled by the layer's
+        // rank, under the scale the projection gives everything real.
+        XCTAssertTrue(source.contains("constant float kFlatRealDepthScale = 1.0 - 1536.0 * kFlatTileLayerDepthStep;"))
+        XCTAssertEqual(RenderCamera.realDepthScale, 1 - 1536 * 3.2e-6)
+        XCTAssertTrue(source.contains("out.position.z *= layerDepthScale / kFlatRealDepthScale;"))
         XCTAssertNil(source.range(of: "roadFade"), "No road distance fade: the roads are not faded with the distance")
         // The flat rank-depth step is one value with the sphere's, both
         // mirrored by GlobeSurfaceDepthRank.
-        XCTAssertTrue(source.contains("constant float kFlatTileLayerDepthStep = 4e-7;"))
+        XCTAssertTrue(source.contains("constant float kFlatTileLayerDepthStep = 3.2e-6;"))
         XCTAssertTrue(source.contains("constant FlatDepthBand& depthBand [[buffer(7)]]"))
         // One depth path: the rank rides in the vertex z and no fragment
         // entry writes a depth, so every ground draw keeps the early depth
@@ -52,7 +59,7 @@ final class TileClipDistanceContractTests: XCTestCase {
         XCTAssertNil(source.range(of: "ExactRankDepth"))
         XCTAssertTrue(source.contains("fragment half4 tileFragmentShader("))
         XCTAssertTrue(source.contains("fragment half4 tileRoadFragmentShader("))
-        XCTAssertTrue(source.contains("out.position.z = layerNdcZ * out.position.w;"))
+        XCTAssertNil(source.range(of: "out.position.z = layerNdcZ * out.position.w;"))
     }
 
     func testBuildingShadersNeitherClipNorDiscard() throws {
@@ -132,9 +139,9 @@ final class TileClipDistanceContractTests: XCTestCase {
         // Which tile owns a pixel is the stencil's job now, not depth's.
         XCTAssertNil(source.range(of: "depthBias"))
         // The depth constants are a binding contract with the CPU mirror.
-        XCTAssertTrue(source.contains("constant float kTileSphereLayerDepthStep = 4e-7;"))
-        XCTAssertEqual(GlobeSurfaceDepthRank.layerDepthStep, 4e-7)
-        XCTAssertEqual(GlobeSurfaceDepthRank.classDepthBand, 257 * 4e-7)
+        XCTAssertTrue(source.contains("constant float kTileSphereLayerDepthStep = 3.2e-6;"))
+        XCTAssertEqual(GlobeSurfaceDepthRank.layerDepthStep, 3.2e-6)
+        XCTAssertEqual(GlobeSurfaceDepthRank.classDepthBand, 257 * 3.2e-6)
         XCTAssertTrue(source.contains("constant GlobeSurfaceTile& surfaceTile [[buffer(9)]]"))
         XCTAssertNil(source.range(of: "shadowMap"))
         XCTAssertNil(source.range(of: "groundShadowMask"))

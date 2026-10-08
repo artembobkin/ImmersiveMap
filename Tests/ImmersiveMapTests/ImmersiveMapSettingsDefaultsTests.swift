@@ -26,7 +26,7 @@ final class ImmersiveMapSettingsDefaultsTests: XCTestCase {
         XCTAssertEqual(shadows.coverageCameraDistances, 3.0)
         XCTAssertEqual(shadows.minimumCoverageMeters, 500)
         XCTAssertEqual(shadows.normalOffsetTexels, 2.5)
-        XCTAssertEqual(shadows.maxCasterHeightMeters, 10)
+        XCTAssertEqual(shadows.maxCasterHeightMeters, 500)
         XCTAssertEqual(shadows.softness, 1.5)
     }
 

@@ -79,9 +79,14 @@ struct SurfaceLabelFragmentIn {
 };
 
 constant float kSurfaceLabelTileExtent = 4096.0;
-// The camera's near plane in view units, the cut the flat ground makes
-// (kFlatCameraNearPlane in Tile.metal).
+// The camera's near plane in view units (kFlatCameraNearPlane in
+// Tile.metal): a label whose anchor or probe lies nearer is dropped.
 constant float kSurfaceLabelNearPlane = 0.01;
+// The scale the projection applies to the z of everything real
+// (RenderCamera.realDepthScale, kFlatRealDepthScale in Tile.metal): the
+// flat surface divides it out and applies the label's own depth scale,
+// so the label lies over every ground layer and under every wall.
+constant float kSurfaceLabelRealDepthScale = 1.0 - 1536.0 * 3.2e-6;
 // The atlas's distance range in texels (TextShader.metal).
 constant float kSurfaceLabelDistanceRange = 24.0;
 // How far the scale probe reaches from the anchor, in points of the map's
@@ -99,6 +104,11 @@ static inline float2 surfaceLabelWorldUv(float2 localPosition, constant SurfaceL
 struct SurfaceLabelClip {
     float4 position;
     float clipDistance;
+    // Whether the depth is the projection's z scaled by the label's depth
+    // (the flat surface and the morph, as the ground's, Tile.metal) or
+    // the label's depth as a band at the far plane (the sphere's, as
+    // TileSphere.metal's).
+    bool projectedDepth;
 };
 
 /// Screen pixels per tile unit around the anchor: the longer of the two
@@ -131,7 +141,9 @@ static inline SurfaceLabelVertexOut surfaceLabelOutput(SurfaceLabelClip clip, fl
                                                        constant SurfaceLabelDraw& draw) {
     SurfaceLabelVertexOut out;
     out.position = clip.position;
-    out.position.z = draw.depth * out.position.w;
+    out.position.z = clip.projectedDepth
+        ? clip.position.z * (draw.depth / kSurfaceLabelRealDepthScale)
+        : draw.depth * out.position.w;
     out.uv = uv;
     out.clipDistance[0] = clip.clipDistance;
     return out;
@@ -144,9 +156,10 @@ static inline SurfaceLabelClip surfaceLabelFlatClip(float2 local,
                                                     constant float4x4& modelMatrix) {
     SurfaceLabelClip clip;
     clip.position = camera.matrix * (modelMatrix * float4(local, 0.0, 1.0));
-    // The depth is the band's, so the z clip cuts nothing at the near
-    // plane: the clip distance does, as on the ground.
-    clip.clipDistance = clip.position.w - kSurfaceLabelNearPlane;
+    // The depth is the projection's, so the hardware clips at the near
+    // plane, as for the ground.
+    clip.clipDistance = 1.0;
+    clip.projectedDepth = true;
     return clip;
 }
 
@@ -159,6 +172,7 @@ static inline SurfaceLabelClip surfaceLabelSphereClip(float2 local,
     // The far side of the planet goes to back-face culling, as the
     // ground's does.
     clip.clipDistance = 1.0;
+    clip.projectedDepth = false;
     return clip;
 }
 
@@ -180,6 +194,7 @@ static inline SurfaceLabelClip surfaceLabelMorphClip(float2 local,
     clip.position = camera.matrix * float4(worldPosition, 1.0);
     clip.clipDistance = globeUnrollCutClearance(sphereWorldPosition, flatWorldPosition,
                                                 globe.transition, globe.radius);
+    clip.projectedDepth = true;
     return clip;
 }
 

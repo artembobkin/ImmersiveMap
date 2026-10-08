@@ -82,7 +82,7 @@ final class RoadEdgeLineTests: XCTestCase {
     /// lines, everything else empty.
     private func preparedTileWithOneRoad(tile: Tile) -> PreparedTileCPU {
         let base = PreparedTileCPUTestFixtures.empty(tile: tile)
-        let vertices = (0 ..< 4).map { TileVertexIn(position: SIMD2<Int16>(Int16($0), 0), styleIndex: 0) }
+        let vertices = (0 ..< 4).map { TileVertexIn(position: SIMD2<Float>(Float($0), 0), styleIndex: 0) }
         let fill = PreparedTileCPU.GeometryLayer(vertices: vertices,
                                                  indices: [0, 1, 2, 1, 3, 2, 0, 2, 1, 3],
                                                  styles: [TilePolygonStyle(color: SIMD4<Float>(repeating: 1))],

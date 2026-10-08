@@ -175,7 +175,10 @@ final class SceneModelMeshStoreTests: XCTestCase {
         let becameReady = try await waitUntil { store.requestMeshes(for: [url]).isEmpty == false }
         XCTAssertTrue(becameReady)
         XCTAssertEqual(counter.count, 1, "Repeated requests must not restart a finished load")
-        XCTAssertGreaterThanOrEqual(sink.invalidationCount, 1)
+        // The mesh is published before the frame is invalidated, so the
+        // invalidation can land a moment after the mesh is seen.
+        let invalidated = try await waitUntil { sink.invalidationCount >= 1 }
+        XCTAssertTrue(invalidated, "A finished load invalidates a frame")
     }
 
     func testFailedLoadRecordsAttemptAndWaitsForCooldown() async throws {

@@ -11,7 +11,9 @@ import XCTest
 /// settings change like any other theme change.
 @MainActor
 final class BuildingExtrusionToggleTests: XCTestCase {
-    private static let tile = Tile(x: 9908, y: 5140, z: 14)
+    // A tile of the zoom the buildings draw from (ExtrusionSettings.buildingsMinimumZoom):
+    // a coarser tile extrudes nothing whatever the switch says.
+    private static let tile = Tile(x: 19816, y: 10280, z: 15)
 
     private static func theme(extrusion: Bool) -> ProtomapsBasemapTheme {
         ProtomapsBasemapTheme.default.apply { theme in
@@ -64,5 +66,28 @@ final class BuildingExtrusionToggleTests: XCTestCase {
                       "Extrusions are baked at parse time: the prepared tiles must rebuild")
         XCTAssertTrue(plan.actions.contains(.invalidateCaches))
         XCTAssertTrue(plan.requiresRendererRecreation)
+    }
+}
+
+/// The rise out of the ground as the SwiftUI modifiers set it
+/// (`ImmersiveMapSettings.extrusion(...)`).
+final class ExtrusionRiseModifierTests: XCTestCase {
+    func testTheModifiersLeaveTheOtherValueAsConfigured() {
+        let settings = ImmersiveMapSettings.default
+            .extrusion(buildingsMinimumZoom: 16, riseSeconds: 1)
+            .extrusion(riseSeconds: 0.25)
+        XCTAssertEqual(settings.scene.extrusion.buildingsMinimumZoom, 16)
+        XCTAssertEqual(settings.scene.extrusion.riseSeconds, 0.25)
+    }
+
+    func testTheRiseSwitch() {
+        let off = ImmersiveMapSettings.default.extrusion(risesFromTheGround: false)
+        XCTAssertEqual(off.scene.extrusion.riseSeconds, 0, "Off stands a layer up at once")
+        XCTAssertEqual(off.extrusion(risesFromTheGround: true).scene.extrusion.riseSeconds, 0.6,
+                       "Back on without a time, it takes the default")
+        let tuned = ImmersiveMapSettings.default.extrusion(riseSeconds: 1).extrusion(risesFromTheGround: true)
+        XCTAssertEqual(tuned.scene.extrusion.riseSeconds, 1, "On keeps a configured time")
+        XCTAssertEqual(ImmersiveMapSettings.default.extrusion(riseSeconds: -1).scene.extrusion.riseSeconds, 0,
+                       "A negative time is zero")
     }
 }

@@ -75,10 +75,10 @@ struct RoadDirectionArrowGeometryBuilder {
 
         let tailPolygon = ParsedPolygon(
             vertices: [
-                TileCoordinateSpace.quantized(tailStart + normal * tailHalfWidth),
-                TileCoordinateSpace.quantized(tailStart - normal * tailHalfWidth),
-                TileCoordinateSpace.quantized(tailEnd + normal * tailHalfWidth),
-                TileCoordinateSpace.quantized(tailEnd - normal * tailHalfWidth)
+                tailStart + normal * tailHalfWidth,
+                tailStart - normal * tailHalfWidth,
+                tailEnd + normal * tailHalfWidth,
+                tailEnd - normal * tailHalfWidth
             ],
             // (left, right, next left) and (right, next right, next left):
             // counter-clockwise in render space, like every tile triangle.
@@ -87,9 +87,9 @@ struct RoadDirectionArrowGeometryBuilder {
 
         let headPolygon = ParsedPolygon(
             vertices: [
-                TileCoordinateSpace.quantized(tailEnd + normal * headHalfWidth),
-                TileCoordinateSpace.quantized(tailEnd - normal * headHalfWidth),
-                TileCoordinateSpace.quantized(tip)
+                tailEnd + normal * headHalfWidth,
+                tailEnd - normal * headHalfWidth,
+                tip
             ],
             indices: [0, 1, 2]
         )

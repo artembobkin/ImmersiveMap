@@ -11,7 +11,7 @@ import XCTest
 /// the per-style opacity inputs.
 final class GroundStyleRunTests: XCTestCase {
     private func vertex(_ style: UInt8) -> TileVertexIn {
-        TileVertexIn(position: SIMD2<Int16>(0, 0), styleIndex: style, lineDistance: 0, lineParameter: 0)
+        TileVertexIn(position: SIMD2<Float>(0, 0), styleIndex: style, lineDistance: 0, lineParameter: 0)
     }
 
     private func makeGround(styleOfTriangle: [UInt8],

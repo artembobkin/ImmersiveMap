@@ -867,6 +867,35 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// The extruded buildings and the models of a model archive: the
+    /// camera zoom the buildings draw from, and how long a layer takes to
+    /// rise out of the ground when the camera reaches its zoom
+    /// (`ImmersiveMapSettings.ExtrusionSettings`). The buildings grow from
+    /// the ground to their height, the models come up out of it whole. An
+    /// omitted value is left as configured:
+    ///
+    ///     ImmersiveMapView()
+    ///         .extrusion(buildingsMinimumZoom: 15, riseSeconds: 0.6)
+    ///
+    /// A rise of zero stands a layer up at once. Applies live.
+    public func extrusion(buildingsMinimumZoom: Double? = nil,
+                          riseSeconds: TimeInterval? = nil) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.extrusion(buildingsMinimumZoom: buildingsMinimumZoom,
+                                                riseSeconds: riseSeconds)
+        return view
+    }
+
+    /// The rise out of the ground on or off, for the extruded buildings
+    /// and the models alike. Off, a layer stands up at once when the
+    /// camera reaches its zoom. On, it takes the configured
+    /// `riseSeconds`, or the default 0.6 seconds when that is zero.
+    public func extrusion(risesFromTheGround: Bool) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.extrusion(risesFromTheGround: risesFromTheGround)
+        return view
+    }
+
     public func sceneSettings(_ scene: ImmersiveMapSettings.SceneSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.sceneSettings(scene)

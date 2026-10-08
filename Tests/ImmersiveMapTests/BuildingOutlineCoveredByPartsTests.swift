@@ -118,7 +118,7 @@ final class BuildingOutlineCoveredByPartsTests: XCTestCase {
                                                            interiors: interiors.map(pack)),
             clippedExterior: exterior,
             clippedInteriors: interiors,
-            roof: ParsedPolygon(vertices: exterior.map { SIMD2<Int16>(Int16($0.x), Int16($0.y)) },
+            roof: ParsedPolygon(vertices: exterior.map { SIMD2<Float>($0.x, $0.y) },
                                 indices: [0, 1, 2]),
             baseHeight: base,
             topHeight: top

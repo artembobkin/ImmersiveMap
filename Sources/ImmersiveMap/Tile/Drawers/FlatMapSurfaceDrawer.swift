@@ -49,6 +49,7 @@ enum FlatMapSurfaceDrawer {
     ///   tested and written (`RoadRankDepth`).
     static func draw(renderEncoder: MTLRenderCommandEncoder,
                      cameraUniform: CameraUniform,
+                     cpuCameraMatrix: matrix_float4x4,
                      cameraZoom: Double,
                      pixelsPerPoint: Float,
                      drawableSizePx: SIMD2<Float>,
@@ -78,8 +79,12 @@ enum FlatMapSurfaceDrawer {
             pixelsPerPoint: pixelsPerPoint,
             cameraZoom: Float(cameraZoom),
             viewportSizePx: drawableSizePx,
-            pointWidthReferenceDepth: screenCentreGroundDepth(cameraMatrix: cameraUniform.matrix),
-            cameraMatrix: cameraUniform.matrix
+            // The CPU's matrix, not the uniform's: the depth of the screen
+            // centre's ground point is found by unprojecting, and the
+            // uniform's z is remapped for the GPU (RenderCamera.gpuClipDepthAdjustment),
+            // so an NDC depth of 1 through it lies past the far plane.
+            pointWidthReferenceDepth: screenCentreGroundDepth(cameraMatrix: cpuCameraMatrix),
+            cameraMatrix: cpuCameraMatrix
         )
         var shadowUniformValue = groundShadowMask.uniform
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)

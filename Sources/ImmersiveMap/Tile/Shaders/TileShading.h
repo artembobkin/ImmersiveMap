@@ -22,7 +22,7 @@ using namespace metal;
 
 // Add necessary structures for transformation and rendering
 struct VertexIn {
-    short2 position [[attribute(0)]];
+    float2 position [[attribute(0)]];
     unsigned char styleIndex [[attribute(1)]];
     char lineDistance [[attribute(2)]];
     short lineParameter [[attribute(3)]];

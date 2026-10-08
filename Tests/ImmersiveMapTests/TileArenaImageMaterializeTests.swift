@@ -22,13 +22,13 @@ final class TileArenaImageMaterializeTests: XCTestCase {
     /// extruded geometry, glyph and icon runs, road label glyphs.
     private func makeRichPreparedTile(tile: Tile) -> PreparedTileCPU {
         let ground = PreparedTileCPU.GeometryLayer(
-            vertices: (0..<7).map { TileVertexIn(position: SIMD2<Int16>(Int16($0), Int16($0 * 2)), styleIndex: 0) },
+            vertices: (0..<7).map { TileVertexIn(position: SIMD2<Float>(Float($0), Float($0 * 2)), styleIndex: 0) },
             indices: [0, 1, 2, 2, 3, 4, 4, 5, 6],
             styles: [TilePolygonStyle(color: SIMD4<Float>(0.2, 0.4, 0.6, 1))],
             styleZoomFades: [ImmersiveMapZoomFade.fadeIn(from: 0, to: 1).shaderPair]
         )
         let roadFill = PreparedTileCPU.GeometryLayer(
-            vertices: (0..<4).map { TileVertexIn(position: SIMD2<Int16>(Int16($0 * 3), 9), styleIndex: 0) },
+            vertices: (0..<4).map { TileVertexIn(position: SIMD2<Float>(Float($0 * 3), 9), styleIndex: 0) },
             indices: [0, 1, 2, 1, 2, 3],
             styles: [TilePolygonStyle(color: SIMD4<Float>(0.5, 0.5, 0.5, 1))],
             styleZoomFades: [ImmersiveMapZoomFade.none.shaderPair]
@@ -326,7 +326,7 @@ final class TileArenaImageMaterializeTests: XCTestCase {
             tile: tile,
             ground: PreparedTileCPU.GeometryLayer(
                 vertices: replacementGround.ground.vertices.map { _ in
-                    TileVertexIn(position: SIMD2<Int16>(31, 41), styleIndex: 0)
+                    TileVertexIn(position: SIMD2<Float>(31, 41), styleIndex: 0)
                 },
                 indices: replacementGround.ground.indices,
                 styles: replacementGround.ground.styles,
@@ -467,7 +467,7 @@ final class TileArenaImageMaterializeTests: XCTestCase {
             tile: tile,
             ground: PreparedTileCPU.GeometryLayer(
                 vertices: (0..<vertexCount).map {
-                    TileVertexIn(position: SIMD2<Int16>(Int16(truncatingIfNeeded: $0), 7), styleIndex: 0)
+                    TileVertexIn(position: SIMD2<Float>(Float($0), 7), styleIndex: 0)
                 },
                 indices: [0, UInt32(vertexCount - 1), 65_534],
                 styles: [TilePolygonStyle(color: SIMD4<Float>(1, 0, 1, 1))],

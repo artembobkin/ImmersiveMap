@@ -22,7 +22,7 @@ final class TileMvtParserBuildingEnvelopeClampTests: XCTestCase {
                 | UInt64(UInt32(bitPattern: Int32($0.y.rounded()))) },
             interiors: []
         )
-        let roofVertices = exterior.map { SIMD2<Int16>(Int16($0.x.rounded()), Int16($0.y.rounded())) }
+        let roofVertices = exterior.map { SIMD2<Float>($0.x, $0.y) }
         return BuildingExtrusionCandidate(
             styleKey: 1,
             buildingId: buildingId,

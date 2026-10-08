@@ -100,5 +100,5 @@ enum SurfaceLabelScale {
 /// `RoadRankDepth`), so the text lies over them, and still farther than the
 /// buildings and the models, which hide it.
 enum SurfaceLabelDepth {
-    static let depth: Float = 1 - 4_096 * 0x1p-23
+    static let depth: Float = 1 - 1_220 * GlobeSurfaceDepthRank.layerDepthStep
 }

@@ -97,7 +97,7 @@ enum GroundGeometrySubdivider {
 
         func point(at index: UInt32) -> Point {
             let vertex = polygon.vertices[Int(index)]
-            return Point(position: SIMD2<Float>(Float(vertex.x), Float(vertex.y)),
+            return Point(position: vertex,
                          lineDistance: hasAttributes ? Float(polygon.lineDistances[Int(index)]) : 0,
                          lineParameter: hasAttributes ? Float(polygon.lineParameters[Int(index)]) : 0)
         }
@@ -242,14 +242,15 @@ enum GroundGeometrySubdivider {
     }
 
     private struct VertexKey: Hashable {
-        let position: SIMD2<Int16>
+        let position: SIMD2<Float>
         let lineDistance: Int8
         let lineParameter: Int16
     }
 
-    private static func quantize(_ point: Point) -> (position: SIMD2<Int16>, lineDistance: Int8, lineParameter: Int16) {
-        (SIMD2<Int16>(Int16(clamping: Int(point.position.x.rounded())),
-                      Int16(clamping: Int(point.position.y.rounded()))),
+    /// The vertex as the stream stores it: the position as it is, the line
+    /// attributes rounded to their formats.
+    private static func quantize(_ point: Point) -> (position: SIMD2<Float>, lineDistance: Int8, lineParameter: Int16) {
+        (point.position,
          Int8(clamping: Int(point.lineDistance.rounded())),
          Int16(clamping: Int(point.lineParameter.rounded())))
     }

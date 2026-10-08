@@ -8,7 +8,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
     private static let testBlobURL = URL(fileURLWithPath: "/nonexistent/test.ptgeo")
 
     func testPreparedTileCacheFormatVersionIncludesArenaImageRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 140)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 141)
     }
 
     /// Each building's place in the extruded indices travels with the
@@ -586,30 +586,32 @@ final class PreparedTileDiskCodecTests: XCTestCase {
 
         // The vertex layout is a binding contract (vertex descriptor, arena
         // strides); pin the ABI before trusting stride-derived expectations.
-        XCTAssertEqual(MemoryLayout<TileVertexIn>.stride, 12)
+        XCTAssertEqual(MemoryLayout<TileVertexIn>.stride, 16)
         XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 48)
 
         // Slot sequence: 5 ground + 20 road phases x 5 (four structures:
         // tunnel, ground, automobile ground, bridge) + 5 bridge overlay
-        // + 3 extruded + 0 label runs (all sets empty) + 1 road glyphs.
-        XCTAssertEqual(spans.count, 114)
+        // + 3 extruded + 0 label runs (all sets empty) + 1 road glyphs
+        // + 1 surface label glyphs.
+        XCTAssertEqual(spans.count, 115)
 
-        // Ground vertices: 3 elements at offset 0, 36 bytes. The three
-        // vertices are (0,0), (4096,0), (0,4096) with styleIndex 0, a zero
-        // line distance, the saturated line parameter (0x7FFF little-endian
-        // [0xFF, 0x7F]) and a zero normal. 4096 is 0x1000, little-endian
-        // [0x00, 0x10]. The last two bytes of each 12-byte vertex are the
-        // struct's alignment padding, whose content Swift does not define,
-        // so only the first ten bytes of each vertex are pinned.
-        XCTAssertEqual(spans[0], TileArenaSpan(byteOffset: 0, byteCount: 36, elementCount: 3, indexWidth: nil))
+        // Ground vertices: 3 elements at offset 0, 48 bytes. The three
+        // vertices are (0,0), (4096,0), (0,4096) as float2 with styleIndex
+        // 0, a zero line distance, the saturated line parameter (0x7FFF
+        // little-endian [0xFF, 0x7F]) and a zero normal. 4096 as a float is
+        // 0x45800000, little-endian [0x00, 0x00, 0x80, 0x45]. The last two
+        // bytes of each 16-byte vertex are the struct's alignment padding,
+        // whose content Swift does not define, so only the first fourteen
+        // bytes of each vertex are pinned.
+        XCTAssertEqual(spans[0], TileArenaSpan(byteOffset: 0, byteCount: 48, elementCount: 3, indexWidth: nil))
         let expectedVertexBytes: [[UInt8]] = [
-            [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7F, 0x00, 0x00],
-            [0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7F, 0x00, 0x00],
-            [0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0xFF, 0x7F, 0x00, 0x00],
+            [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7F, 0x00, 0x00],
+            [0x00, 0x00, 0x80, 0x45, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7F, 0x00, 0x00],
+            [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x45, 0x00, 0x00, 0xFF, 0x7F, 0x00, 0x00],
         ]
         for (index, expected) in expectedVertexBytes.enumerated() {
-            let start = index * 12
-            XCTAssertEqual(blob[start ..< start + 10], Data(expected), "vertex \(index)")
+            let start = index * 16
+            XCTAssertEqual(blob[start ..< start + 14], Data(expected), "vertex \(index)")
         }
 
         // Ground indices: [0, 1, 2] narrowed to UInt16 (3 vertices are far
@@ -648,7 +650,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         }
         XCTAssertEqual(decoded.image.arenaByteCount, 1280)
         XCTAssertEqual(blob.count, 1280)
-        XCTAssertEqual(blob[36..<256], Data(count: 220), "Span padding must be deterministic zeros")
+        XCTAssertEqual(blob[48..<256], Data(count: 208), "Span padding must be deterministic zeros")
         XCTAssertEqual(blob[262..<512], Data(count: 250), "Span padding must be deterministic zeros")
         XCTAssertEqual(blob[776..<1024], Data(count: 248), "Span padding must be deterministic zeros")
         XCTAssertEqual(blob[1072..<1280], Data(count: 208), "Span padding must be deterministic zeros")
@@ -663,7 +665,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         let preparedTile = PreparedTileCPUTestFixtures.withGround(
             tile: tile,
             ground: PreparedTileCPU.GeometryLayer(
-                vertices: Array(repeating: TileVertexIn(position: SIMD2<Int16>(0, 0), styleIndex: 0),
+                vertices: Array(repeating: TileVertexIn(position: SIMD2<Float>(0, 0), styleIndex: 0),
                                 count: vertexCount),
                 indices: [0, UInt32(vertexCount - 1), 12_345],
                 styles: [TilePolygonStyle(color: SIMD4<Float>(0, 1, 0, 1))],

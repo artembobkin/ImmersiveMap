@@ -8,8 +8,15 @@
 /// second; WHICH tile owns a pixel is the tile-priority stencil's job
 /// (TileSourceStencilPriority).
 enum GlobeSurfaceDepthRank {
-    /// One style rank step, in NDC at the far plane.
-    static let layerDepthStep: Float = 4e-7
+    /// One style rank step, in NDC at the far plane for the sphere, and
+    /// as a scale of the projection's depth for the flat ground
+    /// (Tile.metal). A float depth resolves a step of 1e-7, but the flat
+    /// ground's depth is interpolated across a triangle that can run from
+    /// the near plane to the horizon, and two layers' triangles of one
+    /// plane interpolate to values a few 1e-6 apart: a step of 4e-7 lost
+    /// the order between them (HorizonOffscreenRenderTests), 8e-7 kept
+    /// it, and this is four times that.
+    static let layerDepthStep: Float = 3.2e-6
     /// The ribbons class sits one class band nearer than the fills: 256
     /// styles plus one step of separation.
     static let classDepthBand: Float = 257 * layerDepthStep

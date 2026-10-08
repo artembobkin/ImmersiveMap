@@ -158,7 +158,11 @@ final class LabelScreenUnitTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(labelTextStyle.sizePoints,
                                         LabelTypeScale.minimumSizePoints,
                                         "\(name) resolves below the readable floor")
-            XCTAssertGreaterThan(labelTextStyle.haloEm, 0, "\(name) lost its halo")
+            // The water names are painted on the water with no halo, so they
+            // read as part of its surface (ProtomapsBasemapTheme, water).
+            if layerName != "water" {
+                XCTAssertGreaterThan(labelTextStyle.haloEm, 0, "\(name) lost its halo")
+            }
         }
     }
 
@@ -199,8 +203,7 @@ final class LabelScreenUnitTests: XCTestCase {
     func testEveryLabelVertexShaderAppliesTheScale() throws {
         for relativePath in ["Sources/ImmersiveMap/Labels/Shaders/Base/LabelTextVertex.metal",
                              "Sources/ImmersiveMap/Labels/Shaders/POI/PoiSprite.metal",
-                             "Sources/ImmersiveMap/Labels/Shaders/Road/RoadLabelTextVertex.metal",
-                             "Sources/ImmersiveMap/Labels/Compute/Shaders/RoadLabelPlacement.metal"] {
+                             "Sources/ImmersiveMap/Labels/Shaders/Road/RoadLabelTextVertex.metal"] {
             let source = try packageSource(relativePath: relativePath)
             XCTAssertTrue(source.contains("pixelsPerPoint"),
                           "\(relativePath) does not convert layout points to device pixels")

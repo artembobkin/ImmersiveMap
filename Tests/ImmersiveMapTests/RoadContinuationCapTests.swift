@@ -45,7 +45,7 @@ final class RoadContinuationCapTests: XCTestCase {
     private func capTriangleCount(_ layer: DrawingGeometryLayer) -> Int {
         let vertices = layer.drawing.vertices
         let indices = layer.drawing.indices
-        let expected = SIMD2<Int16>(Int16(node.0), Int16(Float(TileCoordinateSpace.tileExtentDouble) - Float(node.1)))
+        let expected = SIMD2<Float>(Float(node.0), Float(TileCoordinateSpace.tileExtentDouble) - Float(node.1))
         var count = 0
         var index = 0
         while index + 2 < indices.count {
