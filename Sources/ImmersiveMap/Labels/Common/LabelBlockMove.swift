@@ -83,7 +83,7 @@ struct LabelWorkingSetChange {
     ///
     /// - a label of an arriving run, from the fullest lit copy anywhere in
     ///   the old span. A copy that arrives beside a lit one takes over at
-    ///   once, with its occlusion answer, and the frame's collision solve
+    ///   once, and the frame's collision solve
     ///   decides which of the two shows; it never waits unlit beside the
     ///   copy it replaces.
     /// - an unlit label of a surviving run, from the fullest lit copy in a

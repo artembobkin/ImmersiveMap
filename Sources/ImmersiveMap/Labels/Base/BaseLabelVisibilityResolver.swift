@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import Foundation
 import simd
 
 /// What the frame needs to know about a label besides its geometry: its
@@ -22,8 +23,8 @@ enum BaseLabelVisibilityResolver {
     static let activeAlphaThreshold: Float = 0.0001
 
     /// Whether a label reserves collision space this frame: it must have a
-    /// drawable screen point and be either in view (in front of the horizon
-    /// and not behind a building) or still fading out of view (so
+    /// drawable screen point and be either in view (in front of the
+    /// horizon) or still fading out of view (so
     /// neighbours do not jump mid-fade), and a label below its minimum
     /// camera zoom, or local detail outside the look-at tile
     /// (`localSuppressed`), reserves nothing while it is fully invisible,
@@ -31,7 +32,6 @@ enum BaseLabelVisibilityResolver {
     @inline(__always)
     static func reservesSpace(screenVisible: Bool,
                               horizonVisible: Bool,
-                              occluded: Bool = false,
                               localSuppressed: Bool = false,
                               currentAlpha: Float,
                               minCameraZoom: Float,
@@ -39,89 +39,101 @@ enum BaseLabelVisibilityResolver {
         guard screenVisible else {
             return false
         }
-        let active = (horizonVisible && occluded == false) || currentAlpha > activeAlphaThreshold
+        let active = horizonVisible || currentAlpha > activeAlphaThreshold
         let suppressed = (minCameraZoom > cameraZoom || localSuppressed) && currentAlpha <= activeAlphaThreshold
         return active && suppressed == false
     }
 
     /// `reservesSpace` for the whole set, written into `reserves`, which
-    /// is sized to `inputs`. `occluded` and `localSuppressed` may be
-    /// shorter than the set or empty: a missing entry counts as in view.
+    /// is sized to `inputs`. `localSuppressed` may be shorter than the set
+    /// or empty: a missing entry counts as in view.
+    /// Only the labels of `spans` are decided (`LabelActiveSpans`), the
+    /// rest reserve nothing. Nil decides every label.
     static func reservesSpace(inputs: [BaseLabelPresentationInput],
                               screenPoints: [ScreenPointOutput],
                               horizonVisibility: [Bool],
-                              occluded: [Bool],
                               localSuppressed: [Bool],
                               currentAlphas: [Float],
                               cameraZoom: Float,
+                              spans: [Range<Int>]? = nil,
                               into reserves: inout [Bool]) {
         let count = inputs.count
         if reserves.count != count {
             reserves = [Bool](repeating: false, count: count)
         }
+        let spans = spans ?? [0..<count]
         let limit = min(count, min(screenPoints.count, min(horizonVisibility.count, currentAlphas.count)))
         inputs.withUnsafeBufferPointer { inputs in
         screenPoints.withUnsafeBufferPointer { screenPoints in
         horizonVisibility.withUnsafeBufferPointer { horizon in
-        occluded.withUnsafeBufferPointer { occluded in
         localSuppressed.withUnsafeBufferPointer { local in
         currentAlphas.withUnsafeBufferPointer { alphas in
         reserves.withUnsafeMutableBufferPointer { reserves in
-            var index = 0
-            while index < limit {
-                reserves[index] = reservesSpace(screenVisible: screenPoints[index].visible != 0,
-                                                horizonVisible: horizon[index],
-                                                occluded: index < occluded.count && occluded[index],
-                                                localSuppressed: index < local.count && local[index],
-                                                currentAlpha: alphas[index],
-                                                minCameraZoom: inputs[index].minCameraZoom,
-                                                cameraZoom: cameraZoom)
-                index += 1
+            if let base = reserves.baseAddress {
+                memset(base, 0, count * MemoryLayout<Bool>.stride)
             }
-            while index < count {
-                reserves[index] = false
-                index += 1
+            let localCount = local.count
+            for span in spans {
+                var index = span.lowerBound
+                let end = min(span.upperBound, limit)
+                while index < end {
+                    reserves[index] = reservesSpace(screenVisible: screenPoints[index].visible != 0,
+                                                    horizonVisible: horizon[index],
+                                                    localSuppressed: index < localCount && local[index],
+                                                    currentAlpha: alphas[index],
+                                                    minCameraZoom: inputs[index].minCameraZoom,
+                                                    cameraZoom: cameraZoom)
+                    index += 1
+                }
             }
-        }}}}}}}
+        }}}}}}
     }
 
     /// Whether a label wants to be shown: accepted by the collision solve
     /// (which also hides a duplicate of a placed copy), in front of the
-    /// horizon, not behind a building (`occluded`, a missing entry counts
-    /// as in view), not local detail outside the look-at tile
+    /// horizon, not local detail outside the look-at tile
     /// (`localSuppressed`, likewise) and at or above its minimum camera
-    /// zoom. A missing collision or horizon entry counts as hidden.
+    /// zoom. A missing collision or horizon entry counts as hidden. Only
+    /// the labels of `spans` are decided (`LabelActiveSpans`), the rest
+    /// want to be hidden. Nil decides every label.
     static func targetVisibility(inputs: [BaseLabelPresentationInput],
                                  collisionVisible: [Bool],
                                  horizonVisibility: [Bool],
-                                 occluded: [Bool] = [],
                                  localSuppressed: [Bool] = [],
                                  cameraZoom: Float,
+                                 spans: [Range<Int>]? = nil,
                                  into target: inout [Bool]) {
         let count = inputs.count
         if target.count != count {
             target = [Bool](repeating: false, count: count)
         }
+        let spans = spans ?? [0..<count]
         inputs.withUnsafeBufferPointer { inputs in
         collisionVisible.withUnsafeBufferPointer { collision in
         horizonVisibility.withUnsafeBufferPointer { horizon in
-        occluded.withUnsafeBufferPointer { occluded in
         localSuppressed.withUnsafeBufferPointer { local in
         target.withUnsafeMutableBufferPointer { target in
-            var index = 0
-            while index < count {
-                let accepted = index < collision.count && collision[index]
-                let horizonVisible = index < horizon.count && horizon[index]
-                let hidden = index < occluded.count && occluded[index]
-                let outsideLookAt = index < local.count && local[index]
-                target[index] = accepted
-                    && horizonVisible
-                    && hidden == false
-                    && outsideLookAt == false
-                    && inputs[index].minCameraZoom <= cameraZoom
-                index += 1
+            if let base = target.baseAddress {
+                memset(base, 0, count * MemoryLayout<Bool>.stride)
             }
-        }}}}}}
+            let collisionCount = collision.count
+            let horizonCount = horizon.count
+            let localCount = local.count
+            for span in spans {
+                var index = span.lowerBound
+                let end = min(span.upperBound, count)
+                while index < end {
+                    let accepted = index < collisionCount && collision[index]
+                    let horizonVisible = index < horizonCount && horizon[index]
+                    let outsideLookAt = index < localCount && local[index]
+                    target[index] = accepted
+                        && horizonVisible
+                        && outsideLookAt == false
+                        && inputs[index].minCameraZoom <= cameraZoom
+                    index += 1
+                }
+            }
+        }}}}}
     }
 
     /// How far the local detail may be, for `localSuppression`.
@@ -143,18 +155,22 @@ enum BaseLabelVisibilityResolver {
     /// world) is farther from the camera than `reach` allows. A tile
     /// coarser than the look-at tile holds the point over its whole area,
     /// so a stand-in shows its detail near the camera until the exact tiles
-    /// arrive. Returns whether any label changed.
+    /// arrive. Only the labels of `spans` are decided
+    /// (`LabelActiveSpans`). Nil decides every label. Returns whether any
+    /// label changed.
     @discardableResult
     static func localSuppression(inputs: [BaseLabelPresentationInput],
                                  pointInputs: [TilePointInput],
                                  anchors: [SIMD4<Float>],
                                  centerWorldMercator: SIMD2<Double>,
                                  reach: LocalDetailReach,
+                                 spans: [Range<Int>]? = nil,
                                  into suppressed: inout [Bool]) -> Bool {
         let count = inputs.count
         if suppressed.count != count {
             suppressed = [Bool](repeating: false, count: count)
         }
+        let spans = spans ?? [0..<count]
         let maximumDistance = reach.unitsPerMeter.map { $0 * max(0, reach.maximumDistanceMeters) }
         let eye = reach.eye
         var changed = false
@@ -162,22 +178,36 @@ enum BaseLabelVisibilityResolver {
         pointInputs.withUnsafeBufferPointer { points in
         anchors.withUnsafeBufferPointer { anchors in
         suppressed.withUnsafeMutableBufferPointer { suppressed in
-            var index = 0
-            while index < count {
-                var outOfReach = false
-                if inputs[index].isLocal, index < points.count {
-                    outOfReach = isWithinLookAtBlock(points[index].tile, mercator: centerWorldMercator) == false
-                    if outOfReach == false, let maximumDistance, index < anchors.count {
-                        let anchor = anchors[index]
-                        let distance = simd_length(SIMD3<Float>(anchor.x, anchor.y, anchor.z) - eye)
-                        outOfReach = distance > maximumDistance
+            let pointCount = points.count
+            let anchorCount = anchors.count
+            // The labels of a tile are a run: the tile's answer is found
+            // once for the run.
+            var lastTile = SIMD3<Int32>(-1, -1, -1)
+            var lastTileOutside = false
+            for span in spans {
+                var index = span.lowerBound
+                let end = min(span.upperBound, count)
+                while index < end {
+                    var outOfReach = false
+                    if inputs[index].isLocal, index < pointCount {
+                        let tile = points[index].tile
+                        if tile != lastTile {
+                            lastTile = tile
+                            lastTileOutside = isWithinLookAtBlock(tile, mercator: centerWorldMercator) == false
+                        }
+                        outOfReach = lastTileOutside
+                        if outOfReach == false, let maximumDistance, index < anchorCount {
+                            let anchor = anchors[index]
+                            let distance = simd_length(SIMD3<Float>(anchor.x, anchor.y, anchor.z) - eye)
+                            outOfReach = distance > maximumDistance
+                        }
                     }
+                    if suppressed[index] != outOfReach {
+                        suppressed[index] = outOfReach
+                        changed = true
+                    }
+                    index += 1
                 }
-                if suppressed[index] != outOfReach {
-                    suppressed[index] = outOfReach
-                    changed = true
-                }
-                index += 1
             }
         }}}}
         return changed

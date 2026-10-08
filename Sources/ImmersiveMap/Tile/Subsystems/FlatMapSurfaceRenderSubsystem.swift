@@ -74,10 +74,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   tileStencilTestState: tileStencilTestState,
                                   roadRankState: roadRankState,
                                   isWireframeEnabled: isWireframeEnabled,
-                                  // The target zoom's tiles keep the rank depth in
-                                  // the vertex z, every coarser band writes it
-                                  // exactly (FlatMapSurfaceDrawer.usesExactRankDepth).
-                                  exactRankDepthBelowZoom: frameContext.visibleContent.tileZoomLevel,
                                   linelessTiles: frameContext.visibleContent.linelessTiles)
         encoder.setDepthStencilState(depthDisabledState)
     }

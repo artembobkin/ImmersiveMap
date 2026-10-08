@@ -85,17 +85,21 @@ enum RoadLabelPlacer {
 
     /// Projects the record's path points onto the flat map and places its
     /// glyphs. The record is one tile, so `origin` places all its points.
+    /// A point deeper than `maximumDepth` (clip w) is out of reach, and a
+    /// glyph on it is not placed (`LabelDistanceRule.scale`).
     static func place(geometry: Geometry,
                       origin: FlatTileOriginData,
                       cameraMatrix: simd_float4x4,
                       viewportSize: SIMD2<Float>,
                       pixelsPerPoint: Float,
+                      maximumDepth: Float = .infinity,
                       scratch: inout Scratch,
                       output: inout Output) {
         project(pathPoints: geometry.pathPoints,
                 origin: origin,
                 cameraMatrix: cameraMatrix,
                 viewportSize: viewportSize,
+                maximumDepth: maximumDepth,
                 screenPoints: &scratch.screenPoints,
                 visible: &scratch.visible)
         place(geometry: geometry,
@@ -108,11 +112,13 @@ enum RoadLabelPlacer {
 
     /// The flat projection of a tile's points, device pixels with the
     /// origin at the bottom left like the base labels' screen points. A
-    /// point behind the camera is not visible.
+    /// point behind the camera, or deeper than `maximumDepth`, is not
+    /// visible.
     static func project(pathPoints: [TilePointInput],
                         origin: FlatTileOriginData,
                         cameraMatrix: simd_float4x4,
                         viewportSize: SIMD2<Float>,
+                        maximumDepth: Float = .infinity,
                         screenPoints: inout [SIMD2<Float>],
                         visible: inout [Bool]) {
         let count = pathPoints.count
@@ -141,7 +147,7 @@ enum RoadLabelPlacer {
                 if clip.w > 0.0 {
                     let ndc = SIMD2<Float>(clip.x, clip.y) / clip.w
                     screen[index] = (ndc + 1.0) * halfViewport
-                    visible[index] = true
+                    visible[index] = clip.w <= maximumDepth
                 } else {
                     screen[index] = .zero
                     visible[index] = false

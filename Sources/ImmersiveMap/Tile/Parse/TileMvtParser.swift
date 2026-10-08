@@ -57,7 +57,12 @@ final class TileMvtParser {
         mvtData: Data
     ) throws -> ParsedTile {
         let decodedTile = try MvtTileDecoder.decode(data: mvtData)
-        let readingStageResult = readingStage(decodedTile: decodedTile, tile: tile)
+        var readingStageResult = readingStage(decodedTile: decodedTile, tile: tile)
+        if options.flattensGround(tileZoom: tile.z) {
+            readingStageResult.polygonByStyle = GroundFlattening.flatten(polygonByStyle: readingStageResult.polygonByStyle,
+                                                                         grid: options.groundFlatteningGrid)
+            readingStageResult.groundIsFlattened = true
+        }
         let unificationResult = TileUnificationStage.unify(readingStageResult)
 
         return ParsedTile(
@@ -74,7 +79,8 @@ final class TileMvtParser {
             tile: tile,
             textLabels: readingStageResult.textLabels,
             roadTextLabels: readingStageResult.roadTextLabels,
-            parseLayerTimings: readingStageResult.layerTimings
+            parseLayerTimings: readingStageResult.layerTimings,
+            groundIsFlattened: readingStageResult.groundIsFlattened
         )
     }
 
@@ -300,13 +306,19 @@ final class TileMvtParser {
               result.textLabels.contains(where: \.standsOnRoof) else {
             return
         }
-        let roofs = BuildingRoofLookup(candidates: volumes)
+        // Built on the first label that needs the roof over its anchor:
+        // one naming an outline raised only by its parts.
+        var roofs: BuildingRoofLookup?
         for index in result.textLabels.indices where result.textLabels[index].standsOnRoof {
             let label = result.textLabels[index]
             let roof = Self.labelRoof(featureId: label.featureId,
                                       buildingTops: buildingTops,
                                       buildingOutlineIDs: buildingOutlineIDs,
-                                      roofOverAnchor: roofs.roofHeight(atTilePoint: label.position))
+                                      roofOverAnchor: {
+                                          let lookup = roofs ?? BuildingRoofLookup(candidates: volumes)
+                                          roofs = lookup
+                                          return lookup.roofHeight(atTilePoint: label.position)
+                                      }())
             result.textLabels[index].roofHeight = roof.height
             result.textLabels[index].liftsToRoof = roof.lifts
         }
@@ -314,7 +326,9 @@ final class TileMvtParser {
 
     /// The roof a label in a building takes and whether it draws on it,
     /// from the element it names. `roofOverAnchor` is the top of the
-    /// volumes over its anchor, zero on open ground.
+    /// volumes over its anchor, zero on open ground, asked for only when
+    /// the label names an outline. A label of something inside a building
+    /// takes no roof: it draws on the ground.
     static func labelRoof(featureId: UInt64?,
                           buildingTops: [UInt64: Float],
                           buildingOutlineIDs: Set<UInt64>,
@@ -324,15 +338,15 @@ final class TileMvtParser {
             // over or around it.
             return (ownTop, true)
         }
-        let roofOverAnchor = roofOverAnchor()
         if let featureId, buildingOutlineIDs.contains(featureId) {
+            let roofOverAnchor = roofOverAnchor()
             // Names an outline raised only by its parts: the roof of the
             // parts over the anchor. In a courtyard there is none, and the
             // label stays on the ground.
             return (roofOverAnchor, roofOverAnchor > 0)
         }
-        // Something inside: the roof over it, for the view test.
-        return (roofOverAnchor, false)
+        // Something inside: on the ground.
+        return (0, false)
     }
 
     /// A polygon feature by the case of its style: a fill (with the ocean

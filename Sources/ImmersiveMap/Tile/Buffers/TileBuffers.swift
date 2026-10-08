@@ -53,6 +53,11 @@ struct TileBuffers {
         /// Ground only: the index buffer's per-style runs in paint order,
         /// what the sphere drawer layers the ground by. Empty elsewhere.
         let styleRuns: [GroundStyleRun]
+        /// Ground only: whether the fills are one flattened layer
+        /// (`GroundStyleRun.flattenedFlag`), drawn at one depth.
+        var isFlattened: Bool {
+            styleRuns.contains { $0.isFlattened }
+        }
         /// The road buckets only: what the layer's styles say about the
         /// pass it draws in. Empty elsewhere.
         let roadStyles: RoadLayerStyles

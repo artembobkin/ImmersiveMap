@@ -9,10 +9,11 @@ final class RenderLoopPacing {
     enum Activity: String, CaseIterable {
         case interaction = "interaction"
         case labelFade = "label fade"
-        case labelVisibilityCycle = "label visibility cycle"
         case cameraAnimation = "camera animation"
         case avatarAnimation = "avatar animation"
         case sceneModelAnimation = "scene model animation"
+        /// The buildings or the models rising out of the ground.
+        case extrusionRise = "extrusion rise"
         /// A camera position set from outside through
         /// `ImmersiveMapCameraController.jump`: an app driving the camera
         /// once per frame (its own animation, a follow camera fed by a
@@ -25,10 +26,10 @@ final class RenderLoopPacing {
         var usesInteractionFrameRate: Bool {
             switch self {
             case .interaction,
-                 .labelVisibilityCycle,
                  .cameraAnimation,
                  .avatarAnimation,
                  .sceneModelAnimation,
+                 .extrusionRise,
                  .externalCameraDrive:
                 return true
             case .labelFade:

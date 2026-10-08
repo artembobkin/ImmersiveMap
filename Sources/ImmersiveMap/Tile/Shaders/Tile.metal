@@ -22,22 +22,12 @@ constant bool kTileLineFields [[function_constant(1)]];
 /// flat style index and the fragment resolves the style itself
 /// (tileLineFragmentColor), cutting a line vertex's interpolants to a third.
 constant bool kTileFillFields = !kTileLineFields;
-/// The exact rank depth: the fragment stage writes the layer's rank as a
-/// constant ([[depth(any)]], tileExactDepthFragmentShader) instead of the
-/// rasterizer interpolating it from the vertex z. The vertex band below
-/// (out.position.z = layerNdcZ * w) is exact only until a triangle is cut
-/// at the near plane: the clipper builds the cut vertex from the two ends
-/// in float, and a vertex hundreds of world units away leaves an error of
-/// its own magnitude times 2^-24 in a w of 0.01, which is thousands of rank
-/// steps at the cut and still tens to thousands at the far pixels the
-/// triangle reaches on screen. The base and the landcover of the horizon
-/// backdrop (z0 cells of 64 tile units) then swap order from frame to
-/// frame, a flicker that follows the camera, and a coarse band's layers
-/// swap the same way at a smaller scale. A source whose triangles are
-/// small against the near distance (the target zoom's tiles) keeps the
-/// vertex band and the early depth test; every coarser source and the
-/// backdrop take this variant (FlatMapSurfaceDrawer decides by zoom).
-constant bool kTileExactRankDepth [[function_constant(3)]];
+/// The rank depth rides in the vertex z (out.position.z = layerNdcZ * w)
+/// and survives the near cut only while a triangle is small against the
+/// near distance: the clipper builds the cut vertex from the two ends in
+/// float, and the error grows with the triangle, doubling with each zoom
+/// level a tile is blown up past its own. The band holds a level past the
+/// tiles' zoom and no further (FlatGroundStreetTiltOffscreenRenderTests).
 /// The road ribbons: the road buckets of a tile whose ribbons are deferred
 /// (the centreline and a direction, extruded right here). The vertex stage
 /// puts the rim exactly on the style's edge, so the geometry is the road
@@ -77,6 +67,14 @@ constant float kGroundShadowMaskScale = 0.4;
 // (kTileSphereLayerDepthStep; mirrored by GlobeSurfaceDepthRank and pinned
 // by TileClipDistanceContractTests).
 constant float kFlatTileLayerDepthStep = 4e-7;
+// The place of a draw in the rank-depth band (FlatMapSurfaceDrawer, buffer
+// 7): the group's offset, and the step from one style rank to the next,
+// kFlatTileLayerDepthStep for the layered ground and 0 for a flattened
+// ground, whose fills overlap nowhere and all take the band's first step.
+struct FlatDepthBand {
+    float offset;
+    float rankStep;
+};
 // The camera's near plane in view units (RenderCamera.nearPlane, pinned
 // by TileClipDistanceContractTests). The surface writes its depth as the
 // rank band, not the projection's z, which leaves Metal's z clip with
@@ -84,10 +82,7 @@ constant float kFlatTileLayerDepthStep = 4e-7;
 // then cut at the eye's own plane (w = 0) and its cut vertex projects to
 // infinity, which the rasterizer resolves differently from frame to
 // frame, blocks of the near ground dropping out at a street tilt on the
-// deepest zoom. The near clip distance below cuts at the real plane. The
-// cut vertex's depth is still the clipper's float arithmetic on the two
-// ends, which is why large triangles take the exact rank depth instead
-// (kTileExactRankDepth).
+// deepest zoom. The near clip distance below cuts at the real plane.
 constant float kFlatCameraNearPlane = 0.01;
 // The farthest a deferred ribbon's vertex moves, in tile units: a quarter
 // of the tile, past which a width on screen is a camera at the vertex's
@@ -130,9 +125,6 @@ struct VertexOut {
     // the centreline, and only the axis is read). Zero where nothing is
     // deferred.
     float2 widthAxis [[function_constant(kTileCoverageFields)]];
-    // The exact variant: the layer's rank depth, flat, written by the
-    // fragment stage as the fragment's depth.
-    float rankDepth [[flat, function_constant(kTileExactRankDepth)]];
     // One cut, not a slot clip (see above): the camera's near plane, which
     // the rank depth took away from the z clip (kFlatCameraNearPlane).
     float clipDistance [[clip_distance]] [1];
@@ -149,14 +141,6 @@ struct FragmentIn {
     float lineParameterRaw [[function_constant(kTileStyleIndexField)]];
     float deferredEdgePx [[flat, function_constant(kTileCoverageFields)]];
     float2 widthAxis [[function_constant(kTileCoverageFields)]];
-    float rankDepth [[flat, function_constant(kTileExactRankDepth)]];
-};
-
-/// The exact variant's output: the colour and the rank depth as the
-/// fragment's depth, so the depth test compares the constant itself.
-struct TileExactDepthFragmentOut {
-    half4 color [[color(0)]];
-    float depth [[depth(any)]];
 };
 
 vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
@@ -165,7 +149,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                                   constant float4x4& modelMatrix [[buffer(3)]],
                                   constant float2* styleZoomFades [[buffer(4)]],
                                   constant LineStyle* lineStyles [[buffer(5)]],
-                                  constant float& depthBandOffset [[buffer(7)]],
+                                  constant FlatDepthBand& depthBand [[buffer(7)]],
                                   constant OverviewFadeUniform& overviewFade [[buffer(8)]]) {
     float2 localPosition = float2(vertexIn.position.xy);
     float deferredEdgePx = 0.0;
@@ -264,16 +248,17 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     // nearer, the road buckets and the bridge overlay nearer still
     // (GlobeSurfaceDepthRank mirrors the constants). A road's offset is its
     // band (RoadRankDepth), and its style ranks stay inside the band.
+    // The rank step is the draw's: a flattened ground's fills
+    // (GroundFlattening) overlap nowhere and all take one depth, the
+    // band's first step, so the near plane's cut of a blown-up triangle,
+    // which moves a rank depth, has nothing to reorder.
     float styleRank = float(vertexIn.styleIndex);
     if (kTileRoadRibbons) {
         styleRank = min(styleRank, kTileRoadBandRanks - 1.0);
     }
-    float layerNdcZ = 1.0 - depthBandOffset
-        - (styleRank + 1.0) * kFlatTileLayerDepthStep;
+    float layerNdcZ = 1.0 - depthBand.offset
+        - styleRank * depthBand.rankStep - kFlatTileLayerDepthStep;
     out.position.z = layerNdcZ * out.position.w;
-    if (kTileExactRankDepth) {
-        out.rankDepth = layerNdcZ;
-    }
     out.worldPos = worldPosition.xyz;
     // The near plane, in the clip space w (the view depth): what the z clip
     // would have cut had z been the projection's.
@@ -396,27 +381,6 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                              shadowMap, groundShadowMask);
 }
 
-// The exact rank depth (kTileExactRankDepth): the same colour, and the
-// layer's rank written as the fragment's depth, a constant per style that
-// no clipping or interpolation can move. Costs the early depth and stencil
-// tests of its draws, which is why only the sources whose triangles are
-// too large for the vertex band use it.
-fragment TileExactDepthFragmentOut tileExactDepthFragmentShader(FragmentIn in [[stage_in]],
-                                                                constant OverviewFadeUniform& overviewFade [[buffer(0)]],
-                                                                constant Shadow& shadow [[buffer(3)]],
-                                                                constant LineDashUniform& lineDash [[buffer(4)]],
-                                                                constant Style* styles [[buffer(5), function_constant(kTileLineFields)]],
-                                                                constant float2* styleZoomFades [[buffer(6), function_constant(kTileLineFields)]],
-                                                                constant LineStyle* lineStyles [[buffer(7), function_constant(kTileLineFields)]],
-                                                                depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
-                                                                texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
-    TileExactDepthFragmentOut out;
-    out.color = tileFragmentColor(in, overviewFade, shadow, lineDash, styles, styleZoomFades, lineStyles,
-                                  shadowMap, groundShadowMask);
-    out.depth = in.rankDepth;
-    return out;
-}
-
 // The road ribbons (kTileRoadRibbons): the geometry is the road, so there
 // is no coverage to compute. Which road owns a pixel is the depth test's
 // work, over the rank the vertex stage wrote (RoadRankDepth):
@@ -480,19 +444,4 @@ fragment half4 tileRoadFragmentShader(FragmentIn in [[stage_in]],
                                       depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
                                       texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
     return tileRoadFragmentColor(in, alphaScale, shadow, lineDash, lineStyles, shadowMap, groundShadowMask);
-}
-
-// The exact rank depth of a road (kTileExactRankDepth), for the sources
-// whose triangles are too large for the vertex band.
-fragment TileExactDepthFragmentOut tileRoadExactDepthFragmentShader(FragmentIn in [[stage_in]],
-                                                                    constant float& alphaScale [[buffer(11), function_constant(kTileRoadBlended)]],
-                                                                    constant Shadow& shadow [[buffer(3)]],
-                                                                    constant LineDashUniform& lineDash [[buffer(4), function_constant(kTileRoadBlended)]],
-                                                                    constant LineStyle* lineStyles [[buffer(7), function_constant(kTileRoadBlended)]],
-                                                                    depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
-                                                                    texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
-    TileExactDepthFragmentOut out;
-    out.color = tileRoadFragmentColor(in, alphaScale, shadow, lineDash, lineStyles, shadowMap, groundShadowMask);
-    out.depth = in.rankDepth;
-    return out;
 }

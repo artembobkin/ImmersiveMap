@@ -115,9 +115,8 @@ enum DebugTileGridMath {
     ///
     /// A fifth `src` line appears when the slot is drawn with a substitute tile's
     /// geometry, because then the pixels under the stamp were not built from the tile
-    /// the first line names: they come from `sourceTile`, mapped into the slot by
-    /// `TileLocalClipMath.clipBounds(source:placeIn:)`. Without the line the stamp
-    /// would point at a tile that is not on screen.
+    /// the first line names: they come from `sourceTile`, drawn into the slot.
+    /// Without the line the stamp would point at a tile that is not on screen.
     static func cellLabelLines(tile: Tile,
                                column: Int,
                                row: Int,

@@ -20,8 +20,12 @@ struct PreparedTileCacheIdentity {
     /// is identity: a tile prepared without labels must not answer a map
     /// that wants them, and vice versa.
     let labelsEnabled: Bool
+    /// The flattened ground's zoom and grid (`TileParseOptions`): a tile
+    /// flattened, or on another grid, is another tile.
+    var groundFlatteningFromTileZoom: Int? = ImmersiveMapSettings.TileSettings.GroundFlatteningSettings().fromTileZoom
+    var groundFlatteningGrid: Int = ImmersiveMapSettings.TileSettings.GroundFlatteningSettings().grid
     var namespaceComponent: String {
-        return "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)"
+        return "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)-g\(groundFlatteningFromTileZoom ?? -1)x\(groundFlatteningGrid)"
     }
 
     static func tileSourceRevision(for network: ImmersiveMapSettings.TileSettings.NetworkSettings) -> UInt64 {
@@ -852,7 +856,19 @@ final class PreparedTileDiskCaching {
     // by its parts stands on the roof of the parts over its anchor, where
     // an older entry left it on the ground. The versions 127 and 128 were
     // steps of this work that were never released.
-    static let preparedFormatVersion: UInt32 = 129
+    // 138: a tile's labels are ordered by the zoom they show from
+    // (`TileTextLabelsBuilder`), so a camera zoom shows a run at the head
+    // of them. A v129 entry orders them by their collision rank. The
+    // versions 130 to 137 were experiments that were never released, and
+    // a machine that ran them may hold entries of another layout under
+    // those numbers.
+    // 139: a label of something inside a building carries no roof (its
+    // `roofHeight` is 0): only a label naming the building draws on one.
+    // A v138 entry carries the roof over every label in a building.
+    // 140: a tile's ground fills may be flattened into one layer that does
+    // not overlap (`GroundFlattening`), which its fill runs say
+    // (`GroundStyleRun.flattenedFlag`). A v139 entry stacks every fill.
+    static let preparedFormatVersion: UInt32 = 140
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

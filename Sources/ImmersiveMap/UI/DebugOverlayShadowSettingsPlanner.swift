@@ -24,6 +24,9 @@ enum DebugOverlayShadowSettingsPlanner {
     static var coverageRange: ClosedRange<Double> {
         Double(ShadowFrameStateResolver.coverageRange.lowerBound)...12
     }
+    /// The coverage floor in meters, off at the bottom, up to the reach of
+    /// a long street.
+    static let minimumCoverageRange: ClosedRange<Double> = 0...1500
     /// The resolver's own clamp, so the slider can reach everything the
     /// setting accepts and nothing it does not: a slider that runs past the
     /// clamp reports a value the renderer is not using.
@@ -75,6 +78,10 @@ enum DebugOverlayShadowSettingsPlanner {
 
     static func coverageTitle(_ coverage: Float) -> String {
         String(format: "Coverage %.1fx", coverage)
+    }
+
+    static func minimumCoverageTitle(_ meters: Float) -> String {
+        meters > 0 ? String(format: "Coverage at least %.0f m", meters) : "Coverage floor off"
     }
 
     static func casterHeightTitle(_ meters: Float) -> String {

@@ -14,7 +14,6 @@ final class VideoExportRenderEventSink: RenderFrameEventSink, @unchecked Sendabl
     private let lock = NSLock()
     private var pendingInvalidation = false
     private var latestActivityState = RenderActivityState(labelFadeRenderingActive: false,
-                                                          labelVisibilityCycleRenderingActive: false,
                                                           avatarAnimationRenderingActive: false,
                                                           sceneModelAnimationRenderingActive: false)
     private var latestMarkerProjectionSnapshot: MarkerProjectionSnapshot?

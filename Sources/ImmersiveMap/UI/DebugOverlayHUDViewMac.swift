@@ -88,6 +88,7 @@ final class DebugOverlayHUDView: NSView {
     private let localLabelDistanceSlider = NSSlider()
     private let labelMinimumScaleLabel = NSTextField(labelWithString: "")
     private let labelMinimumScaleSlider = NSSlider()
+
     /// How far a distant label may shrink, as a fraction of its size.
     private static let labelMinimumScaleRange: ClosedRange<Double> = 0.3...1
     /// The local detail's reach from the camera, in metres.
@@ -106,6 +107,8 @@ final class DebugOverlayHUDView: NSView {
         action: nil)
     private let shadowCoverageLabel = NSTextField(labelWithString: "")
     private let shadowCoverageSlider = NSSlider()
+    private let shadowMinimumCoverageLabel = NSTextField(labelWithString: "")
+    private let shadowMinimumCoverageSlider = NSSlider()
     private let shadowNormalOffsetLabel = NSTextField(labelWithString: "")
     private let shadowNormalOffsetSlider = NSSlider()
     private let shadowCasterHeightLabel = NSTextField(labelWithString: "")
@@ -179,12 +182,30 @@ final class DebugOverlayHUDView: NSView {
     private let ringRuleSetControl = NSSegmentedControl(labels: [], trackingMode: .selectOne, target: nil, action: nil)
     private let ringRuleSetFirstZoomLabel = NSTextField(labelWithString: "")
     private let ringRuleSetFirstZoomSlider = NSSlider()
+
     private let ringRuleSetsAddButton = NSButton()
     private let ringRuleSetsRemoveButton = NSButton()
     /// The sets as the editor shows them: any moved control emits the
     /// whole list.
     private var ringRuleSets = RingRuleSets.default
     private var selectedRingRuleSetIndex = 0
+
+    /// The labels' reach by camera zoom (`LabelDistanceRules`), a group of
+    /// its own: the picker names each rule by its zooms, and the rows
+    /// below it edit the chosen rule.
+    private let labelDistanceGroupLabel = NSTextField(labelWithString: "Label distance")
+    private let labelDistanceRuleControl = NSSegmentedControl(labels: [], trackingMode: .selectOne, target: nil, action: nil)
+    private let labelDistanceRuleFirstZoomLabel = NSTextField(labelWithString: "")
+    private let labelDistanceRuleFirstZoomSlider = NSSlider()
+    private let labelDistanceRuleScaleLabel = NSTextField(labelWithString: "")
+    private let labelDistanceRuleScaleSlider = NSSlider()
+    private let labelDistanceRulesAddButton = NSButton()
+    private let labelDistanceRulesRemoveButton = NSButton()
+    private var labelDistanceRules = LabelDistanceRules.default
+    private var selectedLabelDistanceRuleIndex = 0
+    /// In multiples of the camera's distance to the point it looks at.
+    /// The top of the range stands for no limit.
+    private static let labelDistanceScaleRange: ClosedRange<Double> = 1...10
     /// The rules of the chosen set, which the rule rows edit.
     private var flatRingRules: FlatRingRules {
         get { ringRuleSets.sets[min(selectedRingRuleSetIndex, ringRuleSets.sets.count - 1)].rules }
@@ -216,6 +237,8 @@ final class DebugOverlayHUDView: NSView {
     var onWireframeEnabledChanged: ((Bool) -> Void)?
     /// The plane's ring rules, whole, on every edit.
     var onRingRuleSetsChanged: ((RingRuleSets) -> Void)?
+    /// The labels' reach by camera zoom, on every edit.
+    var onLabelDistanceRulesChanged: ((LabelDistanceRules) -> Void)?
     /// The building level of detail thresholds: the cut and the fade, in pixels.
     var onRoadLabelTilesEnabledChanged: ((Bool) -> Void)?
     var onBaseLabelBoundsEnabledChanged: ((Bool) -> Void)?
@@ -224,6 +247,7 @@ final class DebugOverlayHUDView: NSView {
     var onLocalLabelDistanceChanged: ((Float) -> Void)?
     /// The labels' shrink floor, on every drag.
     var onLabelMinimumScaleChanged: ((Float) -> Void)?
+
     var onSurfaceModeSwitchRequested: (() -> Void)?
     var onTileTraceRecordingToggle: (() -> Void)?
     var onBaseLabelTraceRecordingToggle: (() -> Void)?
@@ -259,7 +283,7 @@ final class DebugOverlayHUDView: NSView {
         configureScrollView(scrollView, documentView: contentView)
         containerView.addSubview(scrollView)
 
-        [statsGroupLabel, tilesGroupLabel, baseLabelsGroupLabel,
+        [statsGroupLabel, tilesGroupLabel, baseLabelsGroupLabel, labelDistanceGroupLabel,
          shadowsGroupLabel, fogGroupLabel, atmosphereGroupLabel, controlsGroupLabel].forEach(configureGroupLabel)
 
         configureControlLabel(axesLabel, text: "Axes")
@@ -271,6 +295,7 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(roadLabelBoundsLabel, text: "Road label boxes")
         configureControlLabel(localLabelDistanceLabel, text: "")
         configureControlLabel(labelMinimumScaleLabel, text: "")
+
         configureSlider(labelMinimumScaleSlider,
                         range: Self.labelMinimumScaleRange,
                         action: #selector(labelMinimumScaleSliderChanged))
@@ -281,6 +306,7 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(shadowStrengthLabel, text: "")
         configureControlLabel(shadowMapResolutionLabel, text: "Map px")
         configureControlLabel(shadowCoverageLabel, text: "")
+        configureControlLabel(shadowMinimumCoverageLabel, text: "")
         configureControlLabel(shadowNormalOffsetLabel, text: "")
         configureControlLabel(shadowCasterHeightLabel, text: "")
         configureControlLabel(shadowSoftnessLabel, text: "")
@@ -314,6 +340,9 @@ final class DebugOverlayHUDView: NSView {
         configureSlider(shadowCoverageSlider,
                         range: DebugOverlayShadowSettingsPlanner.coverageRange,
                         action: #selector(shadowCoverageSliderChanged))
+        configureSlider(shadowMinimumCoverageSlider,
+                        range: DebugOverlayShadowSettingsPlanner.minimumCoverageRange,
+                        action: #selector(shadowMinimumCoverageSliderChanged))
         configureSlider(shadowNormalOffsetSlider,
                         range: DebugOverlayShadowSettingsPlanner.normalOffsetRange,
                         action: #selector(shadowNormalOffsetSliderChanged))
@@ -367,6 +396,25 @@ final class DebugOverlayHUDView: NSView {
         configureSlider(ringRuleSetFirstZoomSlider,
                         range: Double(RingRuleSets.zoomRange.lowerBound) ... Double(RingRuleSets.zoomRange.upperBound),
                         action: #selector(ringRuleSetFirstZoomSliderChanged))
+        configureControlLabel(labelDistanceRuleFirstZoomLabel, text: "")
+        configureSlider(labelDistanceRuleFirstZoomSlider,
+                        range: Double(LabelDistanceRules.zoomRange.lowerBound) ... Double(LabelDistanceRules.zoomRange.upperBound),
+                        action: #selector(labelDistanceRuleFirstZoomSliderChanged))
+        configureControlLabel(labelDistanceRuleScaleLabel, text: "")
+        configureSlider(labelDistanceRuleScaleSlider,
+                        range: Self.labelDistanceScaleRange,
+                        action: #selector(labelDistanceRuleScaleSliderChanged))
+        labelDistanceRuleControl.segmentStyle = .rounded
+        labelDistanceRuleControl.target = self
+        labelDistanceRuleControl.action = #selector(labelDistanceRuleControlChanged)
+        configureActionButton(labelDistanceRulesAddButton,
+                              title: "Split the label distance rule at a zoom",
+                              symbolName: "plus.square.on.square",
+                              action: #selector(labelDistanceRulesAddButtonTapped))
+        configureActionButton(labelDistanceRulesRemoveButton,
+                              title: "Remove this label distance rule",
+                              symbolName: "minus.square",
+                              action: #selector(labelDistanceRulesRemoveButtonTapped))
         configureActionButton(ringRuleSetsAddButton,
                               title: "Split the rule set at a zoom",
                               symbolName: "plus.square.on.square",
@@ -431,6 +479,7 @@ final class DebugOverlayHUDView: NSView {
          shadowStrengthLabel, shadowStrengthSlider,
          shadowMapResolutionLabel, shadowMapResolutionControl,
          shadowCoverageLabel, shadowCoverageSlider,
+         shadowMinimumCoverageLabel, shadowMinimumCoverageSlider,
          shadowNormalOffsetLabel, shadowNormalOffsetSlider,
          shadowCasterHeightLabel, shadowCasterHeightSlider,
          shadowSoftnessLabel, shadowSoftnessSlider,
@@ -450,6 +499,10 @@ final class DebugOverlayHUDView: NSView {
          tileGridLabel, tileGridSwitch, tileGridDensityControl,
          wireframeLabel, wireframeSwitch,
          ringRuleSetControl, ringRuleSetFirstZoomLabel, ringRuleSetFirstZoomSlider,
+         labelDistanceGroupLabel, labelDistanceRuleControl,
+         labelDistanceRuleFirstZoomLabel, labelDistanceRuleFirstZoomSlider,
+         labelDistanceRuleScaleLabel, labelDistanceRuleScaleSlider,
+         labelDistanceRulesAddButton, labelDistanceRulesRemoveButton,
          ringRuleSetsAddButton, ringRuleSetsRemoveButton,
          ringRulesAddButton, ringRulesRemoveButton,
          surfaceModeButton,
@@ -484,6 +537,9 @@ final class DebugOverlayHUDView: NSView {
             rebuildRingRuleRows()
         }
         updateRingRuleRows()
+        labelDistanceRules = controls.labelDistanceRules
+        selectedLabelDistanceRuleIndex = min(selectedLabelDistanceRuleIndex, labelDistanceRules.rules.count - 1)
+        updateLabelDistanceRuleControls()
         roadLabelTilesSwitch.state = controls.roadLabelTilesEnabled ? .on : .off
         baseLabelBoundsSwitch.state = controls.baseLabelBoundsEnabled ? .on : .off
         roadLabelBoundsSwitch.state = controls.roadLabelBoundsEnabled ? .on : .off
@@ -673,6 +729,107 @@ final class DebugOverlayHUDView: NSView {
         ringRuleSets.sets[selectedRingRuleSetIndex].firstZoom = firstZoom
         updateRingRuleSetControls()
         onRingRuleSetsChanged?(ringRuleSets)
+    }
+
+    // MARK: - Label distance rules
+
+    static func labelDistanceRuleTitle(rules: LabelDistanceRules, index: Int) -> String {
+        let first = rules.rules[index].firstZoom
+        guard let last = rules.lastZoom(ofRuleAt: index) else { return "z\(first)+" }
+        return last == first ? "z\(first)" : "z\(first)\u{2013}\(last)"
+    }
+
+    /// The first zooms the rule at `index` can take without passing a
+    /// neighbour. The first rule always starts at zoom 0.
+    static func labelDistanceRuleFirstZoomLimits(rules: LabelDistanceRules, index: Int) -> ClosedRange<Int>? {
+        guard index > 0, rules.rules.indices.contains(index) else { return nil }
+        let lower = rules.rules[index - 1].firstZoom + 1
+        let upper = rules.rules.indices.contains(index + 1) ? rules.rules[index + 1].firstZoom - 1
+                                                             : LabelDistanceRules.zoomRange.upperBound
+        return lower <= upper ? lower ... upper : nil
+    }
+
+    private static func labelDistanceScaleTitle(_ scale: Float) -> String {
+        scale.isFinite ? "Distance \(String(format: "%.2f", scale))x" : "Distance off"
+    }
+
+    private func updateLabelDistanceRuleControls() {
+        labelDistanceRuleControl.segmentCount = labelDistanceRules.rules.count
+        for index in labelDistanceRules.rules.indices {
+            labelDistanceRuleControl.setLabel(Self.labelDistanceRuleTitle(rules: labelDistanceRules, index: index),
+                                              forSegment: index)
+        }
+        labelDistanceRuleControl.selectedSegment = selectedLabelDistanceRuleIndex
+        let rule = labelDistanceRules.rules[selectedLabelDistanceRuleIndex]
+        labelDistanceRuleFirstZoomSlider.doubleValue = Double(rule.firstZoom)
+        labelDistanceRuleFirstZoomSlider.isEnabled = Self.labelDistanceRuleFirstZoomLimits(rules: labelDistanceRules,
+                                                                                           index: selectedLabelDistanceRuleIndex) != nil
+        labelDistanceRuleFirstZoomLabel.stringValue = "Rule: starts at zoom \(rule.firstZoom)"
+        let range = Self.labelDistanceScaleRange
+        labelDistanceRuleScaleSlider.doubleValue = rule.scale.isFinite
+            ? min(max(Double(rule.scale), range.lowerBound), range.upperBound)
+            : range.upperBound
+        labelDistanceRuleScaleLabel.stringValue = Self.labelDistanceScaleTitle(rule.scale)
+        labelDistanceRulesRemoveButton.isEnabled = labelDistanceRules.rules.count > 1
+        needsLayout = true
+    }
+
+    @objc private func labelDistanceRuleControlChanged() {
+        guard labelDistanceRules.rules.indices.contains(labelDistanceRuleControl.selectedSegment) else { return }
+        selectedLabelDistanceRuleIndex = labelDistanceRuleControl.selectedSegment
+        updateLabelDistanceRuleControls()
+    }
+
+    @objc private func labelDistanceRuleFirstZoomSliderChanged() {
+        guard let limits = Self.labelDistanceRuleFirstZoomLimits(rules: labelDistanceRules,
+                                                                 index: selectedLabelDistanceRuleIndex) else {
+            updateLabelDistanceRuleControls()
+            return
+        }
+        let wanted = Int(labelDistanceRuleFirstZoomSlider.doubleValue.rounded())
+        let firstZoom = min(max(wanted, limits.lowerBound), limits.upperBound)
+        guard labelDistanceRules.rules[selectedLabelDistanceRuleIndex].firstZoom != firstZoom else {
+            updateLabelDistanceRuleControls()
+            return
+        }
+        labelDistanceRules.rules[selectedLabelDistanceRuleIndex].firstZoom = firstZoom
+        updateLabelDistanceRuleControls()
+        onLabelDistanceRulesChanged?(labelDistanceRules)
+    }
+
+    @objc private func labelDistanceRuleScaleSliderChanged() {
+        let value = (labelDistanceRuleScaleSlider.doubleValue * 20).rounded() / 20
+        let scale = value >= Self.labelDistanceScaleRange.upperBound ? Float.infinity : Float(value)
+        labelDistanceRuleScaleLabel.stringValue = Self.labelDistanceScaleTitle(scale)
+        guard labelDistanceRules.rules[selectedLabelDistanceRuleIndex].scale != scale else { return }
+        labelDistanceRules.rules[selectedLabelDistanceRuleIndex].scale = scale
+        onLabelDistanceRulesChanged?(labelDistanceRules)
+    }
+
+    /// Splits the chosen rule: a new rule with the same reach takes the
+    /// upper half of its zooms and becomes the chosen one.
+    @objc private func labelDistanceRulesAddButtonTapped() {
+        let index = selectedLabelDistanceRuleIndex
+        let first = labelDistanceRules.rules[index].firstZoom
+        let last = labelDistanceRules.lastZoom(ofRuleAt: index) ?? LabelDistanceRules.zoomRange.upperBound
+        guard last > first else { return }
+        var upper = labelDistanceRules.rules[index]
+        upper.firstZoom = first + (last - first + 1) / 2
+        labelDistanceRules.rules.insert(upper, at: index + 1)
+        selectedLabelDistanceRuleIndex = index + 1
+        updateLabelDistanceRuleControls()
+        onLabelDistanceRulesChanged?(labelDistanceRules)
+    }
+
+    /// Removes the chosen rule: its zooms go to the rule before it, or,
+    /// for the first rule, to the one after.
+    @objc private func labelDistanceRulesRemoveButtonTapped() {
+        guard labelDistanceRules.rules.count > 1 else { return }
+        labelDistanceRules.rules.remove(at: selectedLabelDistanceRuleIndex)
+        labelDistanceRules.rules[0].firstZoom = LabelDistanceRules.zoomRange.lowerBound
+        selectedLabelDistanceRuleIndex = max(selectedLabelDistanceRuleIndex - 1, 0)
+        updateLabelDistanceRuleControls()
+        onLabelDistanceRulesChanged?(labelDistanceRules)
     }
 
     /// Splits the chosen set: a new set with the same rules takes the upper
@@ -873,12 +1030,23 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutFullWidthRow(baseLabelTraceStatusLabel, at: cursor, contentWidth: contentWidth, height: Layout.traceStatusHeight)
         cursor += Layout.groupSpacing
 
+        // Label distance: the rule picker first, everything under it edits
+        // the chosen rule.
+        cursor = layoutGroupHeader(labelDistanceGroupLabel, at: cursor, contentWidth: contentWidth)
+        cursor = layoutFullWidthRow(labelDistanceRuleControl, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
+        cursor = layoutControlRow(labelDistanceRuleFirstZoomLabel, labelDistanceRuleFirstZoomSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(labelDistanceRuleScaleLabel, labelDistanceRuleScaleSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutFullWidthRow(labelDistanceRulesAddButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
+        cursor = layoutFullWidthRow(labelDistanceRulesRemoveButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
+        cursor += Layout.groupSpacing
+
         // Shadows
         cursor = layoutGroupHeader(shadowsGroupLabel, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(shadowsEnabledLabel, shadowsEnabledSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowStrengthLabel, shadowStrengthSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowMapResolutionLabel, shadowMapResolutionControl, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowCoverageLabel, shadowCoverageSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(shadowMinimumCoverageLabel, shadowMinimumCoverageSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowNormalOffsetLabel, shadowNormalOffsetSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowCasterHeightLabel, shadowCasterHeightSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowSoftnessLabel, shadowSoftnessSlider, at: cursor, contentWidth: contentWidth)
@@ -1074,6 +1242,8 @@ final class DebugOverlayHUDView: NSView {
             DebugOverlayShadowSettingsPlanner.mapResolutionIndex(for: shadowSettings.mapResolution)
         shadowCoverageSlider.doubleValue = Double(shadowSettings.coverageCameraDistances)
         shadowCoverageLabel.stringValue = DebugOverlayShadowSettingsPlanner.coverageTitle(shadowSettings.coverageCameraDistances)
+        shadowMinimumCoverageSlider.doubleValue = Double(shadowSettings.minimumCoverageMeters)
+        shadowMinimumCoverageLabel.stringValue = DebugOverlayShadowSettingsPlanner.minimumCoverageTitle(shadowSettings.minimumCoverageMeters)
         shadowNormalOffsetSlider.doubleValue = Double(shadowSettings.normalOffsetTexels)
         shadowNormalOffsetLabel.stringValue = DebugOverlayShadowSettingsPlanner.normalOffsetTitle(shadowSettings.normalOffsetTexels)
         shadowCasterHeightSlider.doubleValue = Double(shadowSettings.maxCasterHeightMeters)
@@ -1088,7 +1258,7 @@ final class DebugOverlayHUDView: NSView {
         sunElevationLabel.stringValue = DebugOverlayShadowSettingsPlanner.elevationTitle(angles.elevationDegrees)
 
         // Everything below the switch only means something with shadows on.
-        [shadowStrengthSlider, shadowMapResolutionControl, shadowCoverageSlider,
+        [shadowStrengthSlider, shadowMapResolutionControl, shadowCoverageSlider, shadowMinimumCoverageSlider,
          shadowNormalOffsetSlider, shadowCasterHeightSlider, shadowSoftnessSlider,
          sunAzimuthSlider,
          sunElevationSlider].forEach { $0.isEnabled = shadowSettings.isEnabled }
@@ -1370,6 +1540,12 @@ final class DebugOverlayHUDView: NSView {
     @objc private func shadowCoverageSliderChanged() {
         var settings = shadowSettings
         settings.coverageCameraDistances = Float(shadowCoverageSlider.doubleValue)
+        publish(shadowSettings: settings)
+    }
+
+    @objc private func shadowMinimumCoverageSliderChanged() {
+        var settings = shadowSettings
+        settings.minimumCoverageMeters = Float((shadowMinimumCoverageSlider.doubleValue / 25).rounded() * 25)
         publish(shadowSettings: settings)
     }
 

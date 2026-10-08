@@ -47,9 +47,16 @@ let package = Package(
             name: "PMTilesTestSupport",
             dependencies: ["PMTiles"]
         ),
+        // The ground flattener: stacked painted rings in, one layer of
+        // triangles that do not overlap out, cut to a grid for a heightmap.
+        // Its own module for the same reason as `Earcut`: pure geometry that
+        // knows nothing of the engine, reached at `package` access.
+        .target(
+            name: "TileFlattening"
+        ),
         .target(
             name: "ImmersiveMap",
-            dependencies: ["Earcut", "Mvt", "PMTiles"],
+            dependencies: ["Earcut", "Mvt", "PMTiles", "TileFlattening"],
             resources: [
                 .process("Avatars/Resources/avatar_marker_sdf.json"),
                 .process("Avatars/Resources/avatar_marker_sdf.png"),
@@ -76,6 +83,10 @@ let package = Package(
         .testTarget(
             name: "MvtTests",
             dependencies: ["Mvt", "MvtTestSupport"]
+        ),
+        .testTarget(
+            name: "TileFlatteningTests",
+            dependencies: ["TileFlattening"]
         ),
         .testTarget(
             name: "PMTilesTests",

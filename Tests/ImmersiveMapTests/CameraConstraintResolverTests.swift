@@ -7,19 +7,19 @@ import XCTest
 final class CameraConstraintResolverTests: XCTestCase {
     private let settings = ImmersiveMapSettings.default.camera
 
-    func testFlatPitchLimitIsAlwaysSeventyFiveDegrees() {
-        XCTAssertEqual(flatMaximumPitch(at: 0), degrees(75), accuracy: 0.0001)
-        XCTAssertEqual(flatMaximumPitch(at: 12), degrees(75), accuracy: 0.0001)
-        XCTAssertEqual(flatMaximumPitch(at: 20), degrees(75), accuracy: 0.0001)
+    func testFlatPitchLimitIsAlwaysEightyFiveDegrees() {
+        XCTAssertEqual(flatMaximumPitch(at: 0), degrees(85), accuracy: 0.0001)
+        XCTAssertEqual(flatMaximumPitch(at: 12), degrees(85), accuracy: 0.0001)
+        XCTAssertEqual(flatMaximumPitch(at: 20), degrees(85), accuracy: 0.0001)
     }
 
     /// The globe's ceiling no longer eases in with zoom: it is the flat
-    /// map's fixed 75 degrees at every zoom, the whole planet included.
-    func testGlobePitchLimitIsAlwaysSeventyFiveDegrees() {
-        XCTAssertEqual(globeMaximumPitch(at: 0), degrees(75), accuracy: 0.0001)
-        XCTAssertEqual(globeMaximumPitch(at: 1.5), degrees(75), accuracy: 0.0001)
-        XCTAssertEqual(globeMaximumPitch(at: 3), degrees(75), accuracy: 0.0001)
-        XCTAssertEqual(globeMaximumPitch(at: 20), degrees(75), accuracy: 0.0001)
+    /// map's fixed 85 degrees at every zoom, the whole planet included.
+    func testGlobePitchLimitIsAlwaysEightyFiveDegrees() {
+        XCTAssertEqual(globeMaximumPitch(at: 0), degrees(85), accuracy: 0.0001)
+        XCTAssertEqual(globeMaximumPitch(at: 1.5), degrees(85), accuracy: 0.0001)
+        XCTAssertEqual(globeMaximumPitch(at: 3), degrees(85), accuracy: 0.0001)
+        XCTAssertEqual(globeMaximumPitch(at: 20), degrees(85), accuracy: 0.0001)
     }
 
     func testDefaultsLeavePitchFloorBearingCapAndBoundsOff() {

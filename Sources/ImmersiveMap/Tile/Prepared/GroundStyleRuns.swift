@@ -30,11 +30,18 @@ struct GroundStyleRun: Equatable, Sendable {
     var zoomFade: SIMD2<Float>
     /// Bit 0: the style's colour carries alpha 1, so the run is opaque
     /// whenever its fade is 1. Bit 1: the run is line ribbons and draws
-    /// through the line-field pipeline.
+    /// through the line-field pipeline. Bit 2: the run is a fill of a
+    /// flattened ground (`GroundFlattening`): it overlaps no other fill
+    /// and draws at one depth with them, opaque, in one pass.
     var flags: UInt32
 
     static let alphaOpaqueFlag: UInt32 = 1
     static let linesClassFlag: UInt32 = 2
+    static let flattenedFlag: UInt32 = 4
+
+    var isFlattened: Bool {
+        flags & Self.flattenedFlag != 0
+    }
 
     var isAlphaOpaque: Bool {
         flags & Self.alphaOpaqueFlag != 0
@@ -70,7 +77,7 @@ enum GroundStyleRunScanner {
                                       start: 0,
                                       end: boundary,
                                       primitiveIndexCount: 3,
-                                      classFlags: 0),
+                                      classFlags: ground.isFlattened ? GroundStyleRun.flattenedFlag : 0),
               let ribbons = scanSegment(ground: ground,
                                         start: boundary,
                                         end: ground.indices.count,

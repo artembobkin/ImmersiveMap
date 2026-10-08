@@ -299,8 +299,8 @@ final class ImmersiveMapStillRuntime {
             let activity = eventSink.activityState
             let isSettled = hasPendingWork == false
                 && activity.labelFadeRenderingActive == false
-                && activity.labelVisibilityCycleRenderingActive == false
                 && activity.avatarAnimationRenderingActive == false
+                && activity.extrusionRiseRenderingActive == false
             if isSettled {
                 break
             }

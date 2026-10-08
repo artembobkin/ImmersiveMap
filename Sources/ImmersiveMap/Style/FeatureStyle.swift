@@ -388,11 +388,9 @@ public struct PointLabelStyle: Sendable {
     /// tallest volume whose footprint holds it (or of the model drawn in
     /// its place), wherever the frame draws that building. A label naming
     /// the building itself, the same OSM element as the building, rises to
-    /// the roof; one naming something inside it stays on the ground, and
-    /// is tested for view at the roof, so its own building never hides it
-    /// while another building or a model still can. On the ground where
-    /// the frame draws no buildings (the globe, a zoom coarser than the
-    /// building tiles, beyond the near field).
+    /// the roof, and one naming something inside it stays on the ground.
+    /// On the ground where the frame draws no buildings (the globe, a zoom
+    /// coarser than the building tiles, beyond the near field).
     public var standsOnRoof: Bool
     /// Whether the label is local detail, shown only near the camera: the
     /// house numbers, a memorial's plaque, a ticket office, the things one

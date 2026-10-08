@@ -141,6 +141,8 @@ enum ShadowFrameStateResolver {
     /// debug panel wind the window right down and look at the texel grid
     /// itself. See `fadeDistances` for what happens under a coverage of 1.
     static let coverageRange: ClosedRange<Float> = 0.25...48
+    /// Range `ShadowSettings.minimumCoverageMeters` is clamped to.
+    static let minimumCoverageMetersRange: ClosedRange<Float> = 0...5000
 
     struct CascadeSpec {
         let radius: Float
@@ -148,14 +150,20 @@ enum ShadowFrameStateResolver {
     }
 
     /// The window this frame asks for: one disc, sized by
-    /// `coverageCameraDistances`, with the caster-height cap in world units.
+    /// `coverageCameraDistances` and never under `minimumCoverageMeters`,
+    /// with the caster-height cap in world units. Both depend on the zoom
+    /// alone, not on the pitch or the bearing.
     static func windowSpec(cameraDistance: Float,
                            unitsPerMeter: Double,
                            coverageCameraDistances: Float,
+                           minimumCoverageMeters: Float = 0,
                            maxCasterHeightMeters: Float) -> CascadeSpec {
         let coverage = min(max(coverageCameraDistances, coverageRange.lowerBound),
                            coverageRange.upperBound)
-        let radius = coverage * cameraDistance
+        let floorMeters = minimumCoverageMeters.isFinite
+            ? min(max(minimumCoverageMeters, minimumCoverageMetersRange.lowerBound), minimumCoverageMetersRange.upperBound)
+            : 0
+        let radius = max(coverage * cameraDistance, Float(Double(floorMeters) * unitsPerMeter))
         let limit = min(max(maxCasterHeightMeters, maxCasterHeightRange.lowerBound),
                         maxCasterHeightRange.upperBound)
         return CascadeSpec(radius: radius,
@@ -243,6 +251,7 @@ enum ShadowFrameStateResolver {
         let spec = windowSpec(cameraDistance: cameraDistance,
                               unitsPerMeter: unitsPerMeter,
                               coverageCameraDistances: scene.shadows.coverageCameraDistances,
+                              minimumCoverageMeters: scene.shadows.minimumCoverageMeters,
                               maxCasterHeightMeters: scene.shadows.maxCasterHeightMeters)
 
         let halfMapSize = renderMapSize * 0.5

@@ -161,6 +161,10 @@ final class HorizonOffscreenRenderTests: XCTestCase {
         settings.scene.starfield.starCount = 0
         settings.scene.shadows.isEnabled = false
         settings.scene.fog = ImmersiveMapSettings.FogSettings(hazeRange: 4...8)
+        // The tower stands in a z14 tile under a camera at zoom 14: the
+        // buildings draw from there, standing at once.
+        settings.scene.extrusion.buildingsMinimumZoom = 14
+        settings.scene.extrusion.riseSeconds = 0
         let harness = try OffscreenFrameHarness.makeOrSkip(settings: settings, size: 200)
         let latitude = 48.0
         let longitude = 10.0

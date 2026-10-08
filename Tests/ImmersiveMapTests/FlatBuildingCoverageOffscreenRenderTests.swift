@@ -5,97 +5,79 @@
 import XCTest
 
 /// End-to-end contract of the building coverage (`BuildingCoveragePlanner`):
-/// buildings come from a partition of the ground over the loaded tiles. A
-/// loaded z15 child draws its own buildings in its quadrant of the z14
-/// cell, the cell draws its buildings clipped to the quadrants whose child
-/// has not arrived, and with all four children loaded the cell draws
-/// nothing. The parent here has a building over its whole extent and the
-/// children have none, so the handover is visible as the building vanishing
-/// quadrant by quadrant. Requires the compiled Metal library, so it skips
-/// under `swift test` and runs in the xcodebuild workspace suite.
+/// only the tiles of the frame's target zoom draw buildings, each in its
+/// own place. A z14 cell with a building over its whole extent stands in
+/// on the ground for the z15 children that have not arrived, and extrudes
+/// nothing there: the frame is the same with the extrusion on and off.
+/// With the cell as the target it draws its building. The building's
+/// footprint is a ground fill in the same colour, which is why the frames
+/// are compared whole rather than by colour. Requires the compiled Metal
+/// library, so it skips under `swift test` and runs in the xcodebuild
+/// workspace suite.
 final class FlatBuildingCoverageOffscreenRenderTests: XCTestCase {
     /// Colours that appear nowhere else in the map.
     private static let fixtureWater = SIMD4<Float>(1, 0, 1, 1)
     private static let fixtureSnow = SIMD4<Float>(0, 1, 1, 1)
     private static let fixtureBuilding = SIMD4<Float>(1, 1, 0, 1)
 
-    /// The z14 cell 9908/5140 and its four z15 children; the camera looks at
-    /// the cell's centre, the corner all four children share.
+    /// The z14 cell 9908/5140 and its north-west z15 child. The camera
+    /// looks at the cell's centre, the corner all four children share, from
+    /// the south at a tilt, so the three missing children's quadrants are
+    /// in view with the loaded one.
     private static let cell = Tile(x: 9908, y: 5140, z: 14)
-    private static let children = [Tile(x: 19816, y: 10280, z: 15), Tile(x: 19817, y: 10280, z: 15),
-                                   Tile(x: 19816, y: 10281, z: 15), Tile(x: 19817, y: 10281, z: 15)]
+    private static let child = Tile(x: 19816, y: 10280, z: 15)
 
     @MainActor
-    func testTheCellDrawsItsBuildingUntilItsChildrenAreComplete() async throws {
-        let harness = try makeHarness()
-        let centerUv = (x: (Double(Self.cell.x) + 0.5) / Double(1 << Self.cell.z),
-                        y: (Double(Self.cell.y) + 0.5) / Double(1 << Self.cell.z))
-        let latitude = atan(sinh(Double.pi * (1.0 - 2.0 * centerUv.y))) * 180.0 / .pi
-        let longitude = centerUv.x * 360.0 - 180.0
-        harness.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: latitude,
-                                                              longitudeDegrees: longitude,
-                                                              zoom: 15.2))
-        let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
+    func testACoarserTileStandingInDrawsNoBuilding() async throws {
+        let standingIn = try await differingBytes(zoom: 15.2, buildingsMinimumZoom: 15)
+        XCTAssertEqual(standingIn, 0,
+                       "The cell standing in for the missing children extrudes nothing: the extrusion changes no pixel")
 
-        // The cell: water ground and one building over its whole extent.
-        // The children: snow ground, no buildings.
-        let waterData = VectorTileFixture.fullCoverageTile(layerName: "water",
-                                                           properties: ["kind": "ocean"])
-        let buildingData = VectorTileFixture.fullCoverageTile(layerName: "buildings",
-                                                              properties: ["kind": "building", "height": "40"])
-        let snowData = VectorTileFixture.fullCoverageTile(layerName: "landuse",
-                                                          properties: ["kind": "glacier"])
-        let cellLoaded = await harness.tileRenderStore.parseTile(tile: Self.cell, data: waterData + buildingData)
-        XCTAssertTrue(cellLoaded, "The cell fixture tile must parse")
-        let firstChildLoaded = await harness.tileRenderStore.parseTile(tile: Self.children[0], data: snowData)
-        XCTAssertTrue(firstChildLoaded, "The child fixture tile must parse")
+        let asTarget = try await differingBytes(zoom: 14.5, buildingsMinimumZoom: 14)
+        XCTAssertGreaterThan(asTarget, 0, "The cell as the target draws its building")
+    }
 
-        let partial = try await harness.renderUntilSettled(changedFrom: baseline,
-                                                            startingAt: OffscreenFrameHarness.frameTime(1))
-        let center = partial.size / 2
-        let inset = partial.size / 5
-        let margin = 4
-        // One child loaded: the child draws its quadrant (snow, no
-        // buildings) and the cell's building is clipped to the other three,
-        // the missing sibling's included; the cut runs along the quadrant's
-        // edge, inside the margin.
-        let childQuadrant = Self.count(in: partial, x: (center - inset) ..< (center - margin), y: (center - inset) ..< (center - margin))
-        XCTAssertEqual(childQuadrant.building, 0,
-                       "The loaded child's quadrant shows the child's buildings, none, not the cell's")
-        XCTAssertGreaterThan(childQuadrant.snow, (inset - margin) * (inset - margin) / 2, "The child's snow shows")
-        let siblingQuadrant = Self.count(in: partial, x: (center + margin) ..< (center + inset), y: (center - inset) ..< (center - margin))
-        XCTAssertGreaterThan(siblingQuadrant.building, (inset - margin) * (inset - margin) / 2,
-                             "The cell's building fills the missing sibling's quadrant")
-        XCTAssertEqual(siblingQuadrant.snow, 0)
+    /// The bytes that differ between the frame with the extrusion on and
+    /// the one with it off, at `zoom` over the cell's centre.
+    @MainActor
+    private func differingBytes(zoom: Double, buildingsMinimumZoom: Double) async throws -> Int {
+        var frames: [RenderedFrame] = []
+        for buildingExtrusion in [true, false] {
+            let harness = try makeHarness(buildingExtrusion: buildingExtrusion, buildingsMinimumZoom: buildingsMinimumZoom)
+            let centerUv = (x: (Double(Self.cell.x) + 0.5) / Double(1 << Self.cell.z),
+                            y: (Double(Self.cell.y) + 0.5) / Double(1 << Self.cell.z))
+            let latitude = atan(sinh(Double.pi * (1.0 - 2.0 * centerUv.y))) * 180.0 / .pi
+            let longitude = centerUv.x * 360.0 - 180.0
+            harness.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: latitude,
+                                                                  longitudeDegrees: longitude,
+                                                                  zoom: zoom,
+                                                                  bearing: 0,
+                                                                  pitch: 1.0))
+            let baseline = try await harness.renderFrame(at: OffscreenFrameHarness.frameTime(0))
 
-        for child in Self.children.dropFirst() {
-            let loaded = await harness.tileRenderStore.parseTile(tile: child, data: snowData)
-            XCTAssertTrue(loaded, "The child fixture tile must parse")
+            // The cell: water ground and one building over its whole extent.
+            // The child: snow ground, no buildings.
+            let waterData = VectorTileFixture.fullCoverageTile(layerName: "water",
+                                                               properties: ["kind": "ocean"])
+            let buildingData = VectorTileFixture.fullCoverageTile(layerName: "buildings",
+                                                                  properties: ["kind": "building", "height": "40"])
+            let snowData = VectorTileFixture.fullCoverageTile(layerName: "landuse",
+                                                              properties: ["kind": "glacier"])
+            let cellLoaded = await harness.tileRenderStore.parseTile(tile: Self.cell, data: waterData + buildingData)
+            XCTAssertTrue(cellLoaded, "The cell fixture tile must parse")
+            let childLoaded = await harness.tileRenderStore.parseTile(tile: Self.child, data: snowData)
+            XCTAssertTrue(childLoaded, "The child fixture tile must parse")
+
+            frames.append(try await harness.renderUntilSettled(changedFrom: baseline,
+                                                                startingAt: OffscreenFrameHarness.frameTime(1)))
         }
-        let complete = try await harness.renderUntilSettled(changedFrom: partial,
-                                                             startingAt: OffscreenFrameHarness.frameTime(20))
-        let whole = Self.count(in: complete, x: (center - inset) ..< (center + inset), y: (center - inset) ..< (center + inset))
-        XCTAssertEqual(whole.building, 0, "All four children loaded: the cell hands over, and the children have no buildings")
-        XCTAssertGreaterThan(whole.snow, (2 * inset) * (2 * inset) / 2, "The children's snow shows")
+        return frames[0].differingByteCount(from: frames[1])
     }
 
     // MARK: - Helpers
 
-    private static func count(in frame: RenderedFrame, x: Range<Int>, y: Range<Int>) -> (building: Int, snow: Int) {
-        var building = 0
-        var snow = 0
-        for row in y {
-            for column in x {
-                let pixel = frame.pixel(x: column, y: row)
-                if isFixtureBuilding(pixel) { building += 1 }
-                if isFixtureSnow(pixel) { snow += 1 }
-            }
-        }
-        return (building, snow)
-    }
-
     @MainActor
-    private func makeHarness() throws -> OffscreenFrameHarness {
+    private func makeHarness(buildingExtrusion: Bool, buildingsMinimumZoom: Double) throws -> OffscreenFrameHarness {
         let configuration = ProtomapsBasemapTheme.default
             .layers { layers in
                 layers.water = Self.fixtureWater
@@ -103,21 +85,16 @@ final class FlatBuildingCoverageOffscreenRenderTests: XCTestCase {
             }
             .features { features in
                 features.buildingFillColor = Self.fixtureBuilding
+                features.buildingExtrusion = buildingExtrusion
             }
         var settings = ImmersiveMapSettings.default
             .mapStyle(ProtomapsBasemapMapStyle(theme: configuration))
+        settings.scene.extrusion.buildingsMinimumZoom = buildingsMinimumZoom
+        settings.scene.extrusion.riseSeconds = 0
         settings.scene.starfield.starCount = 0
         // No cast shadows: they would tint the sampled snow according to the
         // sun's azimuth.
         settings.scene.shadows.isEnabled = false
         return try OffscreenFrameHarness.makeOrSkip(settings: settings)
-    }
-
-    private static func isFixtureSnow(_ pixel: RenderedFrame.Pixel) -> Bool {
-        pixel.red < 60 && pixel.green > 200 && pixel.blue > 200
-    }
-
-    private static func isFixtureBuilding(_ pixel: RenderedFrame.Pixel) -> Bool {
-        pixel.red > 200 && pixel.green > 200 && pixel.blue < 60
     }
 }

@@ -9,7 +9,7 @@ final class RenderPassGraph {
         switch layer {
         case .starfield, .globeVectorSurface, .globeCap,
              .tileOwnership, .flatMapSurface, .surfaceLabels, .buildingExtrusion, .sceneModels,
-             .labelOcclusionProbe, .horizon:
+             .horizon:
             return true
         case .shadowCasters, .groundShadowMask, .postProcessing,
              .labels, .avatars, .debugOverlay:
@@ -23,7 +23,7 @@ final class RenderPassGraph {
             return true
         case .shadowCasters, .groundShadowMask, .starfield,
              .globeVectorSurface, .globeCap, .tileOwnership, .flatMapSurface, .surfaceLabels,
-             .buildingExtrusion, .sceneModels, .labelOcclusionProbe, .horizon, .postProcessing:
+             .buildingExtrusion, .sceneModels, .horizon, .postProcessing:
             return false
         }
     }

@@ -16,7 +16,7 @@ import simd
 ///   the pipeline's GeoJSON) speaks it.
 /// - **Render space**: y grows NORTH from the south edge, `4096 - y`. It
 ///   exists only as the vertex storage and GPU contract (`ParsedPolygon`,
-///   `TileVertexIn`, extrusion meshes, `TileLocalClipMath` bounds,
+///   `TileVertexIn`, extrusion meshes,
 ///   `Tile.metal`'s `localPosition`), matching the y-up flat render world.
 ///   It is entered at exactly ONE named point per geometry kind: inside
 ///   `ParseLine`'s precompute for lines, at `ParsePolygon`'s tessellation

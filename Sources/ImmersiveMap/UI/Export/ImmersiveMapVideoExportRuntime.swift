@@ -219,8 +219,8 @@ final class ImmersiveMapVideoExportRuntime {
             let activity = eventSink.activityState
             let isSettled = hasPendingTiles == false
                 && activity.labelFadeRenderingActive == false
-                && activity.labelVisibilityCycleRenderingActive == false
                 && activity.avatarAnimationRenderingActive == false
+                && activity.extrusionRiseRenderingActive == false
             if isSettled {
                 break
             }

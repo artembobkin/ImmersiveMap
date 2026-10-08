@@ -134,38 +134,47 @@ final class BaseLabelCache {
         labelPresentationInputs
     }
 
+    /// Each tile's labels in the set, in the set's order: a tile's labels
+    /// are ordered by the zoom they show from (`TileTextLabelsBuilder`),
+    /// which is what `LabelActiveSpans` searches.
+    var tileRuns: [Range<Int>] {
+        records.map { $0.start..<($0.start + $0.count) }
+    }
+
     /// Each label's shrink for its distance, index-aligned with the set.
-    func updatePerspectiveScales(_ scales: [Float]) {
+    /// Only the labels of `spans` are written (`LabelActiveSpans`). Nil
+    /// writes every label.
+    func updatePerspectiveScales(_ scales: [Float], spans: [Range<Int>]? = nil) {
         let count = min(labelRuntimeMetaData.count, scales.count)
         labelRuntimeMetaData.withUnsafeMutableBufferPointer { meta in
             scales.withUnsafeBufferPointer { scales in
-                var index = 0
-                while index < count {
-                    meta[index].perspectiveScale = scales[index]
-                    index += 1
-                }
-                while index < meta.count {
-                    meta[index].perspectiveScale = 1
-                    index += 1
+                for span in spans ?? [0..<meta.count] {
+                    var index = span.lowerBound
+                    let end = min(span.upperBound, meta.count)
+                    while index < end {
+                        meta[index].perspectiveScale = index < count ? scales[index] : 1
+                        index += 1
+                    }
                 }
             }
         }
     }
 
     /// Each label's fade alpha times `multiplier`, index-aligned with the
-    /// set, into the runtime meta the shaders read.
-    func updateFadeAlphas(_ fadeAlphas: [Float], multiplier: Float = 1.0) {
+    /// set, into the runtime meta the shaders read. Only the labels of
+    /// `spans` are written (`LabelActiveSpans`): the rest are dark and keep
+    /// the 0 they left with. Nil writes every label.
+    func updateFadeAlphas(_ fadeAlphas: [Float], multiplier: Float = 1.0, spans: [Range<Int>]? = nil) {
         let count = min(labelRuntimeMetaData.count, fadeAlphas.count)
         labelRuntimeMetaData.withUnsafeMutableBufferPointer { meta in
             fadeAlphas.withUnsafeBufferPointer { alphas in
-                var index = 0
-                while index < count {
-                    meta[index].fadeAlpha = alphas[index] * multiplier
-                    index += 1
-                }
-                while index < meta.count {
-                    meta[index].fadeAlpha = 0
-                    index += 1
+                for span in spans ?? [0..<meta.count] {
+                    var index = span.lowerBound
+                    let end = min(span.upperBound, meta.count)
+                    while index < end {
+                        meta[index].fadeAlpha = index < count ? alphas[index] * multiplier : 0
+                        index += 1
+                    }
                 }
             }
         }

@@ -34,14 +34,14 @@ struct TilePointScreenProjector {
                                       tileOriginData: [FlatTileOriginData]) -> TilePointScreenProjectionResult {
         var result = TilePointScreenProjectionResult.empty
         var perspectiveScales: [Float] = []
-        var probePositions: [SIMD4<Float>] = []
+        var anchorPositions: [SIMD4<Float>] = []
         projectWithHorizonVisibility(snapshot: snapshot,
                                      frameContext: frameContext,
                                      tileOriginData: tileOriginData,
                                      screenPoints: &result.screenPoints,
                                      horizonVisibility: &result.horizonVisibility,
                                      perspectiveScales: &perspectiveScales,
-                                     probePositions: &probePositions)
+                                     anchorPositions: &anchorPositions)
         return result
     }
 
@@ -57,20 +57,27 @@ struct TilePointScreenProjector {
     /// focus or nearer keeps its size, one twice as far is half as big down
     /// to the minimum. A minimum of 1 keeps every point at its size.
     ///
-    /// `probePositions` receives each point's occlusion probe, in the
-    /// render world the frame draws with: where the point draws (xyz) and
-    /// the roof over it (w: the tile's, the ground's level on open
-    /// ground). The probe climbs the eye ray to that roof, so the building
-    /// a point stands in never hides it. Zero for a point without a
-    /// projection.
+    /// `anchorPositions` receives where each point draws in the render
+    /// world the frame draws with (xyz, w zero). Zero for a point without
+    /// a projection.
+    ///
+    /// `spans` limits the work to those points (`LabelActiveSpans`), the
+    /// others keep what they had. Nil projects every point.
+    ///
+    /// A point farther from the camera than `maximumDistanceScale` times
+    /// the camera's depth of its focus is out of reach: not in
+    /// `horizonVisibility`, like one past the horizon, so its label fades
+    /// out (`LabelDistanceRule.scale`).
     func projectWithHorizonVisibility(snapshot: TilePointToScreenPointSnapshot,
                                       frameContext: FrameContext,
                                       tileOriginData: [FlatTileOriginData],
                                       minimumPerspectiveScale: Float = 1,
+                                      maximumDistanceScale: Float = .infinity,
+                                      spans: [Range<Int>]? = nil,
                                       screenPoints: inout [ScreenPointOutput],
                                       horizonVisibility: inout [Bool],
                                       perspectiveScales: inout [Float],
-                                      probePositions: inout [SIMD4<Float>]) {
+                                      anchorPositions: inout [SIMD4<Float>]) {
         let count = snapshot.pointsCount
         if screenPoints.count != count {
             screenPoints = Array(repeating: ScreenPointOutput(position: .zero, depth: 0, visible: 0), count: count)
@@ -81,14 +88,17 @@ struct TilePointScreenProjector {
         if perspectiveScales.count != count {
             perspectiveScales = Array(repeating: 1, count: count)
         }
-        if probePositions.count != count {
-            probePositions = Array(repeating: .zero, count: count)
+        if anchorPositions.count != count {
+            anchorPositions = Array(repeating: .zero, count: count)
         }
         guard count > 0 else {
             return
         }
-        let perspective = PerspectiveScale(focusDepth: Self.focusDepth(frameContext: frameContext),
+        let focusDepth = Self.focusDepth(frameContext: frameContext)
+        let perspective = PerspectiveScale(focusDepth: focusDepth,
                                            minimum: minimumPerspectiveScale)
+        let maximumDepth = focusDepth * max(maximumDistanceScale, 0)
+        let spans = spans ?? [0..<count]
 
         switch frameContext.screenSpaceProjectionMode {
         case .flat:
@@ -96,20 +106,22 @@ struct TilePointScreenProjector {
                                     frameContext: frameContext,
                                     tileOriginData: tileOriginData,
                                     perspective: perspective,
+                                    maximumDepth: maximumDepth,
+                                    spans: spans,
                                     into: &screenPoints,
+                                    inView: &horizonVisibility,
                                     perspectiveScales: &perspectiveScales,
-                                    probePositions: &probePositions)
-            for index in 0..<count {
-                horizonVisibility[index] = screenPoints[index].visible != 0
-            }
+                                    anchorPositions: &anchorPositions)
         case .globe:
             projectGlobe(snapshot: snapshot,
                          frameContext: frameContext,
                          perspective: perspective,
+                         maximumDepth: maximumDepth,
+                         spans: spans,
                          screenPoints: &screenPoints,
                          horizonVisibility: &horizonVisibility,
                          perspectiveScales: &perspectiveScales,
-                         worldPositions: &probePositions)
+                         worldPositions: &anchorPositions)
         }
     }
 
@@ -180,14 +192,18 @@ struct TilePointScreenProjector {
         var outputs = Array(repeating: ScreenPointOutput(position: .zero, depth: 0, visible: 0),
                             count: snapshot.pointsCount)
         var perspectiveScales = Array(repeating: Float(1), count: snapshot.pointsCount)
-        var probePositions = Array(repeating: SIMD4<Float>.zero, count: snapshot.pointsCount)
+        var anchorPositions = Array(repeating: SIMD4<Float>.zero, count: snapshot.pointsCount)
+        var inView = Array(repeating: false, count: snapshot.pointsCount)
         projectFlatScreenPoints(snapshot: snapshot,
                                 frameContext: frameContext,
                                 tileOriginData: tileOriginData,
                                 perspective: PerspectiveScale(focusDepth: 0, minimum: 1),
+                                maximumDepth: .infinity,
+                                spans: [0..<snapshot.pointsCount],
                                 into: &outputs,
+                                inView: &inView,
                                 perspectiveScales: &perspectiveScales,
-                                probePositions: &probePositions)
+                                anchorPositions: &anchorPositions)
         return outputs
     }
 
@@ -195,34 +211,47 @@ struct TilePointScreenProjector {
                                          frameContext: FrameContext,
                                          tileOriginData: [FlatTileOriginData],
                                          perspective: PerspectiveScale,
+                                         maximumDepth: Float,
+                                         spans: [Range<Int>],
                                          into outputs: inout [ScreenPointOutput],
+                                         inView: inout [Bool],
                                          perspectiveScales: inout [Float],
-                                         probePositions: inout [SIMD4<Float>]) {
+                                         anchorPositions: inout [SIMD4<Float>]) {
         let viewport = SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height))
         let cameraMatrix = frameContext.cameraMatrices.projectionView
         let invisible = ScreenPointOutput(position: .zero, depth: 0, visible: 0)
         let count = snapshot.pointInputs.count
+        let halfViewport = viewport * 0.5
+        // The roofs stand as high as the buildings of their tile have
+        // risen (`FrameContextSharedState.buildingRiseByTile`): on the
+        // ground where no buildings draw.
+        let riseByTile = frameContext.sharedState.buildingRiseByTile
 
         snapshot.pointInputs.withUnsafeBufferPointer { inputs in
         snapshot.tileSlotVisibleTileIndices.withUnsafeBufferPointer { slots in
         tileOriginData.withUnsafeBufferPointer { origins in
         outputs.withUnsafeMutableBufferPointer { outputs in
+        inView.withUnsafeMutableBufferPointer { inView in
         perspectiveScales.withUnsafeMutableBufferPointer { perspectiveScales in
-        probePositions.withUnsafeMutableBufferPointer { probePositions in
-            var index = 0
-            while index < count {
+        anchorPositions.withUnsafeMutableBufferPointer { anchorPositions in
+          for span in spans {
+            var index = span.lowerBound
+            let end = min(span.upperBound, count)
+            while index < end {
                 let input = inputs[index]
                 let tileSlotIndex = Int(input.tileSlotIndex)
                 guard tileSlotIndex < slots.count else {
                     outputs[index] = invisible
-                    probePositions[index] = .zero
+                    inView[index] = false
+                    anchorPositions[index] = .zero
                     index += 1
                     continue
                 }
                 let visibleTileIndex = Int(slots[tileSlotIndex])
                 guard visibleTileIndex < origins.count else {
                     outputs[index] = invisible
-                    probePositions[index] = .zero
+                    inView[index] = false
+                    anchorPositions[index] = .zero
                     index += 1
                     continue
                 }
@@ -236,18 +265,37 @@ struct TilePointScreenProjector {
                 // scale, so the same tile size that places the point raises it
                 // to the roof the building draws.
                 let roofZ = input.roofHeight > 0 ? input.roofHeight * originData.size / 4096.0 : 0.0
-                // The label naming the building draws on its roof; one of the
-                // things inside it draws on the ground, and is only tested for
-                // view at the roof.
+                // The label naming the building draws on its roof, one of the
+                // things inside it on the ground.
                 let drawsOnRoof = input.liftsToRoof != 0
-                let drawnZ = drawsOnRoof ? roofZ : 0.0
+                var drawnZ: Float = 0
+                if drawsOnRoof {
+                    let tile = Tile(x: Int(input.tile.x), y: Int(input.tile.y), z: Int(input.tile.z))
+                    drawnZ = roofZ * (riseByTile[tile] ?? 0)
+                }
                 let clip = cameraMatrix * SIMD4<Float>(worldPosition.x, worldPosition.y, drawnZ, 1.0)
-                outputs[index] = screenPointFromClip(clip: clip, viewportSize: viewport)
+                // `screenPointFromClip` written out: this loop runs over
+                // every label of the frame.
+                if clip.w > 0 {
+                    let inverseW = 1 / clip.w
+                    let ndc = SIMD2<Float>(clip.x, clip.y) * inverseW
+                    outputs[index] = ScreenPointOutput(position: (ndc + 1) * halfViewport,
+                                                       depth: clip.z * inverseW,
+                                                       visible: 1,
+                                                       visibilityAlpha: 1)
+                    // The flat map has no horizon: a point is in view where
+                    // it projects within reach.
+                    inView[index] = clip.w <= maximumDepth
+                } else {
+                    outputs[index] = invisible
+                    inView[index] = false
+                }
                 perspectiveScales[index] = perspective.scale(clipW: clip.w)
-                probePositions[index] = SIMD4<Float>(worldPosition.x, worldPosition.y, drawnZ, roofZ)
+                anchorPositions[index] = SIMD4<Float>(worldPosition.x, worldPosition.y, drawnZ, 0)
                 index += 1
             }
-        }}}}}}
+          }
+        }}}}}}}
     }
 
     private func projectGlobe(snapshot: TilePointToScreenPointSnapshot,
@@ -260,6 +308,7 @@ struct TilePointScreenProjector {
         projectGlobe(snapshot: snapshot,
                      frameContext: frameContext,
                      perspective: PerspectiveScale(focusDepth: 0, minimum: 1),
+                     spans: [0..<snapshot.pointsCount],
                      screenPoints: &result.screenPoints,
                      horizonVisibility: &result.horizonVisibility,
                      perspectiveScales: &perspectiveScales,
@@ -270,6 +319,8 @@ struct TilePointScreenProjector {
     private func projectGlobe(snapshot: TilePointToScreenPointSnapshot,
                               frameContext: FrameContext,
                               perspective: PerspectiveScale,
+                              maximumDepth: Float = .infinity,
+                              spans: [Range<Int>],
                               screenPoints outputs: inout [ScreenPointOutput],
                               horizonVisibility: inout [Bool],
                               perspectiveScales: inout [Float],
@@ -279,7 +330,9 @@ struct TilePointScreenProjector {
         let globe = frameContext.globeRenderUniform
         let constants = GlobeProjectionConstants(globe: globe)
 
-        for index in snapshot.pointInputs.indices {
+        let count = snapshot.pointInputs.count
+        for span in spans {
+          for index in span.clamped(to: 0..<count) {
             let input = snapshot.pointInputs[index]
             let projection = globeProjectTileUV(input: input,
                                                 cameraUniform: cameraUniform,
@@ -293,9 +346,10 @@ struct TilePointScreenProjector {
                 output.visibilityAlpha = 1.0
             }
             outputs[index] = output
-            horizonVisibility[index] = horizonVisible
+            horizonVisibility[index] = horizonVisible && projection.clip.w <= maximumDepth
             perspectiveScales[index] = perspective.scale(clipW: projection.clip.w)
             worldPositions[index] = SIMD4<Float>(projection.worldPosition, 0)
+          }
         }
     }
 

@@ -282,13 +282,12 @@ final class RenderFrameEngine {
 
         let hasActiveLabelFadeAnimations = frameContext.sharedState.baseLabelState.hasActiveFadeAnimations
             || frameContext.sharedState.roadLabelState.hasActiveFadeAnimations
-        let hasActiveLabelVisibilityCycle = frameContext.sharedState.baseLabelState.hasActiveVisibilityCycle
         let hasActiveAvatarAnimations = frameContext.sharedState.avatarState.hasActiveAnimations
         let hasActiveSceneModelAnimations = frameContext.sharedState.sceneModelState.hasActiveAnimations
         eventSink.applyActivityState(RenderActivityState(labelFadeRenderingActive: hasActiveLabelFadeAnimations,
-                                                         labelVisibilityCycleRenderingActive: hasActiveLabelVisibilityCycle,
                                                          avatarAnimationRenderingActive: hasActiveAvatarAnimations,
-                                                         sceneModelAnimationRenderingActive: hasActiveSceneModelAnimations))
+                                                         sceneModelAnimationRenderingActive: hasActiveSceneModelAnimations,
+                                                         extrusionRiseRenderingActive: frameContext.sharedState.isExtrusionRising))
         // Independent of `didSchedule`: the animation advanced in `update`
         // whether or not this frame reached a drawable.
         let pathAnimationResults = frameContext.sharedState.sceneModelState.pathAnimationResults

@@ -44,6 +44,7 @@ final class ShadowMapReuseController {
     private var renderedCasterKeys: Set<CasterKey> = []
     private var renderedStaticModelCasters: Set<StaticModelCasterKey> = []
     private var renderedHiddenBuildings = ReplacedBuildings.none
+    private var renderedHeightScales: SIMD2<Float>?
 
     /// The per-frame shadow state: a cached fit re-materialized under the
     /// current pan when it still covers the frame, a fresh (margined) fit
@@ -84,10 +85,12 @@ final class ShadowMapReuseController {
     /// then also records the render, so the next frames can reuse it.
     func planShadowRender(frameContext: FrameContext, texture: MTLTexture) -> Bool {
         let sceneModelState = frameContext.sharedState.sceneModelState
-        return planShadowRender(casterKeys: Self.casterKeys(tilePlacementState: frameContext.sharedState.tilePlacementState),
+        return planShadowRender(casterKeys: Self.casterKeys(drawnPlacements: frameContext.sharedState.drawnBuildingPlacements),
                                 hasModelCasters: sceneModelState.hasMovingShadowCasters,
                                 staticModelCasters: sceneModelState.staticShadowCasters,
                                 hiddenBuildings: sceneModelState.replacedBuildings,
+                                heightScales: SIMD2<Float>(frameContext.sharedState.buildingRiseSignature,
+                                                           frameContext.sharedState.modelTileRiseSignature),
                                 texture: texture)
     }
 
@@ -97,6 +100,7 @@ final class ShadowMapReuseController {
                           hasModelCasters: Bool,
                           staticModelCasters: Set<StaticModelCasterKey> = [],
                           hiddenBuildings: ReplacedBuildings = .none,
+                          heightScales: SIMD2<Float> = SIMD2<Float>(1, 1),
                           texture: MTLTexture) -> Bool {
         let needsRender = renderedGeneration != fitGeneration
             || renderedTextureIdentity != ObjectIdentifier(texture)
@@ -107,6 +111,10 @@ final class ShadowMapReuseController {
             // left out or brought back for one, change what the map holds.
             || staticModelCasters != renderedStaticModelCasters
             || hiddenBuildings != renderedHiddenBuildings
+            // The buildings and the models rising out of the ground, and
+            // going when the camera leaves their zoom (`ExtrusionRise`),
+            // change what casts.
+            || heightScales != renderedHeightScales
             // Any change of the caster set: a caster arriving is not in the
             // rendered map, and a caster leaving may leave its shadows on
             // ground whose buildings are no longer drawn (a cell handing
@@ -120,16 +128,16 @@ final class ShadowMapReuseController {
         renderedCasterKeys = casterKeys
         renderedStaticModelCasters = staticModelCasters
         renderedHiddenBuildings = hiddenBuildings
+        renderedHeightScales = heightScales
         return true
     }
 
-    /// Every building caster the frame would rasterize: the building
-    /// coverage's placements with buildings. The rendered map is reused
-    /// only while this set is unchanged.
-    static func casterKeys(tilePlacementState: TilePlacementState) -> Set<CasterKey> {
+    /// Every building caster the frame rasterizes: the placements it draws
+    /// buildings for (`FrameContextSharedState.drawnBuildingPlacements`).
+    /// The rendered map is reused only while this set is unchanged.
+    static func casterKeys(drawnPlacements: [PlaceTile]) -> Set<CasterKey> {
         var keys = Set<CasterKey>()
-        for placement in tilePlacementState.buildingPlaceTilesContext.tilePlacements
-        where placement.metalTile.tileBuffers.extruded.indicesCount > 0 {
+        for placement in drawnPlacements {
             keys.insert(CasterKey(tile: ObjectIdentifier(placement.metalTile),
                                   placeIn: placement.placeIn.tile,
                                   worldWrap: placement.placeIn.worldWrap))

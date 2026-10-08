@@ -38,7 +38,8 @@ final class RoadRibbonBehindCameraOffscreenRenderTests: XCTestCase {
     /// The row the reference road starts at: well in front of the camera,
     /// under the lower half of the frame.
     private static let referenceStartRow: Int32 = 2500
-    /// The full street tilt, and a bearing a little east of the road.
+    /// A steep street tilt (75 degrees), and a bearing a little east of
+    /// the road.
     private static let pitch: Float = .pi * 5.0 / 12.0
     private static let bearing: Float = 0.3
     private static let zoom = 15.9

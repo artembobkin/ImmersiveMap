@@ -38,7 +38,7 @@ enum CinematicStoryboard {
         // by a slow separate flight with a constant pitch.
 
         // 2. Tilt while still on the globe, just below the morph window: 1.28 rad (~73°),
-        // almost the camera maximum (75°).
+        // well under the camera maximum (85°).
         let tokyoPreTilt = ImmersiveMapCameraPosition(latitudeDegrees: tokyo.lat,
                                                       longitudeDegrees: tokyo.lon,
                                                       zoom: 5.6, bearing: 0.25, pitch: 1.28)

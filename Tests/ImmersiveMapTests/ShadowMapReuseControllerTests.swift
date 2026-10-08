@@ -18,13 +18,20 @@ final class ShadowMapReuseControllerTests: XCTestCase {
     private static let renderMapSize = 2.0 * Double.pi * 0.14 * pow(2.0, 16)
     private static let basePan = SIMD2<Double>(0.312, -0.144)
     private static let baseEye = SIMD3<Float>(0.2, -0.35, 0.7)
+    /// The default scene with the coverage floor in meters off: the
+    /// window's travel budget here is pinned in camera distances.
+    private static var scene: ImmersiveMapSettings.SceneSettings {
+        var scene = ImmersiveMapSettings.default.scene
+        scene.shadows.minimumCoverageMeters = 0
+        return scene
+    }
 
     private final class DummyCaster {}
 
     private func resolve(_ controller: ShadowMapReuseController,
                          eye: SIMD3<Float> = baseEye,
                          pan: SIMD2<Double> = basePan,
-                         scene: ImmersiveMapSettings.SceneSettings = ImmersiveMapSettings.default.scene) -> ShadowFrameState? {
+                         scene: ImmersiveMapSettings.SceneSettings = ShadowMapReuseControllerTests.scene) -> ShadowFrameState? {
         controller.resolveFrameState(renderSurfaceMode: .flat,
                                      projectionView: ShadowFrameStateResolverTests.makeProjectionView(eye: eye),
                                      cameraEye: eye,
@@ -145,7 +152,7 @@ final class ShadowMapReuseControllerTests: XCTestCase {
 
         XCTAssertNotNil(resolve(controller))
         XCTAssertTrue(controller.planShadowRender(casterKeys: keys, hasModelCasters: false, texture: texture))
-        var scene = ImmersiveMapSettings.default.scene
+        var scene = Self.scene
         scene.light.direction = simd_normalize(SIMD3<Float>(0.5, 0.2, 0.8))
         XCTAssertNotNil(resolve(controller, scene: scene))
         XCTAssertTrue(controller.planShadowRender(casterKeys: keys, hasModelCasters: false, texture: texture),

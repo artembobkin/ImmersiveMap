@@ -15,7 +15,7 @@ using namespace metal;
 // How far a glyph's place on the road moves toward the eye before its depth
 // is taken, as a fraction of the distance: clear of the ground it lies on,
 // without leaving its pixel. A wall between the road and the camera is
-// nearer by far more. The value the label occlusion probes use.
+// nearer by far more.
 constant float kRoadGlyphEyeStep = 0.01;
 
 // The depth of the road under a glyph: its pixel carried back along the eye

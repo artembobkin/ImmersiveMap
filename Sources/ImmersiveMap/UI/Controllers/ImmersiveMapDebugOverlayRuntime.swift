@@ -111,6 +111,10 @@ final class ImmersiveMapDebugOverlayRuntime {
             controls?.setRingRuleSets(sets)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
+        hudView.onLabelDistanceRulesChanged = { [weak controls, weak renderRuntime] rules in
+            controls?.setLabelDistanceRules(rules)
+            renderRuntime?.requestFrame(reason: .externalStateChanged)
+        }
         hudView.onLocalLabelDistanceChanged = { [weak controls, weak renderRuntime] meters in
             controls?.setLocalLabelMaximumDistanceMeters(meters)
             renderRuntime?.requestFrame(reason: .externalStateChanged)

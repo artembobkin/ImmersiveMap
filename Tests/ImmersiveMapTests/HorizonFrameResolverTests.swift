@@ -189,6 +189,29 @@ final class HorizonFrameResolverTests: XCTestCase {
         XCTAssertEqual(half.cutoffEndRadians, (on.cutoffEndRadians + gone.cutoffEndRadians) * 0.5, accuracy: 1e-6)
     }
 
+    /// Close to the ground the band at the horizon line is drawn in toward
+    /// the line, its profile's shape kept: every angle scaled by the same
+    /// share, down to the hairline that still hides the seam.
+    func testTheHorizonBandIsDrawnInWithTheZoom() {
+        let settings = ImmersiveMapSettings.default
+            .fog(hazeZoomFade: .fadeOut(from: 18, to: 19))
+            .fog(horizonBandZoomFade: .fadeOut(from: 18, to: 19))
+        let hazeOnly = ImmersiveMapSettings.default.fog(hazeZoomFade: .fadeOut(from: 18, to: 19))
+        let wide = resolve(settings: settings, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 18)
+        let thin = resolve(settings: settings, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 19.5)
+        let plainWide = resolve(settings: hazeOnly, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 18)
+
+        XCTAssertEqual(wide, plainWide, "Up to the fade's start the band keeps its width")
+
+        let share = ImmersiveMapSettings.FogSettings.minimumHorizonBandShare
+        XCTAssertEqual(thin.groundBandRadians, HorizonFrameResolver.fogBandRadians * share, accuracy: 1e-6)
+        XCTAssertEqual(thin.cutoffStartRadians, HorizonFrameResolver.fogCutoffStartRadians * share, accuracy: 1e-6)
+        XCTAssertEqual(thin.cutoffEndRadians, HorizonFrameResolver.fogCutoffEndRadians * share, accuracy: 1e-6)
+        XCTAssertEqual(thin.groundGain, HorizonFrameResolver.fogGain, accuracy: 1e-6,
+                       "Still saturated at the line: the seam stays hidden")
+        XCTAssertTrue(thin.drawsSky)
+    }
+
     func testTheFogOffIgnoresTheHazeZoomFade() {
         let settings = ImmersiveMapSettings.default.fog(isEnabled: false).fog(hazeZoomFade: .fadeOut(from: 18, to: 19))
         let low = resolve(settings: settings, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 10)

@@ -23,6 +23,11 @@ final class ProtomapsBasemapThemeTests: XCTestCase {
         XCTAssertNotEqual(base.cacheFingerprint, relabeled.cacheFingerprint)
         XCTAssertNotEqual(base.cacheFingerprint, relayered.cacheFingerprint)
         XCTAssertNotEqual(base.cacheFingerprint, refeatured.cacheFingerprint)
+
+        let redistricted = base.labels { labels in
+            labels.district.fillColor = SIMD3<Float>(0.6, 0.6, 0.6)
+        }
+        XCTAssertNotEqual(base.cacheFingerprint, redistricted.cacheFingerprint)
     }
 
     /// `apply` is a copy with the changes: the original is untouched, the

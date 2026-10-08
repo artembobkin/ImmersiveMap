@@ -15,8 +15,7 @@ struct TilePointInput {
     var tileSlotIndex: UInt32 = 0
     /// The roof over the point in tile units (a 4096 extent), the
     /// extrusion mesh's height scale. Zero on open ground. The flat
-    /// projection tests the point for view at the roof, and draws it there
-    /// too when `liftsToRoof` is set.
+    /// projection draws the point there when `liftsToRoof` is set.
     var roofHeight: Float = 0
     /// 1 when the point draws on the roof over it (a label naming the
     /// building itself), 0 when it draws on the ground (a label of

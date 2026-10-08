@@ -556,8 +556,35 @@ final class ShadowFrameStateResolverTests: XCTestCase {
 
     // MARK: - Helpers
 
+    /// The default scene with the coverage floor off: these tests pin the
+    /// window's scaling with the camera distance, which the floor in meters
+    /// would cut off at small distances. The floor has its own test.
     private static func makeScene() -> ImmersiveMapSettings.SceneSettings {
-        ImmersiveMapSettings.default.scene
+        var scene = ImmersiveMapSettings.default.scene
+        scene.shadows.minimumCoverageMeters = 0
+        return scene
+    }
+
+    /// Close to the ground the window never shrinks under the floor in
+    /// meters, and from high over the map the camera distances win.
+    func testTheWindowNeverShrinksUnderTheFloorInMeters() {
+        let unitsPerMeter = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: 0,
+                                                                      renderMapSize: Self.renderMapSize)
+        func radius(distance: Float, floorMeters: Float) -> Float {
+            ShadowFrameStateResolver.windowSpec(cameraDistance: distance,
+                                                unitsPerMeter: unitsPerMeter,
+                                                coverageCameraDistances: 3,
+                                                minimumCoverageMeters: floorMeters,
+                                                maxCasterHeightMeters: 10).radius
+        }
+        let floor = Float(300 * unitsPerMeter)
+        XCTAssertEqual(radius(distance: floor / 30, floorMeters: 300), floor, accuracy: floor * 1e-5,
+                       "Close to the ground: the floor")
+        XCTAssertEqual(radius(distance: floor, floorMeters: 300), 3 * floor, accuracy: floor * 1e-5,
+                       "High over the map: the camera distances")
+        XCTAssertEqual(radius(distance: floor / 30, floorMeters: 0), floor / 10, accuracy: floor * 1e-5,
+                       "Zero turns the floor off")
+        XCTAssertEqual(ImmersiveMapSettings.default.scene.shadows.minimumCoverageMeters, 500)
     }
 
     private static func makeEye(pitch: Float, bearing: Float, distance: Float) -> SIMD3<Float> {

@@ -22,8 +22,9 @@ final class ImmersiveMapSettingsDefaultsTests: XCTestCase {
         let shadows = ImmersiveMapSettings.default.scene.shadows
         XCTAssertTrue(shadows.isEnabled)
         XCTAssertEqual(shadows.strength, 0.22)
-        XCTAssertEqual(shadows.mapResolution, 2048)
+        XCTAssertEqual(shadows.mapResolution, 4096)
         XCTAssertEqual(shadows.coverageCameraDistances, 3.0)
+        XCTAssertEqual(shadows.minimumCoverageMeters, 500)
         XCTAssertEqual(shadows.normalOffsetTexels, 2.5)
         XCTAssertEqual(shadows.maxCasterHeightMeters, 10)
         XCTAssertEqual(shadows.softness, 1.5)

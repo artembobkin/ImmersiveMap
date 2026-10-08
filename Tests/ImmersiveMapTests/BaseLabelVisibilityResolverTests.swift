@@ -39,31 +39,6 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
         XCTAssertEqual(target, [true, false], "A missing collision entry counts as hidden")
     }
 
-    /// A label whose anchor a building hides is not shown, and a missing
-    /// answer counts as in view: with the probe off nothing changes.
-    func testTargetVisibilityHidesOccludedLabels() {
-        let inputs = [input(key: 1), input(key: 2), input(key: 3)]
-        var target: [Bool] = []
-        BaseLabelVisibilityResolver.targetVisibility(inputs: inputs,
-                                                     collisionVisible: [true, true, true],
-                                                     horizonVisibility: [true, true, true],
-                                                     occluded: [false, true],
-                                                     cameraZoom: 14,
-                                                     into: &target)
-        XCTAssertEqual(target, [true, false, true])
-    }
-
-    /// Behind a building a label keeps its space only while it fades out,
-    /// like one behind the horizon, so the labels around it do not jump.
-    func testReservationBehindABuildingLastsTheFadeOut() {
-        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(screenVisible: true, horizonVisible: true,
-                                                                occluded: true, currentAlpha: 0.4, minCameraZoom: 0, cameraZoom: 14))
-        XCTAssertFalse(BaseLabelVisibilityResolver.reservesSpace(screenVisible: true, horizonVisible: true,
-                                                                 occluded: true, currentAlpha: 0, minCameraZoom: 0, cameraZoom: 14))
-        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(screenVisible: true, horizonVisible: true,
-                                                                occluded: false, currentAlpha: 0, minCameraZoom: 0, cameraZoom: 14))
-    }
-
     /// Local detail (house numbers, plaques) keeps to the three by three
     /// tiles around the look-at tile, counted in its own tile's grid, and a
     /// coarser stand-in holding the look-at point counts as inside.
@@ -163,7 +138,6 @@ final class BaseLabelVisibilityResolverTests: XCTestCase {
         BaseLabelVisibilityResolver.reservesSpace(inputs: inputs,
                                                   screenPoints: points,
                                                   horizonVisibility: [true, true, true],
-                                                  occluded: [],
                                                   localSuppressed: [],
                                                   currentAlphas: [0, 0, 1],
                                                   cameraZoom: 14,

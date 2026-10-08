@@ -227,9 +227,13 @@ enum HorizonFrameResolver {
                                   minimumRadians)
         let hazeCutoffEnd = max(HorizonEdgeMath.depression(atCameraDistances: hazeStart, cosPitch: cosPitch),
                                 hazeCutoffStart + minimumRadians)
-        let planeCutoffStart = mixed(fogCutoffStartRadians, hazeCutoffStart)
-        let planeCutoffEnd = mixed(fogCutoffEndRadians, hazeCutoffEnd)
-        let planeBand = mixed(fogBandRadians, hazeCutoffEnd * hazeBandCutoffWidths)
+        // The band drawn in toward the line close to the ground
+        // (`FogSettings.horizonBandZoomFade`): all of its angles at once,
+        // so its profile keeps its shape.
+        let bandShare = fog.horizonBandShare(atZoom: zoom)
+        let planeCutoffStart = mixed(fogCutoffStartRadians, hazeCutoffStart) * bandShare
+        let planeCutoffEnd = mixed(fogCutoffEndRadians, hazeCutoffEnd) * bandShare
+        let planeBand = mixed(fogBandRadians, hazeCutoffEnd * hazeBandCutoffWidths) * bandShare
         let planeGain = mixed(fogGain, hazeGain)
 
         let rimRadians = haloRadians(haloRimRadii)

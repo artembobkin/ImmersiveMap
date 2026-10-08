@@ -16,12 +16,19 @@ import XCTest
 final class TileClipDistanceContractTests: XCTestCase {
     func testGroundShaderClipsWithClipDistancesAndNeverDiscards() throws {
         let source = try shaderSource("Tile/Shaders/Tile.metal")
-        XCTAssertNil(source.range(of: "discard_fragment"),
-                     "The ground shader must not discard: it blocks hidden surface removal for every ground draw")
+        // The ground never discards: it would block hidden surface removal
+        // for every ground draw. The one discard is the road ribbons',
+        // for the gaps of a dash pattern, inside their own colour function.
+        let roadColor = try XCTUnwrap(source.range(of: "static inline half4 tileRoadFragmentColor("))
+        let roadColorEnd = try XCTUnwrap(source.range(of: "\nfragment ", range: roadColor.upperBound ..< source.endIndex))
+        XCTAssertEqual(source.components(separatedBy: "discard_fragment").count - 1, 1,
+                       "One discard in the tile shaders, the dash gaps' of the road ribbons")
+        XCTAssertNotNil(source.range(of: "discard_fragment", range: roadColor.upperBound ..< roadColorEnd.lowerBound),
+                        "The discard is the road ribbons' alone")
         // The flat tiles carry NO slot clip distances any more: a retained
         // substitute draws at full extent and the tile-priority stencil
         // rejects it wherever a finer tile painted, exactly like the
-        // sphere. Only the buildings keep their slot clips (TileExtruded).
+        // sphere. The buildings carry none either (TileExtruded).
         // The one clip distance here is the camera's near plane, which the
         // rank depth takes away from the z clip; no slot's edge, and no
         // road distance cut: the roads draw wherever their tile does.
@@ -36,78 +43,29 @@ final class TileClipDistanceContractTests: XCTestCase {
         // The flat rank-depth step is one value with the sphere's, both
         // mirrored by GlobeSurfaceDepthRank.
         XCTAssertTrue(source.contains("constant float kFlatTileLayerDepthStep = 4e-7;"))
-        XCTAssertTrue(source.contains("constant float& depthBandOffset [[buffer(7)]]"))
-        // Two fragment entries over one body. The plain one writes no
-        // depth: a flat rank depth from the fragment stage is exact but
-        // shaded for every fill layer, more than the target zoom's small
-        // triangles need, whose vertex band survives the near cut to
-        // within a few rank steps. The exact one writes the rank as the
-        // fragment's depth ([[depth(any)]]) for the sources whose
-        // triangles do not: a coarse band's tiles and the z0 backdrop,
-        // where the clipper's float error at the cut vertex is thousands
-        // of rank steps and the base and the landcover swap from frame to
-        // frame. Which source takes which is the drawer's zoom rule
-        // (FlatMapSurfaceDrawer.usesExactRankDepth), through function
-        // constant 3.
-        XCTAssertTrue(source.contains("constant bool kTileExactRankDepth [[function_constant(3)]];"))
+        XCTAssertTrue(source.contains("constant FlatDepthBand& depthBand [[buffer(7)]]"))
+        // One depth path: the rank rides in the vertex z and no fragment
+        // entry writes a depth, so every ground draw keeps the early depth
+        // test. The band holds a level past the tiles' zoom
+        // (FlatGroundStreetTiltOffscreenRenderTests).
+        XCTAssertNil(source.range(of: "[[depth("), "No fragment entry writes a depth")
+        XCTAssertNil(source.range(of: "ExactRankDepth"))
         XCTAssertTrue(source.contains("fragment half4 tileFragmentShader("))
-        XCTAssertTrue(source.contains("fragment TileExactDepthFragmentOut tileExactDepthFragmentShader("))
-        // One fragment output writes a depth, and nothing else does: the
-        // exact variants' return struct, the ground's and the roads'. The
-        // plain entries write none, and the roads' ranks come from the
-        // vertex stage like every other layer's.
-        XCTAssertEqual(source.components(separatedBy: "float depth [[depth(any)]];").count - 1, 1,
-                       "Depth is written by the exact variants only")
         XCTAssertTrue(source.contains("fragment half4 tileRoadFragmentShader("))
-        XCTAssertTrue(source.contains("fragment TileExactDepthFragmentOut tileRoadExactDepthFragmentShader("))
-        for structName in ["TileExactDepthFragmentOut"] {
-            let declaration = try XCTUnwrap(source.range(of: "struct \(structName) {"), structName)
-            let closing = try XCTUnwrap(source.range(of: "};", range: declaration.upperBound ..< source.endIndex), structName)
-            XCTAssertTrue(source[declaration.upperBound ..< closing.lowerBound].contains("float depth [[depth(any)]];"),
-                          "\(structName) carries the depth output")
-        }
-        XCTAssertTrue(source.contains("float rankDepth [[flat, function_constant(kTileExactRankDepth)]];"))
-        XCTAssertTrue(source.contains("out.depth = in.rankDepth;"))
         XCTAssertTrue(source.contains("out.position.z = layerNdcZ * out.position.w;"))
     }
 
-    /// The drawer's zoom rule for the exact rank depth: the target zoom's
-    /// tiles keep the vertex band, every coarser source and the backdrop
-    /// (asked for with `Int.max`) write the rank from the fragment stage.
-    func testTheExactRankDepthGoesToEverySourceBelowTheTargetZoom() {
-        XCTAssertFalse(FlatMapSurfaceDrawer.usesExactRankDepth(sourceZoom: 15, exactRankDepthBelowZoom: 15))
-        XCTAssertFalse(FlatMapSurfaceDrawer.usesExactRankDepth(sourceZoom: 16, exactRankDepthBelowZoom: 15),
-                       "A finer retained tile has smaller triangles still")
-        XCTAssertTrue(FlatMapSurfaceDrawer.usesExactRankDepth(sourceZoom: 14, exactRankDepthBelowZoom: 15))
-        XCTAssertTrue(FlatMapSurfaceDrawer.usesExactRankDepth(sourceZoom: 13, exactRankDepthBelowZoom: 15))
-        XCTAssertTrue(FlatMapSurfaceDrawer.usesExactRankDepth(sourceZoom: 0, exactRankDepthBelowZoom: 15))
-        XCTAssertTrue(FlatMapSurfaceDrawer.usesExactRankDepth(sourceZoom: 0, exactRankDepthBelowZoom: .max),
-                      "The backdrop's every source")
-        XCTAssertTrue(FlatMapSurfaceDrawer.usesExactRankDepth(sourceZoom: 16, exactRankDepthBelowZoom: .max))
-        XCTAssertFalse(FlatMapSurfaceDrawer.usesExactRankDepth(sourceZoom: 0, exactRankDepthBelowZoom: 0),
-                       "At the world zoom the target's own tile keeps the band")
-    }
-
-    func testBuildingShadersClipWithSlotDistancesOnBothPaths() throws {
+    func testBuildingShadersNeitherClipNorDiscard() throws {
         let source = try shaderSource("Tile/Shaders/TileExtruded.metal")
         XCTAssertNil(source.range(of: "discard_fragment"),
                      "The building shaders must not discard, on the main path or the shadow-caster path")
-        // The building coverage is a partition of the ground: a parent
-        // filling a slot its finer tiles do not cover is cut to the slot by
-        // the vertex-stage clip, in the world pass and in the shadow pass
-        // alike (the shadow pass has no stencil, the world pass tests none
-        // for buildings), so both vertex stages carry the four distances
-        // and take the bounds at buffer 4.
-        XCTAssertEqual(source.components(separatedBy: "float clipDistance [[clip_distance]] [4];").count - 1, 2,
-                       "Both vertex outputs carry the slot clip distances")
-        XCTAssertEqual(source.components(separatedBy: "constant float4& localClipBounds [[buffer(4)]]").count - 1, 2,
-                       "Both vertex stages take the bounds at buffer 4")
-        let mainVertex = source.components(separatedBy: "vertex VertexOut tileExtrudedVertexShader")[1]
-            .components(separatedBy: "fragment")[0]
-        XCTAssertNotNil(mainVertex.range(of: "writeLocalClipDistances(out.clipDistance"),
-                        "The main vertex stage writes the slot clip distances")
+        // The building coverage draws the tiles of one zoom, each in its
+        // own place (BuildingCoveragePlanner): no tile is ever cut to a
+        // slot, so neither vertex stage carries a clip distance.
+        XCTAssertNil(source.range(of: "[[clip_distance]]"))
+        XCTAssertNil(source.range(of: "localClipBounds"))
         XCTAssertNil(source.range(of: "tileExtrudedShadowFragmentShader"),
-                     "The shadow-caster pass is depth-only: no fragment function replicates the clip")
+                     "The shadow-caster pass is depth-only")
     }
 
     /// The flat ground reads its shadow from the per-pixel mask instead of

@@ -43,7 +43,9 @@ final class TileRenderStore: @unchecked Sendable {
             smallSettlementMaximumZoom: UInt32(max(0, config.labels.settlementVisibility.smallSettlementMaximumZoom)),
             landmarkMinimumZoom: UInt32(max(0, config.labels.landmarks.minimumZoom)),
             addTestBorders: config.tiles.parsing.addTestBorders,
-            labelsEnabled: config.labels.isEnabled
+            labelsEnabled: config.labels.isEnabled,
+            groundFlatteningFromTileZoom: parseOptions.groundFlatteningFromTileZoom,
+            groundFlatteningGrid: parseOptions.groundFlatteningGrid
         )
         let labelDecisions = TileLabelDecisions(style: styleRuntime.style,
                                                 glyphCoverage: textRenderer.glyphCoverage,

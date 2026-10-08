@@ -6,17 +6,22 @@ import simd
 
 enum BuildingExtrusionDrawer {
     /// Opaque building geometry with depth test and depth write, straight
-    /// into the world pass. Nothing keeps sources apart per pixel: the
-    /// building coverage is a partition of the ground
-    /// (`BuildingCoveragePlanner`), each placement draws its source either
-    /// at full extent or clipped to its slot by the vertex-stage slot clip,
-    /// so no two of them draw over the same ground.
+    /// into the world pass. Nothing keeps tiles apart per pixel: the
+    /// building coverage draws the tiles of one zoom, each in its own place
+    /// (`BuildingCoveragePlanner`), so no two of them draw over the same
+    /// ground.
+    ///
+    /// `heightScales`, index-aligned with the placements, scale each
+    /// placement's heights over the ground: how far its tile has risen out
+    /// of it (`ExtrusionRise`). A placement at 0 is not drawn. Empty draws
+    /// every placement at full height.
     static func drawBuildings(renderEncoder: MTLRenderCommandEncoder,
                               cameraUniform: CameraUniform,
                               shadowBinding: ShadowReceiverBinding,
                               placeTilesContext: PlaceTilesContext,
                               indexBuffers: HiddenBuildingIndexBuffers,
                               flatRenderState: FlatRenderState,
+                              heightScales: [Float] = [],
                               extrudedTilePipeline: ExtrudedTilePipeline,
                               extrudedStencilTestState: MTLDepthStencilState,
                               depthDisabledState: MTLDepthStencilState) {
@@ -50,7 +55,8 @@ enum BuildingExtrusionDrawer {
         drawExtrudedSources(renderEncoder: renderEncoder,
                             placeTilesContext: placeTilesContext,
                             indexBuffers: indexBuffers,
-                            flatRenderState: flatRenderState)
+                            flatRenderState: flatRenderState,
+                            heightScales: heightScales)
 
         renderEncoder.setCullMode(.none)
         renderEncoder.setDepthStencilState(depthDisabledState)
@@ -70,6 +76,7 @@ enum BuildingExtrusionDrawer {
                                   placeTilesContext: PlaceTilesContext,
                                   indexBuffers: HiddenBuildingIndexBuffers,
                                   flatRenderState: FlatRenderState,
+                                  heightScales: [Float] = [],
                                   extrudedTilePipeline: ExtrudedTilePipeline,
                                   extrudedDepthState: MTLDepthStencilState) {
         renderEncoder.setCullMode(.none)
@@ -81,23 +88,22 @@ enum BuildingExtrusionDrawer {
         drawClippedCasterGeometry(renderEncoder: renderEncoder,
                                   placeTilesContext: placeTilesContext,
                                   indexBuffers: indexBuffers,
-                                  flatRenderState: flatRenderState)
+                                  flatRenderState: flatRenderState,
+                                  heightScales: heightScales)
         renderEncoder.setDepthClipMode(.clip)
     }
 
-    /// World-pass building draws, one per placement. A placement in its
-    /// own slot draws whole with back-face culling on. A clipped one (a
-    /// parent filling a slot its finer tiles do not cover) is cut open at
-    /// the slot's edge, so it draws both faces: through the cut the inside
-    /// of the far walls and the underside of the roof read as a solid block
-    /// instead of a hollow shell. The buildings a model stands in for are
-    /// left out of each tile's draw (`indexBuffers`).
+    /// World-pass building draws, one per placement, whole, with back-face
+    /// culling on. The buildings a model stands in for are left out of
+    /// each tile's draw (`indexBuffers`).
     private static func drawExtrudedSources(renderEncoder: MTLRenderCommandEncoder,
                                             placeTilesContext: PlaceTilesContext,
                                             indexBuffers: HiddenBuildingIndexBuffers,
-                                            flatRenderState: FlatRenderState) {
-        var cullMode = MTLCullMode.back
-        for placeTile in placeTilesContext.tilePlacements {
+                                            flatRenderState: FlatRenderState,
+                                            heightScales: [Float]) {
+        for (placementIndex, placeTile) in placeTilesContext.tilePlacements.enumerated() {
+            let heightScale = placementIndex < heightScales.count ? heightScales[placementIndex] : 1
+            guard heightScale > 0 else { continue }
             let metalTile = placeTile.metalTile
             let tile = metalTile.tile
             let buffers = metalTile.tileBuffers
@@ -116,11 +122,6 @@ enum BuildingExtrusionDrawer {
                                                                              renderMapSize: flatRenderState.renderMapSize)
             let scale = originAndSize.z / 4096.0
 
-            let placementCullMode: MTLCullMode = placeIn.tile == tile ? .back : .none
-            if placementCullMode != cullMode {
-                renderEncoder.setCullMode(placementCullMode)
-                cullMode = placementCullMode
-            }
 
             renderEncoder.setVertexBuffer(extrudedVertices.buffer, offset: extrudedVertices.offset, index: 0)
             renderEncoder.setVertexBuffer(extrudedStyles.buffer, offset: extrudedStyles.offset, index: 2)
@@ -131,16 +132,11 @@ enum BuildingExtrusionDrawer {
             renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.reference(sourceZoom: tile.z)
                                                    | TileSourceStencilPriority.surfaceMaskBit)
 
-            var localClipBounds = TileLocalClipMath.clipBounds(source: tile, placeIn: placeIn.tile)
-            renderEncoder.setVertexBytes(&localClipBounds,
-                                         length: MemoryLayout<SIMD4<Float>>.stride,
-                                         index: 4)
-
             var modelMatrix = Matrix.translationMatrix(
                 x: originAndSize.x,
                 y: originAndSize.y,
                 z: 0
-            ) * Matrix.scaleMatrix(sx: scale, sy: scale, sz: scale)
+            ) * Matrix.scaleMatrix(sx: scale, sy: scale, sz: scale * heightScale)
             renderEncoder.setVertexBytes(&modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
 
             drawIndices(of: metalTile,
@@ -176,15 +172,16 @@ enum BuildingExtrusionDrawer {
         }
     }
 
-    /// Shadow-caster draws: per placement, with the vertex stage's slot clip
-    /// bounds set from the placement, so a parent filling a slot casts only
-    /// from that slot, exactly what the world pass draws of it: a building
-    /// the frame leaves out casts no shadow either.
+    /// Shadow-caster draws: per placement, exactly what the world pass
+    /// draws of it: a building the frame leaves out casts no shadow either.
     private static func drawClippedCasterGeometry(renderEncoder: MTLRenderCommandEncoder,
                                                   placeTilesContext: PlaceTilesContext,
                                                   indexBuffers: HiddenBuildingIndexBuffers,
-                                                  flatRenderState: FlatRenderState) {
-        for placeTile in placeTilesContext.tilePlacements {
+                                                  flatRenderState: FlatRenderState,
+                                                  heightScales: [Float]) {
+        for (placementIndex, placeTile) in placeTilesContext.tilePlacements.enumerated() {
+            let heightScale = placementIndex < heightScales.count ? heightScales[placementIndex] : 1
+            guard heightScale > 0 else { continue }
             let metalTile = placeTile.metalTile
             let tile = metalTile.tile
             let buffers = metalTile.tileBuffers
@@ -206,16 +203,11 @@ enum BuildingExtrusionDrawer {
             renderEncoder.setVertexBuffer(extrudedVertices.buffer, offset: extrudedVertices.offset, index: 0)
             renderEncoder.setVertexBuffer(extrudedStyles.buffer, offset: extrudedStyles.offset, index: 2)
 
-            var localClipBounds = TileLocalClipMath.clipBounds(source: tile, placeIn: placeIn.tile)
-            renderEncoder.setVertexBytes(&localClipBounds,
-                                         length: MemoryLayout<SIMD4<Float>>.stride,
-                                         index: 4)
-
             var modelMatrix = Matrix.translationMatrix(
                 x: originAndSize.x,
                 y: originAndSize.y,
                 z: 0
-            ) * Matrix.scaleMatrix(sx: scale, sy: scale, sz: scale)
+            ) * Matrix.scaleMatrix(sx: scale, sy: scale, sz: scale * heightScale)
             renderEncoder.setVertexBytes(&modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
 
             drawIndices(of: metalTile,

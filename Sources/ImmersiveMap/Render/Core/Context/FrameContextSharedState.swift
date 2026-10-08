@@ -13,15 +13,13 @@ struct BaseLabelState {
                                       labelRuntimeMetaBuffer: nil,
                                       screenPositionsBuffer: nil,
                                       baseLabelsDrawBatches: [],
-                                      hasActiveFadeAnimations: false,
-                                      hasActiveVisibilityCycle: false)
+                                      hasActiveFadeAnimations: false)
 
     var labelInputsCount: Int
     var labelRuntimeMetaBuffer: MTLBuffer?
     var screenPositionsBuffer: MTLBuffer?
     var baseLabelsDrawBatches: [BaseLabelDrawBatch]
     var hasActiveFadeAnimations: Bool
-    var hasActiveVisibilityCycle: Bool
 }
 
 /// Debug frame of one base label in screen pixels: the collision AABB and the
@@ -176,6 +174,28 @@ final class FrameContextSharedState {
     var avatarState: AvatarState = .empty
     var sceneModelState: SceneModelFrameState = .empty
     var markerState: MarkerFrameState = .empty
+    /// The model tiles (`ModelTileStore.tileZoom`) still on their way this
+    /// frame, set in `update` by `ModelTileRenderSubsystem`: the buildings
+    /// under them wait, so the ones a model stands in for are left out
+    /// from their first frame instead of standing until the model comes.
+    var pendingModelTiles: Set<Tile> = []
+    /// How far the extruded buildings have risen out of the ground this
+    /// frame (`ExtrusionRise`), by the tile they draw from, set in `update`
+    /// by their subsystem: the roofs the labels of a tile stand on rise
+    /// with its buildings. A tile missing draws no buildings.
+    var buildingRiseByTile: [Tile: Float] = [:]
+    /// The building placements the frame draws, set in `update` by
+    /// `BuildingExtrusionRenderSubsystem`: the coverage's
+    /// (`TilePlacementState.buildingPlaceTilesContext`) with buildings,
+    /// less the ones off the buildings' zoom or waiting for their model
+    /// tile. What casts shadows this frame.
+    var drawnBuildingPlacements: [PlaceTile] = []
+    /// What changes while the buildings or the models rise: the shadow map
+    /// is drawn again while it does.
+    var buildingRiseSignature: Float = 0
+    var modelTileRiseSignature: Float = 0
+    /// Whether either is rising: the frames keep coming until it stands.
+    var isExtrusionRising = false
     /// Whether a label layer reads the world's depth this frame, asked in
     /// `update` (`RoadLabelDrawSubsystem`): the world pass then keeps its
     /// depth instead of dropping it when the pass ends.

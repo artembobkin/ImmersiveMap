@@ -27,16 +27,6 @@ struct VertexOut {
     float3 worldPosition;
     half3 worldNormal;
     half4 color;
-    float clipDistance [[clip_distance]] [4];
-};
-
-// The fragment stage's view of VertexOut, matched by name and without the
-// clip distances (consumed by the rasterizer; not allowed in stage_in).
-struct FragmentIn {
-    float4 position [[position]];
-    float3 worldPosition;
-    half3 worldNormal;
-    half4 color;
 };
 
 /// Mirror of TilePolygonStyle: the stride must match the shared style
@@ -45,28 +35,10 @@ struct Style {
     float4 color;
 };
 
-// localClipBounds: (minX, minY, maxX, maxY) in the source tile's local
-// coordinates, on the world-pass and the shadow-caster path alike. The
-// building coverage is a partition of the ground: a parent filling a slot
-// its finer tiles do not cover draws in full and is cut to the slot by the
-// rasterizer, on the ground footprint of every vertex (a wall is cut where
-// its base crosses the slot's edge), otherwise its copy of a building
-// would cut through the finer tile's copy next to it. A placement in its
-// own slot gets the disabled bounds and draws whole.
-static inline void writeLocalClipDistances(thread float (&clipDistance)[4],
-                                           float2 localPosition,
-                                           float4 localClipBounds) {
-    clipDistance[0] = localPosition.x - localClipBounds.x;
-    clipDistance[1] = localClipBounds.z - localPosition.x;
-    clipDistance[2] = localPosition.y - localClipBounds.y;
-    clipDistance[3] = localClipBounds.w - localPosition.y;
-}
-
 vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
                                           constant Camera& camera [[buffer(1)]],
                                           constant Style* styles [[buffer(2)]],
-                                          constant float4x4& modelMatrix [[buffer(3)]],
-                                          constant float4& localClipBounds [[buffer(4)]]) {
+                                          constant float4x4& modelMatrix [[buffer(3)]]) {
     Style style = styles[vertexIn.styleIndex];
     float4x4 matrix = camera.matrix;
 
@@ -81,7 +53,6 @@ vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
     out.color = half4(style.color);
     out.worldPosition = worldPosition.xyz;
     out.worldNormal = half3(worldNormal);
-    writeLocalClipDistances(out.clipDistance, localPosition.xy, localClipBounds);
     return out;
 }
 
@@ -137,7 +108,7 @@ static inline half extrudedDepthCueShade(half3 worldNormal,
 // come out shadowed exactly like cast shadows: one consistent system.
 // Building geometry is always drawn opaque with a regular depth test and MSAA,
 // directly into the world pass.
-static inline half4 shadeExtrudedFragment(FragmentIn in,
+static inline half4 shadeExtrudedFragment(VertexOut in,
                                           constant Shadow& shadow,
                                           constant float& metersToWorldZ,
                                           depth2d<float> shadowMap) {
@@ -160,7 +131,7 @@ static inline half4 shadeExtrudedFragment(FragmentIn in,
     return half4(in.color.rgb * appliedCue * shadowColorMultiplier(shadow, shadowFactor), 1.0h);
 }
 
-fragment half4 tileExtrudedFragmentShader(FragmentIn in [[stage_in]],
+fragment half4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
                                           constant Shadow& shadow [[buffer(5)]],
                                           constant float& metersToWorldZ [[buffer(6)]],
                                           depth2d<float> shadowMap [[texture(0)]]) {
@@ -172,17 +143,14 @@ fragment half4 tileExtrudedFragmentShader(FragmentIn in [[stage_in]],
 // routing).
 struct ExtrudedShadowVertexOut {
     float4 position [[position]];
-    float clipDistance [[clip_distance]] [4];
 };
 
 vertex ExtrudedShadowVertexOut tileExtrudedShadowVertexShader(VertexIn vertexIn [[stage_in]],
                                                               constant ShadowCasterMatrices& casters [[buffer(1)]],
-                                                              constant float4x4& modelMatrix [[buffer(3)]],
-                                                              constant float4& localClipBounds [[buffer(4)]]) {
+                                                              constant float4x4& modelMatrix [[buffer(3)]]) {
     float3 localPosition = vertexIn.position * kExtrudedPositionInverseScale;
     float4 worldPosition = modelMatrix * float4(localPosition, 1.0);
     ExtrudedShadowVertexOut out;
     out.position = casters.lightProjectionView * worldPosition;
-    writeLocalClipDistances(out.clipDistance, localPosition.xy, localClipBounds);
     return out;
 }

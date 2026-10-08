@@ -8,8 +8,13 @@ import simd
 struct ModelTileDrawItem {
     let mesh: ModelTileMesh
     /// Tile space into the frame's flat world: the matrix the map's own
-    /// buildings of the same tile take.
+    /// buildings of the same tile take, lowered while the tile comes up
+    /// out of the ground (`ExtrusionRise`).
     let modelMatrix: matrix_float4x4
+    /// Whether the tile is still partly under the ground, coming up: what
+    /// is below it is not drawn, and the models that cut into the ground
+    /// draw as the others, without their hole.
+    var isRising = false
 }
 
 enum ModelTileDrawer {
@@ -49,7 +54,7 @@ enum ModelTileDrawer {
         renderEncoder.setRenderPipelineState(pipeline.pipelineState)
         renderEncoder.setDepthStencilState(surfaceMaskState)
         renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.surfaceMaskBit)
-        for item in items where item.mesh.mergedIndexCount > 0 {
+        for item in items where item.mesh.mergedIndexCount > 0 && item.isRising == false {
             bind(item, renderEncoder: renderEncoder, withTextures: true)
             renderEncoder.drawIndexedPrimitives(type: .triangle,
                                                 indexCount: item.mesh.mergedIndexCount,
@@ -58,9 +63,24 @@ enum ModelTileDrawer {
                                                 indexBufferOffset: 0)
         }
 
+        // A tile coming up out of the ground: all of it, the models that
+        // cut into the ground with the others, with what is still below
+        // the ground dropped.
+        if items.contains(where: \.isRising) {
+            renderEncoder.setRenderPipelineState(pipeline.belowGroundClippedPipelineState)
+            for item in items where item.isRising && item.mesh.indexCount > 0 {
+                bind(item, renderEncoder: renderEncoder, withTextures: true)
+                renderEncoder.drawIndexedPrimitives(type: .triangle,
+                                                    indexCount: item.mesh.indexCount,
+                                                    indexType: .uint32,
+                                                    indexBuffer: item.mesh.indexBuffer,
+                                                    indexBufferOffset: 0)
+            }
+        }
+
         // The models that cut into the ground after them, each with the
         // four draws of its cut.
-        for item in items where item.mesh.groundCutModels.isEmpty == false {
+        for item in items where item.mesh.groundCutModels.isEmpty == false && item.isRising == false {
             bind(item, renderEncoder: renderEncoder, withTextures: true)
             for model in item.mesh.groundCutModels {
                 // The hole: the outline on the ground, raised, and the

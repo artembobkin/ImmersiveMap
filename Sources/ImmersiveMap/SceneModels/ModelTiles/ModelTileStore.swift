@@ -119,12 +119,13 @@ final class ModelTileStore: @unchecked Sendable {
 
     /// One call per frame. `wanted` is the tiles the frame wants, nearest
     /// first: that is the order the missing ones start loading in. Returns
-    /// the wanted tiles that are on the GPU now, in the same order, and how
-    /// many are still on their way.
-    func meshes(for wanted: [Tile]) -> (ready: [ModelTileMesh], pendingCount: Int) {
+    /// the wanted tiles that are on the GPU now, in the same order, and the
+    /// ones still on their way. A tile waiting out its retry after a
+    /// failure is not on its way: what waits for it does not wait forever.
+    func meshes(for wanted: [Tile]) -> (ready: [ModelTileMesh], pending: [Tile]) {
         var ready: [ModelTileMesh] = []
         var tilesToLoad: [Tile] = []
-        var pendingCount = 0
+        var pending: [Tile] = []
 
         lock.lock()
         wantedTiles = Set(wanted)
@@ -143,13 +144,13 @@ final class ModelTileStore: @unchecked Sendable {
             }
             switch statesByTile[tile] {
             case .loading:
-                pendingCount += 1
+                pending.append(tile)
             case .failed(_, let retryAt) where time < retryAt:
                 break
             case .failed, nil:
                 // Past the limit the tile waits for a later frame: a load
                 // that ends invalidates one.
-                pendingCount += 1
+                pending.append(tile)
                 if runningCount < Self.maximumConcurrentLoads {
                     runningCount += 1
                     tilesToLoad.append(tile)
@@ -168,7 +169,7 @@ final class ModelTileStore: @unchecked Sendable {
         for tile in tilesToLoad {
             startLoad(tile)
         }
-        return (ready, pendingCount)
+        return (ready, pending)
     }
 
     func handleMemoryWarning() {

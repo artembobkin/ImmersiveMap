@@ -18,10 +18,12 @@ struct TilePlacementState {
                                           renderedTilesCount: 0)
 
     let placeTilesContext: PlaceTilesContext
-    /// The tiles that draw their buildings this frame, a partition of the
-    /// near field with no overlaps (`BuildingCoveragePlanner`): what the
-    /// building and shadow passes draw, by the depth test alone. Empty on
-    /// the globe.
+    /// The tiles that may draw their buildings this frame: the near
+    /// field's resident tiles of the target zoom, each in its own place,
+    /// with no overlaps (`BuildingCoveragePlanner`). The building subsystem
+    /// draws those at the buildings' zoom and not waiting for a model tile
+    /// (`FrameContextSharedState.drawnBuildingPlacements`), by the depth
+    /// test alone. Empty on the globe.
     let buildingPlaceTilesContext: PlaceTilesContext
     let placementVersion: UInt64
     let visibleTilesCount: Int

@@ -92,17 +92,14 @@ extension ProtomapsBasemapDefaultMapStyle {
                 appearance = theme.labels.city
             case "town":
                 appearance = theme.labels.town
-            default: // village, hamlet, and the rest
-                var a = theme.labels.town
-                a.sizePoints -= 1.5
-                a.weight = .thin
-                appearance = a
+            default:
+                // A village, a hamlet, and the rest: in a city, its named
+                // corners (a square, a quarter), which read as its
+                // districts do, never in a city's deep black.
+                appearance = theme.labels.district
             }
         default: // macrohood, neighbourhood
-            var a = theme.labels.town
-            a.sizePoints -= 1.5
-            a.weight = .thin
-            appearance = a
+            appearance = theme.labels.district
         }
         // A national capital is a city carrying the `capital` attribute.
         if kind == "locality", kindDetail == "city", isCapital(props) {

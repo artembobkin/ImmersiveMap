@@ -33,7 +33,6 @@ final class SharedRenderResourcesTests: XCTestCase {
         XCTAssertTrue(first.globeVectorSurfacePipeline === second.globeVectorSurfacePipeline)
         XCTAssertTrue(first.extrudedTilePipeline === second.extrudedTilePipeline)
         XCTAssertTrue(first.sceneModelPipeline === second.sceneModelPipeline)
-        XCTAssertTrue(first.labelOcclusionProbePipeline === second.labelOcclusionProbePipeline)
         XCTAssertTrue(first.shadowFallbackTexture === second.shadowFallbackTexture)
         XCTAssertTrue(first.extrudedDepthState === second.extrudedDepthState)
         XCTAssertTrue(first.metalContext.library === second.metalContext.library)

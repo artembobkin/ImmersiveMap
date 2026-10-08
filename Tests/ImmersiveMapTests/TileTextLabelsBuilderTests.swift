@@ -5,9 +5,10 @@
 import simd
 import XCTest
 
-/// The tile's text labels are one set: every built label, in its
-/// collision priority order, with compact label indices and one glyph run
-/// per style identity.
+/// The tile's text labels are one set: every built label, in the order
+/// the builder sorted them (by the zoom they show from, then by collision
+/// priority), with compact label indices and one glyph run per style
+/// identity.
 final class TileTextLabelsBuilderTests: XCTestCase {
     func testEveryLabelIsKeptInOrder() {
         let labels = (0..<40).map { makeBuiltLabel(index: $0, key: $0 % 3 + 1, withIcon: $0 % 2 == 0) }

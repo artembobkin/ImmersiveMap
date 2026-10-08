@@ -16,6 +16,9 @@ import Foundation
 struct ReadingStageResult {
     /// Ground fills and line ribbons, drawn under everything else.
     var polygonByStyle: [UInt8: [ParsedPolygon]] = [:]
+    /// Whether the ground fills were flattened into one layer
+    /// (`GroundFlattening`), which the prepared tile records.
+    var groundIsFlattened = false
     var styles: [UInt8: BakedStyle] = [:]
     /// The separate-road path's polygons: by style for the flat layer, and
     /// in arrival order with their sort keys for the phase buckets.

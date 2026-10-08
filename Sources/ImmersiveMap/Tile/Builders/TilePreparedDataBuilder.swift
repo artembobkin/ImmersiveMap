@@ -34,7 +34,8 @@ final class TilePreparedDataBuilder {
                                                   styles: parsedTile.styles,
                                                   styleZoomFades: parsedTile.styleZoomFades,
                                                   lineStyles: parsedTile.lineStyles,
-                                                  fillsIndexCount: parsedTile.drawingPolygon.fillsIndexCount),
+                                                  fillsIndexCount: parsedTile.drawingPolygon.fillsIndexCount,
+                                                  isFlattened: parsedTile.groundIsFlattened),
             roads: parsedTile.drawingRoadPhases.map { structureBucket in
                 structureBucket.map { phase in
                     PreparedTileCPU.GeometryLayer(vertices: phase.drawing.vertices,

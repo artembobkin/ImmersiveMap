@@ -242,6 +242,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             }
         }
 
+        /// The highest pitch the camera can reach, in radians from straight
+        /// down: 85 degrees by default.
         public var maximumPitch: Float
         /// The lowest pitch the camera can reach, in radians from straight down.
         /// Zero (the default) allows the top-down view. A floor above the
@@ -616,6 +618,31 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             }
         }
 
+        /// The flattened ground: the tiles of the deep zooms, which the
+        /// camera blows up to many screens, carry their ground fills as
+        /// one layer of triangles that do not overlap (`GroundFlattening`)
+        /// instead of the layers a coarser tile stacks. Every pixel of such
+        /// a tile's ground is one fill, so nothing has to be ordered in
+        /// depth, which is what keeps the near ground whole at a street
+        /// tilt, and no triangle crosses a cell of the grid, which keeps
+        /// the mesh ready for a heightmap. Baked into the prepared tiles,
+        /// so a change re-parses them.
+        public struct GroundFlatteningSettings: Equatable, Sendable {
+            /// The tile zoom the ground is flattened from, nil for never.
+            /// A tile of this zoom or deeper is flattened whatever the
+            /// camera's zoom, a coarser one keeps its layers.
+            public var fromTileZoom: Int?
+            /// The grid a flattened tile's triangles keep to, cells a side:
+            /// no triangle crosses a cell. More cells, more triangles.
+            /// Clamped to `1...256`.
+            public var grid: Int
+
+            public init(fromTileZoom: Int? = 15, grid: Int = 16) {
+                self.fromTileZoom = fromTileZoom
+                self.grid = grid
+            }
+        }
+
         /// How the tile loader uses regions downloaded through
         /// `ImmersiveMapOfflineController`. Serving needs no wiring beyond the
         /// mode: downloaded tiles are found on disk by the tile source
@@ -646,18 +673,21 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var network: NetworkSettings
         public var cache: CacheSettings
         public var parsing: ParsingSettings
+        public var groundFlattening: GroundFlatteningSettings
         public var offline: OfflineSettings
 
         public init(coverage: CoverageSettings,
                     network: NetworkSettings,
                     cache: CacheSettings,
                     parsing: ParsingSettings,
-                    offline: OfflineSettings = OfflineSettings()) {
+                    offline: OfflineSettings = OfflineSettings(),
+                    groundFlattening: GroundFlatteningSettings = GroundFlatteningSettings()) {
             self.coverage = coverage
             self.network = network
             self.cache = cache
             self.parsing = parsing
             self.offline = offline
+            self.groundFlattening = groundFlattening
         }
 
         func resolvedCoverageZoomLevel(forCameraZoom cameraZoom: Double) -> Int {
@@ -713,17 +743,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// when the map is created, like the fades; the debug panel can
             /// move it while the map runs.
             public var perspectiveMinimumScale: Float
-            /// Whether a point label whose anchor the extruded buildings or
-            /// the scene models hide from the camera is hidden with it, and
-            /// shown again as the camera brings the anchor back into view,
-            /// with the usual fades. A label in a building belongs to it
-            /// (`labelsStandOnRoofs` in the theme) and is tested at the
-            /// building's roof: its own building never hides it, only the
-            /// buildings and models in front of it. On the flat map only,
-            /// where the buildings are drawn. Off, every label draws over
-            /// the buildings as if they were flat. Read once, when the map
-            /// is created, like the fades.
-            public var hidesBehindBuildings: Bool
             /// How near the camera, in metres, the local detail shows: the
             /// labels the style marks local (`PointLabelStyle.isLocal`: the
             /// house numbers, the plaques, the offices), which also keep to
@@ -740,14 +759,12 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                         fadeOutSeconds: TimeInterval,
                         collisionSpacingPoints: Float = 10,
                         perspectiveMinimumScale: Float = 0.75,
-                        hidesBehindBuildings: Bool = true,
                         localDetailMaximumDistanceMeters: Float = 400) {
                 self.gridCellSizePoints = gridCellSizePoints
                 self.fadeInSeconds = fadeInSeconds
                 self.fadeOutSeconds = fadeOutSeconds
                 self.collisionSpacingPoints = collisionSpacingPoints
                 self.perspectiveMinimumScale = perspectiveMinimumScale
-                self.hidesBehindBuildings = hidesBehindBuildings
                 self.localDetailMaximumDistanceMeters = localDetailMaximumDistanceMeters
             }
         }
@@ -888,6 +905,16 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// aid: they wind the window down onto the point the camera looks at,
         /// which is how the shadow map's texel grid is looked at up close.
         public var coverageCameraDistances: Float
+        /// The least coverage radius of the shadow map, in meters, whatever
+        /// `coverageCameraDistances` gives. Close to the ground the camera is
+        /// a few tens of meters from the point it looks at, and a few camera
+        /// distances end a few houses down the street: the floor keeps the
+        /// shadows down the street the camera looks along. From a camera high
+        /// over the map the camera distances are the larger and the floor
+        /// does nothing. The window is fitted to the visible ground inside
+        /// the radius, so the extra meters go to the ground in the frame.
+        /// Zero turns the floor off. Clamped to `0...5000`.
+        public var minimumCoverageMeters: Float
         /// Tallest building the shadow window is fitted for, in meters.
         /// Expected range: `10...500`, clamped at render time.
         ///
@@ -962,8 +989,9 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
         public init(isEnabled: Bool = true,
                     strength: Float = 0.22,
-                    mapResolution: Int = 2048,
+                    mapResolution: Int = 4096,
                     coverageCameraDistances: Float = 3.0,
+                    minimumCoverageMeters: Float = 500,
                     maxCasterHeightMeters: Float = 10,
                     normalOffsetTexels: Float = 2.5,
                     softness: Float = 1.5,
@@ -972,6 +1000,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.strength = strength
             self.mapResolution = mapResolution
             self.coverageCameraDistances = coverageCameraDistances
+            self.minimumCoverageMeters = minimumCoverageMeters
             self.maxCasterHeightMeters = maxCasterHeightMeters
             self.normalOffsetTexels = normalOffsetTexels
             self.softness = softness
@@ -1056,23 +1085,70 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// that hides the seam with the sky. Evaluated against the camera
         /// zoom each frame, so a zoom gesture plays the fade.
         public var hazeZoomFade: ImmersiveMapZoomFade
+        /// How wide the band at the horizon line is with the camera zoom:
+        /// the ground whitening into the horizon colour over the last
+        /// degrees under the line, which hides the seam between the far
+        /// ground and the sky and is there with the haze off too. It is
+        /// measured in degrees under the line, so from a camera high over
+        /// the map it lies on the horizon, and from one standing in the
+        /// street it reaches down the street to the camera's feet. A
+        /// fade-out, say `.fadeOut(from: 18, to: 19)`, draws it in toward the
+        /// line over that stretch of zoom, to `minimumHorizonBandShare` of
+        /// its width from 19 on: a hairline that still hides the seam where
+        /// the horizon is open. `.none` (the default) keeps it at its width
+        /// at every zoom. Evaluated against the camera zoom each frame.
+        public var horizonBandZoomFade: ImmersiveMapZoomFade
+
+        /// The share of its width the horizon band keeps once
+        /// `horizonBandZoomFade` has drawn it in.
+        public static let minimumHorizonBandShare: Float = 0.1
 
         public init(isEnabled: Bool = true,
                     skyColor: SIMD3<Float> = SIMD3<Float>(0.40, 0.66, 1.0),
                     horizonColor: SIMD3<Float> = SIMD3<Float>(0.97, 0.97, 0.98),
                     hazeRange: ClosedRange<Float> = 6...40,
-                    hazeZoomFade: ImmersiveMapZoomFade = .none) {
+                    hazeZoomFade: ImmersiveMapZoomFade = .none,
+                    horizonBandZoomFade: ImmersiveMapZoomFade = .none) {
             self.isEnabled = isEnabled
             self.skyColor = skyColor
             self.horizonColor = horizonColor
             self.hazeRange = hazeRange
             self.hazeZoomFade = hazeZoomFade
+            self.horizonBandZoomFade = horizonBandZoomFade
         }
 
         /// How much of the haze is on at a camera zoom: 0 with the fog off,
         /// otherwise the haze zoom fade's share, 1 for `.none`.
         func hazeStrength(atZoom zoom: Double) -> Float {
             isEnabled ? hazeZoomFade.alpha(atZoom: zoom) : 0
+        }
+
+        /// The share of its width the band at the horizon line has at a
+        /// camera zoom: 1 for `.none`, down to `minimumHorizonBandShare`
+        /// where `horizonBandZoomFade` is out.
+        func horizonBandShare(atZoom zoom: Double) -> Float {
+            let alpha = min(max(horizonBandZoomFade.alpha(atZoom: zoom), 0), 1)
+            return Self.minimumHorizonBandShare + (1 - Self.minimumHorizonBandShare) * alpha
+        }
+    }
+
+    /// When the extruded buildings and the models of a model archive
+    /// stand up out of the flat map.
+    public struct ExtrusionSettings: Equatable, Sendable {
+        /// The camera zoom the extruded buildings draw from. Below it the
+        /// map is flat, and reaching it they rise out of the ground.
+        public var buildingsMinimumZoom: Double
+        /// How long a layer takes to rise out of the ground when the
+        /// camera reaches its zoom. Zero stands it up at once. Leaving the
+        /// zoom, the layer is gone at once. The extruded buildings grow
+        /// from the ground to their height, the models of a model archive
+        /// come up out of it whole, from `ModelArchiveSettings.minimumZoom`.
+        public var riseSeconds: TimeInterval
+
+        public init(buildingsMinimumZoom: Double = 15,
+                    riseSeconds: TimeInterval = 0.6) {
+            self.buildingsMinimumZoom = buildingsMinimumZoom
+            self.riseSeconds = riseSeconds
         }
     }
 
@@ -1083,19 +1159,22 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var shadows: ShadowSettings
         public var atmosphere: AtmosphereSettings
         public var fog: FogSettings
+        public var extrusion: ExtrusionSettings
 
         public init(space: SpaceSettings,
                     starfield: StarfieldSettings,
                     light: SceneLightSettings = SceneLightSettings(),
                     shadows: ShadowSettings = ShadowSettings(),
                     atmosphere: AtmosphereSettings = AtmosphereSettings(),
-                    fog: FogSettings = FogSettings()) {
+                    fog: FogSettings = FogSettings(),
+                    extrusion: ExtrusionSettings = ExtrusionSettings()) {
             self.space = space
             self.starfield = starfield
             self.light = light
             self.shadows = shadows
             self.atmosphere = atmosphere
             self.fog = fog
+            self.extrusion = extrusion
         }
     }
 
@@ -1316,17 +1395,25 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var depthBias: Float {
             didSet { depthBias = Self.clampedDepthBias(depthBias) }
         }
+        /// The camera zoom the models draw from. Below it they are not
+        /// drawn and stand in for no building, and reaching it they rise
+        /// out of the ground (`ExtrusionSettings.riseSeconds`). The model
+        /// tiles are of zoom 14, so a zoom below that draws none whatever
+        /// this says.
+        public var minimumZoom: Double
 
         public init(archiveURL: URL,
                     requestHeaders: [String: String] = [:],
                     memoryBudgetInBytes: Int = ModelArchiveSettings.defaultMemoryBudgetInBytes,
                     diskCacheSizeInBytes: Int = ModelArchiveSettings.defaultDiskCacheSizeInBytes,
-                    depthBias: Float = ModelArchiveSettings.defaultDepthBias) {
+                    depthBias: Float = ModelArchiveSettings.defaultDepthBias,
+                    minimumZoom: Double = 14) {
             self.archiveURL = archiveURL
             self.requestHeaders = requestHeaders
             self.memoryBudgetInBytes = memoryBudgetInBytes
             self.diskCacheSizeInBytes = diskCacheSizeInBytes
             self.depthBias = Self.clampedDepthBias(depthBias)
+            self.minimumZoom = minimumZoom
         }
 
         private static func clampedDepthBias(_ value: Float) -> Float {
@@ -1387,14 +1474,20 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         renderLoop: RenderLoopSettings(forceContinuousRendering: false,
                                        interactionFramesPerSecond: 60,
                                        labelFadeFramesPerSecond: 30),
-        camera: CameraSettings(maximumPitch: Float.pi * 5.0 / 12.0,
+        // Tilted nearly to the horizon, 85 degrees from straight down, on
+        // both surfaces and at every zoom: a camera can look along the
+        // streets at the skyline.
+        camera: CameraSettings(maximumPitch: Float.pi * 17.0 / 36.0,
                                minimumZoom: 0.0,
-                               // Two levels past the deepest tile (z16): closer
-                               // in, a street tilt lays the camera on a few
-                               // tiles blown up to many screens, whose fills
-                               // are fans of slivers the depth test cannot
-                               // order cleanly, and blocks of the near ground
-                               // drop out at the screen's edge.
+                               // Two levels past the deepest tile: closer in,
+                               // the tiles' detail is blown up past what it
+                               // was drawn for. The flattened ground
+                               // (`TileSettings.GroundFlatteningSettings`)
+                               // keeps the near ground whole at any depth.
+                               // A layered ground's rank depth holds a level
+                               // past the tiles' zoom (Tile.metal): deeper, a
+                               // street tilt can drop blocks of the near
+                               // ground.
                                maximumZoom: 18.0,
                                focusedMarkerZoom: 15.25,
                                highZoomPitchExtension: 0,
@@ -1571,6 +1664,34 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
+    /// The flattened ground's zoom and grid
+    /// (`TileSettings.GroundFlatteningSettings`), a nil leaving a value as
+    /// configured.
+    func groundFlattening(fromTileZoom: Int? = nil, grid: Int? = nil) -> ImmersiveMapSettings {
+        var settings = self
+        if let fromTileZoom {
+            settings.tiles.groundFlattening.fromTileZoom = fromTileZoom
+        }
+        if let grid {
+            settings.tiles.groundFlattening.grid = grid
+        }
+        return settings
+    }
+
+    /// The flattened ground on or off. Off, every tile keeps its layers.
+    /// On, the zoom it starts from is the configured one.
+    func groundFlattening(isEnabled: Bool) -> ImmersiveMapSettings {
+        var settings = self
+        if isEnabled {
+            if settings.tiles.groundFlattening.fromTileZoom == nil {
+                settings.tiles.groundFlattening.fromTileZoom = TileSettings.GroundFlatteningSettings().fromTileZoom
+            }
+        } else {
+            settings.tiles.groundFlattening.fromTileZoom = nil
+        }
+        return settings
+    }
+
     /// The deepest tile zoom level requested from the source. Past it the
     /// camera keeps zooming and the renderer scales the deepest tiles up.
     func tileMaximumZoomLevel(_ maximumZoomLevel: Int) -> ImmersiveMapSettings {
@@ -1743,6 +1864,14 @@ public extension ImmersiveMapSettings {
     func fog(hazeZoomFade: ImmersiveMapZoomFade) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.fog.hazeZoomFade = hazeZoomFade
+        return settings
+    }
+
+    /// The flat map's band at the horizon line drawn in toward the line
+    /// with the camera zoom (`FogSettings.horizonBandZoomFade`).
+    func fog(horizonBandZoomFade: ImmersiveMapZoomFade) -> ImmersiveMapSettings {
+        var settings = self
+        settings.scene.fog.horizonBandZoomFade = horizonBandZoomFade
         return settings
     }
 

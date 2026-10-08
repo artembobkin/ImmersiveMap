@@ -32,11 +32,10 @@ struct ParsedTextLabel {
     let featureId: UInt64?
     /// Local detail, shown only near the camera (`PointLabelStyle.isLocal`).
     let isLocal: Bool
-    /// The roof over the anchor in tile units, the extrusion mesh's own
-    /// height scale, set once the tile's buildings are resolved. Zero on
-    /// open ground. The label draws at it only when `liftsToRoof`; the
-    /// others draw on the ground and are tested for view at the roof, so
-    /// the building they stand in never hides them.
+    /// The roof the label draws on in tile units, the extrusion mesh's own
+    /// height scale, set once the tile's buildings are resolved when it
+    /// names the building (`liftsToRoof`). Zero for every other label,
+    /// which draws on the ground.
     var roofHeight: Float = 0
     /// Whether the label draws on the roof over it: it names the building
     /// itself (the building's own OSM element), not something inside it.

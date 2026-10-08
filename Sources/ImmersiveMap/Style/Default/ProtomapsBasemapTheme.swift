@@ -55,6 +55,10 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
     public struct LabelStyles: Equatable, Sendable {
         public var city: LabelAppearance
         public var town: LabelAppearance
+        /// The districts of a city: its neighbourhoods and the larger
+        /// quarters they make up, and the places smaller than a town (a
+        /// village, a hamlet, a named square).
+        public var district: LabelAppearance
         public var country: LabelAppearance
         public var poi: LabelAppearance
         public var water: LabelAppearance
@@ -62,12 +66,14 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
 
         public init(city: LabelAppearance,
                     town: LabelAppearance,
+                    district: LabelAppearance = LabelStyles.default.district,
                     country: LabelAppearance,
                     poi: LabelAppearance,
                     water: LabelAppearance,
                     road: LabelAppearance) {
             self.city = city
             self.town = town
+            self.district = district
             self.country = country
             self.poi = poi
             self.water = water
@@ -608,7 +614,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         add(features.buildingFillColor)
         out.append(features.buildingExtrusion ? 1 : 0)
         out.append(features.labelsStandOnRoofs ? 1 : 0)
-        add(labels.city); add(labels.town); add(labels.country)
+        add(labels.city); add(labels.town); add(labels.district); add(labels.country)
         add(labels.poi); add(labels.water); add(labels.road)
         // Not palette values, but they change which labels are drawn, so they
         // must participate in the disk-cache identity.
@@ -730,6 +736,14 @@ public extension ProtomapsBasemapTheme.LabelStyles {
         town: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.30, 0.30, 0.32), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.173, sizePoints: 11, weight: .thin),
+        // The districts are lettered like the streets, the deep black
+        // being the cities' alone: light grey capitals in the thin face
+        // with a little added weight and a narrow halo, so a district
+        // names the stretch of the city it lies over without standing out
+        // of it.
+        district: ProtomapsBasemapTheme.LabelAppearance(
+            fillColor: SIMD3<Float>(0.45, 0.45, 0.46), strokeColor: SIMD3<Float>(1, 1, 1),
+            haloEm: 0.1, sizePoints: 10, weight: .thin, uppercased: true, emboldenPoints: 0.2),
         country: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.28, 0.27, 0.33), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.162, sizePoints: 13, weight: .bold),

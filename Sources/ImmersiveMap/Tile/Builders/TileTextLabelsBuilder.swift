@@ -86,7 +86,15 @@ final class TileTextLabelsBuilder {
         var builtLabels: [BuiltBaseLabel] = []
         builtLabels.reserveCapacity(textLabels.count)
 
+        // A tile's labels in the order of the zoom they show from, so the
+        // labels a camera zoom shows are a run at the head of the tile's
+        // and the frame works on that run alone (`LabelActiveSpans`). The
+        // collisions rank the labels by themselves and do not read this
+        // order.
         let sortedLabels = textLabels.enumerated().sorted { lhs, rhs in
+            if lhs.element.minCameraZoom != rhs.element.minCameraZoom {
+                return lhs.element.minCameraZoom < rhs.element.minCameraZoom
+            }
             if lhs.element.collisionPriority != rhs.element.collisionPriority {
                 return lhs.element.collisionPriority < rhs.element.collisionPriority
             }

@@ -29,10 +29,17 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
     private var latestRequestedTilesCount: Int = 0
     private var latestCounts = (visible: 0, demanded: 0, ready: 0)
 
+    /// The tile zoom the buildings draw from
+    /// (`BuildingCoveragePlanner.minimumDrawZoom(settings:)`): no coarser
+    /// frame plans them.
+    private let buildingsMinimumTileZoom: Int
+
     init(tileRenderStore: TileRenderStore,
-         tileTraceRecorder: TileTraceRecorder) {
+         tileTraceRecorder: TileTraceRecorder,
+         buildingsMinimumTileZoom: Int = BuildingCoveragePlanner.minimumSourceZoom) {
         self.tileRenderStore = tileRenderStore
         self.tileTraceRecorder = tileTraceRecorder
+        self.buildingsMinimumTileZoom = buildingsMinimumTileZoom
     }
 
     func update(frameContext: FrameContext) {
@@ -107,7 +114,8 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
             buildingPlaceTilesContext = BuildingCoveragePlanner.plan(resident: resident,
                                                                      visibleTiles: targets,
                                                                      eyeGroundCell: eyeGroundCell,
-                                                                     targetZoom: tileZoomLevel)
+                                                                     targetZoom: tileZoomLevel,
+                                                                     minimumZoom: buildingsMinimumTileZoom)
             placementVersion &+= 1
             plannedCoverageVersion = coverageVersion
             plannedContentVersion = contentVersion

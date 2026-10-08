@@ -77,11 +77,11 @@ final class ModelTileStoreTests: XCTestCase {
 
         let first = store.meshes(for: [Self.tileA])
         XCTAssertTrue(first.ready.isEmpty)
-        XCTAssertEqual(first.pendingCount, 1)
+        XCTAssertEqual(first.pending.count, 1)
 
         try await waitForInvalidations(1, sink: sink)
         let second = store.meshes(for: [Self.tileA])
-        XCTAssertEqual(second.pendingCount, 0)
+        XCTAssertEqual(second.pending.count, 0)
         let mesh = try XCTUnwrap(second.ready.first)
         XCTAssertEqual(mesh.tile, Self.tileA)
         XCTAssertEqual(mesh.indexCount, 6)
@@ -117,12 +117,12 @@ final class ModelTileStoreTests: XCTestCase {
                                    })
         store.eventSink = sink
 
-        XCTAssertEqual(store.meshes(for: [Self.tileA]).pendingCount, 1)
+        XCTAssertEqual(store.meshes(for: [Self.tileA]).pending.count, 1)
         try await waitForInvalidations(1, sink: sink)
         for _ in 0..<3 {
             let answer = store.meshes(for: [Self.tileA])
             XCTAssertTrue(answer.ready.isEmpty)
-            XCTAssertEqual(answer.pendingCount, 0)
+            XCTAssertEqual(answer.pending.count, 0)
         }
         XCTAssertEqual(loads.withLock { $0 }, 1)
     }
@@ -196,11 +196,11 @@ final class ModelTileStoreTests: XCTestCase {
         try await waitForInvalidations(1, sink: sink)
         let duringPause = store.meshes(for: [Self.tileA])
         XCTAssertTrue(duringPause.ready.isEmpty)
-        XCTAssertEqual(duringPause.pendingCount, 0, "a tile waiting out its pause is not on its way")
+        XCTAssertEqual(duringPause.pending.count, 0, "a tile waiting out its pause is not on its way")
         XCTAssertEqual(loads.withLock { $0 }, 1)
 
         clock.withLock { $0 += ModelTileStore.retryBaseDelay + 1 }
-        XCTAssertEqual(store.meshes(for: [Self.tileA]).pendingCount, 1)
+        XCTAssertEqual(store.meshes(for: [Self.tileA]).pending.count, 1)
         try await waitForInvalidations(2, sink: sink)
         XCTAssertEqual(store.meshes(for: [Self.tileA]).ready.count, 1)
         XCTAssertEqual(loads.withLock { $0 }, 2)
@@ -227,7 +227,7 @@ final class ModelTileStoreTests: XCTestCase {
         try await waitForInvalidations(1, sink: sink)
         let answer = store.meshes(for: [Self.tileA])
         XCTAssertTrue(answer.ready.isEmpty)
-        XCTAssertEqual(answer.pendingCount, 0)
+        XCTAssertEqual(answer.pending.count, 0)
         XCTAssertEqual(loads.withLock { $0 }, 1)
         XCTAssertEqual(discarded.withLock { $0 }, [Self.tileA])
     }
@@ -268,8 +268,8 @@ final class ModelTileStoreTests: XCTestCase {
         store.eventSink = sink
         let wanted = (0..<6).map { Tile(x: 9900 + $0, y: 5121, z: 14) }
 
-        XCTAssertEqual(store.meshes(for: wanted).pendingCount, 6)
-        XCTAssertEqual(store.meshes(for: wanted).pendingCount, 6, "asking again starts nothing more")
+        XCTAssertEqual(store.meshes(for: wanted).pending.count, 6)
+        XCTAssertEqual(store.meshes(for: wanted).pending.count, 6, "asking again starts nothing more")
         let deadline = Date().addingTimeInterval(10)
         while started.withLock({ $0.count }) < ModelTileStore.maximumConcurrentLoads, Date() < deadline {
             try await Task.sleep(nanoseconds: 2_000_000)
@@ -278,9 +278,9 @@ final class ModelTileStoreTests: XCTestCase {
 
         gateIsOpen.withLock { $0 = true }
         try await waitForInvalidations(ModelTileStore.maximumConcurrentLoads, sink: sink)
-        XCTAssertEqual(store.meshes(for: wanted).pendingCount, 2, "the two that waited start now")
+        XCTAssertEqual(store.meshes(for: wanted).pending.count, 2, "the two that waited start now")
         try await waitForInvalidations(6, sink: sink)
-        XCTAssertEqual(store.meshes(for: wanted).pendingCount, 0)
+        XCTAssertEqual(store.meshes(for: wanted).pending.count, 0)
         XCTAssertEqual(Set(started.withLock { $0 }), Set(wanted))
     }
 

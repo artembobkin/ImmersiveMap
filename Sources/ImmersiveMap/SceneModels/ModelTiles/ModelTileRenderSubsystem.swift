@@ -52,6 +52,13 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
     private let shadowFallbackTexture: MTLTexture
     private var drawItems: [ModelTileDrawItem] = []
     private var shadowCasterItems: [ModelTileDrawItem] = []
+    /// `ModelArchiveSettings.minimumZoom`: the models draw from it, each
+    /// tile coming up out of the ground (`ExtrusionRise`) over
+    /// `riseSeconds` from the frame it is first drawn in: when the camera
+    /// reaches the zoom, and when the tile loads later.
+    private let minimumZoom: Double
+    private let riseSeconds: TimeInterval
+    private var rise = ExtrusionRise<WantedTile>()
 
     /// `store` is nil for a map without a model archive: the subsystem then
     /// does nothing.
@@ -63,8 +70,12 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
          groundCutStates: SceneModelGroundCutStates,
          depthDisabledState: MTLDepthStencilState,
          shadowMapTextureProvider: @escaping () -> MTLTexture?,
-         shadowFallbackTexture: MTLTexture) {
+         shadowFallbackTexture: MTLTexture,
+         minimumZoom: Double = 0,
+         riseSeconds: TimeInterval = 0) {
         self.store = store
+        self.minimumZoom = minimumZoom
+        self.riseSeconds = riseSeconds
         self.depthBias = depthBias
         self.pipeline = pipeline
         self.extrudedDepthState = extrudedDepthState
@@ -79,6 +90,8 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
         drawItems.removeAll(keepingCapacity: true)
         shadowCasterItems.removeAll(keepingCapacity: true)
         guard let store else { return }
+        let isRaised = frameContext.renderSurfaceMode == .flat && frameContext.zoom >= minimumZoom
+        let time = frameContext.time
 
         let wanted = Self.wantedTiles(visibleTiles: frameContext.visibleContent.visibleTiles)
         var wrapsByTile: [Tile: [Int8]] = [:]
@@ -89,12 +102,23 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
             }
             wrapsByTile[wantedTile.tile, default: []].append(wantedTile.worldWrap)
         }
-        let (meshes, pendingCount) = store.meshes(for: tiles)
+        let (meshes, pending) = store.meshes(for: tiles)
         // Added to the scene models' own count: a capture waits for both.
-        frameContext.services.diagnostics.incrementCounter(.pendingSceneModelMeshes, by: pendingCount)
+        frameContext.services.diagnostics.incrementCounter(.pendingSceneModelMeshes, by: pending.count)
+        // The buildings of these tiles wait for them: a model may stand in
+        // for some of them, and they are left out from their first frame.
+        frameContext.sharedState.pendingModelTiles = Set(pending)
         // The tiles are in the flat map's space and draw there alone, as
-        // the map's buildings do.
-        guard meshes.isEmpty == false, frameContext.renderSurfaceMode == .flat else { return }
+        // the map's buildings do. Below their zoom they draw nothing and
+        // stand in for no building: the buildings, if they draw there,
+        // stay whole.
+        let drawnTiles = isRaised
+            ? meshes.flatMap { mesh in (wrapsByTile[mesh.tile] ?? []).map { WantedTile(tile: mesh.tile, worldWrap: $0) } }
+            : []
+        rise.advance(keys: drawnTiles, time: time, seconds: riseSeconds)
+        frameContext.sharedState.isExtrusionRising = frameContext.sharedState.isExtrusionRising || rise.isAnimating
+        guard drawnTiles.isEmpty == false else { return }
+        var riseSignature: Float = 0
 
         let flatRenderState = frameContext.resolvedPresentation.flatRenderState
         let frustum = Frustum(pv: frameContext.cameraMatrices.projectionView)
@@ -111,8 +135,17 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
 
             for worldWrap in wrapsByTile[mesh.tile] ?? [] {
                 let placement = Self.placement(of: mesh.tile, worldWrap: worldWrap, flatRenderState: flatRenderState)
-                let item = ModelTileDrawItem(mesh: mesh, modelMatrix: placement.modelMatrix)
+                // Coming up out of the ground whole: the tile is lowered by
+                // what is left of its tallest model's height, so its models
+                // keep their shape and the tallest tops come out first.
+                let heightScale = rise.heightScale(of: WantedTile(tile: mesh.tile, worldWrap: worldWrap), time: time)
+                riseSignature += heightScale
+                let depth = (1 - heightScale) * max(Float(mesh.boundsMaximum.z), 0) * placement.scale
+                let item = ModelTileDrawItem(mesh: mesh,
+                                             modelMatrix: Matrix.translationMatrix(x: 0, y: 0, z: -depth) * placement.modelMatrix,
+                                             isRising: heightScale < 1)
                 let center = placement.origin + (mesh.boundsMinimum + mesh.boundsMaximum) * 0.5 * placement.scale
+                    - SIMD3<Float>(0, 0, depth)
                 let radius = simd_length(mesh.boundsMaximum - mesh.boundsMinimum) * 0.5 * placement.scale
                 guard radius > 0 else { continue }
 
@@ -125,6 +158,7 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
                 drawItems.append(item)
             }
         }
+        frameContext.sharedState.modelTileRiseSignature = riseSignature
         state.hasShadowCasters = state.hasShadowCasters || shadowCasterItems.isEmpty == false
         state.hasDrawnModels = state.hasDrawnModels || drawItems.isEmpty == false
         frameContext.sharedState.sceneModelState = state
@@ -239,5 +273,6 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
 
     func evict() {
         store?.evict()
+        rise.reset()
     }
 }

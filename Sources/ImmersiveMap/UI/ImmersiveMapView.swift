@@ -747,6 +747,34 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// The flattened ground: from this tile zoom on a tile's ground fills
+    /// are one layer of triangles that do not overlap, cut to a grid of
+    /// `grid` cells a side, instead of the layers a coarser tile stacks.
+    /// Nothing of such a ground has to be ordered in depth, which keeps the
+    /// near ground whole when the camera stands in the street with the
+    /// tiles blown up to many screens, and the mesh is ready for a
+    /// heightmap. The default is the tileset's deepest zoom, 15, on a grid
+    /// of 16. An omitted value is left as configured:
+    ///
+    ///     ImmersiveMapView()
+    ///         .groundFlattening(fromTileZoom: 15, grid: 32)
+    ///
+    /// Baked into the prepared tiles, so a change re-parses them. See
+    /// `ImmersiveMapSettings.TileSettings.GroundFlatteningSettings`.
+    public func groundFlattening(fromTileZoom: Int? = nil, grid: Int? = nil) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.groundFlattening(fromTileZoom: fromTileZoom, grid: grid)
+        return view
+    }
+
+    /// The flattened ground on or off. Off, every tile keeps its layers at
+    /// every zoom, as before the flattening.
+    public func groundFlattening(isEnabled: Bool) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.groundFlattening(isEnabled: isEnabled)
+        return view
+    }
+
     /// Adjusts only the provided cache fields; nil leaves a field unchanged.
     /// `memoryCacheSizeInBytes` is accepted for source compatibility and
     /// ignored: tiles stay in GPU memory only while a frame draws them.
@@ -911,25 +939,75 @@ public extension ImmersiveMapView {
         return view
     }
 
-    /// The flat map's haze over the far ground fading with the camera
-    /// zoom, the sky untouched. A fade-out thins the haze over a stretch of
-    /// zoom, and past it the ground keeps only the thin band at the horizon
-    /// line that hides the seam with the sky, so a street-level view wears
-    /// no haze under a full sky:
+    /// The flat map's haze over the far ground, and the band at the
+    /// horizon line, with the camera zoom, the sky untouched.
+    ///
+    /// `hazeZoomFade` thins the haze over a stretch of zoom
+    /// (`FogSettings.hazeZoomFade`). `horizonBandZoomFade` draws the band
+    /// that hides the seam with the sky in toward the line, so close to the
+    /// ground it no longer reaches down the street to the camera's feet
+    /// (`FogSettings.horizonBandZoomFade`). A street-level view then wears
+    /// neither under a full sky:
     ///
     ///     ImmersiveMapView()
-    ///         .fog(hazeZoomFade: .fadeOut(from: 18, to: 19))
+    ///         .fog(hazeZoomFade: .fadeOut(from: 18, to: 19),
+    ///              horizonBandZoomFade: .fadeOut(from: 18, to: 19))
     ///
-    /// `.none` (the default) keeps the haze at every zoom. Applies live.
-    public func fog(hazeZoomFade: ImmersiveMapZoomFade) -> ImmersiveMapView {
+    /// An omitted band fade is left as configured, `.none` by default,
+    /// which keeps the band at its width at every zoom, as `.none` keeps
+    /// the haze. Applies live.
+    public func fog(hazeZoomFade: ImmersiveMapZoomFade,
+                    horizonBandZoomFade: ImmersiveMapZoomFade? = nil) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.fog(hazeZoomFade: hazeZoomFade)
+        if let horizonBandZoomFade {
+            view.settings = view.settings.fog(horizonBandZoomFade: horizonBandZoomFade)
+        }
         return view
     }
 
-    public func shadows(isEnabled: Bool = true) -> ImmersiveMapView {
+    /// The flat map's band at the horizon line drawn in toward the line
+    /// with the camera zoom, the haze left as configured
+    /// (`fog(hazeZoomFade:horizonBandZoomFade:)`). Applies live.
+    public func fog(horizonBandZoomFade: ImmersiveMapZoomFade) -> ImmersiveMapView {
         var view = self
-        view.settings = view.settings.shadows(isEnabled: isEnabled)
+        view.settings = view.settings.fog(horizonBandZoomFade: horizonBandZoomFade)
+        return view
+    }
+
+    /// Directional shadows cast by the buildings and the scene models in the
+    /// flat presentation, on or off, with any of their values set in place.
+    /// An omitted value is left as configured, so a value set here never
+    /// resets the others:
+    ///
+    ///     ImmersiveMapView()
+    ///         .shadows(minimumCoverageMeters: 500)
+    ///
+    /// The values are `ImmersiveMapSettings.ShadowSettings`'s, where each is
+    /// described. `coverageCameraDistances` and `minimumCoverageMeters`
+    /// together size the ground the shadows reach: high over the map the
+    /// first, close to the ground the second. Applies live.
+    public func shadows(isEnabled: Bool = true,
+                        strength: Float? = nil,
+                        mapResolution: Int? = nil,
+                        coverageCameraDistances: Float? = nil,
+                        minimumCoverageMeters: Float? = nil,
+                        maxCasterHeightMeters: Float? = nil,
+                        normalOffsetTexels: Float? = nil,
+                        softness: Float? = nil,
+                        tint: SIMD3<Float>? = nil) -> ImmersiveMapView {
+        var view = self
+        var shadows = view.settings.scene.shadows
+        shadows.isEnabled = isEnabled
+        if let strength { shadows.strength = strength }
+        if let mapResolution { shadows.mapResolution = mapResolution }
+        if let coverageCameraDistances { shadows.coverageCameraDistances = coverageCameraDistances }
+        if let minimumCoverageMeters { shadows.minimumCoverageMeters = minimumCoverageMeters }
+        if let maxCasterHeightMeters { shadows.maxCasterHeightMeters = maxCasterHeightMeters }
+        if let normalOffsetTexels { shadows.normalOffsetTexels = normalOffsetTexels }
+        if let softness { shadows.softness = softness }
+        if let tint { shadows.tint = tint }
+        view.settings = view.settings.shadowSettings(shadows)
         return view
     }
 

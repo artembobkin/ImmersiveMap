@@ -34,11 +34,6 @@ enum RenderLayer: String, CaseIterable {
     case surfaceLabels
     case buildingExtrusion
     case sceneModels
-    /// The point labels' occlusion probes, right after everything that can
-    /// hide a label: unpainted depth-tested points at the anchors, whose
-    /// answer decides in a later frame which labels the buildings and the
-    /// models hide, see `LabelOcclusionProbe`.
-    case labelOcclusionProbe
     /// The air around the surface's edge, last of the world layers on both
     /// surfaces: the globe's atmosphere and limb feather, the flat map's fog
     /// band, and their handover through the morph. Two depth-split
@@ -95,9 +90,8 @@ struct RenderLayerPlanner {
         case .flat:
             // The horizon last: the fog band hazes everything painted near
             // the horizon line, buildings and models included, and the
-            // labels, which come after, stay crisp. The label probes sit
-            // behind the last thing that can hide a label.
-            [.tileOwnership, .flatMapSurface, .surfaceLabels, .buildingExtrusion, .sceneModels, .labelOcclusionProbe, .horizon]
+            // labels, which come after, stay crisp.
+            [.tileOwnership, .flatMapSurface, .surfaceLabels, .buildingExtrusion, .sceneModels, .horizon]
         case .spherical:
             // Sky first: nothing writes surface depth any more (the
             // placeholder grid is gone), so the space background and the

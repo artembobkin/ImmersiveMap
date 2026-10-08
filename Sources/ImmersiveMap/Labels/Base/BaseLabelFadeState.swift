@@ -37,11 +37,14 @@ final class BaseLabelFadeState {
     /// its last update, then stores `targetVisibility` as the new target.
     /// Returns whether any label is still mid-fade. `targetVisibility` must
     /// be index-aligned with the set; a missing entry counts as hidden.
+    /// Only the labels of `spans` move (`LabelActiveSpans`), the rest are
+    /// dark and stay so. Nil moves every label.
     @discardableResult
     func advance(targetVisibility: [Bool],
                  time: TimeInterval,
                  fadeInSeconds: TimeInterval,
-                 fadeOutSeconds: TimeInterval) -> Bool {
+                 fadeOutSeconds: TimeInterval,
+                 spans: [Range<Int>]? = nil) -> Bool {
         let count = currentAlphas.count
         guard count > 0 else {
             return false
@@ -54,8 +57,10 @@ final class BaseLabelFadeState {
         lastUpdateTimes.withUnsafeMutableBufferPointer { times in
         targetVisibility.withUnsafeBufferPointer { visibility in
             let visibleCount = visibility.count
-            var index = 0
-            while index < count {
+          for span in spans ?? [0..<count] {
+            var index = span.lowerBound
+            let end = min(span.upperBound, count)
+            while index < end {
                 let elapsed = time - times[index]
                 let target = targets[index]
                 var alpha = alphas[index]
@@ -86,6 +91,7 @@ final class BaseLabelFadeState {
                 }
                 index += 1
             }
+          }
         }}}}
         return hasActiveAnimations
     }

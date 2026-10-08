@@ -19,7 +19,7 @@ xcodebuild test -workspace .swiftpm/xcode/package.xcworkspace -scheme ImmersiveM
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'   # full suite, iOS (runs UIKit-gated tests)
 ```
 
-To run the map in an app, open `ImmersiveMap.xcworkspace`. Work in progress is shown in `Develop/ImmersiveMapDevMac`, and `Examples/macOS/ImmersiveMapMac` stays the untouched demonstration of the shipping tile service. A user-visible rendering feature that ships without a scenario in `Tools/VisualReview/` does not get looked at before a release.
+To run the map in an app, open `ImmersiveMap.xcworkspace`. Work in progress is shown in `Develop/ImmersiveMapDevMac`, and `Examples/macOS/ImmersiveMapMac` stays the untouched demonstration of the shipping tile service.
 
 ## Architecture
 
@@ -60,6 +60,7 @@ The code shows how things are wired. These are the decisions behind it, which th
 - There is no separate documentation to keep up: the guides and the DocC catalog were removed on purpose, and the doc comments in the code are the reference. Do not add them back. `Assets/` holds the README's images.
 - Never edit `README.md`, `CHANGELOG.md` or any other `.md` file except this one and the rules under `.claude/`. When a change makes a statement in one of them wrong, leave the file as it is and say which file and which statement in the report.
 - Never launch an app or take screenshots. Building it to check that it compiles is where it stops. Rendering is judged by the person: say which app to run (`Develop/ImmersiveMapDevMac` for work in progress), what the frame should look like, and ask for a screenshot.
+- A technical value a map's author may want to tune (a shadow coverage, a fade's zoom range, a band's width, a distance threshold, an animation's duration) is a setting reachable from SwiftUI, not a constant in the engine. It lives in `ImmersiveMapSettings` (or the style, for how the map draws) with a sensible default and a doc comment that says what it does and when to change it, and an `ImmersiveMapView` modifier sets it in place: an optional parameter of the modifier for its group, so the author writes `.shadows(minimumCoverageMeters: 500)` without building a settings object, and an omitted value is left as configured rather than reset. When such a value is added or found hard-coded, expose it this way in the same change. Values that only make sense while tuning (a debug override) stay in the debug panel.
 - The public API is not frozen. Refactoring it is allowed, breaking changes included: a public symbol may be renamed, removed, reshaped or given a different signature when the design calls for it, and no deprecation shim or parallel old API is required. Anything `internal` can be reshaped freely as before.
 - Never use a semicolon to join two clauses in prose (documentation, comments, commit messages, UI strings, replies): write two sentences instead. Semicolons in code are fine.
 - Never use an em dash (U+2014, the long dash) in any text: documentation, comments, commit messages, changelog entries, UI strings. Rewrite with a comma, a colon, parentheses, or a second sentence instead.

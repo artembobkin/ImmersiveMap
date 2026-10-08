@@ -128,16 +128,19 @@ final class BuildingRoofLabelTests: XCTestCase {
     }
 
     /// Something inside a building (a shop, a sight) is not the building:
-    /// it draws on the ground and carries the roof for its view test.
+    /// it draws on the ground, carries no roof, and the roof over its
+    /// anchor is never looked up.
     func testALabelOfSomethingInsideStaysOnTheGround() {
         for featureId in [UInt64?.none, 99] {
+            var lookedUp = false
             let roof = TileMvtParser.labelRoof(featureId: featureId,
                                                buildingTops: [7: 60],
                                                buildingOutlineIDs: [7],
-                                               roofOverAnchor: 60)
+                                               roofOverAnchor: { lookedUp = true; return 60 }())
 
-            XCTAssertEqual(roof.height, 60)
+            XCTAssertEqual(roof.height, 0)
             XCTAssertFalse(roof.lifts)
+            XCTAssertFalse(lookedUp)
         }
     }
 }

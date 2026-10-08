@@ -11,14 +11,13 @@ enum RenderGraphFactory {
                                  shadowMapTextureProvider: @escaping () -> MTLTexture?,
                                  groundShadowMaskTextureProvider: @escaping () -> MTLTexture?) -> RenderGraph {
         let tileWorkingSetSubsystem = TileWorkingSetSubsystem(tileRenderStore: context.tileRenderStore,
-                                                              tileTraceRecorder: context.tileTraceRecorder)
+                                                              tileTraceRecorder: context.tileTraceRecorder,
+                                                              buildingsMinimumTileZoom: BuildingCoveragePlanner.minimumDrawZoom(settings: settings))
         let tileProjectionIndexSubsystem = TileProjectionIndexSubsystem(flatTileOriginCalculator: context.flatTileOriginCalculator)
         let baseLabelSubsystem = BaseLabelPrepareSubsystem(baseLabelCache: context.baseLabelCache,
                                                            roadLabelCache: context.roadLabelCache,
                                                            baseLabelTraceRecorder: context.baseLabelTraceRecorder,
                                                            metalDevice: context.metalContext.device,
-                                                           occlusionProbePipeline: context.labelOcclusionProbePipeline,
-                                                           depthDisabledState: context.depthDisabledState,
                                                            settings: settings.labels,
                                                            debugOverlayControls: debugOverlayControls)
         let baseLabelDrawSubsystem = BaseLabelDrawSubsystem(textRenderer: context.textRenderer,
@@ -53,7 +52,9 @@ enum RenderGraphFactory {
                                                           groundCutStates: context.sceneModelGroundCutStates,
                                                           depthDisabledState: context.depthDisabledState,
                                                           shadowMapTextureProvider: shadowMapTextureProvider,
-                                                          shadowFallbackTexture: context.shadowFallbackTexture)
+                                                          shadowFallbackTexture: context.shadowFallbackTexture,
+                                                          minimumZoom: settings.modelArchive?.minimumZoom ?? 0,
+                                                          riseSeconds: settings.scene.extrusion.riseSeconds)
         let flatMapSurfaceSubsystem = FlatMapSurfaceRenderSubsystem(tilePipeline: context.tilePipeline,
                                                                     groundOwnerState: context.groundOwnerState,
                                                                     tileStencilTestState: context.tileStencilTestState,
@@ -74,6 +75,7 @@ enum RenderGraphFactory {
                                                                           depthDisabledState: context.depthDisabledState,
                                                                           shadowMapTextureProvider: shadowMapTextureProvider,
                                                                           shadowFallbackTexture: context.shadowFallbackTexture,
+                                                                          extrusion: settings.scene.extrusion,
                                                                           debugOverlayControls: debugOverlayControls)
         let starfieldSubsystem = StarfieldRenderSubsystem(starfieldRenderer: context.starfieldRenderer,
                                                           skyBackdropDepthState: context.skyBackdropDepthState,
@@ -108,6 +110,10 @@ enum RenderGraphFactory {
             tileProjectionIndexSubsystem,
             sceneModelSubsystem,
             modelTileSubsystem,
+            // Before the labels: the buildings' rise this frame
+            // (`FrameContextSharedState.buildingHeightScale`) is the height
+            // of the roofs the labels stand on.
+            buildingExtrusionSubsystem,
             baseLabelSubsystem,
             baseLabelDrawSubsystem,
             roadLabelDrawSubsystem,
@@ -116,7 +122,6 @@ enum RenderGraphFactory {
             groundShadowMaskSubsystem,
             tileOwnershipSubsystem,
             flatMapSurfaceSubsystem,
-            buildingExtrusionSubsystem,
             starfieldSubsystem,
             globeVectorSurfaceSubsystem,
             surfaceLabelSubsystem,

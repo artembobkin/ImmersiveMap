@@ -14,6 +14,8 @@ struct DebugOverlayControlSnapshot: Equatable {
     let tileGridDensity: Int
     /// The ring rules by target zoom (`RingRuleSets`), normalized.
     let ringRuleSets: RingRuleSets
+    /// The labels' reach by camera zoom (`LabelDistanceRules`), normalized.
+    let labelDistanceRules: LabelDistanceRules
     /// The local detail's distance the panel has been dragged to, in
     /// metres; nil keeps `BaseSettings.localDetailMaximumDistanceMeters`.
     let localLabelMaximumDistanceMeters: Float?
@@ -30,6 +32,7 @@ struct DebugOverlayControlSnapshot: Equatable {
          tileGridEnabled: Bool = false,
          tileGridDensity: Int = DebugTileGridDensity.standard,
          ringRuleSets: RingRuleSets = .default,
+         labelDistanceRules: LabelDistanceRules = .default,
          localLabelMaximumDistanceMeters: Float? = nil,
          labelPerspectiveMinimumScale: Float? = nil) {
         self.axesEnabled = axesEnabled
@@ -41,6 +44,7 @@ struct DebugOverlayControlSnapshot: Equatable {
         self.tileGridEnabled = tileGridEnabled
         self.tileGridDensity = DebugTileGridDensity.clamp(tileGridDensity)
         self.ringRuleSets = ringRuleSets.normalized()
+        self.labelDistanceRules = labelDistanceRules.normalized()
         self.localLabelMaximumDistanceMeters = localLabelMaximumDistanceMeters
         self.labelPerspectiveMinimumScale = labelPerspectiveMinimumScale
     }
@@ -57,6 +61,7 @@ final class DebugOverlayControlState {
     private var tileGridEnabled = false
     private var tileGridDensity = DebugTileGridDensity.standard
     private var ringRuleSets = RingRuleSets.default
+    private var labelDistanceRules = LabelDistanceRules.default
     private var localLabelMaximumDistanceMeters: Float?
     private var labelPerspectiveMinimumScale: Float?
 
@@ -73,6 +78,7 @@ final class DebugOverlayControlState {
                                            tileGridEnabled: tileGridEnabled,
                                            tileGridDensity: tileGridDensity,
                                            ringRuleSets: ringRuleSets,
+                                           labelDistanceRules: labelDistanceRules,
                                            localLabelMaximumDistanceMeters: localLabelMaximumDistanceMeters,
                                            labelPerspectiveMinimumScale: labelPerspectiveMinimumScale)
     }
@@ -89,6 +95,14 @@ final class DebugOverlayControlState {
         lock.lock()
         defer { lock.unlock() }
         return labelPerspectiveMinimumScale
+    }
+
+    /// The labels' reach at a camera zoom, from the rule the zoom falls
+    /// in (`LabelDistanceRules`).
+    func labelDistanceScale(forCameraZoom cameraZoom: Double) -> Float {
+        lock.lock()
+        defer { lock.unlock() }
+        return labelDistanceRules.scale(forCameraZoom: cameraZoom)
     }
 
     func setLabelPerspectiveMinimumScale(_ scale: Float?) {
@@ -155,6 +169,12 @@ final class DebugOverlayControlState {
     func setRingRuleSets(_ sets: RingRuleSets) {
         lock.lock()
         ringRuleSets = sets.normalized()
+        lock.unlock()
+    }
+
+    func setLabelDistanceRules(_ rules: LabelDistanceRules) {
+        lock.lock()
+        labelDistanceRules = rules.normalized()
         lock.unlock()
     }
 }

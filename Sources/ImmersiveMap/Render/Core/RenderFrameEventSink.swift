@@ -10,9 +10,11 @@ enum RenderInvalidationReason {
 
 struct RenderActivityState {
     let labelFadeRenderingActive: Bool
-    let labelVisibilityCycleRenderingActive: Bool
     let avatarAnimationRenderingActive: Bool
     let sceneModelAnimationRenderingActive: Bool
+    /// The buildings or the models rising out of the ground
+    /// (`ExtrusionRise`).
+    var extrusionRiseRenderingActive: Bool = false
 }
 
 /// Events arrive both from the main thread and from background tasks (tile

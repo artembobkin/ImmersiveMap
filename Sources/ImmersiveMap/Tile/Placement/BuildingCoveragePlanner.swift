@@ -5,52 +5,34 @@ import Foundation
 import simd
 
 /// The flat map's building coverage: which resident tiles draw their
-/// buildings this frame, as a partition of the ground with no overlaps.
+/// buildings this frame.
 ///
-/// The ground coverage may overlap (a coarse parent under fine children,
-/// resolved per pixel by the tile-priority stencil), and buildings cannot
-/// live with that: a wall rises into the pixels of the ground behind it,
-/// so a pixel test cannot tell the parent's copy of a building from the
-/// child's, and the two versions cut through each other. Buildings are
-/// owned by ground area instead. The planner takes the tiles resident in
-/// the working set (the stand-ins included), never demands more, and
-/// hands every slot of the building quadtree to exactly one of them:
-///
-/// - the grid is the `minimumSourceZoom` tiles (z14, the zoom where the
-///   tiles carry real buildings; coarser tiles merge them into blocks of one
-///   height and are never used), split down to the target zoom into the
-///   slots the view needs (a slot no visible tile lies in is not needed,
-///   since nothing of it is on screen);
-/// - a needed slot draws the finest resident tile that covers it: a
-///   resident tile draws itself at its own extent wherever no resident
-///   descendant the view needs lies under it, and clipped to the slots of
-///   the needed descendants it has none for. So the nearest loaded tile
-///   always draws its own buildings, and its loaded neighbours never lose
-///   theirs because a farther sibling has not arrived; the parent fills
-///   only the slots that are actually missing, cut at the slot's edge the
-///   way the ground's stencil cuts the coarse ground under a fine tile;
-/// - a slot with no resident tile at or above it (down from the grid)
-///   borrows nothing coarser than the grid: the resident tiles under it
-///   draw what they have, at their own extents, the finer ones included
-///   (a zoom-out's tiles stand in for the parent they wait for, as they
-///   do for the ground), and what none of them covers stays empty until
-///   its tile arrives;
-/// - cells farther than `fieldRadiusInCells` from the eye's ground point
-///   are skipped: buildings are a near-field feature;
-/// - a frame whose target zoom is coarser than the grid draws no
-///   buildings at all: its ground carries none, and the tiles standing in
-///   from a closer view would draw as islands.
-///
-/// A clipped placement (`placeIn` below the source) is drawn with the
-/// vertex-stage slot clip; the result is otherwise drawn with the depth
-/// test alone, no stencil, by the building and shadow passes.
+/// Only the frame's targets of its target zoom draw buildings, each in its
+/// own place, once it is resident: a coarser tile standing in where they
+/// have not arrived draws none, so the buildings never overlap and a tile
+/// keeps its own buildings from the frame it arrives in. The planner never
+/// demands a tile. The targets farther than `fieldRadiusInCells` from the
+/// eye's ground point are skipped: buildings are a near-field feature. A
+/// frame whose target zoom is below the buildings' zoom
+/// (`minimumDrawZoom(settings:)`) plans none.
 enum BuildingCoveragePlanner {
-    /// The zoom of the building grid and the coarsest tile that may draw
-    /// buildings.
+    /// The coarsest tile zoom that carries real buildings: coarser tiles
+    /// merge them into blocks of one height and never draw them. Also the
+    /// grid the near field is measured in.
     static let minimumSourceZoom = 14
     /// How far from the eye's ground point, in grid cells, buildings are
     /// drawn.
     static let fieldRadiusInCells: Double = 3
+
+    /// The tile zoom the buildings draw from: the zoom of the tiles a
+    /// camera at `ExtrusionSettings.buildingsMinimumZoom` targets, within
+    /// the tileset's zooms and never coarser than `minimumSourceZoom`. The
+    /// parser extrudes no coarser tile (`TileParseOptions`).
+    static func minimumDrawZoom(settings: ImmersiveMapSettings) -> Int {
+        let minimumZoom = settings.scene.extrusion.buildingsMinimumZoom
+        let wanted = minimumZoom.isFinite ? Int(max(minimumZoom, 0).rounded(.down)) : Int.max
+        return max(minimumSourceZoom, min(wanted, settings.tiles.coverage.maximumZoomLevel))
+    }
 
     /// The eye's ground point in grid cell units. The engine's camera looks
     /// at the world origin (the pan moves the world under it), so the eye
@@ -66,134 +48,38 @@ enum BuildingCoveragePlanner {
         return eyeGround * pow(2.0, Double(minimumSourceZoom - targetZoom))
     }
 
-    /// `resident` is every tile in the working set; `visibleTiles` the
-    /// frame's coverage targets (the exact tiles at the target zoom and the
-    /// parents placed under them), which decide which children a cell
-    /// needs; `eyeGroundCell` the eye's ground point in grid cell units (a
-    /// z14 tile is one unit), nil for the globe, where nothing is extruded;
-    /// `targetZoom` the frame's target zoom, the finest target's when not
-    /// given.
+    /// `resident` is every tile in the working set, `visibleTiles` the
+    /// frame's coverage targets. `eyeGroundCell` is the eye's ground point
+    /// in grid cell units (a z14 tile is one unit), nil for the globe,
+    /// where nothing is extruded. `targetZoom` is the frame's target zoom,
+    /// the finest target's when not given, and `minimumZoom` the tile zoom
+    /// the buildings draw from (`minimumDrawZoom(settings:)`).
     static func plan(resident: [Tile: MetalTile],
                      visibleTiles: [VisibleTile],
                      eyeGroundCell: SIMD2<Double>?,
-                     targetZoom: Int? = nil) -> PlaceTilesContext {
-        // Coarser than the grid nothing draws: the ground tiles carry no
-        // buildings there, and whatever still stands in from a closer
-        // view would draw as islands of its own outline.
+                     targetZoom: Int? = nil,
+                     minimumZoom: Int = minimumSourceZoom) -> PlaceTilesContext {
         guard let eyeGroundCell,
               let targetZoom = targetZoom ?? visibleTiles.map(\.z).max(),
-              targetZoom >= minimumSourceZoom else {
+              targetZoom >= max(minimumZoom, minimumSourceZoom) else {
             return .empty
         }
-        struct Key: Hashable {
-            let tile: Tile
-            let worldWrap: Int8
-        }
-
-        // What the view needs, per world copy: the targets from the grid
-        // down, every ancestor of one down to the grid, and everything
-        // under one.
-        var targetsByWorldWrap: [Int8: Set<Tile>] = [:]
-        var targetAncestorsByWorldWrap: [Int8: Set<Tile>] = [:]
-        for tile in visibleTiles where tile.z >= minimumSourceZoom {
-            targetsByWorldWrap[tile.worldWrap, default: []].insert(tile.tile)
-            var ancestor = tile.tile
-            while ancestor.z > minimumSourceZoom, let parent = ancestor.findParentTile(atZoom: ancestor.z - 1) {
-                ancestor = parent
-                targetAncestorsByWorldWrap[tile.worldWrap, default: []].insert(ancestor)
-            }
-        }
-        func isNeeded(_ tile: Tile, worldWrap: Int8) -> Bool {
-            if targetsByWorldWrap[worldWrap]?.contains(tile) ?? false || targetAncestorsByWorldWrap[worldWrap]?.contains(tile) ?? false {
-                return true
-            }
-            var ancestor = tile
-            while ancestor.z > minimumSourceZoom, let parent = ancestor.findParentTile(atZoom: ancestor.z - 1) {
-                ancestor = parent
-                if targetsByWorldWrap[worldWrap]?.contains(ancestor) ?? false {
-                    return true
-                }
-            }
-            return false
-        }
-
-        // The resident tiles of the grid and below, every ancestor of one
-        // down to the grid (the branches worth descending into), and the
-        // cells they belong to, per world copy the view shows.
-        var present = Set<Key>()
-        var cells = Set<Key>()
-        for worldWrap in targetsByWorldWrap.keys {
-            for tile in resident.keys where tile.z >= minimumSourceZoom && isNeeded(tile, worldWrap: worldWrap) {
-                var ancestor = tile
-                while true {
-                    present.insert(Key(tile: ancestor, worldWrap: worldWrap))
-                    if ancestor.z == minimumSourceZoom {
-                        cells.insert(Key(tile: ancestor, worldWrap: worldWrap))
-                        break
-                    }
-                    guard let parent = ancestor.findParentTile(atZoom: ancestor.z - 1) else {
-                        break
-                    }
-                    ancestor = parent
-                }
-            }
-        }
-
-        /// The placements under `tile`. `cover` is the finest resident tile
-        /// at or above `tile` (nil when there is none down from the grid).
-        /// A needed child with resident tiles under it resolves on its own;
-        /// every other needed child is a slot the cover draws into, clipped;
-        /// a tile with nothing resident under it draws the cover whole. At
-        /// or below the target zoom a resident tile draws whole, its finer
-        /// residents unused; a missing one hands its slot to the finer
-        /// residents it has, and the cover fills the quadrants they leave.
-        func resolve(_ tile: Tile, worldWrap: Int8, cover: MetalTile?) -> [PlaceTile] {
-            let own = resident[tile]
-            let cover = own ?? cover
-            let needed: [Tile]
-            if tile.z < targetZoom {
-                needed = children(of: tile).filter { isNeeded($0, worldWrap: worldWrap) }
-            } else if own == nil, children(of: tile).contains(where: { present.contains(Key(tile: $0, worldWrap: worldWrap)) }) {
-                needed = children(of: tile)
-            } else {
-                needed = []
-            }
-            let branches = needed.filter { present.contains(Key(tile: $0, worldWrap: worldWrap)) }
-            guard let cover else {
-                return branches.flatMap { resolve($0, worldWrap: worldWrap, cover: nil) }
-            }
-            func place(in slot: Tile) -> PlaceTile {
-                PlaceTile(metalTile: cover,
-                          placeIn: VisibleTile(tile: slot, worldWrap: worldWrap))
-            }
-            if branches.isEmpty {
-                return [place(in: tile)]
-            }
-            var placements: [PlaceTile] = []
-            for child in needed {
-                if present.contains(Key(tile: child, worldWrap: worldWrap)) {
-                    placements.append(contentsOf: resolve(child, worldWrap: worldWrap, cover: cover))
-                } else {
-                    placements.append(place(in: child))
-                }
-            }
-            return placements
-        }
-
-        var result: [PlaceTile] = []
         let cellsCount = Double(1 << minimumSourceZoom)
-        for cell in cells {
-            let center = SIMD2<Double>(Double(cell.tile.x) + Double(cell.worldWrap) * cellsCount + 0.5,
-                                       Double(cell.tile.y) + 0.5)
+        let cellsPerTile = pow(2.0, Double(minimumSourceZoom - targetZoom))
+        var planned = Set<VisibleTile>()
+        var result: [PlaceTile] = []
+        for target in visibleTiles where target.z == targetZoom {
+            guard let metalTile = resident[target.tile], planned.insert(target).inserted else {
+                continue
+            }
+            let center = SIMD2<Double>((Double(target.x) + 0.5) * cellsPerTile + Double(target.worldWrap) * cellsCount,
+                                       (Double(target.y) + 0.5) * cellsPerTile)
             guard simd_length(center - eyeGroundCell) <= fieldRadiusInCells else {
                 continue
             }
-            result.append(contentsOf: resolve(cell.tile, worldWrap: cell.worldWrap, cover: nil))
+            result.append(PlaceTile(metalTile: metalTile, placeIn: target))
         }
         result.sort { lhs, rhs in
-            if lhs.placeIn.z != rhs.placeIn.z {
-                return lhs.placeIn.z > rhs.placeIn.z
-            }
             if lhs.placeIn.worldWrap != rhs.placeIn.worldWrap {
                 return lhs.placeIn.worldWrap < rhs.placeIn.worldWrap
             }
@@ -203,13 +89,5 @@ enum BuildingCoveragePlanner {
             return lhs.placeIn.y < rhs.placeIn.y
         }
         return PlaceTilesContext(tilePlacements: result)
-    }
-
-    private static func children(of tile: Tile) -> [Tile] {
-        let x = tile.x * 2
-        let y = tile.y * 2
-        let z = tile.z + 1
-        return [Tile(x: x, y: y, z: z), Tile(x: x + 1, y: y, z: z),
-                Tile(x: x, y: y + 1, z: z), Tile(x: x + 1, y: y + 1, z: z)]
     }
 }

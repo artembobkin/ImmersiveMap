@@ -26,6 +26,10 @@ struct PreparedTileCPU: Sendable {
         /// lines, as line segments (`unifyOrderedRoadLayer`). A layer
         /// without edge lines keeps the whole range as bodies.
         let edgeLineIndexStart: Int
+        /// The ground bucket only: whether its fills are one flattened
+        /// layer that does not overlap (`GroundFlattening`), drawn at one
+        /// depth. The fill runs carry it (`GroundStyleRun.flattenedFlag`).
+        let isFlattened: Bool
 
         init(vertices: [TileVertexIn],
              indices: [UInt32],
@@ -33,7 +37,9 @@ struct PreparedTileCPU: Sendable {
              styleZoomFades: [SIMD2<Float>],
              lineStyles: [TileLineStyle]? = nil,
              fillsIndexCount: Int? = nil,
-             edgeLineIndexStart: Int? = nil) {
+             edgeLineIndexStart: Int? = nil,
+             isFlattened: Bool = false) {
+            self.isFlattened = isFlattened
             self.vertices = vertices
             self.indices = indices
             self.styles = styles

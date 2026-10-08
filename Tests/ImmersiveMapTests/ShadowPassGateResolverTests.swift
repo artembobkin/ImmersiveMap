@@ -31,7 +31,13 @@ final class ShadowPassGateResolverTests: XCTestCase {
                                                        hasModelCasters: true))
     }
 
-    func testEmptyPlacementsHaveNoBuildingCasters() {
-        XCTAssertFalse(ShadowPassGateResolver.hasBuildingCasters(placeTilesContext: PlaceTilesContext.empty))
+    /// The buildings cast only where they draw: a frame that draws none
+    /// (off the buildings' zoom, or every tile waiting for its model tile)
+    /// runs no shadow pass for them, whatever the coverage planned.
+    func testNoDrawnBuildingsHaveNoBuildingCasters() {
+        XCTAssertTrue(ShadowMapReuseController.casterKeys(drawnPlacements: []).isEmpty)
+        XCTAssertNil(ShadowPassGateResolver.resolve(shadowFrameState: Self.state,
+                                                    hasBuildingCasters: false,
+                                                    hasModelCasters: false))
     }
 }

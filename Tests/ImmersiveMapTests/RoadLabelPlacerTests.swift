@@ -143,6 +143,38 @@ final class RoadLabelPlacerTests: XCTestCase {
 
     // MARK: - Instance boxes
 
+    /// A path point deeper than the reach is not visible, as one behind
+    /// the camera is not, so a glyph on it is not placed
+    /// (`LabelDistanceRule.scale`).
+    func testAPointPastTheReachIsNotVisible() {
+        // The clip w grows with the world y: 1 at the tile's south edge,
+        // 11 at its north edge.
+        let matrix = simd_float4x4(columns: (SIMD4<Float>(1, 0, 0, 0),
+                                             SIMD4<Float>(0, 1, 0, 1),
+                                             SIMD4<Float>(0, 0, 1, 0),
+                                             SIMD4<Float>(0, 0, 0, 1)))
+        let points = [TilePointInput(uv: SIMD2<Float>(0.5, 1), tile: .zero),
+                      TilePointInput(uv: SIMD2<Float>(0.5, 0), tile: .zero)]
+        var screenPoints: [SIMD2<Float>] = []
+        var visible: [Bool] = []
+        RoadLabelPlacer.project(pathPoints: points,
+                                origin: FlatTileOriginData(panRelativeOrigin: .zero, size: 10),
+                                cameraMatrix: matrix,
+                                viewportSize: SIMD2<Float>(100, 100),
+                                maximumDepth: 5,
+                                screenPoints: &screenPoints,
+                                visible: &visible)
+        XCTAssertEqual(visible, [true, false])
+
+        RoadLabelPlacer.project(pathPoints: points,
+                                origin: FlatTileOriginData(panRelativeOrigin: .zero, size: 10),
+                                cameraMatrix: matrix,
+                                viewportSize: SIMD2<Float>(100, 100),
+                                screenPoints: &screenPoints,
+                                visible: &visible)
+        XCTAssertEqual(visible, [true, true], "No reach keeps every point in front of the camera")
+    }
+
     func testInstanceBoxesComeFromThePlacement() {
         var output = RoadLabelPlacer.Output()
         output.placements = [Self.placement(SIMD2<Float>(10, 20), angle: 0.1),

@@ -22,6 +22,9 @@ final class ParsedTile {
     let textLabels: [ParsedTextLabel]
     let roadTextLabels: [ParsedRoadTextLabel]
     let parseLayerTimings: [TileParseLayerTiming]
+    /// Whether the ground fills are one flattened layer that does not
+    /// overlap (`GroundFlattening`).
+    let groundIsFlattened: Bool
 
     init(
         drawingPolygon: DrawingPolygonBytes,
@@ -37,7 +40,8 @@ final class ParsedTile {
         tile: Tile,
         textLabels: [ParsedTextLabel],
         roadTextLabels: [ParsedRoadTextLabel],
-        parseLayerTimings: [TileParseLayerTiming]
+        parseLayerTimings: [TileParseLayerTiming],
+        groundIsFlattened: Bool = false
     ) {
         self.drawingPolygon = drawingPolygon
         self.drawingRoadPhases = drawingRoadPhases
@@ -53,5 +57,6 @@ final class ParsedTile {
         self.textLabels = textLabels
         self.roadTextLabels = roadTextLabels
         self.parseLayerTimings = parseLayerTimings
+        self.groundIsFlattened = groundIsFlattened
     }
 }

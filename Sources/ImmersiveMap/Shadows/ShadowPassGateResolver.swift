@@ -49,12 +49,13 @@ struct GroundShadowMaskBinding {
 /// (the same trick as `RenderLayerPlanner`). Both call after
 /// subsystem updates, when `sharedState` is final for the frame.
 enum ShadowPassGateResolver {
+    /// The buildings cast only where they draw
+    /// (`FrameContextSharedState.drawnBuildingPlacements`): planned but off
+    /// the buildings' zoom, or waiting for a model tile, they cast nothing.
     static func resolve(frameContext: FrameContext) -> ShadowFrameState? {
-        let tilePlacementState = frameContext.sharedState.tilePlacementState
-        return resolve(shadowFrameState: frameContext.shadowFrameState,
-                       hasBuildingCasters: hasBuildingCasters(
-                           placeTilesContext: tilePlacementState.buildingPlaceTilesContext),
-                       hasModelCasters: frameContext.sharedState.sceneModelState.hasShadowCasters)
+        resolve(shadowFrameState: frameContext.shadowFrameState,
+                hasBuildingCasters: frameContext.sharedState.drawnBuildingPlacements.isEmpty == false,
+                hasModelCasters: frameContext.sharedState.sceneModelState.hasShadowCasters)
     }
 
     static func resolve(shadowFrameState: ShadowFrameState?,
@@ -66,7 +67,4 @@ enum ShadowPassGateResolver {
         return shadowFrameState
     }
 
-    static func hasBuildingCasters(placeTilesContext: PlaceTilesContext) -> Bool {
-        placeTilesContext.tilePlacements.contains { $0.metalTile.tileBuffers.extruded.indicesCount > 0 }
-    }
 }

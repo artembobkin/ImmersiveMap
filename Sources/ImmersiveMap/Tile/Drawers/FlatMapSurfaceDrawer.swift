@@ -18,17 +18,6 @@ enum FlatMapSurfaceDrawer {
     /// edge's steps.
     static let roadEdgeLineAlpha: Float = 0.5
 
-    /// Whether a source draws with the exact rank depth (Tile.metal,
-    /// kTileExactRankDepth): every source below `exactRankDepthBelowZoom`.
-    /// The rank depth in the vertex z survives the near cut only while a
-    /// source's triangles are small against the near distance, which the
-    /// target zoom's tiles are and a coarser band's are not (each level
-    /// down doubles the error), so the target zoom keeps the early depth
-    /// test and everything coarser takes the exact path.
-    static func usesExactRankDepth(sourceZoom: Int, exactRankDepthBelowZoom: Int) -> Bool {
-        sourceZoom < exactRankDepthBelowZoom
-    }
-
     /// The view depth of the ground point under the centre of the screen,
     /// which is the clip-space w there: the depth the point-locked road
     /// widths are stated at, so a road is its style's points wide at the
@@ -56,9 +45,6 @@ enum FlatMapSurfaceDrawer {
         return depth.isFinite && depth > 0 ? depth : 0
     }
 
-    /// - Parameter exactRankDepthBelowZoom: the sources below this zoom
-    ///   write their rank depth from the fragment stage
-    ///   (`usesExactRankDepth`). The main coverage passes the target zoom.
     /// - Parameter roadRankState: the road buckets' state, the rank depth
     ///   tested and written (`RoadRankDepth`).
     static func draw(renderEncoder: MTLRenderCommandEncoder,
@@ -74,7 +60,6 @@ enum FlatMapSurfaceDrawer {
                      tileStencilTestState: MTLDepthStencilState,
                      roadRankState: MTLDepthStencilState,
                      isWireframeEnabled: Bool,
-                     exactRankDepthBelowZoom: Int,
                      linelessTiles: Set<VisibleTile> = []) {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder)
         // Every tile triangle (ground, road buckets, bridge overlay) is
@@ -121,14 +106,12 @@ enum FlatMapSurfaceDrawer {
         // origins across the seam. Finest first, so the owner writes win.
         typealias SourceKey = FlatGroundSourceKey
         var seenSources = Set<SourceKey>()
-        var uniqueSources: [(metalTile: MetalTile, worldWrap: Int8, exactRankDepth: Bool)] = []
+        var uniqueSources: [(metalTile: MetalTile, worldWrap: Int8)] = []
         uniqueSources.reserveCapacity(placeTilesContext.tilePlacements.count)
         for placeTile in placeTilesContext.tilePlacements {
             let key = SourceKey(tile: placeTile.metalTile.tile, worldWrap: placeTile.placeIn.worldWrap)
             if seenSources.insert(key).inserted {
-                let exact = usesExactRankDepth(sourceZoom: placeTile.metalTile.tile.z,
-                                               exactRankDepthBelowZoom: exactRankDepthBelowZoom)
-                uniqueSources.append((placeTile.metalTile, placeTile.placeIn.worldWrap, exact))
+                uniqueSources.append((placeTile.metalTile, placeTile.placeIn.worldWrap))
             }
         }
         uniqueSources.sort { $0.metalTile.tile.z > $1.metalTile.tile.z }
@@ -143,9 +126,7 @@ enum FlatMapSurfaceDrawer {
             linedSourceKeys.contains(SourceKey(tile: $0.metalTile.tile, worldWrap: $0.worldWrap))
         }
 
-        // Each group selects its pipeline per source, since a source's
-        // depth path is its own (usesExactRankDepth): finest first, so the
-        // exact sources come last and the state changes once per group.
+        // Each group selects its pipeline once.
         enum GroundPipeline {
             case lines
             case fills
@@ -153,24 +134,23 @@ enum FlatMapSurfaceDrawer {
             case roadOpaque
             case roadBlended
         }
-        var selectedPipeline: (GroundPipeline, Bool)?
-        func selectPipeline(_ pipeline: GroundPipeline, exactRankDepth: Bool) {
-            if let selectedPipeline, selectedPipeline == (pipeline, exactRankDepth) { return }
-            selectedPipeline = (pipeline, exactRankDepth)
+        var selectedPipeline: GroundPipeline?
+        func selectPipeline(_ pipeline: GroundPipeline) {
+            if selectedPipeline == pipeline { return }
+            selectedPipeline = pipeline
             switch pipeline {
             case .lines:
-                tilePipeline.selectFlatLinesPipeline(renderEncoder: renderEncoder, exactRankDepth: exactRankDepth)
+                tilePipeline.selectFlatLinesPipeline(renderEncoder: renderEncoder)
             case .fills:
-                tilePipeline.selectFlatFillsPipeline(renderEncoder: renderEncoder, exactRankDepth: exactRankDepth)
+                tilePipeline.selectFlatFillsPipeline(renderEncoder: renderEncoder)
             case .opaqueFills:
-                tilePipeline.selectFlatOpaquePipeline(renderEncoder: renderEncoder, exactRankDepth: exactRankDepth)
+                tilePipeline.selectFlatOpaquePipeline(renderEncoder: renderEncoder)
             case .roadOpaque, .roadBlended:
                 // A pipeline without the road variants draws the roads as
                 // plain ribbons.
                 if tilePipeline.selectFlatRoadPipeline(renderEncoder: renderEncoder,
-                                                       blended: pipeline == .roadBlended,
-                                                       exactRankDepth: exactRankDepth) == false {
-                    tilePipeline.selectFlatLinesPipeline(renderEncoder: renderEncoder, exactRankDepth: exactRankDepth)
+                                                       blended: pipeline == .roadBlended) == false {
+                    tilePipeline.selectFlatLinesPipeline(renderEncoder: renderEncoder)
                 }
             }
         }
@@ -180,10 +160,15 @@ enum FlatMapSurfaceDrawer {
                        bandOffset: Float,
                        linesOnly: Bool = false,
                        runFilter: ((GroundStyleRun) -> Bool)? = nil) {
+            selectPipeline(pipeline)
             for source in linesOnly ? linedSources : uniqueSources {
-                selectPipeline(pipeline, exactRankDepth: source.exactRankDepth)
+                let layer = source.metalTile.tileBuffers[keyPath: keyPath]
+                // The fills of a flattened ground take one depth: no rank
+                // step between their styles (Tile.metal, FlatDepthBand).
+                let rankStep: Float = pipeline == .opaqueFills && layer.isFlattened
+                    ? 0 : GlobeSurfaceDepthRank.layerDepthStep
                 drawFlatGeometryLayer(renderEncoder: renderEncoder,
-                                      buffers: source.metalTile.tileBuffers[keyPath: keyPath],
+                                      buffers: layer,
                                       tile: source.metalTile.tile,
                                       worldWrap: source.worldWrap,
                                       flatRenderState: flatRenderState,
@@ -191,6 +176,7 @@ enum FlatMapSurfaceDrawer {
                                       drawableHeightPx: drawableSizePx.y,
                                       overviewFade: overviewFadeUniform,
                                       bandOffset: bandOffset,
+                                      rankStep: rankStep,
                                       runFilter: runFilter)
             }
         }
@@ -201,10 +187,13 @@ enum FlatMapSurfaceDrawer {
         // tile-priority stencil; the translucent fills and the ribbons
         // follow, tested only. The band sits at the far plane, farther than
         // every real fragment, so the buildings' occlusion is untouched.
+        // A flattened ground's fills overlap nowhere: every run of them draws
+        // in the opaque pass, at one depth, whatever its fade.
         let isOpaqueFillRun: (GroundStyleRun) -> Bool = { run in
             run.isFillsClass
-                && run.isAlphaOpaque
-                && TileStyleFadeMath.fadeIsOne(zoomFade: run.zoomFade, overviewFade: overviewFadeUniform)
+                && (run.isFlattened
+                    || (run.isAlphaOpaque
+                        && TileStyleFadeMath.fadeIsOne(zoomFade: run.zoomFade, overviewFade: overviewFadeUniform)))
         }
         let isTranslucentFillRun: (GroundStyleRun) -> Bool = { run in
             run.isFillsClass && isOpaqueFillRun(run) == false
@@ -275,7 +264,7 @@ enum FlatMapSurfaceDrawer {
                       indexRange: Range<Int>,
                       primitiveType: MTLPrimitiveType = .triangle) {
             let source = linedSources[roadDraw.source]
-            selectPipeline(pipeline, exactRankDepth: source.exactRankDepth)
+            selectPipeline(pipeline)
             if pipeline == .roadBlended {
                 // The blended road variant's alpha scale (Tile.metal,
                 // buffer 11): one for a body, the edge lines' share for
@@ -360,6 +349,7 @@ enum FlatMapSurfaceDrawer {
                                               drawableHeightPx: Float,
                                               overviewFade: TileOverviewFadeUniform,
                                               bandOffset: Float,
+                                              rankStep: Float = GlobeSurfaceDepthRank.layerDepthStep,
                                               runFilter: ((GroundStyleRun) -> Bool)? = nil,
                                               indexRange: Range<Int>? = nil,
                                               primitiveType: MTLPrimitiveType = .triangle) {
@@ -409,8 +399,8 @@ enum FlatMapSurfaceDrawer {
         // draws at full extent and the stencil keeps it out of covered slots.
         renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.reference(sourceZoom: tile.z))
         // The group's place in the rank-depth band (Tile.metal, buffer 7).
-        var bandOffsetValue = bandOffset
-        renderEncoder.setVertexBytes(&bandOffsetValue, length: MemoryLayout<Float>.stride, index: 7)
+        var depthBand = FlatDepthBand(offset: bandOffset, rankStep: rankStep)
+        renderEncoder.setVertexBytes(&depthBand, length: MemoryLayout<FlatDepthBand>.stride, index: 7)
 
         // Anchors point-dashed patterns to the geometry: the scale depends on
         // the source tile's world size and the viewport, never on the live
@@ -476,4 +466,11 @@ enum FlatMapSurfaceDrawer {
         if spanCount > 0 { spans.append((spanStart, spanCount)) }
         return spans
     }
+}
+
+/// Mirror of `FlatDepthBand` in Tile.metal (buffer 7): a draw's offset in
+/// the rank-depth band and its step from one style rank to the next.
+struct FlatDepthBand {
+    var offset: Float
+    var rankStep: Float
 }

@@ -120,8 +120,6 @@ final class SharedRenderResources {
     let sceneModelPipeline: SceneModelPipeline
     /// The models of the model tiles, see `ModelTilePipeline`.
     let modelTilePipeline: ModelTilePipeline
-    /// The point labels' occlusion probes in the world pass.
-    let labelOcclusionProbePipeline: LabelOcclusionProbePipeline
 
     // MARK: - Geometry and atlases
 
@@ -317,7 +315,6 @@ final class SharedRenderResources {
         self.horizonPipeline = compiled.horizonPipeline
         self.sceneModelPipeline = compiled.sceneModelPipeline
         self.modelTilePipeline = compiled.modelTilePipeline
-        self.labelOcclusionProbePipeline = compiled.labelOcclusionProbePipeline
         self.globeCap = compiled.globeCap
         self.avatars = compiled.avatars
         self.textRenderer = compiled.textRenderer
@@ -344,7 +341,6 @@ final class SharedRenderResources {
         let horizonPipeline: HorizonPipeline
         let sceneModelPipeline: SceneModelPipeline
         let modelTilePipeline: ModelTilePipeline
-        let labelOcclusionProbePipeline: LabelOcclusionProbePipeline
         let globeCap: GlobeCapRenderer.SharedResources
         let avatars: AvatarsRenderer.SharedResources
         let textRenderer: TextRenderer
@@ -376,7 +372,6 @@ final class SharedRenderResources {
         var horizonPipeline: HorizonPipeline?
         var sceneModelPipeline: SceneModelPipeline?
         var modelTilePipeline: ModelTilePipeline?
-        var labelOcclusionProbePipeline: LabelOcclusionProbePipeline?
         var globeCap: GlobeCapRenderer.SharedResources?
         var avatars: AvatarsRenderer.SharedResources?
         var textRenderer: TextRenderer?
@@ -439,11 +434,7 @@ final class SharedRenderResources {
             { modelTilePipeline = ModelTilePipeline(metalDevice: device,
                                                     pixelFormat: pixelFormat,
                                                     library: library,
-                                                    sampleCount: sampleCount) },
-            { labelOcclusionProbePipeline = LabelOcclusionProbePipeline(metalDevice: device,
-                                                                        pixelFormat: pixelFormat,
-                                                                        library: library,
-                                                                        sampleCount: sampleCount) }
+                                                    sampleCount: sampleCount) }
         ]
         DispatchQueue.concurrentPerform(iterations: jobs.count) { jobs[$0]() }
 
@@ -460,7 +451,6 @@ final class SharedRenderResources {
             horizonPipeline: horizonPipeline!,
             sceneModelPipeline: sceneModelPipeline!,
             modelTilePipeline: modelTilePipeline!,
-            labelOcclusionProbePipeline: labelOcclusionProbePipeline!,
             globeCap: globeCap!,
             avatars: avatars!,
             textRenderer: textRenderer!
