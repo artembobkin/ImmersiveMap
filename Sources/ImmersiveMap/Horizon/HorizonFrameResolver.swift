@@ -16,27 +16,20 @@ import simd
 ///   it is the same at every zoom.
 /// - **The fog**, the flat map's (`FogSettings`): the sky above the
 ///   horizon line, a glow of the horizon colour at the line decaying into
-///   the sky colour over a few degrees, and below it the far ground veiled
-///   toward the horizon colour by distance from the camera. The haze is stated in camera distances
-///   and turned into two angles under the line per frame
-///   (`HorizonEdgeMath.depression`), so the shader keeps its one angle
-///   profile: fully veiled up to the far angle, thinning smoothly to
-///   nothing at the near one, and the map under the camera stays
-///   byte-clean. With the fog off nothing is painted above the line and
-///   the ground keeps a thin band into the map's clear colour at it, so
-///   the far range still meets the sky with no seam. The haze's zoom fade
-///   (`FogSettings.hazeZoomFade`) thins the haze alone by the camera
-///   zoom: its profile is mixed from the seam band's to the haze's by the
-///   fade's strength, while the sky and the tint at the line stay the
-///   fog's, so a faded-out haze leaves the seam band in the horizon
-///   colour under a full sky.
+///   the sky colour over a few degrees, and below it a thin band of the
+///   ground whitening into the horizon colour at the line, which hides the
+///   seam between the far ground and the sky. With the fog off nothing is
+///   painted above the line and the band whitens into the map's clear
+///   colour, so the far range still meets the sky with no seam. The far
+///   ground itself is the ground fog's (`GroundFogSettings`), drawn by
+///   the shaders of what stands on the map, not here.
 ///
 /// The three never share a frame. The resting globe wears the first two.
 /// As the morph starts the atmosphere fades out, gone by
 /// `atmosphereFadeOutEnd` of the semantic transition, and the unroll then
-/// runs bare: no halo, no feather, no haze. Over the last stretch, from
+/// runs bare: no halo, no feather, no band. Over the last stretch, from
 /// `fogFadeInStart`, where the geometry is already a finished plane, the
-/// flat map's sky and haze fade in, complete at 1, so the surface switch
+/// flat map's sky and band fade in, complete at 1, so the surface switch
 /// happens between identical frames.
 struct HorizonHaze: Equatable {
     var edge: HorizonEdgeMath.Edge
@@ -107,25 +100,14 @@ enum HorizonFrameResolver {
     /// to the whole sky.
     static let maximumHaloRadians: Float = 45 * .pi / 180
 
-    /// The seam-hiding band of the plane with the fog off, radians below
-    /// the horizon: one exponential with a gain above one so it saturates
-    /// to the clear colour at the line, cut off smoothly a few degrees
-    /// under it.
+    /// The seam-hiding band of the plane, radians below the horizon: one
+    /// exponential with a gain above one so it saturates to the tint at the
+    /// line, cut off smoothly a few degrees under it.
     static let fogBandRadians: Float = 1.2 * .pi / 180
     static let fogGain: Float = 1.6
     static let fogCutoffStartRadians: Float = 4 * .pi / 180
     static let fogCutoffEndRadians: Float = 6 * .pi / 180
 
-    /// The haze with the fog on rides the same profile with its exponential
-    /// held saturated: the band is `hazeBandCutoffWidths` times the near
-    /// cutoff angle and the gain covers the decay over that angle
-    /// (`exp(1 / widths) = 1.65 < hazeGain`), so the profile is exactly the
-    /// cutoff's smooth ramp: 1 up to the far angle, 0 from the near one.
-    static let hazeBandCutoffWidths: Float = 2
-    static let hazeGain: Float = 1.7
-    /// The floor of the haze range, camera distances: nearer than this the
-    /// haze would sit under the camera.
-    static let minimumHazeStart: Float = 0.25
     /// The e-fold width, radians above the line, of the plane's horizon
     /// glow: the sky is the horizon colour at the line and the sky colour
     /// a few of these widths up.
@@ -151,7 +133,7 @@ enum HorizonFrameResolver {
         return 1 - t * t * (3 - 2 * t)
     }
 
-    /// How much of the flat map's sky and haze is in: 0 before
+    /// How much of the flat map's sky and band is in: 0 before
     /// `fogFadeInStart`, 1 at the end of the transition and on the plane.
     static func fogFade(transition: Float, renderSurfaceMode: ViewMode) -> Float {
         guard renderSurfaceMode == .spherical else { return 1 }
@@ -161,7 +143,7 @@ enum HorizonFrameResolver {
 
     /// - Parameters:
     ///   - transition: the semantic transition (the fades' clock).
-    ///   - zoom: the camera zoom, the haze zoom fade's clock.
+    ///   - zoom: the camera zoom, the band zoom fade's clock.
     ///   - globe: the geometry transition and the resting radius.
     ///   - verticalFovRadians: the render camera's vertical field of view,
     ///     which with the drawable height sizes the feather in pixels.
@@ -178,16 +160,6 @@ enum HorizonFrameResolver {
         let atmosphere = settings.scene.atmosphere
         let isOn = atmosphere.isEnabled
         let fog = settings.scene.fog
-        // The haze's share at this zoom: 0 with the fog off or the haze
-        // faded out, 1 fully on. A ground profile value is mixed from the
-        // seam band's to the haze's by it, the ends exact so both looks
-        // are reached bit for bit.
-        let hazeStrength = fog.hazeStrength(atZoom: zoom)
-        func mixed(_ band: Float, _ haze: Float) -> Float {
-            if hazeStrength <= 0 { return band }
-            if hazeStrength >= 1 { return haze }
-            return band + (haze - band) * hazeStrength
-        }
         let radius = max(globe.radius, 1e-6)
         let curvature = renderSurfaceMode == .spherical
             ? max(1 - min(max(globe.transition, 0), 1), 0) / radius
@@ -213,28 +185,14 @@ enum HorizonFrameResolver {
         let tint = showsFog ? planeTint : globeTint
 
         let inverseProjectionView = simd_inverse(projectionView)
-        // The plane's haze: its camera-distance range becomes two angles
-        // under the line for this frame's pitch (the centre ray's dip under
-        // the local horizontal), the far one where the veil is complete and
-        // the near one where it is gone.
-        let centerDirection = HorizonEdgeMath.viewDirection(ndc: SIMD2<Float>(0, 0),
-                                                            inverseProjectionView: inverseProjectionView,
-                                                            eye: cameraEye)
-        let cosPitch = max(-simd_dot(centerDirection, edge.up), 0)
-        let hazeStart = max(fog.hazeRange.lowerBound, minimumHazeStart)
-        let hazeEnd = max(fog.hazeRange.upperBound, hazeStart + minimumHazeStart)
-        let hazeCutoffStart = max(HorizonEdgeMath.depression(atCameraDistances: hazeEnd, cosPitch: cosPitch),
-                                  minimumRadians)
-        let hazeCutoffEnd = max(HorizonEdgeMath.depression(atCameraDistances: hazeStart, cosPitch: cosPitch),
-                                hazeCutoffStart + minimumRadians)
         // The band drawn in toward the line close to the ground
         // (`FogSettings.horizonBandZoomFade`): all of its angles at once,
         // so its profile keeps its shape.
         let bandShare = fog.horizonBandShare(atZoom: zoom)
-        let planeCutoffStart = mixed(fogCutoffStartRadians, hazeCutoffStart) * bandShare
-        let planeCutoffEnd = mixed(fogCutoffEndRadians, hazeCutoffEnd) * bandShare
-        let planeBand = mixed(fogBandRadians, hazeCutoffEnd * hazeBandCutoffWidths) * bandShare
-        let planeGain = mixed(fogGain, hazeGain)
+        let planeCutoffStart = fogCutoffStartRadians * bandShare
+        let planeCutoffEnd = fogCutoffEndRadians * bandShare
+        let planeBand = fogBandRadians * bandShare
+        let planeGain = fogGain
 
         let rimRadians = haloRadians(haloRimRadii)
         let featherRadians = max(featherPixels * verticalFovRadians / max(drawableHeightPx, 1), minimumRadians)

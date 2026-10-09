@@ -5,7 +5,9 @@ import Metal
 
 /// The air around the surface's edge, drawn last in the world pass on both
 /// surfaces: the globe's atmosphere and limb feather, the flat map's sky
-/// and haze, with the morph between them bare (`HorizonFrameResolver`).
+/// and the band at its line, with the morph between them bare
+/// (`HorizonFrameResolver`). The flat map's far ground is veiled by the
+/// ground fog (`GroundFogUniform`), not here.
 ///
 /// One geometry (the band), up to two draws split by the depth buffer. The sky draw
 /// runs under the far-plane lessEqual state and shades only pixels nothing
@@ -13,7 +15,7 @@ import Metal
 /// only painted pixels that no building or model stands on (the surface
 /// mask bit, `TileSourceStencilPriority.surfaceMaskBit`), clamping its angle
 /// to the edge. Each pixel is shaded once. Both are skipped when the edge is farther below the frame than the
-/// haze reaches, which at street pitch is every frame; transparent space
+/// band reaches, which at street pitch is every frame. Transparent space
 /// skips the globe's sky draw, since nothing may be painted around the
 /// planet, while the plane's sky still paints over its own clear colour.
 final class HorizonRenderSubsystem: RenderSubsystem {

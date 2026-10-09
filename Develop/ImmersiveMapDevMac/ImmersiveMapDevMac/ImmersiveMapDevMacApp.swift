@@ -42,12 +42,10 @@ private struct MapScreen: View {
             // the deepest tile. Here the landmarks are reviewed up close,
             // at about a dozen metres over the pavement at 22.
             .zoomRange(maximum: 22)
-            // Close to the ground the haze over the far ground goes, the
-            // sky stays, and the band at the horizon line is drawn in to a
-            // hairline at the line: from 19 on nothing whitens the street
-            // at the camera's feet.
-            .fog(hazeZoomFade: .fadeOut(from: 18, to: 19),
-                 horizonBandZoomFade: .fadeOut(from: 17, to: 18))
+            // Close to the ground the band at the horizon line is drawn in
+            // to a hairline at the line: from 18 on it no longer whitens the
+            // street at the camera's feet. The ground fog keeps its defaults.
+            .fog(horizonBandZoomFade: .fadeOut(from: 17, to: 18))
             // Moscow inside the MKAD ring: the globe turns freely up to zoom
             // 1, the area closes in on the city between zoom 1 and 2, and
             // from zoom 2 on a pull that grows with the distance draws the

@@ -81,25 +81,25 @@ final class HorizonOffscreenRenderTests: XCTestCase {
     // MARK: - The flat map
 
     /// Pitched almost to the horizon over a magenta world with the fog on:
-    /// the top of the frame is the sky, bluer and darker than the line; the
-    /// sky brightens into the horizon colour coming down to the line; a
-    /// little under it both sides wear the horizon colour; under that the
-    /// haze thins over a band of rows; and the bottom of the frame is the
-    /// bare fixture colour. Rendered twice with different horizon colours,
-    /// so the haze's colour is pinned by what changes and the byte-clean
-    /// ground by what does not.
+    /// the top of the frame is the sky, bluer and darker than the line. The
+    /// sky brightens into the horizon colour coming down to the line. A
+    /// little under it both sides wear the horizon colour, which the ground
+    /// fog takes. Under that the fog thins over a band of rows, and the
+    /// bottom of the frame is the bare fixture colour. Rendered twice with
+    /// different horizon colours, so the fog's colour is pinned by what
+    /// changes and the byte-clean ground by what does not.
     @MainActor
-    func testTheFlatHorizonWearsTheSkyAndTheHaze() async throws {
+    func testTheFlatHorizonWearsTheSkyAndTheGroundFog() async throws {
         let paleHorizon = SIMD3<Float>(0.97, 0.97, 0.98)
         let greenHorizon = SIMD3<Float>(0.2, 0.8, 0.3)
-        // A range whose full veil lasts a couple of degrees under the line
-        // at this pitch, so the veiled rows are unmistakable.
-        var paleFog = ImmersiveMapSettings.FogSettings(hazeRange: 4...8)
+        var paleFog = ImmersiveMapSettings.FogSettings()
         paleFog.horizonColor = paleHorizon
         var greenFog = paleFog
         greenFog.horizonColor = greenHorizon
-        let pale = try await renderTiltedPlane(clearColor: Self.paperClearColor, fog: paleFog)
-        let green = try await renderTiltedPlane(clearColor: Self.paperClearColor, fog: greenFog)
+        let pale = try await renderTiltedPlane(clearColor: Self.paperClearColor, fog: paleFog,
+                                               groundFog: Self.thickGroundFog(zoom: 10, latitudeDegrees: 48))
+        let green = try await renderTiltedPlane(clearColor: Self.paperClearColor, fog: greenFog,
+                                                groundFog: Self.thickGroundFog(zoom: 10, latitudeDegrees: 48))
         let size = pale.size
         let column = size / 2
         let palePixel = Self.pixel(of: SIMD4<Double>(Double(paleHorizon.x), Double(paleHorizon.y), Double(paleHorizon.z), 1))
@@ -125,27 +125,29 @@ final class HorizonOffscreenRenderTests: XCTestCase {
         XCTAssertLessThanOrEqual(Self.distance(green.pixel(x: column, y: veiledRow), greenPixel), 6,
                                  "Under the line the ground is fully veiled in the horizon colour")
 
-        // Further down the haze thins over a band of rows.
+        // Further down the fog thins over a band of rows.
         guard let releaseRow = (veiledRow ..< size).first(where: { Self.distance(pale.pixel(x: column, y: $0), palePixel) > 6 }) else {
             return XCTFail("The ground never appeared below the horizon")
         }
         let bandRows = (releaseRow ..< min(releaseRow + 40, size)).filter {
             Self.distance(pale.pixel(x: column, y: $0), green.pixel(x: column, y: $0)) > 6
         }
-        XCTAssertGreaterThanOrEqual(bandRows.count, 3, "The haze thins over a band of rows under the line")
+        XCTAssertGreaterThanOrEqual(bandRows.count, 3, "The fog thins over a band of rows under the line")
 
         for y in (size * 3 / 4) ..< size {
             XCTAssertEqual(pale.pixel(x: column, y: y), green.pixel(x: column, y: y),
-                           "Under the camera the map is byte-clean of haze at row \(y)")
+                           "Under the camera the map is byte-clean of fog at row \(y)")
         }
         XCTAssertTrue(Self.isFixtureWater(pale.pixel(x: column, y: size - 1)), "The near ground is the bare fixture colour")
     }
 
-    /// A building whose wall crosses the horizon row keeps its own colour:
-    /// the haze is decided from the view ray as if every painted pixel were
-    /// the ground, so without the surface mask bit the wall would take the
-    /// far ground's haze at that row. The ground beside the building is
-    /// veiled as before. Street zoom, so the built-in style extrudes.
+    /// A building whose wall crosses the horizon row keeps its own colour.
+    /// The horizon's band is decided from the view ray as if every painted
+    /// pixel were the ground, so without the surface mask bit the wall would
+    /// take the far ground's whitening at that row. The ground fog is worked
+    /// out at the wall's own points, nearer than the fog begins, so it
+    /// leaves the wall too. The ground beside the building is veiled as
+    /// before. Street zoom, so the built-in style extrudes.
     @MainActor
     func testABuildingCrossingTheHorizonKeepsItsColour() async throws {
         let fixtureBuilding = SIMD4<Float>(1, 1, 0, 1)
@@ -160,7 +162,8 @@ final class HorizonOffscreenRenderTests: XCTestCase {
             .mapStyle(ProtomapsBasemapMapStyle(theme: configuration))
         settings.scene.starfield.starCount = 0
         settings.scene.shadows.isEnabled = false
-        settings.scene.fog = ImmersiveMapSettings.FogSettings(hazeRange: 4...8)
+        settings.scene.fog = ImmersiveMapSettings.FogSettings()
+        settings.scene.groundFog = Self.thickGroundFog(zoom: 14, latitudeDegrees: 48)
         // The tower stands in a z14 tile under a camera at zoom 14: the
         // buildings draw from there, standing at once.
         settings.scene.extrusion.buildingsMinimumZoom = 14
@@ -218,7 +221,7 @@ final class HorizonOffscreenRenderTests: XCTestCase {
                                  "Beside the tower the far ground is veiled")
 
         // The tower's wall on the centre column, across the same rows: its
-        // own colour, no haze on it, above and below the line alike.
+        // own colour, no fog on it, above and below the line alike.
         let wallColumn = size / 2
         for row in (lineRow - 4) ... (lineRow + 6) {
             let pixel = frame.pixel(x: wallColumn, y: row)
@@ -236,8 +239,9 @@ final class HorizonOffscreenRenderTests: XCTestCase {
     @MainActor
     func testTheFlatHorizonWearsTheSeamBandWithTheFogOff() async throws {
         let off = ImmersiveMapSettings.FogSettings(isEnabled: false)
-        let paper = try await renderTiltedPlane(clearColor: Self.paperClearColor, fog: off)
-        let green = try await renderTiltedPlane(clearColor: Self.greenClearColor, fog: off)
+        let noGroundFog = ImmersiveMapSettings.GroundFogSettings(isEnabled: false)
+        let paper = try await renderTiltedPlane(clearColor: Self.paperClearColor, fog: off, groundFog: noGroundFog)
+        let green = try await renderTiltedPlane(clearColor: Self.greenClearColor, fog: off, groundFog: noGroundFog)
         let size = paper.size
         let column = size / 2
         let paperClear = Self.pixel(of: Self.paperClearColor)
@@ -306,13 +310,33 @@ final class HorizonOffscreenRenderTests: XCTestCase {
         return (peakX, peakValue)
     }
 
+    /// A ground fog that fills the view from 4 camera distances out and is
+    /// complete a few more out, so at this pitch its full veil lasts a
+    /// couple of degrees under the line and the veiled rows are
+    /// unmistakable. Stated in the meters a camera distance spans at a whole
+    /// zoom and a latitude, where the camera stands one render unit from
+    /// the point it looks at.
+    private static func thickGroundFog(zoom: Int, latitudeDegrees: Double) -> ImmersiveMapSettings.GroundFogSettings {
+        let renderMapSize = 2 * Double.pi * ImmersiveMapSettings.default.presentation.globeRadiusScale
+            * pow(2, Double(zoom))
+        let unitsPerMeter = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: latitudeDegrees * .pi / 180,
+                                                                      renderMapSize: renderMapSize)
+        let cameraDistance = Float(1 / unitsPerMeter)
+        return ImmersiveMapSettings.GroundFogSettings(densityPerKilometer: ImmersiveMapZoomCurve(2000 / cameraDistance),
+                                                      heightMeters: ImmersiveMapZoomCurve(10 * cameraDistance),
+                                                      startDistanceMeters: ImmersiveMapZoomCurve(4 * cameraDistance),
+                                                      startSoftnessMeters: ImmersiveMapZoomCurve(4 * cameraDistance),
+                                                      maximumOpacity: 1)
+    }
+
     /// A magenta world tilted almost to the horizon at zoom 10, with every
     /// tile the frame could ask for handed to the store (the near zooms
     /// around the camera, the coarse zooms everywhere, since the far range
     /// and the horizon backdrop draw whatever ancestor is loaded).
     @MainActor
     private func renderTiltedPlane(clearColor: SIMD4<Double>,
-                                   fog: ImmersiveMapSettings.FogSettings) async throws -> RenderedFrame {
+                                   fog: ImmersiveMapSettings.FogSettings,
+                                   groundFog: ImmersiveMapSettings.GroundFogSettings) async throws -> RenderedFrame {
         let configuration = ProtomapsBasemapTheme.default
             .layers { layers in
                 layers.water = Self.fixtureWater
@@ -325,6 +349,7 @@ final class HorizonOffscreenRenderTests: XCTestCase {
         settings.scene.starfield.starCount = 0
         settings.scene.shadows.isEnabled = false
         settings.scene.fog = fog
+        settings.scene.groundFog = groundFog
         let harness = try OffscreenFrameHarness.makeOrSkip(settings: settings, size: 200)
         let latitude = 48.0
         let longitude = 10.0

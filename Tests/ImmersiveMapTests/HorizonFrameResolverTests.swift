@@ -84,10 +84,10 @@ final class HorizonFrameResolverTests: XCTestCase {
     // MARK: - The plane
 
     /// The fog is on by default: the plane paints the sky gradient over
-    /// everything above the line and veils the far ground toward the
-    /// horizon colour, with its two angles set from the camera-distance
-    /// range for the frame's pitch.
-    func testThePlaneWearsTheSkyAndTheHaze() {
+    /// everything above the line and whitens the last degrees of the ground
+    /// into the horizon colour at it. The far ground is the ground fog's,
+    /// not the horizon's.
+    func testThePlaneWearsTheSkyAndTheBand() {
         let settings = ImmersiveMapSettings.default
         let fog = settings.scene.fog
         XCTAssertTrue(fog.isEnabled, "The fog ships on")
@@ -99,49 +99,30 @@ final class HorizonFrameResolverTests: XCTestCase {
         XCTAssertEqual(haze.featherStrength, 0)
         XCTAssertEqual(haze.whitenWeight, 0, "No limb whitening on the plane: the sky brightens into the line on its own")
         XCTAssertEqual(haze.sunInfluence, 0)
-        XCTAssertEqual(haze.tint, fog.horizonColor, "The haze veils toward the horizon colour")
+        XCTAssertEqual(haze.tint, fog.horizonColor, "The band whitens into the horizon colour")
         XCTAssertEqual(haze.skyColor, fog.skyColor)
         XCTAssertEqual(haze.skyOpacity, 1)
         XCTAssertEqual(haze.skyGradientRadians, HorizonFrameResolver.skyGradientRadians)
-        XCTAssertEqual(haze.groundGain, HorizonFrameResolver.hazeGain, accuracy: 1e-6)
-        // The camera looks down at the ground `cos(pitch)` camera distances
-        // below it, so the range's ends are angles under the line.
-        let farAngle = asin(cos(pitch) / fog.hazeRange.upperBound)
-        let nearAngle = asin(cos(pitch) / fog.hazeRange.lowerBound)
-        XCTAssertEqual(haze.cutoffStartRadians, farAngle, accuracy: 1e-5)
-        XCTAssertEqual(haze.cutoffEndRadians, nearAngle, accuracy: 1e-5)
-        XCTAssertEqual(haze.groundBandRadians, nearAngle * HorizonFrameResolver.hazeBandCutoffWidths, accuracy: 1e-5)
+        XCTAssertEqual(haze.groundGain, HorizonFrameResolver.fogGain, accuracy: 1e-6)
+        XCTAssertEqual(haze.groundBandRadians, HorizonFrameResolver.fogBandRadians, accuracy: 1e-6)
+        XCTAssertEqual(haze.cutoffStartRadians, HorizonFrameResolver.fogCutoffStartRadians, accuracy: 1e-6)
+        XCTAssertEqual(haze.cutoffEndRadians, HorizonFrameResolver.fogCutoffEndRadians, accuracy: 1e-6)
         XCTAssertTrue(haze.drawsSky, "The sky gradient paints everything above the line")
-        XCTAssertTrue(haze.drawsGround, "Pitched almost to the horizon, the haze is in the frame")
+        XCTAssertTrue(haze.drawsGround, "Pitched almost to the horizon, the band is in the frame")
         XCTAssertGreaterThan(haze.bandTopRadians, HorizonFrameResolver.bandTopMarginRadians,
                              "The plane's band reaches past the top of the frame")
+        let lower = resolve(settings: settings, transition: 1, geometryTransition: 1, mode: .flat, pitch: 0.8)
+        XCTAssertEqual(lower.cutoffEndRadians, haze.cutoffEndRadians,
+                       "The band is an angle profile under the line whatever the pitch")
     }
 
-    /// The haze follows the camera: a lower pitch puts the same camera
-    /// distances at steeper angles under the line, and looking straight
-    /// down the near end of the range is the nadir itself.
-    func testTheHazeAnglesFollowThePitch() {
-        let high = resolve(settings: .default, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25)
-        let low = resolve(settings: .default, transition: 1, geometryTransition: 1, mode: .flat, pitch: 0.8)
-        XCTAssertGreaterThan(low.cutoffStartRadians, high.cutoffStartRadians)
-        XCTAssertGreaterThan(low.cutoffEndRadians, high.cutoffEndRadians)
-        var settings = ImmersiveMapSettings.default
-        settings.scene.fog.hazeRange = 0.5...4
-        let nadir = resolve(settings: settings, transition: 1, geometryTransition: 1, mode: .flat, pitch: 0)
-        XCTAssertEqual(nadir.cutoffEndRadians, .pi / 2, accuracy: 1e-5, "Nearer than the eye's height is the nadir")
-    }
-
-    /// Nearer than the near end of the range the haze is exactly nothing,
-    /// farther than the far end it is complete: the profile is the cutoff's
-    /// own ramp, with the exponential held saturated across it.
-    func testTheHazeIsCompleteBeyondTheRangeAndAbsentInsideIt() {
+    /// The band saturates at the line and is exactly nothing past its far
+    /// cutoff, so the map under the camera stays byte-clean.
+    func testTheBandIsCompleteAtTheLineAndAbsentPastItsCutoff() {
         let haze = resolve(settings: .default, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25)
         XCTAssertEqual(HorizonFrameResolver.groundProfile(belowRadians: 0, haze: haze), 1)
-        XCTAssertEqual(HorizonFrameResolver.groundProfile(belowRadians: haze.cutoffStartRadians, haze: haze), 1)
         XCTAssertEqual(HorizonFrameResolver.groundProfile(belowRadians: haze.cutoffEndRadians, haze: haze), 0)
         XCTAssertEqual(HorizonFrameResolver.groundProfile(belowRadians: haze.cutoffEndRadians * 2, haze: haze), 0)
-        XCTAssertGreaterThan(HorizonFrameResolver.hazeGain, exp(1 / HorizonFrameResolver.hazeBandCutoffWidths),
-                             "The gain covers the exponential's decay over the near cutoff angle")
     }
 
     /// Off, the plane is what it was before the fog: nothing painted above
@@ -159,47 +140,15 @@ final class HorizonFrameResolverTests: XCTestCase {
         XCTAssertTrue(haze.drawsGround, "Pitched almost to the horizon, the band is in the frame")
     }
 
-    func testTheHazeFadesOutWithTheZoomUnderAFullSky() {
-        let settings = ImmersiveMapSettings.default.fog(hazeZoomFade: .fadeOut(from: 18, to: 19))
-        let on = resolve(settings: settings, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 18)
-        let half = resolve(settings: settings, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 18.5)
-        let gone = resolve(settings: settings, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 19)
-        let plain = resolve(settings: .default, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 18)
-
-        XCTAssertEqual(on, plain, "Up to the fade's start the fog is exactly the fog without a fade")
-
-        // Past the fade's end the sky and the tint are still the fog's,
-        // and the ground wears the seam band alone, in the horizon colour.
-        XCTAssertEqual(gone.skyOpacity, plain.skyOpacity)
-        XCTAssertEqual(gone.skyColor, plain.skyColor)
-        XCTAssertEqual(gone.tint, plain.tint)
-        XCTAssertEqual(gone.groundGain, HorizonFrameResolver.fogGain, accuracy: 1e-6)
-        XCTAssertEqual(gone.groundBandRadians, HorizonFrameResolver.fogBandRadians, accuracy: 1e-6)
-        XCTAssertEqual(gone.cutoffStartRadians, HorizonFrameResolver.fogCutoffStartRadians, accuracy: 1e-6)
-        XCTAssertEqual(gone.cutoffEndRadians, HorizonFrameResolver.fogCutoffEndRadians, accuracy: 1e-6)
-        XCTAssertTrue(gone.drawsSky)
-        XCTAssertTrue(gone.drawsGround)
-
-        // Halfway: the ground profile between the two, the sky untouched.
-        XCTAssertEqual(half.skyOpacity, plain.skyOpacity)
-        XCTAssertEqual(half.tint, plain.tint)
-        XCTAssertEqual(half.groundGain, (on.groundGain + gone.groundGain) * 0.5, accuracy: 1e-6)
-        XCTAssertEqual(half.groundBandRadians, (on.groundBandRadians + gone.groundBandRadians) * 0.5, accuracy: 1e-6)
-        XCTAssertEqual(half.cutoffStartRadians, (on.cutoffStartRadians + gone.cutoffStartRadians) * 0.5, accuracy: 1e-6)
-        XCTAssertEqual(half.cutoffEndRadians, (on.cutoffEndRadians + gone.cutoffEndRadians) * 0.5, accuracy: 1e-6)
-    }
-
     /// Close to the ground the band at the horizon line is drawn in toward
     /// the line, its profile's shape kept: every angle scaled by the same
     /// share, down to the hairline that still hides the seam.
     func testTheHorizonBandIsDrawnInWithTheZoom() {
         let settings = ImmersiveMapSettings.default
-            .fog(hazeZoomFade: .fadeOut(from: 18, to: 19))
             .fog(horizonBandZoomFade: .fadeOut(from: 18, to: 19))
-        let hazeOnly = ImmersiveMapSettings.default.fog(hazeZoomFade: .fadeOut(from: 18, to: 19))
         let wide = resolve(settings: settings, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 18)
         let thin = resolve(settings: settings, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 19.5)
-        let plainWide = resolve(settings: hazeOnly, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 18)
+        let plainWide = resolve(settings: .default, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 18)
 
         XCTAssertEqual(wide, plainWide, "Up to the fade's start the band keeps its width")
 
@@ -210,14 +159,6 @@ final class HorizonFrameResolverTests: XCTestCase {
         XCTAssertEqual(thin.groundGain, HorizonFrameResolver.fogGain, accuracy: 1e-6,
                        "Still saturated at the line: the seam stays hidden")
         XCTAssertTrue(thin.drawsSky)
-    }
-
-    func testTheFogOffIgnoresTheHazeZoomFade() {
-        let settings = ImmersiveMapSettings.default.fog(isEnabled: false).fog(hazeZoomFade: .fadeOut(from: 18, to: 19))
-        let low = resolve(settings: settings, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 10)
-        let off = resolve(settings: ImmersiveMapSettings.default.fog(isEnabled: false),
-                          transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25, zoom: 10)
-        XCTAssertEqual(low, off)
     }
 
     /// The plane's treatment does not depend on the atmosphere switch.
@@ -295,7 +236,7 @@ final class HorizonFrameResolverTests: XCTestCase {
         XCTAssertGreaterThan(midway.skyOpacity, 0)
         XCTAssertLessThan(midway.skyOpacity, 1)
         XCTAssertGreaterThan(midway.groundGain, 0)
-        XCTAssertLessThan(midway.groundGain, HorizonFrameResolver.hazeGain)
+        XCTAssertLessThan(midway.groundGain, HorizonFrameResolver.fogGain)
         XCTAssertEqual(midway.tint, fog.horizonColor)
         XCTAssertEqual(midway.skyStrength, 0, "The halo is long gone")
         XCTAssertEqual(midway.featherStrength, 0)

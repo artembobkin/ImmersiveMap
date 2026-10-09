@@ -5,12 +5,13 @@ import SwiftUI
 import ImmersiveMap
 
 /// The sky of both presentations: the space background, the starfield
-/// behind the planet and the atmosphere around its limb on the globe; the
-/// sky gradient and the haze of the flat map. All live on `settings.scene`;
-/// transparent space leaves everything outside the globe unpainted, so what
-/// the app draws behind the map continues around the planet. The fog's
-/// haze range is in camera distances, so the same fraction of the visible
-/// ground is hazy at every zoom; tilt the camera to the horizon to see it.
+/// behind the planet and the atmosphere around its limb on the globe, the
+/// sky gradient and the ground fog of the flat map. All live on
+/// `settings.scene`. Transparent space leaves everything outside the globe
+/// unpainted, so what the app draws behind the map continues around the
+/// planet. The ground fog's lengths are in camera distances, so the same
+/// fraction of the visible ground is fogged at every zoom. Tilt the camera
+/// to the horizon to see it.
 struct SkyPanel: View {
     @Binding var settings: ImmersiveMapSettings
 
@@ -61,39 +62,36 @@ struct SkyPanel: View {
                     .disabled(settings.scene.fog.isEnabled == false)
                 ColorPicker("Horizon", selection: fogColor(\.horizonColor), supportsOpacity: false)
                     .disabled(settings.scene.fog.isEnabled == false)
-                ValueSlider("Haze from",
-                            value: hazeStart,
-                            range: 0.25...20,
+            }
+            PanelRow {
+                // The ground fog veils the far ground. Its values follow the
+                // zoom by default. A slider here sets one value at every zoom.
+                Toggle("Ground fog", isOn: $settings.scene.groundFog.isEnabled)
+                    .toggleStyle(.switch)
+                ValueSlider("Density /km",
+                            value: groundFogValue(\.densityPerKilometer),
+                            range: 0...30,
                             format: "%.1f")
-                    .disabled(settings.scene.fog.isEnabled == false)
-                ValueSlider("Haze to",
-                            value: hazeEnd,
-                            range: 0.5...40,
-                            format: "%.1f")
-                    .disabled(settings.scene.fog.isEnabled == false)
+                    .disabled(settings.scene.groundFog.isEnabled == false)
+                ValueSlider("Fog from, m",
+                            value: groundFogValue(\.startDistanceMeters),
+                            range: 0...5000,
+                            format: "%.0f")
+                    .disabled(settings.scene.groundFog.isEnabled == false)
             }
         }
     }
 
-    /// The haze range's two ends, in camera distances; each keeps the other
-    /// on its side of it.
-    private var hazeStart: Binding<Double> {
+    /// One of the ground fog's zoom curves as one slider value: its value, or
+    /// its last stop's for a curve. Setting it makes it the same at every
+    /// zoom.
+    private func groundFogValue(
+        _ keyPath: WritableKeyPath<ImmersiveMapSettings.GroundFogSettings, ImmersiveMapZoomCurve>
+    ) -> Binding<Double> {
         Binding {
-            Double(settings.scene.fog.hazeRange.lowerBound)
+            Double(settings.scene.groundFog[keyPath: keyPath].stops.last?.value ?? 0)
         } set: { newValue in
-            let start = Float(newValue)
-            let end = max(settings.scene.fog.hazeRange.upperBound, start + 0.25)
-            settings.scene.fog.hazeRange = start...end
-        }
-    }
-
-    private var hazeEnd: Binding<Double> {
-        Binding {
-            Double(settings.scene.fog.hazeRange.upperBound)
-        } set: { newValue in
-            let end = Float(newValue)
-            let start = min(settings.scene.fog.hazeRange.lowerBound, end - 0.25)
-            settings.scene.fog.hazeRange = max(start, 0.25)...max(end, 0.5)
+            settings.scene.groundFog[keyPath: keyPath] = ImmersiveMapZoomCurve(Float(newValue))
         }
     }
 

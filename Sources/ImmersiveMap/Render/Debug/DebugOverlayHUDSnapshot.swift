@@ -20,6 +20,9 @@ struct DebugOverlayHUDSnapshot: Equatable {
     let topPadding: Float
     let sectionSpacing: Float
     let textColor: SIMD3<Float>
+    /// The camera zoom as a number, for the controls that read a value off
+    /// a zoom curve (the ground fog group).
+    var cameraZoom: Double = 0
 
     /// The same frame snapshot with the tile list read again from the
     /// reporter: what the panel applies between frames.
@@ -33,7 +36,8 @@ struct DebugOverlayHUDSnapshot: Equatable {
                                 leftPadding: leftPadding,
                                 topPadding: topPadding,
                                 sectionSpacing: sectionSpacing,
-                                textColor: textColor)
+                                textColor: textColor,
+                                cameraZoom: cameraZoom)
     }
 
     static func make(settings: ImmersiveMapSettings.DebugSettings,
@@ -62,7 +66,8 @@ struct DebugOverlayHUDSnapshot: Equatable {
             leftPadding: settings.leftPadding,
             topPadding: settings.topPadding,
             sectionSpacing: settings.sectionSpacing,
-            textColor: settings.textColor
+            textColor: settings.textColor,
+            cameraZoom: zoom
         )
     }
 

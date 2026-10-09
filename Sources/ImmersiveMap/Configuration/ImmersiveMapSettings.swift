@@ -470,7 +470,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// world is a sphere until the camera zooms into the transition
         /// window and unrolls it into the plane. Off, the world is the
         /// Mercator plane at every zoom: no sphere, no morph, no stars, the
-        /// flat map's sky and haze from zoom 0 up. Applies live.
+        /// flat map's sky and ground fog from zoom 0 up. Applies live.
         public var isGlobeEnabled: Bool
 
         public init(automaticTransitionStartZoom: Double,
@@ -1094,44 +1094,31 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
     }
 
-    /// The sky and the haze of the flat presentation: above the horizon
-    /// line the sky, a short pale glow at the line that gives way to the
-    /// sky colour within a few degrees, and below it a narrow band of the
-    /// far ground veiled toward the same colour by distance from the
-    /// camera. On by default. Off, nothing is
-    /// painted above the line (the sky is the map's clear colour) and the
-    /// ground keeps a thin band into that colour at the line, so the far
-    /// range still meets the sky with no seam. The globe has its own
-    /// treatment, `AtmosphereSettings`; through the globe-to-flat morph the
+    /// The sky of the flat presentation: above the horizon line the sky, a
+    /// short pale glow at the line that gives way to the sky colour within
+    /// a few degrees, and below it a thin band of the ground whitening into
+    /// the same colour at the line, which hides the seam between the far
+    /// ground and the sky. On by default. Off, nothing is painted above the
+    /// line (the sky is the map's clear colour) and the band whitens into
+    /// that colour, so the far range still meets the sky with no seam. The
+    /// far ground itself is veiled by the ground fog (`GroundFogSettings`),
+    /// which takes its colour from `horizonColor`. The globe has its own
+    /// treatment, `AtmosphereSettings`. Through the globe-to-flat morph the
     /// atmosphere hands over to this.
     public struct FogSettings: Equatable, Sendable {
         public var isEnabled: Bool
         /// The sky's colour away from the horizon, RGB in `0...1`.
         public var skyColor: SIMD3<Float>
         /// The colour at the horizon: the glow the sky brightens into over
-        /// its last degrees coming down, and what the haze veils the far
-        /// ground toward, so the two meet at the line in one colour. White
-        /// by default, the way a hazy day's sky whitens toward the ground.
+        /// its last degrees coming down, the band at the line and, unless it
+        /// states its own, the ground fog, so they all meet at the line in
+        /// one colour. White by default, the way a hazy day's sky whitens
+        /// toward the ground.
         public var horizonColor: SIMD3<Float>
-        /// Where the haze lies, in camera distances (1 is the distance from
-        /// the camera to the point it looks at): the ground nearer than the
-        /// lower bound stays byte-clean, the ground farther than the upper
-        /// bound is fully veiled, and the haze thickens smoothly in between.
-        /// Stated in camera distances rather than metres so the same
-        /// fraction of the visible ground is hazy at every zoom.
-        public var hazeRange: ClosedRange<Float>
-        /// How the haze over the far ground comes and goes with the camera
-        /// zoom. The sky is not touched. `.none` (the default) keeps the
-        /// haze at every zoom. A fade-out, say `.fadeOut(from: 18, to: 19)`,
-        /// thins it over that stretch of zoom, and from 19 on the ground
-        /// keeps only the thin band into the horizon colour at the line
-        /// that hides the seam with the sky. Evaluated against the camera
-        /// zoom each frame, so a zoom gesture plays the fade.
-        public var hazeZoomFade: ImmersiveMapZoomFade
         /// How wide the band at the horizon line is with the camera zoom:
         /// the ground whitening into the horizon colour over the last
         /// degrees under the line, which hides the seam between the far
-        /// ground and the sky and is there with the haze off too. It is
+        /// ground and the sky and is there with the fog off too. It is
         /// measured in degrees under the line, so from a camera high over
         /// the map it lies on the horizon, and from one standing in the
         /// street it reaches down the street to the camera's feet. A
@@ -1149,21 +1136,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public init(isEnabled: Bool = true,
                     skyColor: SIMD3<Float> = SIMD3<Float>(0.40, 0.66, 1.0),
                     horizonColor: SIMD3<Float> = SIMD3<Float>(0.97, 0.97, 0.98),
-                    hazeRange: ClosedRange<Float> = 6...40,
-                    hazeZoomFade: ImmersiveMapZoomFade = .none,
                     horizonBandZoomFade: ImmersiveMapZoomFade = .none) {
             self.isEnabled = isEnabled
             self.skyColor = skyColor
             self.horizonColor = horizonColor
-            self.hazeRange = hazeRange
-            self.hazeZoomFade = hazeZoomFade
             self.horizonBandZoomFade = horizonBandZoomFade
-        }
-
-        /// How much of the haze is on at a camera zoom: 0 with the fog off,
-        /// otherwise the haze zoom fade's share, 1 for `.none`.
-        func hazeStrength(atZoom zoom: Double) -> Float {
-            isEnabled ? hazeZoomFade.alpha(atZoom: zoom) : 0
         }
 
         /// The share of its width the band at the horizon line has at a
@@ -1197,49 +1174,98 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
     /// The fog that lies on the ground of the flat map and thins upward:
     /// thickest at the ground, its density falling by a factor of e every
-    /// `height`, gathered along each view ray past `startDistance` from the
-    /// camera. A far point low on the ground sinks in it, the near ground
-    /// and everything high stays clear, and a tall building rises out of it.
-    /// It veils the ground, the roads, the labels painted on the map, the
-    /// buildings and the models, so it is a cheap way to hide the far
-    /// detail and its shimmer. Off by default. Independent of the horizon's
-    /// sky and haze (`FogSettings`): either can be on without the other.
-    /// The globe has none. Every length is in camera distances (1 is the
-    /// distance from the camera to the point it looks at), so the fog
-    /// looks the same at every zoom. Applies live.
+    /// `heightMeters`, gathered along each view ray past
+    /// `startDistanceMeters` from the camera. A far point low on the ground
+    /// sinks in it, the near ground and everything high stays clear, and a
+    /// tall building rises out of it. It veils the ground, the roads and the
+    /// labels painted on the map, and the buildings and the models only
+    /// with `veilsBuildings` on, so it hides the far detail and its shimmer
+    /// and draws the eye to the near ground. On by default. The horizon's sky and the band at its line (`FogSettings`)
+    /// are the horizon's own: either can be on without the other. The globe
+    /// has none.
+    ///
+    /// Every length is in meters on the ground, so a fog layer 60 m high is
+    /// 60 m high at every zoom, and a fog that begins 400 m from the camera
+    /// begins there however close the camera is.
+    ///
+    /// Every value but the colour follows the camera zoom
+    /// (`ImmersiveMapZoomCurve`), so the fog changes as the camera zooms
+    /// rather than at a step. The lengths and the density run between their
+    /// stops geometrically, the same ratio for every step of zoom, the way
+    /// the map's own scale changes, so two stops a few zooms apart follow
+    /// the map in between. A curve holds its first stop's value below it,
+    /// so a fog meant to keep its look while the camera pulls away needs a
+    /// stop at the lowest zoom it shows at, its lengths there scaled by two
+    /// per zoom. The defaults: no fog up to zoom 8, coming in by zoom 10.
+    /// From zoom 7 to 12 the zoom 12 look at the map's scale: at zoom 12 a
+    /// thin haze from 40 km out, complete only toward the horizon some
+    /// 200 km away, so the view still reaches far, and at zoom 7, 32 times
+    /// as far, the same haze. At zoom 16 a fog from 400 m that is complete by
+    /// 1.2 km, at the edge past which the buildings are drawn flat, 150 m
+    /// high so the near towers rise out of it. At zoom 22, at the camera's
+    /// feet, a low layer from 250 m, 60 m high: the street ahead is clear
+    /// and the far bases sink softly into it. A single value states the same
+    /// at every zoom.
+    ///
+    /// On a map with the globe the fog comes in over a tenth of the
+    /// transition span (`PresentationSettings.automaticTransitionSpan`)
+    /// past the zoom the globe's morph into the plane ends at, so it never
+    /// appears at one frame. Applies live.
     public struct GroundFogSettings: Equatable, Sendable {
         public var isEnabled: Bool
-        /// How thick the fog is at the ground: the share of light it takes
-        /// over one camera distance there is about `1 - e^-density`. Raise
-        /// it for a thicker fog, lower it for a veil.
-        public var density: Float
-        /// How high the fog rises, in camera distances: its density falls by
-        /// a factor of e every `height` above the ground. Low, a layer the
-        /// buildings stand out of. High, a fog that fills the view.
-        public var height: Float
-        /// How far from the camera the fog begins, in camera distances:
-        /// nearer than this the view is clear.
-        public var startDistance: Float
-        /// The fog's colour, RGB in `0...1`. Nil takes the horizon's colour
-        /// (`FogSettings.horizonColor`), so the fog meets the haze at the
-        /// horizon line in one colour.
+        /// How thick the fog is at the ground, per kilometer: the share of
+        /// light it takes over one kilometer there is about
+        /// `1 - e^-density`. Raise it for a thicker fog, lower it for a
+        /// veil. Past the start's softness the fog is complete within about
+        /// `3 / density` kilometers along the ground.
+        public var densityPerKilometer: ImmersiveMapZoomCurve
+        /// How high the fog rises, in meters: its density falls by a factor
+        /// of e every this many meters above the ground. Low, a layer the
+        /// buildings stand out of. High, a haze that fills the view.
+        public var heightMeters: ImmersiveMapZoomCurve
+        /// How far from the camera the fog begins, in meters: nearer than
+        /// this the view is clear.
+        public var startDistanceMeters: ImmersiveMapZoomCurve
+        /// How far past `startDistanceMeters` the fog takes to come in, in
+        /// meters: its density rises smoothly from nothing to full over this
+        /// stretch, so the veil has no edge where it begins. 0 starts it at
+        /// full density at once. Widen it for a softer, longer transition
+        /// from the clear near ground into the fog.
+        public var startSoftnessMeters: ImmersiveMapZoomCurve
+        /// The fog's colour at the horizon line, RGB in `0...1`. Nil takes
+        /// the horizon's colour (`FogSettings.horizonColor`), so the fog
+        /// meets the sky at the line in one colour. Above the line the fog
+        /// takes the sky's colour in the direction of the view, where the
+        /// horizon paints a sky (`FogSettings.isEnabled`): a building veiled
+        /// in full is the sky behind it, not a pale block on it.
         public var color: SIMD3<Float>?
         /// The most the fog veils anything, `0...1`: under 1 the farthest
-        /// ground still shows through.
-        public var maximumOpacity: Float
+        /// ground still shows through, and at 0 there is no fog. The value
+        /// to bring the fog in or out with the zoom.
+        public var maximumOpacity: ImmersiveMapZoomCurve
+        /// Whether the fog veils the extruded buildings and the models too.
+        /// Off (the default) they always draw in their own colour, crisp
+        /// against the fogged ground behind them. On, a far building sinks
+        /// into the fog with the ground, taking the sky's colour above the
+        /// horizon line, which reads as the building turning see-through.
+        public var veilsBuildings: Bool
 
-        public init(isEnabled: Bool = false,
-                    density: Float = 0.3,
-                    height: Float = 0.15,
-                    startDistance: Float = 2,
+        public init(isEnabled: Bool = true,
+                    densityPerKilometer: ImmersiveMapZoomCurve = [7: 0.0019, 12: 0.06, 16: 17, 22: 6],
+                    heightMeters: ImmersiveMapZoomCurve = [7: 256_000, 12: 8000, 16: 150, 22: 60],
+                    startDistanceMeters: ImmersiveMapZoomCurve = [7: 1_280_000, 12: 40_000, 16: 400, 22: 250],
+                    startSoftnessMeters: ImmersiveMapZoomCurve = [7: 4_800_000, 12: 150_000, 16: 800, 22: 950],
                     color: SIMD3<Float>? = nil,
-                    maximumOpacity: Float = 1) {
+                    maximumOpacity: ImmersiveMapZoomCurve = [8: 0, 10: 1],
+                    veilsBuildings: Bool = false) {
             self.isEnabled = isEnabled
-            self.density = density
-            self.height = height
-            self.startDistance = startDistance
+            self.densityPerKilometer = densityPerKilometer
+            self.heightMeters = heightMeters
+            self.startDistanceMeters = startDistanceMeters
+            self.startSoftnessMeters = startSoftnessMeters
             self.color = color
             self.maximumOpacity = maximumOpacity
+            self.veilsBuildings = veilsBuildings
         }
     }
 
@@ -1967,19 +1993,11 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
-    /// The flat map's sky and haze on or off; off leaves the sky the clear
-    /// colour and only a thin seam-hiding band at the horizon line.
+    /// The flat map's sky on or off. Off leaves the sky the clear colour
+    /// and only a thin seam-hiding band at the horizon line.
     func fog(isEnabled: Bool = true) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.fog.isEnabled = isEnabled
-        return settings
-    }
-
-    /// The flat map's haze over the far ground fading with the camera
-    /// zoom, the sky untouched; see `FogSettings.hazeZoomFade`.
-    func fog(hazeZoomFade: ImmersiveMapZoomFade) -> ImmersiveMapSettings {
-        var settings = self
-        settings.scene.fog.hazeZoomFade = hazeZoomFade
         return settings
     }
 
@@ -2000,21 +2018,29 @@ public extension ImmersiveMapSettings {
     /// The fog on the ground of the flat map (`GroundFogSettings`): on or
     /// off, and every value a nil leaves as configured.
     func groundFog(isEnabled: Bool = true,
-                   density: Float? = nil,
-                   height: Float? = nil,
-                   startDistance: Float? = nil,
+                   densityPerKilometer: ImmersiveMapZoomCurve? = nil,
+                   heightMeters: ImmersiveMapZoomCurve? = nil,
+                   startDistanceMeters: ImmersiveMapZoomCurve? = nil,
+                   startSoftnessMeters: ImmersiveMapZoomCurve? = nil,
                    color: SIMD3<Float>? = nil,
-                   maximumOpacity: Float? = nil) -> ImmersiveMapSettings {
+                   maximumOpacity: ImmersiveMapZoomCurve? = nil,
+                   veilsBuildings: Bool? = nil) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.groundFog.isEnabled = isEnabled
-        if let density {
-            settings.scene.groundFog.density = density
+        if let veilsBuildings {
+            settings.scene.groundFog.veilsBuildings = veilsBuildings
         }
-        if let height {
-            settings.scene.groundFog.height = height
+        if let densityPerKilometer {
+            settings.scene.groundFog.densityPerKilometer = densityPerKilometer
         }
-        if let startDistance {
-            settings.scene.groundFog.startDistance = startDistance
+        if let heightMeters {
+            settings.scene.groundFog.heightMeters = heightMeters
+        }
+        if let startDistanceMeters {
+            settings.scene.groundFog.startDistanceMeters = startDistanceMeters
+        }
+        if let startSoftnessMeters {
+            settings.scene.groundFog.startSoftnessMeters = startSoftnessMeters
         }
         if let color {
             settings.scene.groundFog.color = color

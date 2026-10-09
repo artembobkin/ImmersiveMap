@@ -9,13 +9,13 @@ import simd
 /// AppKit port of the debug HUD: a full-height panel flush against the left
 /// edge of the map, whose groups are stacked vertically inside one scroll view.
 ///
-/// It used to be a floating card with a tab picker, which meant three quarters
-/// of the panel was hidden at any moment and the panel's height was whatever
-/// the selected tab happened to need. Debugging a frame usually means watching
-/// two groups at once (the stats while a control is toggled, the tile list
-/// while the shadow settings move), so every group is laid out at once, the
-/// panel takes the full window height, and what does not fit is scrolled to.
-/// The one group whose height follows the data, the tile list, is last, so a
+/// A strip of category tabs under the header (`DebugOverlayPanelCategory`)
+/// narrows the column to one category's groups. The first tab, All, lays
+/// out every group at once: debugging a frame often means watching two
+/// groups together (the stats while a control is toggled, the tile list
+/// while the shadow settings move), which a tab alone would hide. The panel
+/// takes the full window height and what does not fit is scrolled to. The
+/// one group whose height follows the data, the tile list, is last, so a
 /// tile arriving cannot shove a control the pointer is aimed at.
 ///
 /// Layout is manual and top-down (the container and the scrolled content are
@@ -33,6 +33,15 @@ final class DebugOverlayHUDView: NSView {
         static let controlSpacing: CGFloat = 6.0
         static let groupSpacing: CGFloat = 16.0
         static let traceStatusHeight: CGFloat = 24.0
+        /// A zoom curve's graph and the title over it: tall enough that a
+        /// value is aimed at in hundredths of its range.
+        static let graphHeight: CGFloat = 96.0
+        static let graphTitleHeight: CGFloat = 18.0
+        static let hintRowHeight: CGFloat = 14.0
+        /// The strip of category tabs under the header.
+        static let tabBarHeight: CGFloat = 34.0
+        static let tabHeight: CGFloat = 24.0
+        static let tabPadding: CGFloat = 20.0
         /// Nearly opaque: the panel is read while the map moves under it, and
         /// a translucent one turned every label and building edge behind it
         /// into noise across the text.
@@ -60,6 +69,12 @@ final class DebugOverlayHUDView: NSView {
     private let collapseButton = NSButton()
     private let scrollView = NSScrollView()
     private let contentView = DebugOverlayFlippedView()
+    /// The category tabs under the header, scrolled sideways when the panel
+    /// is too narrow for all of them.
+    private let tabScrollView = NSScrollView()
+    private let tabStripView = DebugOverlayFlippedView()
+    private var tabButtons: [NSButton] = []
+    private var selectedCategory: DebugOverlayPanelCategory = .all
 
     private let statsGroupLabel = NSTextField(labelWithString: "Stats")
     private let zoomLabel = NSTextField(wrappingLabelWithString: "")
@@ -123,10 +138,6 @@ final class DebugOverlayHUDView: NSView {
     private let fogGroupLabel = NSTextField(labelWithString: "Horizon")
     private let fogEnabledLabel = NSTextField(labelWithString: "")
     private let fogEnabledSwitch = NSSwitch()
-    private let fogHazeStartLabel = NSTextField(labelWithString: "")
-    private let fogHazeStartSlider = NSSlider()
-    private let fogHazeEndLabel = NSTextField(labelWithString: "")
-    private let fogHazeEndSlider = NSSlider()
     private let fogSkyColorLabel = NSTextField(labelWithString: "")
     private let fogSkyColorWell = NSColorWell(style: .minimal)
     private let fogHorizonColorLabel = NSTextField(labelWithString: "")
@@ -135,16 +146,30 @@ final class DebugOverlayHUDView: NSView {
     private let groundFogGroupLabel = NSTextField(labelWithString: "Ground fog")
     private let groundFogEnabledLabel = NSTextField(labelWithString: "")
     private let groundFogEnabledSwitch = NSSwitch()
+    private let groundFogBuildingsLabel = NSTextField(labelWithString: "")
+    private let groundFogBuildingsSwitch = NSSwitch()
+    // Every value of the fog but the colour is a curve over the zoom, each
+    // on a graph of its own under its title.
     private let groundFogDensityLabel = NSTextField(labelWithString: "")
-    private let groundFogDensitySlider = NSSlider()
+    private let groundFogDensityGraph = DebugOverlayZoomCurveView()
     private let groundFogHeightLabel = NSTextField(labelWithString: "")
-    private let groundFogHeightSlider = NSSlider()
+    private let groundFogHeightGraph = DebugOverlayZoomCurveView()
     private let groundFogStartLabel = NSTextField(labelWithString: "")
-    private let groundFogStartSlider = NSSlider()
+    private let groundFogStartGraph = DebugOverlayZoomCurveView()
+    private let groundFogSoftnessLabel = NSTextField(labelWithString: "")
+    private let groundFogSoftnessGraph = DebugOverlayZoomCurveView()
     private let groundFogOpacityLabel = NSTextField(labelWithString: "")
-    private let groundFogOpacitySlider = NSSlider()
+    private let groundFogOpacityGraph = DebugOverlayZoomCurveView()
+    private let groundFogGraphHint = NSTextField(labelWithString: "")
     private let groundFogColorLabel = NSTextField(labelWithString: "")
     private let groundFogColorWell = NSColorWell(style: .minimal)
+    private let groundFogResetButton = NSButton()
+
+    /// The Export tab: the tuned values written to a file as the modifiers
+    /// that set them (`DebugOverlaySettingsExport`), the file's path copied.
+    private let exportGroupLabel = NSTextField(labelWithString: "Export")
+    private let exportButton = NSButton()
+    private let exportStatusLabel = NSTextField(wrappingLabelWithString: "")
 
     private let atmosphereGroupLabel = NSTextField(labelWithString: "Atmosphere")
     private let atmosphereEnabledLabel = NSTextField(labelWithString: "")
@@ -239,6 +264,9 @@ final class DebugOverlayHUDView: NSView {
     private var atmosphereSettings = ImmersiveMapSettings.AtmosphereSettings()
     private var groundFogSettings = ImmersiveMapSettings.GroundFogSettings()
     private var groundFogHorizonColor = ImmersiveMapSettings.FogSettings().horizonColor
+    /// The camera zoom the fog's curves are read and edited at, from the
+    /// frame snapshot.
+    private var groundFogCameraZoom: Double = 0
     /// The host view's top safe-area inset; on macOS with a regular window title bar this is 0.
     var safeAreaTopInset: CGFloat = 0 {
         didSet {
@@ -275,6 +303,10 @@ final class DebugOverlayHUDView: NSView {
     var onFogSettingsChanged: ((ImmersiveMapSettings.FogSettings) -> Void)?
     var onAtmosphereSettingsChanged: ((ImmersiveMapSettings.AtmosphereSettings) -> Void)?
     var onGroundFogSettingsChanged: ((ImmersiveMapSettings.GroundFogSettings) -> Void)?
+    /// The ground fog group's reset: back to the values the app gave.
+    var onGroundFogResetRequested: (() -> Void)?
+    /// The Export tab's button: write the settings to a file.
+    var onExportSettingsRequested: (() -> Void)?
 
     override var isFlipped: Bool { true }
 
@@ -303,8 +335,27 @@ final class DebugOverlayHUDView: NSView {
         configureScrollView(scrollView, documentView: contentView)
         containerView.addSubview(scrollView)
 
+        tabScrollView.drawsBackground = false
+        tabScrollView.hasVerticalScroller = false
+        tabScrollView.hasHorizontalScroller = true
+        tabScrollView.autohidesScrollers = true
+        tabScrollView.scrollerStyle = .overlay
+        tabScrollView.horizontalScrollElasticity = .allowed
+        tabScrollView.verticalScrollElasticity = .none
+        tabScrollView.documentView = tabStripView
+        containerView.addSubview(tabScrollView)
+        tabButtons = DebugOverlayPanelCategory.allCases.map { category in
+            let button = NSButton()
+            configureActionButton(button, title: category.title, symbolName: nil, action: #selector(tabButtonTapped(_:)))
+            button.tag = category.rawValue
+            tabStripView.addSubview(button)
+            return button
+        }
+        updateTabButtons()
+
         [statsGroupLabel, tilesGroupLabel, baseLabelsGroupLabel, labelDistanceGroupLabel,
-         shadowsGroupLabel, fogGroupLabel, groundFogGroupLabel, atmosphereGroupLabel, controlsGroupLabel].forEach(configureGroupLabel)
+         shadowsGroupLabel, fogGroupLabel, groundFogGroupLabel, atmosphereGroupLabel, controlsGroupLabel,
+         exportGroupLabel].forEach(configureGroupLabel)
 
         configureControlLabel(axesLabel, text: "Axes")
         configureControlLabel(tileLayersLabel, text: "Tile layers")
@@ -333,14 +384,14 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(sunAzimuthLabel, text: "")
         configureControlLabel(sunElevationLabel, text: "")
         configureControlLabel(fogEnabledLabel, text: "Enabled")
-        configureControlLabel(fogHazeStartLabel, text: "")
-        configureControlLabel(fogHazeEndLabel, text: "")
         configureControlLabel(fogSkyColorLabel, text: "Sky colour")
         configureControlLabel(fogHorizonColorLabel, text: "Horizon colour")
         configureControlLabel(groundFogEnabledLabel, text: "Enabled")
+        configureControlLabel(groundFogBuildingsLabel, text: "Veil buildings")
         configureControlLabel(groundFogDensityLabel, text: "")
         configureControlLabel(groundFogHeightLabel, text: "")
         configureControlLabel(groundFogStartLabel, text: "")
+        configureControlLabel(groundFogSoftnessLabel, text: "")
         configureControlLabel(groundFogOpacityLabel, text: "")
         configureControlLabel(groundFogColorLabel, text: "Colour")
         configureControlLabel(atmosphereEnabledLabel, text: "Enabled")
@@ -360,19 +411,47 @@ final class DebugOverlayHUDView: NSView {
         configureSwitch(fogEnabledSwitch, action: #selector(fogEnabledSwitchChanged))
         configureSwitch(atmosphereEnabledSwitch, action: #selector(atmosphereEnabledSwitchChanged))
         configureSwitch(groundFogEnabledSwitch, action: #selector(groundFogEnabledSwitchChanged))
-        configureSlider(groundFogDensitySlider,
-                        range: DebugOverlayGroundFogSettingsPlanner.densityRange,
-                        action: #selector(groundFogDensitySliderChanged))
-        configureSlider(groundFogHeightSlider,
-                        range: DebugOverlayGroundFogSettingsPlanner.heightRange,
-                        action: #selector(groundFogHeightSliderChanged))
-        configureSlider(groundFogStartSlider,
-                        range: DebugOverlayGroundFogSettingsPlanner.startDistanceRange,
-                        action: #selector(groundFogStartSliderChanged))
-        configureSlider(groundFogOpacitySlider,
-                        range: DebugOverlayGroundFogSettingsPlanner.maximumOpacityRange,
-                        action: #selector(groundFogOpacitySliderChanged))
+        configureSwitch(groundFogBuildingsSwitch, action: #selector(groundFogBuildingsSwitchChanged))
+        typealias FogPlanner = DebugOverlayGroundFogSettingsPlanner
+        configureGroundFogGraph(groundFogDensityGraph,
+                                axes: FogPlanner.densityAxes,
+                                valueText: FogPlanner.densityText,
+                                keyPath: \.densityPerKilometer)
+        configureGroundFogGraph(groundFogHeightGraph,
+                                axes: FogPlanner.heightAxes,
+                                valueText: FogPlanner.metersText,
+                                keyPath: \.heightMeters)
+        configureGroundFogGraph(groundFogStartGraph,
+                                axes: FogPlanner.startDistanceAxes,
+                                valueText: FogPlanner.metersText,
+                                keyPath: \.startDistanceMeters)
+        configureGroundFogGraph(groundFogSoftnessGraph,
+                                axes: FogPlanner.startSoftnessAxes,
+                                valueText: FogPlanner.metersText,
+                                keyPath: \.startSoftnessMeters)
+        configureGroundFogGraph(groundFogOpacityGraph,
+                                axes: FogPlanner.maximumOpacityAxes,
+                                valueText: { String(format: "%.2f", $0) },
+                                keyPath: \.maximumOpacity)
+        configureControlLabel(groundFogGraphHint,
+                              text: "Click to add a point, drag to move it, double-click to remove it")
+        groundFogGraphHint.font = NSFont.systemFont(ofSize: 10, weight: .regular)
+        groundFogGraphHint.textColor = NSColor.white.withAlphaComponent(0.55)
         configureColorWell(groundFogColorWell, action: #selector(groundFogColorWellChanged))
+        configureActionButton(groundFogResetButton,
+                              title: "Reset to the app's values",
+                              symbolName: "arrow.uturn.backward",
+                              action: #selector(groundFogResetButtonTapped))
+        configureActionButton(exportButton,
+                              title: "Export settings to a file",
+                              symbolName: "square.and.arrow.up",
+                              action: #selector(exportButtonTapped))
+        configureControlLabel(exportStatusLabel,
+                              text: "Writes the sky, fog, light, shadows and atmosphere as modifiers "
+                                  + "and copies the file's path")
+        exportStatusLabel.font = NSFont.systemFont(ofSize: 11, weight: .regular)
+        exportStatusLabel.textColor = NSColor.white.withAlphaComponent(0.7)
+        exportStatusLabel.lineBreakMode = .byCharWrapping
 
         configureSlider(shadowStrengthSlider,
                         range: DebugOverlayShadowSettingsPlanner.strengthRange,
@@ -398,12 +477,6 @@ final class DebugOverlayHUDView: NSView {
         configureSlider(sunElevationSlider,
                         range: DebugOverlayShadowSettingsPlanner.elevationRange,
                         action: #selector(sunElevationSliderChanged))
-        configureSlider(fogHazeStartSlider,
-                        range: DebugOverlayFogSettingsPlanner.hazeStartRange,
-                        action: #selector(fogHazeStartSliderChanged))
-        configureSlider(fogHazeEndSlider,
-                        range: DebugOverlayFogSettingsPlanner.hazeEndRange,
-                        action: #selector(fogHazeEndSliderChanged))
         configureColorWell(fogSkyColorWell, action: #selector(fogSkyColorWellChanged))
         configureColorWell(fogHorizonColorWell, action: #selector(fogHorizonColorWellChanged))
         configureSlider(atmosphereIntensitySlider,
@@ -527,16 +600,19 @@ final class DebugOverlayHUDView: NSView {
          sunAzimuthLabel, sunAzimuthSlider,
          sunElevationLabel, sunElevationSlider,
          fogGroupLabel, fogEnabledLabel, fogEnabledSwitch,
-         fogHazeStartLabel, fogHazeStartSlider,
-         fogHazeEndLabel, fogHazeEndSlider,
          fogSkyColorLabel, fogSkyColorWell,
          fogHorizonColorLabel, fogHorizonColorWell,
          groundFogGroupLabel, groundFogEnabledLabel, groundFogEnabledSwitch,
-         groundFogDensityLabel, groundFogDensitySlider,
-         groundFogHeightLabel, groundFogHeightSlider,
-         groundFogStartLabel, groundFogStartSlider,
-         groundFogOpacityLabel, groundFogOpacitySlider,
+         groundFogBuildingsLabel, groundFogBuildingsSwitch,
+         groundFogGraphHint,
+         groundFogDensityLabel, groundFogDensityGraph,
+         groundFogHeightLabel, groundFogHeightGraph,
+         groundFogStartLabel, groundFogStartGraph,
+         groundFogSoftnessLabel, groundFogSoftnessGraph,
+         groundFogOpacityLabel, groundFogOpacityGraph,
          groundFogColorLabel, groundFogColorWell,
+         groundFogResetButton,
+         exportGroupLabel, exportButton, exportStatusLabel,
          atmosphereGroupLabel, atmosphereEnabledLabel, atmosphereEnabledSwitch,
          atmosphereColorLabel, atmosphereColorWell,
          atmosphereIntensityLabel, atmosphereIntensitySlider,
@@ -564,6 +640,11 @@ final class DebugOverlayHUDView: NSView {
         }
 
         self.snapshot = snapshot
+        if let zoom = snapshot?.cameraZoom, zoom != groundFogCameraZoom {
+            // The fog's sliders read their curves at the camera's zoom.
+            groundFogCameraZoom = zoom
+            updateGroundFogControls()
+        }
         updateText()
         updateVisibility()
         needsLayout = true
@@ -1066,6 +1147,7 @@ final class DebugOverlayHUDView: NSView {
                                          height: Layout.headerHeight)
             layoutHeader(width: Layout.collapsedWidth)
             scrollView.isHidden = true
+            tabScrollView.isHidden = true
             return
         }
 
@@ -1073,8 +1155,9 @@ final class DebugOverlayHUDView: NSView {
         let panelHeight = max(Layout.headerHeight, bounds.height - panelTop)
         containerView.frame = CGRect(x: 0, y: panelTop, width: panelWidth, height: panelHeight)
         layoutHeader(width: panelWidth)
+        layoutTabs(width: panelWidth)
 
-        let scrollTop = Layout.headerHeight
+        let scrollTop = Layout.headerHeight + Layout.tabBarHeight
         scrollView.isHidden = false
         scrollView.frame = CGRect(x: 0,
                                   y: scrollTop,
@@ -1095,25 +1178,72 @@ final class DebugOverlayHUDView: NSView {
                                    height: max(contentHeight, scrollView.contentSize.height))
     }
 
-    /// Walks the groups top-down with one cursor and returns the total height.
-    /// Every group is laid out; nothing is hidden by a tab any more, so the
-    /// only thing that can shorten the column is a group with no content
-    /// (an empty tile list).
+    /// The tab strip under the header: one button per category, as wide as
+    /// its title, scrolled sideways when they do not all fit.
+    private func layoutTabs(width: CGFloat) {
+        tabScrollView.isHidden = false
+        tabScrollView.frame = CGRect(x: 0, y: Layout.headerHeight, width: width, height: Layout.tabBarHeight)
+        var x = Layout.contentInset
+        let y = (Layout.tabBarHeight - Layout.tabHeight) / 2
+        for button in tabButtons {
+            let buttonWidth = ceil(button.intrinsicContentSize.width) + Layout.tabPadding
+            button.frame = CGRect(x: x, y: y, width: buttonWidth, height: Layout.tabHeight)
+            x += buttonWidth + Layout.controlSpacing
+        }
+        tabStripView.frame = CGRect(x: 0,
+                                    y: 0,
+                                    width: max(x - Layout.controlSpacing + Layout.contentInset, width),
+                                    height: Layout.tabBarHeight)
+    }
+
+    /// Walks the groups of the selected tab top-down with one cursor and
+    /// returns the total height. Everything in the column starts hidden and
+    /// each row laid out shows its views again, so a group left out by the
+    /// tab is neither drawn nor hit.
     private func layoutGroups(contentWidth: CGFloat) -> CGFloat {
-        let sectionSpacing = CGFloat(snapshot?.sectionSpacing ?? 8) / backingScale
         let constrainedSize = CGSize(width: contentWidth, height: CGFloat.greatestFiniteMagnitude)
         var cursor = Layout.contentInset
+        contentView.subviews.forEach { $0.isHidden = true }
+        let tab = selectedCategory
 
-        // Stats
-        cursor = layoutGroupHeader(statsGroupLabel, at: cursor, contentWidth: contentWidth)
+        if tab.shows(.stats) {
+            cursor = layoutStatsGroup(at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+        }
+        if tab.shows(.labels) {
+            cursor = layoutLabelGroups(at: cursor, contentWidth: contentWidth)
+        }
+        if tab.shows(.shadows) {
+            cursor = layoutShadowsGroup(at: cursor, contentWidth: contentWidth)
+        }
+        if tab.shows(.sky) {
+            cursor = layoutSkyGroups(at: cursor, contentWidth: contentWidth)
+        }
+        if tab.shows(.map) {
+            cursor = layoutControlsGroup(at: cursor, contentWidth: contentWidth)
+        }
+        if tab.shows(.export) {
+            cursor = layoutExportGroup(at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+        }
+        if tab.shows(.tiles) {
+            cursor = layoutTilesGroup(at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+        }
+        return cursor + Layout.contentInset
+    }
+
+    private func layoutStatsGroup(at top: CGFloat, contentWidth: CGFloat, constrainedSize: CGSize) -> CGFloat {
+        let sectionSpacing = CGFloat(snapshot?.sectionSpacing ?? 8) / backingScale
+        var cursor = layoutGroupHeader(statsGroupLabel, at: top, contentWidth: contentWidth)
         cursor = layoutTextRow(zoomLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
         cursor = layoutTextRow(latLonLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
         cursor += sectionSpacing
         cursor = layoutTextRow(diagnosticsLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
-        cursor += Layout.groupSpacing
+        return cursor + Layout.groupSpacing
+    }
 
-        // Base labels
-        cursor = layoutGroupHeader(baseLabelsGroupLabel, at: cursor, contentWidth: contentWidth)
+    /// The base labels, then the label distance rules: the rule picker
+    /// first, everything under it edits the chosen rule.
+    private func layoutLabelGroups(at top: CGFloat, contentWidth: CGFloat) -> CGFloat {
+        var cursor = layoutGroupHeader(baseLabelsGroupLabel, at: top, contentWidth: contentWidth)
         cursor = layoutSwitchRow(roadLabelTilesLabel, roadLabelTilesSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(baseLabelBoundsLabel, baseLabelBoundsSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(roadLabelBoundsLabel, roadLabelBoundsSwitch, at: cursor, contentWidth: contentWidth)
@@ -1123,18 +1253,17 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutFullWidthRow(baseLabelTraceStatusLabel, at: cursor, contentWidth: contentWidth, height: Layout.traceStatusHeight)
         cursor += Layout.groupSpacing
 
-        // Label distance: the rule picker first, everything under it edits
-        // the chosen rule.
         cursor = layoutGroupHeader(labelDistanceGroupLabel, at: cursor, contentWidth: contentWidth)
         cursor = layoutFullWidthRow(labelDistanceRuleControl, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutControlRow(labelDistanceRuleFirstZoomLabel, labelDistanceRuleFirstZoomSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(labelDistanceRuleScaleLabel, labelDistanceRuleScaleSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutFullWidthRow(labelDistanceRulesAddButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutFullWidthRow(labelDistanceRulesRemoveButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
-        cursor += Layout.groupSpacing
+        return cursor + Layout.groupSpacing
+    }
 
-        // Shadows
-        cursor = layoutGroupHeader(shadowsGroupLabel, at: cursor, contentWidth: contentWidth)
+    private func layoutShadowsGroup(at top: CGFloat, contentWidth: CGFloat) -> CGFloat {
+        var cursor = layoutGroupHeader(shadowsGroupLabel, at: top, contentWidth: contentWidth)
         cursor = layoutSwitchRow(shadowsEnabledLabel, shadowsEnabledSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowStrengthLabel, shadowStrengthSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowMapResolutionLabel, shadowMapResolutionControl, at: cursor, contentWidth: contentWidth)
@@ -1145,38 +1274,45 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutControlRow(shadowSoftnessLabel, shadowSoftnessSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(sunAzimuthLabel, sunAzimuthSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(sunElevationLabel, sunElevationSlider, at: cursor, contentWidth: contentWidth)
-        cursor += Layout.groupSpacing
+        return cursor + Layout.groupSpacing
+    }
 
-        // Horizon
-        cursor = layoutGroupHeader(fogGroupLabel, at: cursor, contentWidth: contentWidth)
+    /// The horizon, the ground fog with a graph per zoom curve, and the
+    /// globe's atmosphere.
+    private func layoutSkyGroups(at top: CGFloat, contentWidth: CGFloat) -> CGFloat {
+        var cursor = layoutGroupHeader(fogGroupLabel, at: top, contentWidth: contentWidth)
         cursor = layoutSwitchRow(fogEnabledLabel, fogEnabledSwitch, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(fogHazeStartLabel, fogHazeStartSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(fogHazeEndLabel, fogHazeEndSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(fogSkyColorLabel, fogSkyColorWell, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(fogHorizonColorLabel, fogHorizonColorWell, at: cursor, contentWidth: contentWidth)
         cursor += Layout.groupSpacing
 
-        // Ground fog
         cursor = layoutGroupHeader(groundFogGroupLabel, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(groundFogEnabledLabel, groundFogEnabledSwitch, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(groundFogDensityLabel, groundFogDensitySlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(groundFogHeightLabel, groundFogHeightSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(groundFogStartLabel, groundFogStartSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(groundFogOpacityLabel, groundFogOpacitySlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(groundFogBuildingsLabel, groundFogBuildingsSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutFullWidthRow(groundFogGraphHint, at: cursor, contentWidth: contentWidth, height: Layout.hintRowHeight)
+        for (label, graph) in [(groundFogDensityLabel, groundFogDensityGraph),
+                               (groundFogHeightLabel, groundFogHeightGraph),
+                               (groundFogStartLabel, groundFogStartGraph),
+                               (groundFogSoftnessLabel, groundFogSoftnessGraph),
+                               (groundFogOpacityLabel, groundFogOpacityGraph)] {
+            cursor = layoutFullWidthRow(label, at: cursor, contentWidth: contentWidth, height: Layout.graphTitleHeight)
+            cursor = layoutFullWidthRow(graph, at: cursor, contentWidth: contentWidth, height: Layout.graphHeight)
+        }
         cursor = layoutControlRow(groundFogColorLabel, groundFogColorWell, at: cursor, contentWidth: contentWidth)
+        cursor = layoutFullWidthRow(groundFogResetButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor += Layout.groupSpacing
 
-        // Atmosphere
         cursor = layoutGroupHeader(atmosphereGroupLabel, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(atmosphereEnabledLabel, atmosphereEnabledSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(atmosphereColorLabel, atmosphereColorWell, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(atmosphereIntensityLabel, atmosphereIntensitySlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(atmosphereThicknessLabel, atmosphereThicknessSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(atmosphereSunInfluenceLabel, atmosphereSunInfluenceSlider, at: cursor, contentWidth: contentWidth)
-        cursor += Layout.groupSpacing
+        return cursor + Layout.groupSpacing
+    }
 
-        // Controls
-        cursor = layoutGroupHeader(controlsGroupLabel, at: cursor, contentWidth: contentWidth)
+    private func layoutControlsGroup(at top: CGFloat, contentWidth: CGFloat) -> CGFloat {
+        var cursor = layoutGroupHeader(controlsGroupLabel, at: top, contentWidth: contentWidth)
         cursor = layoutSwitchRow(axesLabel, axesSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(tileLayersLabel, tileLayersSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(tileGridLabel, tileGridSwitch, at: cursor, contentWidth: contentWidth)
@@ -1198,27 +1334,35 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutFullWidthRow(ringRulesAddButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutFullWidthRow(ringRulesRemoveButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutFullWidthRow(surfaceModeButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
-        cursor += Layout.groupSpacing
+        return cursor + Layout.groupSpacing
+    }
 
-        // Tiles last, and deliberately so: the list is the only thing in the
-        // panel whose height follows the data (seventeen tiles while a zoom
-        // settles, three once it has), and anything under it was shoved up and
-        // down every time a tile arrived. Nothing is under it now.
-        cursor = layoutGroupHeader(tilesGroupLabel, at: cursor, contentWidth: contentWidth)
+    private func layoutExportGroup(at top: CGFloat, contentWidth: CGFloat, constrainedSize: CGSize) -> CGFloat {
+        var cursor = layoutGroupHeader(exportGroupLabel, at: top, contentWidth: contentWidth)
+        cursor = layoutFullWidthRow(exportButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
+        cursor = layoutTextRow(exportStatusLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+        return cursor + Layout.groupSpacing
+    }
+
+    /// Tiles last, and deliberately so: the list is the only thing in the
+    /// panel whose height follows the data (seventeen tiles while a zoom
+    /// settles, three once it has), and anything under it was shoved up and
+    /// down every time a tile arrived. Nothing is under it now.
+    private func layoutTilesGroup(at top: CGFloat, contentWidth: CGFloat, constrainedSize: CGSize) -> CGFloat {
+        var cursor = layoutGroupHeader(tilesGroupLabel, at: top, contentWidth: contentWidth)
         cursor = layoutFullWidthRow(tileTraceButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutFullWidthRow(tileTraceStatusLabel, at: cursor, contentWidth: contentWidth, height: Layout.traceStatusHeight)
         cursor = layoutTextRow(tilesStatusLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
         // Always laid out, always the same height, empty or not: a reserved
         // height that disappears when the map has no tiles is not reserved.
-        cursor = layoutFullWidthRow(tilesStatusListView,
-                                    at: cursor,
-                                    contentWidth: contentWidth,
-                                    height: tilesStatusListView.preferredHeight(forWidth: contentWidth))
-
-        return cursor + Layout.contentInset
+        return layoutFullWidthRow(tilesStatusListView,
+                                  at: cursor,
+                                  contentWidth: contentWidth,
+                                  height: tilesStatusListView.preferredHeight(forWidth: contentWidth))
     }
 
     private func layoutGroupHeader(_ label: NSTextField, at top: CGFloat, contentWidth: CGFloat) -> CGFloat {
+        label.isHidden = false
         label.frame = CGRect(x: Layout.contentInset,
                              y: top,
                              width: contentWidth,
@@ -1231,6 +1375,7 @@ final class DebugOverlayHUDView: NSView {
                                contentWidth: CGFloat,
                                constrainedSize: CGSize) -> CGFloat {
         let height = label.sizeThatFits(constrainedSize).height
+        label.isHidden = false
         label.frame = CGRect(x: Layout.contentInset, y: top, width: contentWidth, height: height)
         return top + height
     }
@@ -1239,6 +1384,7 @@ final class DebugOverlayHUDView: NSView {
                                     at top: CGFloat,
                                     contentWidth: CGFloat,
                                     height: CGFloat) -> CGFloat {
+        view.isHidden = false
         view.frame = CGRect(x: Layout.contentInset, y: top, width: contentWidth, height: height)
         return top + height + Layout.controlSpacing
     }
@@ -1248,6 +1394,8 @@ final class DebugOverlayHUDView: NSView {
                                  at top: CGFloat,
                                  contentWidth: CGFloat) -> CGFloat {
         let switchSize = control.intrinsicContentSize
+        label.isHidden = false
+        control.isHidden = false
         label.frame = CGRect(x: Layout.contentInset,
                              y: top,
                              width: max(0, contentWidth - switchSize.width - Layout.controlSpacing),
@@ -1268,6 +1416,8 @@ final class DebugOverlayHUDView: NSView {
                                   contentWidth: CGFloat) -> CGFloat {
         let labelWidth = (contentWidth * Layout.controlLabelFraction).rounded()
         let controlWidth = max(0, contentWidth - labelWidth - Layout.controlSpacing)
+        label.isHidden = false
+        control.isHidden = false
         label.frame = CGRect(x: Layout.contentInset,
                              y: top,
                              width: labelWidth,
@@ -1336,6 +1486,7 @@ final class DebugOverlayHUDView: NSView {
     private func updateVisibility() {
         isHidden = isPanelEnabled == false || snapshot == nil
         scrollView.isHidden = isCollapsed
+        tabScrollView.isHidden = isCollapsed
     }
 
     private func updateShadowControls() {
@@ -1372,32 +1523,51 @@ final class DebugOverlayHUDView: NSView {
 
     private func updateFogControls() {
         fogEnabledSwitch.state = fogSettings.isEnabled ? .on : .off
-        fogHazeStartSlider.doubleValue = Double(fogSettings.hazeRange.lowerBound)
-        fogHazeStartLabel.stringValue = DebugOverlayFogSettingsPlanner.hazeStartTitle(fogSettings.hazeRange.lowerBound)
-        fogHazeEndSlider.doubleValue = Double(fogSettings.hazeRange.upperBound)
-        fogHazeEndLabel.stringValue = DebugOverlayFogSettingsPlanner.hazeEndTitle(fogSettings.hazeRange.upperBound)
         fogSkyColorWell.color = Self.color(fogSettings.skyColor)
         fogHorizonColorWell.color = Self.color(fogSettings.horizonColor)
 
         // Everything below the switch only means something with the fog on.
-        [fogHazeStartSlider, fogHazeEndSlider, fogSkyColorWell, fogHorizonColorWell]
+        [fogSkyColorWell, fogHorizonColorWell]
             .forEach { $0.isEnabled = fogSettings.isEnabled }
     }
 
     private func updateGroundFogControls() {
         let fog = groundFogSettings
+        let zoom = groundFogCameraZoom
+        typealias Planner = DebugOverlayGroundFogSettingsPlanner
         groundFogEnabledSwitch.state = fog.isEnabled ? .on : .off
-        groundFogDensitySlider.doubleValue = Double(fog.density)
-        groundFogDensityLabel.stringValue = DebugOverlayGroundFogSettingsPlanner.densityTitle(fog.density)
-        groundFogHeightSlider.doubleValue = Double(fog.height)
-        groundFogHeightLabel.stringValue = DebugOverlayGroundFogSettingsPlanner.heightTitle(fog.height)
-        groundFogStartSlider.doubleValue = Double(fog.startDistance)
-        groundFogStartLabel.stringValue = DebugOverlayGroundFogSettingsPlanner.startDistanceTitle(fog.startDistance)
-        groundFogOpacitySlider.doubleValue = Double(fog.maximumOpacity)
-        groundFogOpacityLabel.stringValue = DebugOverlayGroundFogSettingsPlanner.maximumOpacityTitle(fog.maximumOpacity)
+        groundFogBuildingsSwitch.state = fog.veilsBuildings ? .on : .off
+        groundFogBuildingsSwitch.isEnabled = fog.isEnabled
+        groundFogDensityLabel.stringValue = Planner.densityTitle(fog.densityPerKilometer, cameraZoom: zoom)
+        groundFogHeightLabel.stringValue = Planner.heightTitle(fog.heightMeters, cameraZoom: zoom)
+        groundFogStartLabel.stringValue = Planner.startDistanceTitle(fog.startDistanceMeters, cameraZoom: zoom)
+        groundFogSoftnessLabel.stringValue = Planner.startSoftnessTitle(fog.startSoftnessMeters, cameraZoom: zoom)
+        groundFogOpacityLabel.stringValue = Planner.maximumOpacityTitle(fog.maximumOpacity, cameraZoom: zoom)
+        for (graph, curve) in [(groundFogDensityGraph, fog.densityPerKilometer),
+                               (groundFogHeightGraph, fog.heightMeters),
+                               (groundFogStartGraph, fog.startDistanceMeters),
+                               (groundFogSoftnessGraph, fog.startSoftnessMeters),
+                               (groundFogOpacityGraph, fog.maximumOpacity)] {
+            graph.curve = curve
+            graph.cameraZoom = zoom
+            graph.isEnabled = fog.isEnabled
+        }
         groundFogColorWell.color = Self.color(fog.color ?? groundFogHorizonColor)
-        [groundFogDensitySlider, groundFogHeightSlider, groundFogStartSlider, groundFogOpacitySlider, groundFogColorWell]
-            .forEach { $0.isEnabled = fog.isEnabled }
+        groundFogColorWell.isEnabled = fog.isEnabled
+    }
+
+    private func configureGroundFogGraph(_ graph: DebugOverlayZoomCurveView,
+                                         axes: DebugOverlayZoomCurveAxes,
+                                         valueText: @escaping (Double) -> String,
+                                         keyPath: WritableKeyPath<ImmersiveMapSettings.GroundFogSettings, ImmersiveMapZoomCurve>) {
+        graph.axes = axes
+        graph.valueText = valueText
+        graph.onChange = { [weak self] curve in
+            guard let self else { return }
+            var settings = groundFogSettings
+            settings[keyPath: keyPath] = curve
+            publish(groundFogSettings: settings)
+        }
     }
 
     private func updateAtmosphereControls() {
@@ -1570,6 +1740,7 @@ final class DebugOverlayHUDView: NSView {
         isCollapsed.toggle()
         updateCollapseButtonImage()
         scrollView.isHidden = isCollapsed
+        tabScrollView.isHidden = isCollapsed
         needsLayout = true
     }
 
@@ -1703,20 +1874,6 @@ final class DebugOverlayHUDView: NSView {
         publish(fogSettings: settings)
     }
 
-    @objc private func fogHazeStartSliderChanged() {
-        var settings = fogSettings
-        settings.hazeRange = DebugOverlayFogSettingsPlanner.hazeRange(settings.hazeRange,
-                                                                      start: Float(fogHazeStartSlider.doubleValue))
-        publish(fogSettings: settings)
-    }
-
-    @objc private func fogHazeEndSliderChanged() {
-        var settings = fogSettings
-        settings.hazeRange = DebugOverlayFogSettingsPlanner.hazeRange(settings.hazeRange,
-                                                                      end: Float(fogHazeEndSlider.doubleValue))
-        publish(fogSettings: settings)
-    }
-
     @objc private func fogSkyColorWellChanged() {
         guard let rgb = Self.rgb(fogSkyColorWell.color) else { return }
         var settings = fogSettings
@@ -1738,34 +1895,53 @@ final class DebugOverlayHUDView: NSView {
         onFogSettingsChanged?(settings)
     }
 
+    @objc private func groundFogBuildingsSwitchChanged() {
+        var settings = groundFogSettings
+        settings.veilsBuildings = groundFogBuildingsSwitch.state == .on
+        publish(groundFogSettings: settings)
+    }
+
     @objc private func groundFogEnabledSwitchChanged() {
         var settings = groundFogSettings
         settings.isEnabled = groundFogEnabledSwitch.state == .on
         publish(groundFogSettings: settings)
     }
 
-    @objc private func groundFogDensitySliderChanged() {
-        var settings = groundFogSettings
-        settings.density = Float(groundFogDensitySlider.doubleValue)
-        publish(groundFogSettings: settings)
+    @objc private func groundFogResetButtonTapped() {
+        onGroundFogResetRequested?()
     }
 
-    @objc private func groundFogHeightSliderChanged() {
-        var settings = groundFogSettings
-        settings.height = Float(groundFogHeightSlider.doubleValue)
-        publish(groundFogSettings: settings)
+    @objc private func exportButtonTapped() {
+        onExportSettingsRequested?()
     }
 
-    @objc private func groundFogStartSliderChanged() {
-        var settings = groundFogSettings
-        settings.startDistance = Float(groundFogStartSlider.doubleValue)
-        publish(groundFogSettings: settings)
+    /// What the last export did: the file's path, or why it failed.
+    func apply(exportStatus: String) {
+        exportStatusLabel.stringValue = exportStatus
+        needsLayout = true
     }
 
-    @objc private func groundFogOpacitySliderChanged() {
-        var settings = groundFogSettings
-        settings.maximumOpacity = Float(groundFogOpacitySlider.doubleValue)
-        publish(groundFogSettings: settings)
+    // MARK: - Tabs
+
+    @objc private func tabButtonTapped(_ sender: NSButton) {
+        guard let category = DebugOverlayPanelCategory(rawValue: sender.tag), category != selectedCategory else {
+            return
+        }
+        selectedCategory = category
+        updateTabButtons()
+        // A new tab starts at its top, not wherever the last one was scrolled.
+        scrollView.contentView.scroll(to: .zero)
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+        needsLayout = true
+    }
+
+    /// The selected tab filled, the others as faint as the panel's buttons.
+    private func updateTabButtons() {
+        for button in tabButtons {
+            let isSelected = button.tag == selectedCategory.rawValue
+            button.layer?.backgroundColor = NSColor.white.withAlphaComponent(isSelected ? 0.3 : 0.08).cgColor
+            button.contentTintColor = isSelected ? .white : NSColor.white.withAlphaComponent(0.7)
+        }
     }
 
     @objc private func groundFogColorWellChanged() {
