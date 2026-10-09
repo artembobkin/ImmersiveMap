@@ -96,8 +96,8 @@ final class BaseLabelFadeState {
         return hasActiveAnimations
     }
 
-    /// The collision solve found `loser` to be a copy of `winner` (the same
-    /// feature from another tile, drawn at the same point): the winner
+    /// `loser` is another tile's copy of the feature `winner` is, the copy
+    /// the working set keeps (`BaseLabelCache.labelCopyOf`): the winner
     /// takes the fuller alpha of the two so a change of winner shows no
     /// blink, and the loser goes out at once, not through a fade, or the
     /// text would draw twice while it faded.

@@ -20,9 +20,9 @@ import simd
 /// carried by copying its run. A frame with a moving camera projects the
 /// base labels' anchors, lays the road glyphs along their roads
 /// (`RoadLabelPlacer`), solves the collisions of base labels and road
-/// instances together in one pass (`LabelCollisionSolver`), which also
-/// finds the copies of one feature that several tiles brought and hides
-/// all but the placed one, advances the fades in place and writes the
+/// instances together in one pass (`LabelCollisionSolver`), the copies of
+/// one feature that several tiles brought left out of it but one
+/// (`BaseLabelCache.labelCopyOf`), advances the fades in place and writes the
 /// runtime meta, the screen positions and the glyph placements the label
 /// shaders read. A frame with a still camera and no fade in flight does
 /// none of that. Nothing is asked of the GPU: the decision for a pose is
@@ -91,12 +91,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     /// `baseHalfSizesPx` with each label shrunk for its distance, the boxes
     /// the collisions measure.
     private var baseScaledHalfSizesPx: [SIMD2<Float>] = []
-    private var baseGroupIds: [UInt64] = []
     private var baseReservesSpace: [Bool] = []
     private var baseCollisionVisible: [Bool] = []
-    /// The placed copy each label is a duplicate of, from the solve, -1
-    /// for a label that is nobody's copy.
-    private var baseDuplicateOf: [Int32] = []
     private var baseTargetVisible: [Bool] = []
 
     // Index-aligned with the road instance set.
@@ -323,10 +319,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         baseHalfSizesPx.removeAll(keepingCapacity: false)
         baseScaledHalfSizesPx.removeAll(keepingCapacity: false)
         basePerspectiveScales.removeAll(keepingCapacity: false)
-        baseGroupIds.removeAll(keepingCapacity: false)
         baseReservesSpace.removeAll(keepingCapacity: false)
         baseCollisionVisible.removeAll(keepingCapacity: false)
-        baseDuplicateOf.removeAll(keepingCapacity: false)
         baseTargetVisible.removeAll(keepingCapacity: false)
         roadCollisionVisible.removeAll(keepingCapacity: false)
         roadTargetVisible.removeAll(keepingCapacity: false)
@@ -334,16 +328,16 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         roadItems.removeAll(keepingCapacity: false)
         roadBoxCenters.removeAll(keepingCapacity: false)
         roadBoxHalfSizes.removeAll(keepingCapacity: false)
-        collisionSolver.rebindBase(ranks: [])
+        collisionSolver.rebindBase(ranks: [], order: [])
     }
 
     // MARK: - The working set
 
     /// Sizes everything index-aligned with the new base and road sets and
     /// carries the fades to their new places, the
-    /// surviving tiles' by run and the swapped tiles' lit labels by key:
-    /// the one place the frame path allocates, and it runs only when the
-    /// tiles change.
+    /// surviving tiles' by run and the swapped tiles' lit labels by key,
+    /// then hands each copy's fade to the copy the set keeps: the one place
+    /// the frame path allocates, and it runs only when the tiles change.
     private func rebindWorkingSet(base: LabelWorkingSetChange, road: LabelWorkingSetChange, time: TimeInterval) {
         // A feature whose tile was swapped for another in this change (a
         // zoom step, a tile boundary in a pan) keeps its fade: the lit
@@ -352,19 +346,17 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         // hold their tile.
         let base = base.seeded(oldAlphas: baseFade.currentAlphas,
                                threshold: BaseLabelVisibilityResolver.activeAlphaThreshold)
-        let candidates = baseLabelCache.labelCollisionAABBInputs
-        let tileOrders = baseLabelCache.labelTileOrders
         let count = base.count
         baseFade.rebind(change: base, time: time)
-        activeSpans.rebind(runs: baseLabelCache.tileRuns)
-        var ranks: [LabelCollisionRank] = []
-        ranks.reserveCapacity(count)
-        for index in candidates.indices {
-            ranks.append(LabelCollisionRank(candidate: candidates[index], tileOrder: tileOrders[index]))
+        // One feature draws once: a copy hands its fade to the kept one and
+        // goes out at once, whichever of the two was showing before.
+        let copyOf = baseLabelCache.labelCopyOf
+        for index in baseLabelCache.copyIndices {
+            baseFade.transfer(from: index, to: Int(copyOf[index]))
         }
-        collisionSolver.rebindBase(ranks: ranks)
-        baseGroupIds = candidates.map(\.groupId)
-        baseHalfSizesPx = candidates.map { $0.halfSize + collisionMarginPoints }
+        activeSpans.rebind(runs: baseLabelCache.tileRuns)
+        collisionSolver.rebindBase(ranks: baseLabelCache.labelRanks, order: baseLabelCache.rankOrder)
+        baseHalfSizesPx = baseLabelCache.labelHalfSizes.map { $0 + collisionMarginPoints }
         baseScaledHalfSizesPx = baseHalfSizesPx
         basePerspectiveScales = Array(repeating: 1, count: count)
         solvedPixelsPerPoint = 0
@@ -375,7 +367,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         baseCenters = Array(repeating: .zero, count: count)
         baseReservesSpace = Array(repeating: false, count: count)
         baseCollisionVisible = Array(repeating: false, count: count)
-        baseDuplicateOf = Array(repeating: -1, count: count)
         baseTargetVisible = Array(repeating: false, count: count)
 
         roadFade.rebind(change: road, time: time)
@@ -385,14 +376,13 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     }
 
     private func rescaleBaseHalfSizes(pixelsPerPoint: Float) {
-        let candidates = baseLabelCache.labelCollisionAABBInputs
         let margin = collisionMarginPoints
-        let count = min(candidates.count, baseHalfSizesPx.count)
-        candidates.withUnsafeBufferPointer { candidates in
+        let count = min(baseLabelCache.labelHalfSizes.count, baseHalfSizesPx.count)
+        baseLabelCache.labelHalfSizes.withUnsafeBufferPointer { labelHalfSizes in
             baseHalfSizesPx.withUnsafeMutableBufferPointer { halfSizes in
                 var index = 0
                 while index < count {
-                    halfSizes[index] = (candidates[index].halfSize + margin) * pixelsPerPoint
+                    halfSizes[index] = (labelHalfSizes[index] + margin) * pixelsPerPoint
                     index += 1
                 }
             }
@@ -618,29 +608,11 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                               baseCenters: baseCenters,
                               baseHalfSizes: baseScaledHalfSizesPx,
                               baseEnabled: baseReservesSpace,
-                              baseGroupIds: baseGroupIds,
                               roadItems: roadItems,
                               roadCenters: roadBoxCenters,
                               roadHalfSizes: roadBoxHalfSizes,
                               baseVisible: &baseCollisionVisible,
-                              baseDuplicateOf: &baseDuplicateOf,
                               roadVisible: &roadCollisionVisible)
-
-        // A copy of a placed label hands its fade to the placed one and
-        // goes out at once: one feature draws once. Only a label of the
-        // spans took part in the solve, so only one can be a copy.
-        let duplicateCount = baseDuplicateOf.count
-        for span in spans {
-            var index = span.lowerBound
-            let end = min(span.upperBound, duplicateCount)
-            while index < end {
-                let winner = baseDuplicateOf[index]
-                if winner >= 0 {
-                    baseFade.transfer(from: index, to: Int(winner))
-                }
-                index += 1
-            }
-        }
     }
 
     private func makeVisibilityCameraFingerprint(frameContext: FrameContext) -> Int {
@@ -820,10 +792,10 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
 
         var boxes: [BaseLabelDebugBox] = []
         if controls.baseLabelBoundsEnabled {
-            let candidates = baseLabelCache.labelCollisionAABBInputs
+            let labelHalfSizes = baseLabelCache.labelHalfSizes
             let presentationInputs = baseLabelCache.presentationInputs
             let alphas = baseFade.currentAlphas
-            let count = min(candidates.count, baseScreenPoints.count)
+            let count = min(labelHalfSizes.count, baseScreenPoints.count)
             boxes.reserveCapacity(count)
 
             for index in 0..<count {
@@ -837,7 +809,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                 }
                 let alpha = index < alphas.count ? alphas[index] : 0.0
                 boxes.append(BaseLabelDebugBox(center: screenPoint.position,
-                                               halfSize: screenScale.pixels(candidates[index].halfSize),
+                                               halfSize: screenScale.pixels(labelHalfSizes[index]),
                                                isVisible: alpha > 0.01))
             }
         }
@@ -867,7 +839,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                            overviewFadeAlpha: Float) {
         let inputs = baseLabelCache.presentationInputs
         let fadeAlphas = baseFade.currentAlphas
-        var duplicateLabelCount = 0
+        var copyLabelCount = 0
+        let copyOf = baseLabelCache.labelCopyOf
         var collisionVisibleCount = 0
         var collisionHiddenCount = 0
         var targetVisibleCount = 0
@@ -876,8 +849,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         var fadeAnimatingCount = 0
 
         for index in inputs.indices {
-            if index < baseDuplicateOf.count, baseDuplicateOf[index] >= 0 {
-                duplicateLabelCount += 1
+            if index < copyOf.count, copyOf[index] >= 0 {
+                copyLabelCount += 1
             }
             if index < baseCollisionVisible.count, baseCollisionVisible[index] {
                 collisionVisibleCount += 1
@@ -917,12 +890,13 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         let labels = includeFullLabels ? Self.makeBaseLabelTraceLabels(inputs: inputs,
                                                                        screenPoints: baseScreenPoints,
                                                                        collisionVisibility: baseCollisionVisible,
-                                                                       duplicateOf: baseDuplicateOf,
+                                                                       copyOf: copyOf,
                                                                        targetVisibility: baseTargetVisible,
                                                                        horizonVisibility: baseHorizonVisible,
                                                                        fadeAlphas: fadeAlphas,
                                                                        overviewFadeAlpha: overviewFadeAlpha,
-                                                                       collisionCandidates: baseLabelCache.labelCollisionAABBInputs,
+                                                                       halfSizes: baseLabelCache.labelHalfSizes,
+                                                                       ranks: baseLabelCache.labelRanks,
                                                                        screenScale: frameContext.screenScale) : nil
         baseLabelTraceRecorder.record(.baseLabelFrame(frameIndex: frameContext.frameIndex,
                                                       zoom: frameContext.zoom,
@@ -935,7 +909,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                       activeLabelSpanCount: baseLabelCache.labelInputsCount,
                                                       labelInputsCount: baseLabelCache.labelInputsCount,
                                                       validLabelCount: inputs.count,
-                                                      duplicateLabelCount: duplicateLabelCount,
+                                                      duplicateLabelCount: copyLabelCount,
                                                       collisionVisibleCount: collisionVisibleCount,
                                                       collisionHiddenCount: collisionHiddenCount,
                                                       collisionUnknownCount: 0,
@@ -955,12 +929,13 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     private static func makeBaseLabelTraceLabels(inputs: [BaseLabelPresentationInput],
                                                  screenPoints: [ScreenPointOutput],
                                                  collisionVisibility: [Bool],
-                                                 duplicateOf: [Int32],
+                                                 copyOf: [Int32],
                                                  targetVisibility: [Bool],
                                                  horizonVisibility: [Bool],
                                                  fadeAlphas: [Float],
                                                  overviewFadeAlpha: Float,
-                                                 collisionCandidates: [ScreenCollisionCandidate],
+                                                 halfSizes: [SIMD2<Float>],
+                                                 ranks: [BaseLabelRank],
                                                  screenScale: ScreenScale) -> String {
         guard inputs.isEmpty == false else {
             return ""
@@ -971,21 +946,19 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         for index in inputs.indices {
             let input = inputs[index]
             let point = index < screenPoints.count ? screenPoints[index] : nil
-            let candidate = index < collisionCandidates.count ? collisionCandidates[index] : nil
             let visibility = index < collisionVisibility.count && collisionVisibility[index]
-            let duplicate = index < duplicateOf.count && duplicateOf[index] >= 0 ? 1 : 0
+            let duplicate = index < copyOf.count && copyOf[index] >= 0 ? 1 : 0
             let targetVisible = index < targetVisibility.count && targetVisibility[index]
             let horizonVisible = index < horizonVisibility.count && horizonVisibility[index]
             let fadeAlpha = traceFadeAlpha(index: index,
                                            fadeAlphas: fadeAlphas,
                                            overviewFadeAlpha: overviewFadeAlpha)
             let position = point?.position ?? .zero
-            let halfSize = screenScale.pixels(candidate?.halfSize ?? .zero)
+            let halfSize = screenScale.pixels(index < halfSizes.count ? halfSizes[index] : .zero)
             let screenVisible = point?.visible != 0
-            let priority = candidate?.priority ?? Int.max
-            let secondaryPriority = candidate?.secondaryPriority ?? Int.max
+            let priority = index < ranks.count ? ranks[index].priority : Int.max
 
-            labels.append("\(index)|\(input.labelKey)|v=1|d=\(duplicate)|cv=\(visibility ? "visible" : "hidden")|t=\(targetVisible ? 1 : 0)|hz=\(horizonVisible ? 1 : 0)|a=\(formatTraceFloat(fadeAlpha))|x=\(formatTraceFloat(position.x))|y=\(formatTraceFloat(position.y))|sv=\(screenVisible ? 1 : 0)|p=\(priority)|sp=\(secondaryPriority)|hw=\(formatTraceFloat(halfSize.x))|hh=\(formatTraceFloat(halfSize.y))")
+            labels.append("\(index)|\(input.labelKey)|v=1|d=\(duplicate)|cv=\(visibility ? "visible" : "hidden")|t=\(targetVisible ? 1 : 0)|hz=\(horizonVisible ? 1 : 0)|a=\(formatTraceFloat(fadeAlpha))|x=\(formatTraceFloat(position.x))|y=\(formatTraceFloat(position.y))|sv=\(screenVisible ? 1 : 0)|p=\(priority)|hw=\(formatTraceFloat(halfSize.x))|hh=\(formatTraceFloat(halfSize.y))")
         }
         return labels.joined(separator: ";")
     }

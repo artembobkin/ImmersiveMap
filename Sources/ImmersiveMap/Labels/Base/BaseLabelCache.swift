@@ -23,10 +23,20 @@ import simd
 /// index is its tile's start plus its index in the tile, the number the
 /// tile's vertices carry and the shaders add the tile's start to.
 ///
+/// The same feature reaches the set from several tiles (an exact tile and
+/// the coarser one standing in beside it, placed whole), each copy under
+/// the feature's key. The set keeps one: the copy of the tile earliest in
+/// winner order, per world wrap, and marks the others as its copies
+/// (`labelCopyOf`), which take no part in the frame. The copies need not
+/// draw at one point (a roof in one tile, the ground in a coarser one that
+/// draws no buildings), so they are told apart by key, never on screen.
+///
 /// Everything here is rebuilt when the tile set changes and read
 /// otherwise: the per-label static arrays (anchor, collision box and rank,
-/// presentation), the per-frame runtime meta the shaders read, and the
-/// draw batches. Repacking the set is a loop over the tiles writing runs;
+/// presentation, copies), the set's rank order, the per-frame runtime meta
+/// the shaders read, and the draw batches. The rank order is the tiles'
+/// own orders (`TileBuffers.TextLabelSet.rankOrder`) merged, never a sort
+/// of the whole set. Repacking the set is a loop over the tiles writing runs;
 /// the change it hands back (`LabelWorkingSetChange`) says which runs
 /// survived and where they went, so the frame's per-label state is
 /// carried by copying runs, never by looking a label up.
@@ -35,7 +45,6 @@ final class BaseLabelCache {
         let ownerKey: VisibleTile
         let metalTileIdentity: ObjectIdentifier
         let labelSet: TileBuffers.TextLabelSet
-        let sourcePriorityRank: Int
         let start: Int
         let count: Int
     }
@@ -52,15 +61,23 @@ final class BaseLabelCache {
     /// The number of labels in the set, the length of every per-label array.
     private(set) var labelInputsCount: Int = 0
     private(set) var tilePointInputs: [TilePointInput] = []
-    private(set) var labelCollisionAABBInputs: [ScreenCollisionCandidate] = []
-    /// Each label's tile's position in the set: the tile order the
-    /// collision rank breaks ties by, so the set's preferred copy of a
-    /// feature is placed before the others.
-    private(set) var labelTileOrders: [Int] = []
+    /// Each label's collision box half size in layout points.
+    private(set) var labelHalfSizes: [SIMD2<Float>] = []
+    /// Each label's collision rank.
+    private(set) var labelRanks: [BaseLabelRank] = []
+    /// The set's labels in rank order, the order the collision solve
+    /// places them in. Ties keep the earlier tile first.
+    private(set) var rankOrder: [Int32] = []
     /// Each label's key, the identity a feature keeps across tiles: what a
     /// topology change matches a departing tile's lit labels to an arriving
     /// tile's by (`LabelWorkingSetChange.seeded`).
     private(set) var labelKeys: [UInt64] = []
+    /// For each label the index of the copy of its feature the set keeps,
+    /// -1 for a label the set keeps itself.
+    private(set) var labelCopyOf: [Int32] = []
+    /// The labels that are copies, in index order: what a topology change
+    /// hands the kept copies' fades over from.
+    private(set) var copyIndices: [Int] = []
 
     init(metalDevice: MTLDevice) {
         self.labelRuntimeMetaBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
@@ -100,9 +117,12 @@ final class BaseLabelCache {
         tileSlotVisibleTileIndices.removeAll(keepingCapacity: false)
         baseLabelsDrawBatches.removeAll(keepingCapacity: false)
         tilePointInputs.removeAll(keepingCapacity: false)
-        labelCollisionAABBInputs.removeAll(keepingCapacity: false)
-        labelTileOrders.removeAll(keepingCapacity: false)
+        labelHalfSizes.removeAll(keepingCapacity: false)
+        labelRanks.removeAll(keepingCapacity: false)
+        rankOrder.removeAll(keepingCapacity: false)
         labelKeys.removeAll(keepingCapacity: false)
+        labelCopyOf.removeAll(keepingCapacity: false)
+        copyIndices.removeAll(keepingCapacity: false)
         labelRuntimeMetaData.removeAll(keepingCapacity: false)
         labelPresentationInputs.removeAll(keepingCapacity: false)
         labelInputsCount = 0
@@ -219,7 +239,6 @@ final class BaseLabelCache {
             nextRecords.append(TileRecord(ownerKey: entry.ownerKey,
                                           metalTileIdentity: identity,
                                           labelSet: labelSet,
-                                          sourcePriorityRank: BaseLabelSourceEntry.priorityRank(for: entry),
                                           start: start,
                                           count: count))
             start += count
@@ -233,6 +252,8 @@ final class BaseLabelCache {
         labelInputsCount = start
 
         rewriteLabelArrays()
+        mergeRankOrder()
+        markCopies()
         rebuildDrawBatches()
         return LabelWorkingSetChange(count: start,
                                      moves: moves,
@@ -245,9 +266,8 @@ final class BaseLabelCache {
     private func rewriteLabelArrays() {
         let total = labelInputsCount
         tilePointInputs = Array(repeating: TilePointInput(uv: .zero, tile: .zero, tileSlotIndex: 0), count: total)
-        labelCollisionAABBInputs = Array(repeating: ScreenCollisionCandidate(position: .zero, halfSize: .zero, isEnabled: false),
-                                         count: total)
-        labelTileOrders = Array(repeating: 0, count: total)
+        labelHalfSizes = Array(repeating: .zero, count: total)
+        labelRanks = Array(repeating: BaseLabelRank(priority: 0, sortPriority: 0, key: 0), count: total)
         labelKeys = Array(repeating: 0, count: total)
         labelPresentationInputs = Array(repeating: BaseLabelPresentationInput(labelKey: 0, minCameraZoom: 0), count: total)
         labelRuntimeMetaData = Array(repeating: LabelRuntimeMeta(), count: total)
@@ -256,14 +276,13 @@ final class BaseLabelCache {
         }
 
         tilePointInputs.withUnsafeMutableBufferPointer { points in
-        labelCollisionAABBInputs.withUnsafeMutableBufferPointer { candidates in
-        labelTileOrders.withUnsafeMutableBufferPointer { tileOrders in
+        labelHalfSizes.withUnsafeMutableBufferPointer { halfSizes in
+        labelRanks.withUnsafeMutableBufferPointer { ranks in
         labelKeys.withUnsafeMutableBufferPointer { keys in
         labelPresentationInputs.withUnsafeMutableBufferPointer { presentation in
         labelRuntimeMetaData.withUnsafeMutableBufferPointer { meta in
             for (tileOrder, record) in records.enumerated() where record.count > 0 {
                 let tileSlotIndex = UInt32(tileOrder)
-                let sourcePriorityRank = record.sourcePriorityRank
                 record.labelSet.placementInputs.withUnsafeBufferPointer { inputs in
                     let count = min(record.count, inputs.count)
                     var offset = 0
@@ -274,15 +293,8 @@ final class BaseLabelCache {
                         var point = input.pointInput
                         point.tileSlotIndex = tileSlotIndex
                         points[index] = point
-                        candidates[index] = ScreenCollisionCandidate(position: .zero,
-                                                                     halfSize: placementMeta.labelSizePoints * 0.5,
-                                                                     priority: placementMeta.collisionPriority,
-                                                                     secondaryPriority: sourcePriorityRank,
-                                                                     sortPriority: placementMeta.sortKey,
-                                                                     stableOrderKey: placementMeta.key,
-                                                                     groupId: placementMeta.key,
-                                                                     isEnabled: true)
-                        tileOrders[index] = tileOrder
+                        halfSizes[index] = placementMeta.labelSizePoints * 0.5
+                        ranks[index] = BaseLabelRank(placementMeta: placementMeta)
                         keys[index] = placementMeta.key
                         presentation[index] = BaseLabelPresentationInput(labelKey: placementMeta.key,
                                                                          minCameraZoom: placementMeta.minCameraZoom,
@@ -295,6 +307,66 @@ final class BaseLabelCache {
                 }
             }
         }}}}}}
+    }
+
+    /// The tiles' rank orders laid end to end in the set's indices, then
+    /// merged into one.
+    private func mergeRankOrder() {
+        rankOrder = Array(repeating: 0, count: labelInputsCount)
+        rankOrder.withUnsafeMutableBufferPointer { order in
+            for record in records where record.count > 0 {
+                record.labelSet.rankOrder.withUnsafeBufferPointer { tileOrder in
+                    let count = min(record.count, tileOrder.count)
+                    let start = Int32(record.start)
+                    var offset = 0
+                    while offset < count {
+                        order[record.start + offset] = start + tileOrder[offset]
+                        offset += 1
+                    }
+                }
+            }
+        }
+        BaseLabelRankOrder.mergeRuns(&rankOrder, runs: tileRuns, ranks: labelRanks)
+    }
+
+    /// Keeps the first copy of each feature in the set's order, the tiles
+    /// being in winner order, per world wrap, and points the later copies
+    /// at it. A label without a key is nobody's copy.
+    private func markCopies() {
+        struct Feature: Hashable {
+            let key: UInt64
+            let worldWrap: Int8
+        }
+        labelCopyOf = Array(repeating: -1, count: labelInputsCount)
+        copyIndices.removeAll(keepingCapacity: true)
+        guard labelInputsCount > 0 else {
+            return
+        }
+        var kept: [Feature: Int32] = [:]
+        kept.reserveCapacity(labelInputsCount)
+        labelKeys.withUnsafeBufferPointer { keys in
+        labelPresentationInputs.withUnsafeMutableBufferPointer { presentation in
+        labelCopyOf.withUnsafeMutableBufferPointer { copyOf in
+            for record in records where record.count > 0 {
+                let worldWrap = record.ownerKey.worldWrap
+                var index = record.start
+                let end = record.start + record.count
+                while index < end {
+                    let key = keys[index]
+                    if key != 0 {
+                        let feature = Feature(key: key, worldWrap: worldWrap)
+                        if let keptIndex = kept[feature] {
+                            copyOf[index] = keptIndex
+                            presentation[index].isCopy = true
+                            copyIndices.append(index)
+                        } else {
+                            kept[feature] = Int32(index)
+                        }
+                    }
+                    index += 1
+                }
+            }
+        }}}
     }
 
     private func rebuildDrawBatches() {

@@ -127,6 +127,11 @@ struct TileBuffers {
         let labelsByStyleRuns: [LabelsByStyleRun]
         let poiIconRuns: [PoiIconRunBuffer]
         let routeShieldRuns: [RouteShieldRunBuffer]
+        /// The tile's labels in collision rank order (`BaseLabelRank`), as
+        /// indices into `placementInputs`: ranked once here, when the tile
+        /// is made, so a working set merges its tiles' orders instead of
+        /// sorting every label it holds.
+        let rankOrder: [Int32]
 
         init(placementInputs: [TextLabelPlacementInput],
              labelsByStyleRuns: [LabelsByStyleRun],
@@ -136,6 +141,7 @@ struct TileBuffers {
             self.labelsByStyleRuns = labelsByStyleRuns
             self.poiIconRuns = poiIconRuns
             self.routeShieldRuns = routeShieldRuns
+            self.rankOrder = BaseLabelRankOrder.sorted(placementInputs.map { BaseLabelRank(placementMeta: $0.placementMeta) })
         }
 
         var labelsCount: Int {

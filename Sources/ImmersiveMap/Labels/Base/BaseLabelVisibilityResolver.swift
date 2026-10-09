@@ -14,6 +14,9 @@ struct BaseLabelPresentationInput {
     let minCameraZoom: Float
     /// Local detail, shown only near the camera (`LabelPlacementMeta.isLocal`).
     var isLocal: Bool = false
+    /// Another tile's copy of a feature the set keeps (`BaseLabelCache`):
+    /// it never reserves space and never shows.
+    var isCopy: Bool = false
 }
 
 /// The per-label rules between the projection, the collision solve and the
@@ -47,6 +50,7 @@ enum BaseLabelVisibilityResolver {
     /// `reservesSpace` for the whole set, written into `reserves`, which
     /// is sized to `inputs`. `localSuppressed` may be shorter than the set
     /// or empty: a missing entry counts as in view.
+    /// A copy (`BaseLabelPresentationInput.isCopy`) reserves nothing.
     /// Only the labels of `spans` are decided (`LabelActiveSpans`), the
     /// rest reserve nothing. Nil decides every label.
     static func reservesSpace(inputs: [BaseLabelPresentationInput],
@@ -77,7 +81,7 @@ enum BaseLabelVisibilityResolver {
                 var index = span.lowerBound
                 let end = min(span.upperBound, limit)
                 while index < end {
-                    reserves[index] = reservesSpace(screenVisible: screenPoints[index].visible != 0,
+                    reserves[index] = inputs[index].isCopy == false && reservesSpace(screenVisible: screenPoints[index].visible != 0,
                                                     horizonVisible: horizon[index],
                                                     localSuppressed: index < localCount && local[index],
                                                     currentAlpha: alphas[index],
@@ -90,7 +94,7 @@ enum BaseLabelVisibilityResolver {
     }
 
     /// Whether a label wants to be shown: accepted by the collision solve
-    /// (which also hides a duplicate of a placed copy), in front of the
+    /// (which never offers a copy a place), in front of the
     /// horizon, not local detail outside the look-at tile
     /// (`localSuppressed`, likewise) and at or above its minimum camera
     /// zoom. A missing collision or horizon entry counts as hidden. Only

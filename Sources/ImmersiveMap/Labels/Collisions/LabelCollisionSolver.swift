@@ -3,11 +3,9 @@
 
 import simd
 
-/// The rank a label competes with: lower wins. Two copies of one feature
-/// (an exact tile's and a stand-in's) rank alike down to the tile order,
-/// which is the working set's winner order, so the copy the set prefers is
-/// placed first and the other is found to be its duplicate. Ties beyond
-/// that fall to the stable key.
+/// The rank a road label instance competes with: lower wins. Ties fall to
+/// the order of its tile among the road tiles, then to the stable key. A
+/// base label ranks by `BaseLabelRank`.
 struct LabelCollisionRank: Equatable {
     var priority: Int
     var secondaryPriority: Int
@@ -21,14 +19,6 @@ struct LabelCollisionRank: Equatable {
         self.sortPriority = sortPriority
         self.tileOrder = tileOrder
         self.stableOrderKey = stableOrderKey
-    }
-
-    init(candidate: ScreenCollisionCandidate, tileOrder: Int) {
-        self.init(priority: candidate.priority,
-                  secondaryPriority: candidate.secondaryPriority,
-                  sortPriority: candidate.sortPriority,
-                  tileOrder: tileOrder,
-                  stableOrderKey: candidate.stableOrderKey)
     }
 
     /// Strict order: whoever is placed first keeps the space.
@@ -68,24 +58,22 @@ struct LabelCollisionRoadItem {
 /// pure function of the pose, and the fades smooth the changes between
 /// frames.
 ///
-/// The same feature reaches the set from several tiles (an exact tile and
-/// the coarser one standing in beside it, or two world wraps), each copy
-/// with the feature's key as its group. The copies stand at one point, so
-/// they overlap: a base label that overlaps a placed box of its own group
-/// is not blocked but found to be that box's duplicate, and reported as
-/// such, so the caller can hand its fade to the winner and hide it. A road
-/// instance's own glyphs share its group so they never block each other.
+/// The base labels come without the copies of one feature that several
+/// tiles brought, the working set keeps one (`BaseLabelCache`), so every
+/// base label blocks every other. A road instance's glyphs share its
+/// group so they never block each other.
 ///
 /// The base labels' ranks and order are fixed at `rebindBase` (a topology
-/// change); the road instances are few and are sorted per solve into a
-/// reused array and merged with the base order. The grid is a bucket per
+/// change), the order made by the working set; the road instances are few
+/// and are sorted per solve into a reused array and merged with the base
+/// order by collision priority, a base label first on a tie. The grid is a bucket per
 /// cell with intrusive lists over flat buffers, all kept between frames and
 /// emptied with the capacity intact, so a solve allocates nothing once
 /// the buffers have grown to the frame's size.
 final class LabelCollisionSolver {
-    private var baseRanks: [LabelCollisionRank] = []
+    private var baseRanks: [BaseLabelRank] = []
     /// Base label indices in rank order.
-    private var baseOrder: [Int] = []
+    private var baseOrder: [Int32] = []
 
     private var roadOrder: [Int] = []
 
@@ -98,42 +86,27 @@ final class LabelCollisionSolver {
     private let placedMin = CollisionScratchBuffer<SIMD2<Float>>(capacity: 1024)
     private let placedMax = CollisionScratchBuffer<SIMD2<Float>>(capacity: 1024)
     private let placedGroup = CollisionScratchBuffer<UInt64>(capacity: 1024)
-    /// The base label a placed box belongs to, -1 for a road glyph.
-    private let placedOwner = CollisionScratchBuffer<Int32>(capacity: 1024)
     /// The boxes of the item being tested, accepted only all together.
     private let pendingMin = CollisionScratchBuffer<SIMD2<Float>>(capacity: 64)
     private let pendingMax = CollisionScratchBuffer<SIMD2<Float>>(capacity: 64)
     private let pendingCells = CollisionScratchBuffer<SIMD4<Int32>>(capacity: 64)
 
-    private enum Offer {
-        case accepted
-        case blocked
-        /// The box stands on a placed box of its own group: the base label
-        /// that owns that box.
-        case duplicate(Int32)
-    }
-
     var baseCount: Int {
         baseRanks.count
     }
 
-    /// The base labels' ranks, in the working set's index order. Sorted
-    /// once here; the sort is the only allocation of the solver's life
-    /// besides growth.
-    func rebindBase(ranks: [LabelCollisionRank]) {
+    /// The base labels' ranks, in the working set's index order, and their
+    /// indices in rank order (`BaseLabelCache.rankOrder`).
+    func rebindBase(ranks: [BaseLabelRank], order: [Int32]) {
         baseRanks = ranks
-        baseOrder = Array(ranks.indices)
-        baseOrder.sort { LabelCollisionRank.precedes(ranks[$0], ranks[$1]) }
+        baseOrder = order
     }
 
     /// Solves the frame. `baseCenters`, `baseHalfSizes` and `baseEnabled`
     /// are index-aligned with the base set (a disabled label takes no space
-    /// and is hidden); `baseGroupIds` is each label's key, the group its
-    /// copies share. Road boxes are the instances' glyph boxes
+    /// and is hidden). Road boxes are the instances' glyph boxes
     /// (`roadItems` ranges into `roadCenters`/`roadHalfSizes`).
-    /// Writes `baseVisible` (index-aligned with the base set),
-    /// `baseDuplicateOf` (index-aligned with the base set: the index of the
-    /// placed copy a label is a duplicate of, -1 otherwise) and
+    /// Writes `baseVisible` (index-aligned with the base set) and
     /// `roadVisible` (index-aligned with the road instance set, sized by
     /// the caller; an instance not offered keeps the value it had) in place.
     func solve(viewportSize: SIMD2<Float>,
@@ -141,76 +114,65 @@ final class LabelCollisionSolver {
                baseCenters: [SIMD2<Float>],
                baseHalfSizes: [SIMD2<Float>],
                baseEnabled: [Bool],
-               baseGroupIds: [UInt64],
                roadItems: [LabelCollisionRoadItem],
                roadCenters: [SIMD2<Float>],
                roadHalfSizes: [SIMD2<Float>],
                baseVisible: inout [Bool],
-               baseDuplicateOf: inout [Int32],
                roadVisible: inout [Bool]) {
         resetGrid(viewportSize: viewportSize, cellSizePx: cellSizePx)
         let baseCount = baseRanks.count
         if baseVisible.count != baseCount {
             baseVisible = [Bool](repeating: false, count: baseCount)
         }
-        if baseDuplicateOf.count != baseCount {
-            baseDuplicateOf = [Int32](repeating: -1, count: baseCount)
-        }
 
         roadOrder.removeAll(keepingCapacity: true)
         roadOrder.append(contentsOf: roadItems.indices)
         roadOrder.sort { LabelCollisionRank.precedes(roadItems[$0].rank, roadItems[$1].rank) }
 
-        let baseTotal = min(baseOrder.count, min(baseCenters.count, min(baseHalfSizes.count, baseEnabled.count)))
+        let baseTotal = baseOrder.count
+        // An index the frame's arrays do not reach is hidden, never read.
+        let baseLimit = min(baseCount, min(baseCenters.count, min(baseHalfSizes.count, baseEnabled.count)))
         let roadTotal = roadOrder.count
         baseOrder.withUnsafeBufferPointer { baseOrder in
         baseRanks.withUnsafeBufferPointer { baseRanks in
         baseCenters.withUnsafeBufferPointer { baseCenters in
         baseHalfSizes.withUnsafeBufferPointer { baseHalfSizes in
         baseEnabled.withUnsafeBufferPointer { baseEnabled in
-        baseGroupIds.withUnsafeBufferPointer { baseGroupIds in
         roadOrder.withUnsafeBufferPointer { roadOrder in
         roadItems.withUnsafeBufferPointer { roadItems in
         roadCenters.withUnsafeBufferPointer { roadCenters in
         roadHalfSizes.withUnsafeBufferPointer { roadHalfSizes in
         baseVisible.withUnsafeMutableBufferPointer { baseVisible in
-        baseDuplicateOf.withUnsafeMutableBufferPointer { baseDuplicateOf in
         roadVisible.withUnsafeMutableBufferPointer { roadVisible in
             var baseCursor = 0
             var roadCursor = 0
             while baseCursor < baseTotal || roadCursor < roadTotal {
                 let takeBase: Bool
                 if baseCursor < baseTotal, roadCursor < roadTotal {
-                    takeBase = LabelCollisionRank.precedes(baseRanks[baseOrder[baseCursor]],
-                                                           roadItems[roadOrder[roadCursor]].rank)
+                    takeBase = baseRanks[Int(baseOrder[baseCursor])].priority <= roadItems[roadOrder[roadCursor]].rank.priority
                 } else {
                     takeBase = baseCursor < baseTotal
                 }
                 if takeBase {
-                    let index = baseOrder[baseCursor]
+                    let index = Int(baseOrder[baseCursor])
                     baseCursor += 1
-                    baseDuplicateOf[index] = -1
+                    guard index < baseLimit else {
+                        continue
+                    }
                     guard baseEnabled[index] else {
                         baseVisible[index] = false
                         continue
                     }
-                    let groupId = index < baseGroupIds.count ? baseGroupIds[index] : 0
                     pendingMin.removeAll()
                     pendingMax.removeAll()
                     pendingCells.removeAll()
-                    switch offer(center: baseCenters[index], halfSize: baseHalfSizes[index], groupId: groupId, findsDuplicates: true) {
-                    case .accepted:
-                        let accepted = pendingMin.count > 0
-                        if accepted {
-                            commitPending(groupId: groupId, owner: Int32(index))
-                        }
-                        baseVisible[index] = accepted
-                    case .blocked:
-                        baseVisible[index] = false
-                    case .duplicate(let winner):
-                        baseVisible[index] = false
-                        baseDuplicateOf[index] = winner
+                    // Group 0: a base label shares its space with nobody.
+                    let accepted = offer(center: baseCenters[index], halfSize: baseHalfSizes[index], groupId: 0)
+                        && pendingMin.count > 0
+                    if accepted {
+                        commitPending(groupId: 0)
                     }
+                    baseVisible[index] = accepted
                 } else {
                     let itemIndex = roadOrder[roadCursor]
                     roadCursor += 1
@@ -225,24 +187,21 @@ final class LabelCollisionSolver {
                             accepted = false
                             break
                         }
-                        switch offer(center: roadCenters[boxIndex], halfSize: roadHalfSizes[boxIndex], groupId: item.groupId, findsDuplicates: false) {
-                        case .accepted:
-                            break
-                        case .blocked, .duplicate:
+                        if offer(center: roadCenters[boxIndex], halfSize: roadHalfSizes[boxIndex], groupId: item.groupId) == false {
                             accepted = false
                         }
                         boxIndex += 1
                     }
                     accepted = accepted && pendingMin.count > 0
                     if accepted {
-                        commitPending(groupId: item.groupId, owner: -1)
+                        commitPending(groupId: item.groupId)
                     }
                     if item.targetIndex >= 0, item.targetIndex < roadVisible.count {
                         roadVisible[item.targetIndex] = accepted
                     }
                 }
             }
-        }}}}}}}}}}}}}
+        }}}}}}}}}}}
     }
 
     // MARK: - Grid
@@ -257,21 +216,20 @@ final class LabelCollisionSolver {
         placedMin.removeAll()
         placedMax.removeAll()
         placedGroup.removeAll()
-        placedOwner.removeAll()
     }
 
-    /// Tests one box against the placed ones and queues it for commit. A
-    /// box entirely off screen is neither queued nor a collision. With
-    /// `findsDuplicates`, a placed box of the same group under this one is
-    /// the copy this box duplicates; without, it is ignored.
+    /// Tests one box against the placed ones and queues it for commit:
+    /// false when it overlaps a placed box of another group, or of any
+    /// group for group 0. A box entirely off screen is neither queued nor
+    /// a collision.
     @inline(__always)
-    private func offer(center: SIMD2<Float>, halfSize: SIMD2<Float>, groupId: UInt64, findsDuplicates: Bool) -> Offer {
+    private func offer(center: SIMD2<Float>, halfSize: SIMD2<Float>, groupId: UInt64) -> Bool {
         let boxMin = center - halfSize
         let boxMax = center + halfSize
         let viewportWidth = Float(gridWidth) * cellSizePx
         let viewportHeight = Float(gridHeight) * cellSizePx
         if boxMax.x < 0 || boxMax.y < 0 || boxMin.x > viewportWidth || boxMin.y > viewportHeight {
-            return .accepted
+            return true
         }
         let minCellX = min(max(Int(max(0, boxMin.x) / cellSizePx), 0), gridWidth - 1)
         let maxCellX = min(max(Int(min(viewportWidth, boxMax.x) / cellSizePx), 0), gridWidth - 1)
@@ -284,7 +242,6 @@ final class LabelCollisionSolver {
         let mins = placedMin.pointer
         let maxs = placedMax.pointer
         let groups = placedGroup.pointer
-        let owners = placedOwner.pointer
         var cellY = minCellY
         while cellY <= maxCellY {
             let row = cellY * gridWidth
@@ -297,10 +254,7 @@ final class LabelCollisionSolver {
                     let otherMax = maxs[box]
                     if boxMin.x < otherMax.x && boxMax.x > otherMin.x && boxMin.y < otherMax.y && boxMax.y > otherMin.y {
                         if groupId == 0 || groups[box] != groupId {
-                            return .blocked
-                        }
-                        if findsDuplicates, owners[box] >= 0 {
-                            return .duplicate(owners[box])
+                            return false
                         }
                     }
                     node = next[Int(node)]
@@ -314,18 +268,17 @@ final class LabelCollisionSolver {
         pendingMin.append(boxMin)
         pendingMax.append(boxMax)
         pendingCells.append(SIMD4<Int32>(Int32(minCellX), Int32(maxCellX), Int32(minCellY), Int32(maxCellY)))
-        return .accepted
+        return true
     }
 
     @inline(__always)
-    private func commitPending(groupId: UInt64, owner: Int32) {
+    private func commitPending(groupId: UInt64) {
         var pendingIndex = 0
         while pendingIndex < pendingMin.count {
             let box = Int32(placedMin.count)
             placedMin.append(pendingMin[pendingIndex])
             placedMax.append(pendingMax[pendingIndex])
             placedGroup.append(groupId)
-            placedOwner.append(owner)
             let cells = pendingCells[pendingIndex]
             var cellY = Int(cells.z)
             while cellY <= Int(cells.w) {

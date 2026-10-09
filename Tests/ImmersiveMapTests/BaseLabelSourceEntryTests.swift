@@ -77,27 +77,119 @@ final class BaseLabelSourceEntryTests: XCTestCase {
                                  inOwnSlot: true)
         ], tileIndexAllocator: VisibleTileIndexAllocator(indexedTiles: [ownerKey]))
 
-        let candidates = cache.labelCollisionAABBInputs
+        XCTAssertEqual(cache.labelRanks, [BaseLabelRank(priority: 0, sortPriority: 0, key: 10),
+                                          BaseLabelRank(priority: 1, sortPriority: 1, key: 11)])
+        XCTAssertEqual(cache.labelHalfSizes, [SIMD2<Float>(5, 3), SIMD2<Float>(5.5, 3)])
+    }
 
-        XCTAssertEqual(candidates[0].stableOrderKey, 10)
-        XCTAssertEqual(candidates[0].groupId, 10)
-        XCTAssertEqual(candidates[0].sortPriority, 0)
-        XCTAssertEqual(candidates[1].stableOrderKey, 11)
-        XCTAssertEqual(candidates[1].groupId, 11)
-        XCTAssertEqual(candidates[1].sortPriority, 1)
+    /// The set's rank order is its tiles' orders merged: the same order a
+    /// sort of the whole set gives, ties to the earlier tile.
+    func testTheSetsRankOrderIsItsTilesOrdersMerged() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            throw XCTSkip("Metal device is required for BaseLabelCache test fixture.")
+        }
+        let first = MetalTile(tile: Tile(x: 8, y: 8, z: 4),
+                              tileBuffers: try makeTileBuffers(textLabels: makeTextLabelSet(keys: [1, 2, 3],
+                                                                                            priorities: [5, 1, 3])))
+        let second = MetalTile(tile: Tile(x: 9, y: 8, z: 4),
+                               tileBuffers: try makeTileBuffers(textLabels: makeTextLabelSet(keys: [4, 5, 6],
+                                                                                             priorities: [2, 4, 0])))
+        let entries = BaseLabelSourceEntry.build(from: [
+            PlaceTile(metalTile: first, placeIn: VisibleTile(x: 8, y: 8, z: 4)),
+            PlaceTile(metalTile: second, placeIn: VisibleTile(x: 9, y: 8, z: 4))
+        ])
+        let cache = BaseLabelCache(metalDevice: device)
+        cache.rebuild(sourceEntries: entries,
+                      tileIndexAllocator: VisibleTileIndexAllocator(indexedTiles: entries.map(\.ownerKey)))
+
+        XCTAssertEqual(cache.labelKeys, [1, 2, 3, 4, 5, 6])
+        XCTAssertEqual(first.tileBuffers.textLabels.rankOrder, [1, 2, 0], "Each tile ranks its own labels once")
+        XCTAssertEqual(cache.rankOrder, [5, 1, 3, 2, 4, 0])
+        XCTAssertEqual(cache.rankOrder, BaseLabelRankOrder.sorted(cache.labelRanks))
+    }
+
+    /// The exact tile and the coarser one standing in beside it both bring
+    /// feature 20: the set keeps the exact tile's copy, the source it
+    /// prefers, and marks the stand-in's as its copy, wherever either draws.
+    func testTheCacheKeepsOneCopyOfAFeatureFromThePreferredTile() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            throw XCTSkip("Metal device is required for BaseLabelCache test fixture.")
+        }
+        let exactTile = MetalTile(tile: Tile(x: 9652, y: 12318, z: 15),
+                                  tileBuffers: try makeTileBuffers(textLabels: makeTextLabelSet(keys: [10, 20])))
+        let standIn = MetalTile(tile: Tile(x: 2413, y: 3079, z: 13),
+                                tileBuffers: try makeTileBuffers(textLabels: makeTextLabelSet(keys: [20, 30, 0, 0])))
+        let entries = BaseLabelSourceEntry.build(from: [
+            PlaceTile(metalTile: standIn, placeIn: VisibleTile(x: 9653, y: 12318, z: 15)),
+            PlaceTile(metalTile: exactTile, placeIn: VisibleTile(x: 9652, y: 12318, z: 15))
+        ])
+        let cache = BaseLabelCache(metalDevice: device)
+        cache.rebuild(sourceEntries: entries,
+                      tileIndexAllocator: VisibleTileIndexAllocator(indexedTiles: entries.map(\.ownerKey)))
+
+        XCTAssertEqual(cache.labelKeys, [10, 20, 20, 30, 0, 0], "The exact tile leads the set")
+        XCTAssertEqual(cache.labelCopyOf, [-1, -1, 1, -1, -1, -1],
+                       "The stand-in's copy points at the exact tile's, a label without a key is nobody's copy")
+        XCTAssertEqual(cache.copyIndices, [2])
+        XCTAssertEqual(cache.presentationInputs.map(\.isCopy), [false, false, true, false, false, false])
+    }
+
+    /// When the exact tile leaves, the stand-in's copy is the one the set keeps.
+    func testTheCopyIsKeptOnceThePreferredTileLeaves() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            throw XCTSkip("Metal device is required for BaseLabelCache test fixture.")
+        }
+        let exactTile = MetalTile(tile: Tile(x: 9652, y: 12318, z: 15),
+                                  tileBuffers: try makeTileBuffers(textLabels: makeTextLabelSet(keys: [20])))
+        let standIn = MetalTile(tile: Tile(x: 2413, y: 3079, z: 13),
+                                tileBuffers: try makeTileBuffers(textLabels: makeTextLabelSet(keys: [20])))
+        let both = BaseLabelSourceEntry.build(from: [
+            PlaceTile(metalTile: exactTile, placeIn: VisibleTile(x: 9652, y: 12318, z: 15)),
+            PlaceTile(metalTile: standIn, placeIn: VisibleTile(x: 9653, y: 12318, z: 15))
+        ])
+        let standInOnly = BaseLabelSourceEntry.build(from: [
+            PlaceTile(metalTile: standIn, placeIn: VisibleTile(x: 9653, y: 12318, z: 15))
+        ])
+        let allocator = VisibleTileIndexAllocator(indexedTiles: both.map(\.ownerKey))
+        let cache = BaseLabelCache(metalDevice: device)
+
+        cache.rebuild(sourceEntries: both, tileIndexAllocator: allocator)
+        XCTAssertEqual(cache.labelCopyOf, [-1, 0])
+        cache.rebuild(sourceEntries: standInOnly, tileIndexAllocator: allocator)
+        XCTAssertEqual(cache.labelCopyOf, [-1])
+        XCTAssertEqual(cache.copyIndices, [])
+    }
+
+    /// One tile in two world wraps is one feature in two places: both kept.
+    func testTheSameFeatureInTwoWorldWrapsIsNotACopy() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            throw XCTSkip("Metal device is required for BaseLabelCache test fixture.")
+        }
+        let metalTile = MetalTile(tile: Tile(x: 1, y: 1, z: 2),
+                                  tileBuffers: try makeTileBuffers(textLabels: makeTextLabelSet(keys: [20])))
+        let entries = BaseLabelSourceEntry.build(from: [
+            PlaceTile(metalTile: metalTile, placeIn: VisibleTile(x: 1, y: 1, z: 2, worldWrap: 0)),
+            PlaceTile(metalTile: metalTile, placeIn: VisibleTile(x: 1, y: 1, z: 2, worldWrap: 1))
+        ])
+        let cache = BaseLabelCache(metalDevice: device)
+        cache.rebuild(sourceEntries: entries,
+                      tileIndexAllocator: VisibleTileIndexAllocator(indexedTiles: entries.map(\.ownerKey)))
+
+        XCTAssertEqual(cache.labelKeys, [20, 20])
+        XCTAssertEqual(cache.labelCopyOf, [-1, -1])
     }
 
     private func makeTileBuffers(textLabels: TileBuffers.TextLabelSet? = nil) throws -> TileBuffers {
         try TileBuffersFixtures.makeEmptyTileBuffers(textLabels: textLabels)
     }
 
-    private func makeTextLabelSet(keys: [UInt64]) -> TileBuffers.TextLabelSet {
+    private func makeTextLabelSet(keys: [UInt64], priorities: [Int]? = nil) -> TileBuffers.TextLabelSet {
         let placementInputs = keys.enumerated().map { index, key in
             TextLabelPlacementInput(pointInput: TilePointInput(uv: SIMD2<Float>(Float(index), Float(index)),
                                                                tile: SIMD3<Int32>(8, 8, 4)),
                                     placementMeta: LabelPlacementMeta(key: key,
                                                                       sortKey: index,
-                                                                      collisionPriority: index,
+                                                                      collisionPriority: priorities?[index] ?? index,
                                                                       labelSizePoints: SIMD2<Float>(10 + Float(index), 6),
                                                                       minCameraZoom: 0))
         }

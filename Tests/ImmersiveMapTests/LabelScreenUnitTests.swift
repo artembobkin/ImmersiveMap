@@ -68,11 +68,7 @@ final class LabelScreenUnitTests: XCTestCase {
     }
 
     func testCollisionBoxesConvertToPixelsWithTheDisplay() {
-        let candidate = ScreenCollisionCandidate(position: .zero,
-                                                 halfSize: SIMD2<Float>(10, 4),
-                                                 priority: 1,
-                                                 secondaryPriority: 1,
-                                                 isEnabled: true)
+        let labelHalfSize = SIMD2<Float>(10, 4)
         let screenPoints = [ScreenPointOutput(position: SIMD2<Float>(40, 50),
                                               depth: 0.5,
                                               visible: 1,
@@ -88,7 +84,7 @@ final class LabelScreenUnitTests: XCTestCase {
                                                                 minCameraZoom: 0,
                                                                 cameraZoom: 14))
         func halfSize(at pixelsPerPoint: Float) -> SIMD2<Float> {
-            ScreenScale(pixelsPerPoint: pixelsPerPoint).pixels(candidate.halfSize)
+            ScreenScale(pixelsPerPoint: pixelsPerPoint).pixels(labelHalfSize)
         }
 
         XCTAssertEqual(halfSize(at: 2), SIMD2<Float>(20, 8))
