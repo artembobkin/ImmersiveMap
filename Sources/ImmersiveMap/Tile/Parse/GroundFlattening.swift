@@ -71,8 +71,7 @@ enum GroundFlattening {
 
         // One polygon per style, the mesh's vertices renumbered per style,
         // the coordinates as the flattener left them: unrounded, so the
-        // triangles stay watertight and keep their positive signed area,
-        // the counter-clockwise winding of render space. The mesh shares a
+        // triangles stay watertight. The mesh shares a
         // vertex within one paint only, so a vertex has one style and one
         // place in its style's polygon: one renumbering table over the
         // mesh's vertices, filled on first use, and per-style streams that
@@ -105,9 +104,18 @@ enum GroundFlattening {
             }
             triangle += 3
         }
+        // The flattener winds a triangle by the structure of its strip, not
+        // by the sign of its area, and keeps the triangles without area
+        // that close a T-junction. It works in double and hands back
+        // floats, so such a sliver can round into a small negative area,
+        // which the winding check in `TileUnificationStage.appendPolygon`
+        // rejects. Flipping it covers the same ground (none), so the
+        // winding is settled on the floats last, as for the other fills.
         var result = kept
         for (slot, style) in paintStyles.enumerated() where indicesByStyle[slot].isEmpty == false {
-            result[style, default: []].append(ParsedPolygon(vertices: verticesByStyle[slot], indices: indicesByStyle[slot]))
+            var polygon = ParsedPolygon(vertices: verticesByStyle[slot], indices: indicesByStyle[slot])
+            polygon.windCounterClockwise()
+            result[style, default: []].append(polygon)
         }
         return result
     }
