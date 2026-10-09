@@ -32,7 +32,8 @@ extension ProtomapsBasemapDefaultMapStyle {
             color: theme.features.buildingFillColor,
             heightScale: 8.0,
             anchorZoom: 16,
-            fallbackHeight: Self.buildingFallbackHeightMetres
+            fallbackHeight: Self.buildingFallbackHeightMetres,
+            edgeRadius: theme.features.buildingEdgeRadius
         ))
     }
 }

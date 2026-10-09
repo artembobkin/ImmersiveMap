@@ -349,16 +349,25 @@ public struct ExtrusionStyle: Sendable {
     /// The height in metres of a building the reading states no height
     /// for; zero leaves it flat.
     public var fallbackHeight: Float
+    /// The radius, in metres, the building's edges are rounded by: every
+    /// corner of its footprint and the rim of its roof take a narrow bevel
+    /// whose shading runs from one face into the next, so a block reads as
+    /// a soft solid rather than a sharp box. Zero keeps the sharp box. A
+    /// building too small or too low for the radius takes a smaller one.
+    /// Baked into the prepared tiles with the rest of the style.
+    public var edgeRadius: Float
     public init(key: UInt8,
                 color: SIMD4<Float>,
                 heightScale: Float = 1.0,
                 anchorZoom: Int = 16,
-                fallbackHeight: Float = 0) {
+                fallbackHeight: Float = 0,
+                edgeRadius: Float = 0) {
         self.key = key
         self.color = color
         self.heightScale = heightScale
         self.anchorZoom = anchorZoom
         self.fallbackHeight = fallbackHeight
+        self.edgeRadius = edgeRadius
     }
 }
 
@@ -537,18 +546,21 @@ public extension FeatureStyle {
     /// A building: the footprint raised to the heights the schema reading
     /// states for it (`ImmersiveMapFeatureFacts.building`). `heightScale`,
     /// `anchorZoom` and `fallbackHeight` say how metres become tile units
-    /// and what a building without a height gets. A feature the reading
-    /// found to be no building stays a flat fill.
+    /// and what a building without a height gets, `edgeRadius` how round
+    /// its edges are, in metres. A feature the reading found to be no
+    /// building stays a flat fill.
     static func extrudedPolygon(key: UInt8,
                                 color: SIMD4<Float>,
                                 heightScale: Float = 1.0,
                                 anchorZoom: Int = 16,
-                                fallbackHeight: Float = 0) -> FeatureStyle {
+                                fallbackHeight: Float = 0,
+                                edgeRadius: Float = 0) -> FeatureStyle {
         .extrusion(ExtrusionStyle(key: key,
                                   color: color,
                                   heightScale: heightScale,
                                   anchorZoom: anchorZoom,
-                                  fallbackHeight: fallbackHeight))
+                                  fallbackHeight: fallbackHeight,
+                                  edgeRadius: edgeRadius))
     }
 
     /// A point label. The text is the name the schema reading states, in

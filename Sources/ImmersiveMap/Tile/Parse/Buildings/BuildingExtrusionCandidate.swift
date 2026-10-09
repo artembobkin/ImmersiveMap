@@ -22,10 +22,15 @@ struct BuildingExtrusionCandidate {
     let roof: ParsedPolygon
     let baseHeight: Float
     let topHeight: Float
+    /// The radius its edges are rounded by, in tile units at the tile's
+    /// zoom (`ExtrusionStyle.edgeRadius`), zero for a sharp box.
+    var edgeRadius: Float = 0
 }
 
-/// A building's vertical extent in tile units at the tile's zoom.
+/// A building's vertical extent in tile units at the tile's zoom, and the
+/// radius its edges are rounded by in the same units.
 struct BuildingExtrusionHeights {
     let base: Float
     let top: Float
+    var edgeRadius: Float = 0
 }

@@ -121,7 +121,8 @@ struct BuildingFeatureReader {
                                           clippedInteriors: parsedGeometry.clipped.interiors.map(TileCoordinateSpace.renderPoints),
                                           roof: parsedGeometry.parsedPolygon,
                                           baseHeight: heights.base,
-                                          topHeight: heights.top)
+                                          topHeight: heights.top,
+                                          edgeRadius: heights.edgeRadius)
     }
 
     /// After the whole tile is read: resolves the candidates against each
@@ -137,6 +138,7 @@ struct BuildingFeatureReader {
                                                                      roof: candidate.roof,
                                                                      baseHeight: candidate.baseHeight,
                                                                      topHeight: candidate.topHeight,
+                                                                     edgeRadius: candidate.edgeRadius,
                                                                      tileExtent: Float(tileExtent)) {
                 extrudedMesh.buildingID = candidate.buildingId
                 result.extrudedByStyle[candidate.styleKey, default: []].append(extrudedMesh)
@@ -167,6 +169,9 @@ struct BuildingFeatureReader {
 
         let base = max(0, min(scaledMinHeight, scaledHeight))
         let top = max(scaledHeight, base)
-        return BuildingExtrusionHeights(base: base, top: top)
+        // The radius in the units the heights take, which are the
+        // footprint's: metres scaled as a height is.
+        let edgeRadius = max(0, style.edgeRadius) * style.heightScale * zoomScale
+        return BuildingExtrusionHeights(base: base, top: top, edgeRadius: edgeRadius)
     }
 }

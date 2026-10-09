@@ -1,12 +1,14 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import Earcut
 import Foundation
 import simd
 
 /// Turns one resolved building candidate into its mesh: a flat lid at the
 /// top height and a wall per footprint edge, in render space with every
-/// normal facing out of the building material.
+/// normal facing out of the building material. With an edge radius the
+/// edges are rounded (`buildRounded`).
 enum BuildingExtrusionMeshBuilder {
     static func build(
         clippedExterior: [SIMD2<Float>],
@@ -14,70 +16,32 @@ enum BuildingExtrusionMeshBuilder {
         roof: ParsedPolygon,
         baseHeight: Float,
         topHeight: Float,
+        edgeRadius: Float = 0,
         tileExtent: Float
     ) -> ParsedExtrudedMesh? {
         guard topHeight > baseHeight else { return nil }
+        if edgeRadius > 0,
+           let rounded = buildRounded(clippedExterior: clippedExterior,
+                                      clippedInteriors: clippedInteriors,
+                                      baseHeight: baseHeight,
+                                      topHeight: topHeight,
+                                      edgeRadius: edgeRadius,
+                                      tileExtent: tileExtent) {
+            return rounded
+        }
 
         var vertices: [ParsedExtrudedVertex] = []
         var indices: [UInt32] = []
         var nextLocalSurfaceID: UInt32 = 1
 
-        let epsilon: Float = 0.001
-        let extent = tileExtent
-        func isOnBoundary(_ point: SIMD2<Float>) -> Bool {
-            abs(point.x) <= epsilon ||
-            abs(point.y) <= epsilon ||
-            abs(point.x - extent) <= epsilon ||
-            abs(point.y - extent) <= epsilon
-        }
-
         func isBoundaryEdge(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool {
-            guard isOnBoundary(a), isOnBoundary(b) else { return false }
-            return abs(a.x - b.x) <= epsilon || abs(a.y - b.y) <= epsilon
+            Self.isBoundaryEdge(a, b, tileExtent: tileExtent)
         }
-
-        func ringArea(_ ring: [SIMD2<Float>]) -> Float {
-            guard ring.count >= 3 else { return 0 }
-            var sum: Float = 0
-            for i in 0..<ring.count {
-                let j = (i + 1) % ring.count
-                sum += ring[i].x * ring[j].y - ring[j].x * ring[i].y
-            }
-            return sum * 0.5
-        }
-
         func sanitizeRing(_ ring: [SIMD2<Float>]) -> [SIMD2<Float>] {
-            var ringPoints = ring
-            if let last = ringPoints.last, let first = ringPoints.first, last == first {
-                ringPoints.removeLast()
-            }
-
-            var filteredRing: [SIMD2<Float>] = []
-            filteredRing.reserveCapacity(ringPoints.count)
-            for point in ringPoints {
-                if filteredRing.last == point {
-                    continue
-                }
-                if filteredRing.count >= 2, filteredRing[filteredRing.count - 2] == point {
-                    filteredRing.removeLast()
-                    continue
-                }
-                filteredRing.append(point)
-            }
-            if filteredRing.count >= 2, let last = filteredRing.last, let first = filteredRing.first, last == first {
-                filteredRing.removeLast()
-            }
-            return filteredRing
+            Self.sanitizeRing(ring)
         }
-
         func ensureWinding(_ ring: [SIMD2<Float>], clockwise: Bool) -> [SIMD2<Float>] {
-            var ringPoints = ring
-            let area = ringArea(ringPoints)
-            let isClockwise = area < 0
-            if isClockwise != clockwise {
-                ringPoints.reverse()
-            }
-            return ringPoints
+            Self.ensureWinding(ring, clockwise: clockwise)
         }
 
         let sanitizedExterior = sanitizeRing(clippedExterior)
@@ -155,5 +119,65 @@ enum BuildingExtrusionMeshBuilder {
         }
 
         return indices.isEmpty ? nil : ParsedExtrudedMesh(vertices: vertices, indices: indices)
+    }
+
+    /// Whether an edge runs along the tile's edge, where the footprint was
+    /// clipped: no wall stands there, the neighbouring tile's building
+    /// goes on.
+    static func isBoundaryEdge(_ a: SIMD2<Float>, _ b: SIMD2<Float>, tileExtent: Float) -> Bool {
+        let epsilon: Float = 0.001
+        func isOnBoundary(_ point: SIMD2<Float>) -> Bool {
+            abs(point.x) <= epsilon ||
+            abs(point.y) <= epsilon ||
+            abs(point.x - tileExtent) <= epsilon ||
+            abs(point.y - tileExtent) <= epsilon
+        }
+        guard isOnBoundary(a), isOnBoundary(b) else { return false }
+        return abs(a.x - b.x) <= epsilon || abs(a.y - b.y) <= epsilon
+    }
+
+    static func ringArea(_ ring: [SIMD2<Float>]) -> Float {
+        guard ring.count >= 3 else { return 0 }
+        var sum: Float = 0
+        for i in 0..<ring.count {
+            let j = (i + 1) % ring.count
+            sum += ring[i].x * ring[j].y - ring[j].x * ring[i].y
+        }
+        return sum * 0.5
+    }
+
+    /// The ring without its closing point, repeated points and spikes that
+    /// fold straight back.
+    static func sanitizeRing(_ ring: [SIMD2<Float>]) -> [SIMD2<Float>] {
+        var ringPoints = ring
+        if let last = ringPoints.last, let first = ringPoints.first, last == first {
+            ringPoints.removeLast()
+        }
+
+        var filteredRing: [SIMD2<Float>] = []
+        filteredRing.reserveCapacity(ringPoints.count)
+        for point in ringPoints {
+            if filteredRing.last == point {
+                continue
+            }
+            if filteredRing.count >= 2, filteredRing[filteredRing.count - 2] == point {
+                filteredRing.removeLast()
+                continue
+            }
+            filteredRing.append(point)
+        }
+        if filteredRing.count >= 2, let last = filteredRing.last, let first = filteredRing.first, last == first {
+            filteredRing.removeLast()
+        }
+        return filteredRing
+    }
+
+    static func ensureWinding(_ ring: [SIMD2<Float>], clockwise: Bool) -> [SIMD2<Float>] {
+        var ringPoints = ring
+        let isClockwise = ringArea(ringPoints) < 0
+        if isClockwise != clockwise {
+            ringPoints.reverse()
+        }
+        return ringPoints
     }
 }

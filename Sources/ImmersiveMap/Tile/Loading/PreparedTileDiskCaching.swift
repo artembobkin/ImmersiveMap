@@ -886,7 +886,11 @@ final class PreparedTileDiskCaching {
     // 141: `TileVertexIn.position` is float render space (stride 16): the
     // vertices are the tessellators' and the flattener's, unrounded. A
     // v140 entry stores Int16 positions in a 12-byte vertex.
-    static let preparedFormatVersion: UInt32 = 141
+    // 142: an extruded building may have rounded edges
+    // (`ExtrusionStyle.edgeRadius`, `buildRounded`): bevels along its
+    // corners and its roof's rim, its walls drawn back and lowered. A v141
+    // entry carries every building as a sharp box.
+    static let preparedFormatVersion: UInt32 = 142
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

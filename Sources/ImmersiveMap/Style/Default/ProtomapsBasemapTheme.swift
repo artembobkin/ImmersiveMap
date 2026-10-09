@@ -493,13 +493,21 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// every label stays on the ground and any building can hide it.
         /// Baked into the prepared tiles, so a change re-parses them.
         public var labelsStandOnRoofs: Bool
+        /// The radius, in metres, an extruded building's edges are rounded
+        /// by (`ExtrusionStyle.edgeRadius`): the corners of its footprint
+        /// and the rim of its roof, so the blocks read soft rather than as
+        /// sharp boxes. Zero keeps the boxes. Baked into the prepared
+        /// tiles, so a change re-parses them.
+        public var buildingEdgeRadius: Float
 
         public init(buildingFillColor: SIMD4<Float>,
                     buildingExtrusion: Bool = true,
-                    labelsStandOnRoofs: Bool = true) {
+                    labelsStandOnRoofs: Bool = true,
+                    buildingEdgeRadius: Float = 1.5) {
             self.buildingFillColor = buildingFillColor
             self.buildingExtrusion = buildingExtrusion
             self.labelsStandOnRoofs = labelsStandOnRoofs
+            self.buildingEdgeRadius = buildingEdgeRadius
         }
     }
 
@@ -614,6 +622,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         add(features.buildingFillColor)
         out.append(features.buildingExtrusion ? 1 : 0)
         out.append(features.labelsStandOnRoofs ? 1 : 0)
+        out.append(features.buildingEdgeRadius)
         add(labels.city); add(labels.town); add(labels.district); add(labels.country)
         add(labels.poi); add(labels.water); add(labels.road)
         // Not palette values, but they change which labels are drawn, so they

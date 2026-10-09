@@ -324,7 +324,8 @@ enum BuildingExtrusionResolver {
                 clippedInteriors: candidate.clippedInteriors,
                 roof: candidate.roof,
                 baseHeight: candidate.baseHeight,
-                topHeight: clampedTop
+                topHeight: clampedTop,
+                edgeRadius: candidate.edgeRadius
             )
             return MeasuredCandidate(candidate: clamped,
                                      bounds: measured.bounds,
