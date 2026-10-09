@@ -245,6 +245,7 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
             let shadowBinding = ShadowReceiverBinding.resolve(frameContext: frameContext,
                                                               shadowMapTexture: shadowMapTextureProvider(),
                                                               fallbackTexture: shadowFallbackTexture)
+            GroundFogUniform.bind(GroundFogUniform.resolve(frameContext: frameContext), encoder: encoder)
             ModelTileDrawer.draw(renderEncoder: encoder,
                                  cameraUniform: frameContext.cameraUniform,
                                  shadowBinding: shadowBinding,

@@ -1195,6 +1195,54 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
     }
 
+    /// The fog that lies on the ground of the flat map and thins upward:
+    /// thickest at the ground, its density falling by a factor of e every
+    /// `height`, gathered along each view ray past `startDistance` from the
+    /// camera. A far point low on the ground sinks in it, the near ground
+    /// and everything high stays clear, and a tall building rises out of it.
+    /// It veils the ground, the roads, the labels painted on the map, the
+    /// buildings and the models, so it is a cheap way to hide the far
+    /// detail and its shimmer. Off by default. Independent of the horizon's
+    /// sky and haze (`FogSettings`): either can be on without the other.
+    /// The globe has none. Every length is in camera distances (1 is the
+    /// distance from the camera to the point it looks at), so the fog
+    /// looks the same at every zoom. Applies live.
+    public struct GroundFogSettings: Equatable, Sendable {
+        public var isEnabled: Bool
+        /// How thick the fog is at the ground: the share of light it takes
+        /// over one camera distance there is about `1 - e^-density`. Raise
+        /// it for a thicker fog, lower it for a veil.
+        public var density: Float
+        /// How high the fog rises, in camera distances: its density falls by
+        /// a factor of e every `height` above the ground. Low, a layer the
+        /// buildings stand out of. High, a fog that fills the view.
+        public var height: Float
+        /// How far from the camera the fog begins, in camera distances:
+        /// nearer than this the view is clear.
+        public var startDistance: Float
+        /// The fog's colour, RGB in `0...1`. Nil takes the horizon's colour
+        /// (`FogSettings.horizonColor`), so the fog meets the haze at the
+        /// horizon line in one colour.
+        public var color: SIMD3<Float>?
+        /// The most the fog veils anything, `0...1`: under 1 the farthest
+        /// ground still shows through.
+        public var maximumOpacity: Float
+
+        public init(isEnabled: Bool = false,
+                    density: Float = 0.3,
+                    height: Float = 0.15,
+                    startDistance: Float = 2,
+                    color: SIMD3<Float>? = nil,
+                    maximumOpacity: Float = 1) {
+            self.isEnabled = isEnabled
+            self.density = density
+            self.height = height
+            self.startDistance = startDistance
+            self.color = color
+            self.maximumOpacity = maximumOpacity
+        }
+    }
+
     public struct SceneSettings: Equatable, Sendable {
         public var space: SpaceSettings
         public var starfield: StarfieldSettings
@@ -1202,6 +1250,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var shadows: ShadowSettings
         public var atmosphere: AtmosphereSettings
         public var fog: FogSettings
+        public var groundFog: GroundFogSettings
         public var extrusion: ExtrusionSettings
 
         public init(space: SpaceSettings,
@@ -1210,6 +1259,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     shadows: ShadowSettings = ShadowSettings(),
                     atmosphere: AtmosphereSettings = AtmosphereSettings(),
                     fog: FogSettings = FogSettings(),
+                    groundFog: GroundFogSettings = GroundFogSettings(),
                     extrusion: ExtrusionSettings = ExtrusionSettings()) {
             self.space = space
             self.starfield = starfield
@@ -1217,6 +1267,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.shadows = shadows
             self.atmosphere = atmosphere
             self.fog = fog
+            self.groundFog = groundFog
             self.extrusion = extrusion
         }
     }
@@ -1937,6 +1988,40 @@ public extension ImmersiveMapSettings {
     func fog(horizonBandZoomFade: ImmersiveMapZoomFade) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.fog.horizonBandZoomFade = horizonBandZoomFade
+        return settings
+    }
+
+    func groundFogSettings(_ groundFog: GroundFogSettings) -> ImmersiveMapSettings {
+        var settings = self
+        settings.scene.groundFog = groundFog
+        return settings
+    }
+
+    /// The fog on the ground of the flat map (`GroundFogSettings`): on or
+    /// off, and every value a nil leaves as configured.
+    func groundFog(isEnabled: Bool = true,
+                   density: Float? = nil,
+                   height: Float? = nil,
+                   startDistance: Float? = nil,
+                   color: SIMD3<Float>? = nil,
+                   maximumOpacity: Float? = nil) -> ImmersiveMapSettings {
+        var settings = self
+        settings.scene.groundFog.isEnabled = isEnabled
+        if let density {
+            settings.scene.groundFog.density = density
+        }
+        if let height {
+            settings.scene.groundFog.height = height
+        }
+        if let startDistance {
+            settings.scene.groundFog.startDistance = startDistance
+        }
+        if let color {
+            settings.scene.groundFog.color = color
+        }
+        if let maximumOpacity {
+            settings.scene.groundFog.maximumOpacity = maximumOpacity
+        }
         return settings
     }
 

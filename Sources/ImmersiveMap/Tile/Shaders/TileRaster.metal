@@ -23,6 +23,7 @@
 using namespace metal;
 #include "TileShading.h"
 #include "../../Globe/Shaders/GlobeTileProjection.h"
+#include "../../Render/Shaders/Shared/GroundFog.h"
 
 constant float kTileRasterExtent = 4096.0;
 
@@ -80,6 +81,8 @@ struct TileRasterSampling {
 struct TileRasterVertexOut {
     float4 position [[position]];
     float2 uv;
+    // The plane's point, for the ground fog. Unused on the sphere.
+    float3 worldPosition;
 };
 
 static inline half4 tileRasterColor(float2 uv,
@@ -97,7 +100,9 @@ vertex TileRasterVertexOut tileRasterFlatVertexShader(uint vertexID [[vertex_id]
                                                       constant float4x4& modelMatrix [[buffer(3)]]) {
     float2 localPosition = grid[vertexID];
     TileRasterVertexOut out;
-    out.position = camera.matrix * (modelMatrix * float4(localPosition, 0.0, 1.0));
+    float4 worldPosition = modelMatrix * float4(localPosition, 0.0, 1.0);
+    out.position = camera.matrix * worldPosition;
+    out.worldPosition = worldPosition.xyz;
     // The plane's depth scaled to the ground band's first step, as the
     // vector ground's opaque fills (Tile.metal).
     out.position.z *= (1.0 - kTileRasterFlatLayerDepthStep) / kTileRasterFlatRealDepthScale;
@@ -108,6 +113,7 @@ vertex TileRasterVertexOut tileRasterFlatVertexShader(uint vertexID [[vertex_id]
 fragment half4 tileRasterFlatFragmentShader(TileRasterVertexOut in [[stage_in]],
                                             constant TileRasterSampling& sampling [[buffer(1)]],
                                             constant Shadow& shadow [[buffer(3)]],
+                                            constant GroundFog& groundFog [[buffer(kGroundFogBufferIndex)]],
                                             texture2d<half> raster [[texture(0)]],
                                             texture2d<half> groundShadowMask [[texture(1)]],
                                             sampler rasterSampler [[sampler(0)]]) {
@@ -119,6 +125,7 @@ fragment half4 tileRasterFlatFragmentShader(TileRasterVertexOut in [[stage_in]],
         ? float(groundShadowMask.sample(maskSampler, in.position.xy * kTileRasterGroundShadowMaskScale).r)
         : 1.0;
     color.rgb *= shadowColorMultiplier(shadow, half(shadowFactor));
+    color.rgb = applyGroundFog(color.rgb, in.worldPosition, groundFog);
     return color;
 }
 
@@ -143,6 +150,7 @@ vertex TileRasterVertexOut tileRasterSpherePureVertexShader(uint vertexID [[vert
     out.position = globeFrame.sphereClip * float4(unitDirection, 1.0);
     out.position.z = (1.0 - kTileRasterSphereLayerDepthStep) * out.position.w;
     out.uv = tileRasterTextureUv(localPosition);
+    out.worldPosition = float3(0.0);
     return out;
 }
 
@@ -151,6 +159,7 @@ struct TileRasterMorphVertexOut {
     // The unroll's cut, as tileSphereMorphVertexShader's.
     float clipDistance [[clip_distance]] [1];
     float2 uv;
+    float3 worldPosition;
 };
 
 vertex TileRasterMorphVertexOut tileRasterSphereMorphVertexShader(uint vertexID [[vertex_id]],
@@ -175,6 +184,7 @@ vertex TileRasterMorphVertexOut tileRasterSphereMorphVertexShader(uint vertexID 
     out.clipDistance[0] = globeUnrollCutClearance(sphereWorldPosition, flatWorldPosition,
                                                   globe.transition, globe.radius);
     out.uv = tileRasterTextureUv(localPosition);
+    out.worldPosition = float3(0.0);
     return out;
 }
 

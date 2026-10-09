@@ -96,6 +96,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
         var shadowUniform = groundShadowMask.uniform
         encoder.setFragmentBytes(&shadowUniform, length: MemoryLayout<ShadowUniform>.stride, index: 3)
         encoder.setFragmentTexture(groundShadowMask.texture, index: 1)
+        GroundFogUniform.bind(GroundFogUniform.resolve(frameContext: frameContext), encoder: encoder)
         let flatRenderState = frameContext.resolvedPresentation.flatRenderState
         for placement in placements {
             let tile = placement.placeIn.tile

@@ -4,6 +4,7 @@
 #include <metal_stdlib>
 using namespace metal;
 #include "../../Render/Shaders/Shared/RenderUniforms.h"
+#include "../../Render/Shaders/Shared/GroundFog.h"
 
 // The models of a model tile (ModelTileContents): every model of the tile
 // is merged into one vertex buffer and one index buffer, in the tile's own
@@ -96,6 +97,7 @@ vertex float4 modelTileShadowVertexShader(ModelTileVertexIn vertexIn [[stage_in]
 // as every model texture is.
 fragment half4 modelTileFragmentShader(ModelTileVertexOut in [[stage_in]],
                                        constant Shadow& shadow [[buffer(4)]],
+                                       constant GroundFog& groundFog [[buffer(kGroundFogBufferIndex)]],
                                        texture2d_array<half> baseColorTextures [[texture(0)]],
                                        depth2d<float> shadowMap [[texture(1)]],
                                        sampler baseColorSampler [[sampler(0)]]) {
@@ -104,5 +106,6 @@ fragment half4 modelTileFragmentShader(ModelTileVertexOut in [[stage_in]],
     }
     half4 base = baseColorTextures.sample(baseColorSampler, in.uv, in.layer);
     half shadowFactor = half(sampleShadowFactor(shadow, shadowMap, in.worldPosition, in.worldNormal));
-    return half4(base.rgb * shadowColorMultiplier(shadow, shadowFactor), 1.0h);
+    half3 lit = base.rgb * shadowColorMultiplier(shadow, shadowFactor);
+    return half4(applyGroundFog(lit, in.worldPosition, groundFog), 1.0h);
 }

@@ -4,6 +4,7 @@
 #include <metal_stdlib>
 using namespace metal;
 #include "TileShading.h"
+#include "../../Render/Shaders/Shared/GroundFog.h"
 
 // Ground shadow source. The flat world pass reads the per-pixel ground
 // shadow mask (GroundShadowMask.metal), evaluated once per frame for the
@@ -395,6 +396,7 @@ static inline half4 tileFragmentColor(FragmentIn in,
 }
 
 fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
+                                  constant GroundFog& groundFog [[buffer(kGroundFogBufferIndex)]],
                                   constant OverviewFadeUniform& overviewFade [[buffer(0)]],
                                   constant Shadow& shadow [[buffer(3)]],
                                   constant LineDashUniform& lineDash [[buffer(4)]],
@@ -403,8 +405,10 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                                   constant LineStyle* lineStyles [[buffer(7), function_constant(kTileLineFields)]],
                                   depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
                                   texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
-    return tileFragmentColor(in, overviewFade, shadow, lineDash, styles, styleZoomFades, lineStyles,
-                             shadowMap, groundShadowMask);
+    half4 color = tileFragmentColor(in, overviewFade, shadow, lineDash, styles, styleZoomFades, lineStyles,
+                                    shadowMap, groundShadowMask);
+    color.rgb = applyGroundFog(color.rgb, in.worldPos, groundFog);
+    return color;
 }
 
 // The road ribbons (kTileRoadRibbons): the geometry is the road, so there
@@ -463,11 +467,14 @@ static inline half4 tileRoadFragmentColor(FragmentIn in,
 }
 
 fragment half4 tileRoadFragmentShader(FragmentIn in [[stage_in]],
+                                      constant GroundFog& groundFog [[buffer(kGroundFogBufferIndex)]],
                                       constant float& alphaScale [[buffer(11), function_constant(kTileRoadBlended)]],
                                       constant Shadow& shadow [[buffer(3)]],
                                       constant LineDashUniform& lineDash [[buffer(4), function_constant(kTileRoadBlended)]],
                                       constant LineStyle* lineStyles [[buffer(7), function_constant(kTileRoadBlended)]],
                                       depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
                                       texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
-    return tileRoadFragmentColor(in, alphaScale, shadow, lineDash, lineStyles, shadowMap, groundShadowMask);
+    half4 color = tileRoadFragmentColor(in, alphaScale, shadow, lineDash, lineStyles, shadowMap, groundShadowMask);
+    color.rgb = applyGroundFog(color.rgb, in.worldPos, groundFog);
+    return color;
 }

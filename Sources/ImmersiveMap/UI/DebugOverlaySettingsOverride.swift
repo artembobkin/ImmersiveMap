@@ -20,9 +20,10 @@ struct DebugOverlaySettingsOverride: Equatable {
     var sunDirection: SIMD3<Float>?
     var fog: ImmersiveMapSettings.FogSettings?
     var atmosphere: ImmersiveMapSettings.AtmosphereSettings?
+    var groundFog: ImmersiveMapSettings.GroundFogSettings?
 
     var isEmpty: Bool {
-        shadows == nil && sunDirection == nil && fog == nil && atmosphere == nil
+        shadows == nil && sunDirection == nil && fog == nil && atmosphere == nil && groundFog == nil
     }
 
     mutating func clear() {
@@ -30,6 +31,7 @@ struct DebugOverlaySettingsOverride: Equatable {
         sunDirection = nil
         fog = nil
         atmosphere = nil
+        groundFog = nil
     }
 
     func applied(to settings: ImmersiveMapSettings) -> ImmersiveMapSettings {
@@ -49,6 +51,9 @@ struct DebugOverlaySettingsOverride: Equatable {
         }
         if let atmosphere {
             overridden.scene.atmosphere = atmosphere
+        }
+        if let groundFog {
+            overridden.scene.groundFog = groundFog
         }
         return overridden
     }

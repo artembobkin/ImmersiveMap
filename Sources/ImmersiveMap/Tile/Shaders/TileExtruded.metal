@@ -4,6 +4,7 @@
 #include <metal_stdlib>
 using namespace metal;
 #include "../../Render/Shaders/Shared/RenderUniforms.h"
+#include "../../Render/Shaders/Shared/GroundFog.h"
 
 // Mirror of ExtrudedVertexIn (12 bytes on the CPU side): positions arrive
 // as raw Int16 values in 14.2 fixed point, converted to float by the vertex
@@ -134,8 +135,11 @@ static inline half4 shadeExtrudedFragment(VertexOut in,
 fragment half4 tileExtrudedFragmentShader(VertexOut in [[stage_in]],
                                           constant Shadow& shadow [[buffer(5)]],
                                           constant float& metersToWorldZ [[buffer(6)]],
+                                          constant GroundFog& groundFog [[buffer(kGroundFogBufferIndex)]],
                                           depth2d<float> shadowMap [[texture(0)]]) {
-    return shadeExtrudedFragment(in, shadow, metersToWorldZ, shadowMap);
+    half4 color = shadeExtrudedFragment(in, shadow, metersToWorldZ, shadowMap);
+    color.rgb = applyGroundFog(color.rgb, in.worldPosition, groundFog);
+    return color;
 }
 
 // Depth-only path of the shadow map pass: one window, so one draw per

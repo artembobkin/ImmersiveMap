@@ -152,6 +152,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
                                                           shadowMapTexture: shadowMapTextureProvider(),
                                                           fallbackTexture: shadowFallbackTexture)
         hiddenBuildingIndexBuffers.update(frameContext.sharedState.sceneModelState.replacedBuildings)
+        GroundFogUniform.bind(GroundFogUniform.resolve(frameContext: frameContext), encoder: encoder)
         BuildingExtrusionDrawer.drawBuildings(renderEncoder: encoder,
                                               cameraUniform: frameContext.cameraUniform,
                                               shadowBinding: shadowBinding,

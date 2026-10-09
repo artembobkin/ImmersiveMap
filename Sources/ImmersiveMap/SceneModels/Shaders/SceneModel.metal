@@ -4,6 +4,7 @@
 #include <metal_stdlib>
 using namespace metal;
 #include "../../Render/Shaders/Shared/RenderUniforms.h"
+#include "../../Render/Shaders/Shared/GroundFog.h"
 
 // The sphere<->plane morph is evaluated ONCE per model anchor on the CPU
 // (SceneModelAnchorMath) and arrives baked into the model matrix, so the model
@@ -106,6 +107,7 @@ vertex float4 sceneModelShadowVertexShader(SceneModelVertexIn vertexIn [[stage_i
 fragment half4 sceneModelFragmentShader(SceneModelVertexOut in [[stage_in]],
                                         constant SceneModelMaterial& material [[buffer(3)]],
                                         constant Shadow& shadow [[buffer(4)]],
+                                        constant GroundFog& groundFog [[buffer(kGroundFogBufferIndex)]],
                                         texture2d<half> baseColorTexture [[texture(0)]],
                                         depth2d<float> shadowMap [[texture(1)]],
                                         sampler baseColorSampler [[sampler(0)]]) {
@@ -114,5 +116,6 @@ fragment half4 sceneModelFragmentShader(SceneModelVertexOut in [[stage_in]],
     }
     half4 base = baseColorTexture.sample(baseColorSampler, in.uv) * half4(material.baseColor);
     half shadowFactor = half(sampleShadowFactor(shadow, shadowMap, in.worldPosition, in.worldNormal));
-    return half4(base.rgb * shadowColorMultiplier(shadow, shadowFactor), 1.0h);
+    half3 lit = base.rgb * shadowColorMultiplier(shadow, shadowFactor);
+    return half4(applyGroundFog(lit, in.worldPosition, groundFog), 1.0h);
 }

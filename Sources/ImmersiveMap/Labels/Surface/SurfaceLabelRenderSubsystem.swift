@@ -81,6 +81,9 @@ final class SurfaceLabelRenderSubsystem: RenderSubsystem {
 
         var cameraUniform = frameContext.cameraUniform
         encoder.setVertexBytes(&cameraUniform, length: MemoryLayout<CameraUniform>.stride, index: 1)
+        // The ground fog over the labels painted on the plane, as over the
+        // ground they lie on. Nothing on the globe.
+        GroundFogUniform.bind(GroundFogUniform.resolve(frameContext: frameContext), encoder: encoder)
 
         // Every tile at its own zoom has the same world size: the map's at
         // the frame's integer zoom over that zoom's tile count.

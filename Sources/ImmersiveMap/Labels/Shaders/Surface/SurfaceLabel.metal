@@ -31,6 +31,7 @@
 using namespace metal;
 #include "../../../Render/Shaders/Shared/RenderUniforms.h"
 #include "../../../Globe/Shaders/GlobeTileProjection.h"
+#include "../../../Render/Shaders/Shared/GroundFog.h"
 
 struct SurfaceLabelVertexIn {
     /// The label's anchor in tile render units.
@@ -70,12 +71,15 @@ struct SurfaceLabelDraw {
 struct SurfaceLabelVertexOut {
     float4 position [[position]];
     float2 uv;
+    // The plane's point, for the ground fog. Unused on the sphere.
+    float3 worldPosition;
     float clipDistance [[clip_distance]] [1];
 };
 
 struct SurfaceLabelFragmentIn {
     float4 position [[position]];
     float2 uv;
+    float3 worldPosition;
 };
 
 constant float kSurfaceLabelTileExtent = 4096.0;
@@ -103,6 +107,7 @@ static inline float2 surfaceLabelWorldUv(float2 localPosition, constant SurfaceL
 /// surface cuts it by.
 struct SurfaceLabelClip {
     float4 position;
+    float3 worldPosition;
     float clipDistance;
     // Whether the depth is the projection's z scaled by the label's depth
     // (the flat surface and the morph, as the ground's, Tile.metal) or
@@ -145,6 +150,7 @@ static inline SurfaceLabelVertexOut surfaceLabelOutput(SurfaceLabelClip clip, fl
         ? clip.position.z * (draw.depth / kSurfaceLabelRealDepthScale)
         : draw.depth * out.position.w;
     out.uv = uv;
+    out.worldPosition = clip.worldPosition;
     out.clipDistance[0] = clip.clipDistance;
     return out;
 }
@@ -155,7 +161,9 @@ static inline SurfaceLabelClip surfaceLabelFlatClip(float2 local,
                                                     constant Camera& camera,
                                                     constant float4x4& modelMatrix) {
     SurfaceLabelClip clip;
-    clip.position = camera.matrix * (modelMatrix * float4(local, 0.0, 1.0));
+    float4 worldPosition = modelMatrix * float4(local, 0.0, 1.0);
+    clip.position = camera.matrix * worldPosition;
+    clip.worldPosition = worldPosition.xyz;
     // The depth is the projection's, so the hardware clips at the near
     // plane, as for the ground.
     clip.clipDistance = 1.0;
@@ -169,6 +177,7 @@ static inline SurfaceLabelClip surfaceLabelSphereClip(float2 local,
     SurfaceLabelClip clip;
     float3 unitDirection = globeWorldUVUnitDirection(surfaceLabelWorldUv(local, tile));
     clip.position = globeFrame.sphereClip * float4(unitDirection, 1.0);
+    clip.worldPosition = float3(0.0);
     // The far side of the planet goes to back-face culling, as the
     // ground's does.
     clip.clipDistance = 1.0;
@@ -192,6 +201,7 @@ static inline SurfaceLabelClip surfaceLabelMorphClip(float2 local,
                                                     globe.transition, globe.radius);
     SurfaceLabelClip clip;
     clip.position = camera.matrix * float4(worldPosition, 1.0);
+    clip.worldPosition = worldPosition;
     clip.clipDistance = globeUnrollCutClearance(sphereWorldPosition, flatWorldPosition,
                                                 globe.transition, globe.radius);
     clip.projectedDepth = true;
@@ -243,7 +253,8 @@ vertex SurfaceLabelVertexOut surfaceLabelMorphVertex(SurfaceLabelVertexIn in [[s
 /// perspective and the zoom (computeTextDistance in TextShader.metal).
 fragment half4 surfaceLabelFragment(SurfaceLabelFragmentIn in [[stage_in]],
                                     texture2d<half> atlasTexture [[texture(0)]],
-                                    constant SurfaceLabelDraw& draw [[buffer(0)]]) {
+                                    constant SurfaceLabelDraw& draw [[buffer(0)]],
+                                    constant GroundFog& groundFog [[buffer(kGroundFogBufferIndex)]]) {
     constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
     half4 atlasSample = atlasTexture.sample(textureSampler, in.uv);
     half3 msdf = atlasSample.rgb;
@@ -278,5 +289,5 @@ fragment half4 surfaceLabelFragment(SurfaceLabelFragmentIn in [[stage_in]],
     if (alpha <= 0.0h) {
         discard_fragment();
     }
-    return half4(color, alpha);
+    return half4(applyGroundFog(color, in.worldPosition, groundFog), alpha);
 }

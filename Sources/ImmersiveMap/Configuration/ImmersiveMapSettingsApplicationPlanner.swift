@@ -77,6 +77,7 @@ public enum ImmersiveMapSettingsApplicationPlanner {
             || oldValue.scene.shadows != newValue.scene.shadows
             || oldValue.scene.atmosphere != newValue.scene.atmosphere
             || oldValue.scene.fog != newValue.scene.fog
+            || oldValue.scene.groundFog != newValue.scene.groundFog
         if sceneLiveChanged {
             mark(.scene, actions: [.liveApply])
         }

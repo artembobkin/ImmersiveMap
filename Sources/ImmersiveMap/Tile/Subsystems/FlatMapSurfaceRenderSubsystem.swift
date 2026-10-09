@@ -63,6 +63,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         // write their ranks. The layered ground writes rank depth, so
         // everything draws finest-first (the sphere's rule) and the stencil
         // settles which source owns a pixel.
+        GroundFogUniform.bind(GroundFogUniform.resolve(frameContext: frameContext), encoder: encoder)
         FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   cpuCameraMatrix: frameContext.cameraMatrices.projectionView,

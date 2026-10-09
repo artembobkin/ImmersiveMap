@@ -974,6 +974,37 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// The fog on the ground of the flat map: thickest at the ground,
+    /// thinning upward, gathered along the view past a distance from the
+    /// camera, so the far ground and its detail sink in it while the near
+    /// ground and the tops of tall buildings stay clear. `density` is how
+    /// thick it is at the ground, `height` how high it rises and
+    /// `startDistance` where it begins, both in camera distances (1 is the
+    /// distance to the point the camera looks at), `color` its colour (the
+    /// horizon's by default) and `maximumOpacity` the most it veils. Off
+    /// by default, independent of the horizon's haze, and the globe has
+    /// none. An omitted value is left as configured:
+    ///
+    ///     ImmersiveMapView()
+    ///         .groundFog(density: 0.4, height: 0.1, startDistance: 3)
+    ///
+    /// See `ImmersiveMapSettings.GroundFogSettings`. Applies live.
+    public func groundFog(isEnabled: Bool = true,
+                          density: Float? = nil,
+                          height: Float? = nil,
+                          startDistance: Float? = nil,
+                          color: SIMD3<Float>? = nil,
+                          maximumOpacity: Float? = nil) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.groundFog(isEnabled: isEnabled,
+                                                density: density,
+                                                height: height,
+                                                startDistance: startDistance,
+                                                color: color,
+                                                maximumOpacity: maximumOpacity)
+        return view
+    }
+
     /// The sky and the haze of the flat presentation: a sky gradient above
     /// the horizon line and the far ground veiled toward the horizon colour
     /// by distance from the camera. Applies live.

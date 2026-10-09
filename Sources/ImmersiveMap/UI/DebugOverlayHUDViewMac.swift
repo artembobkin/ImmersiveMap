@@ -132,6 +132,20 @@ final class DebugOverlayHUDView: NSView {
     private let fogHorizonColorLabel = NSTextField(labelWithString: "")
     private let fogHorizonColorWell = NSColorWell(style: .minimal)
 
+    private let groundFogGroupLabel = NSTextField(labelWithString: "Ground fog")
+    private let groundFogEnabledLabel = NSTextField(labelWithString: "")
+    private let groundFogEnabledSwitch = NSSwitch()
+    private let groundFogDensityLabel = NSTextField(labelWithString: "")
+    private let groundFogDensitySlider = NSSlider()
+    private let groundFogHeightLabel = NSTextField(labelWithString: "")
+    private let groundFogHeightSlider = NSSlider()
+    private let groundFogStartLabel = NSTextField(labelWithString: "")
+    private let groundFogStartSlider = NSSlider()
+    private let groundFogOpacityLabel = NSTextField(labelWithString: "")
+    private let groundFogOpacitySlider = NSSlider()
+    private let groundFogColorLabel = NSTextField(labelWithString: "")
+    private let groundFogColorWell = NSColorWell(style: .minimal)
+
     private let atmosphereGroupLabel = NSTextField(labelWithString: "Atmosphere")
     private let atmosphereEnabledLabel = NSTextField(labelWithString: "")
     private let atmosphereEnabledSwitch = NSSwitch()
@@ -223,6 +237,8 @@ final class DebugOverlayHUDView: NSView {
     private var sunDirection = ImmersiveMapSettings.SceneLightSettings().direction
     private var fogSettings = ImmersiveMapSettings.FogSettings()
     private var atmosphereSettings = ImmersiveMapSettings.AtmosphereSettings()
+    private var groundFogSettings = ImmersiveMapSettings.GroundFogSettings()
+    private var groundFogHorizonColor = ImmersiveMapSettings.FogSettings().horizonColor
     /// The host view's top safe-area inset; on macOS with a regular window title bar this is 0.
     var safeAreaTopInset: CGFloat = 0 {
         didSet {
@@ -258,6 +274,7 @@ final class DebugOverlayHUDView: NSView {
     var onSunDirectionChanged: ((SIMD3<Float>) -> Void)?
     var onFogSettingsChanged: ((ImmersiveMapSettings.FogSettings) -> Void)?
     var onAtmosphereSettingsChanged: ((ImmersiveMapSettings.AtmosphereSettings) -> Void)?
+    var onGroundFogSettingsChanged: ((ImmersiveMapSettings.GroundFogSettings) -> Void)?
 
     override var isFlipped: Bool { true }
 
@@ -287,7 +304,7 @@ final class DebugOverlayHUDView: NSView {
         containerView.addSubview(scrollView)
 
         [statsGroupLabel, tilesGroupLabel, baseLabelsGroupLabel, labelDistanceGroupLabel,
-         shadowsGroupLabel, fogGroupLabel, atmosphereGroupLabel, controlsGroupLabel].forEach(configureGroupLabel)
+         shadowsGroupLabel, fogGroupLabel, groundFogGroupLabel, atmosphereGroupLabel, controlsGroupLabel].forEach(configureGroupLabel)
 
         configureControlLabel(axesLabel, text: "Axes")
         configureControlLabel(tileLayersLabel, text: "Tile layers")
@@ -320,6 +337,12 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(fogHazeEndLabel, text: "")
         configureControlLabel(fogSkyColorLabel, text: "Sky colour")
         configureControlLabel(fogHorizonColorLabel, text: "Horizon colour")
+        configureControlLabel(groundFogEnabledLabel, text: "Enabled")
+        configureControlLabel(groundFogDensityLabel, text: "")
+        configureControlLabel(groundFogHeightLabel, text: "")
+        configureControlLabel(groundFogStartLabel, text: "")
+        configureControlLabel(groundFogOpacityLabel, text: "")
+        configureControlLabel(groundFogColorLabel, text: "Colour")
         configureControlLabel(atmosphereEnabledLabel, text: "Enabled")
         configureControlLabel(atmosphereColorLabel, text: "Colour")
         configureControlLabel(atmosphereIntensityLabel, text: "")
@@ -336,6 +359,20 @@ final class DebugOverlayHUDView: NSView {
         configureSwitch(shadowsEnabledSwitch, action: #selector(shadowsEnabledSwitchChanged))
         configureSwitch(fogEnabledSwitch, action: #selector(fogEnabledSwitchChanged))
         configureSwitch(atmosphereEnabledSwitch, action: #selector(atmosphereEnabledSwitchChanged))
+        configureSwitch(groundFogEnabledSwitch, action: #selector(groundFogEnabledSwitchChanged))
+        configureSlider(groundFogDensitySlider,
+                        range: DebugOverlayGroundFogSettingsPlanner.densityRange,
+                        action: #selector(groundFogDensitySliderChanged))
+        configureSlider(groundFogHeightSlider,
+                        range: DebugOverlayGroundFogSettingsPlanner.heightRange,
+                        action: #selector(groundFogHeightSliderChanged))
+        configureSlider(groundFogStartSlider,
+                        range: DebugOverlayGroundFogSettingsPlanner.startDistanceRange,
+                        action: #selector(groundFogStartSliderChanged))
+        configureSlider(groundFogOpacitySlider,
+                        range: DebugOverlayGroundFogSettingsPlanner.maximumOpacityRange,
+                        action: #selector(groundFogOpacitySliderChanged))
+        configureColorWell(groundFogColorWell, action: #selector(groundFogColorWellChanged))
 
         configureSlider(shadowStrengthSlider,
                         range: DebugOverlayShadowSettingsPlanner.strengthRange,
@@ -461,6 +498,7 @@ final class DebugOverlayHUDView: NSView {
         updateBaseLabelTraceControl()
         updateShadowControls()
         updateFogControls()
+        updateGroundFogControls()
         updateAtmosphereControls()
         updateVisibility()
     }
@@ -493,6 +531,12 @@ final class DebugOverlayHUDView: NSView {
          fogHazeEndLabel, fogHazeEndSlider,
          fogSkyColorLabel, fogSkyColorWell,
          fogHorizonColorLabel, fogHorizonColorWell,
+         groundFogGroupLabel, groundFogEnabledLabel, groundFogEnabledSwitch,
+         groundFogDensityLabel, groundFogDensitySlider,
+         groundFogHeightLabel, groundFogHeightSlider,
+         groundFogStartLabel, groundFogStartSlider,
+         groundFogOpacityLabel, groundFogOpacitySlider,
+         groundFogColorLabel, groundFogColorWell,
          atmosphereGroupLabel, atmosphereEnabledLabel, atmosphereEnabledSwitch,
          atmosphereColorLabel, atmosphereColorWell,
          atmosphereIntensityLabel, atmosphereIntensitySlider,
@@ -958,6 +1002,18 @@ final class DebugOverlayHUDView: NSView {
     }
 
     /// The atmosphere group reflects the live settings, like the others.
+    /// The ground fog group reflects the live settings, like the others.
+    /// The colour well shows the horizon's colour while the fog takes it.
+    func apply(groundFogSettings: ImmersiveMapSettings.GroundFogSettings, horizonColor: SIMD3<Float>) {
+        guard self.groundFogSettings != groundFogSettings || groundFogHorizonColor != horizonColor else {
+            return
+        }
+        self.groundFogSettings = groundFogSettings
+        groundFogHorizonColor = horizonColor
+        updateGroundFogControls()
+        needsLayout = true
+    }
+
     func apply(atmosphereSettings: ImmersiveMapSettings.AtmosphereSettings) {
         guard self.atmosphereSettings != atmosphereSettings else {
             return
@@ -1098,6 +1154,16 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutControlRow(fogHazeEndLabel, fogHazeEndSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(fogSkyColorLabel, fogSkyColorWell, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(fogHorizonColorLabel, fogHorizonColorWell, at: cursor, contentWidth: contentWidth)
+        cursor += Layout.groupSpacing
+
+        // Ground fog
+        cursor = layoutGroupHeader(groundFogGroupLabel, at: cursor, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(groundFogEnabledLabel, groundFogEnabledSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(groundFogDensityLabel, groundFogDensitySlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(groundFogHeightLabel, groundFogHeightSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(groundFogStartLabel, groundFogStartSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(groundFogOpacityLabel, groundFogOpacitySlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(groundFogColorLabel, groundFogColorWell, at: cursor, contentWidth: contentWidth)
         cursor += Layout.groupSpacing
 
         // Atmosphere
@@ -1316,6 +1382,22 @@ final class DebugOverlayHUDView: NSView {
         // Everything below the switch only means something with the fog on.
         [fogHazeStartSlider, fogHazeEndSlider, fogSkyColorWell, fogHorizonColorWell]
             .forEach { $0.isEnabled = fogSettings.isEnabled }
+    }
+
+    private func updateGroundFogControls() {
+        let fog = groundFogSettings
+        groundFogEnabledSwitch.state = fog.isEnabled ? .on : .off
+        groundFogDensitySlider.doubleValue = Double(fog.density)
+        groundFogDensityLabel.stringValue = DebugOverlayGroundFogSettingsPlanner.densityTitle(fog.density)
+        groundFogHeightSlider.doubleValue = Double(fog.height)
+        groundFogHeightLabel.stringValue = DebugOverlayGroundFogSettingsPlanner.heightTitle(fog.height)
+        groundFogStartSlider.doubleValue = Double(fog.startDistance)
+        groundFogStartLabel.stringValue = DebugOverlayGroundFogSettingsPlanner.startDistanceTitle(fog.startDistance)
+        groundFogOpacitySlider.doubleValue = Double(fog.maximumOpacity)
+        groundFogOpacityLabel.stringValue = DebugOverlayGroundFogSettingsPlanner.maximumOpacityTitle(fog.maximumOpacity)
+        groundFogColorWell.color = Self.color(fog.color ?? groundFogHorizonColor)
+        [groundFogDensitySlider, groundFogHeightSlider, groundFogStartSlider, groundFogOpacitySlider, groundFogColorWell]
+            .forEach { $0.isEnabled = fog.isEnabled }
     }
 
     private func updateAtmosphereControls() {
@@ -1654,6 +1736,50 @@ final class DebugOverlayHUDView: NSView {
         updateFogControls()
         needsLayout = true
         onFogSettingsChanged?(settings)
+    }
+
+    @objc private func groundFogEnabledSwitchChanged() {
+        var settings = groundFogSettings
+        settings.isEnabled = groundFogEnabledSwitch.state == .on
+        publish(groundFogSettings: settings)
+    }
+
+    @objc private func groundFogDensitySliderChanged() {
+        var settings = groundFogSettings
+        settings.density = Float(groundFogDensitySlider.doubleValue)
+        publish(groundFogSettings: settings)
+    }
+
+    @objc private func groundFogHeightSliderChanged() {
+        var settings = groundFogSettings
+        settings.height = Float(groundFogHeightSlider.doubleValue)
+        publish(groundFogSettings: settings)
+    }
+
+    @objc private func groundFogStartSliderChanged() {
+        var settings = groundFogSettings
+        settings.startDistance = Float(groundFogStartSlider.doubleValue)
+        publish(groundFogSettings: settings)
+    }
+
+    @objc private func groundFogOpacitySliderChanged() {
+        var settings = groundFogSettings
+        settings.maximumOpacity = Float(groundFogOpacitySlider.doubleValue)
+        publish(groundFogSettings: settings)
+    }
+
+    @objc private func groundFogColorWellChanged() {
+        guard let rgb = Self.rgb(groundFogColorWell.color) else { return }
+        var settings = groundFogSettings
+        settings.color = rgb
+        publish(groundFogSettings: settings)
+    }
+
+    private func publish(groundFogSettings settings: ImmersiveMapSettings.GroundFogSettings) {
+        groundFogSettings = settings
+        updateGroundFogControls()
+        needsLayout = true
+        onGroundFogSettingsChanged?(settings)
     }
 
     @objc private func atmosphereEnabledSwitchChanged() {

@@ -147,6 +147,12 @@ final class ImmersiveMapDebugOverlayRuntime {
             settings.scene.atmosphere = atmosphere
             onSettingsChangeRequested?(settings)
         }
+        hudView.onGroundFogSettingsChanged = { [weak self] groundFog in
+            guard let self, var settings = currentSettings else { return }
+            settingsOverride.groundFog = groundFog
+            settings.scene.groundFog = groundFog
+            onSettingsChangeRequested?(settings)
+        }
         #endif
         hudView.apply(tileTraceSnapshot: tileTraceRecorder.snapshot())
         hudView.apply(baseLabelTraceSnapshot: baseLabelTraceRecorder.snapshot())
@@ -187,6 +193,7 @@ final class ImmersiveMapDebugOverlayRuntime {
                       sunDirection: settings.scene.light.direction)
         hudView.apply(fogSettings: settings.scene.fog)
         hudView.apply(atmosphereSettings: settings.scene.atmosphere)
+        hudView.apply(groundFogSettings: settings.scene.groundFog, horizonColor: settings.scene.fog.horizonColor)
         if settings.debug.enableDebugPanel == false {
             // The panel's reach goes with the panel, like its other values.
             controls.setLocalLabelMaximumDistanceMeters(nil)
