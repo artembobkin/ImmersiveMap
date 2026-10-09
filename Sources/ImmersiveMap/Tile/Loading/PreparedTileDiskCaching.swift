@@ -890,7 +890,12 @@ final class PreparedTileDiskCaching {
     // (`ExtrusionStyle.edgeRadius`, `buildRounded`): bevels along its
     // corners and its roof's rim, its walls drawn back and lowered. A v141
     // entry carries every building as a sharp box.
-    static let preparedFormatVersion: UInt32 = 142
+    // 143: every triangle is counter-clockwise in render space again: a
+    // flattened tile's slivers (`GroundFlattening`) and the pieces of a
+    // ribbon clipped at the tile's edge (`ParseLine.clipToTile`), whose
+    // winding was read off a float area that lost the sign of a sliver. A
+    // v142 entry may carry such a sliver turned clockwise.
+    static let preparedFormatVersion: UInt32 = 143
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

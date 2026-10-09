@@ -859,10 +859,15 @@ class ParseLine {
         }
 
         guard clippedIndices.isEmpty == false else { return nil }
-        return ParsedPolygon(vertices: clippedVertices,
-                                           indices: clippedIndices,
-                                           lineDistances: clippedDistances,
-                                           lineParameters: clippedParameters)
+        var clipped = ParsedPolygon(vertices: clippedVertices,
+                                    indices: clippedIndices,
+                                    lineDistances: clippedDistances,
+                                    lineParameters: clippedParameters)
+        // A piece the clamp to the tile bent out of convexity can still fan
+        // one triangle the wrong way: the winding is settled on the vertices
+        // last, as for the fills.
+        clipped.windCounterClockwise()
+        return clipped
     }
 
     /// Sutherland-Hodgman against the tile square, interpolating the distance
@@ -951,12 +956,19 @@ class ParseLine {
         return sanitized
     }
 
-    private func signedArea(of ring: [SIMD2<Float>]) -> Float {
+    /// The ring's signed area, positive counter-clockwise in render space.
+    /// In double, from the ring's first point: the products of absolute
+    /// tile coordinates run to millions, where a float steps by a whole
+    /// unit, and the sign of a sliver of a join's fan was lost in them.
+    private func signedArea(of ring: [SIMD2<Float>]) -> Double {
         guard ring.count >= 3 else { return 0 }
-        var area: Float = 0
+        let origin = SIMD2<Double>(Double(ring[0].x), Double(ring[0].y))
+        var area: Double = 0
         for index in 0..<ring.count {
             let nextIndex = (index + 1) % ring.count
-            area += ring[index].x * ring[nextIndex].y - ring[nextIndex].x * ring[index].y
+            let current = SIMD2<Double>(Double(ring[index].x), Double(ring[index].y)) - origin
+            let next = SIMD2<Double>(Double(ring[nextIndex].x), Double(ring[nextIndex].y)) - origin
+            area += current.x * next.y - next.x * current.y
         }
         return area * 0.5
     }
