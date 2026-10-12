@@ -32,14 +32,17 @@ final class GroundSlotClipTests: XCTestCase {
 
     /// A parent standing in for a child draws the child's quarter of
     /// itself: the east half for an east child, the south half, low in
-    /// the tile's y-up units, for a south child.
+    /// the tile's y-up units, for a south child. The cut edges reach a
+    /// little past the middle, the tile's own edges stay.
     func testAParentStandingInDrawsTheChildsQuarter() throws {
         let child = Self.lookAt
         let parent = try XCTUnwrap(child.findParentTile(atZoom: child.z - 1))
         let rects = GroundSlotClip.rects(source: parent, slot: VisibleTile(tile: child), rings: Self.rings)
         let east = child.x % 2 == 1
         let south = child.y % 2 == 1
-        XCTAssertEqual(rects, [SIMD4<Float>(east ? 2048 : 0, south ? 0 : 2048, east ? 4096 : 2048, south ? 2048 : 4096)])
+        let reach = GroundSlotClip.seamOverlap
+        XCTAssertEqual(rects, [SIMD4<Float>(east ? 2048 - reach : 0, south ? 0 : 2048 - reach,
+                                            east ? 4096 : 2048 + reach, south ? 2048 + reach : 4096)])
     }
 
     /// A far band's tile that straddles the near band's square draws
@@ -55,8 +58,9 @@ final class GroundSlotClipTests: XCTestCase {
         let child = Tile(x: even ? lookAt.x - 1 : lookAt.x + 2, y: lookAt.y, z: lookAt.z)
         let parent = try XCTUnwrap(child.findParentTile(atZoom: 11))
         let rects = GroundSlotClip.rects(source: parent, slot: VisibleTile(tile: parent), rings: Self.rings)
-        XCTAssertEqual(rects, [even ? SIMD4<Float>(0, 0, 2048, 4096) : SIMD4<Float>(2048, 0, 4096, 4096)],
-                       "The half beyond the near band's square")
+        let reach = GroundSlotClip.seamOverlap
+        XCTAssertEqual(rects, [even ? SIMD4<Float>(0, 0, 2048 + reach, 4096) : SIMD4<Float>(2048 - reach, 0, 4096, 4096)],
+                       "The half beyond the near band's square, reaching past the cut")
         let inside = try XCTUnwrap(lookAt.findParentTile(atZoom: 11))
         XCTAssertTrue(GroundSlotClip.rects(source: inside, slot: VisibleTile(tile: inside), rings: Self.rings).isEmpty,
                       "The look-at tile's parent lies wholly in the near band: nothing of it to draw")
@@ -87,7 +91,9 @@ final class GroundSlotClipTests: XCTestCase {
         let rects = GroundSlotClip.rects(source: parent, slot: VisibleTile(tile: child), holes: [grandchild], rings: Self.rings)
         let quarter = GroundSlotClip.rects(source: parent, slot: VisibleTile(tile: child), rings: Self.rings)[0]
         let area = rects.reduce(Float(0)) { $0 + ($1.z - $1.x) * ($1.w - $1.y) }
-        XCTAssertEqual(area, (quarter.z - quarter.x) * (quarter.w - quarter.y) * 3 / 4, accuracy: 1,
+        // The pieces reach past their cuts by the seam overlap, a few
+        // thousand square units over the quarter's four million.
+        XCTAssertEqual(area, (quarter.z - quarter.x) * (quarter.w - quarter.y) * 3 / 4, accuracy: 4096 * 4,
                        "Three quarters of the quarter remain")
         // The grandchild, the child's north-west quarter: the parent's
         // units are half the child's, so it is 1024 a side, in the top left

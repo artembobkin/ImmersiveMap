@@ -22,7 +22,20 @@ import simd
 /// around it. A band's tile that straddles the band's squares is cut at
 /// them, into up to four pieces, and the neighbouring band's tile over the
 /// same ground is cut at the same line.
+///
+/// A cut edge reaches `seamOverlap` past its line: the edge the clip
+/// makes and the edge of the tile's own geometry beside it are two
+/// different edges, equal only to the float, and the rasterizer leaves
+/// pixels out between two edges that are not one, a dashed seam of the
+/// clear colour along the line. With the overlap the two pieces share a
+/// strip a fraction of a texel wide, and at one depth the piece drawn
+/// first keeps it: the descendants before the ancestor around them.
 enum GroundSlotClip {
+    /// How far a cut edge reaches past its line, in the tile's local units
+    /// (4096 a side): an eighth of a thousandth of the tile, under a pixel
+    /// at any zoom the tile is drawn at.
+    static let seamOverlap: Float = 0.5
+
     /// A placement and the rectangles it draws.
     struct Placement {
         let placeTile: PlaceTile
@@ -132,10 +145,18 @@ enum GroundSlotClip {
         return strips.filter { $0.maxX - $0.minX > 1e-9 && $0.maxY - $0.minY > 1e-9 }
     }
 
-    /// The rectangle in the local units of a tile of `extent`.
+    /// The rectangle in the local units of a tile of `extent`, every edge
+    /// that is a cut (not the tile's own edge) reaching `seamOverlap` past
+    /// its line.
     private static func local(_ rect: FlatRingSquare, in extent: FlatRingSquare) -> SIMD4<Float> {
         let scale = 4096.0 / (extent.maxX - extent.minX)
-        return SIMD4<Float>(Float((rect.minX - extent.minX) * scale), Float((rect.minY - extent.minY) * scale),
-                            Float((rect.maxX - extent.minX) * scale), Float((rect.maxY - extent.minY) * scale))
+        func edge(_ value: Double, from origin: Double, own: Double, reach: Float) -> Float {
+            let local = Float((value - origin) * scale)
+            return abs(value - own) > 1e-9 ? local + reach : local
+        }
+        return SIMD4<Float>(edge(rect.minX, from: extent.minX, own: extent.minX, reach: -seamOverlap),
+                            edge(rect.minY, from: extent.minY, own: extent.minY, reach: -seamOverlap),
+                            edge(rect.maxX, from: extent.minX, own: extent.maxX, reach: seamOverlap),
+                            edge(rect.maxY, from: extent.minY, own: extent.maxY, reach: seamOverlap))
     }
 }
