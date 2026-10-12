@@ -43,7 +43,11 @@ public enum Flattener {
     /// Flattens stacked, overlapping painted rings into one layer of triangles that do not overlap.
     ///
     /// Inside the bounds the mesh has no T-junctions: two triangles that touch share whole edges,
-    /// so the mesh stays closed when its vertices are moved, for example by a heightmap.
+    /// so the mesh stays closed when its vertices are moved, for example by a heightmap. Its
+    /// vertices are the vertices of the visible outlines, the crossings of outlines, and the points
+    /// where an outline crosses the grid, each once per color that touches it: the regions of one
+    /// color share the vertices on their common edges, and no region is cut by a line that the
+    /// input does not have.
     public static func flatten(_ input: FlattenInput, options: FlattenOptions = FlattenOptions()) -> FlatMesh {
         var timings = FlattenTimings()
         return flatten(input, options: options, timings: &timings)
@@ -115,37 +119,51 @@ public enum Flattener {
         }
         timings.triangulation = lap()
 
+        // The strips' vertices in one list. A vertex on a wall is in both strips that share the
+        // wall, and comes out once.
         var vertexCount = 0
         var indexCount = 0
         for strip in strips {
             vertexCount += strip.triangulator.vertices.count
             indexCount += strip.triangulator.indices.count
         }
-        let vertices = [FlatVertex](unsafeUninitializedCapacity: vertexCount) { buffer, count in
-            var offset = 0
-            for strip in strips {
-                let source = strip.triangulator.vertices
-                source.withUnsafeBufferPointer { src in
-                    guard let address = src.baseAddress else { return }
-                    (buffer.baseAddress! + offset).initialize(from: address, count: src.count)
+        var vertices: [FlatVertex] = []
+        vertices.reserveCapacity(vertexCount)
+        var indices = [UInt32](repeating: 0, count: indexCount)
+        var wallVertices: [WallVertexKey: UInt32] = [:]
+        var remap: [UInt32] = []
+        var offset = 0
+        for t in IndexRange(0, columns) {
+            let strip = strips[t]
+            let wallL = Float(walls[t])
+            let wallR = Float(walls[t + 1])
+            let source = strip.triangulator.vertices
+            remap.removeAll(keepingCapacity: true)
+            remap.reserveCapacity(source.count)
+            for vertex in source {
+                if vertex.x == wallL || vertex.x == wallR {
+                    let key = WallVertexKey(x: vertex.x.bitPattern, y: vertex.y.bitPattern, color: vertex.color)
+                    if let shared = wallVertices[key] {
+                        remap.append(shared)
+                        continue
+                    }
+                    wallVertices[key] = UInt32(vertices.count)
                 }
-                offset += source.count
+                remap.append(UInt32(vertices.count))
+                vertices.append(vertex)
             }
-            count = vertexCount
-        }
-        let indices = [UInt32](unsafeUninitializedCapacity: indexCount) { buffer, count in
-            var offset = 0
-            var base: UInt32 = 0
-            for strip in strips {
-                let source = strip.triangulator.indices
-                for k in IndexRange(0, source.count) { buffer[offset + k] = source[k] &+ base }
-                offset += source.count
-                base += UInt32(strip.triangulator.vertices.count)
-            }
-            count = indexCount
+            let stripIndices = strip.triangulator.indices
+            for k in IndexRange(0, stripIndices.count) { indices[offset + k] = remap[Int(stripIndices[k])] }
+            offset += stripIndices.count
         }
         timings.merge = lap()
         return FlatMesh(vertices: vertices, indices: indices)
+    }
+
+    private struct WallVertexKey: Hashable {
+        var x: UInt32
+        var y: UInt32
+        var color: UInt32
     }
 
     /// The working state of one strip. Each strip is only touched by one thread at a time.

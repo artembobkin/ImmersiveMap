@@ -80,6 +80,49 @@ final class FlattenerTests: XCTestCase {
         }
     }
 
+    /// A jagged ring over a background: the mesh has the ring's points and the corners, and
+    /// nothing else. Every extremum of the ring used to cut its neighbours with a horizontal line,
+    /// which put a vertex on every edge level with it, and the regions of one color each had their
+    /// own copy of the vertices on their common edges.
+    func testAnOutlineAddsNoVertices() {
+        var generator = SeededGenerator(seed: 11)
+        var ring: [SIMD2<Double>] = []
+        for k in 0..<200 {
+            let angle = Double(k) / 200 * 2 * .pi
+            let radius = Double.random(in: 300...500, using: &generator)
+            ring.append(SIMD2(512 + radius * cos(angle), 512 + radius * sin(angle)))
+        }
+        var input = FlattenInput()
+        input.addRect(minX: 0, minY: 0, maxX: 1024, maxY: 1024, paint: input.addPaint(opaque(0)))
+        input.addRing(ring, paint: input.addPaint(opaque(1)))
+        var options = FlattenOptions()
+        options.maxX = 1024
+        options.maxY = 1024
+        options.columns = 1
+        let mesh = Flattener.flatten(input, options: options)
+        let report = inspect(mesh, options: options)
+        XCTAssertEqual(report.openEdges, 0)
+        XCTAssertEqual(report.area, 1024 * 1024, accuracy: 1)
+        let positions = Set(mesh.vertices.map { SIMD2(Float($0.x), Float($0.y)) })
+        let expected = Set(ring.map { SIMD2(Float($0.x), Float($0.y)) } + [SIMD2(0, 0), SIMD2(1024, 0), SIMD2(1024, 1024), SIMD2(0, 1024)])
+        XCTAssertEqual(positions, expected, "The mesh has the outline's points and the corners only")
+        // Every point of the ring borders both colors, every corner one color.
+        XCTAssertEqual(mesh.vertices.count, 2 * ring.count + 4, "A position is one vertex per color")
+
+        // With a grid, the only vertices added lie on the grid lines.
+        options.columns = 8
+        options.rows = 8
+        let gridded = Flattener.flatten(input, options: options)
+        XCTAssertEqual(inspect(gridded, options: options).openEdges, 0)
+        let added = Set(gridded.vertices.map { SIMD2(Float($0.x), Float($0.y)) }).subtracting(expected)
+        XCTAssertFalse(added.isEmpty)
+        for p in added where p.x.truncatingRemainder(dividingBy: 128) != 0 && p.y.truncatingRemainder(dividingBy: 128) != 0 {
+            XCTFail("\(p) is not on a grid line")
+        }
+        let pairs = Set(gridded.vertices.map { SIMD3(Float($0.x), Float($0.y), Float($0.color)) })
+        XCTAssertEqual(gridded.vertices.count, pairs.count, "A position is one vertex per color")
+    }
+
     func testSingleColumnSquareIsMinimal() {
         var input = FlattenInput()
         input.addRect(minX: 0, minY: 0, maxX: 10, maxY: 10, paint: input.addPaint(opaque(0)))

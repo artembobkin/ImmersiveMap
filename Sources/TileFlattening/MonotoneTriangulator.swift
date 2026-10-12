@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: MIT
 
 /// Triangulates the monotone polygons produced by `Sweep`.
+///
+/// The polygons of one color share their vertices: a position is emitted once per color, and a
+/// polygon that touches it refers to that vertex.
 struct MonotoneTriangulator {
     private struct ChainVertex {
         var x: Double
@@ -14,8 +17,17 @@ struct MonotoneTriangulator {
     static let collinearTolerance = 1e-6
     static let coincidentDistanceSquared = 1e-12
 
+    /// A position with its color, the identity of a vertex: the regions of one color share the
+    /// vertices on their common edges.
+    private struct VertexKey: Hashable {
+        var x: UInt32
+        var y: UInt32
+        var color: UInt32
+    }
+
     var vertices: [FlatVertex] = []
     var indices: [UInt32] = []
+    private var vertexIndex: [VertexKey: UInt32] = [:]
 
     private var left: [ChainVertex] = []
     private var right: [ChainVertex] = []
@@ -38,20 +50,26 @@ struct MonotoneTriangulator {
         let bottomCount = Int(poly.bottomCount)
         let bottomStart = offset + topCount
         let leftStart = bottomStart + bottomCount
-        let rightStart = leftStart + Int(poly.leftCount) * 2
+        let rightStart = leftStart + Int(poly.leftCount) * 3
 
         // Both chains run from the top-left point to the bottom-right point. The top side belongs
         // to the right chain and the bottom side to the left chain, which keeps both chains
         // ordered by (y, x).
         left.removeAll(keepingCapacity: true)
         right.removeAll(keepingCapacity: true)
-        let base = UInt32(vertices.count)
-        var next = base
+        var created = 0
 
-        @inline(__always) func emit(_ x: Double, _ y: Double) -> UInt32 {
-            vertices.append(FlatVertex(x: Float(x), y: Float(y), color: poly.color))
-            next += 1
-            return next - 1
+        func emit(_ x: Double, _ y: Double) -> UInt32 {
+            // Adding 0 turns -0 into +0, so equal positions have equal bits.
+            let fx = Float(x) + 0
+            let fy = Float(y) + 0
+            let key = VertexKey(x: fx.bitPattern, y: fy.bitPattern, color: poly.color)
+            if let index = vertexIndex[key] { return index }
+            let index = UInt32(vertices.count)
+            vertices.append(FlatVertex(x: fx, y: fy, color: poly.color))
+            vertexIndex[key] = index
+            created += 1
+            return index
         }
 
         let first = ChainVertex(x: data[offset], y: poly.yTop, index: emit(data[offset], poly.yTop), onLeft: true)
@@ -64,33 +82,41 @@ struct MonotoneTriangulator {
             }
         }
 
-        if poly.flags & PolyHeader.rightOnWall != 0 {
-            var k = lowerBound(rightWallMarks, above: poly.yTop)
-            while k < rightWallMarks.count && rightWallMarks[k] < poly.yBot {
-                right.append(ChainVertex(x: wallR, y: rightWallMarks[k], index: emit(wallR, rightWallMarks[k]), onLeft: false))
+        // A stretch of a side along a strip wall gets the wall's vertices, strictly between its ends.
+        func appendWallMarks(_ marks: [Double], wallX: Double, above: Double, below: Double, onLeft: Bool) {
+            var k = lowerBound(marks, above: above)
+            while k < marks.count && marks[k] < below {
+                let vertex = ChainVertex(x: wallX, y: marks[k], index: emit(wallX, marks[k]), onLeft: onLeft)
+                if onLeft { left.append(vertex) } else { right.append(vertex) }
                 k += 1
-            }
-        } else {
-            for k in IndexRange(0, Int(poly.rightCount)) {
-                let x = data[rightStart + 2 * k]
-                let y = data[rightStart + 2 * k + 1]
-                right.append(ChainVertex(x: x, y: y, index: emit(x, y), onLeft: false))
             }
         }
 
-        if poly.flags & PolyHeader.leftOnWall != 0 {
-            var k = lowerBound(leftWallMarks, above: poly.yTop)
-            while k < leftWallMarks.count && leftWallMarks[k] < poly.yBot {
-                left.append(ChainVertex(x: wallL, y: leftWallMarks[k], index: emit(wallL, leftWallMarks[k]), onLeft: true))
-                k += 1
-            }
-        } else {
-            for k in IndexRange(0, Int(poly.leftCount)) {
-                let x = data[leftStart + 2 * k]
-                let y = data[leftStart + 2 * k + 1]
-                left.append(ChainVertex(x: x, y: y, index: emit(x, y), onLeft: true))
-            }
+        let rightCount = Int(poly.rightCount)
+        var rightOnWall = poly.flags & PolyHeader.rightOnWall != 0
+        var above = poly.yTop
+        for k in IndexRange(0, rightCount) {
+            let x = data[rightStart + 3 * k]
+            let y = data[rightStart + 3 * k + 1]
+            if rightOnWall { appendWallMarks(rightWallMarks, wallX: wallR, above: above, below: y, onLeft: false) }
+            right.append(ChainVertex(x: x, y: y, index: emit(x, y), onLeft: false))
+            rightOnWall = data[rightStart + 3 * k + 2] != 0
+            above = y
         }
+        if rightOnWall { appendWallMarks(rightWallMarks, wallX: wallR, above: above, below: poly.yBot, onLeft: false) }
+
+        let leftCount = Int(poly.leftCount)
+        var leftOnWall = poly.flags & PolyHeader.leftOnWall != 0
+        above = poly.yTop
+        for k in IndexRange(0, leftCount) {
+            let x = data[leftStart + 3 * k]
+            let y = data[leftStart + 3 * k + 1]
+            if leftOnWall { appendWallMarks(leftWallMarks, wallX: wallL, above: above, below: y, onLeft: true) }
+            left.append(ChainVertex(x: x, y: y, index: emit(x, y), onLeft: true))
+            leftOnWall = data[leftStart + 3 * k + 2] != 0
+            above = y
+        }
+        if leftOnWall { appendWallMarks(leftWallMarks, wallX: wallL, above: above, below: poly.yBot, onLeft: true) }
 
         for k in IndexRange(0, bottomCount) {
             let x = data[bottomStart + k]
@@ -101,7 +127,10 @@ struct MonotoneTriangulator {
 
         let count = left.count + right.count - 2
         if count < 3 {
-            vertices.removeLast(Int(next - base))
+            for _ in IndexRange(0, created) {
+                let vertex = vertices.removeLast()
+                vertexIndex.removeValue(forKey: VertexKey(x: vertex.x.bitPattern, y: vertex.y.bitPattern, color: vertex.color))
+            }
             return
         }
 
