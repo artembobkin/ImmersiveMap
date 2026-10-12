@@ -71,20 +71,20 @@ final class SharedRenderResources {
     /// is blended and lies on the same plane. Under a solid building the
     /// ground fails the test before its fragment is shaded.
     let groundDepthState: MTLDepthStencilState
-    /// The tile-priority stencil states (TileSourceStencilPriority): the
-    /// sphere's opaque owner (rank depth written), the flat ground's owner
-    /// (building depth tested, not written), and the shared non-owning test
-    /// for translucent fills, ribbons and roads.
+    /// The sphere's tile-priority stencil states (TileSourceStencilPriority):
+    /// the opaque owner (rank depth written) and the non-owning test for
+    /// the translucent fills and the ribbons.
     let sphereOpaqueOwnerState: MTLDepthStencilState
-    let groundOwnerState: MTLDepthStencilState
     let tileStencilTestState: MTLDepthStencilState
+    /// The flat ground: the depth alone, no stencil. Every placement draws
+    /// only its own slot's ground (`GroundSlotClip`), so no two sources
+    /// draw the same ground and the nearest surface is the one to see, as
+    /// for any geometry. The owner writes the depth, the test does not.
+    let groundSlotOwnerState: MTLDepthStencilState
+    let groundSlotTestState: MTLDepthStencilState
     /// The flat road buckets: the rank depth tested and written
     /// (`RoadRankDepth`).
     let roadRankState: MTLDepthStencilState
-    /// The tile-ownership prepass: no depth interaction at all, only the
-    /// owning stencil write, so the quads mark every pixel of their source's
-    /// extent (buildings included) before anything draws.
-    let tileOwnershipWriteState: MTLDepthStencilState
     /// The world-pass buildings: the scene depth (lessEqual, written, for
     /// their own walls and roofs) plus the tile-priority stencil test, which
     /// replaces the old per-placement slot clip.
@@ -110,8 +110,6 @@ final class SharedRenderResources {
     /// The labels painted on the map, in the world pass on both surfaces.
     let surfaceLabelPipeline: SurfaceLabelPipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
-    /// The tile-ownership stencil prepass of the flat passes.
-    let tileOwnershipPipeline: TileOwnershipPipeline
     /// The raster tiles: their bake and their draws on both surfaces.
     let rasterTilePipeline: RasterTilePipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
@@ -238,10 +236,10 @@ final class SharedRenderResources {
         let depthDisabledState: MTLDepthStencilState
         let groundDepthState: MTLDepthStencilState
         let sphereOpaqueOwnerState: MTLDepthStencilState
-        let groundOwnerState: MTLDepthStencilState
         let tileStencilTestState: MTLDepthStencilState
+        let groundSlotOwnerState: MTLDepthStencilState
+        let groundSlotTestState: MTLDepthStencilState
         let roadRankState: MTLDepthStencilState
-        let tileOwnershipWriteState: MTLDepthStencilState
         let extrudedStencilTestState: MTLDepthStencilState
         let sceneModelSurfaceMaskState: MTLDepthStencilState
         let sceneModelGroundCutStates: SceneModelGroundCutStates
@@ -267,10 +265,10 @@ final class SharedRenderResources {
                      depthDisabledState: device.makeDepthStencilState(descriptor: Self.makeDepthDisabledDescriptor())!,
                      groundDepthState: device.makeDepthStencilState(descriptor: Self.makeGroundDepthDescriptor())!,
                      sphereOpaqueOwnerState: device.makeDepthStencilState(descriptor: Self.makeSphereOpaqueOwnerDescriptor())!,
-                     groundOwnerState: device.makeDepthStencilState(descriptor: Self.makeGroundOwnerDescriptor())!,
                      tileStencilTestState: device.makeDepthStencilState(descriptor: Self.makeTileStencilTestDescriptor())!,
-                     roadRankState: device.makeDepthStencilState(descriptor: Self.makeRoadRankDescriptor())!,
-                     tileOwnershipWriteState: device.makeDepthStencilState(descriptor: Self.makeTileOwnershipWriteDescriptor())!,
+                     groundSlotOwnerState: device.makeDepthStencilState(descriptor: Self.makeGroundSlotDescriptor(writes: true))!,
+                     groundSlotTestState: device.makeDepthStencilState(descriptor: Self.makeGroundSlotDescriptor(writes: false))!,
+                     roadRankState: device.makeDepthStencilState(descriptor: Self.makeGroundSlotDescriptor(writes: true))!,
                      extrudedStencilTestState: device.makeDepthStencilState(descriptor: Self.makeExtrudedStencilTestDescriptor())!,
                      sceneModelSurfaceMaskState: device.makeDepthStencilState(descriptor: Self.makeSceneModelSurfaceMaskDescriptor())!,
                      sceneModelGroundCutStates: SceneModelGroundCutStates(
@@ -294,10 +292,10 @@ final class SharedRenderResources {
         self.depthDisabledState = built.depthDisabledState
         self.groundDepthState = built.groundDepthState
         self.sphereOpaqueOwnerState = built.sphereOpaqueOwnerState
-        self.groundOwnerState = built.groundOwnerState
         self.tileStencilTestState = built.tileStencilTestState
+        self.groundSlotOwnerState = built.groundSlotOwnerState
+        self.groundSlotTestState = built.groundSlotTestState
         self.roadRankState = built.roadRankState
-        self.tileOwnershipWriteState = built.tileOwnershipWriteState
         self.extrudedStencilTestState = built.extrudedStencilTestState
         self.sceneModelSurfaceMaskState = built.sceneModelSurfaceMaskState
         self.sceneModelGroundCutStates = built.sceneModelGroundCutStates
@@ -310,7 +308,6 @@ final class SharedRenderResources {
         self.globeVectorSurfacePipeline = compiled.globeVectorSurfacePipeline
         self.surfaceLabelPipeline = compiled.surfaceLabelPipeline
         self.extrudedTilePipeline = compiled.extrudedTilePipeline
-        self.tileOwnershipPipeline = compiled.tileOwnershipPipeline
         self.rasterTilePipeline = compiled.rasterTilePipeline
         self.groundShadowMaskPipeline = compiled.groundShadowMaskPipeline
         self.fxaaPipeline = compiled.fxaaPipeline
@@ -337,7 +334,6 @@ final class SharedRenderResources {
         let globeVectorSurfacePipeline: TilePipeline
         let surfaceLabelPipeline: SurfaceLabelPipeline
         let extrudedTilePipeline: ExtrudedTilePipeline
-        let tileOwnershipPipeline: TileOwnershipPipeline
         let rasterTilePipeline: RasterTilePipeline
         let groundShadowMaskPipeline: GroundShadowMaskPipeline
         let fxaaPipeline: FXAAPipeline
@@ -369,7 +365,6 @@ final class SharedRenderResources {
         var globeVectorSurfacePipeline: TilePipeline?
         var surfaceLabelPipeline: SurfaceLabelPipeline?
         var extrudedTilePipeline: ExtrudedTilePipeline?
-        var tileOwnershipPipeline: TileOwnershipPipeline?
         var rasterTilePipeline: RasterTilePipeline?
         var groundShadowMaskPipeline: GroundShadowMaskPipeline?
         var fxaaPipeline: FXAAPipeline?
@@ -408,10 +403,6 @@ final class SharedRenderResources {
                                           sampleCount: sampleCount,
                                           readsGroundShadowMask: true) },
             { groundShadowMaskPipeline = GroundShadowMaskPipeline(metalDevice: device, library: library) },
-            { tileOwnershipPipeline = TileOwnershipPipeline(metalDevice: device,
-                                                            pixelFormat: pixelFormat,
-                                                            library: library,
-                                                            sampleCount: sampleCount) },
             { rasterTilePipeline = RasterTilePipeline(metalDevice: device,
                                                       pixelFormat: pixelFormat,
                                                       library: library,
@@ -453,7 +444,6 @@ final class SharedRenderResources {
             globeVectorSurfacePipeline: globeVectorSurfacePipeline!,
             surfaceLabelPipeline: surfaceLabelPipeline!,
             extrudedTilePipeline: extrudedTilePipeline!,
-            tileOwnershipPipeline: tileOwnershipPipeline!,
             rasterTilePipeline: rasterTilePipeline!,
             groundShadowMaskPipeline: groundShadowMaskPipeline!,
             fxaaPipeline: fxaaPipeline!,
@@ -575,10 +565,11 @@ final class SharedRenderResources {
         return descriptor
     }
 
-    /// The tile-priority stencil (TileSourceStencilPriority): every tile
-    /// pass tests greaterEqual against the finest painter's mark, and the
-    /// owner passes replace it where they pass both tests, so a coarser
-    /// substitute's overflow is rejected wherever a finer tile painted.
+    /// The sphere's tile-priority stencil (TileSourceStencilPriority):
+    /// every tile pass tests greaterEqual against the finest painter's
+    /// mark, and the owner pass replaces it where it passes both tests, so
+    /// a coarser substitute's overflow is rejected wherever a finer tile
+    /// painted.
     private nonisolated static func makeTilePriorityStencil(writes: Bool) -> MTLStencilDescriptor {
         let stencil = MTLStencilDescriptor()
         stencil.stencilCompareFunction = .greaterEqual
@@ -615,47 +606,27 @@ final class SharedRenderResources {
         return descriptor
     }
 
-    /// The flat ground's opaque pass: tested against the buildings' depth
-    /// (the rank band is farther than every real fragment, so the test
-    /// still rejects everything under a building), WRITING the band so a
-    /// pixel is shaded once by its topmost opaque layer, and owning the
-    /// tile-priority stencil.
-    private nonisolated static func makeGroundOwnerDescriptor() -> MTLDepthStencilDescriptor {
+    /// The flat ground: the ground depth test (against the buildings, and
+    /// against the other slots' ground on a relief) and no stencil at all.
+    /// The opaque pass and the road buckets WRITE the depth: the opaque
+    /// fills write the rank band, so a pixel is shaded once by its topmost
+    /// opaque layer, and the roads their ranks (`RoadRankDepth`), so an
+    /// opaque road is shaded once per pixel by its highest rank and a road
+    /// that blends lands once per pixel of a rank, an equal rank failing.
+    /// The translucent fills and the ribbons only test.
+    private nonisolated static func makeGroundSlotDescriptor(writes: Bool) -> MTLDepthStencilDescriptor {
         let descriptor = makeGroundDepthDescriptor()
-        descriptor.isDepthWriteEnabled = true
-        descriptor.frontFaceStencil = makeTilePriorityStencil(writes: true)
-        descriptor.backFaceStencil = makeTilePriorityStencil(writes: true)
+        descriptor.isDepthWriteEnabled = writes
         return descriptor
     }
 
-    /// Every non-owning tile pass (translucent fills, ribbons): the
-    /// ground depth test plus the tile-priority stencil test, no writes.
+    /// The sphere's non-owning tile passes (translucent fills, ribbons):
+    /// the ground depth test plus the tile-priority stencil test, no
+    /// writes.
     private nonisolated static func makeTileStencilTestDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeGroundDepthDescriptor()
         descriptor.frontFaceStencil = makeTilePriorityStencil(writes: false)
         descriptor.backFaceStencil = makeTilePriorityStencil(writes: false)
-        return descriptor
-    }
-
-    /// The road buckets: the ground depth test over the roads' ranks
-    /// (`RoadRankDepth`), WRITING the rank, under the tile-priority test.
-    /// A fragment passes only where it is nearer than what is there, so an
-    /// opaque road is shaded once per pixel by its highest rank, and a road
-    /// that blends lands once per pixel of a rank, an equal rank failing.
-    private nonisolated static func makeRoadRankDescriptor() -> MTLDepthStencilDescriptor {
-        let descriptor = makeGroundDepthDescriptor()
-        descriptor.isDepthWriteEnabled = true
-        descriptor.frontFaceStencil = makeTilePriorityStencil(writes: false)
-        descriptor.backFaceStencil = makeTilePriorityStencil(writes: false)
-        return descriptor
-    }
-
-    /// The tile-ownership prepass: depth always passes and is never written,
-    /// so the owning stencil write lands on every pixel of the quad.
-    private nonisolated static func makeTileOwnershipWriteDescriptor() -> MTLDepthStencilDescriptor {
-        let descriptor = makeDepthDisabledDescriptor()
-        descriptor.frontFaceStencil = makeTilePriorityStencil(writes: true)
-        descriptor.backFaceStencil = makeTilePriorityStencil(writes: true)
         return descriptor
     }
 

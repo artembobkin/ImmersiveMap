@@ -36,8 +36,10 @@ using namespace metal;
 // polygon and the silhouette's staircase) and the flat map's fog: the sky
 // painted opaque above the line (a glow of the tint at the line decaying
 // into the sky colour, under whatever is left of the halo through the
-// morph) and the haze below it, the ground profile with its angles set
-// from the haze's camera-distance range on the CPU.
+// morph) and the band below it, the ground profile whitening the last
+// degrees of the ground into the tint at the line. The far ground's fog
+// is not drawn here: the shaders of what stands on the map draw it
+// (GroundFog.h).
 //
 // Layout mirrors HorizonUniform.swift (pinned by HorizonUniformLayoutTests).
 struct Horizon {
@@ -136,7 +138,7 @@ static inline half4 horizonShade(constant Horizon& horizon, float above, float3 
     float3 color = mix(horizon.tint, float3(1.0), whiten) * coverage;
     if (!kHorizonGroundSide && above >= 0.0 && horizon.skyOpacity > 0.0) {
         // The plane's sky under the halo: a glow of the tint at the line,
-        // so the sky meets the haze in one colour, decaying into the sky
+        // so the sky meets the band in one colour, decaying into the sky
         // colour over a few e-folds; faded in through the morph by the
         // opacity.
         float gradient = 1.0 - exp(-above / horizon.skyGradientRadians);

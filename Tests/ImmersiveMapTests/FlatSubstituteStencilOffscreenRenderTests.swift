@@ -6,9 +6,8 @@ import XCTest
 
 /// End-to-end contract of the FLAT map's substitute handling, the mirror of
 /// GlobeSubstituteDepthOffscreenRenderTests: a coarse tile standing in for
-/// missing slots draws at its full extent, and the tile-priority stencil
-/// keeps it out of every slot a finer tile owns (the flat tiles have no
-/// slot clip distances any more). The camera sits on the corner shared by
+/// missing slots draws only in those slots (`GroundSlotClip`), never in
+/// the slot a finer tile owns. The camera sits on the corner shared by
 /// the four children of one z13 parent at a flat zoom: one child is loaded
 /// exactly (snow, painted cyan), the parent (water, painted magenta) stands
 /// in for the other three. Requires the compiled Metal library, so it
@@ -23,10 +22,9 @@ final class FlatSubstituteStencilOffscreenRenderTests: XCTestCase {
     /// children share; zoom 14.2 is well past the flat transition.
     private static let parent = Tile(x: 4954, y: 2570, z: 13)
     private static let exactChild = Tile(x: 9908, y: 5140, z: 14)
-    /// The z0 world cover that the horizon backdrop draws under everything:
-    /// loaded on purpose, because the backdrop must lose to the exact child
-    /// through the stencil (it once flooded the whole frame by winning the
-    /// rank-depth test against the finer background).
+    /// The z0 world cover: loaded on purpose, because it must not stand in
+    /// anywhere (it once flooded the whole frame by winning the rank-depth
+    /// test against the finer background).
     private static let backdropAncestor = Tile(x: 0, y: 0, z: 0)
 
     @MainActor

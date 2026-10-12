@@ -261,6 +261,12 @@ final class ImmersiveMapCameraRuntime {
         renderRuntime.requestFrame()
     }
 
+    /// The drag ended, however it ended: the next one is its own
+    /// (`CameraStateController.endPan()`).
+    func endPan() {
+        renderCamera?.endPanCamera()
+    }
+
     func zoomCamera(scale: CGFloat,
                     velocity: CGFloat,
                     anchorPoint: CGPoint? = nil) {

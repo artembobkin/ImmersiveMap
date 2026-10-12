@@ -76,18 +76,6 @@ enum HorizonEdgeMath {
         return directions
     }
 
-    /// How far below the edge the ground lies at a given multiple of the
-    /// camera distance, on the plane. The camera looks at the ground along
-    /// the centre ray, `cosPitch` under the local horizontal, so its height
-    /// over the plane is `cosPitch` camera distances and the ground at `k`
-    /// camera distances of slant range sits `asin(cosPitch / k)` below the
-    /// line; nearer than the eye's height it is the nadir. This is what lets
-    /// a haze stated in camera distances stay a plain angle profile in the
-    /// shader.
-    static func depression(atCameraDistances k: Float, cosPitch: Float) -> Float {
-        asin(min(max(cosPitch, 0) / max(k, 1e-6), 1))
-    }
-
     /// True when some pixel of the frame looks within `reachBelow` radians of
     /// the edge or above it, which is when the horizon layer has anything to
     /// paint. The set of directions farther below the edge than the reach is

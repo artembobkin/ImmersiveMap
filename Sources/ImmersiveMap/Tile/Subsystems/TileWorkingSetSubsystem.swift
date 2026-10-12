@@ -19,15 +19,25 @@ import simd
 /// rule draws its lines or labels, or while the texture is to be baked
 /// from it. A texture that is to be baked is baked here once its vector
 /// tile is resident, a few a frame.
+///
+/// On the ground relief (`GroundReliefStore`) a tile is placed as soon
+/// as it is resident, whatever its terrain: raised by its ring's terrain,
+/// or by the coarsest in while that one loads, and flat on the plane
+/// while no terrain over it is in at all. The flat tile is the stand-in
+/// of last resort: a frame with ground beats a frame with a hole. Asking
+/// the store for a tile's relief starts its terrain's load, so the first
+/// frames ask for every placed tile's.
 final class TileWorkingSetSubsystem: RenderSubsystem {
     let name: String = "TileWorkingSet"
 
     private let tileRenderStore: TileRenderStore
     private let rasterTileStore: RasterTileStore?
     private let tileTraceRecorder: TileTraceRecorder
+    private let groundReliefStore: GroundReliefStore?
 
     private var placeTilesContext: PlaceTilesContext = .empty
     private var rasterPlacements: [RasterTilePlacement] = []
+    private var rasterGroundSlots = Set<VisibleTile>()
     private var buildingPlaceTilesContext: PlaceTilesContext = .empty
     private var placementVersion: UInt64 = 0
     /// The coverage and the working set the last placements were planned
@@ -35,6 +45,7 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
     private var plannedCoverageVersion: UInt64?
     private var plannedContentVersion: UInt64?
     private var plannedRasterVersion: UInt64?
+    private var plannedReliefVersion: UInt64?
     private var latestRequestedTilesCount: Int = 0
     private var latestCounts = (visible: 0, demanded: 0, ready: 0)
 
@@ -46,11 +57,20 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
     init(tileRenderStore: TileRenderStore,
          rasterTileStore: RasterTileStore? = nil,
          tileTraceRecorder: TileTraceRecorder,
+         groundReliefStore: GroundReliefStore? = nil,
          buildingsMinimumTileZoom: Int = BuildingCoveragePlanner.minimumSourceZoom) {
         self.tileRenderStore = tileRenderStore
         self.rasterTileStore = rasterTileStore
         self.tileTraceRecorder = tileTraceRecorder
+        self.groundReliefStore = groundReliefStore
         self.buildingsMinimumTileZoom = buildingsMinimumTileZoom
+    }
+
+    /// Starts the load of the terrain a placed tile is raised by, the
+    /// ring's over it, so it is on its way from the tile's first frame.
+    private func requestTerrain(_ tile: Tile, tileZoomLevel: Int) {
+        guard let groundReliefStore, groundReliefStore.isActive else { return }
+        _ = groundReliefStore.relief(for: tile, terrainZoom: GroundReliefStore.terrainZoom(forTargetZoom: tileZoomLevel))
     }
 
     func update(frameContext: FrameContext) {
@@ -100,7 +120,10 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
                                                                                 renderSurfaceMode: frameContext.renderSurfaceMode)
         // The raster targets ask for their textures first: which of them
         // is to be baked decides whether its vector tile is wanted.
-        let raster = requestRasters(prioritizedTargets: prioritizedTargets, visibleContent: visibleContent)
+        let raster = requestRasters(prioritizedTargets: prioritizedTargets,
+                                    visibleContent: visibleContent,
+                                    floorZoom: backdropZoomLevel,
+                                    tileZoomLevel: tileZoomLevel)
         let vectorTargets = targets.filter { raster.wantsVector($0) }
         let demandedSourceTiles = Self.uniqueSourceTiles(of: vectorTargets)
         let prioritizedDemand = Self.uniqueSourceTiles(of: prioritizedTargets.filter { raster.wantsVector($0) })
@@ -113,13 +136,18 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
         // resident now (the stand-ins included, which are never demanded):
         // replanned from scratch when either moved, kept otherwise.
         let rasterVersion = rasterTileStore?.contentVersion
+        let reliefVersion = groundReliefStore?.version
         let placementChanged = coverageVersion != plannedCoverageVersion
             || contentVersion != plannedContentVersion
             || rasterVersion != plannedRasterVersion
+            || reliefVersion != plannedReliefVersion
         // What is resident now, read only when something is planned or
         // baked over it.
         let resident = placementChanged || raster.toBake.isEmpty == false ? tileRenderStore.residentTiles() : [:]
         if placementChanged {
+            for tile in resident.keys {
+                requestTerrain(tile, tileZoomLevel: tileZoomLevel)
+            }
             placeTilesContext = TilePlacementPlanner.buildPlacements(targets: vectorTargets,
                                                                      resident: resident,
                                                                      zoom: tileZoomLevel,
@@ -138,10 +166,23 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
                                                                      targetZoom: tileZoomLevel,
                                                                      minimumZoom: buildingsMinimumTileZoom)
             rasterPlacements = raster.placements
+            rasterGroundSlots = Set(visibleContent.rasterTiles.keys).subtracting(raster.uncovered)
+            if let rasterTileStore, visibleContent.rasterTiles.isEmpty == false {
+                tileTraceRecorder.record(.rasterDemandUpdate(frameIndex: frameContext.frameIndex,
+                                                             targets: visibleContent.rasterTiles.count,
+                                                             resident: raster.readyCount,
+                                                             pending: raster.waitingCount - raster.toBake.count,
+                                                             toBake: raster.toBake.count,
+                                                             standIns: raster.placements.count - raster.readyCount,
+                                                             uncovered: raster.uncovered.count,
+                                                             storeTextures: rasterTileStore.residentTextureCount,
+                                                             storeBytes: rasterTileStore.residentByteCount))
+            }
             placementVersion &+= 1
             plannedCoverageVersion = coverageVersion
             plannedContentVersion = contentVersion
             plannedRasterVersion = rasterVersion
+            plannedReliefVersion = reliefVersion
         }
         bakeRasters(raster.toBake, resident: resident)
 
@@ -182,6 +223,10 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
         var visibleContent: VisibleContentState?
         var availability: [RasterTileKey: RasterTileStore.Availability] = [:]
         var placements: [RasterTilePlacement] = []
+        /// The raster targets no texture draws whole this frame, their own
+        /// or a stand-in's (`RasterStandInPlanner`): their ground is the
+        /// vector placements', as a vector target's.
+        var uncovered = Set<VisibleTile>()
         /// The textures to bake, nearest first, with the tile each is
         /// drawn from.
         var toBake: [RasterTileKey] = []
@@ -189,17 +234,21 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
         var waitingCount = 0
 
         /// Whether a target wants its vector tile: every vector target,
-        /// and a raster target whose rule draws its lines or labels, or
-        /// whose texture is to be baked from it.
+        /// and a raster target whose rule draws its lines or labels, whose
+        /// texture is to be baked from it, or whose ground no texture
+        /// draws whole yet.
         func wantsVector(_ target: VisibleTile) -> Bool {
             guard let spec = rasterTiles[target], let visibleContent else { return true }
             return visibleContent.rasterTargetWantsVector(target)
                 || availability[RasterTileKey(tile: target.tile, spec: spec)] == .needsBake
+                || uncovered.contains(target)
         }
     }
 
     private func requestRasters(prioritizedTargets: [VisibleTile],
-                                visibleContent: VisibleContentState) -> RasterDemand {
+                                visibleContent: VisibleContentState,
+                                floorZoom: Int?,
+                                tileZoomLevel: Int) -> RasterDemand {
         guard let rasterTileStore, visibleContent.rasterTiles.isEmpty == false else { return RasterDemand() }
         var demand = RasterDemand(rasterTiles: visibleContent.rasterTiles, visibleContent: visibleContent)
         var keys: [RasterTileKey] = []
@@ -226,12 +275,27 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
         }
         // Finest first, as the vector sources draw: the finer texture marks
         // the tile-priority stencil before a coarser one reaches its pixels.
+        var missing: [VisibleTile] = []
         for target in prioritizedTargets {
             guard let spec = visibleContent.rasterTiles[target] else { continue }
             let key = RasterTileKey(tile: target.tile, spec: spec)
             if let texture = request.textures[key] {
-                demand.placements.append(RasterTilePlacement(key: key, texture: texture, placeIn: target))
+                requestTerrain(target.tile, tileZoomLevel: tileZoomLevel)
+                demand.placements.append(RasterTilePlacement(key: key, texture: texture, placeIn: target, slot: target))
+            } else {
+                missing.append(target)
             }
+        }
+        // A target without its texture draws its stand-ins meanwhile: the
+        // textures the last zoom's bands drew are still on the GPU. One no
+        // texture covers whole draws its ground from the vector placements.
+        if missing.isEmpty == false {
+            let standIns = RasterStandInPlanner.plan(forMissing: missing,
+                                                     resident: rasterTileStore.residentTextures(),
+                                                     floorZoom: floorZoom)
+            rasterTileStore.touch(standIns.placements.map(\.key))
+            demand.placements.append(contentsOf: standIns.placements)
+            demand.uncovered = Set(standIns.uncovered)
         }
         demand.placements.sort { $0.placeIn.z > $1.placeIn.z }
         return demand
@@ -274,6 +338,7 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
             placeTilesContext: placeTilesContext,
             buildingPlaceTilesContext: buildingPlaceTilesContext,
             rasterPlacements: rasterPlacements,
+            rasterGroundSlots: rasterGroundSlots,
             placementVersion: placementVersion,
             visibleTilesCount: visibleTilesCount,
             readyTilesCount: readyTilesCount,

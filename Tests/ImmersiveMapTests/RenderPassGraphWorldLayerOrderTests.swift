@@ -8,24 +8,11 @@ import XCTest
 /// under them fails its depth test unshaded. There is no other building
 /// path: translucent compositing was removed.
 final class RenderPassGraphWorldLayerOrderTests: XCTestCase {
-    private let flatPlan: [RenderLayer] = [.tileOwnership, .flatMapSurface, .buildingExtrusion, .sceneModels, .horizon]
+    private let flatPlan: [RenderLayer] = [.flatMapSurface, .buildingExtrusion, .sceneModels, .horizon]
 
     func testBuildingsDrawBeforeTheGround() {
         XCTAssertEqual(RenderPassGraph.worldLayerOrder(flatPlan),
-                       [.tileOwnership, .buildingExtrusion, .flatMapSurface, .sceneModels, .horizon])
-    }
-
-    /// The ownership prepass must precede the buildings: it writes the
-    /// stencil marks the buildings test.
-    func testOwnershipPrepassStaysFirst() {
-        XCTAssertEqual(RenderPassGraph.worldLayerOrder(flatPlan).first, .tileOwnership)
-        XCTAssertEqual(RenderLayerPlanner.plan(availability: RenderPassAvailability(
-            renderSurfaceMode: .flat,
-            labelsEnabled: false,
-            avatarsEnabled: false,
-            debugOverlayEnabled: false,
-            starfieldEnabled: true)).filter(\.enabled).map(\.layer).first, .tileOwnership,
-                       "The planner lists the ownership prepass first among the flat world layers")
+                       [.buildingExtrusion, .flatMapSurface, .sceneModels, .horizon])
     }
 
     /// With extrusion off the planner leaves the building layer out, and
@@ -41,7 +28,7 @@ final class RenderPassGraphWorldLayerOrderTests: XCTestCase {
     }
 
     func testAlreadyOrderedPlanIsUnchanged() {
-        let ordered: [RenderLayer] = [.tileOwnership, .buildingExtrusion, .flatMapSurface, .sceneModels, .horizon]
+        let ordered: [RenderLayer] = [.buildingExtrusion, .flatMapSurface, .sceneModels, .horizon]
         XCTAssertEqual(RenderPassGraph.worldLayerOrder(ordered), ordered)
     }
 }

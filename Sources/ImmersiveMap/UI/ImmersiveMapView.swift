@@ -754,16 +754,76 @@ public extension ImmersiveMapView {
     /// near ground whole when the camera stands in the street with the
     /// tiles blown up to many screens, and the mesh is ready for a
     /// heightmap. The default is the tileset's deepest zoom, 15, on a grid
-    /// of 16. An omitted value is left as configured:
+    /// of 16. `gridByTileZoom` gives a zoom a grid of its own, over `grid`:
+    /// with the ground relief on from a coarse zoom, a coarse tile's cell
+    /// covers far more ground, and more cells keep its relief as fine. An
+    /// omitted value is left as configured:
     ///
     ///     ImmersiveMapView()
-    ///         .groundFlattening(fromTileZoom: 15, grid: 32)
+    ///         .groundFlattening(fromTileZoom: 15, grid: 32, gridByTileZoom: [12: 128, 13: 96, 14: 64])
     ///
     /// Baked into the prepared tiles, so a change re-parses them. See
     /// `ImmersiveMapSettings.TileSettings.GroundFlatteningSettings`.
-    public func groundFlattening(fromTileZoom: Int? = nil, grid: Int? = nil) -> ImmersiveMapView {
+    public func groundFlattening(fromTileZoom: Int? = nil, grid: Int? = nil, gridByTileZoom: [Int: Int]? = nil) -> ImmersiveMapView {
         var view = self
-        view.settings = view.settings.groundFlattening(fromTileZoom: fromTileZoom, grid: grid)
+        view.settings = view.settings.groundFlattening(fromTileZoom: fromTileZoom, grid: grid, gridByTileZoom: gridByTileZoom)
+        return view
+    }
+
+    /// The flattened ground raised by a heightmap: each flattened tile
+    /// takes its heights from the terrain tile of its address, images
+    /// behind `tileURLTemplate` (`{z}`, `{x}` and `{y}` in it) in the
+    /// `encoding` (Terrarium by default, or Mapbox's), and its ground
+    /// rises `exaggeration` times as high as the terrain is, scaled down
+    /// with the camera zoom: over flat ground by `flatZoomFade` (full to
+    /// zoom 10 and flat from 12 by default), over mountains by
+    /// `mountainZoomFade` (17 to 18), the ground being read as one or the
+    /// other, or a mix, by its rise and fall within `reliefWindowMetres`
+    /// of the point the camera looks at, from `flatReliefMetres` to
+    /// `mountainReliefMetres`. `.none` for either keeps the relief at
+    /// every zoom. The roads,
+    /// the buildings and the labels rise with
+    /// it. The ground rises from `fromTileZoom` on (0 by default, as soon
+    /// as the map is the plane): a tile of that zoom or deeper is
+    /// flattened for it whatever the flattening's own zoom says, since
+    /// only a flattened tile can rise. The camera
+    /// keeps its height and flies right up to a ridge between it and the
+    /// point it looks at, or stays `cameraClearanceMetres` over one when
+    /// that is set. The decoded terrain tiles
+    /// keep to `memoryBudgetInBytes`. Off by default, on Mapterhorn's open
+    /// terrain when on. An omitted value is left as configured:
+    ///
+    ///     ImmersiveMapView()
+    ///         .groundFlattening(grid: 64)
+    ///         .groundRelief(isEnabled: true, fromTileZoom: 10, exaggeration: 2)
+    ///
+    /// The relief is as fine as the flattening's grid. See
+    /// `ImmersiveMapSettings.TileSettings.GroundReliefSettings`.
+    public func groundRelief(isEnabled: Bool? = nil,
+                             fromTileZoom: Int? = nil,
+                             tileURLTemplate: String? = nil,
+                             encoding: ImmersiveMapSettings.TileSettings.GroundReliefEncoding? = nil,
+                             exaggeration: Float? = nil,
+                             flatZoomFade: ImmersiveMapZoomFade? = nil,
+                             mountainZoomFade: ImmersiveMapZoomFade? = nil,
+                             reliefWindowMetres: Float? = nil,
+                             flatReliefMetres: Float? = nil,
+                             mountainReliefMetres: Float? = nil,
+                             memoryBudgetInBytes: Int? = nil,
+                             cameraClearanceMetres: Float? = nil) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.groundRelief(isEnabled: isEnabled,
+                                                   fromTileZoom: fromTileZoom,
+                                                   tileURLTemplate: tileURLTemplate,
+                                                   encoding: encoding,
+                                                   exaggeration: exaggeration,
+                                                   flatZoomFade: flatZoomFade,
+                                                   mountainZoomFade: mountainZoomFade,
+                                                   reliefWindowMetres: reliefWindowMetres,
+                                                   flatReliefMetres: flatReliefMetres,
+                                                   mountainReliefMetres: mountainReliefMetres,
+                                                   memoryBudgetInBytes: memoryBudgetInBytes,
+                                                   cameraClearanceMetres: cameraClearanceMetres)
         return view
     }
 
@@ -977,85 +1037,67 @@ public extension ImmersiveMapView {
     /// The fog on the ground of the flat map: thickest at the ground,
     /// thinning upward, gathered along the view past a distance from the
     /// camera, so the far ground and its detail sink in it while the near
-    /// ground and the tops of tall buildings stay clear. `density` is how
-    /// thick it is at the ground, `height` how high it rises and
-    /// `startDistance` where it begins, both in camera distances (1 is the
-    /// distance to the point the camera looks at), `color` its colour (the
-    /// horizon's by default) and `maximumOpacity` the most it veils. Off
-    /// by default, independent of the horizon's haze, and the globe has
-    /// none. An omitted value is left as configured:
+    /// ground and the tops of tall buildings stay clear.
+    /// `densityPerKilometer` is how thick it is at the ground,
+    /// `heightMeters` how high it rises, `startDistanceMeters` where it
+    /// begins and `startSoftnessMeters` how far past that it takes to come
+    /// in, all in meters on the ground, `color` its colour at the horizon
+    /// line (the horizon's by default, the sky's above the line) and
+    /// `maximumOpacity` the most it veils. The buildings and the models
+    /// draw clear of it unless `veilsBuildings` is on. On by default, and
+    /// the globe has none.
+    ///
+    /// Every value but the colour is a value or a curve over the camera
+    /// zoom (`ImmersiveMapZoomCurve`), so the fog never changes at a step.
+    /// The lengths and the density run geometrically between their stops,
+    /// the way the map's scale changes. An omitted value is left as
+    /// configured:
     ///
     ///     ImmersiveMapView()
-    ///         .groundFog(density: 0.4, height: 0.1, startDistance: 3)
+    ///         .groundFog(heightMeters: 120,
+    ///                    startDistanceMeters: [12: 3000, 16: 400],
+    ///                    startSoftnessMeters: [12: 20_000, 16: 800],
+    ///                    maximumOpacity: [18: 1, 19: 0])
     ///
     /// See `ImmersiveMapSettings.GroundFogSettings`. Applies live.
     public func groundFog(isEnabled: Bool = true,
-                          density: Float? = nil,
-                          height: Float? = nil,
-                          startDistance: Float? = nil,
+                          densityPerKilometer: ImmersiveMapZoomCurve? = nil,
+                          heightMeters: ImmersiveMapZoomCurve? = nil,
+                          startDistanceMeters: ImmersiveMapZoomCurve? = nil,
+                          startSoftnessMeters: ImmersiveMapZoomCurve? = nil,
                           color: SIMD3<Float>? = nil,
-                          maximumOpacity: Float? = nil) -> ImmersiveMapView {
+                          maximumOpacity: ImmersiveMapZoomCurve? = nil,
+                          veilsBuildings: Bool? = nil) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.groundFog(isEnabled: isEnabled,
-                                                density: density,
-                                                height: height,
-                                                startDistance: startDistance,
+                                                densityPerKilometer: densityPerKilometer,
+                                                heightMeters: heightMeters,
+                                                startDistanceMeters: startDistanceMeters,
+                                                startSoftnessMeters: startSoftnessMeters,
                                                 color: color,
-                                                maximumOpacity: maximumOpacity)
+                                                maximumOpacity: maximumOpacity,
+                                                veilsBuildings: veilsBuildings)
         return view
     }
 
-    /// The sky and the haze of the flat presentation: a sky gradient above
-    /// the horizon line and the far ground veiled toward the horizon colour
-    /// by distance from the camera. Applies live.
+    /// The sky of the flat presentation: a sky gradient above the horizon
+    /// line and a thin band whitening the ground into the horizon colour at
+    /// the line. The far ground is the ground fog's
+    /// (`groundFog(isEnabled:densityPerKilometer:heightMeters:startDistanceMeters:startSoftnessMeters:color:maximumOpacity:veilsBuildings:)`).
+    /// Applies live.
     public func fogSettings(_ fog: ImmersiveMapSettings.FogSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.fogSettings(fog)
         return view
     }
 
-    /// The flat map's sky and haze on or off. On by default; off leaves
-    /// the sky the map's clear colour and keeps only a thin band at the
-    /// horizon line that hides the seam between the far ground and the sky.
+    /// The flat map's sky on or off. On by default. Off leaves the sky the
+    /// map's clear colour and keeps only a thin band at the horizon line
+    /// that hides the seam between the far ground and the sky. The ground
+    /// fog has its own switch.
     public func fog(isEnabled: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.fog(isEnabled: isEnabled)
-        return view
-    }
-
-    /// The flat map's haze over the far ground, and the band at the
-    /// horizon line, with the camera zoom, the sky untouched.
-    ///
-    /// `hazeZoomFade` thins the haze over a stretch of zoom
-    /// (`FogSettings.hazeZoomFade`). `horizonBandZoomFade` draws the band
-    /// that hides the seam with the sky in toward the line, so close to the
-    /// ground it no longer reaches down the street to the camera's feet
-    /// (`FogSettings.horizonBandZoomFade`). A street-level view then wears
-    /// neither under a full sky:
-    ///
-    ///     ImmersiveMapView()
-    ///         .fog(hazeZoomFade: .fadeOut(from: 18, to: 19),
-    ///              horizonBandZoomFade: .fadeOut(from: 18, to: 19))
-    ///
-    /// An omitted band fade is left as configured, `.none` by default,
-    /// which keeps the band at its width at every zoom, as `.none` keeps
-    /// the haze. Applies live.
-    public func fog(hazeZoomFade: ImmersiveMapZoomFade,
-                    horizonBandZoomFade: ImmersiveMapZoomFade? = nil) -> ImmersiveMapView {
-        var view = self
-        view.settings = view.settings.fog(hazeZoomFade: hazeZoomFade)
-        if let horizonBandZoomFade {
-            view.settings = view.settings.fog(horizonBandZoomFade: horizonBandZoomFade)
-        }
-        return view
-    }
-
-    /// The flat map's band at the horizon line drawn in toward the line
-    /// with the camera zoom, the haze left as configured
-    /// (`fog(hazeZoomFade:horizonBandZoomFade:)`). Applies live.
-    public func fog(horizonBandZoomFade: ImmersiveMapZoomFade) -> ImmersiveMapView {
-        var view = self
-        view.settings = view.settings.fog(horizonBandZoomFade: horizonBandZoomFade)
         return view
     }
 

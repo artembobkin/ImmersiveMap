@@ -380,6 +380,7 @@ enum TileUnificationStage {
         var unifiedExtrudedVertices: [ExtrudedVertexIn] = []
         var unifiedExtrudedIndices: [UInt32] = []
         var buildingRanges: [TileBuildingRange] = []
+        var buildingAnchors: [SIMD2<Float>] = []
         var currentExtrudedVertexOffset: UInt32 = 0
         let totalExtrudedVertexCount = extrudedByStyle.values.reduce(0) { partial, meshes in
             partial + meshes.reduce(0) { meshPartial, mesh in
@@ -417,10 +418,25 @@ enum TileUnificationStage {
             let styleBufferIndex = styleIndexByKey[styleKey] ?? 0
             if let extrudedMeshes = extrudedByStyle[styleKey] {
                 for extrudedMesh in extrudedMeshes {
+                    // The volume's ordinal and anchor: the centre of its
+                    // vertices' bounds. Past 65535 volumes the rest share
+                    // the last anchor.
+                    let ordinal = UInt16(clamping: buildingAnchors.count)
+                    if buildingAnchors.count <= Int(UInt16.max), extrudedMesh.vertices.isEmpty == false {
+                        var minimum = SIMD2<Float>(extrudedMesh.vertices[0].position.x, extrudedMesh.vertices[0].position.y)
+                        var maximum = minimum
+                        for vertex in extrudedMesh.vertices {
+                            let position = SIMD2<Float>(vertex.position.x, vertex.position.y)
+                            minimum = simd_min(minimum, position)
+                            maximum = simd_max(maximum, position)
+                        }
+                        buildingAnchors.append((minimum + maximum) * 0.5)
+                    }
                     for vertex in extrudedMesh.vertices {
                         unifiedExtrudedVertices.append(ExtrudedVertexIn(position: vertex.position,
                                                                         normal: vertex.normal,
-                                                                        styleIndex: styleBufferIndex))
+                                                                        styleIndex: styleBufferIndex,
+                                                                        buildingOrdinal: ordinal))
                     }
                     // A mesh is one building's volume and its indices go
                     // in as one run: the run is that building's place.
@@ -448,7 +464,8 @@ enum TileUnificationStage {
                 styles: extrudedStyles,
                 buildingRanges: buildingRanges.sorted { lhs, rhs in
                     lhs.featureID != rhs.featureID ? lhs.featureID < rhs.featureID : lhs.indexStart < rhs.indexStart
-                }
+                },
+                buildingAnchors: buildingAnchors
             ),
             styles: groundLayer.styles,
             styleZoomFades: groundLayer.styleZoomFades,

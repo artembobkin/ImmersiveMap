@@ -22,7 +22,6 @@ final class RenderPersistentContext {
     let globeVectorSurfacePipeline: TilePipeline
     let surfaceLabelPipeline: SurfaceLabelPipeline
     let extrudedTilePipeline: ExtrudedTilePipeline
-    let tileOwnershipPipeline: TileOwnershipPipeline
     let rasterTilePipeline: RasterTilePipeline
     let groundShadowMaskPipeline: GroundShadowMaskPipeline
     let fxaaPipeline: FXAAPipeline
@@ -47,12 +46,13 @@ final class RenderPersistentContext {
     let depthDisabledState: MTLDepthStencilState
     /// See `SharedRenderResources.groundDepthState`.
     let groundDepthState: MTLDepthStencilState
-    /// The tile-priority stencil states; see SharedRenderResources.
+    /// The sphere's tile-priority stencil states and the flat ground's
+    /// slot states; see SharedRenderResources.
     let sphereOpaqueOwnerState: MTLDepthStencilState
-    let groundOwnerState: MTLDepthStencilState
     let tileStencilTestState: MTLDepthStencilState
+    let groundSlotOwnerState: MTLDepthStencilState
+    let groundSlotTestState: MTLDepthStencilState
     let roadRankState: MTLDepthStencilState
-    let tileOwnershipWriteState: MTLDepthStencilState
     let extrudedStencilTestState: MTLDepthStencilState
     /// See `SharedRenderResources.sceneModelSurfaceMaskState`.
     let sceneModelSurfaceMaskState: MTLDepthStencilState
@@ -84,6 +84,9 @@ final class RenderPersistentContext {
     let sceneModelPipeline: SceneModelPipeline
     /// The models of the model archive, nil for a map without one.
     let modelTileStore: ModelTileStore?
+    /// The terrain the flattened ground rises by, nil while the relief is
+    /// off (`TileSettings.GroundReliefSettings`).
+    let groundReliefStore: GroundReliefStore?
     let modelTilePipeline: ModelTilePipeline
 
     // MARK: - Avatar and Debug Resources
@@ -123,8 +126,8 @@ final class RenderPersistentContext {
         self.depthDisabledState = shared.depthDisabledState
         self.groundDepthState = shared.groundDepthState
         self.sphereOpaqueOwnerState = shared.sphereOpaqueOwnerState
-        self.groundOwnerState = shared.groundOwnerState
-        self.tileOwnershipWriteState = shared.tileOwnershipWriteState
+        self.groundSlotOwnerState = shared.groundSlotOwnerState
+        self.groundSlotTestState = shared.groundSlotTestState
         self.extrudedStencilTestState = shared.extrudedStencilTestState
         self.sceneModelSurfaceMaskState = shared.sceneModelSurfaceMaskState
         self.sceneModelGroundCutStates = shared.sceneModelGroundCutStates
@@ -140,7 +143,6 @@ final class RenderPersistentContext {
         self.globeVectorSurfacePipeline = shared.globeVectorSurfacePipeline
         self.surfaceLabelPipeline = shared.surfaceLabelPipeline
         self.extrudedTilePipeline = shared.extrudedTilePipeline
-        self.tileOwnershipPipeline = shared.tileOwnershipPipeline
         self.rasterTilePipeline = shared.rasterTilePipeline
         self.groundShadowMaskPipeline = shared.groundShadowMaskPipeline
         self.fxaaPipeline = shared.fxaaPipeline
@@ -185,6 +187,8 @@ final class RenderPersistentContext {
                                                   device: metal.device,
                                                   schema: styleRuntime.schema)
         self.modelTileStore?.eventSink = eventSink
+        self.groundReliefStore = GroundReliefStore.make(settings: config, device: metal.device)
+        self.groundReliefStore?.eventSink = eventSink
 
         self.avatarSource = avatarSource
         self.markerSource = markerSource

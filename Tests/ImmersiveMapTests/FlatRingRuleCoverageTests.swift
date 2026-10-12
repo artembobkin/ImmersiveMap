@@ -42,6 +42,38 @@ final class FlatRingRuleCoverageTests: XCTestCase {
                        polygon: try XCTUnwrap(CoveragePolygonBuilder.make(cameraMatrix: cameraMatrix)))
     }
 
+    /// The footprint over a slab of heights holds the plane's footprint
+    /// and reaches past it: on the ground relief a tile beyond the plane's
+    /// far edge, or beside its sides, is still in view where the ground
+    /// rises or falls there.
+    func testTheFootprintOverTheReliefHoldsThePlanesAndReachesPastIt() throws {
+        let settings = ImmersiveMapSettings.default.presentation
+        let center = ImmersiveMapProjection.worldMercator(latitude: 46 * .pi / 180, longitude: 7.7 * .pi / 180)
+        let cameraState = ImmersiveMapCameraState(centerWorldMercator: center, zoom: 12.5, bearing: 0, pitch: 1.1)
+        let presentation = PresentationStateResolver.resolve(cameraState: cameraState,
+                                                             settings: settings,
+                                                             forcedRenderSurfaceMode: .flat)
+        let camera = RenderCamera()
+        camera.recalculateProjection(aspect: 4 / 3)
+        RenderCameraPoseResolver().updateIfNeeded(camera: camera,
+                                                  cameraState: cameraState,
+                                                  transition: presentation.presentationState.transition)
+        let cameraMatrix = try XCTUnwrap(camera.cameraMatrix)
+        let plane = try XCTUnwrap(CoveragePolygonBuilder.make(cameraMatrix: cameraMatrix))
+        let slab = try XCTUnwrap(CoveragePolygonBuilder.make(cameraMatrix: cameraMatrix, heights: -0.05 ... 0.2))
+        for vertex in plane.vertices {
+            XCTAssertTrue(slab.intersects(minX: Double(vertex.x) - 1e-4, minY: Double(vertex.y) - 1e-4,
+                                          maxX: Double(vertex.x) + 1e-4, maxY: Double(vertex.y) + 1e-4),
+                          "The plane's footprint lies within the slab's")
+        }
+        XCTAssertLessThan(slab.bounds.minX, plane.bounds.minX, "Wider at the sides")
+        XCTAssertGreaterThan(slab.bounds.maxX, plane.bounds.maxX)
+        XCTAssertGreaterThan(abs(slab.signedArea), abs(plane.signedArea))
+        XCTAssertGreaterThan(slab.vertices.count, 2)
+        let same = try XCTUnwrap(CoveragePolygonBuilder.make(cameraMatrix: cameraMatrix, heights: 0 ... 0))
+        XCTAssertEqual(same.vertices.count, plane.vertices.count, "A slab of no height is the plane")
+    }
+
     private static func resolve(_ fixture: Fixture,
                                 targetZoom: Int,
                                 rules: FlatRingRules = .default,
@@ -96,8 +128,8 @@ final class FlatRingRuleCoverageTests: XCTestCase {
         XCTAssertEqual(FlatRingRules.default.rules.map(\.drawsLines), [true, false, false, false])
         XCTAssertEqual(FlatRingRules.default.rules.map(\.drawsLabels), [true, false, false, false],
                        "only the exact tiles are labelled")
-        XCTAssertEqual(FlatRingRules.default.rules.map(\.rasterSize), [nil, 512, 512, 128],
-                       "past the exact tiles the ground is textures")
+        XCTAssertEqual(FlatRingRules.default.rules.map(\.rasterSize), [nil, nil, nil, nil],
+                       "every ring draws its ground as geometry")
         XCTAssertEqual(FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1, drawsLabels: false)])
                         .normalized().rules.map(\.drawsLabels), [false], "the label switch survives normalizing")
     }
@@ -133,9 +165,7 @@ final class FlatRingRuleCoverageTests: XCTestCase {
                       "\(resolution.rasterTargets)")
         XCTAssertTrue(resolution.targets.filter { $0.z == 16 }.allSatisfy { resolution.rasterTargets[$0] == nil })
         let defaultResolution = Self.resolve(fixture, targetZoom: 16)
-        XCTAssertFalse(defaultResolution.rasterTargets.isEmpty, "the default draws its far rings from textures")
-        XCTAssertTrue(defaultResolution.targets.filter { $0.z == 16 }.allSatisfy { defaultResolution.rasterTargets[$0] == nil },
-                      "the default draws the exact tiles as geometry")
+        XCTAssertTrue(defaultResolution.rasterTargets.isEmpty, "the default draws every ring as geometry")
     }
 
     /// The raster size survives normalizing, snapped to the nearest edge a

@@ -11,6 +11,18 @@ class CameraStateController {
         }
     }
     private var boundsConstraint: CameraBoundsConstraint?
+    /// The terrain the camera looks at (`CameraTerrainFollow`), nil on a
+    /// map without a relief: a pan keeps the eye's height by the zoom, and
+    /// the zoom stops at the clearance over the terrain.
+    var terrainFollow: CameraTerrainFollow?
+    /// The zoom a drag over the terrain moves the map by: the zoom at the
+    /// drag's start, held to its end (`endPan`), nil between drags. Over
+    /// the terrain the zoom follows the ground the camera looks at
+    /// (`followTerrain`), deeper up a slope and shallower down one, and a
+    /// drag moved by the zoom of the moment would slow on the way up and
+    /// hurry on the way down. The eye keeps its altitude through the drag,
+    /// so the zoom the drag began at is the one that fits the whole of it.
+    private var panReferenceZoom: Double?
 
     var globePan: SIMD2<Double> {
         ImmersiveMapProjection.globePan(fromCenterWorldMercator: cameraState.centerWorldMercator)
@@ -77,7 +89,15 @@ class CameraStateController {
         let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: cameraState.centerWorldMercator.y)
         let surfaceScale = SurfaceScaleMath.surfaceScale(latitude: latitude, transition: transition)
         let proximity = GlobeCameraProximity.distanceFactor(latitude: latitude, transition: transition, zoom: zoom)
-        let sensitivity = settings.worldPanSensitivity / pow(2.0, zoom)
+        let onTerrain = transition >= 1 && terrainFollow != nil
+        let panZoom: Double
+        if onTerrain {
+            panZoom = panReferenceZoom ?? zoom
+            panReferenceZoom = panZoom
+        } else {
+            panZoom = zoom
+        }
+        let sensitivity = settings.worldPanSensitivity / pow(2.0, panZoom)
 
         let cosYaw = cos(-yaw)
         let sinYaw = sin(-yaw)
@@ -102,7 +122,111 @@ class CameraStateController {
                                                                       maximumStretch: maximumStretchPoints * worldPerPoint)
             return
         }
+        if transition >= 1, let terrainFollow {
+            let followed = followTerrain(from: cameraState.centerWorldMercator, to: proposedCenter, follow: terrainFollow)
+            cameraState.zoom = followed.zoom
+            setCenterWorldMercator(followed.center)
+            return
+        }
         setCenterWorldMercator(proposedCenter)
+    }
+
+    /// The drag ended: the next one moves the map by the zoom it starts at
+    /// (`panReferenceZoom`).
+    func endPan() {
+        panReferenceZoom = nil
+    }
+
+    /// A pan over the terrain: the eye moves over the map by the pan, from
+    /// over `from` to over `to` as the plain pan would move the point it
+    /// looks at, and keeps its altitude. The point it looks at is where
+    /// its view ray, pitched as the pose is, meets the terrain from there:
+    /// the zoom is the arm to that point, deeper up a slope and shallower
+    /// down one, never under the clearance. Moving the point by the pan
+    /// instead would move the eye by the pan less the arm's change along
+    /// the view, a drag that drifts with the ground's rise and fall under
+    /// a pitched camera. The ray's meeting with the terrain is found by
+    /// marching along it and bisecting the first crossing, which settles
+    /// on any slope, steeper than the ray included. Where the terrain
+    /// along the ray is not known yet, or the ray meets none within reach
+    /// (the eye under the terrain, or the ground fallen out of the zoom's
+    /// range), the point goes where the pan puts it and the zoom keeps the
+    /// altitude as far as it can.
+    func followTerrain(from: SIMD2<Double>,
+                       to: SIMD2<Double>,
+                       follow: CameraTerrainFollow) -> (center: SIMD2<Double>, zoom: Double) {
+        guard let heightFrom = follow.terrainMetres(from) else {
+            return (to, cameraState.zoom)
+        }
+        let pitch = cameraState.pitch
+        let zoomRange = max(settings.minimumZoom, 0) ... settings.maximumZoom
+        let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: from.y)
+        let eyeAltitude = Double(heightFrom) + follow.eyeHeightMetres(zoom: cameraState.zoom, pitch: pitch, latitude: latitude)
+        let reach = follow.eyeReachMetres(zoom: cameraState.zoom, pitch: pitch, latitude: latitude)
+        let metresPerWorld = ImmersiveMapProjection.earthCircumferenceMeters * max(cos(latitude), 1e-6)
+        let forward = CameraTerrainFollow.forward(bearing: cameraState.bearing)
+        let eyeGround = to - forward * (reach / metresPerWorld)
+        let tanPitch = Double(tan(pitch))
+        // How far past the ray the terrain is at `r` metres ahead of the
+        // eye: the ray at that reach is `r / tan(pitch)` under the eye,
+        // and it has met the terrain once the terrain is at least that
+        // far under it, that is, once r >= (altitude - terrain) * tan.
+        // Nil where the terrain is not known.
+        func crossing(_ r: Double) -> Double? {
+            follow.terrainMetres(eyeGround + forward * (r / metresPerWorld)).map { r - (eyeAltitude - Double($0)) * tanPitch }
+        }
+        let fallback = { () -> (center: SIMD2<Double>, zoom: Double) in
+            guard let heightTo = follow.terrainMetres(to) else {
+                return (to, self.cameraState.zoom)
+            }
+            let latitudeTo = ImmersiveMapProjection.latitude(fromNormalizedWorldY: to.y)
+            let height = max(eyeAltitude - Double(heightTo), follow.clearanceMetres)
+            return (to, follow.zoom(forEyeHeightMetres: height, pitch: pitch, latitude: latitudeTo, range: zoomRange))
+        }
+        guard let start = crossing(0), start < 0 else {
+            return fallback()
+        }
+        // The march: the ray is tried further and further ahead, in steps
+        // of a part of the old reach (the new reach is of its order), as
+        // far as eight times that reach, which is where the ground would
+        // have fallen out of the zoom's range anyway.
+        let step = max(reach, 1) / 8
+        var lowReach = 0.0
+        var highReach: Double?
+        var r = step
+        for _ in 0 ..< 64 {
+            guard let value = crossing(r) else {
+                return fallback()
+            }
+            if value >= 0 {
+                highReach = r
+                break
+            }
+            lowReach = r
+            r += step
+        }
+        guard var high = highReach else {
+            return fallback()
+        }
+        // The crossing, to within a tenth of a metre.
+        for _ in 0 ..< 24 where high - lowReach > 0.1 {
+            let middle = (lowReach + high) * 0.5
+            guard let value = crossing(middle) else {
+                return fallback()
+            }
+            if value >= 0 {
+                high = middle
+            } else {
+                lowReach = middle
+            }
+        }
+        let center = eyeGround + forward * (high / metresPerWorld)
+        guard let heightTo = follow.terrainMetres(center) else {
+            return fallback()
+        }
+        let latitudeTo = ImmersiveMapProjection.latitude(fromNormalizedWorldY: center.y)
+        let height = max(eyeAltitude - Double(heightTo), follow.clearanceMetres)
+        return (center, follow.zoom(forEyeHeightMetres: height, pitch: pitch, latitude: latitudeTo, range: zoomRange))
     }
 
     /// The fastest the elastic pull gets, as a multiple of its rate at the
@@ -329,6 +453,15 @@ class CameraStateController {
 
         cameraState.zoom += delta
         cameraState.zoom = settings.clampZoom(cameraState.zoom)
+        // Over a terrain the zoom stops where the eye would come nearer
+        // than the clearance to the ground under it.
+        if let terrainFollow, delta > 0 {
+            cameraState.zoom = min(cameraState.zoom,
+                                   terrainFollow.maximumZoom(center: cameraState.centerWorldMercator,
+                                                             pitch: cameraState.pitch,
+                                                             bearing: cameraState.bearing,
+                                                             range: settings.minimumZoom ... settings.maximumZoom))
+        }
         constrainCenterToBounds()
     }
 }

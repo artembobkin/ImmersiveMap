@@ -16,8 +16,9 @@ import simd
 ///
 /// The layout is mirrored by `VertexIn` in `TileExtruded.metal` and by
 /// the vertex descriptor in `ExtrudedTilePipeline`. The last two bytes
-/// are padding: they keep the stride a multiple of four, which Metal
-/// requires of a vertex buffer layout.
+/// are the building's ordinal in its tile (`buildingOrdinal`), which the
+/// ground relief lifts the building by: every vertex of a building reads
+/// one lift, so the building stands level on a slope.
 struct ExtrudedVertexIn {
     static let positionScale: Float = 4
 
@@ -28,10 +29,13 @@ struct ExtrudedVertexIn {
     let normalY: Int8
     let normalZ: Int8
     let styleIndex: UInt8
-    /// Padding: Metal requires a vertex stride that is a multiple of four.
-    private let padding: UInt16 = 0
+    /// The volume's place in its tile's `buildingAnchors`
+    /// (`DrawingExtrudedBytes`): the lift the relief gives the volume is
+    /// looked up by it. The stride is a multiple of four with it, which
+    /// Metal requires of a vertex buffer layout.
+    let buildingOrdinal: UInt16
 
-    init(position: SIMD3<Float>, normal: SIMD3<Float>, styleIndex: UInt8) {
+    init(position: SIMD3<Float>, normal: SIMD3<Float>, styleIndex: UInt8, buildingOrdinal: UInt16 = 0) {
         let scaled = position * Self.positionScale
         positionX = Self.quantizePosition(scaled.x)
         positionY = Self.quantizePosition(scaled.y)
@@ -40,6 +44,7 @@ struct ExtrudedVertexIn {
         normalY = Self.quantizeNormal(normal.y)
         normalZ = Self.quantizeNormal(normal.z)
         self.styleIndex = styleIndex
+        self.buildingOrdinal = buildingOrdinal
     }
 
     private static func quantizePosition(_ scaled: Float) -> Int16 {

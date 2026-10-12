@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
+import Metal
 import simd
 import XCTest
 
@@ -69,6 +70,16 @@ final class RasterTileTests: XCTestCase {
 
     /// A raster tile's file lives in its prepared namespace, a directory a
     /// size and fade zoom, under the name the availability index reads.
+    /// On the relief the grid is at least the zoom's flattening grid, and
+    /// never past what 16-bit indices address.
+    func testTheGridOnTheReliefIsAsFineAsTheFlattenings() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("No Metal device") }
+        let grid = RasterTileGrid(device: device)
+        XCTAssertEqual(try XCTUnwrap(grid.mesh(forTileZoom: 10)).indexCount, RasterTileGrid.cells(forTileZoom: 10) * RasterTileGrid.cells(forTileZoom: 10) * 6)
+        XCTAssertEqual(try XCTUnwrap(grid.mesh(forTileZoom: 10, atLeast: 128)).indexCount, 128 * 128 * 6)
+        XCTAssertEqual(try XCTUnwrap(grid.mesh(forTileZoom: 10, atLeast: 256)).indexCount, 255 * 255 * 6, "16-bit indices")
+    }
+
     func testTheFileLivesInThePreparedNamespace() throws {
         let base = FileManager.default.temporaryDirectory.appendingPathComponent("RasterTileTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: base) }

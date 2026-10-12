@@ -79,15 +79,18 @@ struct FlatRingRules: Hashable {
     }
 
     /// The exact tiles to one ring around the look-at tile, as geometry
-    /// with their lines and labels. Past it the ground is textures, without
-    /// lines or labels: one level coarser to ring 2 and two levels coarser
-    /// to ring 3 at 512 texels, four levels coarser to ring 9 at 128,
-    /// nothing beyond. The map recedes toward the horizon soft and quiet.
+    /// with their lines and labels. Past it the ground is geometry too,
+    /// without lines or labels: one level coarser to ring 2, two levels
+    /// coarser to ring 3, four levels coarser to ring 9, nothing beyond.
+    /// The map recedes toward the horizon soft and quiet. No ring draws
+    /// from a texture (`FlatRingRule.rasterSize`): the textures' stand-ins
+    /// are not the vector tiles' yet, and a band of them goes blank where
+    /// a vector band would not.
     static let `default` = FlatRingRules(rules: [
         FlatRingRule(zoomDrop: 0, distance: 1),
-        FlatRingRule(zoomDrop: 1, distance: 2, drawsLines: false, drawsLabels: false, rasterSize: 512),
-        FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false, drawsLabels: false, rasterSize: 512),
-        FlatRingRule(zoomDrop: 4, distance: 9, drawsLines: false, drawsLabels: false, rasterSize: 128)
+        FlatRingRule(zoomDrop: 1, distance: 2, drawsLines: false, drawsLabels: false),
+        FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false, drawsLabels: false),
+        FlatRingRule(zoomDrop: 4, distance: 9, drawsLines: false, drawsLabels: false)
     ])
 
     /// The rules as the coverage reads them: every value inside its range,

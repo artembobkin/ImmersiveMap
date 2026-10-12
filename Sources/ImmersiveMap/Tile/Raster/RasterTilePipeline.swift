@@ -14,6 +14,10 @@ final class RasterTilePipeline {
 
     let bakePipelineState: MTLRenderPipelineState
     let flatPipelineState: MTLRenderPipelineState
+    /// The plane's draw on the ground relief (TileRaster.metal,
+    /// kTileRasterRelief): the grid raised by the terrain bound at vertex
+    /// texture 0 and buffer 9.
+    let flatReliefPipelineState: MTLRenderPipelineState
     let spherePurePipelineState: MTLRenderPipelineState
     let sphereMorphPipelineState: MTLRenderPipelineState
 
@@ -41,10 +45,13 @@ final class RasterTilePipeline {
 
         // The draws: opaque, in the world pass, through the ground's depth
         // and stencil.
-        func drawState(label: String, vertex: String, fragment: String) -> MTLRenderPipelineState {
+        func drawState(label: String, vertex: String, fragment: String, relief: Bool = false) -> MTLRenderPipelineState {
             let descriptor = MTLRenderPipelineDescriptor()
             descriptor.label = label
-            descriptor.vertexFunction = library.makeFunction(name: vertex)
+            let values = MTLFunctionConstantValues()
+            var reliefValue = relief
+            values.setConstantValue(&reliefValue, type: .bool, index: 0)
+            descriptor.vertexFunction = try! library.makeFunction(name: vertex, constantValues: values)
             descriptor.fragmentFunction = library.makeFunction(name: fragment)
             descriptor.rasterSampleCount = sampleCount
             descriptor.colorAttachments[0].pixelFormat = pixelFormat
@@ -55,6 +62,10 @@ final class RasterTilePipeline {
         flatPipelineState = drawState(label: "RasterTileFlat",
                                       vertex: "tileRasterFlatVertexShader",
                                       fragment: "tileRasterFlatFragmentShader")
+        flatReliefPipelineState = drawState(label: "RasterTileFlatRelief",
+                                            vertex: "tileRasterFlatVertexShader",
+                                            fragment: "tileRasterFlatFragmentShader",
+                                            relief: true)
         spherePurePipelineState = drawState(label: "RasterTileSpherePure",
                                             vertex: "tileRasterSpherePureVertexShader",
                                             fragment: "tileRasterSphereFragmentShader")

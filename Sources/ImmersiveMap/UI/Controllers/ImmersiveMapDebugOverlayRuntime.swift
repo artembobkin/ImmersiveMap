@@ -3,6 +3,9 @@
 
 import CoreGraphics
 import Foundation
+#if os(macOS)
+import AppKit
+#endif
 
 @MainActor
 final class ImmersiveMapDebugOverlayRuntime {
@@ -25,6 +28,9 @@ final class ImmersiveMapDebugOverlayRuntime {
     private var currentSettings: ImmersiveMapSettings?
     /// What the panel has been dragged to; see `DebugOverlaySettingsOverride`.
     private var settingsOverride = DebugOverlaySettingsOverride()
+    /// The ground fog the app gave, for the ground fog group's reset: the
+    /// value of any settings that did not come from the panel's own drag.
+    private var appGroundFog: ImmersiveMapSettings.GroundFogSettings?
 
     /// Settings the debug panel asks for. The host runtime applies them the
     /// way it applies any others, so a change here goes through the same
@@ -153,11 +159,49 @@ final class ImmersiveMapDebugOverlayRuntime {
             settings.scene.groundFog = groundFog
             onSettingsChangeRequested?(settings)
         }
+        hudView.onGroundFogResetRequested = { [weak self] in
+            guard let self, var settings = currentSettings else { return }
+            settingsOverride.groundFog = nil
+            settings.scene.groundFog = appGroundFog ?? settings.scene.groundFog
+            onSettingsChangeRequested?(settings)
+        }
+        hudView.onExportSettingsRequested = { [weak self] in
+            self?.exportSettings()
+        }
         #endif
         hudView.apply(tileTraceSnapshot: tileTraceRecorder.snapshot())
         hudView.apply(baseLabelTraceSnapshot: baseLabelTraceRecorder.snapshot())
         mapView.addSubview(hudView)
     }
+
+    #if os(macOS)
+    /// The Export tab's button: the settings the map runs with, as the
+    /// modifiers that set them, written to the Downloads folder (the
+    /// temporary folder where it cannot be written), and the file's path put
+    /// on the pasteboard so it can be pasted at once.
+    private func exportSettings() {
+        guard let settings = currentSettings else { return }
+        let date = Date()
+        let cameraLines = appliedHUDSnapshot.map { [$0.coordinateLines.zoom, $0.coordinateLines.latLon] } ?? []
+        let text = DebugOverlaySettingsExport.swiftCode(settings: settings, date: date, cameraLines: cameraLines)
+        let fileName = DebugOverlaySettingsExport.fileName(date: date)
+        let folders = [FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first,
+                       FileManager.default.temporaryDirectory].compactMap { $0 }
+        for folder in folders {
+            let url = folder.appendingPathComponent(fileName)
+            do {
+                try text.write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                continue
+            }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(url.path, forType: .string)
+            hudView.apply(exportStatus: "Saved, path copied:\n\(url.path)")
+            return
+        }
+        hudView.apply(exportStatus: "Could not write the file to Downloads or the temporary folder")
+    }
+    #endif
 
     deinit {
         hudSnapshotTimer?.invalidate()
@@ -170,6 +214,11 @@ final class ImmersiveMapDebugOverlayRuntime {
     func applyingOverrides(to settings: ImmersiveMapSettings) -> ImmersiveMapSettings {
         if settings.debug.enableDebugPanel == false {
             settingsOverride.clear()
+        }
+        // The panel's own request carries the dragged fog. Anything else
+        // carries the app's.
+        if settingsOverride.groundFog != settings.scene.groundFog {
+            appGroundFog = settings.scene.groundFog
         }
         return settingsOverride.applied(to: settings)
     }
@@ -186,6 +235,11 @@ final class ImmersiveMapDebugOverlayRuntime {
 
     func apply(settings: ImmersiveMapSettings) {
         currentSettings = settings
+        // The first settings the map starts with come straight from the
+        // app, before any drag.
+        if appGroundFog == nil, settingsOverride.groundFog == nil {
+            appGroundFog = settings.scene.groundFog
+        }
         hudView.apply(isDebugPanelEnabled: settings.debug.enableDebugPanel,
                       controls: controls.snapshot())
         #if os(macOS)

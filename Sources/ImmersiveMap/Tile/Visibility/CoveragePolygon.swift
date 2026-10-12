@@ -6,12 +6,22 @@ import simd
 /// The frustum's footprint on the flat plane: the convex polygon the walk
 /// tests every tile square against, built once per pose from the camera
 /// matrix.
+///
+/// On the ground relief the ground is not the plane: a tile whose square
+/// lies outside the plane's footprint still rises into view where the
+/// relief lifts it, at the sides and over the far edge, and ground below
+/// the plane shows past that edge. The footprint is then the frustum's
+/// over the slab of the world between the relief's lowest and highest
+/// heights (`make(cameraMatrix:heights:)`): its cut with each of the
+/// slab's two planes and the corners of the frustum within the slab,
+/// under one convex hull, which holds every cut between them.
 enum CoveragePolygonBuilder {
     static let planeIntersectionTolerance: Float = 1e-5
 
-
-
-    static func make(cameraMatrix: matrix_float4x4?) -> CoveragePolygon? {
+    /// The footprint on the plane, or, with `heights`, over the slab
+    /// between two heights over it, in world units, the plane itself
+    /// always within the slab.
+    static func make(cameraMatrix: matrix_float4x4?, heights: ClosedRange<Float>? = nil) -> CoveragePolygon? {
         guard let cameraMatrix else {
             return nil
         }
@@ -22,22 +32,61 @@ enum CoveragePolygonBuilder {
             return nil
         }
 
+        var planes: [Float] = [0]
+        if let heights {
+            let low = min(heights.lowerBound, 0)
+            let high = max(heights.upperBound, 0)
+            planes = low < high ? [low, high] : [low]
+        }
         var intersections: [SIMD2<Float>] = []
-        intersections.reserveCapacity(frustumEdges.count * 2)
+        intersections.reserveCapacity(frustumEdges.count * 2 * planes.count + frustumCorners.count)
 
-        for edge in frustumEdges {
-            appendPlaneIntersections(from: frustumCorners[edge.start],
-                                     to: frustumCorners[edge.end],
-                                     intersections: &intersections)
+        for planeZ in planes {
+            for edge in frustumEdges {
+                appendPlaneIntersections(from: frustumCorners[edge.start],
+                                         to: frustumCorners[edge.end],
+                                         planeZ: planeZ,
+                                         intersections: &intersections)
+            }
+        }
+        if let low = planes.first, let high = planes.last, low < high {
+            for corner in frustumCorners where corner.z > low && corner.z < high {
+                appendUnique(SIMD2<Float>(corner.x, corner.y), intersections: &intersections)
+            }
         }
 
-        let sortedVertices = sortVerticesClockwise(intersections)
+        let sortedVertices = sortVerticesClockwise(planes.count > 1 ? convexHull(intersections) : intersections)
         guard sortedVertices.count >= 3,
               abs(polygonSignedArea(sortedVertices)) > planeIntersectionTolerance else {
             return nil
         }
 
         return CoveragePolygon(vertices: sortedVertices)
+    }
+
+    /// The convex hull of the points (Andrew's monotone chain), without
+    /// the points on its edges.
+    static func convexHull(_ points: [SIMD2<Float>]) -> [SIMD2<Float>] {
+        guard points.count > 2 else { return points }
+        let sorted = points.sorted { lhs, rhs in lhs.x != rhs.x ? lhs.x < rhs.x : lhs.y < rhs.y }
+        func cross(_ o: SIMD2<Float>, _ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float {
+            (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
+        }
+        var lower: [SIMD2<Float>] = []
+        for point in sorted {
+            while lower.count >= 2, cross(lower[lower.count - 2], lower[lower.count - 1], point) <= 0 {
+                lower.removeLast()
+            }
+            lower.append(point)
+        }
+        var upper: [SIMD2<Float>] = []
+        for point in sorted.reversed() {
+            while upper.count >= 2, cross(upper[upper.count - 2], upper[upper.count - 1], point) <= 0 {
+                upper.removeLast()
+            }
+            upper.append(point)
+        }
+        return Array(lower.dropLast() + upper.dropLast())
     }
 
     private static func unprojectClipSpacePoint(_ point: SIMD3<Float>,
@@ -57,32 +106,34 @@ enum CoveragePolygonBuilder {
 
     private static func appendPlaneIntersections(from start: SIMD3<Float>,
                                                  to end: SIMD3<Float>,
+                                                 planeZ: Float,
                                                  intersections: inout [SIMD2<Float>]) {
-        appendIfPointLiesOnFlatPlane(start, intersections: &intersections)
-        appendIfPointLiesOnFlatPlane(end, intersections: &intersections)
+        appendIfPointLiesOnPlane(start, planeZ: planeZ, intersections: &intersections)
+        appendIfPointLiesOnPlane(end, planeZ: planeZ, intersections: &intersections)
 
         let denominator = start.z - end.z
         guard abs(denominator) > planeIntersectionTolerance else {
             return
         }
 
-        let t = start.z / denominator
+        let t = (start.z - planeZ) / denominator
         guard t >= -planeIntersectionTolerance, t <= 1 + planeIntersectionTolerance else {
             return
         }
 
         let clampedT = min(max(t, 0), 1)
         let point = start + (end - start) * clampedT
-        guard abs(point.z) <= planeIntersectionTolerance else {
+        guard abs(point.z - planeZ) <= planeIntersectionTolerance else {
             return
         }
 
         appendUnique(SIMD2<Float>(point.x, point.y), intersections: &intersections)
     }
 
-    private static func appendIfPointLiesOnFlatPlane(_ point: SIMD3<Float>,
-                                                     intersections: inout [SIMD2<Float>]) {
-        guard abs(point.z) <= planeIntersectionTolerance else {
+    private static func appendIfPointLiesOnPlane(_ point: SIMD3<Float>,
+                                                 planeZ: Float,
+                                                 intersections: inout [SIMD2<Float>]) {
+        guard abs(point.z - planeZ) <= planeIntersectionTolerance else {
             return
         }
         appendUnique(SIMD2<Float>(point.x, point.y), intersections: &intersections)

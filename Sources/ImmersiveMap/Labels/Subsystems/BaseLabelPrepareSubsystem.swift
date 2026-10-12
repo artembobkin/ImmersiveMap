@@ -482,6 +482,11 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         // The reach is measured as the base labels' is: in multiples of
         // the camera's depth of the point it looks at, the world origin.
         let maximumDepth = (cameraMatrix * SIMD4<Float>(0, 0, 0, 1)).w * max(distanceScale, 0)
+        let groundRelief = frameContext.services.groundRelief
+        let renderMapSize = frameContext.resolvedPresentation.flatRenderState.renderMapSize
+        // The ring each source is raised by: its finest target's.
+        let targetZoomBySource = groundRelief == nil
+            ? [:] : frameContext.sharedState.tilePlacementState.placeTilesContext.targetZoomBySource()
         var culledPathCount = 0
 
         for (recordIndex, record) in records.enumerated() {
@@ -503,12 +508,24 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                 record.placement.hideAll()
                 continue
             }
+            // The names ride the ground relief of their tile, where its
+            // terrain is in.
+            var lift: ((SIMD2<Float>) -> Float)?
+            if let groundRelief,
+               let relief = groundRelief.relief(for: record.ownerKey.tile,
+                                                terrainZoom: GroundReliefStore.terrainZoom(
+                                                    forTargetZoom: targetZoomBySource[record.ownerKey.tile] ?? record.ownerKey.z)) {
+                let unitsPerMetre = groundRelief.worldUnitsPerMetre(over: record.ownerKey.tile, renderMapSize: renderMapSize)
+                let datumMetres = groundRelief.datumMetres
+                lift = { uv in (relief.metres(atTileUV: uv) - datumMetres) * unitsPerMetre }
+            }
             RoadLabelPlacer.place(geometry: record.geometry,
                                   origin: tileOriginData[originIndex],
                                   cameraMatrix: cameraMatrix,
                                   viewportSize: viewportSize,
                                   pixelsPerPoint: pixelsPerPoint,
                                   maximumDepth: maximumDepth,
+                                  lift: lift,
                                   scratch: &roadPlacerScratch,
                                   output: &record.placement)
         }
@@ -637,6 +654,10 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         hasher.combine(globeUniform.panY.bitPattern)
         // The labels on the roofs rise with the buildings.
         hasher.combine(frameContext.sharedState.buildingRiseSignature.bitPattern)
+        // The labels on the relief are placed again when its terrain
+        // arrives or leaves, and when the datum it is drawn from moves.
+        hasher.combine(frameContext.services.groundRelief?.version ?? 0)
+        hasher.combine(frameContext.services.groundRelief?.datumMetres.bitPattern ?? 0)
         return hasher.finalize()
     }
 

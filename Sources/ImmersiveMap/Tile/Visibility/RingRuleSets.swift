@@ -88,19 +88,19 @@ extension FlatRingRules {
 
     /// Zooms 15 and 16: the exact tiles with their lines and labels to ring
     /// 1, two levels coarser to ring 4 as geometry with its lines and
-    /// without labels, then the same zoom to ring 13 as 256-texel textures,
-    /// without lines or labels.
+    /// without labels, then the same zoom to ring 13 as geometry without
+    /// lines or labels.
     static let nearStreetDefault = FlatRingRules(rules: [
         FlatRingRule(zoomDrop: 0, distance: 1),
         FlatRingRule(zoomDrop: 2, distance: 4, drawsLabels: false),
-        FlatRingRule(zoomDrop: 2, distance: 13, drawsLines: false, drawsLabels: false, rasterSize: 256)
+        FlatRingRule(zoomDrop: 2, distance: 13, drawsLines: false, drawsLabels: false)
     ])
 
     /// Zoom 17 and deeper: the exact tiles with their lines and labels to
-    /// ring 1, then two levels coarser to ring 2 as 128-texel textures,
-    /// without lines or labels, nothing beyond.
+    /// ring 1, then two levels coarser to ring 2 as geometry without lines
+    /// or labels, nothing beyond.
     static let closeStreetDefault = FlatRingRules(rules: [
         FlatRingRule(zoomDrop: 0, distance: 1),
-        FlatRingRule(zoomDrop: 2, distance: 2, drawsLines: false, drawsLabels: false, rasterSize: 128)
+        FlatRingRule(zoomDrop: 2, distance: 2, drawsLines: false, drawsLabels: false)
     ])
 }

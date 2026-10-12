@@ -10,5 +10,18 @@ struct PlaceTilesContext {
         self.tilePlacements = tilePlacements
     }
 
+    /// The finest target each source is placed in, by the source's tile:
+    /// the ring whose terrain the source is raised by
+    /// (`GroundReliefStore.terrainZoom(forTargetZoom:)`). A source placed
+    /// in its own slot and as a stand-in reads the finer ring's.
+    func targetZoomBySource() -> [Tile: Int] {
+        var zooms: [Tile: Int] = [:]
+        for placement in tilePlacements {
+            let tile = placement.metalTile.tile
+            zooms[tile] = max(zooms[tile] ?? 0, placement.placeIn.z)
+        }
+        return zooms
+    }
+
     nonisolated(unsafe) static let empty = PlaceTilesContext(tilePlacements: [])
 }

@@ -240,7 +240,7 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
             let shadowBinding = ShadowReceiverBinding.resolve(frameContext: frameContext,
                                                               shadowMapTexture: shadowMapTextureProvider(),
                                                               fallbackTexture: shadowFallbackTexture)
-            GroundFogUniform.bind(GroundFogUniform.resolve(frameContext: frameContext), encoder: encoder)
+            GroundFogUniform.bind(GroundFogUniform.resolveForBuildings(frameContext: frameContext), encoder: encoder)
             SceneModelDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   shadowBinding: shadowBinding,

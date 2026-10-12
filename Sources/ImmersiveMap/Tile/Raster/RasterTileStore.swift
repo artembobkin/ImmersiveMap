@@ -5,11 +5,18 @@ import Foundation
 import Metal
 import simd
 
-/// A raster tile the frame draws: its texture in one target's place.
+/// A raster tile the frame draws: its texture over `placeIn`, its own
+/// tile's extent, for the target `slot` (its own, or, for a stand-in, the
+/// target it stands in for), whose zoom names the ring whose terrain
+/// raises it and whose extent is the ground it draws on the relief
+/// (`GroundSlotClip`).
 struct RasterTilePlacement {
     let key: RasterTileKey
     let texture: MTLTexture
     let placeIn: VisibleTile
+    let slot: VisibleTile
+
+    var targetZoom: Int { slot.z }
 }
 
 /// The raster tiles: a ring rule with a raster size
@@ -26,7 +33,8 @@ struct RasterTilePlacement {
 /// then wants the vector tile, and bakes the texture once it is resident,
 /// a few a frame (`ImmersiveMapSettings.TileSettings.RasterizationSettings`).
 /// A texture that arrives invalidates a frame, as a map tile does. Until
-/// then the target's ground draws nothing.
+/// then the target's ground is drawn by its stand-ins, the resident
+/// textures of its descendants or its ancestor (`RasterStandInPlanner`).
 ///
 /// The textures the frame wants are never released. The others stay until
 /// they pass the memory budget, and then the longest unused leave first. A
@@ -123,6 +131,30 @@ final class RasterTileStore: @unchecked Sendable {
         }
     }
 
+    /// Every texture on the GPU, by the tile it draws, the largest of a
+    /// tile's sizes: what a target whose own texture is on its way draws
+    /// in its place (`RasterStandInPlanner`). Read once a frame.
+    func residentTextures() -> RasterStandInPlanner.Resident {
+        lock.lock()
+        defer { lock.unlock() }
+        var resident: RasterStandInPlanner.Resident = [:]
+        for (key, entry) in entries {
+            if let kept = resident[key.tile], kept.key.size >= key.size { continue }
+            resident[key.tile] = (key, entry.texture)
+        }
+        return resident
+    }
+
+    /// The stand-ins the frame draws: used this frame, so the budget lets
+    /// them go last, after what no frame has drawn for longer.
+    func touch(_ keys: [RasterTileKey]) {
+        lock.lock()
+        defer { lock.unlock() }
+        for key in keys {
+            entries[key]?.lastUsedTick = usageTick
+        }
+    }
+
     /// Moves on every texture that arrives or leaves: with the coverage it
     /// is what the working set's placements are planned over.
     var contentVersion: UInt64 {
@@ -144,6 +176,13 @@ final class RasterTileStore: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return residentBytes
+    }
+
+    /// Diagnostics: how many textures are on the GPU.
+    var residentTextureCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return entries.count
     }
 
     /// One call per frame with the textures the frame wants, nearest

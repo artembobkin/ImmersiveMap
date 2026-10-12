@@ -246,7 +246,7 @@ final class DebugOverlaySettingsOverrideTests: XCTestCase {
     func testTheFogOverrideRidesOnTopLikeTheShadows() {
         var override = DebugOverlaySettingsOverride()
         var dragged = ImmersiveMapSettings.FogSettings()
-        dragged.hazeRange = 3...9
+        dragged.horizonColor = SIMD3<Float>(0.9, 0.8, 0.7)
         dragged.skyColor = SIMD3<Float>(0.1, 0.2, 0.9)
         override.fog = dragged
         let resent = settingsWithDebugPanel(true)
@@ -296,37 +296,141 @@ final class DebugOverlaySettingsOverrideTests: XCTestCase {
     }
 }
 
-/// The arithmetic behind the debug panel's horizon group: two sliders over
-/// one range that must stay well formed, and titles that carry the value.
-final class DebugOverlayFogGroupTests: XCTestCase {
-    func testTheSlidersCoverTheShippingDefault() {
-        let range = ImmersiveMapSettings.FogSettings().hazeRange
-        XCTAssertTrue(DebugOverlayFogSettingsPlanner.hazeStartRange.contains(Double(range.lowerBound)))
-        XCTAssertTrue(DebugOverlayFogSettingsPlanner.hazeEndRange.contains(Double(range.upperBound)))
+/// The debug panel's ground fog group: graphs whose axes cover every stop of
+/// the shipping curves, and titles that carry the value at the camera's zoom.
+final class DebugOverlayGroundFogGroupTests: XCTestCase {
+    private typealias Planner = DebugOverlayGroundFogSettingsPlanner
+
+    func testTheGraphsCoverTheShippingDefault() {
+        let fog = ImmersiveMapSettings.GroundFogSettings()
+        for (curve, axes) in [(fog.densityPerKilometer, Planner.densityAxes), (fog.heightMeters, Planner.heightAxes),
+                              (fog.startDistanceMeters, Planner.startDistanceAxes),
+                              (fog.startSoftnessMeters, Planner.startSoftnessAxes),
+                              (fog.maximumOpacity, Planner.maximumOpacityAxes)] {
+            for stop in curve.stops {
+                XCTAssertTrue(axes.valueRange.contains(Double(stop.value)), "\(stop.value) outside \(axes.valueRange)")
+                XCTAssertTrue(axes.zoomRange.contains(stop.zoom), "\(stop.zoom) outside \(axes.zoomRange)")
+            }
+        }
     }
 
-    func testTheStartSliderReachesTheResolverFloor() {
-        XCTAssertEqual(DebugOverlayFogSettingsPlanner.hazeStartRange.lowerBound,
-                       Double(HorizonFrameResolver.minimumHazeStart))
+    func testTitlesCarryTheValueAtTheCameraZoom() {
+        XCTAssertEqual(Planner.densityTitle(0.45, cameraZoom: 12), "Density 0.45/km")
+        XCTAssertEqual(Planner.startDistanceTitle(400, cameraZoom: 12), "From 400 m")
+        XCTAssertEqual(Planner.startDistanceTitle([12: 3200, 16: 200], cameraZoom: 13), "From 1.6 km",
+                       "Geometric between the stops, as the fog reads it")
+        XCTAssertEqual(Planner.heightTitle([13: 4000, 15: 150], cameraZoom: 16), "Height 150 m")
+        XCTAssertEqual(Planner.startSoftnessTitle(25_000, cameraZoom: 12), "Soft start 25 km")
+        XCTAssertEqual(Planner.maximumOpacityTitle([18: 1, 19: 0], cameraZoom: 15), "Max opacity 1.00")
+    }
+}
+
+/// The zoom curve graph's axes and the edits a pointer makes on it.
+final class DebugOverlayZoomCurveEditingTests: XCTestCase {
+    private let rect = CGRect(x: 0, y: 0, width: 220, height: 100)
+    private let axes = DebugOverlayZoomCurveAxes(zoomRange: 0...22, valueRange: 0...1)
+
+    /// Zoom runs left to right, the value bottom to top, and a point maps
+    /// back onto the half zoom grid and the hundredths.
+    func testTheAxesRoundTripOnTheGrid() {
+        XCTAssertEqual(axes.x(zoom: 11, in: rect), 110)
+        XCTAssertEqual(axes.y(value: 0, in: rect), 100)
+        XCTAssertEqual(axes.y(value: 1, in: rect), 0)
+        XCTAssertEqual(axes.zoom(x: 112, in: rect), 11, "11.2 snaps to the half zoom grid")
+        XCTAssertEqual(axes.zoom(x: 116, in: rect), 11.5)
+        XCTAssertEqual(axes.zoom(x: -40, in: rect), 0, "Clamped to the range")
+        XCTAssertEqual(axes.value(y: 25.3, in: rect), 0.75, accuracy: 1e-9)
+        XCTAssertEqual(axes.value(y: 400, in: rect), 0, "Clamped to the range")
     }
 
-    func testMovingOneEndKeepsTheOtherOnItsSide() {
-        let gap = DebugOverlayFogSettingsPlanner.minimumHazeGap
-        let range: ClosedRange<Float> = 6...40
-        XCTAssertEqual(DebugOverlayFogSettingsPlanner.hazeRange(range, start: 10), 10...40)
-        XCTAssertEqual(DebugOverlayFogSettingsPlanner.hazeRange(range, start: 50), 50...(50 + gap),
-                       "The far end gives way to a near end dragged past it")
-        XCTAssertEqual(DebugOverlayFogSettingsPlanner.hazeRange(range, end: 20), 6...20)
-        XCTAssertEqual(DebugOverlayFogSettingsPlanner.hazeRange(range, end: 2), (2 - gap)...2,
-                       "The near end gives way to a far end dragged under it")
-        XCTAssertEqual(DebugOverlayFogSettingsPlanner.hazeRange(range, start: 0).lowerBound,
-                       HorizonFrameResolver.minimumHazeStart,
-                       "The near end never goes under the resolver's floor")
+    /// A logarithmic axis puts each decade at the same height.
+    func testALogarithmicAxisSpacesDecadesEvenly() {
+        let log = DebugOverlayZoomCurveAxes(zoomRange: 0...22, valueRange: 0.01...1, isLogarithmic: true)
+        XCTAssertEqual(log.y(value: 0.1, in: rect), 50, accuracy: 1e-6)
+        XCTAssertEqual(log.value(y: 50, in: rect), 0.1, accuracy: 1e-9)
     }
 
-    func testTitlesCarryTheValue() {
-        XCTAssertEqual(DebugOverlayFogSettingsPlanner.hazeStartTitle(6), "Haze from 6.0x")
-        XCTAssertEqual(DebugOverlayFogSettingsPlanner.hazeEndTitle(40), "Haze to 40.0x")
+    func testAStopIsFoundNearThePointer() {
+        let curve: ImmersiveMapZoomCurve = [11: 0.5, 13: 1]
+        let near = CGPoint(x: 112, y: 52)
+        XCTAssertEqual(DebugOverlayZoomCurveEditing.stopIndex(at: near, curve: curve, axes: axes, rect: rect, radius: 8), 0)
+        XCTAssertNil(DebugOverlayZoomCurveEditing.stopIndex(at: CGPoint(x: 60, y: 50), curve: curve, axes: axes,
+                                                            rect: rect, radius: 8))
+    }
+
+    /// A click adds a stop, or sets the value of the stop already at that
+    /// zoom.
+    func testSettingAStopAddsOrReplaces() {
+        let curve: ImmersiveMapZoomCurve = [11: 0.5, 13: 1]
+        let added = DebugOverlayZoomCurveEditing.settingStop(curve, zoom: 12, value: 0.2)
+        XCTAssertEqual(added.curve, [11: 0.5, 12: 0.2, 13: 1])
+        XCTAssertEqual(added.index, 1)
+        let replaced = DebugOverlayZoomCurveEditing.settingStop(curve, zoom: 13, value: 0.3)
+        XCTAssertEqual(replaced.curve, [11: 0.5, 13: 0.3])
+    }
+
+    /// A dragged stop moves, its index following it. Dropped onto another
+    /// stop's zoom it keeps its own zoom and takes only the value.
+    func testMovingAStopNeverSwallowsANeighbour() {
+        let curve: ImmersiveMapZoomCurve = [11: 0.5, 13: 1]
+        let moved = DebugOverlayZoomCurveEditing.movingStop(curve, at: 0, toZoom: 14, value: 0.4)
+        XCTAssertEqual(moved.curve, [13: 1, 14: 0.4])
+        XCTAssertEqual(moved.index, 1)
+        let blocked = DebugOverlayZoomCurveEditing.movingStop(curve, at: 0, toZoom: 13, value: 0.4)
+        XCTAssertEqual(blocked.curve, [11: 0.4, 13: 1])
+    }
+
+    func testTheLastStopStays() {
+        let curve: ImmersiveMapZoomCurve = [11: 0.5, 13: 1]
+        XCTAssertEqual(DebugOverlayZoomCurveEditing.removingStop(curve, at: 0), [13: 1])
+        XCTAssertNil(DebugOverlayZoomCurveEditing.removingStop([13: 1], at: 0))
+    }
+}
+
+/// The debug panel's tabs.
+final class DebugOverlayPanelCategoryTests: XCTestCase {
+    func testAllShowsEveryCategoryAndATabOnlyItsOwn() {
+        for category in DebugOverlayPanelCategory.allCases {
+            XCTAssertTrue(DebugOverlayPanelCategory.all.shows(category))
+        }
+        XCTAssertTrue(DebugOverlayPanelCategory.sky.shows(.sky))
+        XCTAssertFalse(DebugOverlayPanelCategory.sky.shows(.tiles))
+    }
+}
+
+/// The Export tab's file: the tuned values as the modifiers that set them.
+final class DebugOverlaySettingsExportTests: XCTestCase {
+    func testNumbersCarryOnlyTheirDecimals() {
+        XCTAssertEqual(DebugOverlaySettingsExport.number(0.3), "0.3")
+        XCTAssertEqual(DebugOverlaySettingsExport.number(3), "3")
+        XCTAssertEqual(DebugOverlaySettingsExport.number(0.03), "0.03")
+        XCTAssertEqual(DebugOverlaySettingsExport.number(-0.4), "-0.4")
+    }
+
+    func testACurveIsWrittenAsItsLiteral() {
+        XCTAssertEqual(DebugOverlaySettingsExport.curve(1.7), "1.7")
+        XCTAssertEqual(DebugOverlaySettingsExport.curve([8: 0, 12: 3]), "[8: 0, 12: 3]")
+        XCTAssertEqual(DebugOverlaySettingsExport.curve([12: 5, 16.5: 0.03]), "[12: 5, 16.5: 0.03]")
+    }
+
+    func testAZoomFadeIsWrittenAsItsFactory() {
+        XCTAssertEqual(DebugOverlaySettingsExport.zoomFade(.none), ".none")
+        XCTAssertEqual(DebugOverlaySettingsExport.zoomFade(.fadeOut(from: 17, to: 18)), ".fadeOut(from: 17, to: 18)")
+        XCTAssertEqual(DebugOverlaySettingsExport.zoomFade(.fadeIn(from: 3, to: 4)), ".fadeIn(from: 3, to: 4)")
+    }
+
+    func testTheGroundFogIsWrittenWithItsCurves() {
+        let settings = FixtureTiles.tilelessSettings().groundFog(densityPerKilometer: [12: 0.45, 16: 17],
+                                                                 startDistanceMeters: 400)
+        let code = DebugOverlaySettingsExport.swiftCode(settings: settings,
+                                                        date: Date(timeIntervalSince1970: 0),
+                                                        cameraLines: ["Zoom 12.3"])
+        XCTAssertTrue(code.contains("// Zoom 12.3"))
+        XCTAssertTrue(code.contains("ImmersiveMapView()"))
+        XCTAssertTrue(code.contains(".groundFog(isEnabled: true, densityPerKilometer: [12: 0.45, 16: 17], heightMeters: "),
+                      code)
+        XCTAssertTrue(code.contains("startDistanceMeters: 400"), code)
+        XCTAssertFalse(code.contains("http"), "No tile address, and so no request header, is written")
     }
 }
 

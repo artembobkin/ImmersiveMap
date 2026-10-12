@@ -20,6 +20,9 @@ struct DebugOverlayHUDSnapshot: Equatable {
     let topPadding: Float
     let sectionSpacing: Float
     let textColor: SIMD3<Float>
+    /// The camera zoom as a number, for the controls that read a value off
+    /// a zoom curve (the ground fog group).
+    var cameraZoom: Double = 0
 
     /// The same frame snapshot with the tile list read again from the
     /// reporter: what the panel applies between frames.
@@ -33,7 +36,8 @@ struct DebugOverlayHUDSnapshot: Equatable {
                                 leftPadding: leftPadding,
                                 topPadding: topPadding,
                                 sectionSpacing: sectionSpacing,
-                                textColor: textColor)
+                                textColor: textColor,
+                                cameraZoom: cameraZoom)
     }
 
     static func make(settings: ImmersiveMapSettings.DebugSettings,
@@ -62,7 +66,8 @@ struct DebugOverlayHUDSnapshot: Equatable {
             leftPadding: settings.leftPadding,
             topPadding: settings.topPadding,
             sectionSpacing: settings.sectionSpacing,
-            textColor: settings.textColor
+            textColor: settings.textColor,
+            cameraZoom: zoom
         )
     }
 
@@ -91,14 +96,41 @@ struct DebugOverlayHUDSnapshot: Equatable {
         let sourceZoomCounts = zoomCountsLine(title: "srcZ", tiles: placeTiles.map { $0.metalTile.tile })
         let targetZoomCounts = zoomCountsLine(title: "targetZ", tiles: placeTiles.map { $0.placeIn.tile })
 
-        return [
+        var lines = [
             "camera z:\(format(cameraState.zoom)) pitch:\(format(pitchDegrees)) bearing:\(format(bearingDegrees))",
             "surface:\(surface) transition:\(format(Double(frameContext.transition))) viewport:\(Int(viewport.x))x\(Int(viewport.y))",
-            "eye x:\(format(Double(eye.x))) y:\(format(Double(eye.y))) z:\(format(Double(eye.z)))",
+            "eye x:\(format(Double(eye.x))) y:\(format(Double(eye.y))) z:\(format(Double(eye.z)))"
+        ]
+        if let relief = reliefLine(frameContext: frameContext) {
+            lines.append(relief)
+        }
+        lines += [
             ringRulesLine(frameContext.visibleContent.flatRingBands),
             targetZoomCounts,
             sourceZoomCounts
         ]
+        return lines
+    }
+
+    /// The ground relief under the camera: the terrain under the point it
+    /// looks at, the datum the relief is drawn from, and the eye's own
+    /// altitude over the sea in the terrain's metres as drawn, which a pan
+    /// over the relief keeps (`CameraTerrainFollow`). Nil without a relief
+    /// or off the flat map.
+    private static func reliefLine(frameContext: FrameContext) -> String? {
+        guard let store = frameContext.services.groundRelief,
+              frameContext.renderSurfaceMode == .flat else {
+            return nil
+        }
+        let centre = frameContext.mapCameraState.centerWorldMercator
+        let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: centre.y)
+        let unitsPerMetre = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: latitude,
+                                                                      renderMapSize: frameContext.flatRenderState.renderMapSize)
+        let eyeHeightMetres = Double(frameContext.cameraEye.z) / unitsPerMetre
+        let datumDrawn = Double(store.datumMetres * store.exaggeration)
+        let state = store.isActive ? "on" : "off"
+        return "relief:\(state) datum:\(format(Double(store.datumMetres)))m eye alt:\(format(datumDrawn + eyeHeightMetres))m"
+            + " height:\(format(eyeHeightMetres))m range:\(format(Double(store.reliefRangeMetres)))m x\(format(Double(store.exaggeration)))"
     }
 
     /// The ring rules as the frame resolved them on either surface,

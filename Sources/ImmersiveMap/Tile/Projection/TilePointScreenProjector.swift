@@ -9,6 +9,13 @@
 import simd
 
 struct TilePointScreenProjector {
+    /// Whether a flat point rises by the ground relief under it
+    /// (`GroundReliefStore`), as the labels do. The debug overlay projects
+    /// on the plane instead: its tile frames and watermarks are read, not
+    /// looked at, and a watermark's letters lifted one by one by a slope
+    /// come out torn.
+    var liftsByRelief = true
+
     func project(snapshot: TilePointToScreenPointSnapshot,
                  frameContext: FrameContext,
                  tileOriginData: [FlatTileOriginData]) -> [ScreenPointOutput] {
@@ -226,6 +233,30 @@ struct TilePointScreenProjector {
         // risen (`FrameContextSharedState.buildingRiseByTile`): on the
         // ground where no buildings draw.
         let riseByTile = frameContext.sharedState.buildingRiseByTile
+        // The ground relief under each label, by its tile: the relief and
+        // the world units a metre of it rises by, looked up once per tile
+        // of the projection, nil for a tile whose terrain is not in.
+        let groundRelief = frameContext.services.groundRelief
+        let renderMapSize = frameContext.resolvedPresentation.flatRenderState.renderMapSize
+        var reliefByTile: [Tile: (relief: GroundRelief, unitsPerMetre: Float)?] = [:]
+        // The ring each source is raised by: its finest target's.
+        let targetZoomBySource = groundRelief == nil || liftsByRelief == false
+            ? [:] : frameContext.sharedState.tilePlacementState.placeTilesContext.targetZoomBySource()
+        func lift(tile: Tile, uv: SIMD2<Float>) -> Float {
+            guard let groundRelief, liftsByRelief else { return 0 }
+            let entry: (relief: GroundRelief, unitsPerMetre: Float)?
+            if let known = reliefByTile[tile] {
+                entry = known
+            } else {
+                let terrainZoom = GroundReliefStore.terrainZoom(forTargetZoom: targetZoomBySource[tile] ?? tile.z)
+                entry = groundRelief.relief(for: tile, terrainZoom: terrainZoom).map {
+                    ($0, groundRelief.worldUnitsPerMetre(over: tile, renderMapSize: renderMapSize))
+                }
+                reliefByTile[tile] = entry
+            }
+            guard let entry else { return 0 }
+            return (entry.relief.metres(atTileUV: uv) - groundRelief.datumMetres) * entry.unitsPerMetre
+        }
 
         snapshot.pointInputs.withUnsafeBufferPointer { inputs in
         snapshot.tileSlotVisibleTileIndices.withUnsafeBufferPointer { slots in
@@ -268,10 +299,11 @@ struct TilePointScreenProjector {
                 // The label naming the building draws on its roof, one of the
                 // things inside it on the ground.
                 let drawsOnRoof = input.liftsToRoof != 0
-                var drawnZ: Float = 0
+                let tile = Tile(x: Int(input.tile.x), y: Int(input.tile.y), z: Int(input.tile.z))
+                // The relief under the label lifts it, roof or ground.
+                var drawnZ: Float = lift(tile: tile, uv: input.uv)
                 if drawsOnRoof {
-                    let tile = Tile(x: Int(input.tile.x), y: Int(input.tile.y), z: Int(input.tile.z))
-                    drawnZ = roofZ * (riseByTile[tile] ?? 0)
+                    drawnZ += roofZ * (riseByTile[tile] ?? 0)
                 }
                 let clip = cameraMatrix * SIMD4<Float>(worldPosition.x, worldPosition.y, drawnZ, 1.0)
                 // `screenPointFromClip` written out: this loop runs over

@@ -12,6 +12,7 @@ struct TilePlacementState {
     nonisolated(unsafe) static let empty = TilePlacementState(placeTilesContext: .empty,
                                           buildingPlaceTilesContext: .empty,
                                           rasterPlacements: [],
+                                          rasterGroundSlots: [],
                                           placementVersion: 0,
                                           visibleTilesCount: 0,
                                           readyTilesCount: 0,
@@ -26,10 +27,15 @@ struct TilePlacementState {
     /// (`FrameContextSharedState.drawnBuildingPlacements`), by the depth
     /// test alone. Empty on the globe.
     let buildingPlaceTilesContext: PlaceTilesContext
-    /// The raster targets whose texture is on the GPU, each in its place
-    /// (`RasterTileStore`), finest first. Their ground is the texture: the
-    /// vector placements in their slots draw no fills there.
+    /// The raster tiles drawn this frame, each in its place
+    /// (`RasterTileStore`, `RasterStandInPlanner`), finest first.
     let rasterPlacements: [RasterTilePlacement]
+    /// The raster targets whose ground the textures draw whole, their own
+    /// or their stand-ins': the vector placements in their slots draw no
+    /// fills there. A raster target the textures leave uncovered is not
+    /// among them, and its ground is the vector placements', as a vector
+    /// target's.
+    let rasterGroundSlots: Set<VisibleTile>
     let placementVersion: UInt64
     let visibleTilesCount: Int
     let readyTilesCount: Int

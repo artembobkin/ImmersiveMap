@@ -12,8 +12,8 @@ import Metal
 ///
 /// A grid, not a quad, on both surfaces. On the sphere the cells bend the
 /// tile around the globe as the subdivided geometry of a vector tile does
-/// (`GroundGeometrySubdivider`), and on the plane they are where a
-/// heightmap will lift the ground.
+/// (`GroundGeometrySubdivider`), and on the plane they are where the
+/// ground relief lifts the ground.
 final class RasterTileGrid {
     struct Mesh {
         let vertices: MTLBuffer
@@ -24,6 +24,9 @@ final class RasterTileGrid {
     /// The cells a side of the plane's grid and of the sphere's deep
     /// tiles: enough for a heightmap to shape a tile.
     static let minimumCells = 16
+    /// The most cells a side: the indices are 16 bits, and a side of 256
+    /// vertices is the last that fits.
+    static let maximumCells = 255
 
     /// The cells a side of a tile of zoom `zoom`: the vector ground's split
     /// where the sphere needs one, so the raster tile bends as its
@@ -41,9 +44,11 @@ final class RasterTileGrid {
     }
 
     /// The grid of a tile of zoom `zoom`, built the first time it is asked
-    /// for. Main thread only, as the draw is.
-    func mesh(forTileZoom zoom: Int) -> Mesh? {
-        let cells = Self.cells(forTileZoom: zoom)
+    /// for, of at least `cells` cells a side: on the relief, the zoom's
+    /// flattening grid, so the raster ground is as fine as the vector
+    /// ground beside it. Main thread only, as the draw is.
+    func mesh(forTileZoom zoom: Int, atLeast cells: Int = 0) -> Mesh? {
+        let cells = min(max(Self.cells(forTileZoom: zoom), cells), Self.maximumCells)
         if let mesh = meshesByCells[cells] {
             return mesh
         }

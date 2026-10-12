@@ -36,6 +36,7 @@ class TileCulling {
                                cameraMatrix: matrix_float4x4?,
                                cameraFrustum: Frustum?,
                                cameraEye: SIMD3<Float>,
+                               reliefHeights: ClosedRange<Float>? = nil,
                                rules: FlatRingRules = .default,
                                diagnostics: (any FrameDiagnosticsService)? = nil) -> VisibleContentState {
         let semanticCenterWorldMercator = cameraState.centerWorldMercator
@@ -62,7 +63,7 @@ class TileCulling {
             recordGlobeMetrics(resolution.metrics, diagnostics: diagnostics)
         case .flat:
             let flatRenderState = resolvedPresentation.flatRenderState
-            if let polygon = CoveragePolygonBuilder.make(cameraMatrix: cameraMatrix) {
+            if let polygon = CoveragePolygonBuilder.make(cameraMatrix: cameraMatrix, heights: reliefHeights) {
                 // The flat map draws the rules' bands and nothing under
                 // them, and the world cover's zoom stays the floor no band
                 // and no stand-in goes down to. Beyond the last rule the

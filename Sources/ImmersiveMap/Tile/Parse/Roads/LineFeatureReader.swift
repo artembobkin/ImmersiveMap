@@ -26,12 +26,14 @@ struct LineFeatureReader {
 
     private let labelDecisions: TileLabelDecisions
     private let labelsEnabled: Bool
+    private let options: TileParseOptions
     private let roadDirectionArrowBuilder = RoadDirectionArrowGeometryBuilder()
     private let tileExtent = Float(TileCoordinateSpace.tileExtentDouble)
 
     init(labelDecisions: TileLabelDecisions, options: TileParseOptions) {
         self.labelDecisions = labelDecisions
         self.labelsEnabled = options.labelsEnabled
+        self.options = options
     }
 
     func read(feature: MvtDecodedFeature,
@@ -209,7 +211,10 @@ struct LineFeatureReader {
                                                                        // sphere-era tile keeps the baked ribbon, which
                                                                        // the grid split and the sphere projection need.
                                                                        deferredExtrusion: usesSeparateRoadRendering
-                                                                           && GroundGeometrySubdivider.step(forTileZoom: tile.z) == nil) {
+                                                                           && GroundGeometrySubdivider.step(forTileZoom: tile.z) == nil,
+                                                                       // On a relief the ribbon takes a row at every
+                                                                       // grid crossing, as the ground takes a vertex.
+                                                                       subdivisionStep: options.reliefSubdivisionStep(tileZoom: tile.z)) {
                                 if usesSeparateRoadRendering {
                                     result.appendRoad(linePolygon,
                                                       key: lineRenderPass.key,
@@ -302,8 +307,14 @@ struct LineFeatureReader {
                                   tile: Tile,
                                   into result: inout ReadingStageResult) -> Bool {
         let pass = roadPass.pass
+        // On a relief a decoration is cut at the grid like the ground, so
+        // it lies on the relief as the ground does.
+        let reliefStep = options.reliefSubdivisionStep(tileZoom: tile.z).map { Int($0.rounded()) }
         func append(_ polygons: [ParsedPolygon]) {
-            for polygon in polygons {
+            for var polygon in polygons {
+                if let reliefStep {
+                    polygon = GroundGeometrySubdivider.subdivide(polygon, step: reliefStep)
+                }
                 result.appendRoad(polygon,
                                   key: pass.key,
                                   structureKind: structure,

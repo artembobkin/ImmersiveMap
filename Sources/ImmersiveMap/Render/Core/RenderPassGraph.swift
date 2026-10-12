@@ -8,7 +8,7 @@ final class RenderPassGraph {
     static func isWorldLayer(_ layer: RenderLayer) -> Bool {
         switch layer {
         case .starfield, .globeVectorSurface, .globeCap,
-             .tileOwnership, .flatMapSurface, .surfaceLabels, .buildingExtrusion, .sceneModels,
+             .flatMapSurface, .surfaceLabels, .buildingExtrusion, .sceneModels,
              .horizon:
             return true
         case .shadowCasters, .groundShadowMask, .postProcessing,
@@ -22,7 +22,7 @@ final class RenderPassGraph {
         case .labels, .avatars, .debugOverlay:
             return true
         case .shadowCasters, .groundShadowMask, .starfield,
-             .globeVectorSurface, .globeCap, .tileOwnership, .flatMapSurface, .surfaceLabels,
+             .globeVectorSurface, .globeCap, .flatMapSurface, .surfaceLabels,
              .buildingExtrusion, .sceneModels, .horizon, .postProcessing:
             return false
         }
@@ -170,9 +170,9 @@ final class RenderPassGraph {
                         descriptor.depthAttachment.storeAction = .multisampleResolve
                     }
                 }
-                // The stencil half of the texture carries the tile-priority
-                // marks (TileSourceStencilPriority): cleared to 0, written by
-                // the ground's owner passes, never stored.
+                // The stencil half of the texture carries the sphere's
+                // tile-priority marks and the flat map's surface bits
+                // (TileSourceStencilPriority): cleared to 0, never stored.
                 descriptor.stencilAttachment.texture = depthTexture
                 descriptor.stencilAttachment.loadAction = .clear
                 descriptor.stencilAttachment.storeAction = .dontCare
