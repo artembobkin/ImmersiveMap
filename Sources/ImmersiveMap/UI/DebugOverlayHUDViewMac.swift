@@ -148,6 +148,8 @@ final class DebugOverlayHUDView: NSView {
     private let groundFogEnabledSwitch = NSSwitch()
     private let groundFogBuildingsLabel = NSTextField(labelWithString: "")
     private let groundFogBuildingsSwitch = NSSwitch()
+    private let groundFogSkyColorLabel = NSTextField(labelWithString: "")
+    private let groundFogSkyColorSwitch = NSSwitch()
     // Every value of the fog but the colour is a curve over the zoom, each
     // on a graph of its own under its title.
     private let groundFogDensityLabel = NSTextField(labelWithString: "")
@@ -388,6 +390,7 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(fogHorizonColorLabel, text: "Horizon colour")
         configureControlLabel(groundFogEnabledLabel, text: "Enabled")
         configureControlLabel(groundFogBuildingsLabel, text: "Veil buildings")
+        configureControlLabel(groundFogSkyColorLabel, text: "Sky colour above the line")
         configureControlLabel(groundFogDensityLabel, text: "")
         configureControlLabel(groundFogHeightLabel, text: "")
         configureControlLabel(groundFogStartLabel, text: "")
@@ -412,6 +415,7 @@ final class DebugOverlayHUDView: NSView {
         configureSwitch(atmosphereEnabledSwitch, action: #selector(atmosphereEnabledSwitchChanged))
         configureSwitch(groundFogEnabledSwitch, action: #selector(groundFogEnabledSwitchChanged))
         configureSwitch(groundFogBuildingsSwitch, action: #selector(groundFogBuildingsSwitchChanged))
+        configureSwitch(groundFogSkyColorSwitch, action: #selector(groundFogSkyColorSwitchChanged))
         typealias FogPlanner = DebugOverlayGroundFogSettingsPlanner
         configureGroundFogGraph(groundFogDensityGraph,
                                 axes: FogPlanner.densityAxes,
@@ -604,6 +608,7 @@ final class DebugOverlayHUDView: NSView {
          fogHorizonColorLabel, fogHorizonColorWell,
          groundFogGroupLabel, groundFogEnabledLabel, groundFogEnabledSwitch,
          groundFogBuildingsLabel, groundFogBuildingsSwitch,
+         groundFogSkyColorLabel, groundFogSkyColorSwitch,
          groundFogGraphHint,
          groundFogDensityLabel, groundFogDensityGraph,
          groundFogHeightLabel, groundFogHeightGraph,
@@ -1289,6 +1294,7 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutGroupHeader(groundFogGroupLabel, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(groundFogEnabledLabel, groundFogEnabledSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(groundFogBuildingsLabel, groundFogBuildingsSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(groundFogSkyColorLabel, groundFogSkyColorSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutFullWidthRow(groundFogGraphHint, at: cursor, contentWidth: contentWidth, height: Layout.hintRowHeight)
         for (label, graph) in [(groundFogDensityLabel, groundFogDensityGraph),
                                (groundFogHeightLabel, groundFogHeightGraph),
@@ -1538,6 +1544,8 @@ final class DebugOverlayHUDView: NSView {
         groundFogEnabledSwitch.state = fog.isEnabled ? .on : .off
         groundFogBuildingsSwitch.state = fog.veilsBuildings ? .on : .off
         groundFogBuildingsSwitch.isEnabled = fog.isEnabled
+        groundFogSkyColorSwitch.state = fog.takesSkyColor ? .on : .off
+        groundFogSkyColorSwitch.isEnabled = fog.isEnabled
         groundFogDensityLabel.stringValue = Planner.densityTitle(fog.densityPerKilometer, cameraZoom: zoom)
         groundFogHeightLabel.stringValue = Planner.heightTitle(fog.heightMeters, cameraZoom: zoom)
         groundFogStartLabel.stringValue = Planner.startDistanceTitle(fog.startDistanceMeters, cameraZoom: zoom)
@@ -1898,6 +1906,12 @@ final class DebugOverlayHUDView: NSView {
     @objc private func groundFogBuildingsSwitchChanged() {
         var settings = groundFogSettings
         settings.veilsBuildings = groundFogBuildingsSwitch.state == .on
+        publish(groundFogSettings: settings)
+    }
+
+    @objc private func groundFogSkyColorSwitchChanged() {
+        var settings = groundFogSettings
+        settings.takesSkyColor = groundFogSkyColorSwitch.state == .on
         publish(groundFogSettings: settings)
     }
 

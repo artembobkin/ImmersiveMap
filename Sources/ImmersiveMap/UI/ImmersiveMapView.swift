@@ -981,11 +981,12 @@ public extension ImmersiveMapView {
     /// `densityPerKilometer` is how thick it is at the ground,
     /// `heightMeters` how high it rises, `startDistanceMeters` where it
     /// begins and `startSoftnessMeters` how far past that it takes to come
-    /// in, all in meters on the ground, `color` its colour at the horizon
-    /// line (the horizon's by default, the sky's above the line) and
-    /// `maximumOpacity` the most it veils. The buildings and the models
-    /// draw clear of it unless `veilsBuildings` is on. On by default, and
-    /// the globe has none.
+    /// in, all in meters on the ground, `color` its colour (the horizon's
+    /// by default) and `maximumOpacity` the most it veils. `veilsBuildings`
+    /// sinks the buildings and the models into it with the ground (on by
+    /// default), and `takesSkyColor` turns the fog into the sky's colour
+    /// above the horizon line (off by default). On by default, and the
+    /// globe has none.
     ///
     /// Every value but the colour is a value or a curve over the camera
     /// zoom (`ImmersiveMapZoomCurve`), so the fog never changes at a step.
@@ -1007,7 +1008,8 @@ public extension ImmersiveMapView {
                           startSoftnessMeters: ImmersiveMapZoomCurve? = nil,
                           color: SIMD3<Float>? = nil,
                           maximumOpacity: ImmersiveMapZoomCurve? = nil,
-                          veilsBuildings: Bool? = nil) -> ImmersiveMapView {
+                          veilsBuildings: Bool? = nil,
+                          takesSkyColor: Bool? = nil) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.groundFog(isEnabled: isEnabled,
                                                 densityPerKilometer: densityPerKilometer,
@@ -1016,14 +1018,15 @@ public extension ImmersiveMapView {
                                                 startSoftnessMeters: startSoftnessMeters,
                                                 color: color,
                                                 maximumOpacity: maximumOpacity,
-                                                veilsBuildings: veilsBuildings)
+                                                veilsBuildings: veilsBuildings,
+                                                takesSkyColor: takesSkyColor)
         return view
     }
 
     /// The sky of the flat presentation: a sky gradient above the horizon
     /// line and a thin band whitening the ground into the horizon colour at
     /// the line. The far ground is the ground fog's
-    /// (`groundFog(isEnabled:densityPerKilometer:heightMeters:startDistanceMeters:startSoftnessMeters:color:maximumOpacity:veilsBuildings:)`).
+    /// (`groundFog(isEnabled:densityPerKilometer:heightMeters:startDistanceMeters:startSoftnessMeters:color:maximumOpacity:veilsBuildings:takesSkyColor:)`).
     /// Applies live.
     public func fogSettings(_ fog: ImmersiveMapSettings.FogSettings) -> ImmersiveMapView {
         var view = self

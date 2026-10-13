@@ -47,6 +47,7 @@ enum DebugOverlaySettingsExport {
         }
         groundFogArguments.append("maximumOpacity: \(curve(groundFog.maximumOpacity))")
         groundFogArguments.append("veilsBuildings: \(groundFog.veilsBuildings)")
+        groundFogArguments.append("takesSkyColor: \(groundFog.takesSkyColor)")
         return [
             ".fogSettings(ImmersiveMapSettings.FogSettings(isEnabled: \(fog.isEnabled), "
                 + "skyColor: \(vector(fog.skyColor)), "

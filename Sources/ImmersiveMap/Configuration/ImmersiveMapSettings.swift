@@ -1177,12 +1177,12 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     /// `heightMeters`, gathered along each view ray past
     /// `startDistanceMeters` from the camera. A far point low on the ground
     /// sinks in it, the near ground and everything high stays clear, and a
-    /// tall building rises out of it. It veils the ground, the roads and the
-    /// labels painted on the map, and the buildings and the models only
-    /// with `veilsBuildings` on, so it hides the far detail and its shimmer
-    /// and draws the eye to the near ground. On by default. The horizon's sky and the band at its line (`FogSettings`)
-    /// are the horizon's own: either can be on without the other. The globe
-    /// has none.
+    /// tall building rises out of it. It veils the ground, the roads, the
+    /// labels painted on the map, the buildings and the models
+    /// (`veilsBuildings`), so it hides the far detail and its shimmer and
+    /// draws the eye to the near ground. On by default. The horizon's sky
+    /// and the band at its line (`FogSettings`) are the horizon's own:
+    /// either can be on without the other. The globe has none.
     ///
     /// Every length is in meters on the ground, so a fog layer 60 m high is
     /// 60 m high at every zoom, and a fog that begins 400 m from the camera
@@ -1232,23 +1232,27 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// full density at once. Widen it for a softer, longer transition
         /// from the clear near ground into the fog.
         public var startSoftnessMeters: ImmersiveMapZoomCurve
-        /// The fog's colour at the horizon line, RGB in `0...1`. Nil takes
-        /// the horizon's colour (`FogSettings.horizonColor`), so the fog
-        /// meets the sky at the line in one colour. Above the line the fog
-        /// takes the sky's colour in the direction of the view, where the
-        /// horizon paints a sky (`FogSettings.isEnabled`): a building veiled
-        /// in full is the sky behind it, not a pale block on it.
+        /// The fog's colour, RGB in `0...1`. Nil takes the horizon's colour
+        /// (`FogSettings.horizonColor`), so the fog meets the sky at the
+        /// line in one colour.
         public var color: SIMD3<Float>?
         /// The most the fog veils anything, `0...1`: under 1 the farthest
         /// ground still shows through, and at 0 there is no fog. The value
         /// to bring the fog in or out with the zoom.
         public var maximumOpacity: ImmersiveMapZoomCurve
-        /// Whether the fog veils the extruded buildings and the models too.
-        /// Off (the default) they always draw in their own colour, crisp
-        /// against the fogged ground behind them. On, a far building sinks
-        /// into the fog with the ground, taking the sky's colour above the
-        /// horizon line, which reads as the building turning see-through.
+        /// Whether the fog veils the extruded buildings and the models with
+        /// the ground. On (the default) a far building sinks into the fog
+        /// from its base up, standing in it as the ground does. Off they
+        /// draw in their own colour, crisp, and seem to float over the
+        /// fogged ground at their feet.
         public var veilsBuildings: Bool
+        /// Whether the fog takes the sky's colour above the horizon line,
+        /// in the direction of the view, where the horizon paints a sky
+        /// (`FogSettings.isEnabled`). Off (the default) the fog is one
+        /// colour everywhere, and a far building fades toward it as into a
+        /// haze. On, a building veiled in full is the sky behind it, which
+        /// reads as the building turning see-through.
+        public var takesSkyColor: Bool
 
         public init(isEnabled: Bool = true,
                     densityPerKilometer: ImmersiveMapZoomCurve = [7: 0.0019, 12: 0.06, 16: 17, 22: 6],
@@ -1257,7 +1261,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     startSoftnessMeters: ImmersiveMapZoomCurve = [7: 4_800_000, 12: 150_000, 16: 800, 22: 950],
                     color: SIMD3<Float>? = nil,
                     maximumOpacity: ImmersiveMapZoomCurve = [8: 0, 10: 1],
-                    veilsBuildings: Bool = false) {
+                    veilsBuildings: Bool = true,
+                    takesSkyColor: Bool = false) {
             self.isEnabled = isEnabled
             self.densityPerKilometer = densityPerKilometer
             self.heightMeters = heightMeters
@@ -1266,6 +1271,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.color = color
             self.maximumOpacity = maximumOpacity
             self.veilsBuildings = veilsBuildings
+            self.takesSkyColor = takesSkyColor
         }
     }
 
@@ -2024,11 +2030,15 @@ public extension ImmersiveMapSettings {
                    startSoftnessMeters: ImmersiveMapZoomCurve? = nil,
                    color: SIMD3<Float>? = nil,
                    maximumOpacity: ImmersiveMapZoomCurve? = nil,
-                   veilsBuildings: Bool? = nil) -> ImmersiveMapSettings {
+                   veilsBuildings: Bool? = nil,
+                   takesSkyColor: Bool? = nil) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.groundFog.isEnabled = isEnabled
         if let veilsBuildings {
             settings.scene.groundFog.veilsBuildings = veilsBuildings
+        }
+        if let takesSkyColor {
+            settings.scene.groundFog.takesSkyColor = takesSkyColor
         }
         if let densityPerKilometer {
             settings.scene.groundFog.densityPerKilometer = densityPerKilometer

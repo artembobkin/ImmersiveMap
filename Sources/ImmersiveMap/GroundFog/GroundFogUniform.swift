@@ -72,10 +72,10 @@ struct GroundFogUniform {
         }
         let sky = settings.scene.fog
         let color = fog.color ?? sky.horizonColor
-        // The fog takes the sky's colour above the line where the horizon
-        // paints a sky. With the sky off the plane's clear colour is behind,
-        // and the fog keeps its own.
-        let skyGradient = sky.isEnabled ? HorizonFrameResolver.skyGradientRadians : 0
+        // Asked to, the fog takes the sky's colour above the line where the
+        // horizon paints a sky. With the sky off the plane's clear colour is
+        // behind, and the fog keeps its own.
+        let skyGradient = fog.takesSkyColor && sky.isEnabled ? HorizonFrameResolver.skyGradientRadians : 0
         // The settings state the density per kilometer, the shader per meter.
         let densityPerMeter = length(fog.densityPerKilometer) / 1000
         return GroundFogUniform(colorAndDensity: SIMD4<Float>(color, densityPerMeter),

@@ -94,7 +94,9 @@ final class GroundFogTests: XCTestCase {
     /// the view, as the horizon paints it, so a building veiled in full is
     /// the sky behind it. With the sky off it keeps its own colour.
     func testAboveTheLineTheFogIsTheSky() {
-        let settings = FixtureTiles.tilelessSettings()
+        let byDefault = uniform(FixtureTiles.tilelessSettings())
+        XCTAssertEqual(byDefault.skyColorAndGradient.w, 0, "By default the fog is one colour everywhere")
+        let settings = FixtureTiles.tilelessSettings().groundFog(takesSkyColor: true)
         let fog = uniform(settings)
         let horizon = settings.scene.fog.horizonColor
         let sky = settings.scene.fog.skyColor
@@ -128,13 +130,14 @@ final class GroundFogTests: XCTestCase {
         XCTAssertFalse(changed.groundFog(isEnabled: false).scene.groundFog.isEnabled)
     }
 
-    /// The buildings and the models draw clear of the fog unless asked.
-    func testTheBuildingsStandClearByDefault() {
+    /// The buildings and the models sink into the fog with the ground
+    /// unless asked to stand clear of it.
+    func testTheBuildingsSinkIntoTheFogByDefault() {
         let base = FixtureTiles.tilelessSettings()
-        XCTAssertFalse(base.scene.groundFog.veilsBuildings)
-        XCTAssertTrue(base.groundFog(veilsBuildings: true).scene.groundFog.veilsBuildings)
-        XCTAssertTrue(base.groundFog(veilsBuildings: true).groundFog(densityPerKilometer: 2).scene.groundFog.veilsBuildings,
-                      "An omitted value is left as configured")
+        XCTAssertTrue(base.scene.groundFog.veilsBuildings)
+        XCTAssertFalse(base.groundFog(veilsBuildings: false).scene.groundFog.veilsBuildings)
+        XCTAssertFalse(base.groundFog(veilsBuildings: false).groundFog(densityPerKilometer: 2).scene.groundFog.veilsBuildings,
+                       "An omitted value is left as configured")
     }
 
     func testAChangeAppliesLive() {
