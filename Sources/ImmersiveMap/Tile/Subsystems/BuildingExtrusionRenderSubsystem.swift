@@ -44,6 +44,21 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     /// How far each of the frame's building placements has risen,
     /// index-aligned with them, 0 for one not drawn.
     private var heightScales: [Float] = []
+    /// The ground relief the buildings stand on, nil while it is off.
+    private let groundReliefStore: GroundReliefStore?
+    /// Each of the frame's placements' lifts over the relief, index-aligned
+    /// with them: one float per volume of the tile, in the terrain's own
+    /// metres, nil for a tile whose terrain is not in. Metres, not world
+    /// units, which change with the zoom, and not as drawn, which changes
+    /// with the relief's fade: the drawer binds the units a metre rises
+    /// by this frame beside them, the exaggeration in them.
+    private var liftBuffers: [MTLBuffer?] = []
+    /// The lifts of each tile, kept while the tile is drawn with the same
+    /// terrain: a frame makes a tile's lifts once, when its terrain
+    /// arrives or changes. The tile is named by its object's identity, and
+    /// the entry carries the tile's address as well, so a tile allocated
+    /// where a released one was is not handed the old lifts.
+    private var liftBuffersByTile: [ObjectIdentifier: (tile: Tile, terrain: ObjectIdentifier, roughness: ObjectIdentifier, buffer: MTLBuffer)] = [:]
     private var drawsAny = false
 
     init(extrudedTilePipeline: ExtrudedTilePipeline,
@@ -53,8 +68,10 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
          shadowMapTextureProvider: @escaping () -> MTLTexture?,
          shadowFallbackTexture: MTLTexture,
          extrusion: ImmersiveMapSettings.ExtrusionSettings = ImmersiveMapSettings.ExtrusionSettings(),
-         debugOverlayControls: DebugOverlayControlState) {
+         debugOverlayControls: DebugOverlayControlState,
+         groundReliefStore: GroundReliefStore? = nil) {
         self.debugOverlayControls = debugOverlayControls
+        self.groundReliefStore = groundReliefStore
         self.extrusion = extrusion
         self.extrudedTilePipeline = extrudedTilePipeline
         self.extrudedDepthState = extrudedDepthState
@@ -100,6 +117,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
             signature += drawn
         }
         drawsAny = drawnPlacements.isEmpty == false
+        updateLiftBuffers(placements: placements, drawnKeys: drawnKeys, frameContext: frameContext)
         frameContext.sharedState.drawnBuildingPlacements = drawnPlacements
         frameContext.sharedState.buildingRiseByTile = riseByTile
         frameContext.sharedState.buildingRiseSignature = signature
@@ -107,6 +125,72 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     }
 
     func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
+
+    /// Each drawn placement's lifts over the relief: the terrain's height
+    /// under each volume's anchor, in the terrain's metres, and the
+    /// mountain share of the anchor's place, made once per tile, terrain
+    /// and roughness. Buildings on a slope stand level at the height of
+    /// their anchor, which the ground round them rises above and sinks
+    /// below.
+    private func updateLiftBuffers(placements: [PlaceTile], drawnKeys: [VisibleTile?], frameContext: FrameContext) {
+        liftBuffers.removeAll(keepingCapacity: true)
+        guard let groundReliefStore else {
+            liftBuffersByTile.removeAll()
+            return
+        }
+        var kept: [ObjectIdentifier: (tile: Tile, terrain: ObjectIdentifier, roughness: ObjectIdentifier, buffer: MTLBuffer)] = [:]
+        for (placement, key) in zip(placements, drawnKeys) {
+            let metalTile = placement.metalTile
+            let anchors = metalTile.tileBuffers.extruded.buildingAnchors
+            guard key != nil, anchors.isEmpty == false,
+                  let relief = groundReliefStore.relief(for: metalTile.tile,
+                                                        terrainZoom: GroundReliefStore.terrainZoom(forTargetZoom: placement.placeIn.z)) else {
+                liftBuffers.append(nil)
+                continue
+            }
+            let tileIdentity = ObjectIdentifier(metalTile)
+            let terrainIdentity = ObjectIdentifier(relief.terrain)
+            let roughnessIdentity = ObjectIdentifier(relief.roughness)
+            if let cached = liftBuffersByTile[tileIdentity],
+               cached.terrain == terrainIdentity,
+               cached.roughness == roughnessIdentity,
+               cached.tile == metalTile.tile,
+               cached.buffer.length == anchors.count * MemoryLayout<SIMD2<Float>>.stride {
+                kept[tileIdentity] = cached
+                liftBuffers.append(cached.buffer)
+                continue
+            }
+            var lifts = [SIMD2<Float>](repeating: .zero, count: anchors.count)
+            for (index, anchor) in anchors.enumerated() {
+                // The anchor is render space (y up), the terrain's v grows
+                // from the north edge.
+                let uv = SIMD2<Float>(anchor.x, TileCoordinateSpace.tileExtent - anchor.y) / TileCoordinateSpace.tileExtent
+                lifts[index] = SIMD2<Float>(relief.metres(atTileUV: uv), relief.mountainShare(atTileUV: uv))
+            }
+            guard let buffer = lifts.withUnsafeBytes({ bytes in
+                extrudedTilePipeline.pipelineState.device.makeBuffer(bytes: bytes.baseAddress!, length: bytes.count, options: .storageModeShared)
+            }) else {
+                liftBuffers.append(nil)
+                continue
+            }
+            kept[tileIdentity] = (metalTile.tile, terrainIdentity, roughnessIdentity, buffer)
+            liftBuffers.append(buffer)
+        }
+        liftBuffersByTile = kept
+    }
+
+    /// The datum the lifts are drawn from this frame, in the lifts' own
+    /// metres: the terrain under the point the camera looks at
+    /// (`GroundReliefStore.datumMetres`).
+    private var liftDatumMetres: Float {
+        groundReliefStore?.datumMetres ?? 0
+    }
+
+    /// The frame's fades and zoom the lifts' strength is read at
+    /// (`GroundReliefStore.frame`).
+    private var liftFrame: GroundReliefFrame {
+        groundReliefStore?.frame ?? .plain
+    }
 
     /// The model tile (`ModelTileStore.tileZoom`) a map tile lies in.
     static func modelTile(over tile: Tile) -> Tile {
@@ -131,6 +215,9 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
                 indexBuffers: hiddenBuildingIndexBuffers,
                 flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                 heightScales: heightScales,
+                liftBuffers: liftBuffers,
+                liftDatumMetres: liftDatumMetres,
+                liftFrame: liftFrame,
                 extrudedTilePipeline: extrudedTilePipeline,
                 extrudedDepthState: extrudedDepthState)
             return
@@ -144,6 +231,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
 
     func evict() {
         rise.reset()
+        liftBuffersByTile.removeAll()
     }
 
     private func drawBuildings(encoder: MTLRenderCommandEncoder,
@@ -160,6 +248,9 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
                                               indexBuffers: hiddenBuildingIndexBuffers,
                                               flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                               heightScales: heightScales,
+                                              liftBuffers: liftBuffers,
+                                              liftDatumMetres: liftDatumMetres,
+                                              liftFrame: liftFrame,
                                               extrudedTilePipeline: extrudedTilePipeline,
                                               extrudedStencilTestState: extrudedStencilTestState,
                                               depthDisabledState: depthDisabledState)

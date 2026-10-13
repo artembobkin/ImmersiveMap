@@ -22,4 +22,7 @@ struct FrameContextServices {
     /// the surface is the plane, and the horizon fog's tint.
     let baseColors: ImmersiveMapBaseColors
     let now: Date
+    /// The ground relief the labels stand on (`GroundReliefStore`), nil
+    /// while it is off.
+    var groundRelief: GroundReliefStore? = nil
 }

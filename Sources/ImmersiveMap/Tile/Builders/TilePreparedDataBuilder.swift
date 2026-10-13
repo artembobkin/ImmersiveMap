@@ -54,7 +54,8 @@ final class TilePreparedDataBuilder {
             extruded: PreparedTileCPU.Extruded(vertices: parsedTile.drawingExtruded.vertices,
                                                indices: parsedTile.drawingExtruded.indices,
                                                styles: parsedTile.drawingExtruded.styles,
-                                               buildingRanges: parsedTile.drawingExtruded.buildingRanges),
+                                               buildingRanges: parsedTile.drawingExtruded.buildingRanges,
+                                               buildingAnchors: parsedTile.drawingExtruded.buildingAnchors),
             textLabels: textLabels,
             roadLabels: roadLabels,
             surfaceLabels: surfaceLabels

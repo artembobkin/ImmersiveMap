@@ -9,10 +9,10 @@ import XCTest
 /// atmosphere rings the limb, the feather stays when the atmosphere is off,
 /// and transparent space gets nothing; on the tilted flat map the sky
 /// brightens from the sky colour into the horizon colour coming down to
-/// the line, the ground is veiled toward the horizon colour under it and
-/// stays byte-clean
-/// under the camera, and with the fog off the old seam band into the clear
-/// colour is what remains. A headless globe frame has no tiles, so the sphere's
+/// the line, the ground is veiled toward the horizon colour under it by
+/// the ground fog and stays byte-clean under the camera, and with the fog
+/// off the plane is bare: nothing is painted at the line, above or below.
+/// A headless globe frame has no tiles, so the sphere's
 /// slots are unpainted and space shows through them; the stars are removed
 /// so space is a flat dark colour the halo is measured against. Requires
 /// the compiled Metal library, so it skips under `swift test` and runs in
@@ -83,8 +83,8 @@ final class HorizonOffscreenRenderTests: XCTestCase {
     /// Pitched almost to the horizon over a magenta world with the fog on:
     /// the top of the frame is the sky, bluer and darker than the line. The
     /// sky brightens into the horizon colour coming down to the line. A
-    /// little under it both sides wear the horizon colour, which the ground
-    /// fog takes. Under that the fog thins over a band of rows, and the
+    /// little under it the far ground wears the horizon colour, which the
+    /// ground fog takes. Under that the fog thins over a band of rows, and the
     /// bottom of the frame is the bare fixture colour. Rendered twice with
     /// different horizon colours, so the fog's colour is pinned by what
     /// changes and the byte-clean ground by what does not.
@@ -117,13 +117,17 @@ final class HorizonOffscreenRenderTests: XCTestCase {
         XCTAssertGreaterThan(Self.brightness(pale.pixel(x: column, y: lineRow)), Self.brightness(top) + 15,
                              "The sky brightens coming down to the line")
 
-        // A little under the line the veil is complete: each frame wears
-        // its own horizon colour.
-        let veiledRow = lineRow + 4
+        // The far ground, where the tiles begin a few rows under the line
+        // (between them the clear colour shows, the far range's edge, which
+        // nothing paints), is veiled in full by the fog: each frame wears
+        // its own horizon colour there.
+        guard let veiledRow = (lineRow ..< min(lineRow + 12, size)).first(where: {
+            Self.distance(green.pixel(x: column, y: $0), greenPixel) <= 6
+        }) else {
+            return XCTFail("The far ground never wore the horizon colour under the line")
+        }
         XCTAssertLessThanOrEqual(Self.distance(pale.pixel(x: column, y: veiledRow), palePixel), 6,
-                                 "Under the line the ground is fully veiled in the horizon colour")
-        XCTAssertLessThanOrEqual(Self.distance(green.pixel(x: column, y: veiledRow), greenPixel), 6,
-                                 "Under the line the ground is fully veiled in the horizon colour")
+                                 "The far ground is fully veiled in the horizon colour")
 
         // Further down the fog thins over a band of rows.
         guard let releaseRow = (veiledRow ..< size).first(where: { Self.distance(pale.pixel(x: column, y: $0), palePixel) > 6 }) else {
@@ -142,12 +146,11 @@ final class HorizonOffscreenRenderTests: XCTestCase {
     }
 
     /// A building whose wall crosses the horizon row keeps its own colour.
-    /// The horizon's band is decided from the view ray as if every painted
-    /// pixel were the ground, so without the surface mask bit the wall would
-    /// take the far ground's whitening at that row. The ground fog is worked
-    /// out at the wall's own points, nearer than the fog begins, so it
-    /// leaves the wall too. The ground beside the building is veiled as
-    /// before. Street zoom, so the built-in style extrudes.
+    /// The ground fog is worked out at the wall's own points, nearer than
+    /// the fog begins, so it leaves the wall, and the horizon paints
+    /// nothing on painted pixels of the plane. The ground beside the
+    /// building is veiled as before. Street zoom, so the built-in style
+    /// extrudes.
     @MainActor
     func testABuildingCrossingTheHorizonKeepsItsColour() async throws {
         let fixtureBuilding = SIMD4<Float>(1, 1, 0, 1)
@@ -217,8 +220,15 @@ final class HorizonOffscreenRenderTests: XCTestCase {
             return XCTFail("The horizon colour never appeared on the ground column")
         }
         XCTAssertTrue((5 ... 60).contains(lineRow), "The horizon sits near the top of a frame pitched this far: row \(lineRow)")
-        XCTAssertLessThanOrEqual(Self.distance(frame.pixel(x: groundColumn, y: lineRow + 4), horizonPixel), 6,
-                                 "Beside the tower the far ground is veiled")
+        // The far ground begins a few rows under the line, past the far
+        // range's edge, veiled in full by the fog.
+        guard let gapRow = (lineRow ..< min(lineRow + 12, size)).first(where: {
+            Self.distance(frame.pixel(x: groundColumn, y: $0), horizonPixel) > 6
+        }), (gapRow ..< min(gapRow + 12, size)).contains(where: {
+            Self.distance(frame.pixel(x: groundColumn, y: $0), horizonPixel) <= 6
+        }) else {
+            return XCTFail("Beside the tower the far ground is veiled")
+        }
 
         // The tower's wall on the centre column, across the same rows: its
         // own colour, no fog on it, above and below the line alike.
@@ -230,14 +240,13 @@ final class HorizonOffscreenRenderTests: XCTestCase {
         }
     }
 
-    /// With the fog off the plane is what it was: above the line the sky is
-    /// the clear colour, just under it the ground is fogged into that same
-    /// colour, a few rows further the fog thins, and the bottom of the frame
-    /// is the bare fixture colour. Rendered twice with different clear
-    /// colours, so the band's colour is pinned by what changes and the
-    /// byte-clean ground by what does not.
+    /// With the fog off the plane is bare: above the line the sky is the
+    /// clear colour, and from the first painted row down the ground is the
+    /// fixture colour, nothing whitened at the line. Rendered twice with
+    /// different clear colours, so the sky is pinned by what changes and
+    /// the untouched ground by what does not.
     @MainActor
-    func testTheFlatHorizonWearsTheSeamBandWithTheFogOff() async throws {
+    func testTheFlatHorizonIsBareWithTheFogOff() async throws {
         let off = ImmersiveMapSettings.FogSettings(isEnabled: false)
         let noGroundFog = ImmersiveMapSettings.GroundFogSettings(isEnabled: false)
         let paper = try await renderTiltedPlane(clearColor: Self.paperClearColor, fog: off, groundFog: noGroundFog)
@@ -251,24 +260,19 @@ final class HorizonOffscreenRenderTests: XCTestCase {
         XCTAssertLessThanOrEqual(Self.distance(green.pixel(x: column, y: 0), greenClear), 6, "The sky is the clear colour")
 
         // The horizon line is where the paper frame first leaves its clear
-        // colour going down; the fog saturates to it for a short way under
-        // the line, so the release comes a few rows below the geometric line.
-        guard let releaseRow = (1 ..< size).first(where: { Self.distance(paper.pixel(x: column, y: $0), paperClear) > 6 }) else {
+        // colour going down: the ground starts there, bare.
+        guard let groundRow = (1 ..< size).first(where: { Self.distance(paper.pixel(x: column, y: $0), paperClear) > 6 }) else {
             return XCTFail("The ground never appeared below the horizon")
         }
-        XCTAssertTrue((10 ... 50).contains(releaseRow), "The horizon sits near the top of a frame pitched this far: row \(releaseRow)")
-        XCTAssertLessThanOrEqual(Self.distance(green.pixel(x: column, y: releaseRow - 1), greenClear), 6,
-                                 "Just under the line the ground is fogged into the frame's own clear colour")
-        let bandRows = (releaseRow ..< min(releaseRow + 25, size)).filter {
-            Self.distance(paper.pixel(x: column, y: $0), green.pixel(x: column, y: $0)) > 6
-        }
-        XCTAssertGreaterThanOrEqual(bandRows.count, 3, "The fog thins over a band of rows under the line")
-
-        for y in (size * 3 / 4) ..< size {
+        XCTAssertTrue((10 ... 50).contains(groundRow), "The horizon sits near the top of a frame pitched this far: row \(groundRow)")
+        // Past the rows the far-range edge antialiases over, the ground is
+        // the fixture colour in both frames: nothing of the clear colour is
+        // painted on it.
+        for y in (groundRow + 3) ..< size {
             XCTAssertEqual(paper.pixel(x: column, y: y), green.pixel(x: column, y: y),
-                           "Under the camera the map is byte-clean of fog at row \(y)")
+                           "The ground is untouched by the sky's colour at row \(y)")
+            XCTAssertTrue(Self.isFixtureWater(paper.pixel(x: column, y: y)), "The ground is the bare fixture colour at row \(y)")
         }
-        XCTAssertTrue(Self.isFixtureWater(paper.pixel(x: column, y: size - 1)), "The near ground is the bare fixture colour")
     }
 
     // MARK: - Helpers

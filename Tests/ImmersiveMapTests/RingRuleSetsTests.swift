@@ -65,6 +65,8 @@ final class RingRuleSetsTests: XCTestCase {
         XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.zoomDrop), [0, 2])
         XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.distance), [1, 3])
         XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.drawsLines), [true, false])
+        XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.drawsLabels), [true, true])
+        XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.rasterSize), [nil, 64])
     }
 
     /// A set starting past the tileset's deepest zoom is reached: the set

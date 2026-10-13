@@ -59,15 +59,20 @@ struct PreparedTileCPU: Sendable {
         /// Each building's place in `indices`, sorted by feature id, see
         /// `TileBuildingRange`.
         let buildingRanges: [TileBuildingRange]
+        /// Each volume's anchor by its ordinal
+        /// (`DrawingExtrudedBytes.buildingAnchors`).
+        let buildingAnchors: [SIMD2<Float>]
 
         init(vertices: [ExtrudedVertexIn],
              indices: [UInt32],
              styles: [TilePolygonStyle],
-             buildingRanges: [TileBuildingRange] = []) {
+             buildingRanges: [TileBuildingRange] = [],
+             buildingAnchors: [SIMD2<Float>] = []) {
             self.vertices = vertices
             self.indices = indices
             self.styles = styles
             self.buildingRanges = buildingRanges
+            self.buildingAnchors = buildingAnchors
         }
     }
 

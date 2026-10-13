@@ -90,6 +90,11 @@ final class FrameCameraStateResolver {
         requestRenderCameraUpdate()
     }
 
+    /// See `CameraStateController.endPan()`.
+    func endPanCamera() {
+        cameraStateController.endPan()
+    }
+
     func zoomCamera(scale: Double, velocity: Double = 0) {
         cameraStateController.zoom(scale: scale, velocity: velocity)
         requestRenderCameraUpdate()
@@ -128,6 +133,20 @@ final class FrameCameraStateResolver {
     func setCameraCenterWorldMercator(_ centerWorldMercator: SIMD2<Double>) {
         cameraStateController.setCenterWorldMercator(centerWorldMercator)
         requestRenderCameraUpdate()
+    }
+
+    /// See `CameraStateController.setCenterWorldMercatorOverTerrain`: the
+    /// zoom anchor compensation on the flat map, where the camera may
+    /// stand over a terrain.
+    func setCameraCenterWorldMercatorOverTerrain(_ centerWorldMercator: SIMD2<Double>) {
+        cameraStateController.setCenterWorldMercatorOverTerrain(centerWorldMercator)
+        requestRenderCameraUpdate()
+    }
+
+    /// The terrain under the camera (`CameraTerrainFollow`), nil on a map
+    /// without a relief.
+    func setTerrainFollow(_ follow: CameraTerrainFollow?) {
+        cameraStateController.terrainFollow = follow
     }
 
     /// See `CameraStateController.advanceBoundsPull(deltaTime:)`.

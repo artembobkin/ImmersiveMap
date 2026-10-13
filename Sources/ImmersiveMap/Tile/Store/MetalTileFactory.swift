@@ -84,6 +84,7 @@ final class MetalTileFactory: @unchecked Sendable {
             groundStyleRuns: GroundStyleRunScanner.scan(ground: preparedTile.ground),
             roadEdgeLineIndexStarts: preparedTile.roadEdgeLineIndexStarts,
             buildingRanges: preparedTile.extruded.buildingRanges,
+            buildingAnchors: preparedTile.extruded.buildingAnchors,
             textLabels: Self.textLabelSetMeta(from: preparedTile.textLabels),
             roadLabels: Self.roadLabelsMeta(from: preparedTile.roadLabels),
             surfaceLabels: preparedTile.surfaceLabels.labels
@@ -183,6 +184,7 @@ final class MetalTileFactory: @unchecked Sendable {
                                                       groundStyleRuns: image.groundStyleRuns,
                                                       roadEdgeLineIndexStarts: image.roadEdgeLineIndexStarts,
                                                       buildingRanges: image.buildingRanges,
+                                                      buildingAnchors: image.buildingAnchors,
                                                       textLabels: image.textLabels,
                                                       roadLabels: image.roadLabels,
                                                       surfaceLabels: image.surfaceLabels) else {
@@ -224,6 +226,7 @@ final class MetalTileFactory: @unchecked Sendable {
                                          groundStyleRuns: [GroundStyleRun],
                                          roadEdgeLineIndexStarts: [UInt32],
                                          buildingRanges: [TileBuildingRange],
+                                         buildingAnchors: [SIMD2<Float>],
                                          textLabels: PreparedTileArenaImage.TextLabelSetMeta,
                                          roadLabels: PreparedTileArenaImage.RoadLabelsMeta,
                                          surfaceLabels: [SurfaceLabelRecord]) -> TileBuffers? {
@@ -265,7 +268,8 @@ final class MetalTileFactory: @unchecked Sendable {
                                             indices: extrudedIndices.view,
                                             styles: cursor.takeView(.extrudedStyles),
                                             indexType: extrudedIndices.indexType,
-                                            buildingRanges: buildingRanges)
+                                            buildingRanges: buildingRanges,
+                                            buildingAnchors: buildingAnchors)
 
         let textLabelBuffers = takeTextLabelSet(textLabels, cursor: &cursor)
         let roadGlyphVertices = cursor.takeView(.roadLabelGlyphVertices)

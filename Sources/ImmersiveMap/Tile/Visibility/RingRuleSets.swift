@@ -79,11 +79,12 @@ struct RingRuleSets: Hashable {
 
 extension FlatRingRules {
     /// The globe's zooms: the exact tiles with their lines to ring 1, then
-    /// two levels coarser to ring 3 without lines. Ground past ring 3 is
-    /// the pinned world cover (`GlobeTileCoverage`).
+    /// two levels coarser to ring 3 as 64-texel textures, with their
+    /// labels and without lines. Ground past ring 3 is the pinned world
+    /// cover (`GlobeTileCoverage`).
     static let globeDefault = FlatRingRules(rules: [
         FlatRingRule(zoomDrop: 0, distance: 1),
-        FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false)
+        FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false, rasterSize: 64)
     ])
 
     /// Zooms 15 and 16: the exact tiles with their lines and labels to ring

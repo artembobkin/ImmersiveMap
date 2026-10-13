@@ -55,7 +55,7 @@ struct SkyPanel: View {
             }
             PanelRow {
                 // The fog is a per-frame uniform too. Off leaves the sky the
-                // clear colour and a thin seam-hiding band at the line.
+                // clear colour.
                 Toggle("Fog", isOn: $settings.scene.fog.isEnabled)
                     .toggleStyle(.switch)
                 ColorPicker("Sky", selection: fogColor(\.skyColor), supportsOpacity: false)

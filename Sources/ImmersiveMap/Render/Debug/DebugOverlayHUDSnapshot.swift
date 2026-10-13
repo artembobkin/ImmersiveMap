@@ -96,14 +96,43 @@ struct DebugOverlayHUDSnapshot: Equatable {
         let sourceZoomCounts = zoomCountsLine(title: "srcZ", tiles: placeTiles.map { $0.metalTile.tile })
         let targetZoomCounts = zoomCountsLine(title: "targetZ", tiles: placeTiles.map { $0.placeIn.tile })
 
-        return [
+        var lines = [
             "camera z:\(format(cameraState.zoom)) pitch:\(format(pitchDegrees)) bearing:\(format(bearingDegrees))",
             "surface:\(surface) transition:\(format(Double(frameContext.transition))) viewport:\(Int(viewport.x))x\(Int(viewport.y))",
-            "eye x:\(format(Double(eye.x))) y:\(format(Double(eye.y))) z:\(format(Double(eye.z)))",
+            "eye x:\(format(Double(eye.x))) y:\(format(Double(eye.y))) z:\(format(Double(eye.z)))"
+        ]
+        if let relief = reliefLine(frameContext: frameContext) {
+            lines.append(relief)
+        }
+        lines += [
             ringRulesLine(frameContext.visibleContent.flatRingBands),
             targetZoomCounts,
             sourceZoomCounts
         ]
+        return lines
+    }
+
+    /// The ground relief under the camera: the terrain under the point it
+    /// looks at, the datum the relief is drawn from, and the eye's own
+    /// altitude over the sea in the terrain's metres as drawn, which a pan
+    /// over the relief keeps (`CameraTerrainFollow`). Nil without a relief
+    /// or off the flat map.
+    private static func reliefLine(frameContext: FrameContext) -> String? {
+        guard let store = frameContext.services.groundRelief,
+              frameContext.renderSurfaceMode == .flat else {
+            return nil
+        }
+        let centre = frameContext.mapCameraState.centerWorldMercator
+        let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: centre.y)
+        let unitsPerMetre = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: latitude,
+                                                                      renderMapSize: frameContext.flatRenderState.renderMapSize)
+        let eyeHeightMetres = Double(frameContext.cameraEye.z) / unitsPerMetre
+        let state = store.isActive ? "on" : "off"
+        let terrainZoom = GroundReliefStore.terrainZoom(forTargetZoom: frameContext.visibleContent.tileZoomLevel)
+        let strength = store.strength(atNormalizedWorld: centre, terrainZoom: terrainZoom).map { Double($0) }
+        let share = store.mountainShare(atNormalizedWorld: centre, terrainZoom: terrainZoom).map { Double($0) }
+        return "relief:\(state) datum:\(format(Double(store.datumMetres)))m eye alt:\(format(Double(store.datumMetres) + eyeHeightMetres))m"
+            + " height:\(format(eyeHeightMetres))m mountain:\(share.map(format) ?? "-") x\(strength.map(format) ?? "-")"
     }
 
     /// The ring rules as the frame resolved them on either surface,

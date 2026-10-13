@@ -5,6 +5,7 @@
 using namespace metal;
 #include "../../Render/Shaders/Shared/RenderUniforms.h"
 #include "../../Render/Shaders/Shared/GroundFog.h"
+#include "GroundRelief.h"
 
 // Mirror of ExtrudedVertexIn (12 bytes on the CPU side): positions arrive
 // as raw Int16 values in 14.2 fixed point, converted to float by the vertex
@@ -14,7 +15,39 @@ struct VertexIn {
     float3 position [[attribute(0)]];
     float3 normal [[attribute(1)]];
     unsigned char styleIndex [[attribute(2)]];
+    ushort buildingOrdinal [[attribute(3)]];
 };
+
+/// The ground relief (GroundReliefStore): the building rises by its lift,
+/// one per building of the tile at vertex buffer 4, the terrain's metres
+/// under its anchor and the mountain share of the place
+/// (BuildingExtrusionRenderSubsystem), the metres less the frame's datum,
+/// times the strength of the place this frame and the world units a metre
+/// spans over the tile, at vertex buffer 5 (BuildingLift), so it stands
+/// level on the slope under it. The lifts are metres so a tile keeps them
+/// across the zooms, whose world units differ, and across the frames,
+/// whose datum moves with the camera and whose strength moves with the
+/// zoom.
+constant bool kExtrudedRelief [[function_constant(0)]];
+
+// What a tile's lifts are drawn with this frame (BuildingExtrusionDrawer,
+// mirrored by BuildingLiftUniform): the world units a metre spans over
+// the tile, the datum in metres, the terrain under the point the camera
+// looks at (GroundReliefCameraLift), and the frame's fades and zoom
+// (GroundReliefUniform, GroundRelief.h).
+struct BuildingLift {
+    float unitsPerMetre;
+    float datumMetres;
+    float2 padding;
+    float4 fades;
+    float4 frame;
+};
+
+// The world z a building rises by: its lift's metres over the datum at
+// the strength of its place.
+static inline float buildingLiftZ(float2 lift, BuildingLift uniform) {
+    return (lift.x - uniform.datumMetres) * groundReliefStrength(lift.y, uniform.fades, uniform.frame) * uniform.unitsPerMetre;
+}
 
 // The CPU quantizes positions to quarter tile units; see
 // ExtrudedVertexIn.positionScale.
@@ -39,12 +72,17 @@ struct Style {
 vertex VertexOut tileExtrudedVertexShader(VertexIn vertexIn [[stage_in]],
                                           constant Camera& camera [[buffer(1)]],
                                           constant Style* styles [[buffer(2)]],
-                                          constant float4x4& modelMatrix [[buffer(3)]]) {
+                                          constant float4x4& modelMatrix [[buffer(3)]],
+                                          constant float2* buildingLifts [[buffer(4), function_constant(kExtrudedRelief)]],
+                                          constant BuildingLift& lift [[buffer(5), function_constant(kExtrudedRelief)]]) {
     Style style = styles[vertexIn.styleIndex];
     float4x4 matrix = camera.matrix;
 
     float3 localPosition = vertexIn.position * kExtrudedPositionInverseScale;
     float4 worldPosition = modelMatrix * float4(localPosition, 1.0);
+    if (kExtrudedRelief) {
+        worldPosition.z += buildingLiftZ(buildingLifts[vertexIn.buildingOrdinal], lift);
+    }
     float4 clipPosition = matrix * worldPosition;
     float3x3 normalMatrix = float3x3(modelMatrix[0].xyz, modelMatrix[1].xyz, modelMatrix[2].xyz);
     float3 worldNormal = normalize(normalMatrix * vertexIn.normal);
@@ -151,9 +189,14 @@ struct ExtrudedShadowVertexOut {
 
 vertex ExtrudedShadowVertexOut tileExtrudedShadowVertexShader(VertexIn vertexIn [[stage_in]],
                                                               constant ShadowCasterMatrices& casters [[buffer(1)]],
-                                                              constant float4x4& modelMatrix [[buffer(3)]]) {
+                                                              constant float4x4& modelMatrix [[buffer(3)]],
+                                                              constant float2* buildingLifts [[buffer(4), function_constant(kExtrudedRelief)]],
+                                                              constant BuildingLift& lift [[buffer(5), function_constant(kExtrudedRelief)]]) {
     float3 localPosition = vertexIn.position * kExtrudedPositionInverseScale;
     float4 worldPosition = modelMatrix * float4(localPosition, 1.0);
+    if (kExtrudedRelief) {
+        worldPosition.z += buildingLiftZ(buildingLifts[vertexIn.buildingOrdinal], lift);
+    }
     ExtrudedShadowVertexOut out;
     out.position = casters.lightProjectionView * worldPosition;
     return out;

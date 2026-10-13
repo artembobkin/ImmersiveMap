@@ -2,34 +2,14 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
+import Metal
 import simd
 import XCTest
 
-/// The raster tiles' pieces that need no GPU: the bytes of a texture, the
-/// grid it is drawn on, the file it is kept in, and the settings.
+/// The raster tiles' pieces that need no GPU: the grid a texture is drawn
+/// on, and the settings.
 final class RasterTileTests: XCTestCase {
     // MARK: - The texture's bytes
-
-    /// Every level from the full edge down to one texel, packed one after
-    /// the other.
-    func testTheLevelsArePackedFromTheFullEdgeDown() {
-        XCTAssertEqual(RasterTileLayout.levelCount(size: 256), 9)
-        XCTAssertEqual(RasterTileLayout.levelCount(size: 64), 7)
-        XCTAssertEqual(RasterTileLayout.edge(size: 256, level: 8), 1)
-        let offsets = RasterTileLayout.levelOffsets(size: 256)
-        XCTAssertEqual(offsets.count, 9)
-        XCTAssertEqual(offsets[0], 0)
-        XCTAssertEqual(offsets[1], 256 * 256 * 4)
-        XCTAssertEqual(offsets[2], 256 * 256 * 4 + 128 * 128 * 4)
-        let total = RasterTileLayout.totalByteCount(size: 256)
-        XCTAssertEqual(total, offsets[8] + 4, "the last level is one texel")
-        XCTAssertEqual(Double(total), Double(256 * 256 * 4) * 4 / 3, accuracy: 4, "a mip chain is a third over its first level")
-        for size in FlatRingRules.rasterSizes {
-            XCTAssertEqual(RasterTileLayout.levelOffsets(size: size).count, RasterTileLayout.levelCount(size: size))
-        }
-    }
-
-    // MARK: - The grid
 
     /// The grid covers the tile's extent, counter-clockwise like every tile
     /// triangle, so the surfaces' back-face culling keeps it.
@@ -67,61 +47,27 @@ final class RasterTileTests: XCTestCase {
 
     // MARK: - The file
 
-    /// A raster tile's file lives in its prepared namespace, a directory a
-    /// size and fade zoom, under the name the availability index reads.
-    func testTheFileLivesInThePreparedNamespace() throws {
-        let base = FileManager.default.temporaryDirectory.appendingPathComponent("RasterTileTests-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: base) }
-        let settings = FixtureTiles.tilelessSettings()
-        let identity = PreparedTileCacheIdentity(preparedFormatVersion: PreparedTileDiskCaching.preparedFormatVersion,
-                                                 styleRevision: 1,
-                                                 tileSourceRevision: 2,
-                                                 textRevision: 3,
-                                                 labelLanguage: settings.labels.language,
-                                                 labelFallbackPolicy: settings.labels.fallbackPolicy,
-                                                 capitalMaximumZoom: 0,
-                                                 cityMaximumZoom: 0,
-                                                 smallSettlementMaximumZoom: 0,
-                                                 landmarkMinimumZoom: 0,
-                                                 addTestBorders: false,
-                                                 labelsEnabled: true)
-        let transport = InlinePreparedTileGeometryTransport()
-        let cache = RasterTileDiskCache(config: settings,
-                                        cacheIdentity: identity,
-                                        geometryTransport: transport,
-                                        baseCachesDirectory: base)
-        XCTAssertEqual(cache.fileFormat, .plain)
-        let key = RasterTileKey(tile: Tile(x: 5, y: 7, z: 9), size: 256, fadeZoom: 13)
-        let url = cache.fileURL(for: key)
-        let namespace = PreparedTileDiskCaching.namespaceDirectory(
-            rootDirectory: PreparedTileDiskCaching.rootDirectory(baseCachesDirectory: base),
-            cacheIdentity: identity,
-            geometryTransport: transport)
-        XCTAssertEqual(url.deletingLastPathComponent().deletingLastPathComponent().standardizedFileURL,
-                       namespace.standardizedFileURL)
-        XCTAssertEqual(url.deletingLastPathComponent().lastPathComponent,
-                       "raster-v\(RasterTileDiskCache.formatVersion)-256-z13")
-        XCTAssertEqual(PreparedTileAvailabilityIndex.tile(forIndexedFileName: url.lastPathComponent), key.tile)
-        XCTAssertNil(PreparedTileAvailabilityIndex.tile(forIndexedFileName: url.lastPathComponent + ".tmp-1"))
-        XCTAssertNotEqual(cache.fileURL(for: RasterTileKey(tile: key.tile, size: 128, fadeZoom: 13)), url,
-                          "a size is a file of its own")
-        XCTAssertNotEqual(cache.fileURL(for: RasterTileKey(tile: key.tile, size: 256, fadeZoom: 12)), url,
-                          "a fade zoom is a file of its own")
+    /// On the relief the grid is at least the zoom's flattening grid, and
+    /// never past what 16-bit indices address.
+    func testTheGridOnTheReliefIsAsFineAsTheFlattenings() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("No Metal device") }
+        let grid = RasterTileGrid(device: device)
+        XCTAssertEqual(try XCTUnwrap(grid.mesh(forTileZoom: 10)).indexCount, RasterTileGrid.cells(forTileZoom: 10) * RasterTileGrid.cells(forTileZoom: 10) * 6)
+        XCTAssertEqual(try XCTUnwrap(grid.mesh(forTileZoom: 10, atLeast: 128)).indexCount, 128 * 128 * 6)
+        XCTAssertEqual(try XCTUnwrap(grid.mesh(forTileZoom: 10, atLeast: 256)).indexCount, 255 * 255 * 6, "16-bit indices")
     }
 
     // MARK: - The settings
 
     func testTheModifierLeavesTheOtherValuesAsConfigured() {
         let base = FixtureTiles.tilelessSettings()
-        let changed = base.tileRasterization(bakesPerFrame: 2, mipLevelBias: 0.5)
-        XCTAssertEqual(changed.tiles.rasterization.bakesPerFrame, 2)
+        let changed = base.tileRasterization(mipLevelBias: 0.5)
         XCTAssertEqual(changed.tiles.rasterization.mipLevelBias, 0.5)
-        XCTAssertEqual(changed.tiles.rasterization.memoryBudgetInBytes, base.tiles.rasterization.memoryBudgetInBytes)
         XCTAssertEqual(changed.tiles.rasterization.maximumAnisotropy, base.tiles.rasterization.maximumAnisotropy)
     }
 
-    /// The store and its sampler are built with the renderer, and the
-    /// textures on disk do not depend on these settings.
+    /// The sampler is built with the renderer, and the prepared tiles do
+    /// not depend on these settings.
     func testAChangeRecreatesTheRendererAndKeepsTheCaches() {
         let old = FixtureTiles.tilelessSettings()
         let new = old.tileRasterization(maximumAnisotropy: 4)

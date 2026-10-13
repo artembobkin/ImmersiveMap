@@ -77,6 +77,7 @@ private final class RecordingTileCulling: TileCulling {
                                         cameraMatrix: matrix_float4x4?,
                                         cameraFrustum: Frustum?,
                                         cameraEye: SIMD3<Float>,
+                                        reliefHeights: ClosedRange<Float>?,
                                         rules: FlatRingRules,
                                         diagnostics: (any FrameDiagnosticsService)? = nil) -> VisibleContentState {
         targetZooms.append(targetZoom)

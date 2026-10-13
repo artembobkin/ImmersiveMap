@@ -14,23 +14,23 @@ import simd
 ///   space, which is what hides the tile mesh's chord polygon and the
 ///   one-sample-per-pixel staircase of the silhouette. Sized in pixels, so
 ///   it is the same at every zoom.
-/// - **The fog**, the flat map's (`FogSettings`): the sky above the
-///   horizon line, a glow of the horizon colour at the line decaying into
-///   the sky colour over a few degrees, and below it a thin band of the
-///   ground whitening into the horizon colour at the line, which hides the
-///   seam between the far ground and the sky. With the fog off nothing is
-///   painted above the line and the band whitens into the map's clear
-///   colour, so the far range still meets the sky with no seam. The far
-///   ground itself is the ground fog's (`GroundFogSettings`), drawn by
-///   the shaders of what stands on the map, not here.
+/// - **The sky**, the flat map's (`FogSettings`): above the horizon
+///   line, a glow of the horizon colour at the line decaying into the sky
+///   colour over a few degrees. Nothing is painted on the ground: the far
+///   ground is the ground fog's (`GroundFogSettings`), drawn by the
+///   shaders of what stands on the map by its distance, which veils it
+///   into the sky's colour where it meets the line. An angle profile under
+///   the line would be wrong there anyway: the ground relief's silhouette
+///   is not the plane's line, a near slope lying under it and a peak over
+///   it. With the fog off nothing is painted above the line either.
 ///
 /// The three never share a frame. The resting globe wears the first two.
 /// As the morph starts the atmosphere fades out, gone by
 /// `atmosphereFadeOutEnd` of the semantic transition, and the unroll then
-/// runs bare: no halo, no feather, no band. Over the last stretch, from
+/// runs bare: no halo, no feather, no sky. Over the last stretch, from
 /// `fogFadeInStart`, where the geometry is already a finished plane, the
-/// flat map's sky and band fade in, complete at 1, so the surface switch
-/// happens between identical frames.
+/// flat map's sky fades in, complete at 1, so the surface switch happens
+/// between identical frames.
 struct HorizonHaze: Equatable {
     var edge: HorizonEdgeMath.Edge
     /// The current sphere's centre, for the sun's side of the limb.
@@ -100,14 +100,6 @@ enum HorizonFrameResolver {
     /// to the whole sky.
     static let maximumHaloRadians: Float = 45 * .pi / 180
 
-    /// The seam-hiding band of the plane, radians below the horizon: one
-    /// exponential with a gain above one so it saturates to the tint at the
-    /// line, cut off smoothly a few degrees under it.
-    static let fogBandRadians: Float = 1.2 * .pi / 180
-    static let fogGain: Float = 1.6
-    static let fogCutoffStartRadians: Float = 4 * .pi / 180
-    static let fogCutoffEndRadians: Float = 6 * .pi / 180
-
     /// The e-fold width, radians above the line, of the plane's horizon
     /// glow: the sky is the horizon colour at the line and the sky colour
     /// a few of these widths up.
@@ -133,8 +125,8 @@ enum HorizonFrameResolver {
         return 1 - t * t * (3 - 2 * t)
     }
 
-    /// How much of the flat map's sky and band is in: 0 before
-    /// `fogFadeInStart`, 1 at the end of the transition and on the plane.
+    /// How much of the flat map's sky is in: 0 before `fogFadeInStart`,
+    /// 1 at the end of the transition and on the plane.
     static func fogFade(transition: Float, renderSurfaceMode: ViewMode) -> Float {
         guard renderSurfaceMode == .spherical else { return 1 }
         let t = simd_clamp((transition - fogFadeInStart) / (1 - fogFadeInStart), 0, 1)
@@ -185,22 +177,16 @@ enum HorizonFrameResolver {
         let tint = showsFog ? planeTint : globeTint
 
         let inverseProjectionView = simd_inverse(projectionView)
-        // The band drawn in toward the line close to the ground
-        // (`FogSettings.horizonBandZoomFade`): all of its angles at once,
-        // so its profile keeps its shape.
-        let bandShare = fog.horizonBandShare(atZoom: zoom)
-        let planeCutoffStart = fogCutoffStartRadians * bandShare
-        let planeCutoffEnd = fogCutoffEndRadians * bandShare
-        let planeBand = fogBandRadians * bandShare
-        let planeGain = fogGain
-
+        // The ground side is the globe's alone: the rim of the atmosphere
+        // decaying inward over the surface, and the limb feather. The plane
+        // paints nothing on the ground.
         let rimRadians = haloRadians(haloRimRadii)
         let featherRadians = max(featherPixels * verticalFovRadians / max(drawableHeightPx, 1), minimumRadians)
         let featherStrength = featherPeakStrength * atmosphereFade
-        let groundGain = showsFog ? planeGain * fogFade : (isOn ? intensity : 0) * atmosphereFade
-        let groundBandRadians = max(showsFog ? planeBand : rimRadians, minimumRadians)
-        let cutoffStartRadians = max(showsFog ? planeCutoffStart : rimRadians * rimCutoffStartWidths, minimumRadians)
-        let cutoffEndRadians = max(showsFog ? planeCutoffEnd : rimRadians * rimCutoffEndWidths, minimumRadians)
+        let groundGain = showsFog ? 0 : (isOn ? intensity : 0) * atmosphereFade
+        let groundBandRadians = max(showsFog ? 0 : rimRadians, minimumRadians)
+        let cutoffStartRadians = max(showsFog ? 0 : rimRadians * rimCutoffStartWidths, minimumRadians)
+        let cutoffEndRadians = max(showsFog ? 0 : rimRadians * rimCutoffEndWidths, minimumRadians)
         let skyOpacity = fog.isEnabled ? fogFade : 0
 
         let lightDirection = settings.scene.light.direction

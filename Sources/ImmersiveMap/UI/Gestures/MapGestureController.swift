@@ -189,12 +189,15 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
 
         switch gesture.state {
         case .ended:
+            mapView.cameraRuntime.endPan()
             mapView.cameraAnimationRuntime.startGlobeCameraPanInertiaIfNeeded(initialVelocity: gesture.velocity(in: mapView))
         case .cancelled, .failed:
+            mapView.cameraRuntime.endPan()
             mapView.cameraAnimationRuntime.cancelGlobeCameraPanInertia()
         case .began, .changed, .possible:
             break
         @unknown default:
+            mapView.cameraRuntime.endPan()
             mapView.cameraAnimationRuntime.cancelGlobeCameraPanInertia()
         }
     }

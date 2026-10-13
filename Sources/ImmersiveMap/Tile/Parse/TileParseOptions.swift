@@ -29,6 +29,14 @@ struct TileParseOptions: Equatable {
     /// `TileSettings.GroundFlatteningSettings`).
     var groundFlatteningFromTileZoom: Int?
     var groundFlatteningGrid: Int
+    /// The grid of a tile zoom, over `groundFlatteningGrid` for the zooms
+    /// it names (`GroundFlatteningSettings.gridByTileZoom`).
+    var groundFlatteningGridByTileZoom: [Int: Int]
+    /// Whether the flattened ground rises by a heightmap
+    /// (`TileSettings.GroundReliefSettings`): the roads and the lines of a
+    /// flattened tile then take a vertex at every crossing of the
+    /// flattening's grid, so they follow the relief as the ground does.
+    var groundReliefEnabled: Bool
 
     static let groundFlatteningGridRange = 1 ... 256
 
@@ -36,13 +44,39 @@ struct TileParseOptions: Equatable {
          addTestBorders: Bool,
          buildingMinimumSourceZoom: Int,
          groundFlatteningFromTileZoom: Int? = nil,
-         groundFlatteningGrid: Int = 16) {
+         groundFlatteningGrid: Int = 16,
+         groundFlatteningGridByTileZoom: [Int: Int] = [:],
+         groundReliefEnabled: Bool = false) {
         self.labelsEnabled = labelsEnabled
         self.addTestBorders = addTestBorders
         self.buildingMinimumSourceZoom = buildingMinimumSourceZoom
         self.groundFlatteningFromTileZoom = groundFlatteningFromTileZoom
         self.groundFlatteningGrid = min(max(groundFlatteningGrid, Self.groundFlatteningGridRange.lowerBound),
                                         Self.groundFlatteningGridRange.upperBound)
+        self.groundFlatteningGridByTileZoom = groundFlatteningGridByTileZoom.mapValues {
+            min(max($0, Self.groundFlatteningGridRange.lowerBound), Self.groundFlatteningGridRange.upperBound)
+        }
+        self.groundReliefEnabled = groundReliefEnabled
+    }
+
+    /// The grid a flattened tile of `tileZoom` keeps to.
+    func groundFlatteningGrid(forTileZoom tileZoom: Int) -> Int {
+        groundFlatteningGridByTileZoom[tileZoom] ?? groundFlatteningGrid
+    }
+
+    /// The grids by zoom as one string, for the prepared-tile identity:
+    /// empty without overrides.
+    var groundFlatteningGridByTileZoomKey: String {
+        groundFlatteningGridByTileZoom.keys.sorted().map { "\($0)=\(groundFlatteningGridByTileZoom[$0]!)" }.joined(separator: ",")
+    }
+
+    /// The grid step, in tile units, the roads and the lines of a tile of
+    /// `tileZoom` take a vertex at, nil where they keep their own vertices:
+    /// the flattening's grid, where the tile is flattened and the ground
+    /// rises by a heightmap.
+    func reliefSubdivisionStep(tileZoom: Int) -> Float? {
+        guard groundReliefEnabled, flattensGround(tileZoom: tileZoom) else { return nil }
+        return Float(TileCoordinateSpace.tileExtentDouble) / Float(groundFlatteningGrid(forTileZoom: tileZoom))
     }
 
     /// Whether a tile of `tileZoom` carries its ground flattened.
@@ -61,7 +95,9 @@ struct TileParseOptions: Equatable {
         self.init(labelsEnabled: settings.labels.isEnabled,
                   addTestBorders: settings.tiles.parsing.addTestBorders,
                   buildingMinimumSourceZoom: BuildingCoveragePlanner.minimumDrawZoom(settings: settings),
-                  groundFlatteningFromTileZoom: settings.tiles.groundFlattening.fromTileZoom,
-                  groundFlatteningGrid: settings.tiles.groundFlattening.grid)
+                  groundFlatteningFromTileZoom: settings.tiles.resolvedGroundFlatteningFromTileZoom,
+                  groundFlatteningGrid: settings.tiles.groundFlattening.grid,
+                  groundFlatteningGridByTileZoom: settings.tiles.groundFlattening.gridByTileZoom,
+                  groundReliefEnabled: settings.tiles.groundRelief.isEnabled)
     }
 }

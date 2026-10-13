@@ -21,6 +21,23 @@ class TilePipeline {
     /// buckets, bridge overlay).
     let flatFillsPipelineState: MTLRenderPipelineState?
     let flatOpaquePipelineState: MTLRenderPipelineState?
+    /// Flat surface only: every flat variant again with the ground relief
+    /// (Tile.metal, kTileGroundRelief), the vertex raised by the terrain
+    /// read at vertex texture 0 with its uniform at vertex buffer 9, for
+    /// the tiles whose terrain is in. Keyed by the class the plain variant
+    /// draws.
+    let flatReliefPipelineStates: [FlatClass: MTLRenderPipelineState]
+
+    /// The flat classes, each with its plain pipeline state and its relief
+    /// one.
+    enum FlatClass: Hashable {
+        /// The line-fields pipeline (ribbons, road buckets, bridge overlay).
+        case lines
+        case fills
+        case opaqueFills
+        case roadOpaque
+        case roadBlended
+    }
     /// Flat surface only: the road ribbons (Tile.metal, kTileRoadRibbons),
     /// whose geometry is the road and whose depth is the road's rank. The
     /// opaque ones draw unblended, the rest blend.
@@ -62,6 +79,10 @@ class TilePipeline {
         var sphereMorphFragmentFunctions: [Bool: MTLFunction] = [:]
         var flatFillsVertexFunction: MTLFunction?
         var flatFillsFragmentFunction: MTLFunction?
+        // The relief variants' vertex functions: the lines class, the fills
+        // class, and the opaque and the blended road ribbons.
+        var flatReliefVertexFunctions: (lines: MTLFunction, fills: MTLFunction,
+                                        roadOpaque: MTLFunction, roadBlended: MTLFunction)?
         // The road ribbons: the opaque and the blended vertex and fragment
         // pairs.
         var flatRoadFunctions: (opaqueVertex: MTLFunction, opaqueFragment: MTLFunction,
@@ -71,16 +92,19 @@ class TilePipeline {
             func flatFunction(_ name: String,
                               lineFields: Bool,
                               roadRibbons: Bool = false,
-                              roadBlended: Bool = false) -> MTLFunction {
+                              roadBlended: Bool = false,
+                              groundRelief: Bool = false) -> MTLFunction {
                 let values = MTLFunctionConstantValues()
                 var readsMask = readsGroundShadowMask
                 var lineFieldsValue = lineFields
                 var roadRibbonsValue = roadRibbons
                 var roadBlendedValue = roadBlended
+                var groundReliefValue = groundRelief
                 values.setConstantValue(&readsMask, type: .bool, index: 0)
                 values.setConstantValue(&lineFieldsValue, type: .bool, index: 1)
                 values.setConstantValue(&roadRibbonsValue, type: .bool, index: 4)
                 values.setConstantValue(&roadBlendedValue, type: .bool, index: 5)
+                values.setConstantValue(&groundReliefValue, type: .bool, index: 6)
                 return try! library.makeFunction(name: name, constantValues: values)
             }
             func roadFunction(_ name: String, blended: Bool) -> MTLFunction {
@@ -90,6 +114,13 @@ class TilePipeline {
             fragmentFunction = flatFunction("tileFragmentShader", lineFields: true)
             flatFillsVertexFunction = flatFunction("tileVertexShader", lineFields: false)
             flatFillsFragmentFunction = flatFunction("tileFragmentShader", lineFields: false)
+            flatReliefVertexFunctions = (
+                lines: flatFunction("tileVertexShader", lineFields: true, groundRelief: true),
+                fills: flatFunction("tileVertexShader", lineFields: false, groundRelief: true),
+                roadOpaque: flatFunction("tileVertexShader", lineFields: true, roadRibbons: true, groundRelief: true),
+                roadBlended: flatFunction("tileVertexShader", lineFields: true, roadRibbons: true, roadBlended: true,
+                                          groundRelief: true)
+            )
             flatRoadFunctions = (
                 opaqueVertex: roadFunction("tileVertexShader", blended: false),
                 opaqueFragment: roadFunction("tileRoadFragmentShader", blended: false),
@@ -198,6 +229,27 @@ class TilePipeline {
             pipelineDescriptor.colorAttachments[0].isBlendingEnabled = false
             self.flatOpaquePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
             pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
+            // The relief variants: each class's fragment function and
+            // blending with the relief's vertex function.
+            var reliefStates: [FlatClass: MTLRenderPipelineState] = [:]
+            if let relief = flatReliefVertexFunctions, let road = flatRoadFunctions {
+                func reliefState(_ vertex: MTLFunction, _ fragment: MTLFunction?, blended: Bool) -> MTLRenderPipelineState {
+                    pipelineDescriptor.vertexFunction = vertex
+                    pipelineDescriptor.fragmentFunction = fragment
+                    pipelineDescriptor.colorAttachments[0].isBlendingEnabled = blended
+                    let state = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+                    pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
+                    return state
+                }
+                reliefStates[.lines] = reliefState(relief.lines, fragmentFunction, blended: true)
+                reliefStates[.fills] = reliefState(relief.fills, flatFillsFragmentFunction, blended: true)
+                reliefStates[.opaqueFills] = reliefState(relief.fills, flatFillsFragmentFunction, blended: false)
+                reliefStates[.roadOpaque] = reliefState(relief.roadOpaque, road.opaqueFragment, blended: false)
+                reliefStates[.roadBlended] = reliefState(relief.roadBlended, road.blendedFragment, blended: true)
+            }
+            self.flatReliefPipelineStates = reliefStates
+            pipelineDescriptor.vertexFunction = flatFillsVertexFunction
+            pipelineDescriptor.fragmentFunction = flatFillsFragmentFunction
             // The road ribbons: the blended pair, then the opaque pair
             // with blending off.
             func makeRoadStates() -> (opaque: MTLRenderPipelineState?, blended: MTLRenderPipelineState?) {
@@ -222,6 +274,7 @@ class TilePipeline {
             self.flatRoadBlendedPipelineState = nil
             self.flatFillsPipelineState = nil
             self.flatOpaquePipelineState = nil
+            self.flatReliefPipelineStates = [:]
         }
     }
 
@@ -289,6 +342,15 @@ class TilePipeline {
             return
         }
         selectPipeline(renderEncoder: renderEncoder)
+    }
+
+    /// A flat class raised by its terrain. False when the pipeline has no
+    /// relief variants (a sphere pipeline), and the caller draws flat.
+    @discardableResult
+    func selectFlatReliefPipeline(_ flatClass: FlatClass, renderEncoder: MTLRenderCommandEncoder) -> Bool {
+        guard let state = flatReliefPipelineStates[flatClass] else { return false }
+        renderEncoder.setRenderPipelineState(state)
+        return true
     }
 
     /// The opaque fills variant (blending off) for the layered ground;

@@ -11,8 +11,8 @@ enum RenderGraphFactory {
                                  shadowMapTextureProvider: @escaping () -> MTLTexture?,
                                  groundShadowMaskTextureProvider: @escaping () -> MTLTexture?) -> RenderGraph {
         let tileWorkingSetSubsystem = TileWorkingSetSubsystem(tileRenderStore: context.tileRenderStore,
-                                                              rasterTileStore: context.rasterTileStore,
                                                               tileTraceRecorder: context.tileTraceRecorder,
+                                                              groundReliefStore: context.groundReliefStore,
                                                               buildingsMinimumTileZoom: BuildingCoveragePlanner.minimumDrawZoom(settings: settings))
         let tileProjectionIndexSubsystem = TileProjectionIndexSubsystem(flatTileOriginCalculator: context.flatTileOriginCalculator)
         let baseLabelSubsystem = BaseLabelPrepareSubsystem(baseLabelCache: context.baseLabelCache,
@@ -57,28 +57,29 @@ enum RenderGraphFactory {
                                                           minimumZoom: settings.modelArchive?.minimumZoom ?? 0,
                                                           riseSeconds: settings.scene.extrusion.riseSeconds)
         let flatMapSurfaceSubsystem = FlatMapSurfaceRenderSubsystem(tilePipeline: context.tilePipeline,
-                                                                    groundOwnerState: context.groundOwnerState,
-                                                                    tileStencilTestState: context.tileStencilTestState,
+                                                                    groundSlotOwnerState: context.groundSlotOwnerState,
+                                                                    groundSlotTestState: context.groundSlotTestState,
                                                                     roadRankState: context.roadRankState,
                                                                     depthDisabledState: context.depthDisabledState,
                                                                     debugOverlayControls: debugOverlayControls,
                                                                     groundShadowMaskTextureProvider: groundShadowMaskTextureProvider,
-                                                                    groundShadowMaskFallbackTexture: context.groundShadowMaskFallbackTexture)
+                                                                    groundShadowMaskFallbackTexture: context.groundShadowMaskFallbackTexture,
+                                                                    groundReliefStore: context.groundReliefStore,
+                                                                    groundFlatteningFromTileZoom: settings.tiles.resolvedGroundFlatteningFromTileZoom)
         let groundShadowMaskSubsystem = GroundShadowMaskRenderSubsystem(pipeline: context.groundShadowMaskPipeline,
                                                                         depthDisabledState: context.depthDisabledState,
                                                                         shadowMapTextureProvider: shadowMapTextureProvider)
-        let tileOwnershipSubsystem = TileOwnershipRenderSubsystem(pipeline: context.tileOwnershipPipeline,
-                                                                  tileOwnershipWriteState: context.tileOwnershipWriteState,
-                                                                  depthDisabledState: context.depthDisabledState)
         let rasterTileSubsystem = RasterTileRenderSubsystem(device: context.metalContext.device,
                                                             pipeline: context.rasterTilePipeline,
                                                             settings: settings.tiles.rasterization,
-                                                            groundOwnerState: context.groundOwnerState,
+                                                            groundSlotOwnerState: context.groundSlotOwnerState,
                                                             sphereOpaqueOwnerState: context.sphereOpaqueOwnerState,
                                                             depthDisabledState: context.depthDisabledState,
                                                             debugOverlayControls: debugOverlayControls,
                                                             groundShadowMaskTextureProvider: groundShadowMaskTextureProvider,
-                                                            groundShadowMaskFallbackTexture: context.groundShadowMaskFallbackTexture)
+                                                            groundShadowMaskFallbackTexture: context.groundShadowMaskFallbackTexture,
+                                                            groundReliefStore: context.groundReliefStore,
+                                                            groundFlattening: settings.tiles.groundFlattening)
         let buildingExtrusionSubsystem = BuildingExtrusionRenderSubsystem(extrudedTilePipeline: context.extrudedTilePipeline,
                                                                           extrudedDepthState: context.extrudedDepthState,
                                                                           extrudedStencilTestState: context.extrudedStencilTestState,
@@ -86,7 +87,8 @@ enum RenderGraphFactory {
                                                                           shadowMapTextureProvider: shadowMapTextureProvider,
                                                                           shadowFallbackTexture: context.shadowFallbackTexture,
                                                                           extrusion: settings.scene.extrusion,
-                                                                          debugOverlayControls: debugOverlayControls)
+                                                                          debugOverlayControls: debugOverlayControls,
+                                                                          groundReliefStore: context.groundReliefStore)
         let starfieldSubsystem = StarfieldRenderSubsystem(starfieldRenderer: context.starfieldRenderer,
                                                           skyBackdropDepthState: context.skyBackdropDepthState,
                                                           depthDisabledState: context.depthDisabledState)
@@ -130,7 +132,6 @@ enum RenderGraphFactory {
             avatarSubsystem,
             markerSubsystem,
             groundShadowMaskSubsystem,
-            tileOwnershipSubsystem,
             // Before both ground layers' vector subsystems: a texture owns
             // its pixels before the vector ground draws.
             rasterTileSubsystem,

@@ -339,6 +339,10 @@ enum PreparedTileDiskCodec {
         /// extruded indices.
         let buildingRanges: Data
         let buildingRangeCount: UInt32
+        /// POD array of `SIMD2<Float>`: each volume's anchor by its
+        /// ordinal.
+        let buildingAnchors: Data
+        let buildingAnchorCount: UInt32
         let text: TextLabelSetMetaValue
         let roadPathInputs: Data
         let roadPathInputCount: UInt32
@@ -757,6 +761,9 @@ enum PreparedTileDiskCodec {
             buildingRanges: encodePODArray(preparedTile.extruded.buildingRanges),
             buildingRangeCount: encodeUInt32(preparedTile.extruded.buildingRanges.count,
                                              field: "Extruded.buildingRanges.count"),
+            buildingAnchors: encodePODArray(preparedTile.extruded.buildingAnchors),
+            buildingAnchorCount: encodeUInt32(preparedTile.extruded.buildingAnchors.count,
+                                              field: "Extruded.buildingAnchors.count"),
             text: TextLabelSetMetaValue(preparedTile.textLabels),
             roadPathInputs: encodePODArray(preparedTile.roadLabels.pathInputs),
             roadPathInputCount: encodeUInt32(preparedTile.roadLabels.pathInputs.count, field: "RoadLabels.pathInputs.count"),
@@ -892,7 +899,11 @@ enum PreparedTileDiskCodec {
             buildingRanges: try decodePODArray(entry.buildingRanges,
                                                count: Int(entry.buildingRangeCount),
                                                as: TileBuildingRange.self,
-                                               field: "Entry.buildingRanges")
+                                               field: "Entry.buildingRanges"),
+            buildingAnchors: try decodePODArray(entry.buildingAnchors,
+                                                count: Int(entry.buildingAnchorCount),
+                                                as: SIMD2<Float>.self,
+                                                field: "Entry.buildingAnchors")
         )
         return PreparedTileDiskCacheHit(image: image,
                                         sourceETag: entry.sourceETag.isEmpty ? nil : entry.sourceETag)

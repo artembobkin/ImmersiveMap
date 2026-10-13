@@ -84,6 +84,9 @@ final class DebugOverlayHUDView: NSView {
     private let tilesGroupLabel = NSTextField(labelWithString: "Tiles")
     private let tileTraceButton = NSButton()
     private let tileTraceStatusLabel = NSTextField(labelWithString: "")
+    /// Copies the last trace's path to the pasteboard: the status shows it
+    /// shortened, and a path is for pasting, not for reading off a shot.
+    private let tileTraceCopyButton = NSButton()
     private let tilesStatusLabel = NSTextField(wrappingLabelWithString: "")
     /// No scroll view of its own any more: the tile list is one group of the
     /// scrolled column, and a scroll view inside a scroll view takes the wheel
@@ -553,6 +556,10 @@ final class DebugOverlayHUDView: NSView {
                               symbolName: nil,
                               action: #selector(tileTraceButtonTapped))
         configureStatusLabel(tileTraceStatusLabel)
+        configureActionButton(tileTraceCopyButton,
+                              title: "Copy path",
+                              symbolName: "doc.on.doc",
+                              action: #selector(tileTraceCopyButtonTapped))
         configureActionButton(baseLabelTraceButton,
                               title: "",
                               symbolName: nil,
@@ -634,7 +641,7 @@ final class DebugOverlayHUDView: NSView {
          ringRuleSetsAddButton, ringRuleSetsRemoveButton,
          ringRulesAddButton, ringRulesRemoveButton,
          surfaceModeButton,
-         tilesGroupLabel, tileTraceButton, tileTraceStatusLabel, tilesStatusLabel, tilesStatusListView]
+         tilesGroupLabel, tileTraceButton, tileTraceCopyButton, tileTraceStatusLabel, tilesStatusLabel, tilesStatusListView]
     }
 
     // MARK: - Public API (matches the UIKit version)
@@ -1356,7 +1363,15 @@ final class DebugOverlayHUDView: NSView {
     /// down every time a tile arrived. Nothing is under it now.
     private func layoutTilesGroup(at top: CGFloat, contentWidth: CGFloat, constrainedSize: CGSize) -> CGFloat {
         var cursor = layoutGroupHeader(tilesGroupLabel, at: top, contentWidth: contentWidth)
-        cursor = layoutFullWidthRow(tileTraceButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
+        // The record button and the copy button share the row.
+        let copyWidth: CGFloat = 110
+        tileTraceButton.isHidden = false
+        tileTraceButton.frame = CGRect(x: Layout.contentInset, y: cursor,
+                                       width: contentWidth - copyWidth - Layout.controlSpacing, height: Layout.controlRowHeight)
+        tileTraceCopyButton.isHidden = tileTraceSnapshot.fileURL == nil
+        tileTraceCopyButton.frame = CGRect(x: Layout.contentInset + contentWidth - copyWidth, y: cursor,
+                                           width: copyWidth, height: Layout.controlRowHeight)
+        cursor += Layout.controlRowHeight + Layout.controlSpacing
         cursor = layoutFullWidthRow(tileTraceStatusLabel, at: cursor, contentWidth: contentWidth, height: Layout.traceStatusHeight)
         cursor = layoutTextRow(tilesStatusLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
         // Always laid out, always the same height, empty or not: a reserved
@@ -1812,6 +1827,13 @@ final class DebugOverlayHUDView: NSView {
 
     @objc private func tileTraceButtonTapped() {
         onTileTraceRecordingToggle?()
+    }
+
+    @objc private func tileTraceCopyButtonTapped() {
+        guard let url = tileTraceSnapshot.fileURL else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(url.path, forType: .string)
+        tileTraceStatusLabel.stringValue = "Path copied: \(url.lastPathComponent)"
     }
 
     @objc private func baseLabelTraceButtonTapped() {

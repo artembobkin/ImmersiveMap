@@ -22,11 +22,6 @@ enum RenderLayer: String, CaseIterable {
     /// against the sphere itself, see `GlobeVectorSurfaceRenderSubsystem`.
     case globeVectorSurface
     case globeCap
-    /// The flat passes' stencil prepass: one full-extent quad per unique
-    /// source writes the tile-priority stencil before anything else draws,
-    /// so the buildings (drawn before the ground) can test a complete
-    /// ownership map instead of carrying slot clip distances.
-    case tileOwnership
     case flatMapSurface
     /// The labels painted on the map, right after the ground on either
     /// surface: over the ground and the roads, under the buildings and the
@@ -91,7 +86,7 @@ struct RenderLayerPlanner {
             // The horizon last: the fog band hazes everything painted near
             // the horizon line, buildings and models included, and the
             // labels, which come after, stay crisp.
-            [.tileOwnership, .flatMapSurface, .surfaceLabels, .buildingExtrusion, .sceneModels, .horizon]
+            [.flatMapSurface, .surfaceLabels, .buildingExtrusion, .sceneModels, .horizon]
         case .spherical:
             // Sky first: nothing writes surface depth any more (the
             // placeholder grid is gone), so the space background and the

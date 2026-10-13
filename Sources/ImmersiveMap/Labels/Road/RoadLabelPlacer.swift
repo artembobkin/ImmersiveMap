@@ -93,6 +93,7 @@ enum RoadLabelPlacer {
                       viewportSize: SIMD2<Float>,
                       pixelsPerPoint: Float,
                       maximumDepth: Float = .infinity,
+                      lift: ((SIMD2<Float>) -> Float)? = nil,
                       scratch: inout Scratch,
                       output: inout Output) {
         project(pathPoints: geometry.pathPoints,
@@ -100,6 +101,7 @@ enum RoadLabelPlacer {
                 cameraMatrix: cameraMatrix,
                 viewportSize: viewportSize,
                 maximumDepth: maximumDepth,
+                lift: lift,
                 screenPoints: &scratch.screenPoints,
                 visible: &scratch.visible)
         place(geometry: geometry,
@@ -113,12 +115,14 @@ enum RoadLabelPlacer {
     /// The flat projection of a tile's points, device pixels with the
     /// origin at the bottom left like the base labels' screen points. A
     /// point behind the camera, or deeper than `maximumDepth`, is not
-    /// visible.
+    /// visible. `lift` is the ground relief's height under a point, by its
+    /// tile uv, in world units: the road's names ride the relief with it.
     static func project(pathPoints: [TilePointInput],
                         origin: FlatTileOriginData,
                         cameraMatrix: simd_float4x4,
                         viewportSize: SIMD2<Float>,
                         maximumDepth: Float = .infinity,
+                        lift: ((SIMD2<Float>) -> Float)? = nil,
                         screenPoints: inout [SIMD2<Float>],
                         visible: inout [Bool]) {
         let count = pathPoints.count
@@ -141,7 +145,7 @@ enum RoadLabelPlacer {
                 // v grows from the north edge, the flat render world is y-up.
                 let world = SIMD4<Float>(panRelativeOrigin.x + uv.x * size,
                                          panRelativeOrigin.y + (1.0 - uv.y) * size,
-                                         0.0,
+                                         lift?(uv) ?? 0.0,
                                          1.0)
                 let clip = cameraMatrix * world
                 if clip.w > 0.0 {

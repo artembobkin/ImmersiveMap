@@ -4,6 +4,7 @@
 #include <metal_stdlib>
 using namespace metal;
 #include "TileShading.h"
+#include "GroundRelief.h"
 #include "../../Render/Shaders/Shared/GroundFog.h"
 
 // Ground shadow source. The flat world pass reads the per-pixel ground
@@ -51,6 +52,13 @@ constant bool kTileColorField = kTileFillFields || kTileRoadRibbons;
 constant bool kTileCoverageFields = kTileLineFields && !kTileRoadRibbons;
 constant bool kTileStyleIndexField = kTileLineFields && (!kTileRoadRibbons || kTileRoadBlended);
 constant bool kSamplesShadowCascades = !kGroundShadowMaskEnabled;
+/// The flattened ground raised by a heightmap (GroundReliefStore): the
+/// opaque fills of a flattened tile whose terrain is in. The vertex rises
+/// by the terrain's height under it, read from the relief texture.
+constant bool kTileGroundRelief [[function_constant(6)]];
+
+// The terrain's sample and the uniform it reads: GroundRelief.h, shared
+// with the raster ground.
 
 // Mask pixels per drawable pixel; mirrors
 // GroundShadowMaskPipeline.resolutionScale. The mask is sampled bilinearly
@@ -91,6 +99,19 @@ constant float kFlatCameraNearPlane = 0.01;
 // the layer's rank depth, so a wall is nearer than every ground layer by
 // at least one step at every pixel, and the ground never covers its base.
 constant float kFlatRealDepthScale = 1.0 - 1536.0 * kFlatTileLayerDepthStep;
+// The ground relief's depth (kTileGroundRelief): a hill has to hide the
+// buildings and the models behind it, so a flattened tile raised by its
+// terrain keeps the real geometry's depth scale, which the camera applied
+// (kFlatRealDepthScale is not divided out), and its band shrinks to a
+// quarter and sits two steps behind the real geometry: the ground loses
+// to a wall's base at its own depth as before, the roads and the lines
+// over it keep their order among themselves, and anything real nearer
+// than a road by more than the shrunken band hides it. The drawer adds a
+// slope-scaled depth bias to the roads and the lines over such a ground,
+// which is what keeps them over it where their triangles sample the
+// terrain apart from the ground's (FlatMapSurfaceDrawer).
+constant float kReliefBandScale = 0.25;
+constant float kReliefGroundBehind = 2.0 * kFlatTileLayerDepthStep;
 // The farthest a deferred ribbon's vertex moves, in tile units: a quarter
 // of the tile, past which a width on screen is a camera at the vertex's
 // own depth and the triangle only needs to stay finite.
@@ -108,10 +129,11 @@ constant float kTileRoadBandRanks = 12.0;
 // dash points, gap points); constant per primitive, so half is exact enough.
 struct VertexOut {
     float4 position [[position]];
-    // No slot clip distances: a retained substitute draws at full extent
-    // and the tile-priority stencil rejects it wherever a finer tile
-    // painted (TileSourceStencilPriority), the same mechanism the sphere
-    // uses. The one clip distance below is the road distance cut.
+    // Every placement draws its own slot's ground only (GroundSlotClip):
+    // the four clip distances after the first are the slot's rectangle,
+    // buffer 12, the first being the road distance cut. (The sphere's
+    // shader keeps the tile-priority stencil instead,
+    // TileSourceStencilPriority.)
     float3 worldPos;
     half4 color [[function_constant(kTileColorField)]];
     // Lines classes: the style index rides flat and the fragment resolves
@@ -132,10 +154,10 @@ struct VertexOut {
     // the centreline, and only the axis is read). Zero where nothing is
     // deferred.
     float2 widthAxis [[function_constant(kTileCoverageFields)]];
-    // No slot clip (see above) and no near cut: the depth is the
-    // projection's, so the hardware clips at the near plane. The one use
-    // is a road ribbon invisible this frame, cut whole.
-    float clipDistance [[clip_distance]] [1];
+    // No near cut: the depth is the projection's, so the hardware clips
+    // at the near plane. The first is a road ribbon invisible this frame,
+    // cut whole, the rest the slot's rectangle (see above).
+    float clipDistance [[clip_distance]] [5];
 };
 
 // The fragment stage's view of VertexOut: the same interpolants matched by
@@ -158,7 +180,11 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                                   constant float2* styleZoomFades [[buffer(4)]],
                                   constant LineStyle* lineStyles [[buffer(5)]],
                                   constant FlatDepthBand& depthBand [[buffer(7)]],
-                                  constant OverviewFadeUniform& overviewFade [[buffer(8)]]) {
+                                  constant OverviewFadeUniform& overviewFade [[buffer(8)]],
+                                  constant GroundReliefUniform& relief [[buffer(9), function_constant(kTileGroundRelief)]],
+                                  constant float4& clipRect [[buffer(12)]],
+                                  texture2d<float> reliefHeights [[texture(0), function_constant(kTileGroundRelief)]],
+                                  texture2d<float> reliefRoughness [[texture(1), function_constant(kTileGroundRelief)]]) {
     float2 localPosition = float2(vertexIn.position.xy);
     float deferredEdgePx = 0.0;
     float2 widthAxis = float2(0.0);
@@ -261,6 +287,9 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
         }
     }
     float4 worldPosition = modelMatrix * float4(localPosition, 0.0, 1.0);
+    if (kTileGroundRelief) {
+        worldPosition.z += groundReliefLift(localPosition, reliefHeights, reliefRoughness, relief);
+    }
 
     VertexOut out;
     out.position = camera.matrix * worldPosition;
@@ -286,10 +315,19 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     }
     float layerDepthScale = 1.0 - depthBand.offset
         - styleRank * depthBand.rankStep - kFlatTileLayerDepthStep;
-    out.position.z *= layerDepthScale / kFlatRealDepthScale;
+    if (kTileGroundRelief) {
+        out.position.z *= 1.0 + kReliefGroundBehind - (1.0 - layerDepthScale) * kReliefBandScale;
+    } else {
+        out.position.z *= layerDepthScale / kFlatRealDepthScale;
+    }
     out.worldPos = worldPosition.xyz;
     // Nothing cut: the hardware clips at the near plane.
     out.clipDistance[0] = 1.0;
+    // The slot's rectangle in the tile's local units (GroundSlotClip).
+    out.clipDistance[1] = localPosition.x - clipRect.x;
+    out.clipDistance[2] = clipRect.z - localPosition.x;
+    out.clipDistance[3] = localPosition.y - clipRect.y;
+    out.clipDistance[4] = clipRect.w - localPosition.y;
     if (kTileStyleIndexField) {
         out.styleIndex = uint(vertexIn.styleIndex);
         out.lineParameterRaw = float(vertexIn.lineParameter);

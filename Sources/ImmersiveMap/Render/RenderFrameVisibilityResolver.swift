@@ -4,7 +4,10 @@
 /// Computes the frame's coverage from the camera snapshot, the presentation
 /// state and the tile settings: the target zoom, then the coverage
 /// (`TileCulling`). `rules` are the plane's ring rules, the debug
-/// panel's or the default.
+/// panel's or the default. `reliefHeights` is how far the ground relief
+/// falls and rises about the plane, in world units, nil off the relief:
+/// the coverage then reaches the tiles the relief lifts into view
+/// (`CoveragePolygonBuilder`).
 final class RenderFrameVisibilityResolver {
     private let tileCulling: TileCulling
     private var cachedFingerprint: Int?
@@ -18,6 +21,7 @@ final class RenderFrameVisibilityResolver {
                  resolvedPresentation: ResolvedPresentationState,
                  tileSettings: ImmersiveMapSettings.TileSettings,
                  ruleSets: RingRuleSets = .default,
+                 reliefHeights: ClosedRange<Float>? = nil,
                  diagnostics: (any FrameDiagnosticsService)? = nil) -> VisibleContentState {
         let zoomPlan = TileCoverageZoomPolicy.resolve(cameraZoom: cameraFrameState.mapCameraState.zoom,
                                                       renderSurfaceMode: resolvedPresentation.renderSurfaceMode,
@@ -33,7 +37,8 @@ final class RenderFrameVisibilityResolver {
         let fingerprint = Self.makeFingerprint(cameraFrameState: cameraFrameState,
                                                resolvedPresentation: resolvedPresentation,
                                                targetZoom: zoomPlan.baseZoom,
-                                               rules: rules)
+                                               rules: rules,
+                                               reliefHeights: reliefHeights)
         if fingerprint == cachedFingerprint,
            let cachedContent {
             return cachedContent
@@ -45,6 +50,7 @@ final class RenderFrameVisibilityResolver {
                                                         cameraMatrix: cameraFrameState.cameraMatrices.projectionView,
                                                         cameraFrustum: cameraFrameState.cameraFrustum,
                                                         cameraEye: cameraFrameState.cameraEye,
+                                                        reliefHeights: reliefHeights,
                                                         rules: rules,
                                                         diagnostics: diagnostics)
         cachedFingerprint = fingerprint
@@ -62,8 +68,11 @@ final class RenderFrameVisibilityResolver {
     private static func makeFingerprint(cameraFrameState: CameraFrameState,
                                         resolvedPresentation: ResolvedPresentationState,
                                         targetZoom: Int,
-                                        rules: FlatRingRules) -> Int {
+                                        rules: FlatRingRules,
+                                        reliefHeights: ClosedRange<Float>?) -> Int {
         var hasher = Hasher()
+        hasher.combine(reliefHeights?.lowerBound.bitPattern)
+        hasher.combine(reliefHeights?.upperBound.bitPattern)
         let cameraState = cameraFrameState.mapCameraState
         hasher.combine(cameraState.centerWorldMercator.x.bitPattern)
         hasher.combine(cameraState.centerWorldMercator.y.bitPattern)

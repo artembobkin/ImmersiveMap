@@ -134,6 +134,14 @@ final class RenderFrameEngine {
         if let reporter = persistentContext.tileLoadingStatusReporter {
             eventSink.attachTileLoadingStatus(provider: { [weak reporter] in reporter?.snapshot() })
         }
+        // Over a terrain the camera looks at a point on it
+        // (`GroundReliefStore.makeTerrainFollow`).
+        if let store = persistentContext.groundReliefStore {
+            renderCamera.setTerrainFollow(store.makeTerrainFollow(
+                tileSettings: settings.tiles,
+                globeRadiusScale: settings.presentation.globeRadiusScale,
+                cameraZoom: { [weak renderCamera] in renderCamera?.currentCameraState().zoom ?? 0 }))
+        }
     }
 
     // MARK: - Rendering
@@ -316,7 +324,8 @@ final class RenderFrameEngine {
         let services = FrameContextServices(diagnostics: diagnostics,
                                             settings: settings,
                                             baseColors: persistentContext.baseColors,
-                                            now: clock.currentDate())
+                                            now: clock.currentDate(),
+                                            groundRelief: persistentContext.groundReliefStore)
 
         // The presentation depends on the semantic camera state alone, and
         // the render camera's pose depends on the presentation's phase (the
@@ -338,17 +347,57 @@ final class RenderFrameEngine {
         publishStaticResources(frameIndex: frameTick.index)
         // The ring rules are the debug panel's: an edited rule re-runs
         // the coverage like a camera change would.
+        // How far the relief falls and rises about the plane this frame,
+        // in world units from the last frame's datum: the coverage reaches
+        // the tiles the relief lifts into view (`CoveragePolygonBuilder`).
+        var reliefHeights: ClosedRange<Float>?
+        persistentContext.groundReliefStore?.setFrame(cameraZoom: cameraFrameState.mapCameraState.zoom)
+        if let store = persistentContext.groundReliefStore, store.isActive,
+           resolvedPresentation.renderSurfaceMode == .flat,
+           let range = store.heightRangeMetres {
+            let centre = cameraFrameState.mapCameraState.centerWorldMercator
+            let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: centre.y)
+            // At the strength of a mountain: the most any point rises.
+            let unitsPerMetre = Float(ImmersiveMapProjection.worldUnitsPerMeter(
+                latitudeRadians: latitude,
+                renderMapSize: resolvedPresentation.flatRenderState.renderMapSize)) * store.strengthScale
+            reliefHeights = ((range.lowerBound - store.datumMetres) * unitsPerMetre)
+                ... ((range.upperBound - store.datumMetres) * unitsPerMetre)
+        }
         let visibleContent = visibilityResolver.resolve(cameraFrameState: cameraFrameState,
                                                         resolvedPresentation: resolvedPresentation,
                                                         tileSettings: settings.tiles,
                                                         ruleSets: debugOverlayControls.snapshot().ringRuleSets,
+                                                        reliefHeights: reliefHeights,
                                                         diagnostics: diagnostics)
+        // The relief is drawn from under the point the camera looks at:
+        // the terrain there is the frame's datum, so the point lies on the
+        // ground at the origin and the pose holds as it is. The clearance
+        // over a ridge under the eye is the camera's own business, kept
+        // through the zoom (`CameraStateController`), never a lift here.
+        // After the coverage, which the camera's own pose decides.
+        let cameraMatrices = cameraFrameState.cameraMatrices
+        let cameraEye = cameraFrameState.cameraEye
+        if let groundReliefStore = persistentContext.groundReliefStore {
+            if resolvedPresentation.renderSurfaceMode == .flat {
+                groundReliefStore.setActive(visibleContent.tileZoomLevel >= groundReliefStore.fromTileZoom
+                                            && groundReliefStore.comesIn(atCameraZoom: cameraFrameState.mapCameraState.zoom))
+                if let datum = GroundReliefCameraLift.datumMetres(store: groundReliefStore,
+                                                                  centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
+                                                                  tileZoom: visibleContent.tileZoomLevel) {
+                    groundReliefStore.setDatum(metres: datum)
+                }
+            } else {
+                groundReliefStore.setActive(false)
+                groundReliefStore.setDatum(metres: 0)
+            }
+        }
         // Resolved once here, so the pass injection and every receiver bind
         // site take the same answer from `ShadowPassGateResolver`.
         let shadowFrameState = shadowMapReuse.resolveFrameState(
             renderSurfaceMode: resolvedPresentation.renderSurfaceMode,
-            projectionView: cameraFrameState.cameraMatrices.projectionView,
-            cameraEye: cameraFrameState.cameraEye,
+            projectionView: cameraMatrices.projectionView,
+            cameraEye: cameraEye,
             centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
             flatRenderPan: resolvedPresentation.flatRenderState.pan,
             renderMapSize: resolvedPresentation.flatRenderState.renderMapSize,
@@ -362,8 +411,8 @@ final class RenderFrameEngine {
                             drawSize: cameraFrameState.drawSize,
                             pixelsPerPoint: pixelsPerPoint,
                             viewport: cameraFrameState.viewport,
-                            cameraMatrices: cameraFrameState.cameraMatrices,
-                            cameraEye: cameraFrameState.cameraEye,
+                            cameraMatrices: cameraMatrices,
+                            cameraEye: cameraEye,
                             commandBuffer: commandBuffer,
                             services: services,
                             mapCameraState: cameraFrameState.mapCameraState,

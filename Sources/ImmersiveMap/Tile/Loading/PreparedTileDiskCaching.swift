@@ -24,8 +24,15 @@ struct PreparedTileCacheIdentity {
     /// flattened, or on another grid, is another tile.
     var groundFlatteningFromTileZoom: Int? = ImmersiveMapSettings.TileSettings.GroundFlatteningSettings().fromTileZoom
     var groundFlatteningGrid: Int = ImmersiveMapSettings.TileSettings.GroundFlatteningSettings().grid
+    /// The grids by zoom over `groundFlatteningGrid`
+    /// (`TileParseOptions.groundFlatteningGridByTileZoomKey`), empty
+    /// without any.
+    var groundFlatteningGridByTileZoomKey: String = ""
+    /// Whether the roads and the lines of a flattened tile take a vertex at
+    /// every grid crossing, for the ground relief (`TileParseOptions`).
+    var groundReliefEnabled: Bool = false
     var namespaceComponent: String {
-        return "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)-g\(groundFlatteningFromTileZoom ?? -1)x\(groundFlatteningGrid)"
+        return "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)-g\(groundFlatteningFromTileZoom ?? -1)x\(groundFlatteningGrid)\(groundFlatteningGridByTileZoomKey.isEmpty ? "" : "[" + groundFlatteningGridByTileZoomKey + "]")\(groundReliefEnabled ? "r" : "")"
     }
 
     static func tileSourceRevision(for network: ImmersiveMapSettings.TileSettings.NetworkSettings) -> UInt64 {
@@ -54,9 +61,7 @@ struct PreparedTileCacheIdentity {
 /// and one root-wide index. This prevents two map views from racing atomic
 /// replacements/pruning and avoids rescanning every namespace after each save.
 /// Internally synchronized: the registry is guarded by `registryLock`, all other
-/// state is mutated only on the serial `queue`. The raster tiles of a
-/// namespace (`RasterTileDiskCache`) keep their files under the same root
-/// through the same coordinator, so they share its quota and its TTL.
+/// state is mutated only on the serial `queue`.
 final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
     private struct Policy {
         var byteQuota: Int64
@@ -895,7 +900,17 @@ final class PreparedTileDiskCaching {
     // ribbon clipped at the tile's edge (`ParseLine.clipToTile`), whose
     // winding was read off a float area that lost the sign of a sliver. A
     // v142 entry may carry such a sliver turned clockwise.
-    static let preparedFormatVersion: UInt32 = 143
+    // 144: with the ground relief on, the roads and the lines of a
+    // flattened tile take a vertex at every crossing of the flattening's
+    // grid (`ParseLine.parse(subdivisionStep:)`, `GroundGeometrySubdivider`
+    // on the road decorations and the bridge decks), so they follow the
+    // relief as the ground does. The namespace says whether the relief is
+    // on; the version keeps a v143 entry of the same namespace from
+    // answering. Also, every extruded vertex carries its volume's ordinal
+    // in the tile (`ExtrudedVertexIn.buildingOrdinal`, the bytes a v143
+    // entry pads with) and the tile lists each volume's anchor
+    // (`Extruded.buildingAnchors`), which the relief lifts the volume by.
+    static let preparedFormatVersion: UInt32 = 144
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

@@ -32,8 +32,11 @@ final class DebugOverlayRenderer {
     private let axesVertexBuffer: MTLBuffer
     private let axesVerticesCount: Int
     private let tileTextVertexBufferStore: FrameSlottedDynamicMetalBuffer<TextVertex>
+    private var textVertexCursor: (frameIndex: UInt64, count: Int) = (UInt64.max, 0)
+    private var lineVertexCursor: (frameIndex: UInt64, count: Int) = (UInt64.max, 0)
     private let lineVertexBufferStore: FrameSlottedDynamicMetalBuffer<PolygonsPipeline.Vertex>
-    private let tilePointScreenProjector = TilePointScreenProjector()
+    /// On the plane, not on the relief: the overlay is for reading.
+    private let tilePointScreenProjector = TilePointScreenProjector(liftsByRelief: false)
     private var textVerticesScratch: [TextVertex] = []
     private var lineVerticesScratch: [PolygonsPipeline.Vertex] = []
     private var tileTextEntriesScratch: [TextEntry] = []
@@ -42,6 +45,20 @@ final class DebugOverlayRenderer {
     private var tileWatermarkVertexInputsScratch: [TilePointInput] = []
     private let tileOutlineThicknessPx: Float = 3.5
     private let tileLabelInsetPx = SIMD2<Float>(8.0, 8.0)
+    /// The screen cells, in points, one watermark at most stands in.
+    private static let tileWatermarkScreenCellPx: Float = 220
+    private var tileWatermarkScreenCellsScratch = Set<SIMD2<Int32>>()
+    /// The watermarks' two parts, each its own batch and colour: the
+    /// tile's address, and the terrain it is raised by.
+    private var tileWatermarkAddressEntriesScratch: [TextEntry] = []
+    private var tileWatermarkTerrainEntriesScratch: [TextEntry] = []
+    private static let tileWatermarkAddressColor = SIMD3<Float>(1.0, 0.95, 0.2)
+    private static let tileWatermarkTerrainColor = SIMD3<Float>(0.45, 0.9, 1.0)
+    private static let tileWatermarkFlatColor = SIMD3<Float>(1.0, 0.45, 0.4)
+    /// A thin stroke: the thick one of the tile labels runs into the
+    /// neighbouring glyphs at the watermarks' size.
+    private static let tileWatermarkStrokeWidthPx: Float = 1.5
+    private static let tileWatermarkGapPx: Float = 10
     private let tileWatermarkMaxWidthUV: Float = 0.22
     private let tileWatermarkMaxHeightUV: Float = 0.04
     private let tileWatermarkPaddingPx = SIMD2<Float>(8.0, 4.0)
@@ -137,6 +154,9 @@ final class DebugOverlayRenderer {
         tileTextEntriesScratch.removeAll(keepingCapacity: true)
         tileProjectedTextVerticesScratch.removeAll(keepingCapacity: true)
         tileWatermarkProjectionInputsScratch.removeAll(keepingCapacity: true)
+        tileWatermarkScreenCellsScratch.removeAll(keepingCapacity: true)
+        tileWatermarkAddressEntriesScratch.removeAll(keepingCapacity: true)
+        tileWatermarkTerrainEntriesScratch.removeAll(keepingCapacity: true)
         lineVerticesScratch.removeAll(keepingCapacity: true)
         tileTextEntriesScratch.reserveCapacity(placeTiles.count * 10)
         tileProjectedTextVerticesScratch.reserveCapacity(placeTiles.count * 9 * 96)
@@ -167,6 +187,7 @@ final class DebugOverlayRenderer {
                              polygonPipeline: polygonPipeline,
                              screenMatrix: frameContext.cameraMatrices.screen,
                              frameSlotIndex: frameContext.frameSlotIndex,
+                             frameIndex: frameContext.frameIndex,
                              vertices: lineVerticesScratch)
         }
         if tileTextEntriesScratch.isEmpty == false {
@@ -174,16 +195,43 @@ final class DebugOverlayRenderer {
                             textRenderer: textRenderer,
                             screenMatrix: frameContext.cameraMatrices.screen,
                             frameSlotIndex: frameContext.frameSlotIndex,
+                            frameIndex: frameContext.frameIndex,
                             entries: tileTextEntriesScratch,
                             style: TextStyleUniform(textColor: tileLabelTextColor,
                                                     strokeColor: tileLabelStrokeColor,
                                                     strokeWidthPx: tileLabelStrokeWidthPx))
+        }
+        if tileWatermarkAddressEntriesScratch.isEmpty == false {
+            drawTextEntries(renderEncoder: renderEncoder,
+                            textRenderer: textRenderer,
+                            screenMatrix: frameContext.cameraMatrices.screen,
+                            frameSlotIndex: frameContext.frameSlotIndex,
+                            frameIndex: frameContext.frameIndex,
+                            entries: tileWatermarkAddressEntriesScratch,
+                            style: TextStyleUniform(textColor: Self.tileWatermarkAddressColor,
+                                                    strokeColor: tileLabelStrokeColor,
+                                                    strokeWidthPx: Self.tileWatermarkStrokeWidthPx))
+        }
+        // The terrain tags: a batch per colour, the flat ones apart.
+        for (color, isFlat) in [(Self.tileWatermarkTerrainColor, false), (Self.tileWatermarkFlatColor, true)] {
+            let batch = tileWatermarkTerrainEntriesScratch.filter { ($0.text == Self.flatTerrainTag) == isFlat }
+            guard batch.isEmpty == false else { continue }
+            drawTextEntries(renderEncoder: renderEncoder,
+                            textRenderer: textRenderer,
+                            screenMatrix: frameContext.cameraMatrices.screen,
+                            frameSlotIndex: frameContext.frameSlotIndex,
+                            frameIndex: frameContext.frameIndex,
+                            entries: batch,
+                            style: TextStyleUniform(textColor: color,
+                                                    strokeColor: tileLabelStrokeColor,
+                                                    strokeWidthPx: Self.tileWatermarkStrokeWidthPx))
         }
         if tileProjectedTextVerticesScratch.isEmpty == false {
             drawTextEntries(renderEncoder: renderEncoder,
                             textRenderer: textRenderer,
                             screenMatrix: frameContext.cameraMatrices.screen,
                             frameSlotIndex: frameContext.frameSlotIndex,
+                            frameIndex: frameContext.frameIndex,
                             entries: [],
                             projectedVertices: tileProjectedTextVerticesScratch,
                             style: Self.makeTileWatermarkTextStyle())
@@ -232,6 +280,7 @@ final class DebugOverlayRenderer {
                              polygonPipeline: polygonPipeline,
                              screenMatrix: frameContext.cameraMatrices.screen,
                              frameSlotIndex: frameContext.frameSlotIndex,
+                             frameIndex: frameContext.frameIndex,
                              vertices: lineVerticesScratch)
         }
 
@@ -245,6 +294,7 @@ final class DebugOverlayRenderer {
                             textRenderer: textRenderer,
                             screenMatrix: frameContext.cameraMatrices.screen,
                             frameSlotIndex: frameContext.frameSlotIndex,
+                            frameIndex: frameContext.frameIndex,
                             entries: [],
                             projectedVertices: tileProjectedTextVerticesScratch,
                             style: Self.makeTileWatermarkTextStyle())
@@ -274,6 +324,7 @@ final class DebugOverlayRenderer {
                              polygonPipeline: polygonPipeline,
                              screenMatrix: frameContext.cameraMatrices.screen,
                              frameSlotIndex: frameContext.frameSlotIndex,
+                             frameIndex: frameContext.frameIndex,
                              vertices: lineVerticesScratch)
         }
     }
@@ -304,6 +355,7 @@ final class DebugOverlayRenderer {
                              polygonPipeline: polygonPipeline,
                              screenMatrix: frameContext.cameraMatrices.screen,
                              frameSlotIndex: frameContext.frameSlotIndex,
+                             frameIndex: frameContext.frameIndex,
                              vertices: lineVerticesScratch)
         }
     }
@@ -336,6 +388,7 @@ final class DebugOverlayRenderer {
                                  textRenderer: TextRenderer,
                                  screenMatrix: matrix_float4x4,
                                  frameSlotIndex: Int,
+                                 frameIndex: UInt64,
                                  entries: [TextEntry],
                                  projectedVertices: [TextVertex] = [],
                                  style: TextStyleUniform? = nil) {
@@ -349,7 +402,8 @@ final class DebugOverlayRenderer {
         renderEncoder.setRenderPipelineState(textRenderer.pipelineState)
         setTileTextVertices(renderEncoder: renderEncoder,
                             vertices: textVerticesScratch,
-                            frameSlotIndex: frameSlotIndex)
+                            frameSlotIndex: frameSlotIndex,
+                            frameIndex: frameIndex)
         renderEncoder.setVertexBytes(&matrix, length: MemoryLayout<matrix_float4x4>.stride, index: 1)
         renderEncoder.setFragmentTexture(textRenderer.texture, index: 0)
         renderEncoder.setFragmentBytes(&textStyle, length: MemoryLayout<TextStyleUniform>.stride, index: 0)
@@ -360,12 +414,14 @@ final class DebugOverlayRenderer {
                                   polygonPipeline: PolygonsPipeline,
                                   screenMatrix: matrix_float4x4,
                                   frameSlotIndex: Int,
+                                  frameIndex: UInt64,
                                   vertices: [PolygonsPipeline.Vertex]) {
         guard vertices.isEmpty == false else { return }
         polygonPipeline.setPipelineState(renderEncoder: renderEncoder)
         setLineVertices(renderEncoder: renderEncoder,
                         vertices: vertices,
-                        frameSlotIndex: frameSlotIndex)
+                        frameSlotIndex: frameSlotIndex,
+                        frameIndex: frameIndex)
         var screenUniform = CameraUniform(matrix: screenMatrix,
                                           eye: .zero,
                                           padding: 0.0)
@@ -473,6 +529,26 @@ final class DebugOverlayRenderer {
 
     static func formatTileCoordinateString(_ tile: Tile) -> String {
         "tile = \(tile.x)/\(tile.y)/\(tile.z)"
+    }
+
+    static let flatTerrainTag = "flat"
+
+    /// The watermark's address part: the tile's own, without the prefix.
+    static func formatTileAddress(_ tile: Tile) -> String {
+        "\(tile.x)/\(tile.y)/\(tile.z)"
+    }
+
+    /// The watermark's terrain part, when the tile is on the ground
+    /// relief: `t11` for a source tile whose relief is read out of the
+    /// zoom 11 terrain, the ring's or a coarser stand-in's
+    /// (`GroundReliefStore.relief(for:terrainZoom:)`), `flat` for a tile
+    /// without one. `tile` is the source drawn, the relief's own tile.
+    static func formatTerrainTag(_ tile: Tile, relief: GroundRelief?) -> String {
+        guard let relief else {
+            return flatTerrainTag
+        }
+        let depth = Int((log2(1 / Double(max(relief.scale, 1e-6)))).rounded())
+        return "t\(tile.z - depth)"
     }
 
     static func makeTileWatermarkTextStyle() -> TextStyleUniform {
@@ -629,40 +705,57 @@ final class DebugOverlayRenderer {
         return segments
     }
 
+    /// The frame's text draws share the slot's buffer, each at its own
+    /// offset: the GPU reads the buffer when the frame runs, so a draw
+    /// written over the last one's bytes would draw those instead, and
+    /// of several batches of a frame only the last would show. The cursor
+    /// starts over with each frame.
     private func setTileTextVertices(renderEncoder: MTLRenderCommandEncoder,
                                      vertices: [TextVertex],
-                                     frameSlotIndex: Int) {
+                                     frameSlotIndex: Int,
+                                     frameIndex: UInt64) {
         let length = MemoryLayout<TextVertex>.stride * vertices.count
         if length <= 4096 {
             renderEncoder.setVertexBytes(vertices, length: length, index: 0)
             return
         }
-
+        if textVertexCursor.frameIndex != frameIndex {
+            textVertexCursor = (frameIndex, 0)
+        }
+        let offset = textVertexCursor.count
         let buffer = tileTextVertexBufferStore.ensureCapacity(slot: frameSlotIndex,
-                                                              count: vertices.count)
+                                                              count: offset + vertices.count)
         vertices.withUnsafeBytes { rawBuffer in
             guard let baseAddress = rawBuffer.baseAddress else { return }
-            memcpy(buffer.contents(), baseAddress, rawBuffer.count)
+            memcpy(buffer.contents() + offset * MemoryLayout<TextVertex>.stride, baseAddress, rawBuffer.count)
         }
-        renderEncoder.setVertexBuffer(buffer, offset: 0, index: 0)
+        renderEncoder.setVertexBuffer(buffer, offset: offset * MemoryLayout<TextVertex>.stride, index: 0)
+        textVertexCursor.count = offset + vertices.count
     }
 
+    /// As `setTileTextVertices`: the frame's line draws share the slot's
+    /// buffer at their own offsets.
     private func setLineVertices(renderEncoder: MTLRenderCommandEncoder,
                                  vertices: [PolygonsPipeline.Vertex],
-                                 frameSlotIndex: Int) {
+                                 frameSlotIndex: Int,
+                                 frameIndex: UInt64) {
         let length = MemoryLayout<PolygonsPipeline.Vertex>.stride * vertices.count
         if length <= 4096 {
             renderEncoder.setVertexBytes(vertices, length: length, index: 0)
             return
         }
-
+        if lineVertexCursor.frameIndex != frameIndex {
+            lineVertexCursor = (frameIndex, 0)
+        }
+        let offset = lineVertexCursor.count
         let buffer = lineVertexBufferStore.ensureCapacity(slot: frameSlotIndex,
-                                                          count: vertices.count)
+                                                          count: offset + vertices.count)
         vertices.withUnsafeBytes { rawBuffer in
             guard let baseAddress = rawBuffer.baseAddress else { return }
-            memcpy(buffer.contents(), baseAddress, rawBuffer.count)
+            memcpy(buffer.contents() + offset * MemoryLayout<PolygonsPipeline.Vertex>.stride, baseAddress, rawBuffer.count)
         }
-        renderEncoder.setVertexBuffer(buffer, offset: 0, index: 0)
+        renderEncoder.setVertexBuffer(buffer, offset: offset * MemoryLayout<PolygonsPipeline.Vertex>.stride, index: 0)
+        lineVertexCursor.count = offset + vertices.count
     }
 
     private func appendTileOutlineVertices(into vertices: inout [PolygonsPipeline.Vertex],
@@ -985,14 +1078,41 @@ final class DebugOverlayRenderer {
                                        scale: Float,
                                        lineAdvance: Float,
                                        textRenderer: TextRenderer) {
-        let primaryText = Self.formatTileCoordinateString(placeTile.placeIn.tile)
-        let primaryMetrics = textRenderer.collectLabelVertices(for: primaryText,
-                                                               labelIndex: 0,
-                                                               scale: scale)
-        appendTileWatermarkVertices(into: &projectedVertices,
-                                    metrics: primaryMetrics,
-                                    placeTile: placeTile,
-                                    frameContext: frameContext)
+        // The watermarks lie on the screen, not in the tile: upright and
+        // of one size at any pitch and bearing, so they read from any
+        // angle, in two colours, the address and the terrain tag. Each of
+        // the tile's grid points that projects onto the screen carries
+        // one, except where another already stands within a screen cell
+        // of it, so the far tiles do not pile theirs up.
+        let addressText = Self.formatTileAddress(placeTile.placeIn.tile)
+        let terrainText: String?
+        if let groundRelief = frameContext.services.groundRelief, groundRelief.isActive {
+            terrainText = Self.formatTerrainTag(placeTile.metalTile.tile,
+                                                relief: groundRelief.relief(for: placeTile.metalTile.tile,
+                                                                            terrainZoom: GroundReliefStore.terrainZoom(forTargetZoom: placeTile.placeIn.z)))
+        } else {
+            terrainText = nil
+        }
+        let watermarkScale = max(scale * 0.6, 18.0)
+        let addressWidth = textRenderer.collectLabelVertices(for: addressText, labelIndex: 0, scale: watermarkScale).size.width
+        let terrainWidth = terrainText.map {
+            textRenderer.collectLabelVertices(for: $0, labelIndex: 0, scale: watermarkScale).size.width
+        }
+        let totalWidth = addressWidth + (terrainWidth.map { $0 + Self.tileWatermarkGapPx } ?? 0)
+        for point in projectTilePoints(Self.tileWatermarkUVs, placeTile: placeTile, frameContext: frameContext) {
+            let cell = SIMD2<Int32>(Int32((point.x / Self.tileWatermarkScreenCellPx).rounded(.down)),
+                                    Int32((point.y / Self.tileWatermarkScreenCellPx).rounded(.down)))
+            guard tileWatermarkScreenCellsScratch.insert(cell).inserted else { continue }
+            let left = point.x - totalWidth * 0.5
+            tileWatermarkAddressEntriesScratch.append(TextEntry(text: addressText,
+                                                                position: SIMD2<Float>(left, point.y),
+                                                                scale: watermarkScale))
+            if let terrainText {
+                tileWatermarkTerrainEntriesScratch.append(TextEntry(text: terrainText,
+                                                                    position: SIMD2<Float>(left + addressWidth + Self.tileWatermarkGapPx, point.y),
+                                                                    scale: watermarkScale))
+            }
+        }
 
         let sourceTile = placeTile.metalTile.tile
         if placeTile.inOwnSlot == false {
@@ -1159,6 +1279,29 @@ final class DebugOverlayRenderer {
             }
             placementBase += metricsVertices.count
         }
+    }
+
+    /// The tile's points at `uvs` that project onto the screen, in screen
+    /// points, those behind the camera or off it left out.
+    private func projectTilePoints(_ uvs: [SIMD2<Float>],
+                                   placeTile: PlaceTile,
+                                   frameContext: FrameContext) -> [SIMD2<Float>] {
+        let pointInputs = uvs.map {
+            TilePointInput(uv: $0,
+                           tile: SIMD3<Int32>(Int32(placeTile.placeIn.x),
+                                              Int32(placeTile.placeIn.y),
+                                              Int32(placeTile.placeIn.z)),
+                           tileSlotIndex: 0)
+        }
+        let snapshot = TilePointToScreenPointSnapshot(pointInputs: pointInputs,
+                                                      tileSlotVisibleTileIndices: [0])
+        let points = tilePointScreenProjector.project(snapshot: snapshot,
+                                                      frameContext: frameContext,
+                                                      tileOriginData: makeTileOriginData(for: placeTile,
+                                                                                         frameContext: frameContext))
+        let viewport = frameContext.viewport
+        return points.filter { $0.visible != 0 && $0.position.x >= 0 && $0.position.y >= 0
+            && $0.position.x <= viewport.x && $0.position.y <= viewport.y }.map(\.position)
     }
 
     private func makeTileSourceLabelAnchorPoint(placeTile: PlaceTile,

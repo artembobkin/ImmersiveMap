@@ -55,7 +55,8 @@ struct GroundFogUniform {
                         renderSurfaceMode: ViewMode,
                         cameraEye: SIMD3<Float>,
                         worldUnitsPerMeter: Double,
-                        zoom: Double) -> GroundFogUniform {
+                        zoom: Double,
+                        onGroundRelief: Bool = false) -> GroundFogUniform {
         let fog = settings.scene.groundFog
         let strength = morphFade(presentation: settings.presentation, zoom: zoom)
         let maximumOpacity = min(max(fog.maximumOpacity.value(atZoom: zoom), 0), 1)
@@ -74,8 +75,12 @@ struct GroundFogUniform {
         let color = fog.color ?? sky.horizonColor
         // Asked to, the fog takes the sky's colour above the line where the
         // horizon paints a sky. With the sky off the plane's clear colour is
-        // behind, and the fog keeps its own.
-        let skyGradient = fog.takesSkyColor && sky.isEnabled ? HorizonFrameResolver.skyGradientRadians : 0
+        // behind, and the fog keeps its own. On the ground relief it keeps
+        // its own everywhere: the line is the plane's, not the terrain's,
+        // and a hill crossing it would turn from the fog's colour to the
+        // sky's along that line, a seam across the hill.
+        let takesSky = fog.takesSkyColor && sky.isEnabled && onGroundRelief == false
+        let skyGradient = takesSky ? HorizonFrameResolver.skyGradientRadians : 0
         // The settings state the density per kilometer, the shader per meter.
         let densityPerMeter = length(fog.densityPerKilometer) / 1000
         return GroundFogUniform(colorAndDensity: SIMD4<Float>(color, densityPerMeter),
@@ -115,7 +120,8 @@ struct GroundFogUniform {
                        renderSurfaceMode: frameContext.renderSurfaceMode,
                        cameraEye: frameContext.cameraEye,
                        worldUnitsPerMeter: unitsPerMeter,
-                       zoom: frameContext.zoom)
+                       zoom: frameContext.zoom,
+                       onGroundRelief: frameContext.services.groundRelief?.isActive ?? false)
     }
 
     /// How much of the fog is in at a camera zoom, by the globe's morph: 1

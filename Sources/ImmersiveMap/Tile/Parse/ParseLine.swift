@@ -283,6 +283,12 @@ class ParseLine {
     /// Winding contract: every emitted triangle is counter-clockwise in
     /// render space (`ParsedPolygon.firstClockwiseTriangle`); the tile
     /// drawers cull back faces.
+    ///
+    /// `subdivisionStep` adds a row of vertices wherever a segment crosses
+    /// a line of that grid, in tile units, so a ribbon drawn on a relief
+    /// follows it as the flattened ground does
+    /// (`TileParseOptions.reliefSubdivisionStep`). Nil keeps the segments
+    /// whole.
     func parse(points: [SIMD2<Float>],
                width: Double,
                tileExtent: Float,
@@ -296,7 +302,8 @@ class ParseLine {
                extendClippedEnd: Bool = false,
                clipPadding: Float = 0,
                clipGeometryToTileBounds: Bool = true,
-               deferredExtrusion: Bool = false) -> ParsedPolygon? {
+               deferredExtrusion: Bool = false,
+               subdivisionStep: Float? = nil) -> ParsedPolygon? {
         guard points.count >= 2, width > 0 else { return nil }
 
         // The geometry is extruded past the styled half-width so the shader's
@@ -334,6 +341,7 @@ class ParseLine {
                        featherEnd: featherEnd && endCapRound == false && feathersEnds,
                        emitsArcLength: emitsArcLength,
                        emitsEdgeLines: deferredExtrusion,
+                       subdivisionStep: subdivisionStep,
                        polygon: &polygon)
 
         if lineJoinRound {
@@ -590,12 +598,17 @@ class ParseLine {
     /// With `emitsEdgeLines` (a deferred ribbon) each side of the segment
     /// gets its edge line. The ends get none: a connected end lies under
     /// the next piece, and the cut of a free end stays hard.
+    ///
+    /// With `subdivisionStep`, a row more wherever the centreline crosses
+    /// a grid line between two rows, its parameter interpolated: a row of
+    /// the strip is a row of the strip whatever brought it.
     private func appendSegments(precomputed: PrecomputedLine,
                                 extrudedHalfWidth: Float,
                                 featherStart: Bool,
                                 featherEnd: Bool,
                                 emitsArcLength: Bool,
                                 emitsEdgeLines: Bool,
+                                subdivisionStep: Float? = nil,
                                 polygon: inout GeneratedPolygon) {
         let feather = Self.featherTileUnits
         for index in 0..<precomputed.segmentLengths.count {
@@ -630,6 +643,9 @@ class ParseLine {
                 } else {
                     rows.append((end, 1.0))
                 }
+            }
+            if let subdivisionStep {
+                rows = Self.subdividedRows(rows, step: subdivisionStep)
             }
 
             let base = UInt32(polygon.vertices.count)
@@ -668,6 +684,46 @@ class ParseLine {
                 }
             }
         }
+    }
+
+    /// The rows with one more at every crossing of a grid line between two
+    /// neighbouring rows, in order along the strip. A crossing is found
+    /// from the pair's endpoints as they are (both pieces that share a row
+    /// are rows of one strip, so no two need agree on it).
+    static func subdividedRows(_ rows: [(position: SIMD2<Float>, parameter: Float)],
+                               step: Float) -> [(position: SIMD2<Float>, parameter: Float)] {
+        guard step > 0, rows.count >= 2 else { return rows }
+        var result: [(position: SIMD2<Float>, parameter: Float)] = []
+        result.reserveCapacity(rows.count)
+        result.append(rows[0])
+        for index in 1..<rows.count {
+            let from = rows[index - 1]
+            let to = rows[index]
+            let delta = to.position - from.position
+            // The parameters along the pair at which it crosses a grid line
+            // of either axis, strictly inside the pair.
+            var crossings: [Float] = []
+            for axis in 0..<2 where abs(delta[axis]) > Self.epsilon {
+                let lower = min(from.position[axis], to.position[axis])
+                let upper = max(from.position[axis], to.position[axis])
+                var line = (lower / step).rounded(.down) + 1
+                while line * step < upper {
+                    let value = line * step
+                    if value > lower {
+                        crossings.append((value - from.position[axis]) / delta[axis])
+                    }
+                    line += 1
+                }
+            }
+            crossings.sort()
+            var previous: Float = 0
+            for t in crossings where t > Self.epsilon && t < 1 - Self.epsilon && t - previous > Self.epsilon {
+                result.append((from.position + delta * t, from.parameter + (to.parameter - from.parameter) * t))
+                previous = t
+            }
+            result.append(to)
+        }
+        return result
     }
 
     private func appendRoundJoins(precomputed: PrecomputedLine,

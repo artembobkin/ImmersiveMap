@@ -51,8 +51,7 @@ enum DebugOverlaySettingsExport {
         return [
             ".fogSettings(ImmersiveMapSettings.FogSettings(isEnabled: \(fog.isEnabled), "
                 + "skyColor: \(vector(fog.skyColor)), "
-                + "horizonColor: \(vector(fog.horizonColor)), "
-                + "horizonBandZoomFade: \(zoomFade(fog.horizonBandZoomFade))))",
+                + "horizonColor: \(vector(fog.horizonColor))))",
             ".groundFog(\(groundFogArguments.joined(separator: ", ")))",
             ".sceneLight(direction: \(vector(scene.light.direction)))",
             ".shadows(isEnabled: \(shadows.isEnabled), "

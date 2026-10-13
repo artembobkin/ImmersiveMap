@@ -634,13 +634,206 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             public var fromTileZoom: Int?
             /// The grid a flattened tile's triangles keep to, cells a side:
             /// no triangle crosses a cell. More cells, more triangles.
-            /// Clamped to `1...256`.
+            /// Clamped to `1...256`. With the ground relief on, the relief
+            /// is as fine as the grid: a cell of a coarse tile covers far
+            /// more ground than a cell of a deep one, so `gridByTileZoom`
+            /// gives the coarse zooms more cells.
             public var grid: Int
+            /// The grid of a tile zoom, over `grid` for the zooms it names.
+            public var gridByTileZoom: [Int: Int]
 
-            public init(fromTileZoom: Int? = 15, grid: Int = 16) {
+            public init(fromTileZoom: Int? = 15, grid: Int = 16, gridByTileZoom: [Int: Int] = [:]) {
                 self.fromTileZoom = fromTileZoom
                 self.grid = grid
+                self.gridByTileZoom = gridByTileZoom
             }
+
+            /// The grid of a tile of `tileZoom`.
+            public func grid(forTileZoom tileZoom: Int) -> Int {
+                gridByTileZoom[tileZoom] ?? grid
+            }
+        }
+
+        /// The flattened ground raised by a heightmap: each flattened tile
+        /// (`GroundFlatteningSettings`) takes its heights from the terrain
+        /// tile of the same address, or, where the terrain source has none
+        /// that deep, from the deepest one over it. The vertices of the
+        /// ground rise, so the relief is as fine as the flattening's grid.
+        /// A tile whose terrain has not arrived yet stays flat.
+        ///
+        /// A first step of the terrain: only the ground's fills rise. The
+        /// roads, the ground lines, the buildings, the models, the labels
+        /// and the ground's shadows stay on the plane, so a hill covers the
+        /// roads that cross it. Read at draw time, not baked into the
+        /// prepared tiles. Off by default.
+        public struct GroundReliefSettings: Equatable, Sendable {
+            /// Whether the flattened ground rises.
+            public var isEnabled: Bool
+            /// The frame's tile zoom the ground rises from: a frame whose
+            /// tiles are this zoom or deeper draws every tile of its own on
+            /// the terrain, the coarser tiles of its far rings and its
+            /// raster tiles too, since a tile left on the plane would cut
+            /// through the valleys under the point the camera looks at, and
+            /// the camera and the labels rise with the ground. A frame of
+            /// coarser tiles lies whole on the plane. Zero by default: the
+            /// ground rises as soon as the map is the plane, from the
+            /// globe's transition on, and the zoom fades (`flatZoomFade`,
+            /// `mountainZoomFade`) say where it lies down again. Raise it
+            /// to keep the overview zooms on the plane. With the relief on
+            /// every tile is flattened
+            /// (`TileSettings.resolvedGroundFlatteningFromTileZoom`), since
+            /// only a flattened tile can rise, and the relief of a tile is
+            /// as fine as its zoom's grid (`GroundFlatteningSettings.gridByTileZoom`).
+            public var fromTileZoom: Int
+            /// The terrain tiles: a URL with `{z}`, `{x}` and `{y}` in it,
+            /// of square images (PNG or WebP, of any size) whose pixels hold
+            /// heights in `encoding`. The default is Mapterhorn's open
+            /// global terrain, 30 m everywhere to zoom 12 and lidar deeper
+            /// where a country publishes it. Mapterhorn asks to be credited.
+            public var tileURLTemplate: String
+            /// How a pixel of a terrain tile holds its height
+            /// (`GroundReliefEncoding`): Terrarium by default, as
+            /// Mapterhorn serves. Set it with `tileURLTemplate` to a source
+            /// in another encoding.
+            public var encoding: GroundReliefEncoding
+            /// How much taller than the ground's real heights the relief is
+            /// drawn: 1 is true scale, 2 doubles every height. Raise it to
+            /// see a gentle relief.
+            public var exaggeration: Float
+            /// How the relief comes in with the camera zoom: flat up to
+            /// the fade's start, drawn in full from its end, between them
+            /// scaled up smoothly, so the mountains rise out of the plane
+            /// as the camera closes in rather than standing there the
+            /// moment the map is the plane. Flat to zoom 10 and full from
+            /// zoom 11 by default. Below the fade's start no terrain is
+            /// read or loaded and the camera stands on the plane.
+            /// `ImmersiveMapZoomFade.none` draws the relief from the
+            /// plane's first frame. The fades below, which take it away
+            /// again as the camera comes closer, scale it on top of this.
+            public var appearZoomFade: ImmersiveMapZoomFade
+            /// How the relief goes with the camera zoom over flat ground:
+            /// drawn in full up to the fade's start, flat from its end,
+            /// between them scaled down smoothly, and everything on the
+            /// ground with it. The terrain sources are 30 m cells over
+            /// most of the world, with the buildings and the forests in
+            /// them, and close up those cells read as hills where there
+            /// are none, so a street-level view stands on the plane the
+            /// way the big map services draw it. Flat ground is most
+            /// likely a city, where the relief has the least to show and
+            /// the most to get wrong, so by default it goes early: full to
+            /// zoom 10 and flat from 12, before the global source's own
+            /// zoom 12 cells are seen one by one. With the relief from
+            /// zoom 12 (`fromTileZoom`), flat ground then never rises,
+            /// and the mountains do. `ImmersiveMapZoomFade.none` keeps
+            /// the relief at every zoom.
+            public var flatZoomFade: ImmersiveMapZoomFade
+            /// The same over mountains, where the relief is the view and
+            /// stays late: full to zoom 17 and flat from 18 by default.
+            /// Which of the two a place gets, or how much of each, is a
+            /// property of the place, read off the terrain itself
+            /// (`GroundReliefRoughness`): the rise and fall of the terrain
+            /// within `reliefWindowMetres` of it, under `flatReliefMetres`
+            /// the flat fade, over `mountainReliefMetres` the mountain one,
+            /// between them a fade whose zooms lie between the two fades'
+            /// zooms, so foothills go at a zoom between the city's and the
+            /// mountains', and always whole. Every point of the ground is
+            /// drawn at the strength of its own place, so a city lies
+            /// flat beside a mountain that stands, and a pan at one zoom
+            /// moves nothing. A city on a mountainside gets the mountain
+            /// fade, with whatever its source makes of its buildings.
+            public var mountainZoomFade: ImmersiveMapZoomFade
+            /// The width in metres of the window around a place over which
+            /// the terrain's rise and fall is measured, 16 km by default.
+            /// Whether a place is mountains is a matter of the country
+            /// around it, not of the valley floor it lies on: a window the
+            /// size of a valley reads the floor as flat and the slopes as
+            /// mountains, while one that holds the peaks around the valley
+            /// reads the valley as the mountains' too. The rise is the
+            /// window's highest point less its lowest, so one mountain at
+            /// the edge of the window counts for the whole of it: narrow
+            /// the window for a city on a lake under a mountain, which the
+            /// default reads as foothills.
+            public var reliefWindowMetres: Float
+            /// The rise and fall within the window, in metres, up to which
+            /// the ground counts as flat (`flatZoomFade`): 100 m by
+            /// default, which the buildings in a 30 m source stay under.
+            public var flatReliefMetres: Float
+            /// The rise and fall from which the ground counts as mountain
+            /// (`mountainZoomFade`): 1000 m by default.
+            public var mountainReliefMetres: Float
+            /// The coarsest terrain zoom a tile falls back to when the
+            /// source has no terrain tile at its own zoom. Mapterhorn
+            /// covers the whole world to zoom 12.
+            public var minimumSourceZoom: Int
+            /// The zoom of the terrain tiles the rise and fall of a place
+            /// is read off (`GroundReliefRoughness`), 8 by default: a tile
+            /// about 100 km across at the Alps' latitude, read in cells of
+            /// 1.7 km, which holds the window many times over, so the
+            /// window is cut at the tile's edge for few places. A tile
+            /// coarser than this reads its own. Lower it for a finer
+            /// reading at the cost of more edges, raise it for fewer.
+            public var roughnessZoom: Int
+            /// What the decoded terrain tiles may hold in memory before the
+            /// longest unused are released. A tile is about a megabyte,
+            /// and a frame with its far rings reads a few dozen, so the
+            /// budget holds a frame or two: under that the tiles leave and
+            /// return by turns, and a tile on its way lies flat.
+            public var memoryBudgetInBytes: Int
+            /// The height in metres the camera keeps over a ridge under it,
+            /// the terrain between the eye and the point it looks at that
+            /// rises over that point. Zero by default: the camera flies
+            /// right up to the ridge and is held only from going under
+            /// its surface. Set, the margin grows with the ridge's rise,
+            /// from nothing over ground level with the point to this over
+            /// a ridge this much higher, so over level ground nothing ever
+            /// holds the camera off the point it looks at: the zoom goes
+            /// to its own limit. Set it if the near ground cuts into the
+            /// view on a slope.
+            public var cameraClearanceMetres: Float
+
+            public init(isEnabled: Bool = false,
+                        fromTileZoom: Int = 0,
+                        tileURLTemplate: String = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp",
+                        encoding: GroundReliefEncoding = .terrarium,
+                        exaggeration: Float = 1,
+                        appearZoomFade: ImmersiveMapZoomFade = .fadeIn(from: 10, to: 11),
+                        flatZoomFade: ImmersiveMapZoomFade = .fadeOut(from: 10, to: 12),
+                        mountainZoomFade: ImmersiveMapZoomFade = .fadeOut(from: 17, to: 18),
+                        reliefWindowMetres: Float = 16_000,
+                        flatReliefMetres: Float = 100,
+                        mountainReliefMetres: Float = 1_000,
+                        minimumSourceZoom: Int = 12,
+                        roughnessZoom: Int = 8,
+                        memoryBudgetInBytes: Int = 192 * 1_024 * 1_024,
+                        cameraClearanceMetres: Float = 0) {
+                self.isEnabled = isEnabled
+                self.fromTileZoom = fromTileZoom
+                self.tileURLTemplate = tileURLTemplate
+                self.encoding = encoding
+                self.exaggeration = exaggeration
+                self.appearZoomFade = appearZoomFade
+                self.flatZoomFade = flatZoomFade
+                self.mountainZoomFade = mountainZoomFade
+                self.reliefWindowMetres = reliefWindowMetres
+                self.flatReliefMetres = flatReliefMetres
+                self.mountainReliefMetres = mountainReliefMetres
+                self.minimumSourceZoom = minimumSourceZoom
+                self.roughnessZoom = roughnessZoom
+                self.memoryBudgetInBytes = memoryBudgetInBytes
+                self.cameraClearanceMetres = cameraClearanceMetres
+            }
+        }
+
+        /// How a pixel of a terrain tile holds its height in metres
+        /// (`GroundReliefSettings.encoding`). Both are RGB images, PNG or
+        /// WebP, and differ only in the arithmetic.
+        public enum GroundReliefEncoding: String, CaseIterable, Equatable, Sendable {
+            /// Red × 256 + green + blue / 256 − 32768: Mapterhorn, AWS
+            /// Terrain Tiles and most open sources.
+            case terrarium
+            /// (Red × 65536 + green × 256 + blue) × 0.1 − 10000: Mapbox
+            /// Terrain-DEM and Terrain-RGB, and MapTiler's terrain.
+            case mapbox
         }
 
         /// How the tile loader uses regions downloaded through
@@ -670,24 +863,15 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
 
         /// The tiles drawn from a texture: a ring rule that names a raster
-        /// size draws its tiles' ground from a texture of their fills,
-        /// drawn once, kept on disk next to the prepared tiles and drawn
-        /// from then on with its mipmaps (`RasterTileStore`). These are how
-        /// much of it the GPU keeps, how fast new ones are made, and how
-        /// they are sampled. The size is the rule's.
+        /// size draws its tiles' ground through a texture of their fills,
+        /// drawn from the tile each frame and shown with its mipmaps
+        /// (`RasterTileRenderSubsystem`), so the far ground is as smooth
+        /// as a texture and as current as the geometry. These are how the
+        /// textures are sampled. The size is the rule's, and every tile
+        /// of a raster ring is drawn into its texture every frame, so a
+        /// rule's size is a cost of the frame: 256 texels is plenty for
+        /// a far ring.
         public struct RasterizationSettings: Equatable, Sendable {
-            /// What the textures the frame does not draw may hold in GPU
-            /// memory before the longest unused leave: a camera that comes
-            /// back finds them without reading the disk. The ones the frame
-            /// draws stay whatever this says. Raise it for a map that pans
-            /// back and forth over wide far rings, lower it on a device
-            /// short of memory.
-            public var memoryBudgetInBytes: Int
-            /// How many textures are drawn from their tiles in one frame. A
-            /// texture is drawn once, so this matters only the first time
-            /// a camera crosses an area: more fills the far rings sooner,
-            /// fewer keeps those frames short.
-            public var bakesPerFrame: Int
             /// The anisotropic filtering of the textures, 1 to 16 samples.
             /// The far rings are seen almost edge on, where a texture
             /// without it blurs along the view. Lower it only on a GPU short
@@ -697,12 +881,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// is softer and quieter, below 0 sharper and busier.
             public var mipLevelBias: Float
 
-            public init(memoryBudgetInBytes: Int = 96 * 1_024 * 1_024,
-                        bakesPerFrame: Int = 4,
-                        maximumAnisotropy: Int = 16,
+            public init(maximumAnisotropy: Int = 16,
                         mipLevelBias: Float = 0) {
-                self.memoryBudgetInBytes = memoryBudgetInBytes
-                self.bakesPerFrame = bakesPerFrame
                 self.maximumAnisotropy = maximumAnisotropy
                 self.mipLevelBias = mipLevelBias
             }
@@ -713,6 +893,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var cache: CacheSettings
         public var parsing: ParsingSettings
         public var groundFlattening: GroundFlatteningSettings
+        public var groundRelief: GroundReliefSettings
         public var offline: OfflineSettings
         public var rasterization: RasterizationSettings
 
@@ -722,6 +903,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     parsing: ParsingSettings,
                     offline: OfflineSettings = OfflineSettings(),
                     groundFlattening: GroundFlatteningSettings = GroundFlatteningSettings(),
+                    groundRelief: GroundReliefSettings = GroundReliefSettings(),
                     rasterization: RasterizationSettings = RasterizationSettings()) {
             self.coverage = coverage
             self.network = network
@@ -729,7 +911,17 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.parsing = parsing
             self.offline = offline
             self.groundFlattening = groundFlattening
+            self.groundRelief = groundRelief
             self.rasterization = rasterization
+        }
+
+        /// The tile zoom the ground is flattened from, with the relief in:
+        /// every zoom where the relief is on, since a frame on the terrain
+        /// raises every tile it draws, the coarse tiles of its far rings
+        /// too, and only a flattened tile can rise. Else the flattening's
+        /// own. Every reader of the flattening's zoom reads this.
+        var resolvedGroundFlatteningFromTileZoom: Int? {
+            groundRelief.isEnabled ? 0 : groundFlattening.fromTileZoom
         }
 
         func resolvedCoverageZoomLevel(forCameraZoom cameraZoom: Double) -> Int {
@@ -1096,12 +1288,10 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
     /// The sky of the flat presentation: above the horizon line the sky, a
     /// short pale glow at the line that gives way to the sky colour within
-    /// a few degrees, and below it a thin band of the ground whitening into
-    /// the same colour at the line, which hides the seam between the far
-    /// ground and the sky. On by default. Off, nothing is painted above the
-    /// line (the sky is the map's clear colour) and the band whitens into
-    /// that colour, so the far range still meets the sky with no seam. The
-    /// far ground itself is veiled by the ground fog (`GroundFogSettings`),
+    /// a few degrees. On by default. Off, nothing is painted above the
+    /// line (the sky is the map's clear colour). Nothing is painted on the
+    /// ground under the line: the far ground is veiled by the ground fog
+    /// (`GroundFogSettings`), by its distance,
     /// which takes its colour from `horizonColor`. The globe has its own
     /// treatment, `AtmosphereSettings`. Through the globe-to-flat morph the
     /// atmosphere hands over to this.
@@ -1110,45 +1300,17 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// The sky's colour away from the horizon, RGB in `0...1`.
         public var skyColor: SIMD3<Float>
         /// The colour at the horizon: the glow the sky brightens into over
-        /// its last degrees coming down, the band at the line and, unless it
-        /// states its own, the ground fog, so they all meet at the line in
-        /// one colour. White by default, the way a hazy day's sky whitens
-        /// toward the ground.
+        /// its last degrees coming down and, unless it states its own, the
+        /// ground fog, so the two meet at the line in one colour. White by
+        /// default, the way a hazy day's sky whitens toward the ground.
         public var horizonColor: SIMD3<Float>
-        /// How wide the band at the horizon line is with the camera zoom:
-        /// the ground whitening into the horizon colour over the last
-        /// degrees under the line, which hides the seam between the far
-        /// ground and the sky and is there with the fog off too. It is
-        /// measured in degrees under the line, so from a camera high over
-        /// the map it lies on the horizon, and from one standing in the
-        /// street it reaches down the street to the camera's feet. A
-        /// fade-out, say `.fadeOut(from: 18, to: 19)`, draws it in toward the
-        /// line over that stretch of zoom, to `minimumHorizonBandShare` of
-        /// its width from 19 on: a hairline that still hides the seam where
-        /// the horizon is open. `.none` (the default) keeps it at its width
-        /// at every zoom. Evaluated against the camera zoom each frame.
-        public var horizonBandZoomFade: ImmersiveMapZoomFade
-
-        /// The share of its width the horizon band keeps once
-        /// `horizonBandZoomFade` has drawn it in.
-        public static let minimumHorizonBandShare: Float = 0.1
 
         public init(isEnabled: Bool = true,
                     skyColor: SIMD3<Float> = SIMD3<Float>(0.40, 0.66, 1.0),
-                    horizonColor: SIMD3<Float> = SIMD3<Float>(0.97, 0.97, 0.98),
-                    horizonBandZoomFade: ImmersiveMapZoomFade = .none) {
+                    horizonColor: SIMD3<Float> = SIMD3<Float>(0.97, 0.97, 0.98)) {
             self.isEnabled = isEnabled
             self.skyColor = skyColor
             self.horizonColor = horizonColor
-            self.horizonBandZoomFade = horizonBandZoomFade
-        }
-
-        /// The share of its width the band at the horizon line has at a
-        /// camera zoom: 1 for `.none`, down to `minimumHorizonBandShare`
-        /// where `horizonBandZoomFade` is out.
-        func horizonBandShare(atZoom zoom: Double) -> Float {
-            let alpha = min(max(horizonBandZoomFade.alpha(atZoom: zoom), 0), 1)
-            return Self.minimumHorizonBandShare + (1 - Self.minimumHorizonBandShare) * alpha
         }
     }
 
@@ -1181,8 +1343,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     /// labels painted on the map, the buildings and the models
     /// (`veilsBuildings`), so it hides the far detail and its shimmer and
     /// draws the eye to the near ground. On by default. The horizon's sky
-    /// and the band at its line (`FogSettings`) are the horizon's own:
-    /// either can be on without the other. The globe has none.
+    /// (`FogSettings`) is the horizon's own: either can be on without the
+    /// other. The globe has none.
     ///
     /// Every length is in meters on the ground, so a fog layer 60 m high is
     /// 60 m high at every zoom, and a fog that begins 400 m from the camera
@@ -1793,7 +1955,7 @@ public extension ImmersiveMapSettings {
     /// The flattened ground's zoom and grid
     /// (`TileSettings.GroundFlatteningSettings`), a nil leaving a value as
     /// configured.
-    func groundFlattening(fromTileZoom: Int? = nil, grid: Int? = nil) -> ImmersiveMapSettings {
+    func groundFlattening(fromTileZoom: Int? = nil, grid: Int? = nil, gridByTileZoom: [Int: Int]? = nil) -> ImmersiveMapSettings {
         var settings = self
         if let fromTileZoom {
             settings.tiles.groundFlattening.fromTileZoom = fromTileZoom
@@ -1801,22 +1963,80 @@ public extension ImmersiveMapSettings {
         if let grid {
             settings.tiles.groundFlattening.grid = grid
         }
+        if let gridByTileZoom {
+            settings.tiles.groundFlattening.gridByTileZoom = gridByTileZoom
+        }
+        return settings
+    }
+
+    /// The flattened ground raised by a heightmap
+    /// (`TileSettings.GroundReliefSettings`), a nil leaving a value as
+    /// configured.
+    func groundRelief(isEnabled: Bool? = nil,
+                      fromTileZoom: Int? = nil,
+                      tileURLTemplate: String? = nil,
+                      encoding: TileSettings.GroundReliefEncoding? = nil,
+                      exaggeration: Float? = nil,
+                      appearZoomFade: ImmersiveMapZoomFade? = nil,
+                      flatZoomFade: ImmersiveMapZoomFade? = nil,
+                      mountainZoomFade: ImmersiveMapZoomFade? = nil,
+                      reliefWindowMetres: Float? = nil,
+                      flatReliefMetres: Float? = nil,
+                      mountainReliefMetres: Float? = nil,
+                      roughnessZoom: Int? = nil,
+                      memoryBudgetInBytes: Int? = nil,
+                      cameraClearanceMetres: Float? = nil) -> ImmersiveMapSettings {
+        var settings = self
+        if let roughnessZoom {
+            settings.tiles.groundRelief.roughnessZoom = roughnessZoom
+        }
+        if let appearZoomFade {
+            settings.tiles.groundRelief.appearZoomFade = appearZoomFade
+        }
+        if let memoryBudgetInBytes {
+            settings.tiles.groundRelief.memoryBudgetInBytes = memoryBudgetInBytes
+        }
+        if let flatZoomFade {
+            settings.tiles.groundRelief.flatZoomFade = flatZoomFade
+        }
+        if let mountainZoomFade {
+            settings.tiles.groundRelief.mountainZoomFade = mountainZoomFade
+        }
+        if let reliefWindowMetres {
+            settings.tiles.groundRelief.reliefWindowMetres = reliefWindowMetres
+        }
+        if let flatReliefMetres {
+            settings.tiles.groundRelief.flatReliefMetres = flatReliefMetres
+        }
+        if let mountainReliefMetres {
+            settings.tiles.groundRelief.mountainReliefMetres = mountainReliefMetres
+        }
+        if let encoding {
+            settings.tiles.groundRelief.encoding = encoding
+        }
+        if let isEnabled {
+            settings.tiles.groundRelief.isEnabled = isEnabled
+        }
+        if let fromTileZoom {
+            settings.tiles.groundRelief.fromTileZoom = fromTileZoom
+        }
+        if let tileURLTemplate {
+            settings.tiles.groundRelief.tileURLTemplate = tileURLTemplate
+        }
+        if let exaggeration {
+            settings.tiles.groundRelief.exaggeration = exaggeration
+        }
+        if let cameraClearanceMetres {
+            settings.tiles.groundRelief.cameraClearanceMetres = cameraClearanceMetres
+        }
         return settings
     }
 
     /// The tiles drawn from a texture (`TileSettings.RasterizationSettings`),
     /// a nil leaving a value as configured.
-    func tileRasterization(memoryBudgetInBytes: Int? = nil,
-                           bakesPerFrame: Int? = nil,
-                           maximumAnisotropy: Int? = nil,
+    func tileRasterization(maximumAnisotropy: Int? = nil,
                            mipLevelBias: Float? = nil) -> ImmersiveMapSettings {
         var settings = self
-        if let memoryBudgetInBytes {
-            settings.tiles.rasterization.memoryBudgetInBytes = memoryBudgetInBytes
-        }
-        if let bakesPerFrame {
-            settings.tiles.rasterization.bakesPerFrame = bakesPerFrame
-        }
         if let maximumAnisotropy {
             settings.tiles.rasterization.maximumAnisotropy = maximumAnisotropy
         }
@@ -1999,19 +2219,10 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
-    /// The flat map's sky on or off. Off leaves the sky the clear colour
-    /// and only a thin seam-hiding band at the horizon line.
+    /// The flat map's sky on or off. Off leaves the sky the clear colour.
     func fog(isEnabled: Bool = true) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.fog.isEnabled = isEnabled
-        return settings
-    }
-
-    /// The flat map's band at the horizon line drawn in toward the line
-    /// with the camera zoom (`FogSettings.horizonBandZoomFade`).
-    func fog(horizonBandZoomFade: ImmersiveMapZoomFade) -> ImmersiveMapSettings {
-        var settings = self
-        settings.scene.fog.horizonBandZoomFade = horizonBandZoomFade
         return settings
     }
 

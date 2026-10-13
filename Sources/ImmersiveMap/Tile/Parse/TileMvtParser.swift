@@ -60,8 +60,19 @@ final class TileMvtParser {
         var readingStageResult = readingStage(decodedTile: decodedTile, tile: tile)
         if options.flattensGround(tileZoom: tile.z) {
             readingStageResult.polygonByStyle = GroundFlattening.flatten(polygonByStyle: readingStageResult.polygonByStyle,
-                                                                         grid: options.groundFlatteningGrid)
+                                                                         grid: options.groundFlatteningGrid(forTileZoom: tile.z))
             readingStageResult.groundIsFlattened = true
+        }
+        if let reliefStep = options.reliefSubdivisionStep(tileZoom: tile.z) {
+            // The bridge decks lie on the relief like the ground: cut at
+            // the grid, as the ground was. The ribbons took their rows at
+            // the grid as they were made (`ParseLine`).
+            let step = Int(reliefStep.rounded())
+            for key in readingStageResult.bridgePolygonByStyle.keys {
+                readingStageResult.bridgePolygonByStyle[key] = readingStageResult.bridgePolygonByStyle[key]?.map {
+                    GroundGeometrySubdivider.subdivide($0, step: step)
+                }
+            }
         }
         let unificationResult = TileUnificationStage.unify(readingStageResult)
 

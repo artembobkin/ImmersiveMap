@@ -10,12 +10,24 @@ class ExtrudedTilePipeline {
     /// shadow map. No color attachments and no fragment stage: the placeIn
     /// clip rides on the vertex stage's clip distances.
     let shadowPipelineState: MTLRenderPipelineState
+    /// The same two with the ground relief (TileExtruded.metal,
+    /// kExtrudedRelief): each building lifted by its tile's lifts in
+    /// metres at vertex buffer 4, times the world units a metre spans at
+    /// vertex buffer 5, for the tiles whose terrain is in.
+    let reliefPipelineState: MTLRenderPipelineState
+    let reliefShadowPipelineState: MTLRenderPipelineState
 
     init(metalDevice: MTLDevice,
          pixelFormat: MTLPixelFormat,
          library: MTLLibrary,
          sampleCount: Int = 1) {
-        let vertexFunction = library.makeFunction(name: "tileExtrudedVertexShader")
+        func function(_ name: String, relief: Bool) -> MTLFunction {
+            let values = MTLFunctionConstantValues()
+            var reliefValue = relief
+            values.setConstantValue(&reliefValue, type: .bool, index: 0)
+            return try! library.makeFunction(name: name, constantValues: values)
+        }
+        let vertexFunction = function("tileExtrudedVertexShader", relief: false)
         let fragmentFunction = library.makeFunction(name: "tileExtrudedFragmentShader")
 
         // The 12-byte layout of ExtrudedVertexIn: quantized positions fed
@@ -35,6 +47,9 @@ class ExtrudedTilePipeline {
         vertexDescriptor.attributes[2].format = .uchar
         vertexDescriptor.attributes[2].offset = 9
         vertexDescriptor.attributes[2].bufferIndex = 0
+        vertexDescriptor.attributes[3].format = .ushort
+        vertexDescriptor.attributes[3].offset = 10
+        vertexDescriptor.attributes[3].bufferIndex = 0
         vertexDescriptor.layouts[0].stride = MemoryLayout<ExtrudedVertexIn>.stride
         vertexDescriptor.layouts[0].stepFunction = .perVertex
 
@@ -48,7 +63,7 @@ class ExtrudedTilePipeline {
         pipelineDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
 
         let shadowDescriptor = MTLRenderPipelineDescriptor()
-        shadowDescriptor.vertexFunction = library.makeFunction(name: "tileExtrudedShadowVertexShader")
+        shadowDescriptor.vertexFunction = function("tileExtrudedShadowVertexShader", relief: false)
         shadowDescriptor.fragmentFunction = nil
         shadowDescriptor.vertexDescriptor = vertexDescriptor
         shadowDescriptor.rasterSampleCount = 1
@@ -59,13 +74,18 @@ class ExtrudedTilePipeline {
 
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
         self.shadowPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: shadowDescriptor)
+        pipelineDescriptor.vertexFunction = function("tileExtrudedVertexShader", relief: true)
+        self.reliefPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+        shadowDescriptor.vertexFunction = function("tileExtrudedShadowVertexShader", relief: true)
+        self.reliefShadowPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: shadowDescriptor)
     }
 
-    func selectPipeline(renderEncoder: MTLRenderCommandEncoder) {
-        renderEncoder.setRenderPipelineState(pipelineState)
+    /// `relief` for a tile whose lifts are bound at vertex buffer 4.
+    func selectPipeline(renderEncoder: MTLRenderCommandEncoder, relief: Bool = false) {
+        renderEncoder.setRenderPipelineState(relief ? reliefPipelineState : pipelineState)
     }
 
-    func selectShadowPipeline(renderEncoder: MTLRenderCommandEncoder) {
-        renderEncoder.setRenderPipelineState(shadowPipelineState)
+    func selectShadowPipeline(renderEncoder: MTLRenderCommandEncoder, relief: Bool = false) {
+        renderEncoder.setRenderPipelineState(relief ? reliefShadowPipelineState : shadowPipelineState)
     }
 }

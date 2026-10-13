@@ -98,4 +98,7 @@ struct PreparedTileArenaImage: Sendable {
     /// Each building's place in the extruded indices
     /// (`PreparedTileCPU.Extruded.buildingRanges`).
     var buildingRanges: [TileBuildingRange] = []
+    /// Each volume's anchor by its ordinal
+    /// (`PreparedTileCPU.Extruded.buildingAnchors`).
+    var buildingAnchors: [SIMD2<Float>] = []
 }

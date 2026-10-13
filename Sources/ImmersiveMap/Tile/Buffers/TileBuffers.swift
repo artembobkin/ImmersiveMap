@@ -105,6 +105,10 @@ struct TileBuffers {
         /// Each building's place in `indices`, sorted by feature id, see
         /// `TileBuildingRange`.
         var buildingRanges: [TileBuildingRange] = []
+        /// Each volume's anchor by its ordinal
+        /// (`DrawingExtrudedBytes.buildingAnchors`), where the relief
+        /// lifts it from.
+        var buildingAnchors: [SIMD2<Float>] = []
 
         var indicesCount: Int {
             indices?.count ?? 0
