@@ -700,6 +700,17 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// drawn: 1 is true scale, 2 doubles every height. Raise it to
             /// see a gentle relief.
             public var exaggeration: Float
+            /// How the relief comes in with the camera zoom: flat up to
+            /// the fade's start, drawn in full from its end, between them
+            /// scaled up smoothly, so the mountains rise out of the plane
+            /// as the camera closes in rather than standing there the
+            /// moment the map is the plane. Flat to zoom 10 and full from
+            /// zoom 11 by default. Below the fade's start no terrain is
+            /// read or loaded and the camera stands on the plane.
+            /// `ImmersiveMapZoomFade.none` draws the relief from the
+            /// plane's first frame. The fades below, which take it away
+            /// again as the camera comes closer, scale it on top of this.
+            public var appearZoomFade: ImmersiveMapZoomFade
             /// How the relief goes with the camera zoom over flat ground:
             /// drawn in full up to the fade's start, flat from its end,
             /// between them scaled down smoothly, and everything on the
@@ -718,23 +729,30 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             public var flatZoomFade: ImmersiveMapZoomFade
             /// The same over mountains, where the relief is the view and
             /// stays late: full to zoom 17 and flat from 18 by default.
-            /// Which of the two a frame gets, or how much of each, is read
-            /// off the ground around the point the camera looks at: the
-            /// rise and fall of the terrain within `reliefWindowMetres` of
-            /// it, under `flatReliefMetres` the flat fade, over
-            /// `mountainReliefMetres` the mountain one, between them a
-            /// smooth mix. A city on a mountainside gets the mountain
+            /// Which of the two a place gets, or how much of each, is a
+            /// property of the place, read off the terrain itself
+            /// (`GroundReliefRoughness`): the rise and fall of the terrain
+            /// within `reliefWindowMetres` of it, under `flatReliefMetres`
+            /// the flat fade, over `mountainReliefMetres` the mountain one,
+            /// between them a fade whose zooms lie between the two fades'
+            /// zooms, so foothills go at a zoom between the city's and the
+            /// mountains', and always whole. Every point of the ground is
+            /// drawn at the strength of its own place, so a city lies
+            /// flat beside a mountain that stands, and a pan at one zoom
+            /// moves nothing. A city on a mountainside gets the mountain
             /// fade, with whatever its source makes of its buildings.
             public var mountainZoomFade: ImmersiveMapZoomFade
-            /// The width in metres of the window around the point the
-            /// camera looks at over which the terrain's rise and fall is
-            /// measured, 16 km by default. Whether a place is mountains is
-            /// a matter of the country around it, not of the valley floor
-            /// the camera happens to look at: a window the size of a
-            /// valley reads a different rise at every step of a pan up it,
-            /// and the whole relief would swell and shrink with the hand,
-            /// while one that always holds the peaks around the valley
-            /// reads the same wherever the camera looks within it.
+            /// The width in metres of the window around a place over which
+            /// the terrain's rise and fall is measured, 16 km by default.
+            /// Whether a place is mountains is a matter of the country
+            /// around it, not of the valley floor it lies on: a window the
+            /// size of a valley reads the floor as flat and the slopes as
+            /// mountains, while one that holds the peaks around the valley
+            /// reads the valley as the mountains' too. The rise is the
+            /// window's highest point less its lowest, so one mountain at
+            /// the edge of the window counts for the whole of it: narrow
+            /// the window for a city on a lake under a mountain, which the
+            /// default reads as foothills.
             public var reliefWindowMetres: Float
             /// The rise and fall within the window, in metres, up to which
             /// the ground counts as flat (`flatZoomFade`): 100 m by
@@ -747,6 +765,14 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// source has no terrain tile at its own zoom. Mapterhorn
             /// covers the whole world to zoom 12.
             public var minimumSourceZoom: Int
+            /// The zoom of the terrain tiles the rise and fall of a place
+            /// is read off (`GroundReliefRoughness`), 8 by default: a tile
+            /// about 100 km across at the Alps' latitude, read in cells of
+            /// 1.7 km, which holds the window many times over, so the
+            /// window is cut at the tile's edge for few places. A tile
+            /// coarser than this reads its own. Lower it for a finer
+            /// reading at the cost of more edges, raise it for fewer.
+            public var roughnessZoom: Int
             /// What the decoded terrain tiles may hold in memory before the
             /// longest unused are released. A tile is about a megabyte,
             /// and a frame with its far rings reads a few dozen, so the
@@ -770,12 +796,14 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                         tileURLTemplate: String = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp",
                         encoding: GroundReliefEncoding = .terrarium,
                         exaggeration: Float = 1,
+                        appearZoomFade: ImmersiveMapZoomFade = .fadeIn(from: 10, to: 11),
                         flatZoomFade: ImmersiveMapZoomFade = .fadeOut(from: 10, to: 12),
                         mountainZoomFade: ImmersiveMapZoomFade = .fadeOut(from: 17, to: 18),
                         reliefWindowMetres: Float = 16_000,
                         flatReliefMetres: Float = 100,
                         mountainReliefMetres: Float = 1_000,
                         minimumSourceZoom: Int = 12,
+                        roughnessZoom: Int = 8,
                         memoryBudgetInBytes: Int = 192 * 1_024 * 1_024,
                         cameraClearanceMetres: Float = 0) {
                 self.isEnabled = isEnabled
@@ -783,12 +811,14 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                 self.tileURLTemplate = tileURLTemplate
                 self.encoding = encoding
                 self.exaggeration = exaggeration
+                self.appearZoomFade = appearZoomFade
                 self.flatZoomFade = flatZoomFade
                 self.mountainZoomFade = mountainZoomFade
                 self.reliefWindowMetres = reliefWindowMetres
                 self.flatReliefMetres = flatReliefMetres
                 self.mountainReliefMetres = mountainReliefMetres
                 self.minimumSourceZoom = minimumSourceZoom
+                self.roughnessZoom = roughnessZoom
                 self.memoryBudgetInBytes = memoryBudgetInBytes
                 self.cameraClearanceMetres = cameraClearanceMetres
             }
@@ -833,24 +863,15 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
 
         /// The tiles drawn from a texture: a ring rule that names a raster
-        /// size draws its tiles' ground from a texture of their fills,
-        /// drawn once, kept on disk next to the prepared tiles and drawn
-        /// from then on with its mipmaps (`RasterTileStore`). These are how
-        /// much of it the GPU keeps, how fast new ones are made, and how
-        /// they are sampled. The size is the rule's.
+        /// size draws its tiles' ground through a texture of their fills,
+        /// drawn from the tile each frame and shown with its mipmaps
+        /// (`RasterTileRenderSubsystem`), so the far ground is as smooth
+        /// as a texture and as current as the geometry. These are how the
+        /// textures are sampled. The size is the rule's, and every tile
+        /// of a raster ring is drawn into its texture every frame, so a
+        /// rule's size is a cost of the frame: 256 texels is plenty for
+        /// a far ring.
         public struct RasterizationSettings: Equatable, Sendable {
-            /// What the textures the frame does not draw may hold in GPU
-            /// memory before the longest unused leave: a camera that comes
-            /// back finds them without reading the disk. The ones the frame
-            /// draws stay whatever this says. Raise it for a map that pans
-            /// back and forth over wide far rings, lower it on a device
-            /// short of memory.
-            public var memoryBudgetInBytes: Int
-            /// How many textures are drawn from their tiles in one frame. A
-            /// texture is drawn once, so this matters only the first time
-            /// a camera crosses an area: more fills the far rings sooner,
-            /// fewer keeps those frames short.
-            public var bakesPerFrame: Int
             /// The anisotropic filtering of the textures, 1 to 16 samples.
             /// The far rings are seen almost edge on, where a texture
             /// without it blurs along the view. Lower it only on a GPU short
@@ -860,12 +881,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// is softer and quieter, below 0 sharper and busier.
             public var mipLevelBias: Float
 
-            public init(memoryBudgetInBytes: Int = 96 * 1_024 * 1_024,
-                        bakesPerFrame: Int = 4,
-                        maximumAnisotropy: Int = 16,
+            public init(maximumAnisotropy: Int = 16,
                         mipLevelBias: Float = 0) {
-                self.memoryBudgetInBytes = memoryBudgetInBytes
-                self.bakesPerFrame = bakesPerFrame
                 self.maximumAnisotropy = maximumAnisotropy
                 self.mipLevelBias = mipLevelBias
             }
@@ -1954,14 +1971,22 @@ public extension ImmersiveMapSettings {
                       tileURLTemplate: String? = nil,
                       encoding: TileSettings.GroundReliefEncoding? = nil,
                       exaggeration: Float? = nil,
+                      appearZoomFade: ImmersiveMapZoomFade? = nil,
                       flatZoomFade: ImmersiveMapZoomFade? = nil,
                       mountainZoomFade: ImmersiveMapZoomFade? = nil,
                       reliefWindowMetres: Float? = nil,
                       flatReliefMetres: Float? = nil,
                       mountainReliefMetres: Float? = nil,
+                      roughnessZoom: Int? = nil,
                       memoryBudgetInBytes: Int? = nil,
                       cameraClearanceMetres: Float? = nil) -> ImmersiveMapSettings {
         var settings = self
+        if let roughnessZoom {
+            settings.tiles.groundRelief.roughnessZoom = roughnessZoom
+        }
+        if let appearZoomFade {
+            settings.tiles.groundRelief.appearZoomFade = appearZoomFade
+        }
         if let memoryBudgetInBytes {
             settings.tiles.groundRelief.memoryBudgetInBytes = memoryBudgetInBytes
         }
@@ -2003,17 +2028,9 @@ public extension ImmersiveMapSettings {
 
     /// The tiles drawn from a texture (`TileSettings.RasterizationSettings`),
     /// a nil leaving a value as configured.
-    func tileRasterization(memoryBudgetInBytes: Int? = nil,
-                           bakesPerFrame: Int? = nil,
-                           maximumAnisotropy: Int? = nil,
+    func tileRasterization(maximumAnisotropy: Int? = nil,
                            mipLevelBias: Float? = nil) -> ImmersiveMapSettings {
         var settings = self
-        if let memoryBudgetInBytes {
-            settings.tiles.rasterization.memoryBudgetInBytes = memoryBudgetInBytes
-        }
-        if let bakesPerFrame {
-            settings.tiles.rasterization.bakesPerFrame = bakesPerFrame
-        }
         if let maximumAnisotropy {
             settings.tiles.rasterization.maximumAnisotropy = maximumAnisotropy
         }

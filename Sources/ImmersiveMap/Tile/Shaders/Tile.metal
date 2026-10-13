@@ -183,7 +183,8 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                                   constant OverviewFadeUniform& overviewFade [[buffer(8)]],
                                   constant GroundReliefUniform& relief [[buffer(9), function_constant(kTileGroundRelief)]],
                                   constant float4& clipRect [[buffer(12)]],
-                                  texture2d<float> reliefHeights [[texture(0), function_constant(kTileGroundRelief)]]) {
+                                  texture2d<float> reliefHeights [[texture(0), function_constant(kTileGroundRelief)]],
+                                  texture2d<float> reliefRoughness [[texture(1), function_constant(kTileGroundRelief)]]) {
     float2 localPosition = float2(vertexIn.position.xy);
     float deferredEdgePx = 0.0;
     float2 widthAxis = float2(0.0);
@@ -287,7 +288,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     }
     float4 worldPosition = modelMatrix * float4(localPosition, 0.0, 1.0);
     if (kTileGroundRelief) {
-        worldPosition.z += groundReliefLift(localPosition, reliefHeights, relief);
+        worldPosition.z += groundReliefLift(localPosition, reliefHeights, reliefRoughness, relief);
     }
 
     VertexOut out;

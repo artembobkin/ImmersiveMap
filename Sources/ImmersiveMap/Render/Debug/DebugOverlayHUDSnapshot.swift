@@ -127,10 +127,12 @@ struct DebugOverlayHUDSnapshot: Equatable {
         let unitsPerMetre = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: latitude,
                                                                       renderMapSize: frameContext.flatRenderState.renderMapSize)
         let eyeHeightMetres = Double(frameContext.cameraEye.z) / unitsPerMetre
-        let datumDrawn = Double(store.datumMetres * store.exaggeration)
         let state = store.isActive ? "on" : "off"
-        return "relief:\(state) datum:\(format(Double(store.datumMetres)))m eye alt:\(format(datumDrawn + eyeHeightMetres))m"
-            + " height:\(format(eyeHeightMetres))m range:\(format(Double(store.reliefRangeMetres)))m x\(format(Double(store.exaggeration)))"
+        let terrainZoom = GroundReliefStore.terrainZoom(forTargetZoom: frameContext.visibleContent.tileZoomLevel)
+        let strength = store.strength(atNormalizedWorld: centre, terrainZoom: terrainZoom).map { Double($0) }
+        let share = store.mountainShare(atNormalizedWorld: centre, terrainZoom: terrainZoom).map { Double($0) }
+        return "relief:\(state) datum:\(format(Double(store.datumMetres)))m eye alt:\(format(Double(store.datumMetres) + eyeHeightMetres))m"
+            + " height:\(format(eyeHeightMetres))m mountain:\(share.map(format) ?? "-") x\(strength.map(format) ?? "-")"
     }
 
     /// The ring rules as the frame resolved them on either surface,

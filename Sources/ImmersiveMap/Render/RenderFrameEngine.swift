@@ -65,10 +65,6 @@ final class RenderFrameEngine {
     private let shadowMapReuse = ShadowMapReuseController()
     private let clock: RenderFrameClock
     private var debugHUDSnapshotThrottler = DebugOverlayHUDSnapshotThrottler()
-    /// How far the camera is raised over its pose for the clearance over
-    /// the relief under it (`GroundReliefCameraLift`): the last lift known
-    /// while the terrain under the camera is on its way.
-    private var groundReliefLiftUnits: Float = 0
     /// GPU duration of the most recently completed frame, written on the Metal
     /// completion thread and read on the main thread when the next frame's
     /// diagnostics are built.
@@ -355,18 +351,16 @@ final class RenderFrameEngine {
         // in world units from the last frame's datum: the coverage reaches
         // the tiles the relief lifts into view (`CoveragePolygonBuilder`).
         var reliefHeights: ClosedRange<Float>?
-        persistentContext.groundReliefStore?.setFrame(
-            cameraZoom: cameraFrameState.mapCameraState.zoom,
-            centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
-            tileZoom: settings.tiles.resolvedCoverageZoomLevel(forCameraZoom: cameraFrameState.mapCameraState.zoom))
+        persistentContext.groundReliefStore?.setFrame(cameraZoom: cameraFrameState.mapCameraState.zoom)
         if let store = persistentContext.groundReliefStore, store.isActive,
            resolvedPresentation.renderSurfaceMode == .flat,
            let range = store.heightRangeMetres {
             let centre = cameraFrameState.mapCameraState.centerWorldMercator
             let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: centre.y)
+            // At the strength of a mountain: the most any point rises.
             let unitsPerMetre = Float(ImmersiveMapProjection.worldUnitsPerMeter(
                 latitudeRadians: latitude,
-                renderMapSize: resolvedPresentation.flatRenderState.renderMapSize)) * store.exaggeration
+                renderMapSize: resolvedPresentation.flatRenderState.renderMapSize)) * store.strengthScale
             reliefHeights = ((range.lowerBound - store.datumMetres) * unitsPerMetre)
                 ... ((range.upperBound - store.datumMetres) * unitsPerMetre)
         }
@@ -378,34 +372,24 @@ final class RenderFrameEngine {
                                                         diagnostics: diagnostics)
         // The relief is drawn from under the point the camera looks at:
         // the terrain there is the frame's datum, so the point lies on the
-        // ground at the origin and the pose holds. The camera rises only
-        // where the relief under the eye would come too near. Both after
-        // the coverage, which the camera's own pose decides.
-        var cameraMatrices = cameraFrameState.cameraMatrices
-        var cameraEye = cameraFrameState.cameraEye
+        // ground at the origin and the pose holds as it is. The clearance
+        // over a ridge under the eye is the camera's own business, kept
+        // through the zoom (`CameraStateController`), never a lift here.
+        // After the coverage, which the camera's own pose decides.
+        let cameraMatrices = cameraFrameState.cameraMatrices
+        let cameraEye = cameraFrameState.cameraEye
         if let groundReliefStore = persistentContext.groundReliefStore {
             if resolvedPresentation.renderSurfaceMode == .flat {
-                groundReliefStore.setActive(visibleContent.tileZoomLevel >= groundReliefStore.fromTileZoom)
-                let centerWorldMercator = cameraFrameState.mapCameraState.centerWorldMercator
+                groundReliefStore.setActive(visibleContent.tileZoomLevel >= groundReliefStore.fromTileZoom
+                                            && groundReliefStore.comesIn(atCameraZoom: cameraFrameState.mapCameraState.zoom))
                 if let datum = GroundReliefCameraLift.datumMetres(store: groundReliefStore,
-                                                                  centerWorldMercator: centerWorldMercator,
+                                                                  centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
                                                                   tileZoom: visibleContent.tileZoomLevel) {
                     groundReliefStore.setDatum(metres: datum)
                 }
-                if let units = GroundReliefCameraLift.clearanceLiftUnits(store: groundReliefStore,
-                                                                         eye: cameraEye,
-                                                                         centerWorldMercator: centerWorldMercator,
-                                                                         tileZoom: visibleContent.tileZoomLevel,
-                                                                         renderMapSize: resolvedPresentation.flatRenderState.renderMapSize) {
-                    groundReliefLiftUnits = units
-                }
-                (cameraMatrices, cameraEye) = GroundReliefCameraLift.lifted(cameraMatrices,
-                                                                            eye: cameraEye,
-                                                                            by: groundReliefLiftUnits)
             } else {
                 groundReliefStore.setActive(false)
                 groundReliefStore.setDatum(metres: 0)
-                groundReliefLiftUnits = 0
             }
         }
         // Resolved once here, so the pass injection and every receiver bind

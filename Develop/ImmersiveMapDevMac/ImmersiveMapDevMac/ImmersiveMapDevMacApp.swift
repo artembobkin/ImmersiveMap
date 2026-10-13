@@ -58,6 +58,8 @@ private struct MapScreen: View {
                 theme.features.buildingExtrusion = true
             })
             .extrusion(risesFromTheGround: false)
+            // The buildings from zoom 14, a level before the default's 15.
+            .extrusion(buildingsMinimumZoom: 14)
             .shadows(isEnabled: false)
             .labels(isEnabled: true)
             // The controls are drawn only when a camera controller is attached:
@@ -93,11 +95,11 @@ private struct MapScreen: View {
             // camera it is drawn nearer by, so it covers the map's own
             // building under it in the tiles that could not leave it out.
             // The value to tune by eye: 0 turns it off.
-            .modelArchive(devModelArchive, depthBias: 0.00)
+            .modelArchive(devModelArchive, depthBias: 0.05)
             // A tileset under development is rebuilt and re-served under the
             // same coordinates, so a warm disk cache would keep showing the
             // previous build. Every launch here starts from the network.
-            .tileSettings(clearDiskCachesOnLaunch: false)
+            .tileSettings(clearDiskCachesOnLaunch: true)
             .labelSettings(language: .english)
             // Camera coordinates and renderer diagnostics, drawn as host-view
             // chrome above the map. A development aid, off by default.

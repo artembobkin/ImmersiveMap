@@ -128,8 +128,8 @@ final class FlatRingRuleCoverageTests: XCTestCase {
         XCTAssertEqual(FlatRingRules.default.rules.map(\.drawsLines), [true, false, false, false])
         XCTAssertEqual(FlatRingRules.default.rules.map(\.drawsLabels), [true, false, false, false],
                        "only the exact tiles are labelled")
-        XCTAssertEqual(FlatRingRules.default.rules.map(\.rasterSize), [nil, nil, nil, nil],
-                       "every ring draws its ground as geometry")
+        XCTAssertEqual(FlatRingRules.default.rules.map(\.rasterSize), [nil, 128, 128, 64],
+                       "past the exact tiles the ground is textures")
         XCTAssertEqual(FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1, drawsLabels: false)])
                         .normalized().rules.map(\.drawsLabels), [false], "the label switch survives normalizing")
     }
@@ -161,11 +161,13 @@ final class FlatRingRuleCoverageTests: XCTestCase {
         let fixture = try Self.makeFixture(zoom: 16, pitchDegrees: 75, bearingDegrees: 47)
         let resolution = Self.resolve(fixture, targetZoom: 16, rules: rules)
         XCTAssertFalse(resolution.rasterTargets.isEmpty)
-        XCTAssertTrue(resolution.rasterTargets.allSatisfy { $0.key.z == 14 && $0.value == RasterTileSpec(size: 256, fadeZoom: 16) },
+        XCTAssertTrue(resolution.rasterTargets.allSatisfy { $0.key.z == 14 && $0.value == RasterTileSpec(size: 256) },
                       "\(resolution.rasterTargets)")
         XCTAssertTrue(resolution.targets.filter { $0.z == 16 }.allSatisfy { resolution.rasterTargets[$0] == nil })
         let defaultResolution = Self.resolve(fixture, targetZoom: 16)
-        XCTAssertTrue(defaultResolution.rasterTargets.isEmpty, "the default draws every ring as geometry")
+        XCTAssertFalse(defaultResolution.rasterTargets.isEmpty, "the default draws its far rings from textures")
+        XCTAssertTrue(defaultResolution.targets.filter { $0.z == 16 }.allSatisfy { defaultResolution.rasterTargets[$0] == nil },
+                      "the default draws the exact tiles as geometry")
     }
 
     /// The raster size survives normalizing, snapped to the nearest edge a

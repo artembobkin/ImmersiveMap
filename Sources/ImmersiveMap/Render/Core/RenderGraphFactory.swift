@@ -11,7 +11,6 @@ enum RenderGraphFactory {
                                  shadowMapTextureProvider: @escaping () -> MTLTexture?,
                                  groundShadowMaskTextureProvider: @escaping () -> MTLTexture?) -> RenderGraph {
         let tileWorkingSetSubsystem = TileWorkingSetSubsystem(tileRenderStore: context.tileRenderStore,
-                                                              rasterTileStore: context.rasterTileStore,
                                                               tileTraceRecorder: context.tileTraceRecorder,
                                                               groundReliefStore: context.groundReliefStore,
                                                               buildingsMinimumTileZoom: BuildingCoveragePlanner.minimumDrawZoom(settings: settings))

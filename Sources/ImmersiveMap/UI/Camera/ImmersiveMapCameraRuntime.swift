@@ -312,6 +312,10 @@ final class ImmersiveMapCameraRuntime {
 
     /// Shifts the map center after an already-applied zoom so that the world point
     /// under `anchorPoint` stays under it (by the `zoomAnchorFactor` fraction).
+    /// On the flat map the shift is a move over the terrain, where there
+    /// is one (`CameraStateController.setCenterWorldMercatorOverTerrain`):
+    /// the eye keeps the altitude the zoom gave it, whatever ground the
+    /// point slides over.
     private func applyZoomAnchorCompensation(stateBefore: ImmersiveMapCameraState?,
                                              anchorPoint: CGPoint?) {
         guard let stateBefore,
@@ -328,7 +332,12 @@ final class ImmersiveMapCameraRuntime {
             return
         }
 
-        renderCamera.setCameraCenterWorldMercator(center)
+        let onThePlane = presentationStateResolver.resolve(cameraState: stateAfter).presentationState.transition >= 1
+        if onThePlane {
+            renderCamera.setCameraCenterWorldMercatorOverTerrain(center)
+        } else {
+            renderCamera.setCameraCenterWorldMercator(center)
+        }
     }
 
     private func anchorCompensatedCenter(stateBefore: ImmersiveMapCameraState,

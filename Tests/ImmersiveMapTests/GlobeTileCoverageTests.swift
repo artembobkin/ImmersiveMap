@@ -191,22 +191,23 @@ final class GlobeTileCoverageTests: XCTestCase {
     }
 
     /// A rule that draws its ground from a texture names its tiles with
-    /// the texture's edge and the zoom its fades are baked at (the tile's
-    /// zoom plus the rule's drop), the cover past the last rule following
-    /// the last rule, as for the lines.
+    /// the texture's edge, the cover past the last rule following the
+    /// last rule, as for the lines.
     func testARasterRuleNamesItsTiles() {
         let rules = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1),
                                           FlatRingRule(zoomDrop: 2, distance: 6, rasterSize: 128)])
         let resolution = Self.resolve(rules: rules)
         XCTAssertFalse(resolution.rasterTargets.isEmpty)
         XCTAssertTrue(resolution.rasterTargets.allSatisfy {
-            ($0.key.z == 4 || $0.key.z == GlobeTileCoverage.floorZoom) && $0.value == RasterTileSpec(size: 128, fadeZoom: $0.key.z + 2)
+            ($0.key.z == 4 || $0.key.z == GlobeTileCoverage.floorZoom) && $0.value == RasterTileSpec(size: 128)
         }, "\(resolution.rasterTargets)")
         XCTAssertEqual(resolution.rasterTargets[VisibleTile(x: 0, y: 0, z: GlobeTileCoverage.floorZoom)],
-                       RasterTileSpec(size: 128, fadeZoom: GlobeTileCoverage.floorZoom + 2))
+                       RasterTileSpec(size: 128))
         XCTAssertNil(resolution.rasterTargets[VisibleTile(x: 32, y: 32, z: 6)])
         XCTAssertTrue(Self.resolve().rasterTargets.allSatisfy { $0.key.z < 6 }, "the default's exact tiles are geometry")
-        XCTAssertTrue(Self.resolve(rules: FlatRingRules.globeDefault).rasterTargets.isEmpty, "the globe's zooms draw geometry")
+        let globe = Self.resolve(rules: FlatRingRules.globeDefault).rasterTargets
+        XCTAssertFalse(globe.isEmpty, "the globe's far ring draws from textures")
+        XCTAssertTrue(globe.allSatisfy { $0.key.z < 6 && $0.value == RasterTileSpec(size: 64) }, "and its exact tiles are geometry")
     }
 
     /// The rules are read frame by frame, with nothing carried over: the

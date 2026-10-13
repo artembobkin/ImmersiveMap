@@ -124,10 +124,10 @@ enum FlatMapSurfaceDrawer {
         // where it is drawn but not what it is drawn for: the target's ring
         // names the band that bounds it, and its lines and fills are the
         // target's rule's (`FlatRingRule.drawsLines`, and a raster target's
-        // ground is its texture where one covers it,
-        // `TilePlacementState.rasterGroundSlots`, so its own tile and its
-        // stand-ins draw only their lines there). An ancestor standing in
-        // draws around the descendants placed in the same slot.
+        // ground is its texture, `RasterTileRenderSubsystem`, so its own
+        // tile and its stand-ins draw only their lines there). An ancestor
+        // standing in draws around the descendants placed in the same
+        // slot.
         // The relief of a flattened source whose terrain is in, the ring's
         // of its slot: such a source draws every class through the relief
         // variant of the class's pipeline, raised by its terrain.
@@ -197,7 +197,6 @@ enum FlatMapSurfaceDrawer {
             selectPipeline(pipeline, relief: true)
             bindGroundRelief(relief,
                              tile: source.metalTile.tile,
-                             exaggeration: groundRelief.exaggeration,
                              datumMetres: groundRelief.datumMetres,
                              renderMapSize: flatRenderState.renderMapSize,
                              renderEncoder: renderEncoder)
@@ -394,24 +393,22 @@ enum FlatMapSurfaceDrawer {
 
 
     /// The relief of one flattened tile (Tile.metal, kTileGroundRelief):
-    /// its terrain texture at vertex texture 0, and at vertex buffer 9
-    /// where the tile lies in it, the world units a metre of terrain
-    /// rises by at the tile's latitude, worked out here once for the
-    /// tile, and the frame's datum (`GroundReliefStore.datumMetres`).
+    /// its terrain texture at vertex texture 0, its roughness texture at
+    /// vertex texture 1, and at vertex buffer 9 where the tile lies in
+    /// them, the world units a metre of terrain rises by at the tile's
+    /// latitude, worked out here once for the tile, the frame's datum
+    /// (`GroundReliefStore.datumMetres`) and the frame's fades.
     private static func bindGroundRelief(_ relief: GroundRelief,
                                          tile: Tile,
-                                         exaggeration: Float,
                                          datumMetres: Float,
                                          renderMapSize: Double,
                                          renderEncoder: MTLRenderCommandEncoder) {
         let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: (Double(tile.y) + 0.5) / Double(1 << tile.z))
         let unitsPerMetre = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: latitude,
                                                                       renderMapSize: renderMapSize)
-        var uniform = GroundReliefUniform(origin: relief.origin,
-                                          scale: relief.scale,
-                                          worldUnitsPerMetre: Float(unitsPerMetre) * exaggeration,
-                                          datumMetres: datumMetres)
+        var uniform = GroundReliefUniform(relief: relief, worldUnitsPerMetre: Float(unitsPerMetre), datumMetres: datumMetres)
         renderEncoder.setVertexTexture(relief.texture, index: 0)
+        renderEncoder.setVertexTexture(relief.roughnessTexture, index: 1)
         renderEncoder.setVertexBytes(&uniform, length: MemoryLayout<GroundReliefUniform>.stride, index: 9)
     }
 
@@ -557,15 +554,24 @@ enum FlatMapSurfaceDrawer {
     }
 }
 
-/// Mirror of `GroundReliefUniform` in Tile.metal (vertex buffer 9): the
-/// tile's north-west corner and side in its terrain texture, the world
-/// units a metre of terrain rises by, and the terrain's metres the ground
-/// is drawn from (`GroundReliefStore.datumMetres`).
+/// Mirror of `GroundReliefUniform` in GroundRelief.h (vertex buffer 9):
+/// the tile's corner and side in its terrain texture and the world units
+/// a metre of terrain rises by, its corner and side in its roughness
+/// texture and the datum, the terrain's metres the ground is drawn from
+/// (`GroundReliefStore.datumMetres`), the frame's fades and the frame's
+/// zoom and strength scale (`GroundReliefFrame`).
 struct GroundReliefUniform {
-    var origin: SIMD2<Float>
-    var scale: Float
-    var worldUnitsPerMetre: Float
-    var datumMetres: Float
+    var placement: SIMD4<Float>
+    var roughness: SIMD4<Float>
+    var fades: SIMD4<Float>
+    var frame: SIMD4<Float>
+
+    init(relief: GroundRelief, worldUnitsPerMetre: Float, datumMetres: Float) {
+        placement = SIMD4<Float>(relief.origin.x, relief.origin.y, relief.scale, worldUnitsPerMetre)
+        roughness = SIMD4<Float>(relief.roughnessOrigin.x, relief.roughnessOrigin.y, relief.roughnessScale, datumMetres)
+        fades = SIMD4<Float>(relief.frame.flat.x, relief.frame.flat.y, relief.frame.mountain.x, relief.frame.mountain.y)
+        frame = SIMD4<Float>(relief.frame.cameraZoom, relief.frame.strengthScale, 0, 0)
+    }
 }
 
 /// Mirror of `FlatDepthBand` in Tile.metal (buffer 7): a draw's offset in

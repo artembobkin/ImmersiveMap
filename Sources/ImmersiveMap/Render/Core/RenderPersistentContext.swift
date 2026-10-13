@@ -70,8 +70,6 @@ final class RenderPersistentContext {
     // MARK: - Tile and Label Resources
 
     let tileRenderStore: TileRenderStore
-    /// The textures the raster targets draw their ground from.
-    let rasterTileStore: RasterTileStore
     let textRenderer: TextRenderer
     let poiSpriteAtlas: PoiSpriteAtlas
     let baseLabelCache: BaseLabelCache
@@ -169,12 +167,6 @@ final class RenderPersistentContext {
                                                tileTraceRecorder: tileTraceRecorder,
                                                tileLoadingStatusReporter: tileLoadingStatusReporter)
         self.tileRenderStore.eventSink = eventSink
-        self.rasterTileStore = RasterTileStore(device: metal.device,
-                                               pipeline: shared.rasterTilePipeline,
-                                               diskCache: tileRenderStore.rasterTileDiskCache,
-                                               settings: config.tiles.rasterization,
-                                               baseColor: styleRuntime.baseColors.map)
-        self.rasterTileStore.eventSink = eventSink
         self.baseLabelCache = BaseLabelCache(metalDevice: metal.device)
         self.roadLabelCache = RoadLabelCache(metalDevice: metal.device)
 

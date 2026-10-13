@@ -94,7 +94,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   roadRankState: roadRankState,
                                   isWireframeEnabled: isWireframeEnabled,
                                   linelessTiles: frameContext.visibleContent.linelessTiles,
-                                  rasterGroundSlots: frameContext.sharedState.tilePlacementState.rasterGroundSlots,
+                                  rasterGroundSlots: Set(frameContext.visibleContent.rasterTiles.keys),
                                   groundRelief: groundReliefStore,
                                   pointWidthReferenceDepth: reliefCentreDepth(frameContext: frameContext),
                                   slotClips: slotClips)

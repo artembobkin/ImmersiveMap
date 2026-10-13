@@ -32,8 +32,8 @@ final class CameraTerrainFollowTests: XCTestCase {
     /// its own limit, however high the plateau.
     func testAPlateauDoesNotStopTheZoom() {
         let follow = follow(terrainMetres: { _ in 1000 })
-        XCTAssertEqual(follow.maximumZoom(center: centre, pitch: 0, bearing: 0, range: 0 ... 22), 22)
-        XCTAssertEqual(follow.maximumZoom(center: centre, pitch: 1, bearing: 2, range: 0 ... 22), 22)
+        XCTAssertEqual(follow.clearZoom(below: 22, center: centre, pitch: 0, bearing: 0, range: 0 ... 22), 22)
+        XCTAssertEqual(follow.clearZoom(below: 22, center: centre, pitch: 1, bearing: 2, range: 0 ... 22), 22)
         XCTAssertTrue(follow.isClear(center: centre, zoom: 22, pitch: 1, bearing: 2))
     }
 
@@ -65,14 +65,14 @@ final class CameraTerrainFollowTests: XCTestCase {
             // looking north stands at any zoom.
             point.y > centre.y + 1e-9 ? 500 : 0
         })
-        let flatLimit = follow.maximumZoom(center: centre, pitch: 0, bearing: 0, range: 0 ... 22)
-        let pitchedLimit = follow.maximumZoom(center: centre, pitch: Float.pi / 3, bearing: 0, range: 0 ... 22)
+        let flatLimit = follow.clearZoom(below: 22, center: centre, pitch: 0, bearing: 0, range: 0 ... 22)
+        let pitchedLimit = follow.clearZoom(below: 22, center: centre, pitch: Float.pi / 3, bearing: 0, range: 0 ... 22)
         XCTAssertLessThan(pitchedLimit, flatLimit - 1, "The hill under the pitched eye stops it far sooner")
     }
 
     func testUnknownTerrainStopsNothing() {
         let follow = follow(terrainMetres: { _ in nil })
-        XCTAssertEqual(follow.maximumZoom(center: centre, pitch: 0, bearing: 0, range: 0 ... 22), 22)
+        XCTAssertEqual(follow.clearZoom(below: 22, center: centre, pitch: 0, bearing: 0, range: 0 ... 22), 22)
     }
 
     /// A pan onto higher ground keeps the eye's altitude: the point looked
@@ -123,6 +123,103 @@ final class CameraTerrainFollowTests: XCTestCase {
         XCTAssertEqual(follow.eyeHeightMetres(zoom: followed.zoom, pitch: 0, latitude: latitude), 30, accuracy: 0.1)
     }
 
+    /// A zoom out that crosses onto a coarser terrain map, which reads
+    /// the ground under the point higher than the finer one did, keeps
+    /// the eye where the zoom put it: the point moves up the ray to where
+    /// it meets the higher ground, the arm shortens, and the eye's
+    /// altitude is the old ground plus the new zoom's height, no jump.
+    func testAZoomOntoAnotherTerrainMapKeepsTheEye() {
+        var settings = ImmersiveMapSettings.default
+        settings.camera.maximumZoom = 22
+        let controller = CameraStateController(settings: settings.camera)
+        let pitch = Float.pi / 4
+        controller.setCameraState(ImmersiveMapCameraState(centerWorldMercator: centre, zoom: 12.5, bearing: 0, pitch: pitch))
+        // The finer map, read at zoom 12 and deeper, has the ground at
+        // 1000 m. The coarser one, read below 12, has it at 1300 m.
+        let terrain: (SIMD2<Double>) -> Float? = { [unowned controller] _ in controller.zoom >= 12 ? 1000 : 1300 }
+        let follow = follow(terrainMetres: terrain)
+        controller.terrainFollow = follow
+        let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: centre.y)
+        let expectedAltitude = 1000 + follow.eyeHeightMetres(zoom: 11.5, pitch: pitch, latitude: latitude)
+        let expectedEye = follow.eyeGround(center: centre, zoom: 11.5, pitch: pitch, bearing: 0, latitude: latitude)
+
+        controller.zoom(delta: -1)
+        XCTAssertGreaterThan(controller.zoom, 11.5, "The point met higher ground sooner: a shorter arm")
+        let altitude = 1300 + follow.eyeHeightMetres(zoom: controller.zoom, pitch: pitch, latitude: latitude)
+        XCTAssertEqual(altitude, expectedAltitude, accuracy: 0.5, "The eye is where the zoom put it")
+        let eye = follow.eyeGround(center: controller.cameraState.centerWorldMercator, zoom: controller.zoom, pitch: pitch, bearing: 0, latitude: latitude)
+        let metresPerWorld = ImmersiveMapProjection.earthCircumferenceMeters * cos(latitude)
+        XCTAssertEqual((eye.y - expectedEye.y) * metresPerWorld, 0, accuracy: 0.5, "And over the same ground")
+        XCTAssertNotEqual(controller.cameraState.centerWorldMercator, centre, "The point moved along the ray")
+    }
+
+    /// A pan that brings a ridge under the eye, higher than the eye is,
+    /// backs the eye off along its view ray by the zoom, to where it keeps
+    /// the clearance over the ridge: the frame never lifts the camera off
+    /// its pose.
+    func testAPanUnderARidgeBacksTheEyeOffByTheZoom() {
+        var settings = ImmersiveMapSettings.default
+        settings.camera.maximumZoom = 22
+        let controller = CameraStateController(settings: settings.camera)
+        let pitch = Float.pi / 4
+        controller.setCameraState(ImmersiveMapCameraState(centerWorldMercator: centre, zoom: 16, bearing: 0, pitch: pitch))
+        let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: centre.y)
+        let eyeHeight = follow(terrainMetres: { _ in 0 }).eyeHeightMetres(zoom: 16, pitch: pitch, latitude: latitude)
+        // Level ground at the point and north of it, a plateau twice the
+        // eye's height just south of it: under the eye of a pitched
+        // camera looking north, which stands south of the point.
+        let terrain: (SIMD2<Double>) -> Float? = { [centre] point in point.y > centre.y + 1e-7 ? Float(eyeHeight * 2) : 0 }
+        let follow = follow(terrainMetres: terrain, clearance: 30)
+        controller.terrainFollow = follow
+        controller.pan(deltaX: 0, deltaY: 1, transition: 1)
+        XCTAssertLessThan(controller.zoom, 16, "The arm lengthened: the eye backed off")
+        XCTAssertTrue(follow.isClear(center: controller.cameraState.centerWorldMercator,
+                                     zoom: controller.zoom, pitch: pitch, bearing: 0),
+                      "And it is clear of the ridge")
+    }
+
+    /// The anchor compensation of a zoom slides the point over the
+    /// ground: onto a ramp, the eye keeps the altitude the zoom gave it
+    /// and the arm shortens, as for a pan. Without a terrain the center
+    /// is simply set.
+    func testAnAnchoredZoomsSlideOntoARampKeepsTheEye() {
+        var settings = ImmersiveMapSettings.default
+        settings.camera.maximumZoom = 22
+        let controller = CameraStateController(settings: settings.camera)
+        let pitch = Float.pi / 4
+        controller.setCameraState(ImmersiveMapCameraState(centerWorldMercator: centre, zoom: 14, bearing: 0, pitch: pitch))
+        let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: centre.y)
+        let metresPerWorld = ImmersiveMapProjection.earthCircumferenceMeters * cos(latitude)
+        let rampY = centre.y - 1e-5 + 30 / metresPerWorld
+        let terrain: (SIMD2<Double>) -> Float? = { point in Float(max(0, (rampY - point.y) * metresPerWorld * 2)) }
+        let follow = follow(terrainMetres: terrain)
+        controller.terrainFollow = follow
+        let altitudeBefore = follow.eyeHeightMetres(zoom: 14, pitch: pitch, latitude: latitude)
+
+        controller.setCenterWorldMercatorOverTerrain(centre + SIMD2<Double>(0, -1e-5))
+        XCTAssertGreaterThan(controller.zoom, 14, "The arm shortened onto the ramp")
+        let height = Double(terrain(controller.cameraState.centerWorldMercator) ?? 0)
+        XCTAssertGreaterThan(height, 1, "The point is on the ramp")
+        XCTAssertEqual(height + follow.eyeHeightMetres(zoom: controller.zoom, pitch: pitch, latitude: latitude), altitudeBefore,
+                       accuracy: 0.5, "The eye kept its altitude")
+
+        controller.terrainFollow = nil
+        controller.setCenterWorldMercatorOverTerrain(centre)
+        XCTAssertEqual(controller.cameraState.centerWorldMercator, centre, "Plainly set without a terrain")
+    }
+
+    /// A zoom that stays on one terrain map moves nothing but the zoom.
+    func testAZoomOnOneTerrainMapKeepsThePoint() {
+        var settings = ImmersiveMapSettings.default
+        settings.camera.maximumZoom = 22
+        let controller = CameraStateController(settings: settings.camera)
+        controller.setCameraState(ImmersiveMapCameraState(centerWorldMercator: centre, zoom: 12.5, bearing: 0, pitch: .pi / 4))
+        controller.terrainFollow = follow(terrainMetres: { _ in 1000 })
+        controller.zoom(delta: -1)
+        XCTAssertEqual(controller.zoom, 11.5, accuracy: 1e-9)
+        XCTAssertEqual(controller.cameraState.centerWorldMercator, centre)
+    }
+
     func testTheControllerClampsAZoomInToTheLimitAndLetsAZoomOutThrough() {
         var settings = ImmersiveMapSettings.default
         settings.camera.maximumZoom = 22
@@ -130,7 +227,7 @@ final class CameraTerrainFollowTests: XCTestCase {
         controller.setCameraState(ImmersiveMapCameraState(centerWorldMercator: centre, zoom: 10, bearing: 0, pitch: 0))
         let follow = follow(terrainMetres: { _ in 1000 })
         controller.terrainFollow = follow
-        let limit = follow.maximumZoom(center: centre, pitch: 0, bearing: 0, range: 0 ... 22)
+        let limit = follow.clearZoom(below: 22, center: centre, pitch: 0, bearing: 0, range: 0 ... 22)
 
         controller.zoom(delta: 12)
         XCTAssertEqual(controller.zoom, limit, accuracy: 1e-6, "The zoom in stops at the terrain")

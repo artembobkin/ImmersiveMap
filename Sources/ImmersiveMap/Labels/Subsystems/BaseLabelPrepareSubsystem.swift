@@ -517,7 +517,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                     forTargetZoom: targetZoomBySource[record.ownerKey.tile] ?? record.ownerKey.z)) {
                 let unitsPerMetre = groundRelief.worldUnitsPerMetre(over: record.ownerKey.tile, renderMapSize: renderMapSize)
                 let datumMetres = groundRelief.datumMetres
-                lift = { uv in (relief.metres(atTileUV: uv) - datumMetres) * unitsPerMetre }
+                lift = { uv in relief.drawnMetres(atTileUV: uv, datumMetres: datumMetres) * unitsPerMetre }
             }
             RoadLabelPlacer.place(geometry: record.geometry,
                                   origin: tileOriginData[originIndex],

@@ -4,8 +4,8 @@
 import Metal
 
 /// The pipelines of the raster tiles (TileRaster.metal): the bake, which
-/// draws a tile's fills into its texture, and the draws of the texture on
-/// the plane, on the resting sphere and through the unroll.
+/// draws a tile's fills into its texture each frame, and the draws of the
+/// texture on the plane, on the resting sphere and through the unroll.
 final class RasterTilePipeline {
     /// The samples per texel the bake draws with, resolved into the
     /// texture's first level: the edges of the fills are smooth before the
@@ -31,7 +31,7 @@ final class RasterTilePipeline {
         bake.fragmentFunction = library.makeFunction(name: "tileRasterBakeFragmentShader")
         bake.vertexDescriptor = TilePipeline.makeVertexDescriptor()
         bake.rasterSampleCount = Self.bakeSampleCount
-        bake.colorAttachments[0].pixelFormat = RasterTileLayout.pixelFormat
+        bake.colorAttachments[0].pixelFormat = RasterTileTexture.pixelFormat
         // The fills in buffer order, each over what is under it, the way
         // the vector ground layers them.
         bake.colorAttachments[0].isBlendingEnabled = true

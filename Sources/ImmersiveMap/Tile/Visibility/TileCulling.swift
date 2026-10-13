@@ -17,15 +17,10 @@ class TileCulling {
     /// walk merely ran again: the working set gates on it.
     private var coverageVersion: UInt64 = 0
     private var previousVisibleTiles: [VisibleTile] = []
-    private var previousRasterDemand: [VisibleTile: RasterDemand] = [:]
+    private var previousRasterTiles: [VisibleTile: RasterTileSpec] = [:]
 
     /// What the demand reads of a raster target: how it is baked, and
     /// whether the target wants its vector tile too.
-    private struct RasterDemand: Hashable {
-        let spec: RasterTileSpec
-        let wantsVector: Bool
-    }
-
     init() {}
 
     /// `rules` are the ring rules of both surfaces (`FlatRingRules.default`
@@ -84,16 +79,13 @@ class TileCulling {
             }
         }
 
-        // The demand reads which targets are rasters and which of them
-        // want their vector tile, so a change of either is a new coverage
-        // even over the same targets.
-        let rasterDemand = Self.rasterDemand(rasterTiles: rasterTiles,
-                                             linelessTiles: linelessTiles,
-                                             unlabelledTiles: unlabelledTiles)
-        if visibleTiles != previousVisibleTiles || rasterDemand != previousRasterDemand {
+        // Which targets are rasters, and at what size, is part of the
+        // coverage: a change of it is a new coverage even over the same
+        // targets.
+        if visibleTiles != previousVisibleTiles || rasterTiles != previousRasterTiles {
             coverageVersion &+= 1
             previousVisibleTiles = visibleTiles
-            previousRasterDemand = rasterDemand
+            previousRasterTiles = rasterTiles
         }
         return VisibleContentState(centerWorldMercator: semanticCenterWorldMercator,
                                    center: center,
@@ -104,17 +96,6 @@ class TileCulling {
                                    linelessTiles: linelessTiles,
                                    unlabelledTiles: unlabelledTiles,
                                    rasterTiles: rasterTiles)
-    }
-
-    /// The raster targets with how each is baked, and whether each wants its
-    /// vector tile too, which is what the demand is made of.
-    private static func rasterDemand(rasterTiles: [VisibleTile: RasterTileSpec],
-                                     linelessTiles: Set<VisibleTile>,
-                                     unlabelledTiles: Set<VisibleTile>) -> [VisibleTile: RasterDemand] {
-        rasterTiles.reduce(into: [:]) { demand, entry in
-            let wantsVector = linelessTiles.contains(entry.key) == false || unlabelledTiles.contains(entry.key) == false
-            demand[entry.key] = RasterDemand(spec: entry.value, wantsVector: wantsVector)
-        }
     }
 
     static func makeCenter(centerWorldMercator: SIMD2<Double>,

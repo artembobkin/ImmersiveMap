@@ -58,10 +58,4 @@ struct VisibleContentState {
         self.unlabelledTiles = unlabelledTiles
         self.rasterTiles = rasterTiles
     }
-
-    /// Whether a raster target draws anything from its vector tile: its
-    /// lines or its labels.
-    func rasterTargetWantsVector(_ target: VisibleTile) -> Bool {
-        linelessTiles.contains(target) == false || unlabelledTiles.contains(target) == false
-    }
 }

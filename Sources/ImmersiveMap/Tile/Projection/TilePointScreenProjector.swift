@@ -255,7 +255,7 @@ struct TilePointScreenProjector {
                 reliefByTile[tile] = entry
             }
             guard let entry else { return 0 }
-            return (entry.relief.metres(atTileUV: uv) - groundRelief.datumMetres) * entry.unitsPerMetre
+            return entry.relief.drawnMetres(atTileUV: uv, datumMetres: groundRelief.datumMetres) * entry.unitsPerMetre
         }
 
         snapshot.pointInputs.withUnsafeBufferPointer { inputs in

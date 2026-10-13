@@ -96,9 +96,8 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         if oldValue.tiles.parsing != newValue.tiles.parsing {
             mark(.tiles, actions: [.invalidateCaches, .rebuildPreparedData, .recreateRenderer])
         }
-        // The raster store, its sampler and its budgets are built with the
-        // renderer. The textures on disk stay valid: they are of the tiles,
-        // not of these settings.
+        // The raster tiles' sampler is built with the renderer, and the
+        // textures are drawn anew every frame.
         if oldValue.tiles.rasterization != newValue.tiles.rasterization {
             mark(.tiles, actions: [.recreateRenderer])
         }

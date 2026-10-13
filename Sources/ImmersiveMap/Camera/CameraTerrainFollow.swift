@@ -9,7 +9,10 @@ import simd
 /// camera turns about a point on it. A pan moves the eye over the map
 /// and keeps its altitude, and the point is where its view ray meets the
 /// relief: the zoom, the arm to the point, takes up the terrain's rise and
-/// fall (`CameraStateController.followTerrain`), and the eye rises only
+/// fall (`CameraStateController.followTerrain`). A zoom moves the eye
+/// along the ray and finds the point the same way
+/// (`CameraStateController.followTerrainZoom`), so a crossing onto
+/// another terrain map moves the point, not the eye. The eye rises only
 /// where the terrain under the point, or under the eye itself, would
 /// otherwise come nearer than the clearance.
 ///
@@ -95,18 +98,24 @@ struct CameraTerrainFollow {
         return height >= rise + Self.clearanceMargin(rise: rise, clearance: clearanceMetres)
     }
 
-    /// The deepest zoom of `range` at which the eye keeps the clearance,
-    /// looking at `center`. The eye comes down as the zoom grows, so the
-    /// limit is found by bisection, from the range's bounds.
-    func maximumZoom(center: SIMD2<Double>, pitch: Float, bearing: Float, range: ClosedRange<Double>) -> Double {
+    /// `zoom` where the eye keeps the clearance there, else the deepest
+    /// zoom below it in `range` where it does: the eye backs off along
+    /// its view ray, by the arm, until it clears the terrain under it. A
+    /// zoom deeper than `zoom` is never answered, though the eye might be
+    /// clear there too, in front of a ridge: the zoom would pass through
+    /// the ridge on its way. The boundary is found by bisection between
+    /// the range's start, which counts as clear when it is not, and
+    /// `zoom`.
+    func clearZoom(below zoom: Double, center: SIMD2<Double>, pitch: Float, bearing: Float, range: ClosedRange<Double>) -> Double {
+        let zoom = min(max(zoom, range.lowerBound), range.upperBound)
+        guard isClear(center: center, zoom: zoom, pitch: pitch, bearing: bearing) == false else {
+            return zoom
+        }
         guard isClear(center: center, zoom: range.lowerBound, pitch: pitch, bearing: bearing) else {
             return range.lowerBound
         }
-        guard isClear(center: center, zoom: range.upperBound, pitch: pitch, bearing: bearing) == false else {
-            return range.upperBound
-        }
         var low = range.lowerBound
-        var high = range.upperBound
+        var high = zoom
         for _ in 0 ..< 24 {
             let middle = (low + high) * 0.5
             if isClear(center: center, zoom: middle, pitch: pitch, bearing: bearing) {

@@ -135,6 +135,14 @@ final class FrameCameraStateResolver {
         requestRenderCameraUpdate()
     }
 
+    /// See `CameraStateController.setCenterWorldMercatorOverTerrain`: the
+    /// zoom anchor compensation on the flat map, where the camera may
+    /// stand over a terrain.
+    func setCameraCenterWorldMercatorOverTerrain(_ centerWorldMercator: SIMD2<Double>) {
+        cameraStateController.setCenterWorldMercatorOverTerrain(centerWorldMercator)
+        requestRenderCameraUpdate()
+    }
+
     /// The terrain under the camera (`CameraTerrainFollow`), nil on a map
     /// without a relief.
     func setTerrainFollow(_ follow: CameraTerrainFollow?) {

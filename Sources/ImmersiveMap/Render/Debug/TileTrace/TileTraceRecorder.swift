@@ -268,32 +268,6 @@ extension TileTraceEvent {
                ])
     }
 
-    /// The raster targets of a frame that planned its placements: how
-    /// many have their texture, wait for one, draw stand-ins, or are left
-    /// to the vector ground, and what the texture store holds.
-    static func rasterDemandUpdate(frameIndex: UInt64,
-                                   targets: Int,
-                                   resident: Int,
-                                   pending: Int,
-                                   toBake: Int,
-                                   standIns: Int,
-                                   uncovered: Int,
-                                   storeTextures: Int,
-                                   storeBytes: Int) -> TileTraceEvent {
-        .event("raster_demand_update",
-               frameIndex: frameIndex,
-               fields: [
-                   "targets": .int(targets),
-                   "resident": .int(resident),
-                   "pending": .int(pending),
-                   "toBake": .int(toBake),
-                   "standIns": .int(standIns),
-                   "uncovered": .int(uncovered),
-                   "storeTextures": .int(storeTextures),
-                   "storeBytes": .int(storeBytes)
-               ])
-    }
-
     static func tileLoadingStatusSnapshot(frameIndex: UInt64,
                                           snapshot: TileLoadingStatusSnapshot) -> TileTraceEvent {
         var fields: [String: TileTraceValue] = [

@@ -26,11 +26,12 @@ struct FlatRingRule: Hashable {
     var drawsLabels: Bool = true
     /// The edge, in texels, of the texture the band's tiles draw their
     /// ground from, nil for the ground as geometry. A tile's fills are
-    /// drawn into the texture once, kept on disk and drawn from then on as
-    /// one textured grid (`RasterTileStore`), with its mipmaps, which is
-    /// what a far band wants: few vertices and no shimmer. The lines are
-    /// never in the texture: with `drawsLines` they draw as geometry over
-    /// it. One of `FlatRingRules.rasterSizes`.
+    /// drawn into the texture each frame and the texture drawn as one
+    /// grid (`RasterTileRenderSubsystem`), with its mipmaps, which is
+    /// what a far band wants: no shimmer. The lines are never in the
+    /// texture: with `drawsLines` they draw as geometry over it. One of
+    /// `FlatRingRules.rasterSizes`, and a cost of every frame, so a far
+    /// band wants a small one.
     var rasterSize: Int?
 
     init(zoomDrop: Int,
@@ -47,15 +48,11 @@ struct FlatRingRule: Hashable {
 }
 
 /// How a raster target's ground is drawn (`FlatRingRule.rasterSize`): the
-/// texture's edge, and the camera zoom its style's zoom fades are
-/// evaluated at when it is baked, the zoom the band draws the tile for
-/// (the tile's zoom plus the rule's drop). A fill the style has faded out
-/// at that zoom is left out of the texture, as the vector ground leaves it
-/// out, and a partly faded one is baked at its alpha there. Evaluated once:
-/// the texture never fades with the camera.
+/// texture's edge in texels. The texture is drawn from the tile each frame
+/// (`RasterTileRenderSubsystem`), the zoom fades at the frame's camera
+/// zoom, so nothing else tells one raster target from another.
 struct RasterTileSpec: Hashable {
     let size: Int
-    let fadeZoom: Int
 }
 
 /// The rules, nearest first. Any number of them. The debug panel edits
@@ -79,18 +76,16 @@ struct FlatRingRules: Hashable {
     }
 
     /// The exact tiles to one ring around the look-at tile, as geometry
-    /// with their lines and labels. Past it the ground is geometry too,
-    /// without lines or labels: one level coarser to ring 2, two levels
-    /// coarser to ring 3, four levels coarser to ring 9, nothing beyond.
-    /// The map recedes toward the horizon soft and quiet. No ring draws
-    /// from a texture (`FlatRingRule.rasterSize`): the textures' stand-ins
-    /// are not the vector tiles' yet, and a band of them goes blank where
-    /// a vector band would not.
+    /// with their lines and labels. Past it the ground is textures, without
+    /// lines or labels: one level coarser to ring 2 and two levels coarser
+    /// to ring 3 at 128 texels, four levels coarser to ring 9 at 64,
+    /// nothing beyond. The map recedes toward the horizon soft and quiet,
+    /// and the textures, drawn every frame, stay small.
     static let `default` = FlatRingRules(rules: [
         FlatRingRule(zoomDrop: 0, distance: 1),
-        FlatRingRule(zoomDrop: 1, distance: 2, drawsLines: false, drawsLabels: false),
-        FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false, drawsLabels: false),
-        FlatRingRule(zoomDrop: 4, distance: 9, drawsLines: false, drawsLabels: false)
+        FlatRingRule(zoomDrop: 1, distance: 2, drawsLines: false, drawsLabels: false, rasterSize: 128),
+        FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false, drawsLabels: false, rasterSize: 128),
+        FlatRingRule(zoomDrop: 4, distance: 9, drawsLines: false, drawsLabels: false, rasterSize: 64)
     ])
 
     /// The rules as the coverage reads them: every value inside its range,
@@ -216,7 +211,7 @@ enum FlatRingRuleCoverage {
                 unlabelledTargets.formUnion(tiles.subtracting(placed))
             }
             if let rasterSize = rule.rasterSize {
-                let spec = RasterTileSpec(size: rasterSize, fadeZoom: zoom + rule.zoomDrop)
+                let spec = RasterTileSpec(size: rasterSize)
                 for tile in tiles.subtracting(placed) {
                     rasterTargets[tile] = spec
                 }

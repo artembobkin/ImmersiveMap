@@ -58,7 +58,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     /// arrives or changes. The tile is named by its object's identity, and
     /// the entry carries the tile's address as well, so a tile allocated
     /// where a released one was is not handed the old lifts.
-    private var liftBuffersByTile: [ObjectIdentifier: (tile: Tile, terrain: ObjectIdentifier, buffer: MTLBuffer)] = [:]
+    private var liftBuffersByTile: [ObjectIdentifier: (tile: Tile, terrain: ObjectIdentifier, roughness: ObjectIdentifier, buffer: MTLBuffer)] = [:]
     private var drawsAny = false
 
     init(extrudedTilePipeline: ExtrudedTilePipeline,
@@ -127,8 +127,9 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
 
     /// Each drawn placement's lifts over the relief: the terrain's height
-    /// under each volume's anchor, in the terrain's metres, made once per
-    /// tile and terrain. Buildings on a slope stand level at the height of
+    /// under each volume's anchor, in the terrain's metres, and the
+    /// mountain share of the anchor's place, made once per tile, terrain
+    /// and roughness. Buildings on a slope stand level at the height of
     /// their anchor, which the ground round them rises above and sinks
     /// below.
     private func updateLiftBuffers(placements: [PlaceTile], drawnKeys: [VisibleTile?], frameContext: FrameContext) {
@@ -137,7 +138,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
             liftBuffersByTile.removeAll()
             return
         }
-        var kept: [ObjectIdentifier: (tile: Tile, terrain: ObjectIdentifier, buffer: MTLBuffer)] = [:]
+        var kept: [ObjectIdentifier: (tile: Tile, terrain: ObjectIdentifier, roughness: ObjectIdentifier, buffer: MTLBuffer)] = [:]
         for (placement, key) in zip(placements, drawnKeys) {
             let metalTile = placement.metalTile
             let anchors = metalTile.tileBuffers.extruded.buildingAnchors
@@ -149,20 +150,22 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
             }
             let tileIdentity = ObjectIdentifier(metalTile)
             let terrainIdentity = ObjectIdentifier(relief.terrain)
+            let roughnessIdentity = ObjectIdentifier(relief.roughness)
             if let cached = liftBuffersByTile[tileIdentity],
                cached.terrain == terrainIdentity,
+               cached.roughness == roughnessIdentity,
                cached.tile == metalTile.tile,
-               cached.buffer.length == anchors.count * MemoryLayout<Float>.stride {
+               cached.buffer.length == anchors.count * MemoryLayout<SIMD2<Float>>.stride {
                 kept[tileIdentity] = cached
                 liftBuffers.append(cached.buffer)
                 continue
             }
-            var lifts = [Float](repeating: 0, count: anchors.count)
+            var lifts = [SIMD2<Float>](repeating: .zero, count: anchors.count)
             for (index, anchor) in anchors.enumerated() {
                 // The anchor is render space (y up), the terrain's v grows
                 // from the north edge.
                 let uv = SIMD2<Float>(anchor.x, TileCoordinateSpace.tileExtent - anchor.y) / TileCoordinateSpace.tileExtent
-                lifts[index] = relief.metres(atTileUV: uv)
+                lifts[index] = SIMD2<Float>(relief.metres(atTileUV: uv), relief.mountainShare(atTileUV: uv))
             }
             guard let buffer = lifts.withUnsafeBytes({ bytes in
                 extrudedTilePipeline.pipelineState.device.makeBuffer(bytes: bytes.baseAddress!, length: bytes.count, options: .storageModeShared)
@@ -170,7 +173,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
                 liftBuffers.append(nil)
                 continue
             }
-            kept[tileIdentity] = (metalTile.tile, terrainIdentity, buffer)
+            kept[tileIdentity] = (metalTile.tile, terrainIdentity, roughnessIdentity, buffer)
             liftBuffers.append(buffer)
         }
         liftBuffersByTile = kept
@@ -183,10 +186,10 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
         groundReliefStore?.datumMetres ?? 0
     }
 
-    /// How much taller than the terrain the lifts are drawn this frame
-    /// (`GroundReliefStore.exaggeration`, the relief's fade in it).
-    private var liftExaggeration: Float {
-        groundReliefStore?.exaggeration ?? 1
+    /// The frame's fades and zoom the lifts' strength is read at
+    /// (`GroundReliefStore.frame`).
+    private var liftFrame: GroundReliefFrame {
+        groundReliefStore?.frame ?? .plain
     }
 
     /// The model tile (`ModelTileStore.tileZoom`) a map tile lies in.
@@ -214,7 +217,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
                 heightScales: heightScales,
                 liftBuffers: liftBuffers,
                 liftDatumMetres: liftDatumMetres,
-                liftExaggeration: liftExaggeration,
+                liftFrame: liftFrame,
                 extrudedTilePipeline: extrudedTilePipeline,
                 extrudedDepthState: extrudedDepthState)
             return
@@ -247,7 +250,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
                                               heightScales: heightScales,
                                               liftBuffers: liftBuffers,
                                               liftDatumMetres: liftDatumMetres,
-                                              liftExaggeration: liftExaggeration,
+                                              liftFrame: liftFrame,
                                               extrudedTilePipeline: extrudedTilePipeline,
                                               extrudedStencilTestState: extrudedStencilTestState,
                                               depthDisabledState: depthDisabledState)

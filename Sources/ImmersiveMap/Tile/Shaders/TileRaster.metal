@@ -5,13 +5,13 @@
 //  TileRaster.metal
 //  ImmersiveMap
 //
-//  The raster tiles (RasterTileStore): a tile's ground drawn once into a
-//  texture, and the texture drawn on a grid in the tile's place.
+//  The raster tiles (RasterTileRenderSubsystem): a tile's ground drawn
+//  into a texture each frame, and the texture drawn on a grid in the
+//  tile's place.
 //
 //  - tileRasterBake* draws the tile's fill runs into the texture, top down
 //    over the tile's extent: the style's colour in buffer order, its zoom
-//    fade evaluated once at the key's fade zoom (RasterTileSpec), not at
-//    the live camera's: a raster tile is drawn once.
+//    fade at the frame's camera zoom, as the vector ground draws it.
 //  - tileRasterFlat* draws the texture on the plane, at the ground's rank
 //    depth, under the ground shadow mask, or on the relief
 //    (kTileRasterRelief), raised as the vector ground is.
@@ -123,12 +123,13 @@ vertex TileRasterVertexOut tileRasterFlatVertexShader(uint vertexID [[vertex_id]
                                                       constant float4x4& modelMatrix [[buffer(3)]],
                                                       constant GroundReliefUniform& relief [[buffer(9), function_constant(kTileRasterRelief)]],
                                                       constant float4& clipRect [[buffer(12)]],
-                                                      texture2d<float> reliefHeights [[texture(0), function_constant(kTileRasterRelief)]]) {
+                                                      texture2d<float> reliefHeights [[texture(0), function_constant(kTileRasterRelief)]],
+                                                      texture2d<float> reliefRoughness [[texture(1), function_constant(kTileRasterRelief)]]) {
     float2 localPosition = grid[vertexID];
     TileRasterVertexOut out;
     float4 worldPosition = modelMatrix * float4(localPosition, 0.0, 1.0);
     if (kTileRasterRelief) {
-        worldPosition.z += groundReliefLift(localPosition, reliefHeights, relief);
+        worldPosition.z += groundReliefLift(localPosition, reliefHeights, reliefRoughness, relief);
     }
     out.position = camera.matrix * worldPosition;
     out.worldPosition = worldPosition.xyz;

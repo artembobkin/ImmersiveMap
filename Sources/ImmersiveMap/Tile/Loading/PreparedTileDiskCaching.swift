@@ -61,9 +61,7 @@ struct PreparedTileCacheIdentity {
 /// and one root-wide index. This prevents two map views from racing atomic
 /// replacements/pruning and avoids rescanning every namespace after each save.
 /// Internally synchronized: the registry is guarded by `registryLock`, all other
-/// state is mutated only on the serial `queue`. The raster tiles of a
-/// namespace (`RasterTileDiskCache`) keep their files under the same root
-/// through the same coordinator, so they share its quota and its TTL.
+/// state is mutated only on the serial `queue`.
 final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
     private struct Policy {
         var byteQuota: Int64

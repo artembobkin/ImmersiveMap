@@ -112,30 +112,8 @@ final class GroundReliefTests: XCTestCase {
         XCTAssertNil(store.elevation(atNormalizedWorld: SIMD2(0.1, 0.1), terrainZoom: 15), "Terrain not in yet")
     }
 
-    /// The raised camera sees a point at the lift's height where the camera
-    /// as it was sees the same point on the plane, from an eye as much
-    /// higher.
-    func testTheLiftedCameraSeesTheRaisedGroundWhereItSawThePlane() {
-        let projection = simd_float4x4(columns: (SIMD4<Float>(1.2, 0, 0, 0),
-                                                 SIMD4<Float>(0, 0.8, 0.3, 0.1),
-                                                 SIMD4<Float>(0, 0.5, 0.9, 0.7),
-                                                 SIMD4<Float>(0.2, -0.1, 3, 5)))
-        let matrices = FrameCameraMatrices(projectionView: projection, view: projection, screen: matrix_identity_float4x4)
-        let lifted = GroundReliefCameraLift.lifted(matrices, eye: SIMD3<Float>(1, 2, 3), by: 0.25)
-        let onThePlane = projection * SIMD4<Float>(0.4, -0.7, 0, 1)
-        let raised = lifted.matrices.projectionView * SIMD4<Float>(0.4, -0.7, 0.25, 1)
-        XCTAssertEqual(raised.x, onThePlane.x, accuracy: 1e-5)
-        XCTAssertEqual(raised.y, onThePlane.y, accuracy: 1e-5)
-        XCTAssertEqual(raised.z, onThePlane.z, accuracy: 1e-5)
-        XCTAssertEqual(raised.w, onThePlane.w, accuracy: 1e-5)
-        XCTAssertEqual(lifted.eye, SIMD3<Float>(1, 2, 3.25))
-        XCTAssertEqual(lifted.matrices.screen, matrix_identity_float4x4)
-    }
-
     /// The terrain under the point the camera looks at is the frame's
-    /// datum, which the relief is drawn from, and the camera rises only by
-    /// what its eye lacks of its margin over the terrain under the eye:
-    /// nothing over a plateau level with the point, however low the eye.
+    /// datum, which the relief is drawn from, in the terrain's own metres.
     func testTheTerrainUnderThePointLookedAtIsTheDatum() throws {
         let device = try Self.device()
         let image = try Self.png(size: 2, pixels: Array(repeating: (128, 100, 0), count: 4))
@@ -157,49 +135,6 @@ final class GroundReliefTests: XCTestCase {
                                                                      tileZoom: 16))
         XCTAssertEqual(datum, 100, accuracy: 0.01, "The terrain's own metres, before the exaggeration")
         store.setDatum(metres: datum)
-        func lift(eyeMetres: Float) throws -> Float {
-            try XCTUnwrap(GroundReliefCameraLift.clearanceLiftUnits(store: store,
-                                                                    eye: SIMD3<Float>(0, 0, eyeMetres * unitsPerMetre),
-                                                                    centerWorldMercator: centre,
-                                                                    tileZoom: 16,
-                                                                    renderMapSize: renderMapSize)) / unitsPerMetre
-        }
-        XCTAssertEqual(try lift(eyeMetres: 2000), 0, accuracy: 0.01, "The plateau is drawn at the origin: the camera holds")
-        XCTAssertEqual(try lift(eyeMetres: 100), 0, accuracy: 0.01, "The eye over the point is clear of the plateau")
-        XCTAssertEqual(try lift(eyeMetres: 10), 0, accuracy: 0.01, "Level ground holds nothing off: the eye comes down on the point")
-    }
-
-    /// A ridge between the eye and the point: the eye lacks the clearance
-    /// over the ridge under it, drawn from the point's datum, and rises by
-    /// that.
-    func testARidgeUnderTheEyeLiftsTheCamera() throws {
-        let device = try Self.device()
-        // The west column at sea level, the east at 100 m.
-        let image = try Self.png(size: 2, pixels: [(128, 0, 0), (128, 100, 0), (128, 0, 0), (128, 100, 0)])
-        let settings = ImmersiveMapSettings.TileSettings.GroundReliefSettings(isEnabled: true,
-                                                                              exaggeration: 2,
-                                                                              minimumSourceZoom: 15,
-                                                                              cameraClearanceMetres: 30)
-        let store = GroundReliefStore(device: device, settings: settings, fetch: { _ in .image(image) })
-        let tile = Tile(x: 9647, y: 12321, z: 15)
-        _ = try XCTUnwrap(waitForRelief(of: tile, in: store))
-        let tilesCount = Double(1 << 15)
-        let centre = SIMD2<Double>((Double(tile.x) + 0.5) / tilesCount, (Double(tile.y) + 0.5) / tilesCount)
-        let renderMapSize = 1_000_000.0
-        let tileUnits = Float(renderMapSize / tilesCount)
-        let unitsPerMetre = Float(ImmersiveMapProjection.worldUnitsPerMeter(
-            latitudeRadians: ImmersiveMapProjection.latitude(fromNormalizedWorldY: centre.y),
-            renderMapSize: renderMapSize))
-        // The point in the tile's middle, over 50 m of terrain, the datum;
-        // the eye a quarter tile east, 50 m over the point, over the 100 m
-        // ridge, which is drawn 100 m over the point (50 m twice as tall).
-        store.setDatum(metres: 50)
-        let lift = try XCTUnwrap(GroundReliefCameraLift.clearanceLiftUnits(store: store,
-                                                                            eye: SIMD3<Float>(tileUnits * 0.25, 0, 50 * unitsPerMetre),
-                                                                            centerWorldMercator: centre,
-                                                                            tileZoom: 16,
-                                                                            renderMapSize: renderMapSize)) / unitsPerMetre
-        XCTAssertEqual(lift, 130 - 50, accuracy: 0.5, "The 80 m the eye at 50 m lacks of the ridge's 100 m and the clearance")
     }
 
     /// The centre of the screen meets the terrain as drawn from the datum:
@@ -341,17 +276,6 @@ final class GroundReliefTests: XCTestCase {
         XCTAssertEqual(GroundReliefCameraLift.datumMetres(store: store,
                                                           centerWorldMercator: centre,
                                                           tileZoom: 16), 100)
-        XCTAssertEqual(GroundReliefCameraLift.clearanceLiftUnits(store: store,
-                                                                 eye: SIMD3<Float>(0, 0, 0),
-                                                                 centerWorldMercator: centre,
-                                                                 tileZoom: 11,
-                                                                 renderMapSize: 1_000_000), 0,
-                       "A camera over coarse tiles stays on the plane")
-        XCTAssertNotEqual(GroundReliefCameraLift.clearanceLiftUnits(store: store,
-                                                                    eye: SIMD3<Float>(0, 0, 0),
-                                                                    centerWorldMercator: centre,
-                                                                    tileZoom: 16,
-                                                                    renderMapSize: 1_000_000), 0)
     }
 
     /// The camera's terrain as the engine makes it: over a slope a pan
@@ -489,27 +413,81 @@ final class GroundReliefTests: XCTestCase {
         let follow = store.makeTerrainFollow(tileSettings: settings.tiles,
                                              globeRadiusScale: settings.presentation.globeRadiusScale,
                                              cameraZoom: { cameraZoom })
-        store.setFrame(cameraZoom: 13, centerWorldMercator: centre, tileZoom: 16)
-        XCTAssertEqual(store.reliefRangeMetres, 0, "Level ground")
-        XCTAssertEqual(store.exaggeration, 2, "Full before the fade")
-        store.setFrame(cameraZoom: 15, centerWorldMercator: centre, tileZoom: 16)
-        XCTAssertEqual(store.exaggeration, 1, accuracy: 1e-6, "Halfway through the flat fade")
+        func strength() throws -> Float {
+            try XCTUnwrap(store.strength(atNormalizedWorld: centre, terrainZoom: 15))
+        }
+        XCTAssertEqual(try XCTUnwrap(store.mountainShare(atNormalizedWorld: centre, terrainZoom: 15)), 0, "Level ground")
+        store.setFrame(cameraZoom: 13)
+        XCTAssertEqual(try strength(), 2, "Full before the fade")
+        store.setFrame(cameraZoom: 15)
+        XCTAssertEqual(try strength(), 1, accuracy: 1e-6, "Halfway through the flat fade")
         XCTAssertEqual(try XCTUnwrap(follow.terrainMetres(centre)), 100, accuracy: 1e-3, "The camera's terrain scales with it")
-        store.setFrame(cameraZoom: 17, centerWorldMercator: centre, tileZoom: 16)
+        store.setFrame(cameraZoom: 17)
         cameraZoom = 17
-        XCTAssertEqual(store.exaggeration, 0, "Flat past the fade")
+        XCTAssertEqual(try strength(), 0, "Flat past the fade")
         XCTAssertEqual(try XCTUnwrap(follow.terrainMetres(centre)), 0)
         XCTAssertEqual(store.elevation(atNormalizedWorld: centre, terrainZoom: 15), 100, "The heights themselves are untouched")
         let everywhere = GroundReliefStore(device: device,
                                            settings: settings.groundRelief(flatZoomFade: ImmersiveMapZoomFade.none).tiles.groundRelief,
                                            fetch: { _ in .image(image) })
-        everywhere.setFrame(cameraZoom: 20, centerWorldMercator: centre, tileZoom: 16)
-        XCTAssertEqual(everywhere.exaggeration, 2, "No fade keeps the relief at every zoom")
+        _ = try XCTUnwrap(waitForRelief(of: tile, in: everywhere))
+        everywhere.setFrame(cameraZoom: 20)
+        XCTAssertEqual(try XCTUnwrap(everywhere.strength(atNormalizedWorld: centre, terrainZoom: 15)), 2,
+                       "No fade keeps the relief at every zoom")
+    }
+
+    /// The relief comes in with the camera zoom: flat before its fade,
+    /// scaled up through it, full past it, with the fades that take it
+    /// away again on top. The camera's terrain follows, so below the fade
+    /// the camera stands on the plane.
+    func testTheReliefAppearsWithTheCameraZoom() throws {
+        let device = try Self.device()
+        let image = try Self.png(size: 2, pixels: Array(repeating: (128, 100, 0), count: 4))
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.coverage.maximumZoomLevel = 16
+        settings = settings.groundRelief(isEnabled: true, exaggeration: 2,
+                                         appearZoomFade: .fadeIn(from: 10, to: 11),
+                                         flatZoomFade: .fadeOut(from: 14, to: 16), mountainZoomFade: .none)
+        XCTAssertEqual(ImmersiveMapSettings.default.tiles.groundRelief.appearZoomFade, .fadeIn(from: 10, to: 11),
+                       "Flat to zoom 10 and full from 11 by default")
+        settings.tiles.groundRelief.minimumSourceZoom = 15
+        let store = GroundReliefStore(device: device, settings: settings.tiles.groundRelief, fetch: { _ in .image(image) })
+        let tile = Tile(x: 9647, y: 12321, z: 15)
+        _ = try XCTUnwrap(waitForRelief(of: tile, in: store))
+        let tilesCount = Double(1 << 15)
+        let centre = SIMD2<Double>((Double(tile.x) + 0.5) / tilesCount, (Double(tile.y) + 0.5) / tilesCount)
+        let follow = store.makeTerrainFollow(tileSettings: settings.tiles,
+                                             globeRadiusScale: settings.presentation.globeRadiusScale,
+                                             cameraZoom: { 16 })
+        func strength() throws -> Float {
+            try XCTUnwrap(store.strength(atNormalizedWorld: centre, terrainZoom: 15))
+        }
+        store.setFrame(cameraZoom: 9.5)
+        XCTAssertEqual(try strength(), 0, "Flat before the relief comes in")
+        XCTAssertFalse(store.comesIn(atCameraZoom: 9.5), "And the frame is off the terrain there")
+        XCTAssertTrue(store.comesIn(atCameraZoom: 10.5))
+        XCTAssertTrue(store.comesIn(atCameraZoom: 16), "On it past the fade that scales the relief away: the terrain tells the fade")
+        store.setFrame(cameraZoom: 10.5)
+        XCTAssertEqual(try strength(), 1, accuracy: 1e-6, "Halfway in")
+        XCTAssertEqual(try XCTUnwrap(follow.terrainMetres(centre)), 100, accuracy: 1e-3, "The camera's terrain rises with it")
+        store.setFrame(cameraZoom: 12)
+        XCTAssertEqual(try strength(), 2, "Full past the fade")
+        store.setFrame(cameraZoom: 15)
+        XCTAssertEqual(try strength(), 1, accuracy: 1e-6, "The flat fade takes it away again on top")
+        let atOnce = GroundReliefStore(device: device,
+                                       settings: settings.groundRelief(appearZoomFade: ImmersiveMapZoomFade.none).tiles.groundRelief,
+                                       fetch: { _ in .image(image) })
+        _ = try XCTUnwrap(waitForRelief(of: tile, in: atOnce))
+        atOnce.setFrame(cameraZoom: 5)
+        XCTAssertEqual(try XCTUnwrap(atOnce.strength(atNormalizedWorld: centre, terrainZoom: 15)), 2,
+                       "No fade draws the relief from the plane's first frame")
     }
 
     /// Over a mountain the relief stays late: the terrain's rise and fall
-    /// around the point looked at is past the mountain threshold, so the
-    /// mountain fade holds where the flat one would have gone.
+    /// around the place is past the mountain threshold, so the mountain
+    /// fade holds where the flat one would have gone. The share is the
+    /// place's, read off the terrain (`GroundReliefRoughness`), not the
+    /// frame's.
     func testOverAMountainTheReliefFadesLate() throws {
         let device = try Self.device()
         // The west column at sea level, the east at 1024 m.
@@ -524,15 +502,83 @@ final class GroundReliefTests: XCTestCase {
         _ = try XCTUnwrap(waitForRelief(of: tile, in: store))
         let tilesCount = Double(1 << 15)
         let centre = SIMD2<Double>((Double(tile.x) + 0.5) / tilesCount, (Double(tile.y) + 0.5) / tilesCount)
-        store.setFrame(cameraZoom: 16, centerWorldMercator: centre, tileZoom: 16)
-        XCTAssertGreaterThan(store.reliefRangeMetres, 500, "A mountain's rise within the window")
-        XCTAssertEqual(store.exaggeration, 1, "Full at a zoom the flat fade would have ended at")
-        store.setFrame(cameraZoom: 17, centerWorldMercator: centre, tileZoom: 16)
-        XCTAssertEqual(store.exaggeration, 0.5, accuracy: 1e-6, "Halfway through the mountain fade")
-        // Off the terrain the window reads nothing and the range holds.
+        XCTAssertEqual(try XCTUnwrap(store.mountainShare(atNormalizedWorld: centre, terrainZoom: 15)), 1,
+                       "A mountain's rise within the window")
+        store.setFrame(cameraZoom: 16)
+        XCTAssertEqual(try XCTUnwrap(store.strength(atNormalizedWorld: centre, terrainZoom: 15)), 1,
+                       "Full at a zoom the flat fade would have ended at")
+        store.setFrame(cameraZoom: 17)
+        XCTAssertEqual(try XCTUnwrap(store.strength(atNormalizedWorld: centre, terrainZoom: 15)), 0.5, accuracy: 1e-6,
+                       "Halfway through the mountain fade")
+        // Off the terrain everything lies on the plane.
         store.setActive(false)
-        store.setFrame(cameraZoom: 17, centerWorldMercator: centre, tileZoom: 16)
-        XCTAssertGreaterThan(store.reliefRangeMetres, 500)
+        XCTAssertEqual(store.strength(atNormalizedWorld: centre, terrainZoom: 15), 0)
+    }
+
+    /// The roughness of a tile: a cell's share is the rise and fall within
+    /// the window of it, a plain reads as flat and a mountain as one, with
+    /// a smoothstep between, and the window reaches across the tile only
+    /// as far as it is wide.
+    func testTheRoughnessReadsEachPlacesRise() throws {
+        let device = try Self.device()
+        // A 4 by 4 tile: the west half at sea level, the east half 1000 m
+        // up, read in a window a cell wide at zoom 8, where a cell is tens
+        // of kilometres.
+        var metres = [Float](repeating: 0, count: 16)
+        for row in 0 ..< 4 {
+            for column in 2 ..< 4 {
+                metres[row * 4 + column] = 1000
+            }
+        }
+        let heights = GroundReliefHeights(size: 4, metres: metres)
+        let tile = Tile(x: 132, y: 91, z: 8)
+        let roughness = try XCTUnwrap(GroundReliefRoughness.make(heights: heights, tile: tile,
+                                                                 windowMetres: 1, flatMetres: 100, mountainMetres: 1000,
+                                                                 device: device))
+        XCTAssertEqual(roughness.cells, 4)
+        XCTAssertEqual(roughness.shares[0], 0, "A plain far from the step, the window a cell wide")
+        XCTAssertEqual(roughness.shares[3], 0, "The plateau too: level ground")
+        XCTAssertEqual(roughness.shares[1], 1, accuracy: 1e-6, "A cell beside the step sees the whole rise")
+        XCTAssertEqual(roughness.shares[2], 1, accuracy: 1e-6)
+        let wide = try XCTUnwrap(GroundReliefRoughness.make(heights: heights, tile: tile,
+                                                            windowMetres: 1_000_000, flatMetres: 100, mountainMetres: 1000,
+                                                            device: device))
+        XCTAssertEqual(wide.shares[0], 1, accuracy: 1e-6, "A window over the whole tile reads the step everywhere")
+        XCTAssertEqual(roughness.share(atTextureUV: SIMD2<Float>(0.125, 0.5)), 0, accuracy: 1e-6, "The first cell's centre")
+        XCTAssertEqual(roughness.share(atTextureUV: SIMD2<Float>(0.25, 0.5)), 0.5, accuracy: 1e-6, "Halfway to the next")
+    }
+
+    /// Between flat ground and mountains the relief goes at a zoom
+    /// between the two fades' zooms, and whole: the fades' zooms are
+    /// blended by the share of a mountain, not their alphas, which would
+    /// have left a part of the relief standing to the mountain fade. A
+    /// fade of `.none` stands at an infinite zoom: the relief stays
+    /// wherever that fade has any share.
+    func testFoothillsFadeBetweenTheTwoFadesAndWhole() {
+        let flat = ImmersiveMapZoomFade.fadeOut(from: 10, to: 12)
+        let mountain = ImmersiveMapZoomFade.fadeOut(from: 17, to: 18)
+        func alpha(_ zoom: Double, share: Float, flat: ImmersiveMapZoomFade = flat) -> Float {
+            GroundReliefFrame(cameraZoom: zoom, strengthScale: 1, flatZoomFade: flat, mountainZoomFade: mountain)
+                .fadeAlpha(mountainShare: share)
+        }
+        XCTAssertEqual(alpha(11, share: 0), flat.alpha(atZoom: 11), accuracy: 1e-6, "Flat ground: the flat fade")
+        XCTAssertEqual(alpha(17.5, share: 1), mountain.alpha(atZoom: 17.5), accuracy: 1e-6, "Mountains: the mountain fade")
+        // Half a mountain: the fade runs from 13.5 to 15.
+        XCTAssertEqual(alpha(13.5, share: 0.5), 1, accuracy: 1e-6, "Full to the blended start")
+        XCTAssertEqual(alpha(14.25, share: 0.5), 0.5, accuracy: 1e-6, "Halfway through the blended fade")
+        XCTAssertEqual(alpha(15, share: 0.5), 0, accuracy: 1e-6, "Gone at the blended end, nothing left standing")
+        XCTAssertEqual(alpha(16.5, share: 0.5), 0, "And still gone where the alphas' blend would have kept half")
+        // Most of a mountain, a city beside one: the fade runs from 16.16
+        // to 17.28, gone before the mountain fade has begun.
+        XCTAssertEqual(alpha(17.3, share: 0.88), 0, accuracy: 0.02)
+        XCTAssertEqual(alpha(16.1, share: 0.88), 1, accuracy: 0.02)
+        // No flat fade: the relief stays wherever the ground is at all flat.
+        XCTAssertEqual(alpha(17.5, share: 0.5, flat: .none), 1, accuracy: 1e-6)
+        XCTAssertEqual(alpha(17.5, share: 1, flat: .none), mountain.alpha(atZoom: 17.5), accuracy: 1e-6, "A mountain still fades")
+        let frame = GroundReliefFrame(cameraZoom: 14.25, strengthScale: 3, flatZoomFade: flat, mountainZoomFade: mountain)
+        XCTAssertEqual(frame.strength(mountainShare: 0.5), 1.5, accuracy: 1e-6, "The strength is the scale times the fade")
+        XCTAssertEqual(ImmersiveMapSettings.default.tiles.groundRelief.reliefWindowMetres, 16_000)
+        XCTAssertEqual(ImmersiveMapSettings.default.tiles.groundRelief.roughnessZoom, 8)
     }
 
     /// A tile whose terrain is on its way, at the source's floor, is

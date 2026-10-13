@@ -204,7 +204,7 @@ enum GlobeTileCoverage {
                     walk.unlabelled.insert(VisibleTile(tile: tile))
                 }
                 if let rasterSize {
-                    walk.raster[VisibleTile(tile: tile)] = RasterTileSpec(size: rasterSize, fadeZoom: tile.z + zoomDrop)
+                    walk.raster[VisibleTile(tile: tile)] = RasterTileSpec(size: rasterSize)
                 }
             }
             place(tile, walk: &walk)
