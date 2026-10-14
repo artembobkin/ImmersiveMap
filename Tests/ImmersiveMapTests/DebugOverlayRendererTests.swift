@@ -94,6 +94,21 @@ final class DebugOverlayRendererTests: XCTestCase {
         XCTAssertEqual(DebugOverlayRenderer.formatTileCoordinateString(tile), "tile = 154/79/8")
     }
 
+    func testACoarserZoomTakesAThickerOutline() {
+        XCTAssertEqual(DebugOverlayRenderer.tileOutlineThickness(zoom: 10, deepestZoom: 10), 4, "The deepest zoom is thinnest")
+        XCTAssertEqual(DebugOverlayRenderer.tileOutlineThickness(zoom: 9, deepestZoom: 10), 10)
+        XCTAssertEqual(DebugOverlayRenderer.tileOutlineThickness(zoom: 7, deepestZoom: 10), 22)
+        XCTAssertEqual(DebugOverlayRenderer.tileOutlineThickness(zoom: 0, deepestZoom: 14), 40, "Capped")
+        XCTAssertEqual(DebugOverlayRenderer.tileOutlineThickness(zoom: 12, deepestZoom: 10), 4, "Never under the thinnest")
+    }
+
+    func testTheTileLabelStandsAtTheMeanOfTheTilePointsOnScreen() {
+        XCTAssertNil(DebugOverlayRenderer.makeTileLabelAnchor(visiblePoints: []), "A tile with no point on screen has no label")
+        XCTAssertEqual(DebugOverlayRenderer.makeTileLabelAnchor(visiblePoints: [SIMD2<Float>(100, 200)]), SIMD2<Float>(100, 200))
+        XCTAssertEqual(DebugOverlayRenderer.makeTileLabelAnchor(visiblePoints: [SIMD2<Float>(0, 0), SIMD2<Float>(200, 100), SIMD2<Float>(100, 50)]),
+                       SIMD2<Float>(100, 50), "The centre of a whole tile, sliding with the visible part of a cut one")
+    }
+
     func testTileCoordinateWatermarkAnchorsAreDistributedInsideTile() {
         XCTAssertEqual(DebugOverlayRenderer.makeTileWatermarkUVs(gridSize: 3), [
             SIMD2<Float>(0.25, 0.25),

@@ -173,6 +173,40 @@ final class TilePlacementPlannerTests: XCTestCase {
         XCTAssertTrue(placed.isEmpty, "A z4 child of a missing backdrop slot belongs to the main coverage, not the backdrop")
     }
 
+    /// A pan opens a near slot whose tile is still loading, and the far
+    /// ring's tile stands in for it. The far ring draws that tile as a
+    /// texture without lines or labels, so the stand-in draws the same
+    /// way: nothing on screen changes until the slot's tile lands. A
+    /// stand-in that is no target of the frame (a parent on a zoom-in)
+    /// takes the slot's rules, so its labels stay up until the children
+    /// land.
+    func testAStandInThatIsATargetDrawsAsItsOwnSlotDoes() throws {
+        let resident = try resident([grandparent])
+        let near = VisibleTile(tile: parent)
+        let far = VisibleTile(tile: grandparent)
+        let farRules = TileDrawRules(drawsLines: false, drawsLabels: false, raster: RasterTileSpec(size: 64))
+        func slotRules(_ slot: VisibleTile) -> TileDrawRules { slot == far ? farRules : .all }
+
+        let placed = TilePlacementPlanner.buildPlacements(targets: [near, far], resident: resident, zoom: 5,
+                                                          slotRules: slotRules).tilePlacements
+        XCTAssertEqual(placed.count, 2)
+        let standIn = try XCTUnwrap(placed.first { $0.placeIn == near })
+        XCTAssertEqual(standIn.metalTile.tile, grandparent)
+        XCTAssertEqual(standIn.rules, farRules, "Drawn as the far ring draws it, not as the near slot would")
+        let own = try XCTUnwrap(placed.first { $0.placeIn == far })
+        XCTAssertEqual(own.rules, farRules)
+
+        let zoomIn = TilePlacementPlanner.buildPlacements(targets: [near], resident: resident, zoom: 5,
+                                                          slotRules: slotRules).tilePlacements
+        XCTAssertEqual(zoomIn.first?.rules, .all, "No slot of its own: the slot's rules, labels and all")
+
+        let wrapped = VisibleTile(tile: grandparent, worldWrap: 1)
+        let acrossTheSeam = TilePlacementPlanner.buildPlacements(targets: [near, wrapped], resident: resident, zoom: 5,
+                                                                 slotRules: { $0 == wrapped ? farRules : .all }).tilePlacements
+        XCTAssertEqual(acrossTheSeam.first { $0.placeIn == near }?.rules, .all,
+                       "A slot of its own in another copy of the world is not this copy's")
+    }
+
     func testTheOutputDoesNotDependOnAnyPreviousFrame() throws {
         let resident = try resident([grandparent])
         let first = placements(targets: [parent], resident: resident, zoom: 5)

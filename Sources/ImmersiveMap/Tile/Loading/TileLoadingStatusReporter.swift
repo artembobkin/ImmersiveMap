@@ -192,12 +192,27 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     private var recentPreparationStagesByTile: [Tile: [TilePreparationStageSnapshot]] = [:]
     private var sequence: UInt64 = 0
 
+    /// Called after every change, on the thread that made it: the debug
+    /// panel reads the rows again. Set and cleared by the engine.
+    var onChange: (@Sendable () -> Void)? {
+        get { queue.sync { onChangeStorage } }
+        set { queue.sync { onChangeStorage = newValue } }
+    }
+    private var onChangeStorage: (@Sendable () -> Void)?
+
     init(now: @escaping () -> TimeInterval = { Date().timeIntervalSinceReferenceDate }) {
         self.now = now
     }
 
+    /// A change under the queue, then the word of it outside the queue, so
+    /// a listener may read the snapshot at once.
+    private func mutate(_ body: () -> Void) {
+        queue.sync(execute: body)
+        onChange?()
+    }
+
     func recordDemand(input: Int, deduplicated: Int, tiles: [Tile]) {
-        queue.sync {
+        mutate {
             self.requested = input
             self.deduplicated = deduplicated
             currentDemand = Set(tiles)
@@ -206,7 +221,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     }
 
     func recordDisplayedTiles(_ tiles: [Tile]) {
-        queue.sync {
+        mutate {
             displayedTiles = Set(tiles)
             for tile in tiles {
                 guard shouldCreateDisplayedRecord(for: tile) else {
@@ -223,7 +238,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     }
 
     func recordLoadScheduled(tile: Tile) {
-        queue.sync {
+        mutate {
             scheduled += 1
             updateTile(tile,
                        status: .queued,
@@ -233,7 +248,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     }
 
     func recordLoadStarted(tile: Tile) {
-        queue.sync {
+        mutate {
             activeLoadTiles.insert(tile)
             activeLoads = activeLoadTiles.count
             updateTile(tile,
@@ -244,7 +259,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     }
 
     func recordLoadCompleted(tile: Tile) {
-        queue.sync {
+        mutate {
             activeLoadTiles.remove(tile)
             activeLoads = activeLoadTiles.count
             totalCompleted += 1
@@ -259,7 +274,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     }
 
     func recordLoadFailed(tile: Tile, reason: String) {
-        queue.sync {
+        mutate {
             activeLoadTiles.remove(tile)
             activeLoads = activeLoadTiles.count
             totalFailed += 1
@@ -274,7 +289,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
 
     func recordLoadsCancelled(tiles: [Tile]) {
         let cancelledTiles = Set(tiles)
-        queue.sync {
+        mutate {
             requested = 0
             deduplicated = 0
             currentDemand.removeAll()
@@ -308,7 +323,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     /// network slot) was dropped because demand left the tile: no failure, no
     /// completion, just bookkeeping so `activeLoads` does not leak.
     func recordLoadDropped(tile: Tile) {
-        queue.sync {
+        mutate {
             activeLoadTiles.remove(tile)
             activeLoads = activeLoadTiles.count
             tileRecords.removeValue(forKey: tile)
@@ -321,7 +336,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     /// closed, and the failure counts like any other so the retry backoff
     /// owns the next attempt.
     func recordLoadStalled(tile: Tile, stage: String) {
-        queue.sync {
+        mutate {
             endActiveWork(for: tile)
             totalFailed += 1
             let reason = "stalled in \(stage)"
@@ -340,7 +355,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     /// The row stops claiming a stage nobody is in, so the HUD never carries
     /// a stage past the death of its task.
     func recordLoadEnded(tile: Tile) {
-        queue.sync {
+        mutate {
             guard let record = tileRecords[tile],
                   Self.isActiveResourceStatus(record.status) else {
                 return
@@ -377,7 +392,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     }
 
     func recordDiskStarted(tile: Tile) {
-        queue.sync {
+        mutate {
             disk.inFlight += 1
             activeDiskTiles.insert(tile)
             latestDiskTile = tile
@@ -392,7 +407,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     /// The prepared cache answered the load: the read and its materialize
     /// count as one served disk stage.
     func recordDiskServed(tile: Tile) {
-        queue.sync {
+        mutate {
             guard activeDiskTiles.remove(tile) != nil else {
                 return
             }
@@ -410,7 +425,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     /// The disk could not answer (no entry, or an entry that would not
     /// materialize): the load continues to the network stage.
     func recordDiskMissed(tile: Tile) {
-        queue.sync {
+        mutate {
             guard activeDiskTiles.remove(tile) != nil else {
                 return
             }
@@ -426,7 +441,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     }
 
     func recordNetworkStarted(tile: Tile) {
-        queue.sync {
+        mutate {
             network.inFlight += 1
             activeNetworkTiles.insert(tile)
             latestNetworkTile = tile
@@ -439,7 +454,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     }
 
     func recordNetworkSucceeded(tile: Tile, bytes: Int) {
-        queue.sync {
+        mutate {
             network.inFlight = max(0, network.inFlight - 1)
             network.completed += 1
             networkBytes += bytes
@@ -454,7 +469,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     }
 
     func recordNetworkFailed(tile: Tile, reason: String) {
-        queue.sync {
+        mutate {
             network.inFlight = max(0, network.inFlight - 1)
             network.failed += 1
             activeNetworkTiles.remove(tile)
@@ -469,7 +484,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     }
 
     func recordParsingStarted(tile: Tile) {
-        queue.sync {
+        mutate {
             parsing.inFlight += 1
             activeParsingTiles.insert(tile)
             latestParsingTile = tile
@@ -482,7 +497,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     }
 
     func recordParsingSucceeded(tile: Tile, layerTimings: [TileParseLayerTiming] = []) {
-        queue.sync {
+        mutate {
             parsing.inFlight = max(0, parsing.inFlight - 1)
             parsing.completed += 1
             activeParsingTiles.remove(tile)
@@ -498,7 +513,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     }
 
     func recordParsingFailed(tile: Tile, reason: String) {
-        queue.sync {
+        mutate {
             parsing.inFlight = max(0, parsing.inFlight - 1)
             parsing.failed += 1
             activeParsingTiles.remove(tile)
@@ -513,7 +528,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     }
 
     func recordMaterializationStarted(tile: Tile) {
-        queue.sync {
+        mutate {
             startStage("materialize", for: tile)
             updateTile(tile,
                        status: .parsing,
@@ -523,7 +538,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     }
 
     func recordMaterializationSucceeded(tile: Tile) {
-        queue.sync {
+        mutate {
             finishStage("materialize", for: tile)
             updateTile(tile,
                        status: .parsing,
@@ -533,7 +548,7 @@ final class TileLoadingStatusReporter: @unchecked Sendable {
     }
 
     func recordMaterializationFailed(tile: Tile, reason: String) {
-        queue.sync {
+        mutate {
             finishStage("materialize", for: tile)
             updateTile(tile,
                        status: .parsing,

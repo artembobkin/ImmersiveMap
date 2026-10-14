@@ -12,6 +12,24 @@ struct CameraFrameState {
     let cameraEye: SIMD3<Float>
     let cameraFrustum: Frustum?
     let mapCameraState: ImmersiveMapCameraState
+    /// The zoom the map is planned by (`CameraStateController.planningZoom`).
+    let planningZoom: Double
+
+    init(drawSize: CGSize,
+         viewport: SIMD2<Float>,
+         cameraMatrices: FrameCameraMatrices,
+         cameraEye: SIMD3<Float>,
+         cameraFrustum: Frustum?,
+         mapCameraState: ImmersiveMapCameraState,
+         planningZoom: Double? = nil) {
+        self.drawSize = drawSize
+        self.viewport = viewport
+        self.cameraMatrices = cameraMatrices
+        self.cameraEye = cameraEye
+        self.cameraFrustum = cameraFrustum
+        self.mapCameraState = mapCameraState
+        self.planningZoom = planningZoom ?? mapCameraState.zoom
+    }
 }
 
 /// Responsible for preparing the camera state for a render frame:
@@ -82,7 +100,8 @@ final class FrameCameraStateResolver {
                                 cameraMatrices: matrices,
                                 cameraEye: camera.eye,
                                 cameraFrustum: camera.frustrum,
-                                mapCameraState: cameraStateController.cameraState)
+                                mapCameraState: cameraStateController.cameraState,
+                                planningZoom: cameraStateController.planningZoom)
     }
 
     func rotateCameraYaw(delta: Float) {
@@ -93,11 +112,6 @@ final class FrameCameraStateResolver {
     func panCamera(deltaX: Double, deltaY: Double, transition: Float) {
         cameraStateController.pan(deltaX: deltaX, deltaY: deltaY, transition: transition)
         requestRenderCameraUpdate()
-    }
-
-    /// See `CameraStateController.endPan()`.
-    func endPanCamera() {
-        cameraStateController.endPan()
     }
 
     func zoomCamera(scale: Double, velocity: Double = 0) {
@@ -161,10 +175,14 @@ final class FrameCameraStateResolver {
         cameraStateController.lastTerrainFollowReport
     }
 
-    /// See `CameraStateController.panReferenceZoom`: the zoom a drag over
-    /// the terrain began at, nil between drags.
-    var panReferenceZoom: Double? {
-        cameraStateController.panReferenceZoom
+    /// See `CameraStateController.endPan()`.
+    func endPanCamera() {
+        cameraStateController.endPan()
+    }
+
+    /// See `CameraStateController.planningZoom`.
+    var planningZoom: Double {
+        cameraStateController.planningZoom
     }
 
     /// See `CameraStateController.advanceBoundsPull(deltaTime:)`.

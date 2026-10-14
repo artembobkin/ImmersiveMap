@@ -105,10 +105,6 @@ final class DebugOverlayPanelLayoutTests: XCTestCase {
                        "Three points short of the second row's spacing is still one row")
     }
 
-    func testOverflowTextCountsWhatIsNotShown() {
-        XCTAssertEqual(DebugOverlayHUDTextComposer.tilesOverflowText(count: 6), "+6 more")
-    }
-
     // MARK: - Room for the scroller
 
     /// The bug this pins: rows were laid out to the panel's width, so with a
@@ -145,5 +141,20 @@ final class DebugOverlayPanelLayoutTests: XCTestCase {
                                                                     leadingInset: 10,
                                                                     scrollerGutter: 18),
                        572)
+    }
+
+    func testTheCardGridFillsTheWidthInAsManyColumnsAsFit() {
+        XCTAssertEqual(DebugOverlayPanelLayout.cardColumnCount(width: 560, minimumCardWidth: 250, spacing: 6), 2)
+        XCTAssertEqual(DebugOverlayPanelLayout.cardColumnCount(width: 360, minimumCardWidth: 250, spacing: 6), 1)
+        XCTAssertEqual(DebugOverlayPanelLayout.cardColumnCount(width: 100, minimumCardWidth: 250, spacing: 6), 1, "One at least")
+        XCTAssertEqual(DebugOverlayPanelLayout.cardColumnCount(width: 762, minimumCardWidth: 250, spacing: 6), 3)
+
+        let second = DebugOverlayPanelLayout.cardFrame(index: 1, columns: 2, width: 506, cardHeight: 72, spacing: 6)
+        XCTAssertEqual(second, CGRect(x: 256, y: 0, width: 250, height: 72), "The cards share the width, spacing between")
+        let third = DebugOverlayPanelLayout.cardFrame(index: 2, columns: 2, width: 506, cardHeight: 72, spacing: 6)
+        XCTAssertEqual(third, CGRect(x: 0, y: 78, width: 250, height: 72), "The next row starts at the left")
+
+        XCTAssertEqual(DebugOverlayPanelLayout.cardGridHeight(cardCount: 3, columns: 2, cardHeight: 72, spacing: 6), 150)
+        XCTAssertEqual(DebugOverlayPanelLayout.cardGridHeight(cardCount: 0, columns: 2, cardHeight: 72, spacing: 6), 0)
     }
 }

@@ -67,6 +67,10 @@ enum GroundGeometrySubdivider {
                     assertionFailure("A deferred ribbon in a sphere-era tile")
                     return polygon
                 }
+                // An outline has no triangles to split: the flattening
+                // cuts it to its grid, as fine as this step or finer by
+                // the grid's defaults (`GroundFlatteningSettings`).
+                if polygon.isOutline { return polygon }
                 return subdivide(polygon, step: polygon.isLineRibbon ? ribbonStep : step)
             }
         }

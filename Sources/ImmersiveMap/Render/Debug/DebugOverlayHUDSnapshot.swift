@@ -9,6 +9,19 @@ struct DebugOverlayCoordinateLines: Equatable {
     let latLon: String
 }
 
+/// What the debug panel shows right now, so a frame builds only that: the
+/// panel is in step with every rendered frame, one to one, and the frame
+/// pays for one tab's data, not the whole panel's.
+struct DebugOverlayHUDContentRequest: OptionSet, Sendable, Equatable {
+    let rawValue: UInt8
+
+    /// The camera's lines and the frame's diagnostics.
+    static let stats = DebugOverlayHUDContentRequest(rawValue: 1 << 0)
+    /// The loader's status, the tile cards and the coverage map.
+    static let tiles = DebugOverlayHUDContentRequest(rawValue: 1 << 1)
+    static let all: DebugOverlayHUDContentRequest = [.stats, .tiles]
+}
+
 struct DebugOverlayHUDSnapshot: Equatable {
     let coordinateLines: DebugOverlayCoordinateLines
     let diagnosticsLines: [String]
@@ -24,6 +37,8 @@ struct DebugOverlayHUDSnapshot: Equatable {
     /// controls that read a value off a zoom curve (the ground fog group),
     /// which the frame reads at that zoom.
     var cameraZoom: Double = 0
+    /// The frame's tile coverage from above, for the panel's coverage map.
+    var tileCoverage: DebugOverlayTileCoverage? = nil
 
     /// The same frame snapshot with the tile list read again from the
     /// reporter: what the panel applies between frames.
@@ -38,7 +53,8 @@ struct DebugOverlayHUDSnapshot: Equatable {
                                 topPadding: topPadding,
                                 sectionSpacing: sectionSpacing,
                                 textColor: textColor,
-                                cameraZoom: cameraZoom)
+                                cameraZoom: cameraZoom,
+                                tileCoverage: tileCoverage)
     }
 
     static func make(settings: ImmersiveMapSettings.DebugSettings,
@@ -48,7 +64,9 @@ struct DebugOverlayHUDSnapshot: Equatable {
                      longitude: Double,
                      cameraDebugLines: [String],
                      diagnostics: FrameDiagnostics?,
-                     tileLoadingStatus: TileLoadingStatusSnapshot? = nil) -> DebugOverlayHUDSnapshot? {
+                     tileLoadingStatus: TileLoadingStatusSnapshot? = nil,
+                     tileCoverage: DebugOverlayTileCoverage? = nil,
+                     content: DebugOverlayHUDContentRequest = .all) -> DebugOverlayHUDSnapshot? {
         guard settings.enableDebugPanel else {
             return nil
         }
@@ -56,11 +74,14 @@ struct DebugOverlayHUDSnapshot: Equatable {
         let coordinateLines = DebugOverlayRenderer.makeCoordinateTextLines(zoom: zoom,
                                                                            latitude: latitude,
                                                                            longitude: longitude)
+        let tileLoadingStatus = content.contains(.tiles) ? tileLoadingStatus : nil
         return DebugOverlayHUDSnapshot(
             coordinateLines: DebugOverlayCoordinateLines(zoom: coordinateLines.zoom,
                                                         latLon: coordinateLines.latLon),
-            diagnosticsLines: DebugOverlayRenderer.makeOverlayDiagnosticsTextLines(cameraDebugLines: cameraDebugLines,
-                                                                                  diagnostics: diagnostics),
+            diagnosticsLines: content.contains(.stats)
+                ? DebugOverlayRenderer.makeOverlayDiagnosticsTextLines(cameraDebugLines: cameraDebugLines,
+                                                                       diagnostics: diagnostics)
+                : [],
             tileLoadingStatusLines: tileLoadingStatus?.lines ?? [],
             tileLoadingStatusTiles: tileLoadingStatus?.tiles ?? [],
             coordinateScale: settings.coordinateScale,
@@ -69,23 +90,29 @@ struct DebugOverlayHUDSnapshot: Equatable {
             topPadding: settings.topPadding,
             sectionSpacing: settings.sectionSpacing,
             textColor: settings.textColor,
-            cameraZoom: animatedZoom ?? zoom
+            cameraZoom: animatedZoom ?? zoom,
+            tileCoverage: content.contains(.tiles) ? tileCoverage : nil
         )
     }
 
+    /// The frame's snapshot for the panel's `content`: the rest is left
+    /// empty and never built.
     static func make(settings: ImmersiveMapSettings.DebugSettings,
                      frameContext: FrameContext,
                      diagnostics: FrameDiagnostics?,
-                     tileLoadingStatus: TileLoadingStatusSnapshot? = nil) -> DebugOverlayHUDSnapshot? {
+                     tileLoadingStatus: TileLoadingStatusSnapshot? = nil,
+                     content: DebugOverlayHUDContentRequest = .all) -> DebugOverlayHUDSnapshot? {
         let cameraPosition = frameContext.mapCameraState.cameraPosition()
         return make(settings: settings,
                     zoom: frameContext.mapCameraState.zoom,
                     animatedZoom: frameContext.animatedZoom,
                     latitude: cameraPosition.latitudeDegrees,
                     longitude: cameraPosition.longitudeDegrees,
-                    cameraDebugLines: makeCameraDebugLines(frameContext: frameContext),
+                    cameraDebugLines: content.contains(.stats) ? makeCameraDebugLines(frameContext: frameContext) : [],
                     diagnostics: diagnostics,
-                    tileLoadingStatus: tileLoadingStatus)
+                    tileLoadingStatus: tileLoadingStatus,
+                    tileCoverage: content.contains(.tiles) ? DebugOverlayTileCoverage.make(frameContext: frameContext) : nil,
+                    content: content)
     }
 
     private static func makeCameraDebugLines(frameContext: FrameContext) -> [String] {
@@ -100,7 +127,8 @@ struct DebugOverlayHUDSnapshot: Equatable {
         let targetZoomCounts = zoomCountsLine(title: "targetZ", tiles: placeTiles.map { $0.placeIn.tile })
 
         var lines = [
-            "camera z:\(format(cameraState.zoom)) animated z:\(format(frameContext.animatedZoom)) "
+            "camera z:\(format(cameraState.zoom)) planning z:\(format(frameContext.planningZoom)) "
+                + "animated z:\(format(frameContext.animatedZoom)) "
                 + "pitch:\(format(pitchDegrees)) bearing:\(format(bearingDegrees))",
             "surface:\(surface) transition:\(format(Double(frameContext.transition))) viewport:\(Int(viewport.x))x\(Int(viewport.y))",
             "eye x:\(format(Double(eye.x))) y:\(format(Double(eye.y))) z:\(format(Double(eye.z)))"

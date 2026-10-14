@@ -25,28 +25,35 @@ struct ImmersiveMapDevMacApp: App {
 /// committed, because that is the point of the folder.
 private struct MapScreen: View {
     @State private var camera = ImmersiveMapCameraController()
-    /// The camera's zoom, read off the screen's corner while a gesture is
-    /// under way: quicker to glance at than the debug panel's line.
+    /// The camera's zoom and the planning zoom, read off the screen's
+    /// corner while a gesture is under way: quicker to glance at than the
+    /// debug panel's line. Over the relief the two part through a drag.
     @State private var zoom: Double?
+    @State private var planningZoom: Double?
 
     var body: some View {
         map
             .overlay(alignment: .topTrailing) {
-                if let zoom {
-                    Text(String(format: "z %.2f", zoom))
-                        .font(.system(size: 22, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
-                        .padding(16)
-                        .allowsHitTesting(false)
+                if let zoom, let planningZoom {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(String(format: "z %.2f", zoom))
+                        Text(String(format: "plan %.2f", planningZoom))
+                    }
+                    .font(.system(size: 22, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
+                    .padding(16)
+                    .allowsHitTesting(false)
                 }
             }
             .onAppear {
                 zoom = Self.start.zoom
-                camera.onCameraPositionChanged = { position in
-                    zoom = position.zoom
+                planningZoom = Self.start.zoom
+                camera.onCameraSnapshotChanged = { snapshot in
+                    zoom = snapshot.position.zoom
+                    planningZoom = snapshot.planningZoom
                 }
             }
     }

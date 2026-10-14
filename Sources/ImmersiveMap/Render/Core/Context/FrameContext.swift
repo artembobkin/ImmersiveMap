@@ -89,9 +89,9 @@ struct FrameContext {
         resolvedPresentation.transition
     }
 
-    /// The camera's zoom, the fact of the frame: what the tiles, the rings
-    /// and the camera's pose are read from. What dresses the frame by the
-    /// zoom reads `animatedZoom`.
+    /// The camera's zoom, the fact of the frame: what the camera's pose is
+    /// read from. The tiles and the rings are planned by `planningZoom`,
+    /// and what dresses the frame by the zoom reads `animatedZoom`.
     var zoom: Double {
         mapCameraState.zoom
     }
@@ -99,9 +99,13 @@ struct FrameContext {
     /// The camera's zoom followed over time (`AnimatedZoom`): the zoom the
     /// ground fog, the styles' zoom fades, the labels' reach and the rest
     /// of the frame's dressing are read at, so a zoom that jumps in one
-    /// frame dresses the frame over a few. The relief's collapse reads a zoom
-    /// of their own, held through a drag (`RenderFrameEngine`).
+    /// frame dresses the frame over a few.
     let animatedZoom: Double
+    /// The zoom the map is planned by (`CameraStateController.planningZoom`):
+    /// the coverage's target tiles, the ring rules and the relief's
+    /// thresholds read it. Over the terrain it stays where the last zoom
+    /// set it while the camera's own follows the ground.
+    let planningZoom: Double
     /// How the camera's last move over the terrain was settled, for the
     /// debug panel (`TerrainFollowReport`), nil off the terrain.
     let terrainFollowReport: TerrainFollowReport?
@@ -123,6 +127,7 @@ struct FrameContext {
          services: FrameContextServices,
          mapCameraState: ImmersiveMapCameraState = .default,
          animatedZoom: Double? = nil,
+         planningZoom: Double? = nil,
          terrainFollowReport: TerrainFollowReport? = nil,
          resolvedPresentation: ResolvedPresentationState? = nil,
          visibleContent: VisibleContentState = .empty,
@@ -144,6 +149,7 @@ struct FrameContext {
         self.cameraEye = cameraEye
         self.mapCameraState = fallbackResolvedPresentation.semanticWorldState.cameraState
         self.animatedZoom = animatedZoom ?? fallbackResolvedPresentation.semanticWorldState.cameraState.zoom
+        self.planningZoom = planningZoom ?? fallbackResolvedPresentation.semanticWorldState.cameraState.zoom
         self.terrainFollowReport = terrainFollowReport
         self.resolvedPresentation = fallbackResolvedPresentation
         self.visibleContent = visibleContent

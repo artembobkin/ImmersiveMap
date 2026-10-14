@@ -110,8 +110,12 @@ final class GroundReliefRoadParseTests: XCTestCase {
         settings.tiles.groundRelief.isEnabled = true
         settings.tiles.groundFlattening.grid = 32
         XCTAssertEqual(TileParseOptions(settings: settings).reliefSubdivisionStep(tileZoom: 15), 128)
-        XCTAssertEqual(TileParseOptions(settings: settings).reliefSubdivisionStep(tileZoom: 11), 128,
-                       "With the relief on every tile is flattened, and its roads follow the grid")
+        XCTAssertEqual(TileParseOptions(settings: settings).reliefSubdivisionStep(tileZoom: 8), 128,
+                       "With the relief on every tile from its zoom is flattened, and its roads follow the grid")
+        XCTAssertEqual(TileParseOptions(settings: settings).reliefSubdivisionStep(tileZoom: 11), 16,
+                       "A zoom with a grid of its own follows that grid")
+        XCTAssertNil(TileParseOptions(settings: settings).reliefSubdivisionStep(tileZoom: 5),
+                     "A tile coarser than the relief's zoom is not flattened and keeps its roads")
         settings.tiles.groundRelief.isEnabled = false
         XCTAssertNil(TileParseOptions(settings: settings).reliefSubdivisionStep(tileZoom: 15), "A tile off the relief keeps its roads")
     }

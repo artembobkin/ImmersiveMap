@@ -133,15 +133,17 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
     /// of a ring first (`FlatTileStencilPacking`), on the sphere finest
     /// first.
     func update(frameContext: FrameContext) {
-        let rasterTiles = frameContext.visibleContent.rasterTiles
+        let placements = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
         sources.removeAll(keepingCapacity: true)
-        guard rasterTiles.isEmpty == false else {
+        guard placements.contains(where: { $0.rules.raster != nil }) else {
             trimPools(needed: [:])
             return
         }
         var indexByTile: [Tile: Int] = [:]
-        for placeTile in frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements {
-            guard let target = rasterTiles[placeTile.slot] else { continue }
+        for placeTile in placements {
+            // A raster placement (`TileDrawRules.raster`): a raster slot's
+            // own tile, or a stand-in drawn as its own raster slot draws it.
+            guard let target = placeTile.rules.raster else { continue }
             let tile = placeTile.metalTile.tile
             let index: Int
             if let found = indexByTile[tile] {

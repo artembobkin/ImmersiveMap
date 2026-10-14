@@ -241,7 +241,7 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         XCTAssertFalse(view.isStatsContentVisibleForTesting)
     }
 
-    func testTilesTabExpandsTilePreparationStagesAndParseLayers() {
+    func testTilesTabShowsEveryStageAndTheDearestLayersOnTheCard() {
         let view = DebugOverlayHUDView()
         var settings = ImmersiveMapSettings.default.debug
         settings.enableDebugPanel = true
@@ -287,31 +287,17 @@ final class DebugOverlayHUDViewTests: XCTestCase {
 
         view.simulateTilesTabSelectionForTesting()
         view.layoutIfNeeded()
-        view.simulateTilesStatusRowTapForTesting(at: 0)
 
-        XCTAssertEqual(view.tilesStatusVisibleRowTextsForTesting, [
-            "▾ z7/78/39 ready",
-            "    network 100ms",
-            "  ▸ parse 250ms",
-            "    materialize 30ms",
-            "    ready"
-        ])
-
-        view.simulateTilesStatusParseStageTapForTesting(tile: tile)
-
-        XCTAssertEqual(view.tilesStatusVisibleRowTextsForTesting, [
-            "▾ z7/78/39 ready",
-            "    network 100ms",
-            "  ▾ parse 250ms",
-            "    land 127ms",
-            "    water_polygons 41ms",
-            "    streets 3ms",
-            "    materialize 30ms",
-            "    ready"
-        ])
+        // Everything on the card, nothing to open: the stages in order with
+        // their times, and the parse's layers by cost.
+        XCTAssertEqual(view.tilesStatusCardLinesForTesting, [[
+            "z7/78/39 ready",
+            "network 100ms · parse 250ms · materialize 30ms · ready",
+            "land 127ms · water_polygons 41ms · streets 3ms"
+        ]])
     }
 
-    func testTilesTabCentersPrimaryTileTextInsideProgressBarAndUsesLargerFont() throws {
+    func testTilesTabDrawsTheTitleInsideItsCardInALargerFont() throws {
         let view = DebugOverlayHUDView()
         var settings = ImmersiveMapSettings.default.debug
         settings.enableDebugPanel = true
@@ -340,12 +326,12 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         view.simulateTilesTabSelectionForTesting()
         view.layoutIfNeeded()
 
-        let metrics = try XCTUnwrap(view.tilesStatusPrimaryRowMetricsForTesting)
-        XCTAssertEqual(metrics.textRect.midY, metrics.progressBackgroundRect.midY, accuracy: 0.5)
-        XCTAssertGreaterThanOrEqual(metrics.fontSize, 13)
+        let metrics = try XCTUnwrap(view.tilesStatusFirstCardMetricsForTesting)
+        XCTAssertTrue(metrics.cardRect.contains(metrics.titleRect), "The title lies inside its card")
+        XCTAssertGreaterThanOrEqual(metrics.titleFontSize, 13)
     }
 
-    func testTilesStatusRowsUseFullBoundsWidthWhenRedrawnFromPartialDirtyRect() throws {
+    func testTilesStatusCardsUseFullBoundsWidthWhenRedrawnFromPartialDirtyRect() throws {
         let view = DebugOverlayHUDView(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
         var settings = ImmersiveMapSettings.default.debug
         settings.enableDebugPanel = true
@@ -378,12 +364,24 @@ final class DebugOverlayHUDViewTests: XCTestCase {
         let image = UIGraphicsImageRenderer(size: listView.bounds.size).image { _ in
             listView.draw(CGRect(x: 0, y: 0, width: 24, height: listView.bounds.height))
         }
-        let rightEdgeProbeRect = CGRect(x: listView.bounds.width - 24,
-                                        y: 2,
+        // The first card's progress bar, full for a displayed tile, at the
+        // card's right end: drawn from the bounds, not from the dirty rect.
+        let card = DebugOverlayPanelLayout.cardFrame(
+            index: 0,
+            columns: DebugOverlayPanelLayout.cardColumnCount(width: listView.bounds.width,
+                                                             minimumCardWidth: DebugOverlayTileCardLayout.minimumWidth,
+                                                             spacing: DebugOverlayTileCardLayout.spacing),
+            width: listView.bounds.width,
+            cardHeight: DebugOverlayTileCardLayout.height,
+            spacing: DebugOverlayTileCardLayout.spacing)
+        let progress = DebugOverlayTileCardLayout.progressTrackRect(in: card)
+        let rightEdgeProbeRect = CGRect(x: progress.maxX - 20,
+                                        y: progress.minY,
                                         width: 20,
-                                        height: 24)
+                                        height: progress.height)
 
-        XCTAssertGreaterThan(image.greenPixelCountForTesting(in: rightEdgeProbeRect, scale: 1), 0)
+        // The renderer draws at the screen's scale: the probe is in points.
+        XCTAssertGreaterThan(image.greenPixelCountForTesting(in: rightEdgeProbeRect, scale: image.scale), 0)
     }
 
     func testTilesTabDisplaysIdleMessageWhenStatusIsEmpty() {

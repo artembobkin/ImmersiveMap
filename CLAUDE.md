@@ -56,6 +56,7 @@ The code shows how things are wired. These are the decisions behind it, which th
   // SPDX-License-Identifier: MIT
   ```
 - Shaders and resources load via `Bundle.module`. Every new `.metal` file or resource directory must be registered under `resources:` in `Package.swift`, otherwise the resource silently doesn't ship.
+- Never change the code on your own. A request to look into something, to find a cause, to think about an approach or to propose a fix is answered with an investigation and a proposal, and nothing in the working tree changes until the person at the screen says to go ahead with it, in their own explicit word. A request that asks for a change outright is that word. The same holds for a follow-up fix noticed along the way: name it and wait.
 - Never commit, run tests or push on your own. A change is left in the working tree, built if a build is needed to check it, and reported. The person at the screen looks first and says when to commit, which tests to run, and when to push, each one its own explicit word.
 - There is no separate documentation to keep up: the guides and the DocC catalog were removed on purpose, and the doc comments in the code are the reference. Do not add them back. `Assets/` holds the README's images.
 - Never edit `README.md`, `CHANGELOG.md` or any other `.md` file except this one and the rules under `.claude/`. When a change makes a statement in one of them wrong, leave the file as it is and say which file and which statement in the report.

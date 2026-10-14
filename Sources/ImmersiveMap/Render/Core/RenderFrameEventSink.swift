@@ -34,6 +34,12 @@ protocol RenderFrameEventSink: AnyObject, Sendable {
     /// creation and detached (nil) when it is discarded, so the panel can
     /// read the loader's state between frames. Sinks with no HUD ignore it.
     func attachTileLoadingStatus(provider: (@Sendable () -> TileLoadingStatusSnapshot?)?)
+    /// The reporter's state moved, from a loader's thread: the panel reads
+    /// its rows again between frames. Sinks with no HUD ignore it.
+    func tileLoadingStatusDidChange()
+    /// What the panel shows, for the frame to build only that. A sink with
+    /// no HUD answers everything.
+    func debugOverlayHUDContentRequest() -> DebugOverlayHUDContentRequest
     /// Unlike `updateAvatarSelectionSnapshot` (completion handler, off-main),
     /// this is called synchronously from the render loop on the main thread so
     /// that marker positions apply in the same CA transaction as the frame.
@@ -42,4 +48,6 @@ protocol RenderFrameEventSink: AnyObject, Sendable {
 
 extension RenderFrameEventSink {
     func attachTileLoadingStatus(provider: (@Sendable () -> TileLoadingStatusSnapshot?)?) {}
+    func tileLoadingStatusDidChange() {}
+    func debugOverlayHUDContentRequest() -> DebugOverlayHUDContentRequest { .all }
 }

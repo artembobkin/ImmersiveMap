@@ -142,7 +142,8 @@ final class ImmersiveMapCameraRuntime {
         return ImmersiveMapCameraSnapshotResolver.resolve(
             position: position,
             constraints: constraints,
-            isSphericalSurfaceActive: presentationStateResolver.isSphericalSurfaceActive(cameraState: cameraState)
+            isSphericalSurfaceActive: presentationStateResolver.isSphericalSurfaceActive(cameraState: cameraState),
+            planningZoom: renderCamera.planningZoom
         )
     }
 

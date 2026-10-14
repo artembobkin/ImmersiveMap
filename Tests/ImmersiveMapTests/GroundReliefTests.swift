@@ -220,12 +220,15 @@ final class GroundReliefTests: XCTestCase {
         var settings = ImmersiveMapSettings.default
         XCTAssertEqual(settings.tiles.resolvedGroundFlatteningFromTileZoom, 15, "Off, the flattening's own zoom")
         settings = settings.groundRelief(isEnabled: true)
-        XCTAssertEqual(settings.tiles.groundRelief.fromTileZoom, 0, "The ground rises from the plane's first frame")
-        XCTAssertEqual(settings.tiles.resolvedGroundFlatteningFromTileZoom, 0)
+        XCTAssertEqual(settings.tiles.groundRelief.fromTileZoom, 6, "The coarsest far ring where the relief comes in")
+        XCTAssertEqual(settings.tiles.resolvedGroundFlatteningFromTileZoom, 6)
         XCTAssertTrue(TileParseOptions(settings: settings).flattensGround(tileZoom: 12))
-        XCTAssertTrue(TileParseOptions(settings: settings).flattensGround(tileZoom: 3))
+        XCTAssertTrue(TileParseOptions(settings: settings).flattensGround(tileZoom: 6))
+        XCTAssertFalse(TileParseOptions(settings: settings).flattensGround(tileZoom: 5), "The globe's tiles are spared")
         settings = settings.groundFlattening(isEnabled: false)
-        XCTAssertEqual(settings.tiles.resolvedGroundFlatteningFromTileZoom, 0, "The relief flattens on its own")
+        XCTAssertEqual(settings.tiles.resolvedGroundFlatteningFromTileZoom, 6, "The relief flattens on its own")
+        settings = settings.groundRelief(fromTileZoom: 0)
+        XCTAssertTrue(TileParseOptions(settings: settings).flattensGround(tileZoom: 3), "Zero flattens every tile")
         settings = settings.groundRelief(isEnabled: false)
         XCTAssertNil(settings.tiles.resolvedGroundFlatteningFromTileZoom)
     }
@@ -412,9 +415,9 @@ final class GroundReliefTests: XCTestCase {
         var settings = ImmersiveMapSettings.default
         settings.tiles.coverage.maximumZoomLevel = 16
         settings = settings.groundRelief(isEnabled: true, fromTileZoom: 10, exaggeration: 2,
-                                         collapseZoom: 14, collapseSeconds: 0.4)
+                                         collapseZoom: 14, transitionSeconds: 0.4)
         XCTAssertEqual(ImmersiveMapSettings.default.tiles.groundRelief.collapseZoom, 13.7, "13.7 by default")
-        XCTAssertEqual(ImmersiveMapSettings.default.tiles.groundRelief.collapseSeconds, 0.3)
+        XCTAssertEqual(ImmersiveMapSettings.default.tiles.groundRelief.transitionSeconds, 0.3)
         settings.tiles.groundRelief.minimumSourceZoom = 15
         settings.tiles.groundRelief.cameraTerrainZoom = 15
         let store = GroundReliefStore(device: device, settings: settings.tiles.groundRelief, fetch: { _ in .image(image) })
@@ -431,55 +434,54 @@ final class GroundReliefTests: XCTestCase {
         func strength() throws -> Float {
             try XCTUnwrap(store.strength(atNormalizedWorld: centre, terrainZoom: 15))
         }
-        store.setFrame(cameraZoom: 13.9, deltaTime: 1 / 60)
+        store.setFrame(zoom: 13.9, deltaTime: 1 / 60)
         XCTAssertEqual(try strength(), 2, "Full below the collapse zoom")
-        XCTAssertTrue(store.isVisible(atCameraZoom: 13.9))
-        XCTAssertFalse(store.isCollapsing)
-        store.setFrame(cameraZoom: 14, deltaTime: 0.2)
-        XCTAssertEqual(store.collapseShare, 0.5, accuracy: 1e-6, "Halfway down after half the time")
+        XCTAssertTrue(store.isVisible(atZoom: 13.9))
+        XCTAssertFalse(store.isTransitioning)
+        store.setFrame(zoom: 14, deltaTime: 0.2)
+        XCTAssertEqual(store.standingShare, 0.5, accuracy: 1e-6, "Halfway down after half the time")
         XCTAssertEqual(try strength(), 1, accuracy: 1e-6, "Eased: half the share is half the strength")
-        XCTAssertTrue(store.isCollapsing)
-        XCTAssertTrue(store.isVisible(atCameraZoom: 14), "Still on the terrain on the way down")
+        XCTAssertTrue(store.isTransitioning)
+        XCTAssertTrue(store.isVisible(atZoom: 14), "Still on the terrain on the way down")
         XCTAssertEqual(try XCTUnwrap(follow.terrainMetres(centre)), 100, accuracy: 1e-3, "The camera's terrain scales with it")
-        store.setFrame(cameraZoom: 14, deltaTime: 0.2)
+        store.setFrame(zoom: 14, deltaTime: 0.2)
         cameraZoom = 17
-        XCTAssertEqual(store.collapseShare, 0)
+        XCTAssertEqual(store.standingShare, 0)
         XCTAssertEqual(try strength(), 0, "Collapsed")
-        XCTAssertFalse(store.isCollapsing)
-        XCTAssertFalse(store.isVisible(atCameraZoom: 14), "And the frame is off the terrain once collapsed")
+        XCTAssertFalse(store.isTransitioning)
+        XCTAssertFalse(store.isVisible(atZoom: 14), "And the frame is off the terrain once collapsed")
         XCTAssertEqual(try XCTUnwrap(follow.terrainMetres(centre)), 0)
         XCTAssertEqual(store.elevation(atNormalizedWorld: centre, terrainZoom: 15), 100, "The heights themselves are untouched")
-        store.setFrame(cameraZoom: 13, deltaTime: 0.1)
-        XCTAssertEqual(store.collapseShare, 0.25, accuracy: 1e-6, "Rising back at the same pace")
-        XCTAssertTrue(store.isVisible(atCameraZoom: 13), "On the terrain the moment the zoom is back")
-        store.setFrame(cameraZoom: 13, snap: true)
+        store.setFrame(zoom: 13, deltaTime: 0.1)
+        XCTAssertEqual(store.standingShare, 0.25, accuracy: 1e-6, "Rising back at the same pace")
+        XCTAssertTrue(store.isVisible(atZoom: 13), "On the terrain the moment the zoom is back")
+        store.setFrame(zoom: 13, snap: true)
         XCTAssertEqual(try strength(), 2, "A snap settles it at once")
-        store.setFrame(cameraZoom: 16)
+        store.setFrame(zoom: 16)
         XCTAssertEqual(try strength(), 0, "Without a frame time the collapse is settled where the zoom puts it")
         let everywhere = GroundReliefStore(device: device,
                                            settings: settings.groundRelief(collapseZoom: 30).tiles.groundRelief,
                                            fetch: { _ in .image(image) })
         _ = try XCTUnwrap(waitForRelief(of: tile, in: everywhere))
-        everywhere.setFrame(cameraZoom: 20)
+        everywhere.setFrame(zoom: 20)
         XCTAssertEqual(try XCTUnwrap(everywhere.strength(atNormalizedWorld: centre, terrainZoom: 15)), 2,
                        "A collapse zoom past the deepest keeps the relief at every zoom")
-        XCTAssertTrue(everywhere.isVisible(atCameraZoom: 20))
+        XCTAssertTrue(everywhere.isVisible(atZoom: 20))
     }
 
-    /// The relief comes in with the camera zoom: flat before its fade,
-    /// scaled up through it, full past it, with the collapse on top. The
-    /// camera's terrain follows, so below the fade the camera stands on
-    /// the plane.
-    func testTheReliefAppearsWithTheCameraZoom() throws {
+    /// The relief rises when the zoom crosses `appearZoom`: flat below
+    /// it, up over `transitionSeconds` once the zoom is past it, never
+    /// scaled with the zoom itself, with the collapse on top. The
+    /// camera's terrain follows, so below the appear zoom the camera
+    /// stands on the plane.
+    func testTheReliefRisesAtTheAppearZoom() throws {
         let device = try Self.device()
         let image = try Self.png(size: 2, pixels: Array(repeating: (128, 100, 0), count: 4))
         var settings = ImmersiveMapSettings.default
         settings.tiles.coverage.maximumZoomLevel = 16
         settings = settings.groundRelief(isEnabled: true, exaggeration: 2,
-                                         appearZoomFade: .fadeIn(from: 10, to: 11),
-                                         collapseZoom: 15)
-        XCTAssertEqual(ImmersiveMapSettings.default.tiles.groundRelief.appearZoomFade, .fadeIn(from: 10, to: 11),
-                       "Flat to zoom 10 and full from 11 by default")
+                                         appearZoom: 10, collapseZoom: 15, transitionSeconds: 0.4)
+        XCTAssertEqual(ImmersiveMapSettings.default.tiles.groundRelief.appearZoom, 10, "10 by default")
         settings.tiles.groundRelief.minimumSourceZoom = 15
         settings.tiles.groundRelief.cameraTerrainZoom = 15
         let store = GroundReliefStore(device: device, settings: settings.tiles.groundRelief, fetch: { _ in .image(image) })
@@ -493,25 +495,30 @@ final class GroundReliefTests: XCTestCase {
         func strength() throws -> Float {
             try XCTUnwrap(store.strength(atNormalizedWorld: centre, terrainZoom: 15))
         }
-        store.setFrame(cameraZoom: 9.5)
-        XCTAssertEqual(try strength(), 0, "Flat before the relief comes in")
-        XCTAssertFalse(store.isVisible(atCameraZoom: 9.5), "And the frame is off the terrain there")
-        XCTAssertTrue(store.isVisible(atCameraZoom: 10.5))
-        XCTAssertTrue(store.isVisible(atCameraZoom: 14.9), "On it up to the collapse")
-        store.setFrame(cameraZoom: 10.5)
-        XCTAssertEqual(try strength(), 1, accuracy: 1e-6, "Halfway in")
+        store.setFrame(zoom: 9.5)
+        XCTAssertEqual(try strength(), 0, "Flat below the appear zoom")
+        XCTAssertFalse(store.isVisible(atZoom: 9.5), "And the frame is off the terrain there")
+        XCTAssertEqual(try XCTUnwrap(follow.terrainMetres(centre)), 0, "The camera stands on the plane")
+        XCTAssertTrue(store.isVisible(atZoom: 10))
+        XCTAssertTrue(store.isVisible(atZoom: 14.9), "On it up to the collapse")
+        store.setFrame(zoom: 10.5, deltaTime: 0.2)
+        XCTAssertEqual(store.standingShare, 0.5, accuracy: 1e-6, "Halfway up after half the time")
+        XCTAssertEqual(try strength(), 1, accuracy: 1e-6, "Eased: half the share is half the strength")
+        XCTAssertTrue(store.isTransitioning)
         XCTAssertEqual(try XCTUnwrap(follow.terrainMetres(centre)), 100, accuracy: 1e-3, "The camera's terrain rises with it")
-        store.setFrame(cameraZoom: 12)
-        XCTAssertEqual(try strength(), 2, "Full past the fade")
-        store.setFrame(cameraZoom: 15)
+        store.setFrame(zoom: 10.1, deltaTime: 0.2)
+        XCTAssertEqual(try strength(), 2, "Full once risen, whatever the zoom within the relief's zooms")
+        store.setFrame(zoom: 12.7, deltaTime: 1 / 60)
+        XCTAssertEqual(try strength(), 2, "A zoom's move within them changes nothing: no breathing")
+        store.setFrame(zoom: 15)
         XCTAssertEqual(try strength(), 0, "The collapse takes it away again on top")
         let atOnce = GroundReliefStore(device: device,
-                                       settings: settings.groundRelief(appearZoomFade: ImmersiveMapZoomFade.none).tiles.groundRelief,
+                                       settings: settings.groundRelief(appearZoom: 0).tiles.groundRelief,
                                        fetch: { _ in .image(image) })
         _ = try XCTUnwrap(waitForRelief(of: tile, in: atOnce))
-        atOnce.setFrame(cameraZoom: 5)
+        atOnce.setFrame(zoom: 5)
         XCTAssertEqual(try XCTUnwrap(atOnce.strength(atNormalizedWorld: centre, terrainZoom: 15)), 2,
-                       "No fade draws the relief from the plane's first frame")
+                       "An appear zoom of 0 draws the relief from the plane's first frame")
     }
 
     /// A tile whose terrain is on its way, at the source's floor, is

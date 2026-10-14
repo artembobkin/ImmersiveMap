@@ -133,7 +133,12 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
             placeTilesContext = TilePlacementPlanner.buildPlacements(targets: targets,
                                                                      resident: resident,
                                                                      zoom: tileZoomLevel,
-                                                                     backdropZoomLevel: backdropZoomLevel)
+                                                                     backdropZoomLevel: backdropZoomLevel,
+                                                                     slotRules: { slot in
+                                                                         TileDrawRules(drawsLines: visibleContent.linelessTiles.contains(slot) == false,
+                                                                                       drawsLabels: visibleContent.unlabelledTiles.contains(slot) == false,
+                                                                                       raster: visibleContent.rasterTiles[slot])
+                                                                     })
             // The buildings: a partition of the near field over the resident
             // tiles, never a substitute (see the planner).
             let eyeGroundCell: SIMD2<Double>? = frameContext.renderSurfaceMode == .flat

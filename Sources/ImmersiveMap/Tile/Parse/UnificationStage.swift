@@ -29,6 +29,11 @@ enum TileUnificationStage {
         if let triangle = ParsedPolygon.firstClockwiseTriangle(vertices: polygon.vertices, indices: polygon.indices) {
             assertionFailure("Tile geometry must be counter-clockwise in render space: triangle \(triangle) of a \(polygon.vertices.count)-vertex polygon is clockwise and back-face culling would drop it")
         }
+        // An outline is the flattening's to consume: one here has no
+        // triangles and would vanish without a word.
+        if polygon.isOutline {
+            assertionFailure("A fill kept as its outline reached the unification unflattened")
+        }
         #endif
         let vertexOffset = UInt32(vertexCount)
         let hasLineAttributes = polygon.lineDistances.count == polygon.vertices.count

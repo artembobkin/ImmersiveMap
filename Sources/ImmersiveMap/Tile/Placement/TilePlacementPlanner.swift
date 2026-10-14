@@ -30,6 +30,13 @@
 /// Targets may overlap (a parent under its children on the flat map), so
 /// the same stand-in can be found for two targets; the output holds it
 /// once.
+///
+/// A placement draws by `TileDrawRules`: a target by its slot's, from
+/// `slotRules`, and a stand-in by the rules of its own slot when it is a
+/// target of the frame too (the same world copy), else by the slot's it
+/// fills. A source drawn in its own slot somewhere thus draws the same
+/// way everywhere, and a pan changes nothing on screen until the tile
+/// it opened a slot for lands.
 struct TilePlacementPlanner {
     /// How many levels below a target the descendant search goes: the
     /// whole tree, a resident tile stands in for a loading ancestor at any
@@ -45,7 +52,15 @@ struct TilePlacementPlanner {
                                 resident: [Tile: MetalTile],
                                 zoom: Int,
                                 backdropZoomLevel: Int? = nil,
-                                descendantSearchDepth: Int = descendantSearchDepth) -> PlaceTilesContext {
+                                descendantSearchDepth: Int = descendantSearchDepth,
+                                slotRules: (VisibleTile) -> TileDrawRules = { _ in .all }) -> PlaceTilesContext {
+        // The targets by their tile and world copy: a stand-in that is a
+        // target itself draws by its own slot's rules.
+        let targetSlots = Set(targets)
+        func rules(of source: Tile, in slot: VisibleTile) -> TileDrawRules {
+            let own = VisibleTile(tile: source, worldWrap: slot.worldWrap)
+            return slotRules(targetSlots.contains(own) ? own : slot)
+        }
         // The ancestors of every resident tile, so the descendant search
         // only descends into branches that hold something.
         var branches = Set<Tile>()
@@ -63,7 +78,8 @@ struct TilePlacementPlanner {
         /// for the target's slot.
         func descendants(of tile: Tile, slot: VisibleTile, depth: Int) -> (placements: [PlaceTile], complete: Bool) {
             if let metalTile = resident[tile] {
-                return ([PlaceTile(metalTile: metalTile, placeIn: VisibleTile(tile: tile, worldWrap: slot.worldWrap), slot: slot)], true)
+                let placeIn = VisibleTile(tile: tile, worldWrap: slot.worldWrap)
+                return ([PlaceTile(metalTile: metalTile, placeIn: placeIn, slot: slot, rules: rules(of: tile, in: slot))], true)
             }
             guard depth > 0, branches.contains(tile) else {
                 return ([], false)
@@ -95,7 +111,8 @@ struct TilePlacementPlanner {
             let sourceTile = target.tile
             if let metalTile = resident[sourceTile] {
                 append(PlaceTile(metalTile: metalTile,
-                                 placeIn: target))
+                                 placeIn: target,
+                                 rules: slotRules(target)))
                 continue
             }
 
@@ -115,7 +132,7 @@ struct TilePlacementPlanner {
                         break
                     }
                     if let metalTile = resident[ancestor] {
-                        append(PlaceTile(metalTile: metalTile, placeIn: target))
+                        append(PlaceTile(metalTile: metalTile, placeIn: target, rules: rules(of: ancestor, in: target)))
                         break
                     }
                 }

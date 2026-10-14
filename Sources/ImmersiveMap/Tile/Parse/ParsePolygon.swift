@@ -91,6 +91,36 @@ class ParsePolygon {
         return parseGeometry(polygon: polygon, tileExtent: tileExtent)?.parsedPolygon
     }
 
+    /// The fill as its outline (`ParsedPolygon.outlineStarts`), for a tile
+    /// the flattening takes: clipped to the tile like a tessellated fill,
+    /// flipped into render space, and never tessellated. The flattener
+    /// fills a paint's rings by the nonzero rule, so the orientation is
+    /// settled here by each ring's own area, the exterior counter-clockwise
+    /// and a hole clockwise, as earcut's indifference to it let the tiles
+    /// be: a hole wound like its exterior would add to the fill instead of
+    /// cutting it, and an exterior wound backwards would cancel against a
+    /// neighbour of the same style it overlaps.
+    func parseOutline(polygon: Polygon, tileExtent: Float) -> ParsedPolygon? {
+        guard let clipped = clip(polygon: polygon, tileExtent: tileExtent) else { return nil }
+        var parsed = ParsedPolygon()
+        parsed.vertices.reserveCapacity(clipped.exterior.count + clipped.interiors.reduce(0) { $0 + $1.count })
+        parsed.outlineStarts.reserveCapacity(1 + clipped.interiors.count)
+        appendOutlineRing(TileCoordinateSpace.renderPoints(clipped.exterior), counterClockwise: true, into: &parsed)
+        for interior in clipped.interiors {
+            appendOutlineRing(TileCoordinateSpace.renderPoints(interior), counterClockwise: false, into: &parsed)
+        }
+        return parsed
+    }
+
+    private func appendOutlineRing(_ ring: [SIMD2<Float>], counterClockwise: Bool, into parsed: inout ParsedPolygon) {
+        parsed.outlineStarts.append(Int32(parsed.vertices.count))
+        if (signedArea(of: ring) >= 0) == counterClockwise {
+            parsed.vertices.append(contentsOf: ring)
+        } else {
+            parsed.vertices.append(contentsOf: ring.reversed())
+        }
+    }
+
     private func triangulateGeometry(clipped: ClippedPolygon, tileExtent: Float) -> ParsedGeometry? {
         // The one entry into render space for polygon fills. The flip MUST
         // precede the winding decisions (`signedArea`, earcut): reflecting

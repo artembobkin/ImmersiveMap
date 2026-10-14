@@ -20,18 +20,28 @@ class CameraStateController {
     private(set) var lastTerrainFollowReport: TerrainFollowReport?
     /// Which path the last settle took (`settleOnTerrain`).
     private var lastSettlePath: TerrainFollowReport.Path = .hit
-    /// The zoom a drag over the terrain moves the map by: the zoom at the
-    /// drag's start, held to its end (`endPan`), nil between drags. Over
-    /// the terrain the zoom follows the ground the camera looks at
-    /// (`followTerrain`), deeper up a slope and shallower down one, and a
-    /// drag moved by the zoom of the moment would slow on the way up and
-    /// hurry on the way down. The eye keeps its altitude through the drag,
-    /// so the zoom the drag began at is the one that fits the whole of it.
-    /// The relief's collapse reads it too (`RenderFrameEngine`): the ground
-    /// under the point the drag slides over rises and falls, the arm and
-    /// the zoom with it, and a relief faded by the zoom of the moment
-    /// would breathe with every slope the drag crosses.
-    private(set) var panReferenceZoom: Double?
+    /// The zoom the map is planned by: the zoom of the coverage's target
+    /// tiles and the ring rules (`RenderFrameVisibilityResolver`) and of
+    /// the relief's thresholds (`GroundReliefStore`). It moves only when
+    /// the zoom is set on purpose, and then takes the camera's zoom as it
+    /// comes out: a zoom gesture, or a zoom set outright (`setZoom`,
+    /// `setCameraPosition`, `setCameraState`). Over the terrain the
+    /// camera's zoom also follows the ground the camera looks at
+    /// (`followTerrain`), deeper up a slope and shallower down one, and
+    /// backs off over a ridge (`clearedZoom`), and none of that moves
+    /// this zoom: a map planned by the zoom of the moment would reshuffle
+    /// its rings with every slope a drag crosses, and a relief faded by
+    /// it would breathe. The two zooms part by the terrain climbed since
+    /// the last zoom and meet again at the next: not by a delta, which
+    /// would carry the climb along and leave the map planned levels away
+    /// from what the camera sees after a zoom back.
+    private(set) var planningZoom: Double = ImmersiveMapCameraState.default.zoom
+    /// The zoom a drag over the terrain moves the map by: the camera's
+    /// zoom at the drag's start, held to its end (`endPan`), nil between
+    /// drags. The camera's zoom follows the ground through the drag, and
+    /// a drag moved by the zoom of the moment would slow on the way up a
+    /// slope and hurry on the way down.
+    private var dragZoom: Double?
 
     var globePan: SIMD2<Double> {
         ImmersiveMapProjection.globePan(fromCenterWorldMercator: cameraState.centerWorldMercator)
@@ -60,6 +70,7 @@ class CameraStateController {
         // minimumZoom, minimumPitch or region must hold from the very first
         // frame, not from the first gesture.
         cameraState.zoom = settings.clampZoom(cameraState.zoom)
+        planningZoom = settings.clampZoom(planningZoom)
         cameraState.pitch = settings.clampPitch(cameraState.pitch, at: cameraState.zoom)
         constrainCenterToBounds()
     }
@@ -71,6 +82,7 @@ class CameraStateController {
     func apply(settings: ImmersiveMapSettings.CameraSettings) {
         self.settings = settings
         cameraState.zoom = settings.clampZoom(cameraState.zoom)
+        planningZoom = settings.clampZoom(planningZoom)
         cameraState.pitch = settings.clampPitch(cameraState.pitch, at: cameraState.zoom)
         constrainCenterToBounds()
     }
@@ -101,8 +113,8 @@ class CameraStateController {
         let onTerrain = transition >= 1 && terrainFollow != nil
         let panZoom: Double
         if onTerrain {
-            panZoom = panReferenceZoom ?? zoom
-            panReferenceZoom = panZoom
+            panZoom = dragZoom ?? zoom
+            dragZoom = panZoom
         } else {
             panZoom = zoom
         }
@@ -156,9 +168,9 @@ class CameraStateController {
     }
 
     /// The drag ended: the next one moves the map by the zoom it starts at
-    /// (`panReferenceZoom`).
+    /// (`dragZoom`).
     func endPan() {
-        panReferenceZoom = nil
+        dragZoom = nil
     }
 
     /// The report of a move just settled: the path the settle took, the
@@ -565,6 +577,7 @@ class CameraStateController {
         cameraState.centerWorldMercator = ImmersiveMapProjection.worldMercator(latitude: latitudeRadians,
                                                                       longitude: longitudeRadians)
         cameraState.zoom = settings.clampZoom(cameraPosition.zoom)
+        planningZoom = cameraState.zoom
         cameraState.bearing = cameraPosition.bearing
         cameraState.pitch = settings.clampPitch(cameraPosition.pitch, at: cameraState.zoom)
         constrainCenterToBounds()
@@ -580,6 +593,7 @@ class CameraStateController {
                                           zoom: clampedZoom,
                                           bearing: cameraState.bearing,
                                           pitch: settings.clampPitch(cameraState.pitch, at: clampedZoom))
+        planningZoom = clampedZoom
         constrainCenterToBounds()
     }
 
@@ -608,6 +622,8 @@ class CameraStateController {
             cameraState.zoom = clearedZoom(cameraState.zoom, center: cameraState.centerWorldMercator, follow: terrainFollow)
             recordTerrainFollow(followedZoom: followedZoom, center: cameraState.centerWorldMercator, follow: terrainFollow)
         }
+        // A zoom on purpose: the map is planned by what the camera sees.
+        planningZoom = cameraState.zoom
         constrainCenterToBounds()
     }
 }

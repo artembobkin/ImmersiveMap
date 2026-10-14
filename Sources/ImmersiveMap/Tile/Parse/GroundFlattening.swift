@@ -15,9 +15,12 @@ import TileFlattening
 /// a cell of a `grid` by `grid` grid, which keeps every edge short against
 /// the near distance and makes the mesh ready for a heightmap.
 ///
-/// The fills go in as their triangles, three-point rings of the style's
-/// paint in ascending style order, so a later style covers an earlier one
-/// as the layered draw would have painted it. A paint is opaque and names
+/// The fills go in as rings of the style's paint in ascending style
+/// order, so a later style covers an earlier one as the layered draw
+/// would have painted it: a fill the parse kept as its outline
+/// (`ParsedPolygon.outlineStarts`, the bulk of the ground) as its rings,
+/// and a tessellated fill (the background quad, a building's footprint)
+/// as three-point rings of its triangles. A paint is opaque and names
 /// its style in its red byte: the flattener composites paints by alpha,
 /// and a transparent one would drop out. The mesh comes back as one
 /// polygon per style, the vertex carrying the style index as before, so
@@ -27,6 +30,43 @@ import TileFlattening
 /// in the ribbons class.
 enum GroundFlattening {
     static let tileExtent = Double(TileCoordinateSpace.tileExtentDouble)
+    /// The fewest strips the flattener sweeps a tile in, whatever the grid:
+    /// the sweep's cost grows faster than the strip's share of the fills,
+    /// and a coarse tile on a coarse grid (zoom 7 on 16 cells, with its
+    /// two hundred thousand triangles of landuse) swept in 16 strips takes
+    /// over twice as long as in 64. The extra strips cut a few more
+    /// triangles along their walls and never a cell: the grid's rows and
+    /// columns are among them.
+    static let minimumSweepColumns = 64
+
+    /// A fill's rings into the flattener's input: an outline's rings as
+    /// they are, a tessellated fill's triangles one ring each.
+    static func addRings(of polygon: ParsedPolygon, paint: Int, to input: inout FlattenInput) {
+        let vertices = polygon.vertices
+        if polygon.isOutline {
+            let starts = polygon.outlineStarts
+            for ring in 0 ..< starts.count {
+                let end = ring + 1 < starts.count ? Int(starts[ring + 1]) : vertices.count
+                input.beginRing(paint: paint)
+                for index in Int(starts[ring]) ..< end {
+                    let vertex = vertices[index]
+                    input.addPoint(x: Double(vertex.x), y: Double(vertex.y))
+                }
+                input.endRing()
+            }
+            return
+        }
+        var index = 0
+        while index + 2 < polygon.indices.count {
+            input.beginRing(paint: paint)
+            for corner in 0 ..< 3 {
+                let vertex = vertices[Int(polygon.indices[index + corner])]
+                input.addPoint(x: Double(vertex.x), y: Double(vertex.y))
+            }
+            input.endRing()
+            index += 3
+        }
+    }
 
     static func flatten(polygonByStyle: [UInt8: [ParsedPolygon]], grid: Int) -> [UInt8: [ParsedPolygon]] {
         var input = FlattenInput()
@@ -45,17 +85,7 @@ enum GroundFlattening {
             let paint = input.addPaint(FlatColor(r: style, g: 0, b: 0, a: 255))
             paintStyles.append(style)
             for polygon in fills {
-                let vertices = polygon.vertices
-                var index = 0
-                while index + 2 < polygon.indices.count {
-                    input.beginRing(paint: paint)
-                    for corner in 0 ..< 3 {
-                        let vertex = vertices[Int(polygon.indices[index + corner])]
-                        input.addPoint(x: Double(vertex.x), y: Double(vertex.y))
-                    }
-                    input.endRing()
-                    index += 3
-                }
+                Self.addRings(of: polygon, paint: paint, to: &input)
             }
         }
         guard paintStyles.isEmpty == false else { return kept }
@@ -65,7 +95,7 @@ enum GroundFlattening {
         options.minY = 0
         options.maxX = tileExtent
         options.maxY = tileExtent
-        options.columns = max(1, grid)
+        options.columns = max(max(1, grid), Self.minimumSweepColumns)
         options.rows = max(1, grid)
         let mesh = Flattener.flatten(input, options: options)
 

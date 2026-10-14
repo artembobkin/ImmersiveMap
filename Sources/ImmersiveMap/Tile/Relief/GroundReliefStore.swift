@@ -156,53 +156,51 @@ final class GroundReliefStore: @unchecked Sendable {
     weak var eventSink: RenderFrameEventSink?
 
     /// How much taller than the terrain the ground is drawn this frame
-    /// (`setFrame`): the configured exaggeration times what the appear
-    /// fade leaves at the frame's camera zoom times the collapse's share,
-    /// the same everywhere, so nothing moves with the camera but the
-    /// zoom.
+    /// (`setFrame`): the configured exaggeration times the standing
+    /// share, eased, the same everywhere, so nothing moves with the
+    /// camera but the zoom's crossing of a threshold.
     private(set) var strengthScale: Float
-    /// How much of the relief stands against the collapse
-    /// (`GroundReliefSettings.collapseZoom`): 1 standing, 0 collapsed
-    /// into the plane, between them on its way over `collapseSeconds`.
-    private(set) var collapseShare: Float = 1
-    /// Whether the collapse, or the rise back, is under way this frame:
-    /// the frames keep coming while it is (`RenderFrameEngine`).
-    var isCollapsing: Bool { collapseShare > 0 && collapseShare < 1 }
+    /// How much of the relief stands: 1 standing, 0 lying in the plane,
+    /// between them on its way over `transitionSeconds`, up when the
+    /// zoom entered the relief's zooms (`GroundReliefSettings.appearZoom`
+    /// to `collapseZoom`) and down when it left them. Never a function of
+    /// the zoom itself: a relief scaled with the zoom breathes with every
+    /// drag over the terrain, whose slopes move the zoom.
+    private(set) var standingShare: Float = 1
+    /// Whether the rise or the collapse is under way this frame: the
+    /// frames keep coming while it is (`RenderFrameEngine`).
+    var isTransitioning: Bool { standingShare > 0 && standingShare < 1 }
     private let configuredExaggeration: Float
+    private let appearZoom: Double
     private let collapseZoom: Double
-    private let collapseSeconds: TimeInterval
+    private let transitionSeconds: TimeInterval
     /// The zoom of the terrain tiles the camera and the frame's datum read
     /// (`GroundReliefSettings.cameraTerrainZoom`).
     let cameraTerrainZoom: Int
-    private let appearZoomFade: ImmersiveMapZoomFade
 
-    /// The frame's camera (`RenderFrameEngine`, once a frame, before
-    /// anything of the frame reads the relief): the appear fade is read
-    /// at `cameraZoom`, the camera's own, and the collapse moves toward
-    /// where `reliefZoom` puts it (the zoom held through a drag,
-    /// `cameraZoom` when nil), collapsed from `collapseZoom` on and
-    /// standing below it, by `deltaTime` over `collapseSeconds`, or at
-    /// once with `snap`. The strength is what the fade and the collapse
-    /// leave. Without a `deltaTime` the collapse is settled where the
-    /// zoom puts it.
-    func setFrame(cameraZoom: Double, reliefZoom: Double? = nil, deltaTime: TimeInterval? = nil, snap: Bool = false) {
-        let target: Float = (reliefZoom ?? cameraZoom) >= collapseZoom ? 0 : 1
-        if let deltaTime, snap == false, collapseSeconds > 0 {
-            let step = Float(max(deltaTime, 0) / collapseSeconds)
-            collapseShare = target > collapseShare ? min(collapseShare + step, target) : max(collapseShare - step, target)
+    /// The frame's zoom (`RenderFrameEngine`, once a frame, before
+    /// anything of the frame reads the relief): the zoom held through a
+    /// drag, the camera's otherwise. The relief moves toward standing
+    /// when the zoom is within its zooms and toward the plane when it is
+    /// not, by `deltaTime` over `transitionSeconds`, or at once with
+    /// `snap`. Without a `deltaTime` it is settled where the zoom puts
+    /// it.
+    func setFrame(zoom: Double, deltaTime: TimeInterval? = nil, snap: Bool = false) {
+        let target: Float = stands(atZoom: zoom) ? 1 : 0
+        if let deltaTime, snap == false, transitionSeconds > 0 {
+            let step = Float(max(deltaTime, 0) / transitionSeconds)
+            standingShare = target > standingShare ? min(standingShare + step, target) : max(standingShare - step, target)
         } else {
-            collapseShare = target
+            standingShare = target
         }
-        strengthScale = strength(atCameraZoom: cameraZoom)
+        let eased = standingShare * standingShare * (3 - 2 * standingShare)
+        strengthScale = configuredExaggeration * eased
     }
 
-    /// The strength at a camera zoom this frame: the configured
-    /// exaggeration times the appear fade's alpha
-    /// (`GroundReliefSettings.appearZoomFade`) times the collapse's share
-    /// as it stands, eased.
-    func strength(atCameraZoom zoom: Double) -> Float {
-        let share = collapseShare * collapseShare * (3 - 2 * collapseShare)
-        return configuredExaggeration * appearZoomFade.alpha(atZoom: zoom) * share
+    /// Whether the relief stands at a zoom: from `appearZoom` up to
+    /// `collapseZoom`.
+    func stands(atZoom zoom: Double) -> Bool {
+        zoom >= appearZoom && zoom < collapseZoom
     }
     /// The frame's tile zoom the ground rises from
     /// (`GroundReliefSettings.fromTileZoom`): a frame of coarser tiles,
@@ -211,20 +209,19 @@ final class GroundReliefStore: @unchecked Sendable {
     let fromTileZoom: Int
     /// Whether the frame is on the terrain (`RenderFrameEngine`, once a
     /// frame): the flat map with tiles of the relief's zoom or deeper,
-    /// at a camera zoom the fade and the collapse leave any relief at
-    /// (`isVisible(atCameraZoom:)`). Off, every tile and whatever stands
+    /// at a zoom within the relief's zooms or on its way out of them
+    /// (`isVisible(atZoom:)`). Off, every tile and whatever stands
     /// on it lies on the plane, no terrain is read or loaded and the
     /// camera stands on the plane. On, every tile of the frame rises,
     /// however coarse, so no tile left on the plane cuts through the
     /// valleys under the point looked at.
     private(set) var isActive = true
 
-    /// Whether anything of the relief stands: past the appear fade's start
-    /// at the camera's zoom (`GroundReliefSettings.appearZoomFade`), and
-    /// short of `collapseZoom` at `reliefZoom` (the zoom held through a
-    /// drag, the camera's when nil) or still on its way into the plane.
-    func isVisible(atCameraZoom zoom: Double, reliefZoom: Double? = nil) -> Bool {
-        appearZoomFade.alpha(atZoom: zoom) > 0 && ((reliefZoom ?? zoom) < collapseZoom || collapseShare > 0)
+    /// Whether anything of the relief stands at a zoom (the zoom held
+    /// through a drag, the camera's otherwise): within its zooms, or
+    /// still on its way into the plane.
+    func isVisible(atZoom zoom: Double) -> Bool {
+        stands(atZoom: zoom) || standingShare > 0
     }
     /// The least height the camera keeps over the relief under it.
     let cameraClearanceMetres: Float
@@ -295,11 +292,11 @@ final class GroundReliefStore: @unchecked Sendable {
          now: @escaping @Sendable () -> TimeInterval = { Date().timeIntervalSinceReferenceDate }) {
         self.device = device
         self.configuredExaggeration = settings.exaggeration
-        self.appearZoomFade = settings.appearZoomFade
+        self.appearZoom = settings.appearZoom
         self.collapseZoom = settings.collapseZoom
-        self.collapseSeconds = max(settings.collapseSeconds, 0)
+        self.transitionSeconds = max(settings.transitionSeconds, 0)
         self.cameraTerrainZoom = max(0, settings.cameraTerrainZoom)
-        // Until the first frame: the relief as configured, no fade.
+        // Until the first frame: the relief as configured, standing.
         self.strengthScale = settings.exaggeration
         self.fromTileZoom = settings.fromTileZoom
         self.cameraClearanceMetres = max(0, settings.cameraClearanceMetres)

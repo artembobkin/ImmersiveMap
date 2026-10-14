@@ -92,6 +92,7 @@ final class DebugOverlayHUDView: NSView {
     /// scrolled column, and a scroll view inside a scroll view takes the wheel
     /// away from whichever one the pointer is not over.
     private let tilesStatusListView = DebugOverlayTilesStatusListView()
+    private let tileCoverageView = DebugOverlayTileCoverageView()
 
     private let baseLabelsGroupLabel = NSTextField(labelWithString: "Base labels")
     private let baseLabelTraceButton = NSButton()
@@ -289,6 +290,18 @@ final class DebugOverlayHUDView: NSView {
     var onWireframeEnabledChanged: ((Bool) -> Void)?
     /// The plane's ring rules, whole, on every edit.
     var onRingRuleSetsChanged: ((RingRuleSets) -> Void)?
+    /// The content the selected tab shows, for the frame to build only
+    /// that (`DebugOverlayHUDContentRequest`).
+    var onShownContentChanged: ((DebugOverlayHUDContentRequest) -> Void)?
+
+    var shownContent: DebugOverlayHUDContentRequest {
+        switch selectedCategory {
+        case .all: .all
+        case .stats: .stats
+        case .tiles: .tiles
+        case .labels, .shadows, .sky, .map, .export: []
+        }
+    }
     /// The labels' reach by camera zoom, on every edit.
     var onLabelDistanceRulesChanged: ((LabelDistanceRules) -> Void)?
     /// The building level of detail thresholds: the cut and the fade, in pixels.
@@ -573,10 +586,6 @@ final class DebugOverlayHUDView: NSView {
         scrolledSubviews.forEach(contentView.addSubview)
         rebuildRingRuleRows()
 
-        tilesStatusListView.onExpansionChanged = { [weak self] in
-            self?.needsLayout = true
-        }
-
         updateCollapseButtonImage()
         updateTileTraceControl()
         updateBaseLabelTraceControl()
@@ -641,7 +650,8 @@ final class DebugOverlayHUDView: NSView {
          ringRuleSetsAddButton, ringRuleSetsRemoveButton,
          ringRulesAddButton, ringRulesRemoveButton,
          surfaceModeButton,
-         tilesGroupLabel, tileTraceButton, tileTraceCopyButton, tileTraceStatusLabel, tilesStatusLabel, tilesStatusListView]
+         tilesGroupLabel, tileTraceButton, tileTraceCopyButton, tileTraceStatusLabel, tilesStatusLabel, tileCoverageView,
+         tilesStatusListView]
     }
 
     // MARK: - Public API (matches the UIKit version)
@@ -1374,8 +1384,13 @@ final class DebugOverlayHUDView: NSView {
         cursor += Layout.controlRowHeight + Layout.controlSpacing
         cursor = layoutFullWidthRow(tileTraceStatusLabel, at: cursor, contentWidth: contentWidth, height: Layout.traceStatusHeight)
         cursor = layoutTextRow(tilesStatusLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
-        // Always laid out, always the same height, empty or not: a reserved
-        // height that disappears when the map has no tiles is not reserved.
+        cursor += Layout.controlSpacing
+        // The coverage map, square, as wide as the column allows.
+        cursor = layoutFullWidthRow(tileCoverageView,
+                                    at: cursor,
+                                    contentWidth: contentWidth,
+                                    height: min(DebugOverlayTileCoverageLayout.side, contentWidth))
+        tileCoverageView.frame.size.width = tileCoverageView.frame.height
         return layoutFullWidthRow(tilesStatusListView,
                                   at: cursor,
                                   contentWidth: contentWidth,
@@ -1474,7 +1489,8 @@ final class DebugOverlayHUDView: NSView {
             latLonLabel.attributedStringValue = NSAttributedString(string: "")
             diagnosticsLabel.attributedStringValue = NSAttributedString(string: "")
             tilesStatusLabel.attributedStringValue = NSAttributedString(string: "")
-            tilesStatusListView.apply(tiles: [])
+            tileCoverageView.apply(coverage: nil)
+            applyTiles([])
             return
         }
 
@@ -1501,7 +1517,18 @@ final class DebugOverlayHUDView: NSView {
                                               fontSize: diagnosticsFontSize,
                                               color: .systemYellow))
         tilesStatusLabel.attributedStringValue = tilesStatusText
-        tilesStatusListView.apply(tiles: snapshot.tileLoadingStatusTiles)
+        tileCoverageView.apply(coverage: snapshot.tileCoverage)
+        applyTiles(snapshot.tileLoadingStatusTiles)
+    }
+
+    /// The list's height follows its cards: a tile arriving or leaving
+    /// lays the tab out again.
+    private func applyTiles(_ tiles: [TileLoadingStatusTileSnapshot]) {
+        let countBefore = tilesStatusListView.rowCount
+        tilesStatusListView.apply(tiles: tiles)
+        if tilesStatusListView.rowCount != countBefore {
+            needsLayout = true
+        }
     }
 
     private func updateVisibility() {
@@ -1965,6 +1992,7 @@ final class DebugOverlayHUDView: NSView {
         }
         selectedCategory = category
         updateTabButtons()
+        onShownContentChanged?(shownContent)
         // A new tab starts at its top, not wherever the last one was scrolled.
         scrollView.contentView.scroll(to: .zero)
         scrollView.reflectScrolledClipView(scrollView.contentView)
@@ -2118,237 +2146,107 @@ private final class DebugOverlayFlippedView: NSView {
 }
 
 private final class DebugOverlayTilesStatusListView: NSView {
-    private enum Layout {
-        static let rowHeight: CGFloat = 28
-        static let childRowHeight: CGFloat = 22
-        static let rowSpacing: CGFloat = 4
-        static let textInset: CGFloat = 10
-        static let cornerRadius: CGFloat = 6
-        static let progressVerticalInset: CGFloat = 2
-        static let primaryFontSize: CGFloat = 13.5
-        static let childFontSize: CGFloat = 12
-        /// The list reserves this many tile rows and never grows or shrinks
-        /// with the data. Twelve covers an ordinary street-zoom working set;
-        /// what does not fit is counted on the last line instead of pushing
-        /// the panel around.
-        static let slotCount = 12
-    }
+    private typealias CardLayout = DebugOverlayTileCardLayout
 
-    private typealias Row = DebugOverlayTilesStatusRow
-
-    private var tiles: [TileLoadingStatusTileSnapshot] = []
-    private var expandedTiles: Set<Tile> = []
-    private var expandedParseStageTiles: Set<Tile> = []
-
-    var onExpansionChanged: (() -> Void)?
+    private var cards: [DebugOverlayTileCard] = []
 
     override var isFlipped: Bool { true }
 
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        let clickGesture = NSClickGestureRecognizer(target: self, action: #selector(handleClickGesture(_:)))
-        addGestureRecognizer(clickGesture)
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
     var rowCount: Int {
-        tiles.count
+        cards.count
     }
 
     func apply(tiles: [TileLoadingStatusTileSnapshot]) {
-        self.tiles = tiles
-        let tileSet = Set(tiles.map(\.tile))
-        expandedTiles = expandedTiles.intersection(tileSet)
-        expandedParseStageTiles = expandedParseStageTiles.intersection(tileSet)
+        cards = DebugOverlayTileCard.cards(for: tiles)
         needsDisplay = true
     }
 
-    private static func height(of row: Row) -> CGFloat {
-        switch row {
-        case .tile:
-            return Layout.rowHeight
-        case .stage, .layer:
-            return Layout.childRowHeight
-        }
+    /// The grid's height, every card in: the list is the last group of its
+    /// tab, so a list that grows pushes nothing under it, and the tab's
+    /// scroll view scrolls it with the rest of the tab.
+    func preferredHeight(forWidth width: CGFloat) -> CGFloat {
+        DebugOverlayPanelLayout.cardGridHeight(cardCount: cards.count,
+                                               columns: Self.columns(forWidth: width),
+                                               cardHeight: CardLayout.height,
+                                               spacing: CardLayout.spacing)
     }
 
-    /// Always the same: `slotCount` rows, empty or not. This is the whole
-    /// point of the fixed slots, so nothing laid out after the list moves when
-    /// a tile arrives, leaves, or is expanded.
-    func preferredHeight(forWidth _: CGFloat) -> CGFloat {
-        DebugOverlayPanelLayout.fixedListHeight(slotCount: Layout.slotCount,
-                                                slotHeight: Layout.rowHeight,
-                                                spacing: Layout.rowSpacing)
+    private static func columns(forWidth width: CGFloat) -> Int {
+        DebugOverlayPanelLayout.cardColumnCount(width: width,
+                                                minimumCardWidth: CardLayout.minimumWidth,
+                                                spacing: CardLayout.spacing)
     }
 
-    /// The rows that fit in the reserved height, and how many were left over.
-    /// Expanding a tile spends slots on its children, so the tail of the list
-    /// is what gets dropped.
-    private func windowedRows() -> (rows: [Row], overflow: Int) {
-        let rows = visibleRows()
-        let available = preferredHeight(forWidth: bounds.width)
-        let count = DebugOverlayPanelLayout.visibleRowCount(rowHeights: rows.map(Self.height(of:)),
-                                                            spacing: Layout.rowSpacing,
-                                                            availableHeight: available)
-        guard count < rows.count else {
-            return (rows, 0)
-        }
-        // Give the last slot back to the "+N more" line, so a dropped tile is
-        // stated rather than silently missing.
-        let shown = max(0, count - 1)
-        return (Array(rows.prefix(shown)), rows.count - shown)
-    }
-
-    override func draw(_ rect: CGRect) {
-        guard let context = NSGraphicsContext.current?.cgContext, tiles.isEmpty == false else {
+    override func draw(_: NSRect) {
+        guard cards.isEmpty == false else {
             return
         }
-
-        let window = windowedRows()
-        var rowTop: CGFloat = 0
-        for row in window.rows {
-            draw(row: row,
-                 rowRect: DebugOverlayPanelLayout.rowDrawRect(bounds: bounds,
-                                                              dirtyRect: rect,
-                                                              rowTop: rowTop,
-                                                              rowHeight: Self.height(of: row)),
-                 context: context)
-            rowTop += Self.height(of: row) + Layout.rowSpacing
-        }
-
-        if window.overflow > 0 {
-            drawChildText(DebugOverlayHUDTextComposer.tilesOverflowText(count: window.overflow),
-                          rowRect: DebugOverlayPanelLayout.rowDrawRect(bounds: bounds,
-                                                                       dirtyRect: rect,
-                                                                       rowTop: rowTop,
-                                                                       rowHeight: Layout.childRowHeight))
+        let columns = Self.columns(forWidth: bounds.width)
+        for (index, card) in cards.enumerated() {
+            draw(card: card,
+                 in: DebugOverlayPanelLayout.cardFrame(index: index,
+                                                       columns: columns,
+                                                       width: bounds.width,
+                                                       cardHeight: CardLayout.height,
+                                                       spacing: CardLayout.spacing))
         }
     }
 
-    @objc private func handleClickGesture(_ gesture: NSClickGestureRecognizer) {
-        guard gesture.state == .ended else {
-            return
-        }
+    private func draw(card: DebugOverlayTileCard, in frame: CGRect) {
+        let color = Self.statusColor(card.status)
+        let shape = NSBezierPath(roundedRect: frame, xRadius: CardLayout.cornerRadius, yRadius: CardLayout.cornerRadius)
+        NSColor.black.withAlphaComponent(CardLayout.backgroundAlpha).setFill()
+        shape.fill()
+        color.withAlphaComponent(CardLayout.tintAlpha).setFill()
+        shape.fill()
+        NSGraphicsContext.saveGraphicsState()
+        shape.addClip()
+        color.setFill()
+        CardLayout.stripeRect(in: frame).fill()
+        NSGraphicsContext.restoreGraphicsState()
 
-        let point = gesture.location(in: self)
-        guard let row = row(atY: point.y) else {
-            return
-        }
+        let radius = CardLayout.progressHeight * 0.5
+        NSColor.black.withAlphaComponent(CardLayout.progressTrackAlpha).setFill()
+        NSBezierPath(roundedRect: CardLayout.progressTrackRect(in: frame), xRadius: radius, yRadius: radius).fill()
+        color.withAlphaComponent(CardLayout.progressAlpha).setFill()
+        NSBezierPath(roundedRect: CardLayout.progressRect(in: frame, progress: card.progress), xRadius: radius, yRadius: radius).fill()
 
-        switch row {
-        case let .tile(tile, _, true):
-            toggleTileExpansion(tile.tile)
-        case .tile:
-            break
-        case let .stage(tile, stage, _) where stage.name == "parse" && stage.layerTimings.isEmpty == false:
-            toggleParseExpansion(tile)
-        case .stage, .layer:
-            break
-        }
+        let titleFont = NSFont.monospacedSystemFont(ofSize: CardLayout.titleFontSize, weight: .heavy)
+        let detailFont = NSFont.monospacedSystemFont(ofSize: CardLayout.detailFontSize, weight: .bold)
+        let titleLineHeight = Self.lineHeight(of: titleFont)
+        let detailLineHeight = Self.lineHeight(of: detailFont)
+        let statusAttributes = Self.attributes(font: detailFont, color: color)
+        let statusWidth = (card.statusText as NSString).size(withAttributes: statusAttributes).width
+        // The title in its zoom's colour, the one the tile's outline and
+        // label on the map take (`DebugTileZoomPalette`).
+        let zoomColor = DebugTileZoomPalette.color(forZoom: card.tile.z)
+        card.title.draw(in: CardLayout.titleRect(in: frame, lineHeight: titleLineHeight, statusWidth: statusWidth),
+                        withAttributes: Self.attributes(font: titleFont,
+                                                        color: NSColor(red: CGFloat(zoomColor.x), green: CGFloat(zoomColor.y),
+                                                                       blue: CGFloat(zoomColor.z), alpha: 1)))
+        card.statusText.draw(in: CardLayout.statusRect(in: frame,
+                                                       titleLineHeight: titleLineHeight,
+                                                       lineHeight: detailLineHeight,
+                                                       width: statusWidth),
+                             withAttributes: statusAttributes)
+        card.stagesText.draw(in: CardLayout.stagesRect(in: frame, lineHeight: detailLineHeight),
+                             withAttributes: Self.attributes(font: detailFont, color: NSColor.white.withAlphaComponent(0.86)))
+        card.layersText.draw(in: CardLayout.layersRect(in: frame, lineHeight: detailLineHeight),
+                             withAttributes: Self.attributes(font: detailFont, color: NSColor.white.withAlphaComponent(0.66)))
     }
 
-    private func draw(row: Row,
-                      rowRect: CGRect,
-                      context _: CGContext) {
-        switch row {
-        case let .tile(tile, _, _):
-            drawTile(tile, rowRect: rowRect)
-        case .stage, .layer:
-            drawChildText(row.text, rowRect: rowRect)
-        }
+    /// One line, cut with an ellipsis where the card is too narrow for it.
+    private static func attributes(font: NSFont, color: NSColor) -> [NSAttributedString.Key: Any] {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
+        return [.font: font, .foregroundColor: color, .paragraphStyle: paragraph]
     }
 
-    private func drawTile(_ tile: TileLoadingStatusTileSnapshot,
-                          rowRect: CGRect) {
-        let color = statusColor(tile.status)
-        let backgroundRect = rowRect.insetBy(dx: 0, dy: Layout.progressVerticalInset)
-        NSColor.black.withAlphaComponent(0.16).setFill()
-        NSBezierPath(roundedRect: backgroundRect, cornerRadius: Layout.cornerRadius).fill()
-
-        let progressWidth = max(Layout.cornerRadius * 2, backgroundRect.width * CGFloat(tile.progress))
-        let progressRect = CGRect(x: backgroundRect.minX,
-                                  y: backgroundRect.minY,
-                                  width: progressWidth,
-                                  height: backgroundRect.height)
-            .intersection(backgroundRect)
-        color.withAlphaComponent(0.82).setFill()
-        NSBezierPath(roundedRect: progressRect, cornerRadius: Layout.cornerRadius).fill()
-
-        let font = NSFont.monospacedSystemFont(ofSize: Layout.primaryFontSize, weight: .heavy)
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: NSColor.white.withAlphaComponent(0.98)
-        ]
-        let lineHeight = font.ascender - font.descender + font.leading
-        let textRect = CGRect(x: rowRect.minX + Layout.textInset,
-                              y: backgroundRect.midY - lineHeight * 0.5,
-                              width: max(0, rowRect.width - Layout.textInset * 2),
-                              height: lineHeight)
-        let isExpanded = expandedTiles.contains(tile.tile)
-        Row.tile(tile, isExpanded: isExpanded, canExpand: tile.preparationStages.isEmpty == false)
-            .text
-            .draw(in: textRect, withAttributes: attributes)
+    private static func lineHeight(of font: NSFont) -> CGFloat {
+        font.ascender - font.descender + font.leading
     }
 
-    private func drawChildText(_ text: String, rowRect: CGRect) {
-        let font = NSFont.monospacedSystemFont(ofSize: Layout.childFontSize, weight: .bold)
-        let lineHeight = font.ascender - font.descender + font.leading
-        let textRect = CGRect(x: Layout.textInset,
-                              y: rowRect.midY - lineHeight * 0.5,
-                              width: max(0, rowRect.width - Layout.textInset * 2),
-                              height: lineHeight)
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: NSColor.white.withAlphaComponent(0.94)
-        ]
-        text.draw(in: textRect, withAttributes: attributes)
-    }
-
-    /// Only the drawn rows are clickable: below the last one is reserved
-    /// space, not a row whose tile happens to be off the end.
-    private func row(atY y: CGFloat) -> Row? {
-        var rowTop: CGFloat = 0
-        for row in windowedRows().rows {
-            let rowBottom = rowTop + Self.height(of: row)
-            if y >= rowTop, y <= rowBottom {
-                return row
-            }
-            rowTop = rowBottom + Layout.rowSpacing
-        }
-        return nil
-    }
-
-    private func toggleTileExpansion(_ tile: Tile) {
-        if expandedTiles.contains(tile) {
-            expandedTiles.remove(tile)
-            expandedParseStageTiles.remove(tile)
-        } else {
-            expandedTiles.insert(tile)
-        }
-        needsDisplay = true
-        onExpansionChanged?()
-    }
-
-    private func toggleParseExpansion(_ tile: Tile) {
-        if expandedParseStageTiles.contains(tile) {
-            expandedParseStageTiles.remove(tile)
-        } else {
-            expandedParseStageTiles.insert(tile)
-        }
-        needsDisplay = true
-        onExpansionChanged?()
-    }
-
-    private func visibleRows() -> [Row] {
-        DebugOverlayTilesStatusRow.visibleRows(tiles: tiles,
-                                               expandedTiles: expandedTiles,
-                                               expandedParseStageTiles: expandedParseStageTiles)
-    }
-
-    private func statusColor(_ status: TileLoadingTileStatus) -> NSColor {
+    private static func statusColor(_ status: TileLoadingTileStatus) -> NSColor {
         switch status {
         case .ready:
             return NSColor.systemGreen
@@ -2357,6 +2255,95 @@ private final class DebugOverlayTilesStatusListView: NSView {
         case .queued, .loading, .parsing:
             return NSColor.systemYellow
         }
+    }
+}
+
+/// The coverage map of the Tiles tab: the frame's placements from above
+/// (`DebugOverlayTileCoverage`), each slot a square filled and outlined
+/// in its zoom's colour, the coarse ones under the fine, the view's
+/// ground footprint in white over them, a cross at the point the camera
+/// looks at and a dot at the eye. North up, nothing stretched.
+private final class DebugOverlayTileCoverageView: NSView {
+    private typealias CoverageLayout = DebugOverlayTileCoverageLayout
+
+    private var coverage: DebugOverlayTileCoverage?
+
+    override var isFlipped: Bool { true }
+
+    func apply(coverage: DebugOverlayTileCoverage?) {
+        guard self.coverage != coverage else { return }
+        self.coverage = coverage
+        needsDisplay = true
+    }
+
+    override func draw(_: NSRect) {
+        let shape = NSBezierPath(roundedRect: bounds, xRadius: CoverageLayout.cornerRadius, yRadius: CoverageLayout.cornerRadius)
+        NSColor.black.withAlphaComponent(0.45).setFill()
+        shape.fill()
+        guard let coverage else { return }
+        NSGraphicsContext.saveGraphicsState()
+        shape.addClip()
+        let window = CoverageLayout.window(for: coverage)
+        let side = bounds.width
+        let font = NSFont.monospacedSystemFont(ofSize: CoverageLayout.labelFontSize, weight: .bold)
+        for placement in CoverageLayout.drawingOrder(coverage.placements) {
+            let rect = CoverageLayout.rect(placement.square, window: window, side: side)
+            let color = Self.color(DebugTileZoomPalette.color(forZoom: placement.slot.z))
+            color.withAlphaComponent(CoverageLayout.tileFillAlpha).setFill()
+            rect.fill(using: .sourceOver)
+            color.setStroke()
+            let outline = NSBezierPath(rect: rect.insetBy(dx: CoverageLayout.tileLineWidth / 2, dy: CoverageLayout.tileLineWidth / 2))
+            outline.lineWidth = CoverageLayout.tileLineWidth
+            outline.stroke()
+            guard rect.width >= CoverageLayout.labelledSquareSide else { continue }
+            var lines = [(text: "\(placement.slot.x)/\(placement.slot.y)/\(placement.slot.z)", color: color)]
+            if placement.isStandIn, rect.width >= CoverageLayout.sourceLabelledSquareSide {
+                lines.append((text: "src \(placement.source.x)/\(placement.source.y)/\(placement.source.z)",
+                              color: Self.color(DebugTileZoomPalette.color(forZoom: placement.source.z))))
+            }
+            let lineHeight = font.ascender - font.descender + font.leading
+            var top = rect.minY + 3
+            for line in lines {
+                line.text.draw(in: CGRect(x: rect.minX + 4, y: top, width: rect.width - 8, height: lineHeight),
+                               withAttributes: [.font: font, .foregroundColor: line.color,
+                                                .strokeColor: NSColor.black.withAlphaComponent(0.8), .strokeWidth: -2.5])
+                top += lineHeight
+            }
+        }
+        if coverage.footprint.count >= 3 {
+            let path = NSBezierPath()
+            for (index, vertex) in coverage.footprint.enumerated() {
+                let point = CoverageLayout.point(vertex, window: window, side: side)
+                if index == 0 { path.move(to: point) } else { path.line(to: point) }
+            }
+            path.close()
+            NSColor.white.withAlphaComponent(CoverageLayout.footprintFillAlpha).setFill()
+            path.fill()
+            NSColor.white.setStroke()
+            path.lineWidth = CoverageLayout.footprintLineWidth
+            path.stroke()
+        }
+        let center = CoverageLayout.point(coverage.center, window: window, side: side)
+        let cross = NSBezierPath()
+        let arm = CoverageLayout.markerRadius * 1.6
+        cross.move(to: CGPoint(x: center.x - arm, y: center.y))
+        cross.line(to: CGPoint(x: center.x + arm, y: center.y))
+        cross.move(to: CGPoint(x: center.x, y: center.y - arm))
+        cross.line(to: CGPoint(x: center.x, y: center.y + arm))
+        cross.lineWidth = 1.5
+        NSColor.white.setStroke()
+        cross.stroke()
+        if let eye = coverage.eye {
+            let point = CoverageLayout.point(eye, window: window, side: side)
+            let radius = CoverageLayout.markerRadius
+            NSColor.white.setFill()
+            NSBezierPath(ovalIn: CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)).fill()
+        }
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private static func color(_ rgb: SIMD3<Float>) -> NSColor {
+        NSColor(red: CGFloat(rgb.x), green: CGFloat(rgb.y), blue: CGFloat(rgb.z), alpha: 1)
     }
 }
 

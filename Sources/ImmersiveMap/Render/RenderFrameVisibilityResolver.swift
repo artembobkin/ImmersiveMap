@@ -23,13 +23,17 @@ final class RenderFrameVisibilityResolver {
                  ruleSets: RingRuleSets = .default,
                  reliefHeights: ClosedRange<Float>? = nil,
                  diagnostics: (any FrameDiagnosticsService)? = nil) -> VisibleContentState {
-        let zoomPlan = TileCoverageZoomPolicy.resolve(cameraZoom: cameraFrameState.mapCameraState.zoom,
+        // The planning zoom, not the camera's: over the terrain the
+        // camera's zoom follows the ground under the point it looks at,
+        // and a coverage planned by it would reshuffle its rings with
+        // every slope a drag crosses (`CameraStateController.planningZoom`).
+        let zoomPlan = TileCoverageZoomPolicy.resolve(cameraZoom: cameraFrameState.planningZoom,
                                                       renderSurfaceMode: resolvedPresentation.renderSurfaceMode,
                                                       maximumZoomLevel: tileSettings.coverage.maximumZoomLevel)
-        // The frame is drawn by the rules of the set its camera zoom falls
-        // in. Not the target zoom: that stops at the tileset's deepest zoom,
-        // and a set starting past it would never be reached.
-        let rules = ruleSets.rules(forZoom: Self.ruleSetZoom(cameraZoom: cameraFrameState.mapCameraState.zoom))
+        // The frame is drawn by the rules of the set its planning zoom
+        // falls in. Not the target zoom: that stops at the tileset's
+        // deepest zoom, and a set starting past it would never be reached.
+        let rules = ruleSets.rules(forZoom: Self.ruleSetZoom(cameraZoom: cameraFrameState.planningZoom))
         // The coverage is a pure function of the camera pose, drawSize,
         // presentation state and rules: with an unchanged fingerprint the
         // previous result is reused (along with its coverageVersion, which

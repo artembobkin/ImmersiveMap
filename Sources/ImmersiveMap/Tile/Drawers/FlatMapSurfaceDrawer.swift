@@ -87,8 +87,6 @@ enum FlatMapSurfaceDrawer {
                      stencilPacking: FlatTileStencilPacking,
                      part: Part,
                      isWireframeEnabled: Bool,
-                     linelessTiles: Set<VisibleTile> = [],
-                     rasterGroundSlots: Set<VisibleTile> = [],
                      groundRelief: GroundReliefStore? = nil,
                      pointWidthReferenceDepth: Float? = nil) {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder)
@@ -141,10 +139,10 @@ enum FlatMapSurfaceDrawer {
         // of a ring first, so the owner writes win. The world wrap is part of the key: the
         // flat world's wrap copies place the same tile at different
         // origins across the seam. A source's lines and fills are its
-        // slots' rules' (`FlatRingRule.drawsLines`, and a raster target's
-        // ground is its texture, `RasterTileRenderSubsystem`, so its own
-        // tile and its stand-ins draw only their lines there): it draws
-        // them while any slot it stands in does. On the relief it rises by
+        // placements' rules' (`TileDrawRules`: a raster placement's ground
+        // is its texture, `RasterTileRenderSubsystem`, so it draws only
+        // its lines there): it draws them while any placement of it does.
+        // On the relief it rises by
         // the terrain of the ring of the finest slot it stands in, so a
         // source placed in its own slot and as a stand-in rises by one
         // terrain, drawn through the relief variant of every class's
@@ -155,8 +153,8 @@ enum FlatMapSurfaceDrawer {
         sources.reserveCapacity(placeTilesContext.tilePlacements.count)
         for placeTile in placeTilesContext.tilePlacements {
             let key = FlatGroundSourceKey(tile: placeTile.metalTile.tile, worldWrap: placeTile.placeIn.worldWrap)
-            let drawsLines = linelessTiles.contains(placeTile.slot) == false
-            let drawsGround = rasterGroundSlots.contains(placeTile.slot) == false
+            let drawsLines = placeTile.rules.drawsLines
+            let drawsGround = placeTile.rules.raster == nil
             if let index = sourceIndices[key] {
                 sources[index].targetZoom = max(sources[index].targetZoom, placeTile.slot.z)
                 sources[index].drawsLines = sources[index].drawsLines || drawsLines

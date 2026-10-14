@@ -31,6 +31,21 @@ struct ParsedPolygon {
     /// half the road's alpha that soften its hard edge
     /// (`TileUnificationStage`). Empty for everything else.
     var edgeLineIndices: [UInt32] = []
+    /// A fill kept as its outline for the flattening (`GroundFlattening`):
+    /// where each ring starts in `vertices`, the exterior first and its
+    /// holes after it, every ring closed implicitly and in render space,
+    /// the exterior counter-clockwise and the holes clockwise whatever the
+    /// tile said (`ParsePolygon.parseOutline`). Such a polygon has no
+    /// `indices`: the flattener triangulates the ground as one surface, so
+    /// tessellating the fill first would cost the parse the earcut and
+    /// hand the flattener three times the edges, a triangulation's
+    /// diagonals twice over. It exists only on a tile the flattening
+    /// takes, and the flattening consumes it: none reaches the unification.
+    /// Empty for a tessellated polygon.
+    var outlineStarts: [Int32] = []
+
+    /// Whether this is an outline awaiting the flattening.
+    var isOutline: Bool { outlineStarts.isEmpty == false }
 
     /// A line ribbon carries per-vertex line attributes (extruded stroke
     /// geometry); a fill does not, including the decoration polygons that

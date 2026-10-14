@@ -104,8 +104,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   stencilPacking: stencilPacking,
                                   part: part,
                                   isWireframeEnabled: isWireframeEnabled,
-                                  linelessTiles: frameContext.visibleContent.linelessTiles,
-                                  rasterGroundSlots: Set(frameContext.visibleContent.rasterTiles.keys),
                                   groundRelief: groundReliefStore,
                                   pointWidthReferenceDepth: reliefCentreDepth(frameContext: frameContext))
         encoder.setDepthStencilState(depthDisabledState)

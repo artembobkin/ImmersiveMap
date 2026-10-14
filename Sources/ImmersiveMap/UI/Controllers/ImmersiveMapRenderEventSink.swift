@@ -78,12 +78,27 @@ final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendab
         }
     }
 
+    // Called synchronously from the render loop on the main thread, like
+    // the marker projection: the panel applies the frame's numbers in the
+    // same turn, in step with the frame on screen.
     func updateDebugOverlayHUDSnapshot(_ snapshot: DebugOverlayHUDSnapshot?) {
         debugOverlayHUDSnapshotStore.publish(snapshot)
+        MainActor.assumeIsolated {
+            guard isDeliveryInvalidated == false else { return }
+            debugOverlayHUDSnapshotStore.onSnapshotPublished?()
+        }
     }
 
     func attachTileLoadingStatus(provider: (@Sendable () -> TileLoadingStatusSnapshot?)?) {
         debugOverlayHUDSnapshotStore.attachTileLoadingStatus(provider: provider)
+    }
+
+    func tileLoadingStatusDidChange() {
+        debugOverlayHUDSnapshotStore.noteTileLoadingStatusChanged()
+    }
+
+    func debugOverlayHUDContentRequest() -> DebugOverlayHUDContentRequest {
+        debugOverlayHUDSnapshotStore.requestedContent
     }
 
     func updateMarkerProjectionSnapshot(_ snapshot: MarkerProjectionSnapshot) {

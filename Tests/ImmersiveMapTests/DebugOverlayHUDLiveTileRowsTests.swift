@@ -8,22 +8,22 @@ import XCTest
 
 /// The debug HUD's tile list must never fall behind the loader.
 ///
-/// A frame publishes a tile-list snapshot at most once per
-/// `DebugOverlayHUDSnapshotThrottler.defaultMinimumInterval`, the render loop
-/// is on demand, and a landing tile requests exactly one frame. When that
-/// frame falls inside the throttle window no snapshot is built, the loop
-/// sleeps, and the panel would show the burst's previous state (a tile at
-/// "parse" or "disk") for as long as the camera stands still. The panel's
-/// timer therefore refreshes the rows from the reporter between frames.
+/// Every rendered frame publishes a tile-list snapshot, but the render
+/// loop is on demand: a landing tile requests one frame, the loader then
+/// finishes on its own task, and no frame follows. Without a word from
+/// the reporter the panel would show the burst's previous state (a tile at
+/// "parse" or "disk") for as long as the camera stands still. The reporter
+/// therefore announces every change (`onChange`), and the panel reads the
+/// rows again between frames.
 ///
-/// The pieces here are the production ones (loader, reporter, throttler,
-/// store, pacing); only the frame's and the timer's call sequence is
-/// restated, because the engine needs a compiled shader library and the
-/// panel a host view.
+/// The pieces here are the production ones (loader, reporter, store,
+/// pacing); only the frame's and the panel's call sequence is restated,
+/// because the engine needs a compiled shader library and the panel a
+/// host view.
 final class DebugOverlayHUDLiveTileRowsTests: XCTestCase {
     private let tile = Tile(x: 77, y: 40, z: 7)
 
-    func testARowLandingInsideTheThrottleWindowIsRefreshedByTheTimerWhileTheLoopSleeps() async {
+    func testARowLandingAfterTheLastFrameIsRefreshedOnTheReportersWordWhileTheLoopSleeps() async {
         var settings = ImmersiveMapSettings.default
         settings.debug.enableDebugPanel = true
         settings.tiles.network.maxConcurrentFetches = 1
@@ -32,8 +32,11 @@ final class DebugOverlayHUDLiveTileRowsTests: XCTestCase {
         let loader = ImmersiveMapNeedsTile(config: settings,
                                            loadPipeline: pipeline,
                                            tileLoadingStatusReporter: reporter)
-        var frame = ReplayedHUDFrame(settings: settings, reporter: reporter)
+        let frame = ReplayedHUDFrame(settings: settings, reporter: reporter)
         var panel = ReplayedHUDPanel(store: frame.store)
+        // What the engine wires: the reporter's word reaches the sink.
+        let changes = ChangeCounter()
+        reporter.onChange = { changes.increment() }
 
         loader.request(tiles: [tile])
         let downloadStarted = await pipeline.waitUntilStarted(tile)
@@ -42,37 +45,41 @@ final class DebugOverlayHUDLiveTileRowsTests: XCTestCase {
         let parseStarted = await pipeline.waitUntilPrepared(tile)
         XCTAssertTrue(parseStarted)
 
-        // Frame N, while the tile parses: the first snapshot is never throttled.
-        XCTAssertTrue(frame.render())
+        // Frame N, while the tile parses: the panel applies its snapshot.
+        frame.render()
         panel.tick()
         XCTAssertEqual(panel.shownRow(for: tile)?.detail, "parse")
 
         // The parse ends, the tile lands (one frame requested), and frame
-        // N+1 renders on the next vsync, inside the window: no snapshot.
+        // N+1 renders on the next vsync with the tile still materializing.
         pipeline.completePrepare(tile)
         let materializeStarted = await pipeline.waitUntilMaterialized(tile)
         XCTAssertTrue(materializeStarted)
         frame.pacing.requestOneFrame(reason: .tileAvailable)
         pipeline.completeMaterialize(tile, result: true)
-        let publishedOnLanding = frame.render()
-        XCTAssertFalse(publishedOnLanding, "the landing frame fell inside the throttle window")
+        frame.render()
+        panel.tick()
         XCTAssertTrue(frame.pacing.shouldPauseDisplayLink, "the request is consumed, the loop sleeps")
+        let changesBeforeLanding = changes.count
 
-        // The loader finishes on its own task; nothing requests a frame.
+        // The loader finishes on its own task; nothing requests a frame,
+        // but the reporter says it moved.
         let saved = await pipeline.waitUntilSaved(tile)
         XCTAssertTrue(saved)
         let ready = await reporter.waitUntilRow(for: tile, hasDetail: "ready")
         XCTAssertEqual(ready?.detail, "ready")
         XCTAssertFalse(frame.pacing.needsFrameRendering)
+        XCTAssertGreaterThan(changes.count, changesBeforeLanding, "The reporter announced the landing")
 
-        // The panel's next tick reads the reporter itself.
+        // The panel's refresh on that word reads the reporter itself.
+        let appliedBefore = panel.appliedCount
         panel.tick()
         XCTAssertEqual(panel.shownRow(for: tile)?.detail, "ready")
-        XCTAssertEqual(panel.appliedCount, 2, "one frame snapshot, one between-frames refresh")
+        XCTAssertEqual(panel.appliedCount, appliedBefore + 1, "one between-frames refresh")
 
         // A quiet loader costs the panel nothing more.
         panel.tick()
-        XCTAssertEqual(panel.appliedCount, 2)
+        XCTAssertEqual(panel.appliedCount, appliedBefore + 1)
         loader.cancelAll()
     }
 
@@ -86,7 +93,7 @@ final class DebugOverlayHUDLiveTileRowsTests: XCTestCase {
         let loader = ImmersiveMapNeedsTile(config: settings,
                                            loadPipeline: pipeline,
                                            tileLoadingStatusReporter: reporter)
-        var frame = ReplayedHUDFrame(settings: settings, reporter: reporter)
+        let frame = ReplayedHUDFrame(settings: settings, reporter: reporter)
         var panel = ReplayedHUDPanel(store: frame.store)
 
         loader.request(tiles: [tile])
@@ -95,14 +102,14 @@ final class DebugOverlayHUDLiveTileRowsTests: XCTestCase {
         pipeline.completeDownload(tile, result: .success(Data([1]), etag: "A"))
         let parseStarted = await pipeline.waitUntilPrepared(tile)
         XCTAssertTrue(parseStarted)
-        XCTAssertTrue(frame.render())
+        frame.render()
         panel.tick()
-        XCTAssertEqual(panel.shownRowText(for: tile), "  z7/77/40 parse")
+        XCTAssertEqual(panel.shownRowText(for: tile), "z7/77/40 parse")
 
         // No frame follows, the parse does not end: the row ages on screen.
         now = 1012
         panel.tick()
-        XCTAssertEqual(panel.shownRowText(for: tile), "  z7/77/40 parse 12s")
+        XCTAssertEqual(panel.shownRowText(for: tile), "z7/77/40 parse 12s")
 
         loader.cancelAll()
         pipeline.completePrepare(tile)
@@ -115,12 +122,18 @@ final class DebugOverlayHUDLiveTileRowsTests: XCTestCase {
 /// `RenderFrameEngine.publishDebugOverlayHUDSnapshot` (the throttler gate,
 /// the reporter snapshot, the publish into `DebugOverlayHUDSnapshotStore`)
 /// and `ImmersiveMapRenderDriver.renderFrame` (the consumed frame request).
+private final class ChangeCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    var count: Int { lock.withLock { value } }
+    func increment() { lock.withLock { value += 1 } }
+}
+
 private struct ReplayedHUDFrame {
     let pacing: RenderLoopPacing
     let store = DebugOverlayHUDSnapshotStore()
     private let settings: ImmersiveMapSettings
     private let reporter: TileLoadingStatusReporter
-    private var throttler = DebugOverlayHUDSnapshotThrottler()
 
     init(settings: ImmersiveMapSettings, reporter: TileLoadingStatusReporter) {
         self.settings = settings
@@ -130,25 +143,20 @@ private struct ReplayedHUDFrame {
         store.attachTileLoadingStatus(provider: { [reporter] in reporter.snapshot() })
     }
 
-    /// Returns whether the frame published a snapshot.
-    mutating func render() -> Bool {
-        var published = false
-        if throttler.shouldBuildSnapshot(isEnabled: settings.debug.enableDebugPanel, at: CACurrentMediaTime()) {
-            store.publish(DebugOverlayHUDSnapshot.make(settings: settings.debug,
-                                                       zoom: 10,
-                                                       latitude: 0,
-                                                       longitude: 0,
-                                                       cameraDebugLines: [],
-                                                       diagnostics: nil,
-                                                       tileLoadingStatus: reporter.snapshot()))
-            published = true
-        }
+    /// Every rendered frame publishes its snapshot.
+    func render() {
+        store.publish(DebugOverlayHUDSnapshot.make(settings: settings.debug,
+                                                   zoom: 10,
+                                                   latitude: 0,
+                                                   longitude: 0,
+                                                   cameraDebugLines: [],
+                                                   diagnostics: nil,
+                                                   tileLoadingStatus: reporter.snapshot()))
         pacing.consumeOneFrameRequest()
-        return published
     }
 }
 
-/// The panel's 0.2 s timer, lifted from
+/// The panel's flush, lifted from
 /// `ImmersiveMapDebugOverlayRuntime.flushPendingHUDSnapshot`: the newest
 /// frame snapshot when there is one, otherwise the between-frames refresh.
 private struct ReplayedHUDPanel {
@@ -179,7 +187,7 @@ private struct ReplayedHUDPanel {
     }
 
     func shownRowText(for tile: Tile) -> String? {
-        shownRow(for: tile).map { DebugOverlayTilesStatusRow.tile($0, isExpanded: false, canExpand: false).text }
+        shownRow(for: tile).map { DebugOverlayTileCard($0).headline }
     }
 }
 

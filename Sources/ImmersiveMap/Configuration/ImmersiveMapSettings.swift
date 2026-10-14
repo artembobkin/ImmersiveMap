@@ -656,7 +656,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             public var grid: Int
             /// The grid of a tile zoom, over `grid` for the zooms it names.
             /// By default the zooms the relief is drawn at
-            /// (`GroundReliefSettings.appearZoomFade`, `collapseZoom`)
+            /// (`GroundReliefSettings.appearZoom`, `collapseZoom`)
             /// and the far rings' zooms under them take a cell of about the
             /// same ground, 75 m at the Alps' latitude from zoom 12 on and
             /// the 256 ceiling above it: 256 at zooms 9 to 11, 128 at 12,
@@ -664,11 +664,12 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// thousand triangles, so the overrides cost memory and
             /// parsing where the relief is drawn, and nothing without the
             /// relief, whose zooms are not flattened at all
-            /// (`fromTileZoom`). The globe's zooms take the grid the sphere
-            /// was split by before the relief flattened its tiles
+            /// (`fromTileZoom`). The globe's zooms, should the relief be
+            /// set to flatten them (`GroundReliefSettings.fromTileZoom`),
+            /// take the grid the sphere is split by otherwise
             /// (`GroundGeometrySubdivider`): 64 cells at zooms 0 and 1, 32
             /// at 2 and 3, so the limb and the chords of the fills' edges
-            /// stay as round as they were.
+            /// stay as round as they are.
             public var gridByTileZoom: [Int: Int]
 
             public static let defaultGridByTileZoom: [Int: Int] = [0: 64, 1: 64, 2: 32, 3: 32,
@@ -707,15 +708,21 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// raster tiles too, since a tile left on the plane would cut
             /// through the valleys under the point the camera looks at, and
             /// the camera and the labels rise with the ground. A frame of
-            /// coarser tiles lies whole on the plane. Zero by default: the
-            /// ground rises as soon as the map is the plane, from the
-            /// globe's transition on, and `collapseZoom` says where it lies
-            /// down again. Raise it
-            /// to keep the overview zooms on the plane. With the relief on
-            /// every tile is flattened
+            /// coarser tiles lies whole on the plane. With the relief on,
+            /// the tiles of this zoom and deeper are flattened whatever the
+            /// flattening's own zoom says
             /// (`TileSettings.resolvedGroundFlatteningFromTileZoom`), since
             /// only a flattened tile can rise, and the relief of a tile is
-            /// as fine as its zoom's grid (`GroundFlatteningSettings.gridByTileZoom`).
+            /// as fine as its zoom's grid (`GroundFlatteningSettings.gridByTileZoom`);
+            /// a coarser tile is parsed as it is, which spares the globe's
+            /// and the overview's tiles the flattening, the dearest part of
+            /// a coarse tile's parse. 6 by default: the coarsest far ring
+            /// of a frame at the zoom the relief comes in at
+            /// (`appearZoom`, 10) under the default ring rules, which
+            /// drop four zooms at most. With rules that drop more, or an
+            /// appear fade that starts lower, lower it to match, or a far
+            /// ring lies on the plane and cuts through the valleys. Zero
+            /// flattens every tile.
             public var fromTileZoom: Int
             /// The terrain tiles: a URL with `{z}`, `{x}` and `{y}` in it,
             /// of square images (PNG or WebP, of any size) whose pixels hold
@@ -732,19 +739,18 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// drawn: 1 is true scale, 2 doubles every height. Raise it to
             /// see a gentle relief.
             public var exaggeration: Float
-            /// How the relief comes in with the camera zoom: flat up to
-            /// the fade's start, drawn in full from its end, between them
-            /// scaled up smoothly, so the mountains rise out of the plane
-            /// as the camera closes in rather than standing there the
-            /// moment the map is the plane. Flat to zoom 10 and full from
-            /// zoom 11 by default. Below the fade's start no terrain is
-            /// read or loaded and the camera stands on the plane.
-            /// `ImmersiveMapZoomFade.none` draws the relief from the
-            /// plane's first frame. Read at the camera's zoom as it is.
-            public var appearZoomFade: ImmersiveMapZoomFade
+            /// The camera zoom the relief rises out of the plane at: below
+            /// it the map is flat, no terrain is read or loaded and the
+            /// camera stands on the plane, and the rise is a short
+            /// animation in time (`transitionSeconds`) once the zoom
+            /// crosses it, not a scaling with the zoom. 10 by default. 0
+            /// draws the relief from the plane's first frame. Read at the
+            /// zoom a drag over the terrain began with, held through the
+            /// drag, as `collapseZoom` is.
+            public var appearZoom: Double
             /// The camera zoom the relief collapses into the plane at: from
             /// this zoom on the map is flat, and the collapse is a short
-            /// animation in time (`collapseSeconds`), not a scaling with
+            /// animation in time (`transitionSeconds`), not a scaling with
             /// the zoom, so a zoom crossing it drops the mountains at once
             /// and a zoom crossing back raises them again. The terrain
             /// sources are 30 m cells over most of the world, with the
@@ -758,13 +764,15 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// drag, and followed over a few frames once it ends
             /// (`CameraSettings.animatedZoomHalfLife`): a drag slides the
             /// point the camera looks at up and down the slopes, the zoom
-            /// with it, and a collapse at the zoom of the moment would
-            /// drop and raise the mountains with every slope.
+            /// with it, and a threshold read at the zoom of the moment
+            /// would drop and raise the mountains with every slope. The
+            /// relief is never scaled with the zoom, for the same reason.
             public var collapseZoom: Double
-            /// How long the collapse into the plane takes, and the rise back
-            /// out of it, in seconds: 0.3 by default. Zero drops and raises
-            /// the mountains in one frame.
-            public var collapseSeconds: TimeInterval
+            /// How long the relief takes to rise out of the plane and to
+            /// collapse back into it, in seconds, when the zoom crosses
+            /// `appearZoom` or `collapseZoom`: 0.3 by default. 0 switches
+            /// at once.
+            public var transitionSeconds: TimeInterval
             /// The coarsest terrain zoom a tile falls back to when the
             /// source has no terrain tile at its own zoom. Mapterhorn
             /// covers the whole world to zoom 12.
@@ -803,13 +811,13 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             public var cameraClearanceMetres: Float
 
             public init(isEnabled: Bool = false,
-                        fromTileZoom: Int = 0,
+                        fromTileZoom: Int = 6,
                         tileURLTemplate: String = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp",
                         encoding: GroundReliefEncoding = .terrarium,
                         exaggeration: Float = 1,
-                        appearZoomFade: ImmersiveMapZoomFade = .fadeIn(from: 10, to: 11),
+                        appearZoom: Double = 10,
                         collapseZoom: Double = 13.7,
-                        collapseSeconds: TimeInterval = 0.3,
+                        transitionSeconds: TimeInterval = 0.3,
                         minimumSourceZoom: Int = 12,
                         cameraTerrainZoom: Int = 12,
                         memoryBudgetInBytes: Int = 192 * 1_024 * 1_024,
@@ -819,9 +827,9 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                 self.tileURLTemplate = tileURLTemplate
                 self.encoding = encoding
                 self.exaggeration = exaggeration
-                self.appearZoomFade = appearZoomFade
+                self.appearZoom = appearZoom
                 self.collapseZoom = collapseZoom
-                self.collapseSeconds = collapseSeconds
+                self.transitionSeconds = transitionSeconds
                 self.minimumSourceZoom = minimumSourceZoom
                 self.cameraTerrainZoom = cameraTerrainZoom
                 self.memoryBudgetInBytes = memoryBudgetInBytes
@@ -921,12 +929,13 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
 
         /// The tile zoom the ground is flattened from, with the relief in:
-        /// every zoom where the relief is on, since a frame on the terrain
-        /// raises every tile it draws, the coarse tiles of its far rings
-        /// too, and only a flattened tile can rise. Else the flattening's
-        /// own. Every reader of the flattening's zoom reads this.
+        /// the relief's own (`GroundReliefSettings.fromTileZoom`), since a
+        /// frame on the terrain raises every tile it draws, the coarse
+        /// tiles of its far rings too, and only a flattened tile can rise.
+        /// Else the flattening's own. Every reader of the flattening's zoom
+        /// reads this.
         var resolvedGroundFlatteningFromTileZoom: Int? {
-            groundRelief.isEnabled ? 0 : groundFlattening.fromTileZoom
+            groundRelief.isEnabled ? max(0, groundRelief.fromTileZoom) : groundFlattening.fromTileZoom
         }
 
         func resolvedCoverageZoomLevel(forCameraZoom cameraZoom: Double) -> Int {
@@ -1989,9 +1998,9 @@ public extension ImmersiveMapSettings {
                       tileURLTemplate: String? = nil,
                       encoding: TileSettings.GroundReliefEncoding? = nil,
                       exaggeration: Float? = nil,
-                      appearZoomFade: ImmersiveMapZoomFade? = nil,
+                      appearZoom: Double? = nil,
                       collapseZoom: Double? = nil,
-                      collapseSeconds: TimeInterval? = nil,
+                      transitionSeconds: TimeInterval? = nil,
                       cameraTerrainZoom: Int? = nil,
                       memoryBudgetInBytes: Int? = nil,
                       cameraClearanceMetres: Float? = nil) -> ImmersiveMapSettings {
@@ -1999,8 +2008,8 @@ public extension ImmersiveMapSettings {
         if let cameraTerrainZoom {
             settings.tiles.groundRelief.cameraTerrainZoom = cameraTerrainZoom
         }
-        if let appearZoomFade {
-            settings.tiles.groundRelief.appearZoomFade = appearZoomFade
+        if let appearZoom {
+            settings.tiles.groundRelief.appearZoom = appearZoom
         }
         if let memoryBudgetInBytes {
             settings.tiles.groundRelief.memoryBudgetInBytes = memoryBudgetInBytes
@@ -2008,8 +2017,8 @@ public extension ImmersiveMapSettings {
         if let collapseZoom {
             settings.tiles.groundRelief.collapseZoom = collapseZoom
         }
-        if let collapseSeconds {
-            settings.tiles.groundRelief.collapseSeconds = max(collapseSeconds, 0)
+        if let transitionSeconds {
+            settings.tiles.groundRelief.transitionSeconds = max(transitionSeconds, 0)
         }
         if let encoding {
             settings.tiles.groundRelief.encoding = encoding

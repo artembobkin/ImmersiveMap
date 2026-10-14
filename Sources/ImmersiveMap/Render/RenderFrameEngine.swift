@@ -66,7 +66,6 @@ final class RenderFrameEngine {
     /// camera's zoom, followed over a few frames as `animatedZoom` is, so
     /// the drag's end settles the relief rather than drops it. The appear
     /// fade reads the camera's zoom as it is.
-    private var reliefZoom = AnimatedZoom()
 
     // MARK: - Frame State
 
@@ -75,7 +74,9 @@ final class RenderFrameEngine {
     /// Keeps the rendered shadow map alive across frames; see the type.
     private let shadowMapReuse = ShadowMapReuseController()
     private let clock: RenderFrameClock
-    private var debugHUDSnapshotThrottler = DebugOverlayHUDSnapshotThrottler()
+    /// The loader's status last written to the tile trace: the trace takes
+    /// a status once per change, not once per frame.
+    private var lastTracedTileLoadingStatus: TileLoadingStatusSnapshot?
     /// GPU duration of the most recently completed frame, written on the Metal
     /// completion thread and read on the main thread when the next frame's
     /// diagnostics are built.
@@ -144,6 +145,7 @@ final class RenderFrameEngine {
         // nothing rather than living on in the sink.
         if let reporter = persistentContext.tileLoadingStatusReporter {
             eventSink.attachTileLoadingStatus(provider: { [weak reporter] in reporter?.snapshot() })
+            reporter.onChange = { [weak eventSink] in eventSink?.tileLoadingStatusDidChange() }
         }
         // Over a terrain the camera looks at a point on it
         // (`GroundReliefStore.makeTerrainFollow`).
@@ -243,6 +245,7 @@ final class RenderFrameEngine {
     func prepareForDiscard() {
         persistentContext.tileRenderStore.cancelLoading()
         eventSink.attachTileLoadingStatus(provider: nil)
+        persistentContext.tileLoadingStatusReporter?.onChange = nil
         (eventSink as? ImmersiveMapRenderEventSink)?.invalidateDelivery()
     }
 
@@ -307,8 +310,8 @@ final class RenderFrameEngine {
                                                          avatarAnimationRenderingActive: hasActiveAvatarAnimations,
                                                          sceneModelAnimationRenderingActive: hasActiveSceneModelAnimations,
                                                          extrusionRiseRenderingActive: frameContext.sharedState.isExtrusionRising,
-                                                         animatedZoomRenderingActive: animatedZoom.isSettling || reliefZoom.isSettling
-                                                             || (persistentContext.groundReliefStore?.isCollapsing ?? false)))
+                                                         animatedZoomRenderingActive: animatedZoom.isSettling
+                                                             || (persistentContext.groundReliefStore?.isTransitioning ?? false)))
         // Independent of `didSchedule`: the animation advanced in `update`
         // whether or not this frame reached a drawable.
         let pathAnimationResults = frameContext.sharedState.sceneModelState.pathAnimationResults
@@ -360,13 +363,6 @@ final class RenderFrameEngine {
                                                      deltaTime: frameTick.deltaTime,
                                                      halfLife: settings.camera.animatedZoomHalfLife,
                                                      snap: cameraJumped)
-        // The relief's zoom: held at a drag's start through the drag, then
-        // the camera's, followed.
-        let reliefZoomValue = reliefZoom.advance(toward: renderCamera.panReferenceZoom ?? cameraFrameState.mapCameraState.zoom,
-                                                 deltaTime: frameTick.deltaTime,
-                                                 halfLife: settings.camera.animatedZoomHalfLife,
-                                                 snap: cameraJumped)
-
         guard let commandBuffer = persistentContext.metalContext.makeCommandBuffer() else {
             diagnostics.recordSkipReason(.missingCommandBuffer)
             currentDiagnostics = diagnostics
@@ -380,12 +376,10 @@ final class RenderFrameEngine {
         // in world units from the last frame's datum: the coverage reaches
         // the tiles the relief lifts into view (`CoveragePolygonBuilder`).
         var reliefHeights: ClosedRange<Float>?
-        // The relief's appear fade reads the camera's zoom, its collapse
-        // the relief's zoom (`reliefZoom`): the camera flies over the
-        // relief as drawn, and through a drag the drawn relief must stand
-        // still.
-        persistentContext.groundReliefStore?.setFrame(cameraZoom: cameraFrameState.mapCameraState.zoom,
-                                                      reliefZoom: reliefZoomValue,
+        // The relief's thresholds read the planning zoom, which a drag
+        // over the terrain never moves: through a drag the drawn relief
+        // must stand still.
+        persistentContext.groundReliefStore?.setFrame(zoom: cameraFrameState.planningZoom,
                                                       deltaTime: frameTick.deltaTime,
                                                       snap: cameraJumped)
         if let store = persistentContext.groundReliefStore, store.isActive,
@@ -417,8 +411,7 @@ final class RenderFrameEngine {
         if let groundReliefStore = persistentContext.groundReliefStore {
             if resolvedPresentation.renderSurfaceMode == .flat {
                 groundReliefStore.setActive(visibleContent.tileZoomLevel >= groundReliefStore.fromTileZoom
-                                            && groundReliefStore.isVisible(atCameraZoom: cameraFrameState.mapCameraState.zoom,
-                                                                           reliefZoom: reliefZoomValue))
+                                            && groundReliefStore.isVisible(atZoom: cameraFrameState.planningZoom))
                 if let datum = GroundReliefCameraLift.datumMetres(store: groundReliefStore,
                                                                   centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
                                                                   tileZoom: visibleContent.tileZoomLevel) {
@@ -454,6 +447,7 @@ final class RenderFrameEngine {
                             services: services,
                             mapCameraState: cameraFrameState.mapCameraState,
                             animatedZoom: animatedZoomValue,
+                            planningZoom: cameraFrameState.planningZoom,
                             terrainFollowReport: renderCamera.lastTerrainFollowReport,
                             resolvedPresentation: resolvedPresentation,
                             visibleContent: visibleContent,
@@ -481,19 +475,22 @@ final class RenderFrameEngine {
         frameContext.services.diagnostics.setCounter(.resourcePipelineCount, value: counts.pipelines)
     }
 
+    /// Every rendered frame, for the content the panel shows: the panel is
+    /// in step with the frame, one to one, and the frame pays for one
+    /// tab's data.
     private func publishDebugOverlayHUDSnapshot(frameContext: FrameContext) {
-        guard debugHUDSnapshotThrottler.shouldBuildSnapshot(isEnabled: settings.debug.enableDebugPanel,
-                                                            at: CACurrentMediaTime()) else {
+        guard settings.debug.enableDebugPanel else {
             return
         }
-
+        let content = eventSink.debugOverlayHUDContentRequest()
         #if DEBUG
-        let diagnosticsOverlay: FrameDiagnostics? = frameContext.diagnostics
+        let diagnosticsOverlay: FrameDiagnostics? = content.contains(.stats) ? frameContext.diagnostics : nil
         #else
         let diagnosticsOverlay: FrameDiagnostics? = nil
         #endif
-        let tileLoadingStatus = persistentContext.tileLoadingStatusReporter?.snapshot()
-        if let tileLoadingStatus {
+        let tileLoadingStatus = content.contains(.tiles) ? persistentContext.tileLoadingStatusReporter?.snapshot() : nil
+        if let tileLoadingStatus, tileLoadingStatus != lastTracedTileLoadingStatus {
+            lastTracedTileLoadingStatus = tileLoadingStatus
             persistentContext.tileTraceRecorder.record(
                 .tileLoadingStatusSnapshot(frameIndex: frameContext.frameIndex,
                                            snapshot: tileLoadingStatus)
@@ -503,7 +500,8 @@ final class RenderFrameEngine {
             DebugOverlayHUDSnapshot.make(settings: settings.debug,
                                          frameContext: frameContext,
                                          diagnostics: diagnosticsOverlay,
-                                         tileLoadingStatus: tileLoadingStatus)
+                                         tileLoadingStatus: tileLoadingStatus,
+                                         content: content)
         )
     }
 

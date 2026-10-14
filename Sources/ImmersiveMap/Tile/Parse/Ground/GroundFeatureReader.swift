@@ -36,9 +36,14 @@ struct GroundFeatureReader {
     /// The ocean split for one polygon: its exterior as the feature's style,
     /// its holes as the background (land) style. Returns false when the
     /// polygon is not complex or its exterior does not tessellate, and the
-    /// caller draws it the ordinary way.
+    /// caller draws it the ordinary way. With `asOutline` the pieces stay
+    /// outlines for the flattening (`ParsePolygon.parseOutline`): the split
+    /// still spares the flattener the ring-in-ring bookkeeping of a
+    /// coastline with hundreds of islands, each island its own ring of the
+    /// land's paint over the ocean's.
     func appendComplexOceanPolygon(_ polygon: Polygon,
                                    fill: FillStyle,
+                                   asOutline: Bool,
                                    into result: inout ReadingStageResult,
                                    parsePolygon: ParsePolygon,
                                    tile: Tile) -> Bool {
@@ -46,10 +51,15 @@ struct GroundFeatureReader {
             return false
         }
 
+        func parse(_ polygon: Polygon) -> ParsedPolygon? {
+            asOutline
+                ? parsePolygon.parseOutline(polygon: polygon, tileExtent: Float(tileExtent))
+                : parsePolygon.parse(polygon: polygon, tileExtent: Float(tileExtent))
+        }
+
         let oceanPolygon = Polygon(exteriorRing: polygon.exteriorRing,
                                    interiorRings: [])
-        guard let parsedOcean = parsePolygon.parse(polygon: oceanPolygon,
-                                                   tileExtent: Float(tileExtent)) else {
+        guard let parsedOcean = parse(oceanPolygon) else {
             return false
         }
 
@@ -64,8 +74,7 @@ struct GroundFeatureReader {
         for interiorRing in polygon.interiorRings {
             let landPolygon = Polygon(exteriorRing: interiorRing,
                                       interiorRings: [])
-            if let parsedLand = parsePolygon.parse(polygon: landPolygon,
-                                                   tileExtent: Float(tileExtent)) {
+            if let parsedLand = parse(landPolygon) {
                 result.polygonByStyle[landStyle.key, default: []].append(parsedLand)
             }
         }

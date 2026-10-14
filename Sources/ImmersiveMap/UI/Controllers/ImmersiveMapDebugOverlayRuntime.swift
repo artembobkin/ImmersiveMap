@@ -53,6 +53,19 @@ final class ImmersiveMapDebugOverlayRuntime {
         self.tileTraceRecorder = tileTraceRecorder
         self.baseLabelTraceRecorder = baseLabelTraceRecorder
         self.renderRuntime = renderRuntime
+        hudSnapshotStore.onSnapshotPublished = { [weak self] in
+            self?.flushPendingHUDSnapshot()
+        }
+        hudSnapshotStore.onTileLoadingStatusChanged = { [weak self] in
+            self?.refreshTileLoadingStatusBetweenFrames()
+        }
+        hudSnapshotStore.requestedContent = hudView.shownContent
+        hudView.onShownContentChanged = { [weak hudSnapshotStore, weak renderRuntime] content in
+            // The tab just opened fills on the next frame, requested here,
+            // rather than on the next move of the camera.
+            hudSnapshotStore?.requestedContent = content
+            renderRuntime?.requestFrame(reason: .externalStateChanged)
+        }
         hudView.onAxesEnabledChanged = { [weak controls, weak renderRuntime] isEnabled in
             controls?.setAxesEnabled(isEnabled)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
@@ -271,12 +284,17 @@ final class ImmersiveMapDebugOverlayRuntime {
         }
     }
 
+    /// The one thing neither a frame nor the loader announces: a stage
+    /// growing old (`TileLoadingStatusTileSnapshot.stageAgeSeconds`), in
+    /// whole seconds.
+    private static let stageAgeTimerInterval: TimeInterval = 1
+
     private func startHUDSnapshotTimer() {
         guard hudSnapshotTimer == nil else {
             return
         }
 
-        let timer = Timer(timeInterval: DebugOverlayHUDSnapshotThrottler.defaultMinimumInterval,
+        let timer = Timer(timeInterval: Self.stageAgeTimerInterval,
                           repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.flushPendingHUDSnapshot()
@@ -291,12 +309,12 @@ final class ImmersiveMapDebugOverlayRuntime {
         hudSnapshotTimer = nil
     }
 
-    /// Applies the newest frame snapshot, and between frames keeps the tile
-    /// list current from the reporter itself: the on-demand loop renders a
-    /// frame for a landing tile and then sleeps, and the snapshot of that
-    /// frame is throttled more often than not, so without this the rows
-    /// would show the last state before the landing for as long as the
-    /// camera stands still (a tile forever "parse", "disk", "network").
+    /// Applies the newest frame snapshot, in the frame's own turn of the
+    /// main thread (`DebugOverlayHUDSnapshotStore.onSnapshotPublished`),
+    /// or, when there is none, the tile list read again from the reporter:
+    /// the loader moves between frames too, says so through the store, and
+    /// the rows follow it at once instead of waiting for a frame the
+    /// sleeping loop will not render.
     private func flushPendingHUDSnapshot() {
         if let value = hudSnapshotStore.consumeLatest(after: consumedHUDSnapshotVersion) {
             consumedHUDSnapshotVersion = value.version

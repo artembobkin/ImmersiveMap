@@ -140,10 +140,16 @@ enum RenderGraphFactory {
             groundShadowMaskSubsystem,
             // Before the ground: the rings' marks in the stencil.
             ringStencilSubsystem,
-            // Before both ground layers' vector subsystems: a texture owns
-            // its pixels before the vector ground draws.
-            rasterTileSubsystem,
+            // After the plane's vector ground: a texture takes only the
+            // pixels no finer source painted, by the tile-priority
+            // stencil, which is what keeps a coarse tile's raster standing
+            // in for a near slot (`TileDrawRules`) off the near tiles
+            // around it. The rank depth alone does not on the relief,
+            // where the two lie on different terrain samples and the
+            // coarse one pokes through. Before the sphere's vector ground,
+            // as the sphere's rank depth wants.
             flatMapSurfaceSubsystem,
+            rasterTileSubsystem,
             starfieldSubsystem,
             globeVectorSurfaceSubsystem,
             surfaceLabelSubsystem,

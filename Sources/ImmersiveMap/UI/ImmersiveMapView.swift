@@ -801,20 +801,21 @@ public extension ImmersiveMapView {
     /// behind `tileURLTemplate` (`{z}`, `{x}` and `{y}` in it) in the
     /// `encoding` (Terrarium by default, or Mapbox's), and its ground
     /// rises `exaggeration` times as high as the terrain is. The relief
-    /// comes in with the camera zoom by `appearZoomFade` (flat to zoom 10
-    /// and full from 11 by default, the mountains rising out of the
-    /// plane between), and collapses into the plane as the camera comes
-    /// closer, at `collapseZoom` (13.7 by default) over `collapseSeconds`
-    /// (0.3), everywhere alike, rising again when the zoom crosses back.
-    /// `.none` for the fade, or a `collapseZoom` past the deepest zoom,
-    /// keeps the relief at every zoom. The camera flies
+    /// rises out of the plane when the camera zoom crosses `appearZoom`
+    /// (10 by default) and collapses into it when the zoom crosses
+    /// `collapseZoom` (13.7), each a short animation over
+    /// `transitionSeconds` (0.3), everywhere alike, and never a scaling
+    /// with the zoom, which would breathe with every drag over the
+    /// slopes. An `appearZoom` of 0, or a `collapseZoom` past the deepest
+    /// zoom, keeps the relief at every zoom. The camera flies
     /// over one map at every zoom, the terrain tiles of
     /// `cameraTerrainZoom` (12 by default). The roads,
     /// the buildings and the labels rise with
-    /// it. The ground rises from `fromTileZoom` on (0 by default, as soon
-    /// as the map is the plane): a tile of that zoom or deeper is
-    /// flattened for it whatever the flattening's own zoom says, since
-    /// only a flattened tile can rise. The camera
+    /// it. The ground rises from `fromTileZoom` on (6 by default, the
+    /// coarsest far ring where the relief comes in): a tile of that zoom
+    /// or deeper is flattened for it whatever the flattening's own zoom
+    /// says, since only a flattened tile can rise, and a coarser one is
+    /// spared the flattening. The camera
     /// keeps its height and flies right up to a ridge between it and the
     /// point it looks at, or stays `cameraClearanceMetres` over one when
     /// that is set. The decoded terrain tiles
@@ -832,9 +833,9 @@ public extension ImmersiveMapView {
                              tileURLTemplate: String? = nil,
                              encoding: ImmersiveMapSettings.TileSettings.GroundReliefEncoding? = nil,
                              exaggeration: Float? = nil,
-                             appearZoomFade: ImmersiveMapZoomFade? = nil,
+                             appearZoom: Double? = nil,
                              collapseZoom: Double? = nil,
-                             collapseSeconds: TimeInterval? = nil,
+                             transitionSeconds: TimeInterval? = nil,
                              cameraTerrainZoom: Int? = nil,
                              memoryBudgetInBytes: Int? = nil,
                              cameraClearanceMetres: Float? = nil) -> ImmersiveMapView {
@@ -844,9 +845,9 @@ public extension ImmersiveMapView {
                                                    tileURLTemplate: tileURLTemplate,
                                                    encoding: encoding,
                                                    exaggeration: exaggeration,
-                                                   appearZoomFade: appearZoomFade,
+                                                   appearZoom: appearZoom,
                                                    collapseZoom: collapseZoom,
-                                                   collapseSeconds: collapseSeconds,
+                                                   transitionSeconds: transitionSeconds,
                                                    cameraTerrainZoom: cameraTerrainZoom,
                                                    memoryBudgetInBytes: memoryBudgetInBytes,
                                                    cameraClearanceMetres: cameraClearanceMetres)

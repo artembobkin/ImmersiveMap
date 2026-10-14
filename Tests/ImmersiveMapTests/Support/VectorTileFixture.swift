@@ -126,9 +126,12 @@ enum VectorTileFixture {
                 encoded.geometry = ringGeometry(ring, closed: true)
             case .polygonWithHoles(let exterior, let interiors):
                 encoded.type = .polygon
-                encoded.geometry = ringGeometry(exterior, closed: true)
+                // One cursor through every ring: the format's deltas run
+                // on from the last point of the ring before.
+                var cursor: (Int32, Int32) = (0, 0)
+                encoded.geometry = ringGeometry(exterior, closed: true, cursor: &cursor)
                 for interior in interiors {
-                    encoded.geometry.append(contentsOf: ringGeometry(interior, closed: true))
+                    encoded.geometry.append(contentsOf: ringGeometry(interior, closed: true, cursor: &cursor))
                 }
             case .line(let points):
                 encoded.type = .linestring
@@ -165,11 +168,21 @@ enum VectorTileFixture {
     /// A polyline or ring as MVT commands: one moveTo, the rest lineTo, and a
     /// closePath for a ring.
     private static func ringGeometry(_ points: [(Int32, Int32)], closed: Bool) -> [UInt32] {
+        var cursor: (Int32, Int32) = (0, 0)
+        return ringGeometry(points, closed: closed, cursor: &cursor)
+    }
+
+    /// The commands of one ring from `cursor`, which is left at the ring's
+    /// last point: every coordinate of the format is a delta from the
+    /// point before it, across the rings of a geometry too.
+    private static func ringGeometry(_ points: [(Int32, Int32)], closed: Bool,
+                                     cursor: inout (Int32, Int32)) -> [UInt32] {
         guard let first = points.first else { return [] }
-        var commands: [UInt32] = [GeometryCommand.moveTo.encoded(count: 1), zigZag(first.0), zigZag(first.1)]
+        var commands: [UInt32] = [GeometryCommand.moveTo.encoded(count: 1),
+                                  zigZag(first.0 - cursor.0), zigZag(first.1 - cursor.1)]
+        cursor = first
         if points.count > 1 {
             commands.append(GeometryCommand.lineTo.encoded(count: UInt32(points.count - 1)))
-            var cursor = first
             for point in points.dropFirst() {
                 commands.append(zigZag(point.0 - cursor.0))
                 commands.append(zigZag(point.1 - cursor.1))

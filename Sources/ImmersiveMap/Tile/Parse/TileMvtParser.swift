@@ -381,14 +381,26 @@ final class TileMvtParser {
         switch style {
         case .fill(let fill):
             result.registerStyle(BakedStyle(fill: fill), key: fill.key, placement: .ground)
+            // A fill the flattening will take stays an outline: the
+            // flattener tessellates the ground as a whole. A fill drawn
+            // among the ground lines is not flattened and is tessellated
+            // like a ribbon.
+            let asOutline = options.flattensGround(tileZoom: tile.z) && fill.drawsAmongGroundLines == false
             let splitsComplexOceanHoles = groundReader.splitsComplexOceanHoles(fill: fill, polygons: polygons)
             for polygon in polygons {
                 if splitsComplexOceanHoles,
                    groundReader.appendComplexOceanPolygon(polygon,
                                                           fill: fill,
+                                                          asOutline: asOutline,
                                                           into: &result,
                                                           parsePolygon: tools.parsePolygon,
                                                           tile: tile) {
+                    continue
+                }
+                if asOutline {
+                    if let outline = tools.parsePolygon.parseOutline(polygon: polygon, tileExtent: tileExtent) {
+                        result.appendGround(outline, key: fill.key, placement: .ground)
+                    }
                     continue
                 }
                 guard let parsedGeometry = tools.parsePolygon.parseGeometry(polygon: polygon,
@@ -430,7 +442,7 @@ final class TileMvtParser {
             }
         case .road(let roadStyle):
             if let fill = roadStyle.fill {
-                appendGroundPolygons(polygons, pass: fill, placement: roadStyle.placement, tools: tools, into: &result)
+                appendGroundPolygons(polygons, pass: fill, placement: roadStyle.placement, tile: tile, tools: tools, into: &result)
             }
         case .line(let line):
             // A line style (boundary) that arrived as area geometry is not
@@ -438,21 +450,31 @@ final class TileMvtParser {
             // reservations in the `boundary` layer are drawn as solid
             // polygons.
             guard line.fillsAreas else { return }
-            appendGroundPolygons(polygons, pass: line.pass, placement: line.placement, tools: tools, into: &result)
+            appendGroundPolygons(polygons, pass: line.pass, placement: line.placement, tile: tile, tools: tools, into: &result)
         case .pointLabel, .hidden:
             return
         }
     }
 
     /// Polygons filled with a stroke's colour: a line style on areal
-    /// geometry, a road at a zoom where its surface is a plain fill.
+    /// geometry, a road at a zoom where its surface is a plain fill. On
+    /// the ground of a tile the flattening takes they stay outlines, like
+    /// the fills. The bridge overlay is never flattened.
     private func appendGroundPolygons(_ polygons: MultiPolygon,
                                       pass: LinePass,
                                       placement: LinePlacement,
+                                      tile: Tile,
                                       tools: TileParseTools,
                                       into result: inout ReadingStageResult) {
         result.registerStyle(BakedStyle(pass: pass), key: pass.key, placement: placement)
+        let asOutline = placement == .ground && options.flattensGround(tileZoom: tile.z)
         for polygon in polygons {
+            if asOutline {
+                if let outline = tools.parsePolygon.parseOutline(polygon: polygon, tileExtent: tileExtent) {
+                    result.appendGround(outline, key: pass.key, placement: placement)
+                }
+                continue
+            }
             guard let parsedGeometry = tools.parsePolygon.parseGeometry(polygon: polygon,
                                                                         tileExtent: tileExtent) else {
                 continue

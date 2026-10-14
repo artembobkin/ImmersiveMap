@@ -42,15 +42,23 @@ public struct ImmersiveMapCameraSnapshot: Equatable, Sendable {
     public let bearingLimits: ImmersiveMapCameraBearingLimits
     public let pitchLimits: ImmersiveMapCameraAngleLimits
     public let isSphericalSurfaceActive: Bool
+    /// The zoom the map is planned by: the zoom of the tiles, the rings
+    /// and the relief's thresholds. It moves only with a zoom set on
+    /// purpose, a gesture or a position, while `position.zoom`, the
+    /// camera's own, also follows the ground relief under the point the
+    /// camera looks at through a drag. Equal to it off the relief.
+    public let planningZoom: Double
 
     public init(position: ImmersiveMapCameraPosition,
                 bearingLimits: ImmersiveMapCameraBearingLimits,
                 pitchLimits: ImmersiveMapCameraAngleLimits,
-                isSphericalSurfaceActive: Bool) {
+                isSphericalSurfaceActive: Bool,
+                planningZoom: Double? = nil) {
         self.position = position
         self.bearingLimits = bearingLimits
         self.pitchLimits = pitchLimits
         self.isSphericalSurfaceActive = isSphericalSurfaceActive
+        self.planningZoom = planningZoom ?? position.zoom
     }
 
     public func clampedPosition(_ position: ImmersiveMapCameraPosition) -> ImmersiveMapCameraPosition {

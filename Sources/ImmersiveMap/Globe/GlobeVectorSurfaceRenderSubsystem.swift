@@ -64,9 +64,7 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
                                       depthDisabledState: depthDisabledState,
                                       isWireframeEnabled: isWireframeEnabled,
                                       pureSphere: pureSphere,
-                                      globeFrame: globeFrame,
-                                      linelessTiles: frameContext.visibleContent.linelessTiles,
-                                      rasterTiles: frameContext.visibleContent.rasterTiles)
+                                      globeFrame: globeFrame)
     }
 
     func handleMemoryWarning() {}

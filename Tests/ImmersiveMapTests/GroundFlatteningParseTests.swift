@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
+import Mvt
 import XCTest
 
 /// The flattened ground (`GroundFlattening`): from the configured tile
@@ -86,6 +87,76 @@ final class GroundFlatteningParseTests: XCTestCase {
         XCTAssertEqual(areas.byStyle.count, 2, "The land fill, covered everywhere, has no triangle left")
         XCTAssertEqual(areas.negative, 0, "Every triangle is counter-clockwise in render space")
         XCTAssertEqual(areas.crossingCells, 0, "No triangle crosses a cell of the grid")
+    }
+
+    /// The fills of a flattened tile are never tessellated: they go to the
+    /// flattener as their outlines, a hole wound against its exterior, and
+    /// the flattener fills them by the nonzero rule. A park over the tile
+    /// with a square hole: the hole shows the land under it, the park owns
+    /// the rest, and the tile is covered exactly once.
+    func testAFillWithAHoleIsFlattenedFromItsOutline() throws {
+        let e = Self.extent
+        let park: [(Int32, Int32)] = [(0, 0), (e, 0), (e, e), (0, e)]
+        // The hole wound against its exterior, as the tile format has it:
+        // the decoder tells a hole from a new exterior by that alone.
+        let hole: [(Int32, Int32)] = [(1024, 1024), (1024, 3072), (3072, 3072), (3072, 1024)]
+        let data = VectorTileFixture.layersTile([
+            (layerName: "landuse",
+             features: [VectorTileFixture.Feature(id: 1,
+                                                  geometry: .polygonWithHoles(exterior: park, interiors: [hole]),
+                                                  properties: ["kind": "park"])])
+        ])
+        let parser = makeParser(fromTileZoom: 15)
+        let tile = Tile(x: 9651, y: 12319, z: 15)
+        let reading = parser.readingStage(decodedTile: try MvtTileDecoder.decode(data: data), tile: tile)
+        let outlines = reading.polygonByStyle.values.flatMap { $0 }.filter(\.isOutline)
+        XCTAssertEqual(outlines.count, 1, "The park went in as its outline, the background quad as triangles")
+        XCTAssertEqual(outlines.first?.outlineStarts, [0, 4])
+        XCTAssertTrue(outlines.first?.indices.isEmpty ?? false, "An outline is not tessellated")
+
+        let parsed = try parser.parse(tile: tile, mvtData: data)
+        let areas = fillAreasByStyle(parsed)
+        let tileArea = Double(Self.extent) * Double(Self.extent)
+        let holeArea = 2048.0 * 2048.0
+        XCTAssertEqual(areas.byStyle.values.reduce(0, +), tileArea, accuracy: tileArea * 0.001,
+                       "The fills cover the tile exactly once")
+        XCTAssertEqual(areas.byStyle.count, 2, "The park and the land in its hole")
+        let parkArea = areas.byStyle.max { $0.key < $1.key }!.value
+        XCTAssertEqual(parkArea, tileArea - holeArea, accuracy: tileArea * 0.001, "The park owns the tile but its hole")
+        XCTAssertEqual(areas.negative, 0, "Every triangle is counter-clockwise in render space")
+    }
+
+    /// The outline's contract: render space, the exterior counter-clockwise
+    /// and a hole clockwise whatever the tile's orientation, the rings
+    /// closed implicitly.
+    func testAnOutlineIsOrientedByItsRingsOwnAreas() throws {
+        func ring(_ points: [(Int32, Int32)]) -> [Point] { points.map { Point(x: $0.0, y: $0.1) } }
+        // In tile space (y down) this exterior is counter-clockwise on
+        // screen and the hole too: both have to be turned.
+        let exterior = ring([(100, 100), (100, 900), (900, 900), (900, 100)])
+        let hole = ring([(300, 300), (300, 600), (600, 600), (600, 300)])
+        let parsePolygon = ParsePolygon()
+        let outline = try XCTUnwrap(parsePolygon.parseOutline(polygon: Polygon(exteriorRing: exterior, interiorRings: [hole]),
+                                                               tileExtent: 4096))
+        XCTAssertEqual(outline.outlineStarts, [0, 4])
+        XCTAssertEqual(outline.vertices.count, 8)
+        func doubledArea(_ points: ArraySlice<SIMD2<Float>>) -> Float {
+            var area: Float = 0
+            let ring = Array(points)
+            for index in ring.indices {
+                let next = ring[(index + 1) % ring.count]
+                area += ring[index].x * next.y - next.x * ring[index].y
+            }
+            return area
+        }
+        XCTAssertGreaterThan(doubledArea(outline.vertices[0 ..< 4]), 0, "The exterior is counter-clockwise in render space")
+        XCTAssertLessThan(doubledArea(outline.vertices[4 ..< 8]), 0, "The hole is clockwise")
+        XCTAssertEqual(outline.vertices[0].y, 4096 - 100, "Render space: y up")
+        let flipped = try XCTUnwrap(parsePolygon.parseOutline(polygon: Polygon(exteriorRing: exterior.reversed(),
+                                                                                interiorRings: [hole.reversed()]),
+                                                               tileExtent: 4096))
+        XCTAssertGreaterThan(doubledArea(flipped.vertices[0 ..< 4]), 0, "The orientation does not depend on the tile's")
+        XCTAssertLessThan(doubledArea(flipped.vertices[4 ..< 8]), 0)
     }
 
     /// A slanted edge crossing the grid: the sweep cuts it into slivers far

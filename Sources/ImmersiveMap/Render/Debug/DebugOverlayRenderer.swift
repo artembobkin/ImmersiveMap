@@ -39,20 +39,21 @@ final class DebugOverlayRenderer {
     private let tilePointScreenProjector = TilePointScreenProjector(liftsByRelief: false)
     private var textVerticesScratch: [TextVertex] = []
     private var lineVerticesScratch: [PolygonsPipeline.Vertex] = []
-    private var tileTextEntriesScratch: [TextEntry] = []
     private var tileProjectedTextVerticesScratch: [TextVertex] = []
     private var tileWatermarkProjectionInputsScratch: [TilePointInput] = []
     private var tileWatermarkVertexInputsScratch: [TilePointInput] = []
     private let tileOutlineThicknessPx: Float = 3.5
-    private let tileLabelInsetPx = SIMD2<Float>(8.0, 8.0)
     /// The screen cells, in points, one watermark at most stands in.
-    private static let tileWatermarkScreenCellPx: Float = 220
-    private var tileWatermarkScreenCellsScratch = Set<SIMD2<Int32>>()
+    /// The grid points of a tile whose on-screen mean carries its label:
+    /// dense, so the label slides as the points leave the screen one by
+    /// one instead of stepping.
+    private static let tileLabelAnchorUVs = makeTileWatermarkUVs(gridSize: 7)
     /// The watermarks' two parts, each its own batch and colour: the
     /// tile's address, and the terrain it is raised by.
-    private var tileWatermarkAddressEntriesScratch: [TextEntry] = []
+    /// The address labels by the zoom whose colour they take: a batch per
+    /// zoom, since a batch has one colour.
+    private var tileWatermarkAddressEntriesScratch: [Int: [TextEntry]] = [:]
     private var tileWatermarkTerrainEntriesScratch: [TextEntry] = []
-    private static let tileWatermarkAddressColor = SIMD3<Float>(1.0, 0.95, 0.2)
     private static let tileWatermarkTerrainColor = SIMD3<Float>(0.45, 0.9, 1.0)
     private static let tileWatermarkFlatColor = SIMD3<Float>(1.0, 0.45, 0.4)
     /// A thin stroke: the thick one of the tile labels runs into the
@@ -62,9 +63,7 @@ final class DebugOverlayRenderer {
     private let tileWatermarkMaxWidthUV: Float = 0.22
     private let tileWatermarkMaxHeightUV: Float = 0.04
     private let tileWatermarkPaddingPx = SIMD2<Float>(8.0, 4.0)
-    private let tileLabelTextColor = SIMD3<Float>(1.0, 0.95, 0.2)
     private let tileLabelStrokeColor = SIMD3<Float>(0.0, 0.0, 0.0)
-    private let tileLabelStrokeWidthPx: Float = 5.0
     private let tileOutlineColor = SIMD4<Float>(1.0, 0.95, 0.2, 0.95)
     private let roadLabelTileOutlineColor = SIMD4<Float>(0.0, 0.85, 1.0, 0.95)
     private let labelBoundsVisibleColor = SIMD4<Float>(0.2, 1.0, 0.35, 0.9)
@@ -151,35 +150,33 @@ final class DebugOverlayRenderer {
                          placeTiles: [PlaceTile]) {
         guard placeTiles.isEmpty == false else { return }
 
-        tileTextEntriesScratch.removeAll(keepingCapacity: true)
-        tileProjectedTextVerticesScratch.removeAll(keepingCapacity: true)
-        tileWatermarkProjectionInputsScratch.removeAll(keepingCapacity: true)
-        tileWatermarkScreenCellsScratch.removeAll(keepingCapacity: true)
         tileWatermarkAddressEntriesScratch.removeAll(keepingCapacity: true)
         tileWatermarkTerrainEntriesScratch.removeAll(keepingCapacity: true)
         lineVerticesScratch.removeAll(keepingCapacity: true)
-        tileTextEntriesScratch.reserveCapacity(placeTiles.count * 10)
-        tileProjectedTextVerticesScratch.reserveCapacity(placeTiles.count * 9 * 96)
-        tileWatermarkProjectionInputsScratch.reserveCapacity(Self.tileWatermarkUVs.count * 3)
+        tileWatermarkTerrainEntriesScratch.reserveCapacity(placeTiles.count)
         lineVerticesScratch.reserveCapacity(placeTiles.count * 64)
 
         let labelScale = max(settings.diagnosticsScale * 0.5, 28.0)
-        let labelLineAdvance = makeLineAdvance(textRenderer: textRenderer, scale: labelScale)
         let outlineSegments = Self.makeTileOverlaySegments(segmentCountPerEdge: frameContext.screenSpaceProjectionMode == .flat ? 1 : 8)
 
-        for placeTile in placeTiles {
+        // The outlines in the colour of the slot's zoom, as the labels, and
+        // thicker the coarser the zoom, the coarse ones drawn first: a
+        // coarse tile's edge runs under the edges of the finer tiles that
+        // split it, and it would be covered whole by an outline of one
+        // width, where a thinner line over a thicker one leaves both to
+        // be seen.
+        let deepestZoom = placeTiles.map(\.placeIn.z).max() ?? 0
+        for placeTile in placeTiles.sorted(by: { $0.placeIn.z < $1.placeIn.z }) {
             appendTileOutlineVertices(into: &lineVerticesScratch,
                                       placeTile: placeTile,
                                       outlineSegments: outlineSegments,
                                       frameContext: frameContext,
-                                      color: tileOutlineColor)
-            appendTileTextEntries(into: &tileTextEntriesScratch,
-                                  projectedVertices: &tileProjectedTextVerticesScratch,
-                                  placeTile: placeTile,
-                                  frameContext: frameContext,
-                                  scale: labelScale,
-                                  lineAdvance: labelLineAdvance,
-                                  textRenderer: textRenderer)
+                                      thickness: Self.tileOutlineThickness(zoom: placeTile.placeIn.z, deepestZoom: deepestZoom),
+                                      color: SIMD4<Float>(DebugTileZoomPalette.color(forZoom: placeTile.placeIn.z), 0.95))
+            appendTileLabel(placeTile: placeTile,
+                            frameContext: frameContext,
+                            scale: labelScale,
+                            textRenderer: textRenderer)
         }
 
         if lineVerticesScratch.isEmpty == false {
@@ -190,25 +187,15 @@ final class DebugOverlayRenderer {
                              frameIndex: frameContext.frameIndex,
                              vertices: lineVerticesScratch)
         }
-        if tileTextEntriesScratch.isEmpty == false {
+        for zoom in tileWatermarkAddressEntriesScratch.keys.sorted() {
+            guard let entries = tileWatermarkAddressEntriesScratch[zoom], entries.isEmpty == false else { continue }
             drawTextEntries(renderEncoder: renderEncoder,
                             textRenderer: textRenderer,
                             screenMatrix: frameContext.cameraMatrices.screen,
                             frameSlotIndex: frameContext.frameSlotIndex,
                             frameIndex: frameContext.frameIndex,
-                            entries: tileTextEntriesScratch,
-                            style: TextStyleUniform(textColor: tileLabelTextColor,
-                                                    strokeColor: tileLabelStrokeColor,
-                                                    strokeWidthPx: tileLabelStrokeWidthPx))
-        }
-        if tileWatermarkAddressEntriesScratch.isEmpty == false {
-            drawTextEntries(renderEncoder: renderEncoder,
-                            textRenderer: textRenderer,
-                            screenMatrix: frameContext.cameraMatrices.screen,
-                            frameSlotIndex: frameContext.frameSlotIndex,
-                            frameIndex: frameContext.frameIndex,
-                            entries: tileWatermarkAddressEntriesScratch,
-                            style: TextStyleUniform(textColor: Self.tileWatermarkAddressColor,
+                            entries: entries,
+                            style: TextStyleUniform(textColor: DebugTileZoomPalette.color(forZoom: zoom),
                                                     strokeColor: tileLabelStrokeColor,
                                                     strokeWidthPx: Self.tileWatermarkStrokeWidthPx))
         }
@@ -225,16 +212,6 @@ final class DebugOverlayRenderer {
                             style: TextStyleUniform(textColor: color,
                                                     strokeColor: tileLabelStrokeColor,
                                                     strokeWidthPx: Self.tileWatermarkStrokeWidthPx))
-        }
-        if tileProjectedTextVerticesScratch.isEmpty == false {
-            drawTextEntries(renderEncoder: renderEncoder,
-                            textRenderer: textRenderer,
-                            screenMatrix: frameContext.cameraMatrices.screen,
-                            frameSlotIndex: frameContext.frameSlotIndex,
-                            frameIndex: frameContext.frameIndex,
-                            entries: [],
-                            projectedVertices: tileProjectedTextVerticesScratch,
-                            style: Self.makeTileWatermarkTextStyle())
         }
     }
 
@@ -316,6 +293,7 @@ final class DebugOverlayRenderer {
                                       placeTile: placeTile,
                                       outlineSegments: outlineSegments,
                                       frameContext: frameContext,
+                                      thickness: tileOutlineThicknessPx,
                                       color: roadLabelTileOutlineColor)
         }
 
@@ -758,10 +736,20 @@ final class DebugOverlayRenderer {
         lineVertexCursor.count = offset + vertices.count
     }
 
+    /// The width of a tile's outline: the deepest zoom of the frame takes
+    /// the thinnest line, and every zoom coarser than it six pixels more,
+    /// up to a cap, so the edges of up to six zooms lying on one line are
+    /// all seen, each showing three pixels past the next on either side.
+    static func tileOutlineThickness(zoom: Int, deepestZoom: Int) -> Float {
+        let step: Float = 6
+        return min(4 + step * Float(max(0, deepestZoom - zoom)), 40)
+    }
+
     private func appendTileOutlineVertices(into vertices: inout [PolygonsPipeline.Vertex],
                                            placeTile: PlaceTile,
                                            outlineSegments: [TileOverlayLineSegment],
                                            frameContext: FrameContext,
+                                           thickness: Float,
                                            color: SIMD4<Float>) {
         guard outlineSegments.isEmpty == false else { return }
 
@@ -797,7 +785,7 @@ final class DebugOverlayRenderer {
             appendThickLineQuad(into: &vertices,
                                 start: startPoint.position,
                                 end: endPoint.position,
-                                thickness: tileOutlineThicknessPx,
+                                thickness: thickness,
                                 color: color)
         }
     }
@@ -1071,19 +1059,25 @@ final class DebugOverlayRenderer {
                                                 paddingUV: Self.tileGridCellPlatePaddingFraction * cellSpanUV)
     }
 
-    private func appendTileTextEntries(into entries: inout [TextEntry],
-                                       projectedVertices: inout [TextVertex],
-                                       placeTile: PlaceTile,
-                                       frameContext: FrameContext,
-                                       scale: Float,
-                                       lineAdvance: Float,
-                                       textRenderer: TextRenderer) {
-        // The watermarks lie on the screen, not in the tile: upright and
-        // of one size at any pitch and bearing, so they read from any
-        // angle, in two colours, the address and the terrain tag. Each of
-        // the tile's grid points that projects onto the screen carries
-        // one, except where another already stands within a screen cell
-        // of it, so the far tiles do not pile theirs up.
+    /// One label per placement, on the screen rather than in the tile:
+    /// upright and of one size at any pitch and bearing, so it reads from
+    /// any angle. It stands at the mean of the tile's grid points that
+    /// project onto the screen (`makeTileLabelAnchor`): the tile's centre
+    /// while the tile is whole on screen, and sliding with the visible
+    /// part as the tile leaves it, where a label that moved from one grid
+    /// point to the next jumped. The address in its zoom's colour
+    /// (`DebugTileZoomPalette`) and the terrain tag in its own, and under
+    /// them the source when the tile stands in for another, in the
+    /// source's zoom's colour.
+    private func appendTileLabel(placeTile: PlaceTile,
+                                 frameContext: FrameContext,
+                                 scale: Float,
+                                 textRenderer: TextRenderer) {
+        guard let anchor = Self.makeTileLabelAnchor(
+            visiblePoints: projectTilePoints(Self.tileLabelAnchorUVs, placeTile: placeTile, frameContext: frameContext)
+        ) else {
+            return
+        }
         let addressText = Self.formatTileAddress(placeTile.placeIn.tile)
         let terrainText: String?
         if let groundRelief = frameContext.services.groundRelief, groundRelief.isActive {
@@ -1093,40 +1087,36 @@ final class DebugOverlayRenderer {
         } else {
             terrainText = nil
         }
-        let watermarkScale = max(scale * 0.6, 18.0)
-        let addressWidth = textRenderer.collectLabelVertices(for: addressText, labelIndex: 0, scale: watermarkScale).size.width
-        let terrainWidth = terrainText.map {
-            textRenderer.collectLabelVertices(for: $0, labelIndex: 0, scale: watermarkScale).size.width
+        let labelScale = max(scale * 0.6, 18.0)
+        func width(_ text: String) -> Float {
+            textRenderer.collectLabelVertices(for: text, labelIndex: 0, scale: labelScale).size.width
         }
+        let addressWidth = width(addressText)
+        let terrainWidth = terrainText.map(width)
         let totalWidth = addressWidth + (terrainWidth.map { $0 + Self.tileWatermarkGapPx } ?? 0)
-        for point in projectTilePoints(Self.tileWatermarkUVs, placeTile: placeTile, frameContext: frameContext) {
-            let cell = SIMD2<Int32>(Int32((point.x / Self.tileWatermarkScreenCellPx).rounded(.down)),
-                                    Int32((point.y / Self.tileWatermarkScreenCellPx).rounded(.down)))
-            guard tileWatermarkScreenCellsScratch.insert(cell).inserted else { continue }
-            let left = point.x - totalWidth * 0.5
-            tileWatermarkAddressEntriesScratch.append(TextEntry(text: addressText,
-                                                                position: SIMD2<Float>(left, point.y),
-                                                                scale: watermarkScale))
-            if let terrainText {
-                tileWatermarkTerrainEntriesScratch.append(TextEntry(text: terrainText,
-                                                                    position: SIMD2<Float>(left + addressWidth + Self.tileWatermarkGapPx, point.y),
-                                                                    scale: watermarkScale))
-            }
+        let left = anchor.x - totalWidth * 0.5
+        tileWatermarkAddressEntriesScratch[placeTile.placeIn.z, default: []]
+            .append(TextEntry(text: addressText, position: SIMD2<Float>(left, anchor.y), scale: labelScale))
+        if let terrainText {
+            tileWatermarkTerrainEntriesScratch.append(TextEntry(text: terrainText,
+                                                                position: SIMD2<Float>(left + addressWidth + Self.tileWatermarkGapPx, anchor.y),
+                                                                scale: labelScale))
         }
-
-        let sourceTile = placeTile.metalTile.tile
         if placeTile.inOwnSlot == false {
-            guard let sourceAnchorPoint = makeTileSourceLabelAnchorPoint(placeTile: placeTile,
-                                                                         frameContext: frameContext) else {
-                return
-            }
-            let sourceAnchor = sourceAnchorPoint + SIMD2<Float>(tileLabelInsetPx.x, -tileLabelInsetPx.y)
-            entries.append(contentsOf: Self.makeTileTextEntries(anchor: sourceAnchor,
-                                                                lines: ["src \(Self.formatTileCoordinateString(sourceTile))"],
-                                                                scale: max(scale * 0.72, 20.0),
-                                                                lineAdvance: lineAdvance,
-                                                                padding: .zero))
+            let sourceText = "src \(Self.formatTileAddress(placeTile.metalTile.tile))"
+            let lineAdvance = makeLineAdvance(textRenderer: textRenderer, scale: labelScale)
+            tileWatermarkAddressEntriesScratch[placeTile.metalTile.tile.z, default: []]
+                .append(TextEntry(text: sourceText,
+                                  position: SIMD2<Float>(anchor.x - width(sourceText) * 0.5, anchor.y - lineAdvance),
+                                  scale: labelScale))
         }
+    }
+
+    /// Where a tile's label stands: the mean of its grid points on screen,
+    /// none when the tile shows no point.
+    static func makeTileLabelAnchor(visiblePoints: [SIMD2<Float>]) -> SIMD2<Float>? {
+        guard visiblePoints.isEmpty == false else { return nil }
+        return visiblePoints.reduce(SIMD2<Float>(0, 0), +) / Float(visiblePoints.count)
     }
 
     private func makeTileOriginData(for placeTile: PlaceTile,
@@ -1302,29 +1292,6 @@ final class DebugOverlayRenderer {
         let viewport = frameContext.viewport
         return points.filter { $0.visible != 0 && $0.position.x >= 0 && $0.position.y >= 0
             && $0.position.x <= viewport.x && $0.position.y <= viewport.y }.map(\.position)
-    }
-
-    private func makeTileSourceLabelAnchorPoint(placeTile: PlaceTile,
-                                                frameContext: FrameContext) -> SIMD2<Float>? {
-        let candidateUVs: [SIMD2<Float>] = [
-            SIMD2<Float>(0.55, 0.82),
-            SIMD2<Float>(0.55, 0.68),
-            SIMD2<Float>(0.5, 0.5)
-        ]
-        let pointInputs = candidateUVs.map {
-            TilePointInput(uv: $0,
-                           tile: SIMD3<Int32>(Int32(placeTile.placeIn.x),
-                                              Int32(placeTile.placeIn.y),
-                                              Int32(placeTile.placeIn.z)),
-                           tileSlotIndex: 0)
-        }
-        let snapshot = TilePointToScreenPointSnapshot(pointInputs: pointInputs,
-                                                      tileSlotVisibleTileIndices: [0])
-        let points = tilePointScreenProjector.project(snapshot: snapshot,
-                                                      frameContext: frameContext,
-                                                      tileOriginData: makeTileOriginData(for: placeTile,
-                                                                                         frameContext: frameContext))
-        return points.first(where: { $0.visible != 0 })?.position
     }
 
     private func appendThickLineQuad(into vertices: inout [PolygonsPipeline.Vertex],

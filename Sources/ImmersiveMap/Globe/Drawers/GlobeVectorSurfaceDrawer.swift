@@ -43,9 +43,7 @@ enum GlobeVectorSurfaceDrawer {
                      depthDisabledState: MTLDepthStencilState,
                      isWireframeEnabled: Bool,
                      pureSphere: Bool,
-                     globeFrame: GlobeFrameConstantsUniform,
-                     linelessTiles: Set<VisibleTile> = [],
-                     rasterTiles: [VisibleTile: RasterTileSpec] = [:]) {
+                     globeFrame: GlobeFrameConstantsUniform) {
         guard placeTilesContext.tilePlacements.isEmpty == false else {
             return
         }
@@ -102,23 +100,21 @@ enum GlobeVectorSurfaceDrawer {
                 uniqueSources.append(placement.metalTile)
             }
             uniqueSources.sort { $0.tile.z > $1.tile.z }
-            // The sources that draw their line ribbons
-            // (`FlatRingRule.drawsLines`): a source does while any slot it
-            // is placed in belongs to a rule that draws them, as on the
-            // plane. The morph's single blended draw keeps every line.
+            // The sources that draw their line ribbons (`TileDrawRules`):
+            // a source does while any placement of it draws them, as on
+            // the plane. The morph's single blended draw keeps every line.
             var linedSourceTiles = Set<MetalTile>()
-            for placement in placeTilesContext.tilePlacements where linelessTiles.contains(placement.placeIn) == false {
+            for placement in placeTilesContext.tilePlacements where placement.rules.drawsLines {
                 linedSourceTiles.insert(placement.metalTile)
             }
             let linedSources = uniqueSources.filter { linedSourceTiles.contains($0) }
-            // The sources that draw their fills: not where every slot a
-            // source is placed in draws its ground from a texture, as on
-            // the plane.
+            // The sources that draw their fills: not where every placement
+            // of a source draws its ground from a texture, as on the plane.
             var groundSourceTiles = Set<MetalTile>()
-            for placement in placeTilesContext.tilePlacements where rasterTiles[placement.placeIn] == nil {
+            for placement in placeTilesContext.tilePlacements where placement.rules.raster == nil {
                 groundSourceTiles.insert(placement.metalTile)
             }
-            let groundSources = rasterTiles.isEmpty ? uniqueSources : uniqueSources.filter { groundSourceTiles.contains($0) }
+            let groundSources = uniqueSources.filter { groundSourceTiles.contains($0) }
 
             // The opaque fill layers, depth-written and unblended.
             renderEncoder.pushDebugGroup("ground.opaqueFills")

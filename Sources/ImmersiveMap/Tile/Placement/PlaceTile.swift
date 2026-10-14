@@ -10,15 +10,35 @@
 /// above a descendant or below an ancestor. The target's ring rule is the
 /// placement's: whether it draws its lines and its fills, and the ring
 /// whose terrain it rises by on the relief.
+/// How a placement draws: the switches of a ring rule (`FlatRingRule`),
+/// lines, labels and the ground from a texture. A tile in its own slot
+/// takes its slot's. A stand-in takes the rules of its own slot when the
+/// frame has one for it, and the slot's it fills otherwise
+/// (`TilePlacementPlanner`): a far ring's tile standing in for a near
+/// slot its pan just opened keeps drawing as the far ring draws it, a
+/// texture without lines or labels, so nothing on screen changes until
+/// the slot's own tile lands, where the slot's rules put the far tile's
+/// city labels and roads on the screen for the length of a disk read.
+struct TileDrawRules: Hashable {
+    var drawsLines = true
+    var drawsLabels = true
+    /// The ground from a texture of this size, nil for the geometry.
+    var raster: RasterTileSpec?
+
+    static let all = TileDrawRules()
+}
+
 struct PlaceTile: Hashable {
     let metalTile: MetalTile
     let placeIn: VisibleTile
     let slot: VisibleTile
+    let rules: TileDrawRules
 
-    init(metalTile: MetalTile, placeIn: VisibleTile, slot: VisibleTile? = nil) {
+    init(metalTile: MetalTile, placeIn: VisibleTile, slot: VisibleTile? = nil, rules: TileDrawRules = .all) {
         self.metalTile = metalTile
         self.placeIn = placeIn
         self.slot = slot ?? placeIn
+        self.rules = rules
     }
 
     /// The tile is drawn in its own slot, at its own extent.
