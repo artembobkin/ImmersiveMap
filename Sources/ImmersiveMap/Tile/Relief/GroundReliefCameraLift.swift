@@ -25,19 +25,20 @@ import simd
 enum GroundReliefCameraLift {
     /// The terrain under the point the camera looks at
     /// (`centerWorldMercator`), in metres before the exaggeration: the
-    /// frame's datum (`GroundReliefStore.datumMetres`). Read at the zoom
-    /// of the frame's tiles, or of the flattened ones when the frame's
-    /// are coarser. Zero over tiles coarser than the relief's zoom, which
-    /// lie on the plane. Nil while the terrain under the point is on its
-    /// way.
+    /// frame's datum (`GroundReliefStore.datumMetres`). Read off the
+    /// camera's map (`GroundReliefStore.cameraTerrainZoom`), the one map
+    /// the camera flies over at every zoom, so the point the camera looks
+    /// at is on the ground the camera keeps its height by. Zero over
+    /// tiles coarser than the relief's zoom (`tileZoom`, the frame's),
+    /// which lie on the plane. Nil while the terrain under the point is
+    /// on its way.
     static func datumMetres(store: GroundReliefStore,
                             centerWorldMercator: SIMD2<Double>,
                             tileZoom: Int) -> Float? {
         guard tileZoom >= store.fromTileZoom else {
             return 0
         }
-        return store.elevation(atNormalizedWorld: centerWorldMercator,
-                               terrainZoom: GroundReliefStore.terrainZoom(forTargetZoom: tileZoom))
+        return store.elevation(atNormalizedWorld: centerWorldMercator, terrainZoom: store.cameraTerrainZoom)
     }
 
     /// The view depth of the point where the centre of the screen meets

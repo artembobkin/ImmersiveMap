@@ -23,21 +23,33 @@ import simd
 /// vector ground would not be one.
 ///
 /// A texture is opaque and owns its pixels as an opaque fill does: it
-/// writes the ground's first rank depth, so the lines drawn over it pass.
-/// On the plane each placement draws its slot's ground only
-/// (`GroundSlotClip`), takes the ground shadow mask as the vector ground
-/// does, and rises by the ground relief where the frame is on it
-/// (`GroundReliefStore`), on a grid as fine as the zoom's flattening grid.
-/// On the sphere it follows the unroll as the sphere's tiles do.
+/// writes a depth half a rank step behind the ground's first, so the
+/// lines drawn over it pass and a vector tile drawn over it wins outright
+/// (TileRaster.metal), and the tile-priority stencil
+/// (`TileSourceStencilPriority`), drawn at
+/// full extent and finest first on either surface, so a coarser source
+/// stays out of the pixels a finer one painted. On the plane it takes the
+/// ground shadow mask as the vector ground does, and rises by the ground
+/// relief where the frame is on it (`GroundReliefStore`), on a grid as
+/// fine as the zoom's flattening grid. On the sphere it follows the
+/// unroll as the sphere's tiles do.
 final class RasterTileRenderSubsystem: RenderSubsystem {
     let name: String = "RasterTiles"
 
-    /// One tile drawn into a texture this frame, and where it is placed.
+    /// One tile drawn into a texture this frame, and where it is drawn:
+    /// once per wrap copy of the flat world it is placed at.
     private struct Source {
         let metalTile: MetalTile
-        let size: Int
+        var size: Int
         var texture: MTLTexture?
-        var placements: [GroundSlotClip.Placement] = []
+        var placements: [Placement] = []
+    }
+
+    /// A wrap copy a source is drawn at, and the finest raster target it
+    /// stands in there: the ring whose terrain it rises by.
+    private struct Placement {
+        let worldWrap: Int8
+        var targetZoom: Int
     }
 
     private let device: MTLDevice
@@ -45,7 +57,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
     private let grid: RasterTileGrid
     private let sampler: MTLSamplerState?
     private let mipLevelBias: Float
-    private let groundSlotOwnerState: MTLDepthStencilState
+    private let groundOwnerState: MTLDepthStencilState
     private let sphereOpaqueOwnerState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
     private let debugOverlayControls: DebugOverlayControlState
@@ -54,8 +66,12 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
     private let groundReliefStore: GroundReliefStore?
     private let groundFlattening: ImmersiveMapSettings.TileSettings.GroundFlatteningSettings
 
-    /// The frame's sources, by the tile drawn, in the placements' order.
+    /// The frame's sources, by the tile drawn: on the plane in the order
+    /// of their stencil references, the nearest ring's first and the
+    /// finest of a ring first, on the sphere finest first.
     private var sources: [Source] = []
+    /// The frame's stencil references on the plane (`FlatTileStencilPacking`).
+    private var stencilPacking = FlatTileStencilPacking(bands: [], targetZoom: 0)
     /// The textures by size, reused frame after frame. A size's pool grows
     /// to what a frame needs and shrinks when a frame needs much less, so
     /// a camera that pans keeps its textures and one that zooms out of
@@ -73,7 +89,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
     init(device: MTLDevice,
          pipeline: RasterTilePipeline,
          settings: ImmersiveMapSettings.TileSettings.RasterizationSettings,
-         groundSlotOwnerState: MTLDepthStencilState,
+         groundOwnerState: MTLDepthStencilState,
          sphereOpaqueOwnerState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState,
          debugOverlayControls: DebugOverlayControlState,
@@ -98,7 +114,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
         descriptor.label = "RasterTileSampler"
         self.sampler = device.makeSamplerState(descriptor: descriptor)
         self.mipLevelBias = settings.mipLevelBias
-        self.groundSlotOwnerState = groundSlotOwnerState
+        self.groundOwnerState = groundOwnerState
         self.sphereOpaqueOwnerState = sphereOpaqueOwnerState
         self.depthDisabledState = depthDisabledState
         self.debugOverlayControls = debugOverlayControls
@@ -110,9 +126,12 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
 
     /// The frame's raster placements, grouped by the tile drawn: a tile
     /// placed in several raster slots draws into one texture, of the
-    /// largest size among them, and is drawn once per slot. On the plane
-    /// each placement's slot rectangles are cut here (`GroundSlotClip`),
-    /// an ancestor around the descendants in its slot.
+    /// largest size among them, and is drawn once per wrap copy it is
+    /// placed at, at full extent. The sources are ordered by their
+    /// stencil references, so the tile-priority stencil settles which one
+    /// a pixel shows: on the plane the nearest ring's first and the finest
+    /// of a ring first (`FlatTileStencilPacking`), on the sphere finest
+    /// first.
     func update(frameContext: FrameContext) {
         let rasterTiles = frameContext.visibleContent.rasterTiles
         sources.removeAll(keepingCapacity: true)
@@ -120,31 +139,37 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
             trimPools(needed: [:])
             return
         }
-        let placements = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
-            .filter { rasterTiles[$0.slot] != nil }
-        let clipped: [GroundSlotClip.Placement]
-        if frameContext.renderSurfaceMode == .flat {
-            let rings = GroundSlotClip.Rings(targetZoom: frameContext.visibleContent.tileZoomLevel,
-                                             bands: frameContext.visibleContent.flatRingBands,
-                                             flatRenderState: frameContext.resolvedPresentation.flatRenderState)
-            clipped = GroundSlotClip.placements(placements, rings: rings)
-        } else {
-            clipped = placements.map { GroundSlotClip.Placement(placeTile: $0, clips: [GroundSlotClip.unclipped]) }
-        }
         var indexByTile: [Tile: Int] = [:]
-        for placement in clipped {
-            let tile = placement.placeTile.metalTile.tile
-            let size = rasterTiles[placement.placeTile.slot]?.size ?? 0
-            if let index = indexByTile[tile] {
-                sources[index].placements.append(placement)
-                if size > sources[index].size {
-                    sources[index] = Source(metalTile: sources[index].metalTile, size: size,
-                                            texture: nil, placements: sources[index].placements)
-                }
+        for placeTile in frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements {
+            guard let target = rasterTiles[placeTile.slot] else { continue }
+            let tile = placeTile.metalTile.tile
+            let index: Int
+            if let found = indexByTile[tile] {
+                index = found
+                sources[index].size = max(sources[index].size, target.size)
             } else {
-                indexByTile[tile] = sources.count
-                sources.append(Source(metalTile: placement.placeTile.metalTile, size: size, placements: [placement]))
+                index = sources.count
+                indexByTile[tile] = index
+                sources.append(Source(metalTile: placeTile.metalTile, size: target.size))
             }
+            let worldWrap = placeTile.placeIn.worldWrap
+            if let placement = sources[index].placements.firstIndex(where: { $0.worldWrap == worldWrap }) {
+                sources[index].placements[placement].targetZoom = max(sources[index].placements[placement].targetZoom,
+                                                                      placeTile.slot.z)
+            } else {
+                sources[index].placements.append(Placement(worldWrap: worldWrap, targetZoom: placeTile.slot.z))
+            }
+        }
+        stencilPacking = FlatTileStencilPacking(bands: frameContext.visibleContent.flatRingBands,
+                                                targetZoom: frameContext.visibleContent.tileZoomLevel)
+        if frameContext.renderSurfaceMode == .flat {
+            let packing = stencilPacking
+            func reference(of source: Source) -> UInt32 {
+                source.placements.map { packing.reference(sourceZoom: source.metalTile.tile.z, slotZoom: $0.targetZoom) }.max() ?? 0
+            }
+            sources.sort { reference(of: $0) > reference(of: $1) }
+        } else {
+            sources.sort { $0.metalTile.tile.z > $1.metalTile.tile.z }
         }
         // A texture for each, from the pool of its size.
         var needed: [Int: Int] = [:]
@@ -193,7 +218,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
         guard sources.isEmpty == false, let commandBuffer = frameContext.commandBuffer else { return }
         let base = frameContext.services.baseColors.map
         let clearColor = MTLClearColor(red: Double(base.x), green: Double(base.y), blue: Double(base.z), alpha: 1)
-        var fade = TileOverviewFadeUniform(pixelsPerPoint: 1, cameraZoom: Float(frameContext.zoom))
+        var fade = TileOverviewFadeUniform(pixelsPerPoint: 1, cameraZoom: Float(frameContext.animatedZoom))
         var drawn: [MTLTexture] = []
         drawn.reserveCapacity(sources.count)
         for source in sources {
@@ -319,7 +344,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
         encoder.pushDebugGroup("ground.rasterTiles")
         beginDraws(encoder: encoder, sampler: sampler)
         encoder.setRenderPipelineState(pipeline.flatPipelineState)
-        encoder.setDepthStencilState(groundSlotOwnerState)
+        encoder.setDepthStencilState(groundOwnerState)
         var cameraUniform = frameContext.cameraUniform
         encoder.setVertexBytes(&cameraUniform, length: MemoryLayout<CameraUniform>.stride, index: 1)
         let groundShadowMask = GroundShadowMaskBinding.resolve(frameContext: frameContext,
@@ -330,7 +355,6 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
         encoder.setFragmentTexture(groundShadowMask.texture, index: 1)
         GroundFogUniform.bind(GroundFogUniform.resolve(frameContext: frameContext), encoder: encoder)
         let flatRenderState = frameContext.resolvedPresentation.flatRenderState
-        var clipRect = GroundSlotClip.unclipped
         // The relief variant for a tile whose terrain is in, the plain one
         // for the rest, selected only where it changes from the last draw.
         var selectedRelief = false
@@ -339,9 +363,11 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
             let tile = source.metalTile.tile
             encoder.setFragmentTexture(texture, index: 0)
             for placement in source.placements {
-                let placeTile = placement.placeTile
+                // The tile-priority reference, the slot's ring above the
+                // tile's zoom (FlatTileStencilPacking).
+                encoder.setStencilReferenceValue(stencilPacking.reference(sourceZoom: tile.z, slotZoom: placement.targetZoom))
                 let relief = groundReliefStore?.relief(for: tile,
-                                                       terrainZoom: GroundReliefStore.terrainZoom(forTargetZoom: placeTile.slot.z))
+                                                       terrainZoom: GroundReliefStore.terrainZoom(forTargetZoom: placement.targetZoom))
                 let cells = relief == nil ? 0 : groundFlattening.grid(forTileZoom: tile.z)
                 guard let mesh = grid.mesh(forTileZoom: tile.z, atLeast: cells) else { continue }
                 if (relief != nil) != selectedRelief {
@@ -354,13 +380,12 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
                                                                                                                renderMapSize: flatRenderState.renderMapSize),
                                                       datumMetres: groundReliefStore.datumMetres)
                     encoder.setVertexTexture(relief.texture, index: 0)
-                    encoder.setVertexTexture(relief.roughnessTexture, index: 1)
                     encoder.setVertexBytes(&uniform, length: MemoryLayout<GroundReliefUniform>.stride, index: 9)
                 }
                 let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
                                                                                  y: tile.y,
                                                                                  z: tile.z,
-                                                                                 worldWrap: placeTile.placeIn.worldWrap,
+                                                                                 worldWrap: placement.worldWrap,
                                                                                  flatRenderPan: flatRenderState.pan,
                                                                                  renderMapSize: flatRenderState.renderMapSize)
                 let scale = originAndSize.z / 4096.0
@@ -368,11 +393,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
                                                            y: originAndSize.y,
                                                            z: 0) * Matrix.scaleMatrix(sx: scale, sy: scale, sz: 1)
                 encoder.setVertexBytes(&modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
-                for rect in placement.clips {
-                    clipRect = rect
-                    encoder.setVertexBytes(&clipRect, length: MemoryLayout<SIMD4<Float>>.stride, index: 12)
-                    draw(mesh: mesh, encoder: encoder)
-                }
+                draw(mesh: mesh, encoder: encoder)
             }
         }
         endDraws(encoder: encoder)

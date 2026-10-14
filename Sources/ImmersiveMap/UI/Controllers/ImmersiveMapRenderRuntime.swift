@@ -88,6 +88,11 @@ final class ImmersiveMapRenderRuntime {
                            active: isActive)
     }
 
+    func setAnimatedZoomRenderingActive(_ isActive: Bool) {
+        driver.setActivity(.animatedZoom,
+                           active: isActive)
+    }
+
     func setInteractionRenderingActive(_ isActive: Bool) {
         driver.setActivity(.interaction,
                            active: isActive)
@@ -103,6 +108,7 @@ final class ImmersiveMapRenderRuntime {
         setAvatarAnimationRenderingActive(state.avatarAnimationRenderingActive)
         setSceneModelAnimationRenderingActive(state.sceneModelAnimationRenderingActive)
         setExtrusionRiseRenderingActive(state.extrusionRiseRenderingActive)
+        setAnimatedZoomRenderingActive(state.animatedZoomRenderingActive)
     }
 
     func beginFrame() -> Bool {

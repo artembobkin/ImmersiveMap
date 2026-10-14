@@ -15,6 +15,8 @@ struct RenderActivityState {
     /// The buildings or the models rising out of the ground
     /// (`ExtrusionRise`).
     var extrusionRiseRenderingActive: Bool = false
+    /// The animated zoom still on its way to the camera's (`AnimatedZoom`).
+    var animatedZoomRenderingActive: Bool = false
 }
 
 /// Events arrive both from the main thread and from background tasks (tile

@@ -6,8 +6,9 @@ import XCTest
 
 /// End-to-end contract of the FLAT map's substitute handling, the mirror of
 /// GlobeSubstituteDepthOffscreenRenderTests: a coarse tile standing in for
-/// missing slots draws only in those slots (`GroundSlotClip`), never in
-/// the slot a finer tile owns. The camera sits on the corner shared by
+/// missing slots draws at full extent, and the tile-priority stencil
+/// (`TileSourceStencilPriority`) keeps it out of the slot a finer tile
+/// owns, as on the sphere. The camera sits on the corner shared by
 /// the four children of one z13 parent at a flat zoom: one child is loaded
 /// exactly (snow, painted cyan), the parent (water, painted magenta) stands
 /// in for the other three. Requires the compiled Metal library, so it

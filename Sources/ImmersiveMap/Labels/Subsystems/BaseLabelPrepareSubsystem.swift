@@ -179,8 +179,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         }
 
         // The labels the camera's zoom shows, and those still fading out:
-        // every pass below works on them alone.
-        let cameraZoom = Float(frameContext.zoom)
+        // every pass below works on them alone. The animated zoom, as all
+        // of the frame's dressing reads it.
+        let cameraZoom = Float(frameContext.animatedZoom)
         baseLabelCache.presentationInputs.withUnsafeBufferPointer { inputs in
             baseFade.currentAlphas.withUnsafeBufferPointer { alphas in
                 activeSpans.resolve(inputs: inputs, alphas: alphas, cameraZoom: cameraZoom)
@@ -191,8 +192,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         let minimumScale = debugOverlayControls?.labelPerspectiveMinimum() ?? perspectiveMinimumScale
         // The labels' reach is the rule's of the camera zoom
         // (`LabelDistanceRules`), the panel's or the default.
-        let distanceScale = debugOverlayControls?.labelDistanceScale(forCameraZoom: frameContext.zoom)
-            ?? LabelDistanceRules.default.scale(forCameraZoom: frameContext.zoom)
+        let distanceScale = debugOverlayControls?.labelDistanceScale(forCameraZoom: frameContext.animatedZoom)
+            ?? LabelDistanceRules.default.scale(forCameraZoom: frameContext.animatedZoom)
         let cameraChanged = projectedCameraFingerprint != latestCameraFingerprint
             || projectedPerspectiveMinimumScale != minimumScale
             || projectedMaximumDistanceScale != distanceScale
@@ -249,7 +250,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                fadeInSeconds: fadeInSeconds,
                                                fadeOutSeconds: fadeOutSeconds,
                                                spans: spans)
-        let overviewFadeAlpha = ImmersiveMapZoomFade.overview.alpha(atZoom: frameContext.zoom)
+        let overviewFadeAlpha = ImmersiveMapZoomFade.overview.alpha(atZoom: frameContext.animatedZoom)
         baseLabelCache.updateFadeAlphas(baseFade.currentAlphas, multiplier: overviewFadeAlpha, spans: spans)
         baseFade.currentAlphas.withUnsafeBufferPointer { alphas in
             baseTargetVisible.withUnsafeBufferPointer { targets in
@@ -588,7 +589,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     // MARK: - Collisions
 
     private func solveCollisions(frameContext: FrameContext, spans: [Range<Int>]) {
-        let cameraZoom = Float(frameContext.zoom)
+        let cameraZoom = Float(frameContext.animatedZoom)
         BaseLabelVisibilityResolver.reservesSpace(inputs: baseLabelCache.presentationInputs,
                                                   screenPoints: baseScreenPoints,
                                                   horizonVisibility: baseHorizonVisible,

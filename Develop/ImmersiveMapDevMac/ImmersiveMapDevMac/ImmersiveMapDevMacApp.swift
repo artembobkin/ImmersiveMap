@@ -57,9 +57,9 @@ private struct MapScreen: View {
             .mapStyle(.default.apply { theme in
                 theme.features.buildingExtrusion = true
             })
-            .extrusion(risesFromTheGround: false)
-            // The buildings from zoom 14, a level before the default's 15.
-            .extrusion(buildingsMinimumZoom: 14)
+            // The buildings from zoom 14, a level before the default's 15,
+            // standing up at once.
+            .buildingExtrusion(buildingsMinimumZoom: 14, risesFromTheGround: false)
             .shadows(isEnabled: false)
             .labels(isEnabled: true)
             // The controls are drawn only when a camera controller is attached:
@@ -69,16 +69,9 @@ private struct MapScreen: View {
             // the deepest tile. Here the landmarks are reviewed up close,
             // at about a dozen metres over the pavement at 22.
             .zoomRange(maximum: 22)
-            // The relief from zoom 10. A cell of the same ground, about 53 m
-            // at Zermatt, at every zoom from 11 on: a ring's terrain is
-            // sampled at the same points by a tile and by the coarser tile
-            // that stands in for it while it loads, so the ridges do not
-            // move when a tile lands. Zoom 10 is at the grid's ceiling.
-            .groundFlattening(grid: 32, gridByTileZoom: [10: 256, 11: 256, 12: 128, 13: 64, 14: 32, 15: 16])
-            // Mapterhorn's terrain from the plane's first frame, fading to
-            // the plane with the zoom, early over flat ground (a city, most
-            // likely) and late in the mountains, by the defaults.
-            .groundRelief(isEnabled: true, exaggeration: 1)
+            // Mapterhorn's terrain, coming in with the zoom from 10 to 11
+            // and collapsing into the plane at 13.7, by the defaults.
+            .groundRelief(isEnabled: true)
             // Moscow inside the MKAD ring: the globe turns freely up to zoom
             // 1, the area closes in on the city between zoom 1 and 2, and
             // from zoom 2 on a pull that grows with the distance draws the
@@ -127,14 +120,34 @@ private struct MapScreen: View {
 
 /// The tile source under test: the PMTiles archive the map reads.
 ///
-/// The default is the hosted archive. `IMMERSIVEMAP_DEV_TILE_ARCHIVE` in the
-/// scheme environment points the app at another archive URL without touching
-/// this file, which is what to reach for when comparing two builds of a
-/// tileset.
-private let devTileArchive = ProcessInfo.processInfo
-    .environment["IMMERSIVEMAP_DEV_TILE_ARCHIVE"]
-    .flatMap { $0.isEmpty ? nil : URL(string: $0) }
-    ?? URL(string: "https://tiles.immersivemap.dev/20260922.pmtiles")!
+/// The default is the local copy of the hosted archive at
+/// `LocalTiles/<planet date>.pmtiles` in the repository root (ignored by
+/// git), downloaded once so the map reads tiles from disk and the network
+/// is out of the picture while the engine is judged. Without that copy the
+/// map reads the hosted archive. `IMMERSIVEMAP_DEV_TILE_ARCHIVE` in the
+/// scheme environment points the app at another archive without touching
+/// this file, a URL or the path of a file, which is what to reach for when
+/// comparing two builds of a tileset.
+private let devTileArchive: URL = {
+    if let value = ProcessInfo.processInfo.environment["IMMERSIVEMAP_DEV_TILE_ARCHIVE"],
+       value.isEmpty == false,
+       let url = value.hasPrefix("/") ? URL(fileURLWithPath: value) : URL(string: value) {
+        return url
+    }
+    let hosted = URL(string: "https://tiles.immersivemap.dev/20260922.pmtiles")!
+    let local = repositoryRoot
+        .appendingPathComponent("LocalTiles")
+        .appendingPathComponent(hosted.lastPathComponent)
+    return FileManager.default.fileExists(atPath: local.path) ? local : hosted
+}()
+
+/// The root of the repository this app is built from, found from this
+/// file's path: the app runs in Debug from the source tree, never shipped.
+private let repositoryRoot = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent()  // ImmersiveMapDevMac
+    .deletingLastPathComponent()  // ImmersiveMapDevMac (project)
+    .deletingLastPathComponent()  // Develop
+    .deletingLastPathComponent()  // repository root
 
 /// The models under review: the archive of model tiles the map reads,
 /// baked in the project the models are made in.

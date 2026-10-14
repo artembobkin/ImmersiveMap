@@ -57,8 +57,8 @@ enum RenderGraphFactory {
                                                           minimumZoom: settings.modelArchive?.minimumZoom ?? 0,
                                                           riseSeconds: settings.scene.extrusion.riseSeconds)
         let flatMapSurfaceSubsystem = FlatMapSurfaceRenderSubsystem(tilePipeline: context.tilePipeline,
-                                                                    groundSlotOwnerState: context.groundSlotOwnerState,
-                                                                    groundSlotTestState: context.groundSlotTestState,
+                                                                    groundOwnerState: context.groundOwnerState,
+                                                                    tileStencilTestState: context.tileStencilTestState,
                                                                     roadRankState: context.roadRankState,
                                                                     depthDisabledState: context.depthDisabledState,
                                                                     debugOverlayControls: debugOverlayControls,
@@ -69,10 +69,16 @@ enum RenderGraphFactory {
         let groundShadowMaskSubsystem = GroundShadowMaskRenderSubsystem(pipeline: context.groundShadowMaskPipeline,
                                                                         depthDisabledState: context.depthDisabledState,
                                                                         shadowMapTextureProvider: shadowMapTextureProvider)
+        let ringStencilSubsystem = RingStencilRenderSubsystem(device: context.metalContext.device,
+                                                              pipeline: context.ringStencilPipeline,
+                                                              ringStencilWriteState: context.ringStencilWriteState,
+                                                              depthDisabledState: context.depthDisabledState,
+                                                              groundReliefStore: context.groundReliefStore,
+                                                              groundFlattening: settings.tiles.groundFlattening)
         let rasterTileSubsystem = RasterTileRenderSubsystem(device: context.metalContext.device,
                                                             pipeline: context.rasterTilePipeline,
                                                             settings: settings.tiles.rasterization,
-                                                            groundSlotOwnerState: context.groundSlotOwnerState,
+                                                            groundOwnerState: context.groundOwnerState,
                                                             sphereOpaqueOwnerState: context.sphereOpaqueOwnerState,
                                                             depthDisabledState: context.depthDisabledState,
                                                             debugOverlayControls: debugOverlayControls,
@@ -132,6 +138,8 @@ enum RenderGraphFactory {
             avatarSubsystem,
             markerSubsystem,
             groundShadowMaskSubsystem,
+            // Before the ground: the rings' marks in the stencil.
+            ringStencilSubsystem,
             // Before both ground layers' vector subsystems: a texture owns
             // its pixels before the vector ground draws.
             rasterTileSubsystem,

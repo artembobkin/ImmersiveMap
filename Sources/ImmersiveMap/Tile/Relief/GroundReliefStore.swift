@@ -10,11 +10,9 @@ import simd
 /// The heights a flattened ground tile rises by (`Tile.metal`, the ground
 /// relief variant): a terrain tile's heights in metres as a texture, and
 /// where the ground tile lies in it, the terrain tile being the ground
-/// tile's own or an ancestor's. With them the roughness of the place
-/// (`GroundReliefRoughness`), of the tile of the roughness zoom over the
-/// ground tile, and the frame's part of the strength (`GroundReliefFrame`):
-/// a point of the ground rises by its height over the datum, times the
-/// strength of its place at the frame's zoom.
+/// tile's own or an ancestor's. With them the frame's strength: a point
+/// of the ground rises by its height over the datum, times the strength
+/// the frame's zoom leaves of the relief (`GroundReliefStore.setFrame`).
 struct GroundRelief {
     /// The terrain tile's heights (`GroundReliefTile`), the texture the
     /// vertex stages sample and the same numbers the CPU reads.
@@ -24,16 +22,11 @@ struct GroundRelief {
     /// The ground tile's side in the texture, in 0...1: 1 for the tile's
     /// own terrain, a half for its parent's.
     let scale: Float
-    /// The roughness of the ground tile's country, and where the tile
-    /// lies in it, as `origin` and `scale` in the heights.
-    let roughness: GroundReliefRoughness
-    let roughnessOrigin: SIMD2<Float>
-    let roughnessScale: Float
-    /// The frame's zoom and fades the strength is read at.
-    let frame: GroundReliefFrame
+    /// How much taller than the terrain the ground is drawn this frame:
+    /// the configured exaggeration times what the zoom fades leave.
+    let strength: Float
 
     var texture: MTLTexture { terrain.texture }
-    var roughnessTexture: MTLTexture { roughness.texture }
 
     /// The terrain's height in metres under a point of the ground tile, in
     /// the tile's uv (v from the north edge), bilinear between the texels
@@ -42,24 +35,11 @@ struct GroundRelief {
         terrain.metres(atTextureUV: origin + simd_clamp(uv, SIMD2<Float>(repeating: 0), SIMD2<Float>(repeating: 1)) * scale)
     }
 
-    /// How much of a mountain the ground under a point of the tile is, 0
-    /// to 1, as the vertex stage samples it.
-    func mountainShare(atTileUV uv: SIMD2<Float>) -> Float {
-        roughness.share(atTextureUV: roughnessOrigin
-                        + simd_clamp(uv, SIMD2<Float>(repeating: 0), SIMD2<Float>(repeating: 1)) * roughnessScale)
-    }
-
-    /// How much taller than the terrain the ground under a point of the
-    /// tile is drawn this frame.
-    func strength(atTileUV uv: SIMD2<Float>) -> Float {
-        frame.strength(mountainShare: mountainShare(atTileUV: uv))
-    }
-
     /// The metres a point of the tile is drawn at over the datum, the
-    /// strength of its place in them: what to multiply by the world units
-    /// per metre.
+    /// frame's strength in them: what to multiply by the world units per
+    /// metre.
     func drawnMetres(atTileUV uv: SIMD2<Float>, datumMetres: Float) -> Float {
-        (metres(atTileUV: uv) - datumMetres) * strength(atTileUV: uv)
+        (metres(atTileUV: uv) - datumMetres) * strength
     }
 
     /// Where a tile lies in the terrain tile `source` over it.
@@ -85,22 +65,16 @@ final class GroundReliefTile {
     let halves: [UInt16]
     /// The lowest and the highest height in the tile, in metres.
     let heightRange: ClosedRange<Float>
-    /// How much of a mountain each part of the tile is, read off these
-    /// heights (`GroundReliefRoughness`): the roughness of the tiles
-    /// under this one where this is the roughness zoom's tile, and of
-    /// this one while no coarser roughness is in.
-    let roughness: GroundReliefRoughness
 
-    init(texture: MTLTexture, size: Int, halves: [UInt16], heightRange: ClosedRange<Float>, roughness: GroundReliefRoughness) {
+    init(texture: MTLTexture, size: Int, halves: [UInt16], heightRange: ClosedRange<Float>) {
         self.texture = texture
         self.size = size
         self.halves = halves
         self.heightRange = heightRange
-        self.roughness = roughness
     }
 
     var costInBytes: Int {
-        texture.allocatedSize + halves.count * MemoryLayout<UInt16>.stride + roughness.costInBytes
+        texture.allocatedSize + halves.count * MemoryLayout<UInt16>.stride
     }
 
     /// The height in metres at a point of the texture, in 0...1, bilinear
@@ -181,38 +155,55 @@ final class GroundReliefStore: @unchecked Sendable {
 
     weak var eventSink: RenderFrameEventSink?
 
-    /// The frame's part of the relief's strength (`setFrame`): the camera
-    /// zoom the fades are read at, and the configured exaggeration scaled
-    /// by the appear fade. How much taller than the terrain a point of
-    /// the ground is drawn is this and the point's own mountain share
-    /// (`GroundRelief.strength(atTileUV:)`), so a city lies flat while a
-    /// mountain stands, and nothing moves with the camera but the zoom.
-    private(set) var frame: GroundReliefFrame
+    /// How much taller than the terrain the ground is drawn this frame
+    /// (`setFrame`): the configured exaggeration times what the appear
+    /// fade leaves at the frame's camera zoom times the collapse's share,
+    /// the same everywhere, so nothing moves with the camera but the
+    /// zoom.
+    private(set) var strengthScale: Float
+    /// How much of the relief stands against the collapse
+    /// (`GroundReliefSettings.collapseZoom`): 1 standing, 0 collapsed
+    /// into the plane, between them on its way over `collapseSeconds`.
+    private(set) var collapseShare: Float = 1
+    /// Whether the collapse, or the rise back, is under way this frame:
+    /// the frames keep coming while it is (`RenderFrameEngine`).
+    var isCollapsing: Bool { collapseShare > 0 && collapseShare < 1 }
     private let configuredExaggeration: Float
-    /// The zoom of the terrain tiles the roughness is read off
-    /// (`GroundReliefSettings.roughnessZoom`).
-    let roughnessZoom: Int
+    private let collapseZoom: Double
+    private let collapseSeconds: TimeInterval
+    /// The zoom of the terrain tiles the camera and the frame's datum read
+    /// (`GroundReliefSettings.cameraTerrainZoom`).
+    let cameraTerrainZoom: Int
     private let appearZoomFade: ImmersiveMapZoomFade
-    private let flatZoomFade: ImmersiveMapZoomFade
-    private let mountainZoomFade: ImmersiveMapZoomFade
-    private let reliefWindowMetres: Float
-    private let flatReliefMetres: Float
-    private let mountainReliefMetres: Float
 
     /// The frame's camera (`RenderFrameEngine`, once a frame, before
-    /// anything of the frame reads the relief): the zoom the fades are
-    /// read at, and the strength scale, the configured exaggeration times
-    /// the fade the relief comes in by at that zoom.
-    func setFrame(cameraZoom: Double) {
-        frame = GroundReliefFrame(cameraZoom: cameraZoom,
-                                  strengthScale: configuredExaggeration * appearZoomFade.alpha(atZoom: cameraZoom),
-                                  flatZoomFade: flatZoomFade,
-                                  mountainZoomFade: mountainZoomFade)
+    /// anything of the frame reads the relief): the appear fade is read
+    /// at `cameraZoom`, the camera's own, and the collapse moves toward
+    /// where `reliefZoom` puts it (the zoom held through a drag,
+    /// `cameraZoom` when nil), collapsed from `collapseZoom` on and
+    /// standing below it, by `deltaTime` over `collapseSeconds`, or at
+    /// once with `snap`. The strength is what the fade and the collapse
+    /// leave. Without a `deltaTime` the collapse is settled where the
+    /// zoom puts it.
+    func setFrame(cameraZoom: Double, reliefZoom: Double? = nil, deltaTime: TimeInterval? = nil, snap: Bool = false) {
+        let target: Float = (reliefZoom ?? cameraZoom) >= collapseZoom ? 0 : 1
+        if let deltaTime, snap == false, collapseSeconds > 0 {
+            let step = Float(max(deltaTime, 0) / collapseSeconds)
+            collapseShare = target > collapseShare ? min(collapseShare + step, target) : max(collapseShare - step, target)
+        } else {
+            collapseShare = target
+        }
+        strengthScale = strength(atCameraZoom: cameraZoom)
     }
 
-    /// The most a point of the ground is drawn taller than the terrain
-    /// this frame: the strength of a mountain.
-    var strengthScale: Float { frame.strengthScale }
+    /// The strength at a camera zoom this frame: the configured
+    /// exaggeration times the appear fade's alpha
+    /// (`GroundReliefSettings.appearZoomFade`) times the collapse's share
+    /// as it stands, eased.
+    func strength(atCameraZoom zoom: Double) -> Float {
+        let share = collapseShare * collapseShare * (3 - 2 * collapseShare)
+        return configuredExaggeration * appearZoomFade.alpha(atZoom: zoom) * share
+    }
     /// The frame's tile zoom the ground rises from
     /// (`GroundReliefSettings.fromTileZoom`): a frame of coarser tiles,
     /// and whatever stands on them, lies on the plane, and so does the
@@ -220,20 +211,20 @@ final class GroundReliefStore: @unchecked Sendable {
     let fromTileZoom: Int
     /// Whether the frame is on the terrain (`RenderFrameEngine`, once a
     /// frame): the flat map with tiles of the relief's zoom or deeper,
-    /// at a camera zoom the relief has come in at (`comesIn(atCameraZoom:)`).
-    /// Off, every tile and whatever stands on it lies on the plane, no
-    /// terrain is read or loaded and the camera stands on the plane. On,
-    /// every tile of the frame rises, however coarse, so no tile left on
-    /// the plane cuts through the valleys under the point looked at, and
-    /// the terrain is read even where the fades have scaled the relief
-    /// to nothing: the fade over flat ground or the mountains is told by
-    /// the terrain itself, which has to be in to tell.
+    /// at a camera zoom the fade and the collapse leave any relief at
+    /// (`isVisible(atCameraZoom:)`). Off, every tile and whatever stands
+    /// on it lies on the plane, no terrain is read or loaded and the
+    /// camera stands on the plane. On, every tile of the frame rises,
+    /// however coarse, so no tile left on the plane cuts through the
+    /// valleys under the point looked at.
     private(set) var isActive = true
 
-    /// Whether the relief has come in at a camera zoom
-    /// (`GroundReliefSettings.appearZoomFade`): past the fade's start.
-    func comesIn(atCameraZoom zoom: Double) -> Bool {
-        appearZoomFade.alpha(atZoom: zoom) > 0
+    /// Whether anything of the relief stands: past the appear fade's start
+    /// at the camera's zoom (`GroundReliefSettings.appearZoomFade`), and
+    /// short of `collapseZoom` at `reliefZoom` (the zoom held through a
+    /// drag, the camera's when nil) or still on its way into the plane.
+    func isVisible(atCameraZoom zoom: Double, reliefZoom: Double? = nil) -> Bool {
+        appearZoomFade.alpha(atZoom: zoom) > 0 && ((reliefZoom ?? zoom) < collapseZoom || collapseShare > 0)
     }
     /// The least height the camera keeps over the relief under it.
     let cameraClearanceMetres: Float
@@ -305,17 +296,11 @@ final class GroundReliefStore: @unchecked Sendable {
         self.device = device
         self.configuredExaggeration = settings.exaggeration
         self.appearZoomFade = settings.appearZoomFade
-        self.flatZoomFade = settings.flatZoomFade
-        self.mountainZoomFade = settings.mountainZoomFade
-        self.reliefWindowMetres = max(settings.reliefWindowMetres, 1)
-        self.flatReliefMetres = max(settings.flatReliefMetres, 0)
-        self.mountainReliefMetres = max(settings.mountainReliefMetres, settings.flatReliefMetres)
-        self.roughnessZoom = max(0, settings.roughnessZoom)
+        self.collapseZoom = settings.collapseZoom
+        self.collapseSeconds = max(settings.collapseSeconds, 0)
+        self.cameraTerrainZoom = max(0, settings.cameraTerrainZoom)
         // Until the first frame: the relief as configured, no fade.
-        self.frame = GroundReliefFrame(cameraZoom: 0,
-                                       strengthScale: settings.exaggeration,
-                                       flat: GroundReliefFrame.noFade,
-                                       mountain: GroundReliefFrame.noFade)
+        self.strengthScale = settings.exaggeration
         self.fromTileZoom = settings.fromTileZoom
         self.cameraClearanceMetres = max(0, settings.cameraClearanceMetres)
         self.tileURLTemplate = settings.tileURLTemplate
@@ -355,14 +340,20 @@ final class GroundReliefStore: @unchecked Sendable {
 
     /// The camera's terrain (`CameraTerrainFollow`): a pan keeps the eye's
     /// height by the zoom, and the zoom stops at the clearance over a
-    /// ridge. The terrain is read at the zoom the frame's datum and ground
-    /// read it at (`GroundReliefCameraLift.datumMetres`), the zoom of the
-    /// tiles a frame at `cameraZoom` draws: a coarser zoom's terrain is
-    /// another tile with other heights, and a camera held level by one
-    /// while the ground is drawn by the other bobs by their difference.
-    /// The terrain is read as drawn (`drawnMetres`), at the strength of
-    /// each place. The camera over tiles coarser than the relief's zoom
-    /// is over the plane, like the tiles.
+    /// ridge. The terrain is one map at every zoom, the terrain tiles of
+    /// `cameraTerrainZoom` (`GroundReliefSettings.cameraTerrainZoom`), the
+    /// map the frame's datum reads too (`GroundReliefCameraLift.datumMetres`).
+    /// Read off the map of the frame's own tiles instead, a ray grazing a
+    /// ridge answers in a loop: the map of one zoom says ridge, the arm
+    /// shortens, the zoom crosses a level, the map of the next zoom,
+    /// another grid with other heights, says plain, the arm lengthens, the
+    /// zoom crosses back, and the camera shakes between the two every
+    /// frame. One map, and the ridge is a ridge or not by the eye's place
+    /// alone. The ground is drawn by its rings' own maps, which disagree
+    /// with the camera's by their grids' difference, metres on a ridge. The
+    /// terrain is read as drawn (`drawnMetres`), at the strength of each
+    /// place. The camera over tiles coarser than the relief's zoom is over
+    /// the plane, like the tiles.
     func makeTerrainFollow(tileSettings: ImmersiveMapSettings.TileSettings,
                            globeRadiusScale: Double,
                            cameraZoom: @escaping () -> Double) -> CameraTerrainFollow {
@@ -373,11 +364,18 @@ final class GroundReliefStore: @unchecked Sendable {
                 guard tileZoom >= self.fromTileZoom else {
                     return 0
                 }
-                return self.drawnMetres(atNormalizedWorld: point, terrainZoom: Self.terrainZoom(forTargetZoom: tileZoom))
+                return self.drawnMetres(atNormalizedWorld: point, terrainZoom: self.cameraTerrainZoom)
             },
             clearanceMetres: Double(cameraClearanceMetres),
-            globeRadiusScale: globeRadiusScale)
+            globeRadiusScale: globeRadiusScale,
+            sampleStepWorld: 1 / (Double(1 << cameraTerrainZoom) * Double(Self.nominalTerrainTileSize)))
     }
+
+    /// The texels across a terrain tile the camera's march is stepped by
+    /// (`CameraTerrainFollow.sampleStepWorld`): Mapterhorn's 512. A source
+    /// of coarser tiles is marched finer than its texel, which costs
+    /// samples and nothing else.
+    static let nominalTerrainTileSize = 512
 
     /// The relief of a ground tile, read out of the terrain of
     /// `terrainZoom`, the ring's (`terrainZoom(forTargetZoom:)`), or of
@@ -407,15 +405,7 @@ final class GroundReliefStore: @unchecked Sendable {
         while true {
             if let terrain = terrains.value(forKey: source) {
                 let placement = GroundRelief.placement(of: tile, in: source)
-                let roughness = roughnessSourceLocked(for: tile, heights: source, terrain: terrain)
-                let roughnessPlacement = GroundRelief.placement(of: tile, in: roughness.tile)
-                return GroundRelief(terrain: terrain,
-                                    origin: placement.origin,
-                                    scale: placement.scale,
-                                    roughness: roughness.terrain.roughness,
-                                    roughnessOrigin: roughnessPlacement.origin,
-                                    roughnessScale: roughnessPlacement.scale,
-                                    frame: frame)
+                return GroundRelief(terrain: terrain, origin: placement.origin, scale: placement.scale, strength: strengthScale)
             }
             if standInOnly == false, missingTiles.contains(source) == false {
                 switch statesByTile[source] {
@@ -446,40 +436,6 @@ final class GroundReliefStore: @unchecked Sendable {
         }
     }
 
-    /// The terrain tile the roughness of a ground tile is read off: the
-    /// tile of the roughness zoom over it, or the ground tile's own zoom
-    /// where that is coarser, whose load starts here, or, while that is
-    /// on its way, the finest coarser one in, and, with none in at all,
-    /// the heights' own tile, which has a roughness of its own country.
-    /// Called under `lock`.
-    private func roughnessSourceLocked(for tile: Tile, heights: Tile, terrain: GroundReliefTile) -> (tile: Tile, terrain: GroundReliefTile) {
-        var source = tile.findParentTile(atZoom: max(min(roughnessZoom, tile.z), 0)) ?? tile
-        var asked = false
-        while true {
-            if let resident = terrains.value(forKey: source) {
-                return (source, resident)
-            }
-            if asked == false, missingTiles.contains(source) == false {
-                switch statesByTile[source] {
-                case .loading:
-                    break
-                case .failed(let attempts, let retryAt):
-                    if now() >= retryAt, activeLoads < Self.maximumConcurrentLoads {
-                        startLoad(source, failedAttempts: attempts)
-                    }
-                case nil:
-                    if activeLoads < Self.maximumConcurrentLoads {
-                        startLoad(source, failedAttempts: 0)
-                    }
-                }
-                asked = true
-            }
-            guard source.z > 0, let parent = source.findParentTile(atZoom: source.z - 1) else {
-                return (heights, terrain)
-            }
-            source = parent
-        }
-    }
 
     /// The relief under a point of the world (normalized world mercator),
     /// from the terrain tile of `terrainZoom` that holds it, or the finest
@@ -514,34 +470,21 @@ final class GroundReliefStore: @unchecked Sendable {
         return found.relief.metres(atTileUV: found.uv)
     }
 
-    /// How much of a mountain the ground under a point of the world is, 0
-    /// to 1 (`GroundReliefRoughness`): zero off the terrain, nil while no
-    /// terrain over the point is in.
-    func mountainShare(atNormalizedWorld point: SIMD2<Double>, terrainZoom zoom: Int) -> Float? {
-        guard isActive else {
-            return 0
-        }
-        guard let found = relief(atNormalizedWorld: point, terrainZoom: zoom) else {
-            return nil
-        }
-        return found.relief.mountainShare(atTileUV: found.uv)
-    }
-
     /// How much taller than the terrain the ground under a point of the
-    /// world is drawn this frame, by the roughness of the place: zero off
-    /// the terrain, nil while no terrain over the point is in.
+    /// world is drawn this frame: zero off the terrain, nil while no
+    /// terrain over the point is in.
     func strength(atNormalizedWorld point: SIMD2<Double>, terrainZoom zoom: Int) -> Float? {
         guard isActive else {
             return 0
         }
-        guard let found = relief(atNormalizedWorld: point, terrainZoom: zoom) else {
+        guard relief(atNormalizedWorld: point, terrainZoom: zoom) != nil else {
             return nil
         }
-        return found.relief.strength(atTileUV: found.uv)
+        return strengthScale
     }
 
     /// The terrain under a point of the world as drawn: the datum plus
-    /// the height over it at the strength of the place, in metres, so the
+    /// the height over it at the frame's strength, in metres, so the
     /// point the camera looks at reads as its own height and the country
     /// around it as high as it is drawn. Nil while no terrain over the
     /// point is in, zero off the terrain.
@@ -556,8 +499,8 @@ final class GroundReliefStore: @unchecked Sendable {
     }
 
     /// The world units a metre of terrain rises by over a tile: the world
-    /// units per metre at the tile's latitude. The strength of a place is
-    /// not in it (`GroundRelief.strength(atTileUV:)`).
+    /// units per metre at the tile's latitude. The frame's strength is
+    /// not in it (`GroundRelief.strength`).
     func worldUnitsPerMetre(over tile: Tile, renderMapSize: Double) -> Float {
         let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: (Double(tile.y) + 0.5) / Double(1 << tile.z))
         return Float(ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: latitude, renderMapSize: renderMapSize))
@@ -638,7 +581,7 @@ final class GroundReliefStore: @unchecked Sendable {
     }
 
     /// The heights as half floats, in a texture for the GPU and on the
-    /// CPU, and the roughness of the tile's country read off them.
+    /// CPU.
     private func makeTerrain(_ heights: GroundReliefHeights, tile: Tile) throws -> GroundReliefTile {
         let size = heights.size
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r16Float,
@@ -671,19 +614,10 @@ final class GroundReliefStore: @unchecked Sendable {
         var highest: Float = 0
         vDSP_minv(heights.metres, 1, &lowest, vDSP_Length(heights.metres.count))
         vDSP_maxv(heights.metres, 1, &highest, vDSP_Length(heights.metres.count))
-        guard let roughness = GroundReliefRoughness.make(heights: heights,
-                                                         tile: tile,
-                                                         windowMetres: reliefWindowMetres,
-                                                         flatMetres: flatReliefMetres,
-                                                         mountainMetres: mountainReliefMetres,
-                                                         device: device) else {
-            throw URLError(.cannotCreateFile)
-        }
         return GroundReliefTile(texture: texture,
                                 size: size,
                                 halves: halves,
-                                heightRange: min(lowest, highest) ... max(lowest, highest),
-                                roughness: roughness)
+                                heightRange: min(lowest, highest) ... max(lowest, highest))
     }
 
     /// A load that ended: the terrain, or nil for a tile the source does

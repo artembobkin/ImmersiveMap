@@ -120,7 +120,7 @@ struct GroundFogUniform {
                        renderSurfaceMode: frameContext.renderSurfaceMode,
                        cameraEye: frameContext.cameraEye,
                        worldUnitsPerMeter: unitsPerMeter,
-                       zoom: frameContext.zoom,
+                       zoom: frameContext.animatedZoom,
                        onGroundRelief: frameContext.services.groundRelief?.isActive ?? false)
     }
 

@@ -53,7 +53,7 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
         GlobeVectorSurfaceDrawer.draw(renderEncoder: encoder,
                                       cameraUniform: frameContext.cameraUniform,
                                       globe: globe,
-                                      cameraZoom: frameContext.zoom,
+                                      cameraZoom: frameContext.animatedZoom,
                                       pixelsPerPoint: Float(frameContext.pixelsPerPoint),
                                       drawableHeightPx: Float(frameContext.drawSize.height),
                                       renderMapSize: frameContext.resolvedPresentation.renderNormalizationState.flatRenderMapSize,

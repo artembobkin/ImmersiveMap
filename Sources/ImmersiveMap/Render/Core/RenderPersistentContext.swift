@@ -50,10 +50,10 @@ final class RenderPersistentContext {
     /// slot states; see SharedRenderResources.
     let sphereOpaqueOwnerState: MTLDepthStencilState
     let tileStencilTestState: MTLDepthStencilState
-    let groundSlotOwnerState: MTLDepthStencilState
-    let groundSlotTestState: MTLDepthStencilState
+    let groundOwnerState: MTLDepthStencilState
     let roadRankState: MTLDepthStencilState
     let extrudedStencilTestState: MTLDepthStencilState
+    let ringStencilWriteState: MTLDepthStencilState
     /// See `SharedRenderResources.sceneModelSurfaceMaskState`.
     let sceneModelSurfaceMaskState: MTLDepthStencilState
     /// See `SharedRenderResources.sceneModelGroundCutStates`.
@@ -86,6 +86,7 @@ final class RenderPersistentContext {
     /// off (`TileSettings.GroundReliefSettings`).
     let groundReliefStore: GroundReliefStore?
     let modelTilePipeline: ModelTilePipeline
+    let ringStencilPipeline: RingStencilPipeline
 
     // MARK: - Avatar and Debug Resources
 
@@ -124,9 +125,9 @@ final class RenderPersistentContext {
         self.depthDisabledState = shared.depthDisabledState
         self.groundDepthState = shared.groundDepthState
         self.sphereOpaqueOwnerState = shared.sphereOpaqueOwnerState
-        self.groundSlotOwnerState = shared.groundSlotOwnerState
-        self.groundSlotTestState = shared.groundSlotTestState
+        self.groundOwnerState = shared.groundOwnerState
         self.extrudedStencilTestState = shared.extrudedStencilTestState
+        self.ringStencilWriteState = shared.ringStencilWriteState
         self.sceneModelSurfaceMaskState = shared.sceneModelSurfaceMaskState
         self.sceneModelGroundCutStates = shared.sceneModelGroundCutStates
         self.tileStencilTestState = shared.tileStencilTestState
@@ -175,6 +176,7 @@ final class RenderPersistentContext {
         self.sceneModelMeshStore.eventSink = eventSink
         self.sceneModelPipeline = shared.sceneModelPipeline
         self.modelTilePipeline = shared.modelTilePipeline
+        self.ringStencilPipeline = shared.ringStencilPipeline
         self.modelTileStore = ModelTileStore.make(settings: config,
                                                   device: metal.device,
                                                   schema: styleRuntime.schema)

@@ -235,3 +235,4 @@ final class CameraTerrainFollowTests: XCTestCase {
         XCTAssertEqual(controller.zoom, limit - 3, accuracy: 1e-6, "A zoom out is free")
     }
 }
+

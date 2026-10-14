@@ -298,6 +298,28 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// How fast the animated zoom follows the camera's: the seconds in
+    /// which it closes half of what is left of the way. The camera's zoom
+    /// is the fact of a frame, and the tiles, the rings and the camera's
+    /// pose read it as it is. What dresses the frame by the zoom (the
+    /// ground fog, the styles' zoom fades, the labels' reach) reads the
+    /// animated one, and the relief's collapse a zoom held through a drag and
+    /// then followed the same way, so a zoom that jumps in one frame, as
+    /// it does over a relief when the point the camera looks at drops off
+    /// a ridge onto the plain below, dresses the frame over a few frames
+    /// rather than at once. A camera set outright snaps it. Zero makes the
+    /// two one.
+    ///
+    ///     ImmersiveMapView()
+    ///         .animatedZoom(halfLife: 0.3)
+    ///
+    /// See `ImmersiveMapSettings.CameraSettings.animatedZoomHalfLife`.
+    func animatedZoom(halfLife: Double) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.animatedZoom(halfLife: halfLife)
+        return view
+    }
+
     /// Restricts the tilt angles the camera can reach, in radians from straight
     /// down. Gestures, camera commands and flights are all clamped to the range
     /// on both surfaces alike; a minimum above the maximum yields to it.
@@ -756,8 +778,12 @@ public extension ImmersiveMapView {
     /// heightmap. The default is the tileset's deepest zoom, 15, on a grid
     /// of 16. `gridByTileZoom` gives a zoom a grid of its own, over `grid`:
     /// with the ground relief on from a coarse zoom, a coarse tile's cell
-    /// covers far more ground, and more cells keep its relief as fine. An
-    /// omitted value is left as configured:
+    /// covers far more ground, and more cells keep its relief as fine. By
+    /// default the relief's zooms take a cell of about the same ground,
+    /// 256 cells at zooms 9 to 11, 128 at 12, 64 at 13 and 32 at 14, and
+    /// the globe's zooms the grid the sphere was split by, 64 at 0 and 1
+    /// and 32 at 2 and 3 (`GroundFlatteningSettings.defaultGridByTileZoom`).
+    /// An omitted value is left as configured:
     ///
     ///     ImmersiveMapView()
     ///         .groundFlattening(fromTileZoom: 15, grid: 32, gridByTileZoom: [12: 128, 13: 96, 14: 64])
@@ -777,14 +803,13 @@ public extension ImmersiveMapView {
     /// rises `exaggeration` times as high as the terrain is. The relief
     /// comes in with the camera zoom by `appearZoomFade` (flat to zoom 10
     /// and full from 11 by default, the mountains rising out of the
-    /// plane between), and is scaled down again as the camera comes
-    /// closer: over flat ground by `flatZoomFade` (full to
-    /// zoom 10 and flat from 12 by default), over mountains by
-    /// `mountainZoomFade` (17 to 18), each place being read as one or the
-    /// other, or between, by the rise and fall of the terrain within
-    /// `reliefWindowMetres` of it, from `flatReliefMetres` to
-    /// `mountainReliefMetres`, off the terrain tiles of `roughnessZoom`.
-    /// `.none` for either keeps the relief at every zoom. The roads,
+    /// plane between), and collapses into the plane as the camera comes
+    /// closer, at `collapseZoom` (13.7 by default) over `collapseSeconds`
+    /// (0.3), everywhere alike, rising again when the zoom crosses back.
+    /// `.none` for the fade, or a `collapseZoom` past the deepest zoom,
+    /// keeps the relief at every zoom. The camera flies
+    /// over one map at every zoom, the terrain tiles of
+    /// `cameraTerrainZoom` (12 by default). The roads,
     /// the buildings and the labels rise with
     /// it. The ground rises from `fromTileZoom` on (0 by default, as soon
     /// as the map is the plane): a tile of that zoom or deeper is
@@ -808,12 +833,9 @@ public extension ImmersiveMapView {
                              encoding: ImmersiveMapSettings.TileSettings.GroundReliefEncoding? = nil,
                              exaggeration: Float? = nil,
                              appearZoomFade: ImmersiveMapZoomFade? = nil,
-                             flatZoomFade: ImmersiveMapZoomFade? = nil,
-                             mountainZoomFade: ImmersiveMapZoomFade? = nil,
-                             reliefWindowMetres: Float? = nil,
-                             flatReliefMetres: Float? = nil,
-                             mountainReliefMetres: Float? = nil,
-                             roughnessZoom: Int? = nil,
+                             collapseZoom: Double? = nil,
+                             collapseSeconds: TimeInterval? = nil,
+                             cameraTerrainZoom: Int? = nil,
                              memoryBudgetInBytes: Int? = nil,
                              cameraClearanceMetres: Float? = nil) -> ImmersiveMapView {
         var view = self
@@ -823,12 +845,9 @@ public extension ImmersiveMapView {
                                                    encoding: encoding,
                                                    exaggeration: exaggeration,
                                                    appearZoomFade: appearZoomFade,
-                                                   flatZoomFade: flatZoomFade,
-                                                   mountainZoomFade: mountainZoomFade,
-                                                   reliefWindowMetres: reliefWindowMetres,
-                                                   flatReliefMetres: flatReliefMetres,
-                                                   mountainReliefMetres: mountainReliefMetres,
-                                                   roughnessZoom: roughnessZoom,
+                                                   collapseZoom: collapseZoom,
+                                                   collapseSeconds: collapseSeconds,
+                                                   cameraTerrainZoom: cameraTerrainZoom,
                                                    memoryBudgetInBytes: memoryBudgetInBytes,
                                                    cameraClearanceMetres: cameraClearanceMetres)
         return view
@@ -954,31 +973,26 @@ public extension ImmersiveMapView {
     }
 
     /// The extruded buildings and the models of a model archive: the
-    /// camera zoom the buildings draw from, and how long a layer takes to
-    /// rise out of the ground when the camera reaches its zoom
-    /// (`ImmersiveMapSettings.ExtrusionSettings`). The buildings grow from
-    /// the ground to their height, the models come up out of it whole. An
-    /// omitted value is left as configured:
+    /// camera zoom the buildings draw from, how long a layer takes to
+    /// rise out of the ground when the camera reaches its zoom, and
+    /// whether it rises at all (`ImmersiveMapSettings.ExtrusionSettings`).
+    /// The buildings grow from the ground to their height, the models come
+    /// up out of it whole. `risesFromTheGround` off stands a layer up at
+    /// once, on it takes `riseSeconds`, or the default 0.6 seconds when
+    /// that is zero. An omitted value is left as configured:
     ///
     ///     ImmersiveMapView()
-    ///         .extrusion(buildingsMinimumZoom: 15, riseSeconds: 0.6)
+    ///         .buildingExtrusion(buildingsMinimumZoom: 15, riseSeconds: 0.6)
+    ///         .buildingExtrusion(risesFromTheGround: false)
     ///
-    /// A rise of zero stands a layer up at once. Applies live.
-    public func extrusion(buildingsMinimumZoom: Double? = nil,
-                          riseSeconds: TimeInterval? = nil) -> ImmersiveMapView {
+    /// Applies live.
+    public func buildingExtrusion(buildingsMinimumZoom: Double? = nil,
+                                  riseSeconds: TimeInterval? = nil,
+                                  risesFromTheGround: Bool? = nil) -> ImmersiveMapView {
         var view = self
-        view.settings = view.settings.extrusion(buildingsMinimumZoom: buildingsMinimumZoom,
-                                                riseSeconds: riseSeconds)
-        return view
-    }
-
-    /// The rise out of the ground on or off, for the extruded buildings
-    /// and the models alike. Off, a layer stands up at once when the
-    /// camera reaches its zoom. On, it takes the configured
-    /// `riseSeconds`, or the default 0.6 seconds when that is zero.
-    public func extrusion(risesFromTheGround: Bool) -> ImmersiveMapView {
-        var view = self
-        view.settings = view.settings.extrusion(risesFromTheGround: risesFromTheGround)
+        view.settings = view.settings.buildingExtrusion(buildingsMinimumZoom: buildingsMinimumZoom,
+                                                        riseSeconds: riseSeconds,
+                                                        risesFromTheGround: risesFromTheGround)
         return view
     }
 

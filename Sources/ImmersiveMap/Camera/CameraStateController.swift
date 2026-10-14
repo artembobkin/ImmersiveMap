@@ -15,6 +15,11 @@ class CameraStateController {
     /// map without a relief: a pan keeps the eye's height by the zoom, and
     /// the zoom stops at the clearance over the terrain.
     var terrainFollow: CameraTerrainFollow?
+    /// How the last move over the terrain was settled, for the debug panel
+    /// (`TerrainFollowReport`). Nil before any, or off the terrain.
+    private(set) var lastTerrainFollowReport: TerrainFollowReport?
+    /// Which path the last settle took (`settleOnTerrain`).
+    private var lastSettlePath: TerrainFollowReport.Path = .hit
     /// The zoom a drag over the terrain moves the map by: the zoom at the
     /// drag's start, held to its end (`endPan`), nil between drags. Over
     /// the terrain the zoom follows the ground the camera looks at
@@ -22,7 +27,11 @@ class CameraStateController {
     /// drag moved by the zoom of the moment would slow on the way up and
     /// hurry on the way down. The eye keeps its altitude through the drag,
     /// so the zoom the drag began at is the one that fits the whole of it.
-    private var panReferenceZoom: Double?
+    /// The relief's collapse reads it too (`RenderFrameEngine`): the ground
+    /// under the point the drag slides over rises and falls, the arm and
+    /// the zoom with it, and a relief faded by the zoom of the moment
+    /// would breathe with every slope the drag crosses.
+    private(set) var panReferenceZoom: Double?
 
     var globePan: SIMD2<Double> {
         ImmersiveMapProjection.globePan(fromCenterWorldMercator: cameraState.centerWorldMercator)
@@ -125,6 +134,7 @@ class CameraStateController {
         if transition >= 1, let terrainFollow {
             let followed = followTerrain(from: cameraState.centerWorldMercator, to: proposedCenter, follow: terrainFollow)
             cameraState.zoom = clearedZoom(followed.zoom, center: followed.center, follow: terrainFollow)
+            recordTerrainFollow(followedZoom: followed.zoom, center: followed.center, follow: terrainFollow)
             setCenterWorldMercator(followed.center)
             return
         }
@@ -149,6 +159,17 @@ class CameraStateController {
     /// (`panReferenceZoom`).
     func endPan() {
         panReferenceZoom = nil
+    }
+
+    /// The report of a move just settled: the path the settle took, the
+    /// arm at the zoom it answered, and how far the clearance lowered
+    /// that zoom (`clearedZoom`, applied to `cameraState.zoom` already).
+    private func recordTerrainFollow(followedZoom: Double, center: SIMD2<Double>, follow: CameraTerrainFollow) {
+        let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: center.y)
+        let arm = CameraTerrainFollow.eyeDistanceMetres(zoom: followedZoom, latitude: latitude, globeRadiusScale: follow.globeRadiusScale)
+        lastTerrainFollowReport = TerrainFollowReport(path: lastSettlePath,
+                                                      armMetres: arm,
+                                                      clearedZoomDelta: cameraState.zoom - followedZoom)
     }
 
     /// A pan over the terrain: the eye moves over the map by the pan, from
@@ -249,26 +270,39 @@ class CameraStateController {
         func crossing(_ r: Double) -> Double? {
             follow.terrainMetres(eyeGround + forward * (r / metresPerWorld)).map { r - (eyeAltitude - Double($0)) * tanPitch }
         }
+        // The fallback keeps the arm: the point goes where the pan puts it
+        // and the zoom stays, so a frame the ray cannot be settled on (the
+        // eye under the terrain, the terrain not known, no ground within
+        // reach) moves the camera the plain way and changes nothing else.
+        // A zoom read off the ground under the point instead jumped: an
+        // eye a hair under a crest read a height of nothing over the
+        // crest's own top and the zoom went to its limit.
         let fallback = { () -> (center: SIMD2<Double>, zoom: Double) in
-            guard let heightTo = follow.terrainMetres(to) else {
-                return (to, self.cameraState.zoom)
-            }
-            let latitudeTo = ImmersiveMapProjection.latitude(fromNormalizedWorldY: to.y)
-            let height = max(eyeAltitude - Double(heightTo), follow.clearanceMetres)
-            return (to, follow.zoom(forEyeHeightMetres: height, pitch: pitch, latitude: latitudeTo, range: zoomRange))
+            self.lastSettlePath = .fallback
+            return (to, self.cameraState.zoom)
         }
-        guard let start = crossing(0), start < 0 else {
+        // The eye is over the terrain under it, to within a metre: an eye
+        // skimming a crest at a clearance of nothing is a hair over or
+        // under it from frame to frame, and the hair must not pick the
+        // path.
+        guard let start = crossing(0), start <= tanPitch * Self.eyeOverGroundToleranceMetres else {
             return fallback()
         }
-        // The march: the ray is tried further and further ahead, in steps
-        // of a part of the old reach (the new reach is of its order), as
-        // far as eight times that reach, which is where the ground would
-        // have fallen out of the zoom's range anyway.
-        let step = max(reach, 1) / 8
+        lastSettlePath = .hit
+        // The march: the ray is tried further and further ahead, one
+        // terrain texel at a time (`CameraTerrainFollow.sampleStepWorld`),
+        // as far as eight times the old reach, which is where the ground
+        // would have fallen out of the zoom's range anyway. By the texel,
+        // not by the zoom: a step that grew with the reach found a ridge
+        // at one zoom and stepped over it at the next, and the camera
+        // shook between the two answers. A far reach caps the samples and
+        // coarsens the step instead.
+        let farthest = max(reach, 1) * 8
+        let step = max(follow.sampleStepWorld * metresPerWorld, farthest / Double(Self.marchSampleLimit), 0.5)
         var lowReach = 0.0
         var highReach: Double?
         var r = step
-        for _ in 0 ..< 64 {
+        while r <= farthest {
             guard let value = crossing(r) else {
                 return fallback()
             }
@@ -302,6 +336,13 @@ class CameraStateController {
         let height = max(eyeAltitude - Double(heightTo), follow.clearanceMetres)
         return (center, follow.zoom(forEyeHeightMetres: height, pitch: pitch, latitude: latitudeTo, range: zoomRange))
     }
+
+    /// The most samples the march takes along the ray: a reach far past
+    /// what the texel's step covers in that many is marched coarser.
+    static let marchSampleLimit = 1024
+    /// How far under the terrain the eye may be read and still be over it
+    /// (`settleOnTerrain`).
+    static let eyeOverGroundToleranceMetres = 1.0
 
     /// The fastest the elastic pull gets, as a multiple of its rate at the
     /// edge: a center far out, after a jump or a deep zoom, still glides in
@@ -549,7 +590,9 @@ class CameraStateController {
 
         let previousZoom = cameraState.zoom
         // The terrain under the point as the old zoom reads it, before
-        // the new one reads another map (`followTerrainZoom`).
+        // the new one reads another map (`followTerrainZoom`): the same
+        // map at every zoom (`GroundReliefSettings.cameraTerrainZoom`),
+        // so nothing moves unless the zoom crosses onto the plane.
         let heightBefore = terrainFollow?.terrainMetres(cameraState.centerWorldMercator)
         cameraState.zoom += delta
         cameraState.zoom = settings.clampZoom(cameraState.zoom)
@@ -561,8 +604,29 @@ class CameraStateController {
             }
             // Over a terrain the zoom stops where the eye would come
             // nearer than the clearance to the ground under it.
+            let followedZoom = cameraState.zoom
             cameraState.zoom = clearedZoom(cameraState.zoom, center: cameraState.centerWorldMercator, follow: terrainFollow)
+            recordTerrainFollow(followedZoom: followedZoom, center: cameraState.centerWorldMercator, follow: terrainFollow)
         }
         constrainCenterToBounds()
     }
+}
+
+/// How the camera's last move over the terrain was settled
+/// (`CameraStateController.lastTerrainFollowReport`), for the debug panel:
+/// whether the view ray met the terrain or the move fell back to the plain
+/// pan, the arm the settle answered with, and how far the clearance over
+/// the ridge under the eye lowered that zoom afterwards.
+struct TerrainFollowReport: Equatable {
+    enum Path: String {
+        case hit
+        case fallback
+    }
+
+    let path: Path
+    /// The eye's distance from the point it looks at, in metres.
+    let armMetres: Double
+    /// The zoom after the clearance less the zoom the settle answered,
+    /// zero or negative.
+    let clearedZoomDelta: Double
 }

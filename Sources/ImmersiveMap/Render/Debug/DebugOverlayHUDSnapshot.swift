@@ -20,8 +20,9 @@ struct DebugOverlayHUDSnapshot: Equatable {
     let topPadding: Float
     let sectionSpacing: Float
     let textColor: SIMD3<Float>
-    /// The camera zoom as a number, for the controls that read a value off
-    /// a zoom curve (the ground fog group).
+    /// The animated zoom as a number (`FrameContext.animatedZoom`), for the
+    /// controls that read a value off a zoom curve (the ground fog group),
+    /// which the frame reads at that zoom.
     var cameraZoom: Double = 0
 
     /// The same frame snapshot with the tile list read again from the
@@ -42,6 +43,7 @@ struct DebugOverlayHUDSnapshot: Equatable {
 
     static func make(settings: ImmersiveMapSettings.DebugSettings,
                      zoom: Double,
+                     animatedZoom: Double? = nil,
                      latitude: Double,
                      longitude: Double,
                      cameraDebugLines: [String],
@@ -67,7 +69,7 @@ struct DebugOverlayHUDSnapshot: Equatable {
             topPadding: settings.topPadding,
             sectionSpacing: settings.sectionSpacing,
             textColor: settings.textColor,
-            cameraZoom: zoom
+            cameraZoom: animatedZoom ?? zoom
         )
     }
 
@@ -78,6 +80,7 @@ struct DebugOverlayHUDSnapshot: Equatable {
         let cameraPosition = frameContext.mapCameraState.cameraPosition()
         return make(settings: settings,
                     zoom: frameContext.mapCameraState.zoom,
+                    animatedZoom: frameContext.animatedZoom,
                     latitude: cameraPosition.latitudeDegrees,
                     longitude: cameraPosition.longitudeDegrees,
                     cameraDebugLines: makeCameraDebugLines(frameContext: frameContext),
@@ -97,12 +100,16 @@ struct DebugOverlayHUDSnapshot: Equatable {
         let targetZoomCounts = zoomCountsLine(title: "targetZ", tiles: placeTiles.map { $0.placeIn.tile })
 
         var lines = [
-            "camera z:\(format(cameraState.zoom)) pitch:\(format(pitchDegrees)) bearing:\(format(bearingDegrees))",
+            "camera z:\(format(cameraState.zoom)) animated z:\(format(frameContext.animatedZoom)) "
+                + "pitch:\(format(pitchDegrees)) bearing:\(format(bearingDegrees))",
             "surface:\(surface) transition:\(format(Double(frameContext.transition))) viewport:\(Int(viewport.x))x\(Int(viewport.y))",
             "eye x:\(format(Double(eye.x))) y:\(format(Double(eye.y))) z:\(format(Double(eye.z)))"
         ]
         if let relief = reliefLine(frameContext: frameContext) {
             lines.append(relief)
+        }
+        if let report = frameContext.terrainFollowReport, frameContext.renderSurfaceMode == .flat {
+            lines.append("follow:\(report.path.rawValue) arm:\(format(report.armMetres))m clear:\(format(report.clearedZoomDelta))")
         }
         lines += [
             ringRulesLine(frameContext.visibleContent.flatRingBands),
@@ -130,9 +137,8 @@ struct DebugOverlayHUDSnapshot: Equatable {
         let state = store.isActive ? "on" : "off"
         let terrainZoom = GroundReliefStore.terrainZoom(forTargetZoom: frameContext.visibleContent.tileZoomLevel)
         let strength = store.strength(atNormalizedWorld: centre, terrainZoom: terrainZoom).map { Double($0) }
-        let share = store.mountainShare(atNormalizedWorld: centre, terrainZoom: terrainZoom).map { Double($0) }
         return "relief:\(state) datum:\(format(Double(store.datumMetres)))m eye alt:\(format(Double(store.datumMetres) + eyeHeightMetres))m"
-            + " height:\(format(eyeHeightMetres))m mountain:\(share.map(format) ?? "-") x\(strength.map(format) ?? "-")"
+            + " height:\(format(eyeHeightMetres))m x\(strength.map(format) ?? "-")"
     }
 
     /// The ring rules as the frame resolved them on either surface,

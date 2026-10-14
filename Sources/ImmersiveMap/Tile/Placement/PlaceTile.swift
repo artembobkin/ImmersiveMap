@@ -8,8 +8,8 @@
 /// target's slot. `slot` is the target itself: the placement's own tile
 /// when it has arrived, else the loading target the tile stands in for,
 /// above a descendant or below an ancestor. The target's ring rule is the
-/// placement's, and on the relief its extent bounds what the placement
-/// draws (`GroundSlotClip`).
+/// placement's: whether it draws its lines and its fills, and the ring
+/// whose terrain it rises by on the relief.
 struct PlaceTile: Hashable {
     let metalTile: MetalTile
     let placeIn: VisibleTile

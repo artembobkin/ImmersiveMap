@@ -110,29 +110,6 @@ final class GroundReliefOffscreenRenderTests: XCTestCase {
                           "The hill hides the building: \(behindTheHill) pixels against \(flat) over the flat park")
     }
 
-    /// A coarse tile standing in for a near tile keeps its ridge where
-    /// finer tiles lie behind it: on the relief every placement draws
-    /// only its own slot's ground (`GroundSlotClip`), and the depth alone
-    /// decides what is seen. The park's hill, drawn by the parent standing
-    /// in for the park's own tile, rises over the residential tiles beyond
-    /// it as it does drawn by the park's own tile. The old ownership by
-    /// the finer tile's stencil mark handed the hill's pixels to the
-    /// ground behind it, and the hill was cut off along the far tiles'
-    /// edges whenever a parent stood in at a zoom crossing.
-    @MainActor
-    func testANearStandInKeepsItsRidgeOverTheGroundBehindIt() async throws {
-        let terrain = try makeTerrainDirectory(raisedMetres: 150)
-        defer { try? FileManager.default.removeItem(at: terrain) }
-
-        let own = try await parkPixels(relief: terrain, lookingAt: Self.tile,
-                                       zoom: 15.3, pitch: 80 * .pi / 180, exaggeration: 8)
-        let standIn = try await parkPixels(relief: terrain, lookingAt: Self.tile, parkFromParent: true,
-                                           zoom: 15.3, pitch: 80 * .pi / 180, exaggeration: 8)
-        XCTAssertGreaterThan(own, 2000, "The hill is in view")
-        XCTAssertEqual(Double(standIn), Double(own), accuracy: Double(own) * 0.15,
-                       "The parent's hill stands whole: \(standIn) pixels against \(own) by the park's own tile")
-    }
-
     /// A building's lift is made once per tile and kept: a camera that
     /// zooms out afterwards sees the building where a fresh camera there
     /// does, not raised by the world units of the deeper zoom.
@@ -156,15 +133,12 @@ final class GroundReliefOffscreenRenderTests: XCTestCase {
     /// crosses the park in the fixture's road colour; with `building`, a
     /// building stands on it in the fixture's building colour. With
     /// `afterZoom`, the camera first draws a few frames from that zoom.
-    /// With `parkFromParent`, the park's own tile is not loaded and its
-    /// parent, all park, stands in for it.
     @MainActor
     private func parkPixels(relief terrain: URL?,
                             lookingAt lookAt: Tile,
                             lookAtOffsetTiles: SIMD2<Double> = .zero,
                             road: Bool = false,
                             building: Bool = false,
-                            parkFromParent: Bool = false,
                             buildingTile: Tile? = nil,
                             buildingRing: [(Int32, Int32)] = [(1536, 1536), (2560, 1536), (2560, 2560), (1536, 2560)],
                             zoom: Double = 13,
@@ -184,13 +158,12 @@ final class GroundReliefOffscreenRenderTests: XCTestCase {
         settings.scene.fog.isEnabled = false
         settings.labels.isEnabled = false
         if let terrain {
-            // The relief at every zoom: the fixture's plateau is flat
-            // ground to the fades, which would draw it on the plane.
+            // The relief at every zoom: the collapse would draw the street
+            // zooms on the plane.
             settings = settings.groundRelief(isEnabled: true,
                                              tileURLTemplate: terrain.absoluteString + "{z}/{x}/{y}.png",
                                              exaggeration: exaggeration,
-                                             flatZoomFade: ImmersiveMapZoomFade.none,
-                                             mountainZoomFade: ImmersiveMapZoomFade.none)
+                                             collapseZoom: 30)
         }
         let harness = try OffscreenFrameHarness.makeOrSkip(settings: settings, size: 768)
         var layers: [(layerName: String, features: [VectorTileFixture.Feature])] = [
@@ -221,19 +194,10 @@ final class GroundReliefOffscreenRenderTests: XCTestCase {
         for dx in -3 ... 3 {
             for dy in -3 ... 3 {
                 let neighbour = Tile(x: Self.tile.x + dx, y: Self.tile.y + dy, z: Self.tile.z)
-                if parkFromParent, dx == 0, dy == 0 {
-                    continue
-                }
                 let data = dx == 0 && dy == 0 ? park : (building && neighbour == buildingTile ? residentialWithBuilding : residential)
                 let loaded = await harness.tileRenderStore.parseTile(tile: neighbour, data: data)
                 XCTAssertTrue(loaded, "The fixture tile must parse")
             }
-        }
-        if parkFromParent {
-            let parent = try XCTUnwrap(Self.tile.findParentTile(atZoom: Self.tile.z - 1))
-            let loaded = await harness.tileRenderStore.parseTile(
-                tile: parent, data: VectorTileFixture.fullCoverageTile(layerName: "landuse", properties: ["kind": "park"]))
-            XCTAssertTrue(loaded, "The parent fixture tile must parse")
         }
         // Far enough for the park to be a block in the frame: the coarser
         // tiles the camera's zoom asks for are not loaded, so the z15

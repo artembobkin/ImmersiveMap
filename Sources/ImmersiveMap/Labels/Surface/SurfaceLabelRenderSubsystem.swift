@@ -5,7 +5,7 @@ import Metal
 import simd
 
 /// The labels painted on the map (`LabelPlacement.surface`): drawn in the
-/// world pass right after the ground, on the flat map and on the globe
+/// world pass after the ground and its roads, on the flat map and on the globe
 /// alike, through the ground's own projection. `update` picks the copy of
 /// each label that draws (`SurfaceLabelSelection`), `encode` draws every
 /// halo and then every fill. A label shows whole or not at all: nothing
@@ -57,7 +57,7 @@ final class SurfaceLabelRenderSubsystem: RenderSubsystem {
                                          tileZoom: $0.metalTile.tile.z,
                                          worldWrap: $0.worldWrap)
         }
-        let selected = SurfaceLabelSelection.select(sources: sources, cameraZoom: frameContext.zoom)
+        let selected = SurfaceLabelSelection.select(sources: sources, cameraZoom: frameContext.animatedZoom)
         drawItems = selected.map { item in
             let source = sourceTiles[item.sourceIndex]
             return DrawItem(metalTile: source.metalTile,

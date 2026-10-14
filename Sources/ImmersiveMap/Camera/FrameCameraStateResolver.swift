@@ -24,6 +24,11 @@ final class FrameCameraStateResolver {
     private let screenMatrix: ScreenMatrix
     private let presentationSettings: ImmersiveMapSettings.PresentationSettings
     private var lastDrawableSize: CGSize = .zero
+    /// How many times the camera was set outright (a position or a whole
+    /// state, by a command, a flight's step or a path's): the animated
+    /// zoom snaps to such a camera instead of following it
+    /// (`AnimatedZoom`).
+    private(set) var cameraJumpCount = 0
 
     init(settings: ImmersiveMapSettings) {
         self.camera = RenderCamera()
@@ -117,11 +122,13 @@ final class FrameCameraStateResolver {
 
     func setCameraPosition(_ cameraPosition: ImmersiveMapCameraPosition) {
         cameraStateController.setCameraPosition(cameraPosition)
+        cameraJumpCount += 1
         requestRenderCameraUpdate()
     }
 
     func setCameraState(_ cameraState: ImmersiveMapCameraState) {
         cameraStateController.setCameraState(cameraState)
+        cameraJumpCount += 1
         requestRenderCameraUpdate()
     }
 
@@ -147,6 +154,17 @@ final class FrameCameraStateResolver {
     /// without a relief.
     func setTerrainFollow(_ follow: CameraTerrainFollow?) {
         cameraStateController.terrainFollow = follow
+    }
+
+    /// See `CameraStateController.lastTerrainFollowReport`.
+    var lastTerrainFollowReport: TerrainFollowReport? {
+        cameraStateController.lastTerrainFollowReport
+    }
+
+    /// See `CameraStateController.panReferenceZoom`: the zoom a drag over
+    /// the terrain began at, nil between drags.
+    var panReferenceZoom: Double? {
+        cameraStateController.panReferenceZoom
     }
 
     /// See `CameraStateController.advanceBoundsPull(deltaTime:)`.

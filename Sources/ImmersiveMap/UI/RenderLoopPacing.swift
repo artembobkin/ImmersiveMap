@@ -14,6 +14,8 @@ final class RenderLoopPacing {
         case sceneModelAnimation = "scene model animation"
         /// The buildings or the models rising out of the ground.
         case extrusionRise = "extrusion rise"
+        /// The animated zoom settling on the camera's (`AnimatedZoom`).
+        case animatedZoom = "animated zoom"
         /// A camera position set from outside through
         /// `ImmersiveMapCameraController.jump`: an app driving the camera
         /// once per frame (its own animation, a follow camera fed by a
@@ -30,6 +32,7 @@ final class RenderLoopPacing {
                  .avatarAnimation,
                  .sceneModelAnimation,
                  .extrusionRise,
+                 .animatedZoom,
                  .externalCameraDrive:
                 return true
             case .labelFade:

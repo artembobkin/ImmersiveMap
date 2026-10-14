@@ -43,6 +43,11 @@ struct CameraTerrainFollow {
     }
     /// `PresentationSettings.globeRadiusScale`, the render world's scale.
     let globeRadiusScale: Double
+    /// One texel of the terrain the camera reads, in normalized world
+    /// units: the step the view ray is marched by (`CameraStateController`),
+    /// so a ridge is found or not by the eye's place alone, never by the
+    /// zoom's. Zero where unknown, which marches finely anyway.
+    var sampleStepWorld: Double = 0
 
     /// The eye's height in metres over the point it looks at, for a pose
     /// on the flat map.
@@ -98,33 +103,38 @@ struct CameraTerrainFollow {
         return height >= rise + Self.clearanceMargin(rise: rise, clearance: clearanceMetres)
     }
 
-    /// `zoom` where the eye keeps the clearance there, else the deepest
-    /// zoom below it in `range` where it does: the eye backs off along
-    /// its view ray, by the arm, until it clears the terrain under it. A
-    /// zoom deeper than `zoom` is never answered, though the eye might be
-    /// clear there too, in front of a ridge: the zoom would pass through
-    /// the ridge on its way. The boundary is found by bisection between
-    /// the range's start, which counts as clear when it is not, and
-    /// `zoom`.
+    /// `zoom` where the eye keeps the clearance there, else the zoom below
+    /// it in `range` where it does: the eye backs off along its view ray,
+    /// by the arm, until it clears the terrain under it. A zoom deeper
+    /// than `zoom` is never answered, though the eye might be clear there
+    /// too, in front of a ridge: the zoom would pass through the ridge on
+    /// its way. The zoom is read off the terrain straight: the height the
+    /// eye needs over the point is the ridge's rise over the point plus
+    /// the margin, and the zoom is the one with that height. Backing off
+    /// moves the eye over other ground, so the reading is taken again from
+    /// there, a few times, each time only ever lower. Never a bisection
+    /// over the zoom: the ground under a backing eye is not monotone, over
+    /// a crest it rises and then falls, and a bisection settles on any of
+    /// several boundaries, a different one from frame to frame.
     func clearZoom(below zoom: Double, center: SIMD2<Double>, pitch: Float, bearing: Float, range: ClosedRange<Double>) -> Double {
-        let zoom = min(max(zoom, range.lowerBound), range.upperBound)
-        guard isClear(center: center, zoom: zoom, pitch: pitch, bearing: bearing) == false else {
-            return zoom
-        }
-        guard isClear(center: center, zoom: range.lowerBound, pitch: pitch, bearing: bearing) else {
-            return range.lowerBound
-        }
-        var low = range.lowerBound
-        var high = zoom
-        for _ in 0 ..< 24 {
-            let middle = (low + high) * 0.5
-            if isClear(center: center, zoom: middle, pitch: pitch, bearing: bearing) {
-                low = middle
-            } else {
-                high = middle
+        var cleared = min(max(zoom, range.lowerBound), range.upperBound)
+        let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: center.y)
+        let pointMetres = Double(terrainMetres(center) ?? 0)
+        for _ in 0 ..< 4 {
+            let height = eyeHeightMetres(zoom: cleared, pitch: pitch, latitude: latitude)
+            let ground = eyeGround(center: center, zoom: cleared, pitch: pitch, bearing: bearing, latitude: latitude)
+            let rise = Double(terrainMetres(ground) ?? 0) - pointMetres
+            let needed = rise + Self.clearanceMargin(rise: rise, clearance: clearanceMetres)
+            guard height < needed else {
+                return cleared
             }
+            let lower = self.zoom(forEyeHeightMetres: needed, pitch: pitch, latitude: latitude, range: range)
+            guard lower < cleared else {
+                return cleared
+            }
+            cleared = lower
         }
-        return low
+        return cleared
     }
 
     /// The eye's distance from the point it looks at, in metres: the

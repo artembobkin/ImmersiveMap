@@ -69,25 +69,29 @@ final class BuildingExtrusionToggleTests: XCTestCase {
     }
 }
 
-/// The rise out of the ground as the SwiftUI modifiers set it
-/// (`ImmersiveMapSettings.extrusion(...)`).
+/// The rise out of the ground as the SwiftUI modifier sets it
+/// (`ImmersiveMapSettings.buildingExtrusion(...)`).
 final class ExtrusionRiseModifierTests: XCTestCase {
-    func testTheModifiersLeaveTheOtherValueAsConfigured() {
+    func testTheModifierLeavesTheOtherValuesAsConfigured() {
         let settings = ImmersiveMapSettings.default
-            .extrusion(buildingsMinimumZoom: 16, riseSeconds: 1)
-            .extrusion(riseSeconds: 0.25)
+            .buildingExtrusion(buildingsMinimumZoom: 16, riseSeconds: 1)
+            .buildingExtrusion(riseSeconds: 0.25)
         XCTAssertEqual(settings.scene.extrusion.buildingsMinimumZoom, 16)
         XCTAssertEqual(settings.scene.extrusion.riseSeconds, 0.25)
     }
 
     func testTheRiseSwitch() {
-        let off = ImmersiveMapSettings.default.extrusion(risesFromTheGround: false)
+        let off = ImmersiveMapSettings.default.buildingExtrusion(risesFromTheGround: false)
         XCTAssertEqual(off.scene.extrusion.riseSeconds, 0, "Off stands a layer up at once")
-        XCTAssertEqual(off.extrusion(risesFromTheGround: true).scene.extrusion.riseSeconds, 0.6,
+        XCTAssertEqual(off.buildingExtrusion(risesFromTheGround: true).scene.extrusion.riseSeconds, 0.6,
                        "Back on without a time, it takes the default")
-        let tuned = ImmersiveMapSettings.default.extrusion(riseSeconds: 1).extrusion(risesFromTheGround: true)
+        let tuned = ImmersiveMapSettings.default.buildingExtrusion(riseSeconds: 1).buildingExtrusion(risesFromTheGround: true)
         XCTAssertEqual(tuned.scene.extrusion.riseSeconds, 1, "On keeps a configured time")
-        XCTAssertEqual(ImmersiveMapSettings.default.extrusion(riseSeconds: -1).scene.extrusion.riseSeconds, 0,
+        XCTAssertEqual(ImmersiveMapSettings.default.buildingExtrusion(riseSeconds: -1).scene.extrusion.riseSeconds, 0,
                        "A negative time is zero")
+        let together = ImmersiveMapSettings.default.buildingExtrusion(riseSeconds: 0.3, risesFromTheGround: true)
+        XCTAssertEqual(together.scene.extrusion.riseSeconds, 0.3, "A time and the switch in one call: the time stands")
+        XCTAssertEqual(ImmersiveMapSettings.default.buildingExtrusion(riseSeconds: 0.3, risesFromTheGround: false)
+                           .scene.extrusion.riseSeconds, 0, "The switch is read after the time")
     }
 }

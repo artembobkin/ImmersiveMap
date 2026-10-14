@@ -10,7 +10,7 @@ struct LabelPlacementMeta {
     /// screen positions it is tested against live in.
     let labelSizePoints: SIMD2<Float>
     /// Minimum CAMERA zoom at which the label is visible. 0 = always visible.
-    /// Resolved at runtime (via `frameContext.zoom`), not via `tile.z`, so it
+    /// Resolved at runtime (via `frameContext.animatedZoom`), not via `tile.z`, so it
     /// also works under overzoom (when tile.z is capped at the source's maxzoom).
     let minCameraZoom: Float
     /// Local detail, shown only near the camera (`PointLabelStyle.isLocal`).

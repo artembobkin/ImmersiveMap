@@ -12,6 +12,15 @@ struct FlatGroundSourceKey: Hashable {
 }
 
 enum FlatMapSurfaceDrawer {
+    /// Which of the flat ground's classes a draw covers: the ground
+    /// (`RenderLayer.flatMapSurface`), its opaque and translucent fills,
+    /// or what lies on it (`RenderLayer.flatMapRoads`), the ground's line
+    /// ribbons, the roads and the bridges.
+    enum Part {
+        case ground
+        case roads
+    }
+
     /// The share of a road's alpha its edge lines draw with: a line is one
     /// pixel wide and lands on the pixels the body's edge passes through
     /// without covering, so half the road's colour there softens the
@@ -54,9 +63,14 @@ enum FlatMapSurfaceDrawer {
     ///   road widths are stated at, the ground under the centre of the
     ///   screen: on a relief the terrain there
     ///   (`GroundReliefCameraLift.centreGroundDepth`), else the plane.
-    /// - Parameter slotClips: the frame's rings: every placement draws its
-    ///   slot's ground only (`GroundSlotClip`), once per rectangle of it,
-    ///   and the depth alone orders the sources.
+    /// - Parameter groundOwnerState: the opaque fills' state, the rank
+    ///   depth written and the tile-priority stencil owned
+    ///   (`TileSourceStencilPriority`).
+    /// - Parameter tileStencilTestState: the state of every other ground
+    ///   pass, the depth and the priority tested and nothing written.
+    /// - Parameter stencilPacking: the frame's stencil references, a
+    ///   source's ring above its zoom (`FlatTileStencilPacking`).
+    /// - Parameter part: the ground's fills, or what lies on the ground.
     static func draw(renderEncoder: MTLRenderCommandEncoder,
                      cameraUniform: CameraUniform,
                      cpuCameraMatrix: matrix_float4x4,
@@ -67,15 +81,16 @@ enum FlatMapSurfaceDrawer {
                      flatRenderState: FlatRenderState,
                      groundShadowMask: GroundShadowMaskBinding,
                      tilePipeline: TilePipeline,
-                     groundSlotOwnerState: MTLDepthStencilState,
-                     groundSlotTestState: MTLDepthStencilState,
+                     groundOwnerState: MTLDepthStencilState,
+                     tileStencilTestState: MTLDepthStencilState,
                      roadRankState: MTLDepthStencilState,
+                     stencilPacking: FlatTileStencilPacking,
+                     part: Part,
                      isWireframeEnabled: Bool,
                      linelessTiles: Set<VisibleTile> = [],
                      rasterGroundSlots: Set<VisibleTile> = [],
                      groundRelief: GroundReliefStore? = nil,
-                     pointWidthReferenceDepth: Float? = nil,
-                     slotClips: GroundSlotClip.Rings) {
+                     pointWidthReferenceDepth: Float? = nil) {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder)
         // Every tile triangle (ground, road buckets, bridge overlay) is
         // counter-clockwise in render space, the parser's contract
@@ -117,32 +132,53 @@ enum FlatMapSurfaceDrawer {
         // (fragment texture 1) instead of sampling the cascades per layer.
         renderEncoder.setFragmentTexture(groundShadowMask.texture, index: 1)
 
-        // PLACEMENTS, each drawing its slot's ground only (`GroundSlotClip`):
-        // the sources do not overlap, and the depth orders them. A stand-in
-        // placed in several slots draws once per slot. The slot is the
-        // target's, a descendant standing in included, whose own tile is
-        // where it is drawn but not what it is drawn for: the target's ring
-        // names the band that bounds it, and its lines and fills are the
-        // target's rule's (`FlatRingRule.drawsLines`, and a raster target's
+        // Unique SOURCES, not placements: a tile standing in for several
+        // slots draws once at full extent, and the tile-priority stencil
+        // keeps it out of every pixel a finer source painted and off every
+        // ring nearer than its slot's (TileSourceStencilPriority,
+        // FlatTileStencilPacking), the sphere's scheme. In the order of
+        // their references, the nearest ring's sources first and the finest
+        // of a ring first, so the owner writes win. The world wrap is part of the key: the
+        // flat world's wrap copies place the same tile at different
+        // origins across the seam. A source's lines and fills are its
+        // slots' rules' (`FlatRingRule.drawsLines`, and a raster target's
         // ground is its texture, `RasterTileRenderSubsystem`, so its own
-        // tile and its stand-ins draw only their lines there). An ancestor
-        // standing in draws around the descendants placed in the same
-        // slot.
-        // The relief of a flattened source whose terrain is in, the ring's
-        // of its slot: such a source draws every class through the relief
-        // variant of the class's pipeline, raised by its terrain.
+        // tile and its stand-ins draw only their lines there): it draws
+        // them while any slot it stands in does. On the relief it rises by
+        // the terrain of the ring of the finest slot it stands in, so a
+        // source placed in its own slot and as a stand-in rises by one
+        // terrain, drawn through the relief variant of every class's
+        // pipeline.
         let reliefStore = tilePipeline.flatReliefPipelineStates.isEmpty ? nil : groundRelief
-        let sources = GroundSlotClip.placements(placeTilesContext.tilePlacements, rings: slotClips).map { placement in
-            let tile = placement.placeTile.metalTile.tile
-            let relief = placement.placeTile.metalTile.tileBuffers.ground.isFlattened
-                ? reliefStore?.relief(for: tile, terrainZoom: GroundReliefStore.terrainZoom(forTargetZoom: placement.placeTile.slot.z))
-                : nil
-            return Source(metalTile: placement.placeTile.metalTile,
-                          worldWrap: placement.placeTile.placeIn.worldWrap,
-                          clips: placement.clips,
-                          relief: relief,
-                          drawsLines: linelessTiles.contains(placement.placeTile.slot) == false,
-                          drawsGround: rasterGroundSlots.contains(placement.placeTile.slot) == false)
+        var sourceIndices: [FlatGroundSourceKey: Int] = [:]
+        var sources: [Source] = []
+        sources.reserveCapacity(placeTilesContext.tilePlacements.count)
+        for placeTile in placeTilesContext.tilePlacements {
+            let key = FlatGroundSourceKey(tile: placeTile.metalTile.tile, worldWrap: placeTile.placeIn.worldWrap)
+            let drawsLines = linelessTiles.contains(placeTile.slot) == false
+            let drawsGround = rasterGroundSlots.contains(placeTile.slot) == false
+            if let index = sourceIndices[key] {
+                sources[index].targetZoom = max(sources[index].targetZoom, placeTile.slot.z)
+                sources[index].drawsLines = sources[index].drawsLines || drawsLines
+                sources[index].drawsGround = sources[index].drawsGround || drawsGround
+            } else {
+                sourceIndices[key] = sources.count
+                sources.append(Source(metalTile: placeTile.metalTile,
+                                      worldWrap: key.worldWrap,
+                                      targetZoom: placeTile.slot.z,
+                                      drawsLines: drawsLines,
+                                      drawsGround: drawsGround))
+            }
+        }
+        for index in sources.indices {
+            sources[index].stencilReference = stencilPacking.reference(sourceZoom: sources[index].metalTile.tile.z,
+                                                                       slotZoom: sources[index].targetZoom)
+        }
+        sources.sort { $0.stencilReference > $1.stencilReference }
+        for index in sources.indices where sources[index].metalTile.tileBuffers.ground.isFlattened {
+            let tile = sources[index].metalTile.tile
+            sources[index].relief = reliefStore?.relief(for: tile,
+                                                        terrainZoom: GroundReliefStore.terrainZoom(forTargetZoom: sources[index].targetZoom))
         }
         let linedSources = sources.filter(\.drawsLines)
         let groundSources = sources.filter(\.drawsGround)
@@ -218,7 +254,7 @@ enum FlatMapSurfaceDrawer {
                                       buffers: layer,
                                       tile: source.metalTile.tile,
                                       worldWrap: source.worldWrap,
-                                      clips: source.clips,
+                                      stencilReference: source.stencilReference,
                                       flatRenderState: flatRenderState,
                                       pixelsPerPoint: pixelsPerPoint,
                                       drawableHeightPx: drawableSizePx.y,
@@ -231,8 +267,9 @@ enum FlatMapSurfaceDrawer {
 
         // The ground draws as class layers, the sphere's scheme: the opaque
         // fill layers first, unblended, writing the rank-band depth (a
-        // pixel is shaded once by its topmost opaque layer); the
-        // translucent fills and the ribbons follow, tested only. The band
+        // pixel is shaded once by its topmost opaque layer) and owning the
+        // tile-priority stencil; the translucent fills and the ribbons
+        // follow, tested only. The band
         // sits at the far plane, farther than every real fragment, so the
         // buildings' occlusion is untouched.
         // A flattened ground's fills overlap nowhere: every run of them draws
@@ -246,22 +283,30 @@ enum FlatMapSurfaceDrawer {
         let isTranslucentFillRun: (GroundStyleRun) -> Bool = { run in
             run.isFillsClass && isOpaqueFillRun(run) == false
         }
-        renderEncoder.pushDebugGroup("ground.opaqueFills")
-        renderEncoder.setDepthStencilState(groundSlotOwnerState)
-        drawLayer(\.ground, pipeline: .opaqueFills, bandOffset: 0, sources: groundSources, runFilter: isOpaqueFillRun)
-        renderEncoder.popDebugGroup()
-        // Everything after only tests the depth.
-        renderEncoder.pushDebugGroup("ground.translucentFills")
-        renderEncoder.setDepthStencilState(groundSlotTestState)
-        drawLayer(\.ground, pipeline: .fills, bandOffset: 0, sources: groundSources, runFilter: isTranslucentFillRun)
-        renderEncoder.popDebugGroup()
-        renderEncoder.pushDebugGroup("ground.lineRibbons")
-        drawLayer(\.ground,
-                  pipeline: .lines,
-                  bandOffset: GlobeSurfaceDepthRank.classDepthBand,
-                  sources: linedSources,
-                  runFilter: { $0.isLinesClass })
-        renderEncoder.popDebugGroup()
+        if part == .ground {
+            renderEncoder.pushDebugGroup("ground.opaqueFills")
+            renderEncoder.setDepthStencilState(groundOwnerState)
+            drawLayer(\.ground, pipeline: .opaqueFills, bandOffset: 0, sources: groundSources, runFilter: isOpaqueFillRun)
+            renderEncoder.popDebugGroup()
+            // Everything after only tests the depth and the priority.
+            renderEncoder.pushDebugGroup("ground.translucentFills")
+            renderEncoder.setDepthStencilState(tileStencilTestState)
+            drawLayer(\.ground, pipeline: .fills, bandOffset: 0, sources: groundSources, runFilter: isTranslucentFillRun)
+            renderEncoder.popDebugGroup()
+        }
+        if part == .roads {
+            // What lies on the ground, drawn after the buildings and the
+            // models have marked their pixels: the test states read the
+            // surface mask bit, so nothing here paints over them.
+            renderEncoder.pushDebugGroup("ground.lineRibbons")
+            renderEncoder.setDepthStencilState(tileStencilTestState)
+            drawLayer(\.ground,
+                      pipeline: .lines,
+                      bandOffset: GlobeSurfaceDepthRank.classDepthBand,
+                      sources: linedSources,
+                      runFilter: { $0.isLinesClass })
+            renderEncoder.popDebugGroup()
+        }
 
         // The road buckets: whatever the tiles carry. A tile whose roads the
         // style drew as ground lines carries none. The roads are ordered by
@@ -324,7 +369,7 @@ enum FlatMapSurfaceDrawer {
                                   buffers: roadDraw.layer,
                                   tile: source.metalTile.tile,
                                   worldWrap: source.worldWrap,
-                                  clips: source.clips,
+                                  stencilReference: source.stencilReference,
                                   flatRenderState: flatRenderState,
                                   pixelsPerPoint: pixelsPerPoint,
                                   drawableHeightPx: drawableSizePx.y,
@@ -359,28 +404,30 @@ enum FlatMapSurfaceDrawer {
             }
         }
 
-        renderEncoder.pushDebugGroup("roads")
-        renderEncoder.setDepthStencilState(roadRankState)
-        renderEncoder.pushDebugGroup("roads.opaque")
-        drawRoads(opaque: true)
-        renderEncoder.popDebugGroup()
-        renderEncoder.pushDebugGroup("roads.blended")
-        drawRoads(opaque: false)
-        renderEncoder.popDebugGroup()
-        renderEncoder.pushDebugGroup("roads.edgeLines")
-        renderEncoder.setDepthStencilState(groundSlotTestState)
-        drawRoadEdgeLines()
-        renderEncoder.popDebugGroup()
-        // The bridge overlay is plain ground geometry laid over the roads:
-        // tested against the ranks the roads wrote, in its own band, and
-        // writing none.
-        renderEncoder.pushDebugGroup("roads.bridgeOverlay")
-        drawLayer(\.bridgeOverlay,
-                  pipeline: .lines,
-                  bandOffset: RoadRankDepth.depthOffset(band: RoadRankDepth.bridgeOverlayBand),
-                  sources: linedSources)
-        renderEncoder.popDebugGroup()
-        renderEncoder.popDebugGroup()
+        if part == .roads {
+            renderEncoder.pushDebugGroup("roads")
+            renderEncoder.setDepthStencilState(roadRankState)
+            renderEncoder.pushDebugGroup("roads.opaque")
+            drawRoads(opaque: true)
+            renderEncoder.popDebugGroup()
+            renderEncoder.pushDebugGroup("roads.blended")
+            drawRoads(opaque: false)
+            renderEncoder.popDebugGroup()
+            renderEncoder.pushDebugGroup("roads.edgeLines")
+            renderEncoder.setDepthStencilState(tileStencilTestState)
+            drawRoadEdgeLines()
+            renderEncoder.popDebugGroup()
+            // The bridge overlay is plain ground geometry laid over the
+            // roads: tested against the ranks the roads wrote, in its own
+            // band, and writing none.
+            renderEncoder.pushDebugGroup("roads.bridgeOverlay")
+            drawLayer(\.bridgeOverlay,
+                      pipeline: .lines,
+                      bandOffset: RoadRankDepth.depthOffset(band: RoadRankDepth.bridgeOverlayBand),
+                      sources: linedSources)
+            renderEncoder.popDebugGroup()
+            renderEncoder.popDebugGroup()
+        }
         if isWireframeEnabled {
             renderEncoder.setTriangleFillMode(.fill)
         }
@@ -393,11 +440,11 @@ enum FlatMapSurfaceDrawer {
 
 
     /// The relief of one flattened tile (Tile.metal, kTileGroundRelief):
-    /// its terrain texture at vertex texture 0, its roughness texture at
-    /// vertex texture 1, and at vertex buffer 9 where the tile lies in
-    /// them, the world units a metre of terrain rises by at the tile's
-    /// latitude, worked out here once for the tile, the frame's datum
-    /// (`GroundReliefStore.datumMetres`) and the frame's fades.
+    /// its terrain texture at vertex texture 0, and at vertex buffer 9
+    /// where the tile lies in it, the world units a metre of terrain rises
+    /// by at the tile's latitude, worked out here once for the tile, the
+    /// frame's datum (`GroundReliefStore.datumMetres`) and the frame's
+    /// strength.
     private static func bindGroundRelief(_ relief: GroundRelief,
                                          tile: Tile,
                                          datumMetres: Float,
@@ -408,7 +455,6 @@ enum FlatMapSurfaceDrawer {
                                                                       renderMapSize: renderMapSize)
         var uniform = GroundReliefUniform(relief: relief, worldUnitsPerMetre: Float(unitsPerMetre), datumMetres: datumMetres)
         renderEncoder.setVertexTexture(relief.texture, index: 0)
-        renderEncoder.setVertexTexture(relief.roughnessTexture, index: 1)
         renderEncoder.setVertexBytes(&uniform, length: MemoryLayout<GroundReliefUniform>.stride, index: 9)
     }
 
@@ -416,7 +462,7 @@ enum FlatMapSurfaceDrawer {
                                               buffers: TileBuffers.GeometryLayer,
                                               tile: Tile,
                                               worldWrap: Int8,
-                                              clips: [SIMD4<Float>],
+                                              stencilReference: UInt32,
                                               flatRenderState: FlatRenderState,
                                               pixelsPerPoint: Float,
                                               drawableHeightPx: Float,
@@ -491,31 +537,35 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.setVertexBytes(&modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
 
         let indexByteWidth = buffers.indexType == .uint16 ? 2 : 4
-        // The slot's rectangles the draw is clipped to (Tile.metal, buffer
-        // 12, GroundSlotClip).
-        for clip in clips {
-            var clipRect = clip
-            renderEncoder.setVertexBytes(&clipRect, length: MemoryLayout<SIMD4<Float>>.stride, index: 12)
-            for span in visibleSpans {
-                renderEncoder.drawIndexedPrimitives(type: primitiveType,
-                                                    indexCount: span.count,
-                                                    indexType: buffers.indexType,
-                                                    indexBuffer: indices.buffer,
-                                                    indexBufferOffset: indices.offset + span.start * indexByteWidth)
-            }
+        // The tile-priority stencil reference, the source's ring above its
+        // zoom (FlatTileStencilPacking): the owner pass replaces the stencil
+        // with it, every pass tests greaterEqual against the ring's mark and
+        // the finest painter. No slot clip: a stand-in draws at full extent
+        // and the stencil keeps it out of the pixels a finer source painted
+        // and off the nearer rings.
+        renderEncoder.setStencilReferenceValue(stencilReference)
+        for span in visibleSpans {
+            renderEncoder.drawIndexedPrimitives(type: primitiveType,
+                                                indexCount: span.count,
+                                                indexType: buffers.indexType,
+                                                indexBuffer: indices.buffer,
+                                                indexBufferOffset: indices.offset + span.start * indexByteWidth)
         }
     }
 
-    /// One draw of the ground: a source, where it lies, the rectangles of
-    /// its slot it draws (`GroundSlotClip`), the terrain it rises by, and
-    /// which of its classes it draws.
+    /// One source of the ground: a tile at one wrap copy of the world,
+    /// drawn at full extent, the finest target it stands in (the ring
+    /// whose terrain it rises by, and whose rank its stencil reference
+    /// carries), the terrain itself once it is in, and which of its
+    /// classes it draws.
     struct Source {
         let metalTile: MetalTile
         let worldWrap: Int8
-        let clips: [SIMD4<Float>]
-        let relief: GroundRelief?
-        let drawsLines: Bool
-        let drawsGround: Bool
+        var targetZoom: Int
+        var stencilReference: UInt32 = 0
+        var relief: GroundRelief?
+        var drawsLines: Bool
+        var drawsGround: Bool
     }
 
     /// The index spans of a layer worth drawing this frame: without a run
@@ -556,21 +606,16 @@ enum FlatMapSurfaceDrawer {
 
 /// Mirror of `GroundReliefUniform` in GroundRelief.h (vertex buffer 9):
 /// the tile's corner and side in its terrain texture and the world units
-/// a metre of terrain rises by, its corner and side in its roughness
-/// texture and the datum, the terrain's metres the ground is drawn from
-/// (`GroundReliefStore.datumMetres`), the frame's fades and the frame's
-/// zoom and strength scale (`GroundReliefFrame`).
+/// a metre of terrain rises by, then the datum, the terrain's metres the
+/// ground is drawn from (`GroundReliefStore.datumMetres`), and the frame's
+/// strength (`GroundRelief.strength`).
 struct GroundReliefUniform {
     var placement: SIMD4<Float>
-    var roughness: SIMD4<Float>
-    var fades: SIMD4<Float>
     var frame: SIMD4<Float>
 
     init(relief: GroundRelief, worldUnitsPerMetre: Float, datumMetres: Float) {
         placement = SIMD4<Float>(relief.origin.x, relief.origin.y, relief.scale, worldUnitsPerMetre)
-        roughness = SIMD4<Float>(relief.roughnessOrigin.x, relief.roughnessOrigin.y, relief.roughnessScale, datumMetres)
-        fades = SIMD4<Float>(relief.frame.flat.x, relief.frame.flat.y, relief.frame.mountain.x, relief.frame.mountain.y)
-        frame = SIMD4<Float>(relief.frame.cameraZoom, relief.frame.strengthScale, 0, 0)
+        frame = SIMD4<Float>(datumMetres, relief.strength, 0, 0)
     }
 }
 

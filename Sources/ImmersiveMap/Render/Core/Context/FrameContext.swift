@@ -89,9 +89,22 @@ struct FrameContext {
         resolvedPresentation.transition
     }
 
+    /// The camera's zoom, the fact of the frame: what the tiles, the rings
+    /// and the camera's pose are read from. What dresses the frame by the
+    /// zoom reads `animatedZoom`.
     var zoom: Double {
         mapCameraState.zoom
     }
+
+    /// The camera's zoom followed over time (`AnimatedZoom`): the zoom the
+    /// ground fog, the styles' zoom fades, the labels' reach and the rest
+    /// of the frame's dressing are read at, so a zoom that jumps in one
+    /// frame dresses the frame over a few. The relief's collapse reads a zoom
+    /// of their own, held through a drag (`RenderFrameEngine`).
+    let animatedZoom: Double
+    /// How the camera's last move over the terrain was settled, for the
+    /// debug panel (`TerrainFollowReport`), nil off the terrain.
+    let terrainFollowReport: TerrainFollowReport?
 
     var zoomLevel: Int {
         Int(mapCameraState.zoom)
@@ -109,6 +122,8 @@ struct FrameContext {
          commandBuffer: MTLCommandBuffer?,
          services: FrameContextServices,
          mapCameraState: ImmersiveMapCameraState = .default,
+         animatedZoom: Double? = nil,
+         terrainFollowReport: TerrainFollowReport? = nil,
          resolvedPresentation: ResolvedPresentationState? = nil,
          visibleContent: VisibleContentState = .empty,
          sharedState: FrameContextSharedState = FrameContextSharedState(),
@@ -128,6 +143,8 @@ struct FrameContext {
         self.cameraMatrices = cameraMatrices
         self.cameraEye = cameraEye
         self.mapCameraState = fallbackResolvedPresentation.semanticWorldState.cameraState
+        self.animatedZoom = animatedZoom ?? fallbackResolvedPresentation.semanticWorldState.cameraState.zoom
+        self.terrainFollowReport = terrainFollowReport
         self.resolvedPresentation = fallbackResolvedPresentation
         self.visibleContent = visibleContent
         self.commandBuffer = commandBuffer

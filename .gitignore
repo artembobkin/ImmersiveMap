@@ -29,4 +29,5 @@ DerivedData/
 
 # A developer's own tile API key, read by the demo apps. Never committed.
 /LocalSecrets.plist
-
+# A developer's local copy of the tile archive, read by the dev app. Never committed.
+/LocalTiles/

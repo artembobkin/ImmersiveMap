@@ -33,7 +33,7 @@ enum BuildingExtrusionDrawer {
                               heightScales: [Float] = [],
                               liftBuffers: [MTLBuffer?] = [],
                               liftDatumMetres: Float = 0,
-                              liftFrame: GroundReliefFrame = .plain,
+                              liftStrength: Float = 1,
                               extrudedTilePipeline: ExtrudedTilePipeline,
                               extrudedStencilTestState: MTLDepthStencilState,
                               depthDisabledState: MTLDepthStencilState) {
@@ -71,7 +71,7 @@ enum BuildingExtrusionDrawer {
                             heightScales: heightScales,
                             liftBuffers: liftBuffers,
                             liftDatumMetres: liftDatumMetres,
-                            liftFrame: liftFrame,
+                            liftStrength: liftStrength,
                             extrudedTilePipeline: extrudedTilePipeline)
 
         renderEncoder.setCullMode(.none)
@@ -95,7 +95,7 @@ enum BuildingExtrusionDrawer {
                                   heightScales: [Float] = [],
                                   liftBuffers: [MTLBuffer?] = [],
                                   liftDatumMetres: Float = 0,
-                                  liftFrame: GroundReliefFrame = .plain,
+                                  liftStrength: Float = 1,
                                   extrudedTilePipeline: ExtrudedTilePipeline,
                                   extrudedDepthState: MTLDepthStencilState) {
         renderEncoder.setCullMode(.none)
@@ -111,7 +111,7 @@ enum BuildingExtrusionDrawer {
                                   heightScales: heightScales,
                                   liftBuffers: liftBuffers,
                                   liftDatumMetres: liftDatumMetres,
-                                  liftFrame: liftFrame,
+                                  liftStrength: liftStrength,
                                   extrudedTilePipeline: extrudedTilePipeline)
         renderEncoder.setDepthClipMode(.clip)
     }
@@ -126,7 +126,7 @@ enum BuildingExtrusionDrawer {
                                             heightScales: [Float],
                                             liftBuffers: [MTLBuffer?],
                                             liftDatumMetres: Float,
-                                            liftFrame: GroundReliefFrame,
+                                            liftStrength: Float,
                                             extrudedTilePipeline: ExtrudedTilePipeline) {
         var selectedRelief = false
         for (placementIndex, placeTile) in placeTilesContext.tilePlacements.enumerated() {
@@ -141,7 +141,7 @@ enum BuildingExtrusionDrawer {
             }
             if let liftBuffer {
                 bindLifts(liftBuffer, tile: placeTile.metalTile.tile, datumMetres: liftDatumMetres,
-                          frame: liftFrame, flatRenderState: flatRenderState, renderEncoder: renderEncoder)
+                          strength: liftStrength, flatRenderState: flatRenderState, renderEncoder: renderEncoder)
             }
             let metalTile = placeTile.metalTile
             let tile = metalTile.tile
@@ -185,20 +185,20 @@ enum BuildingExtrusionDrawer {
         }
     }
 
-    /// A tile's lifts, the terrain's metres and the mountain share per
-    /// building, at vertex buffer 4, and at buffer 5 the world units a
-    /// metre of terrain rises by at the tile's latitude this frame, the
-    /// datum the lifts are drawn from, and the frame's fades and zoom.
+    /// A tile's lifts, the terrain's metres per building, at vertex
+    /// buffer 4, and at buffer 5 the world units a metre of terrain rises
+    /// by at the tile's latitude this frame, the datum the lifts are drawn
+    /// from, and the frame's strength.
     private static func bindLifts(_ liftBuffer: MTLBuffer,
                                   tile: Tile,
                                   datumMetres: Float,
-                                  frame: GroundReliefFrame,
+                                  strength: Float,
                                   flatRenderState: FlatRenderState,
                                   renderEncoder: MTLRenderCommandEncoder) {
         let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: (Double(tile.y) + 0.5) / Double(1 << tile.z))
         let unitsPerMetre = Float(ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: latitude,
                                                                             renderMapSize: flatRenderState.renderMapSize))
-        var lift = BuildingLiftUniform(unitsPerMetre: unitsPerMetre, datumMetres: datumMetres, frame: frame)
+        var lift = BuildingLiftUniform(unitsPerMetre: unitsPerMetre, datumMetres: datumMetres, strength: strength)
         renderEncoder.setVertexBuffer(liftBuffer, offset: 0, index: 4)
         renderEncoder.setVertexBytes(&lift, length: MemoryLayout<BuildingLiftUniform>.stride, index: 5)
     }
@@ -238,7 +238,7 @@ enum BuildingExtrusionDrawer {
                                                   heightScales: [Float],
                                                   liftBuffers: [MTLBuffer?],
                                                   liftDatumMetres: Float,
-                                                  liftFrame: GroundReliefFrame,
+                                                  liftStrength: Float,
                                                   extrudedTilePipeline: ExtrudedTilePipeline) {
         var selectedRelief = false
         for (placementIndex, placeTile) in placeTilesContext.tilePlacements.enumerated() {
@@ -251,7 +251,7 @@ enum BuildingExtrusionDrawer {
             }
             if let liftBuffer {
                 bindLifts(liftBuffer, tile: placeTile.metalTile.tile, datumMetres: liftDatumMetres,
-                          frame: liftFrame, flatRenderState: flatRenderState, renderEncoder: renderEncoder)
+                          strength: liftStrength, flatRenderState: flatRenderState, renderEncoder: renderEncoder)
             }
             let metalTile = placeTile.metalTile
             let tile = metalTile.tile
@@ -291,19 +291,18 @@ enum BuildingExtrusionDrawer {
 
 /// Mirror of `BuildingLift` in TileExtruded.metal (vertex buffer 5): the
 /// world units a metre spans over the tile, the datum in metres that the
-/// tile's lifts are drawn from, and the frame's fades, zoom and strength
-/// scale (`GroundReliefFrame`), as the ground's `GroundReliefUniform`.
+/// tile's lifts are drawn from, and the frame's strength
+/// (`GroundReliefStore.strengthScale`), as the ground's
+/// `GroundReliefUniform`.
 struct BuildingLiftUniform {
     var unitsPerMetre: Float
     var datumMetres: Float
-    var padding = SIMD2<Float>(repeating: 0)
-    var fades: SIMD4<Float>
-    var frame: SIMD4<Float>
+    var strength: Float
+    var padding: Float = 0
 
-    init(unitsPerMetre: Float, datumMetres: Float, frame: GroundReliefFrame) {
+    init(unitsPerMetre: Float, datumMetres: Float, strength: Float) {
         self.unitsPerMetre = unitsPerMetre
         self.datumMetres = datumMetres
-        fades = SIMD4<Float>(frame.flat.x, frame.flat.y, frame.mountain.x, frame.mountain.y)
-        self.frame = SIMD4<Float>(frame.cameraZoom, frame.strengthScale, 0, 0)
+        self.strength = strength
     }
 }

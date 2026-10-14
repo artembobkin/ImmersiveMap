@@ -129,11 +129,10 @@ constant float kTileRoadBandRanks = 12.0;
 // dash points, gap points); constant per primitive, so half is exact enough.
 struct VertexOut {
     float4 position [[position]];
-    // Every placement draws its own slot's ground only (GroundSlotClip):
-    // the four clip distances after the first are the slot's rectangle,
-    // buffer 12, the first being the road distance cut. (The sphere's
-    // shader keeps the tile-priority stencil instead,
-    // TileSourceStencilPriority.)
+    // No slot clip: a source draws at full extent, in every slot it stands
+    // in at once, and the tile-priority stencil keeps it out of the
+    // pixels a finer source painted (TileSourceStencilPriority), on the
+    // plane as on the sphere.
     float3 worldPos;
     half4 color [[function_constant(kTileColorField)]];
     // Lines classes: the style index rides flat and the fragment resolves
@@ -155,9 +154,9 @@ struct VertexOut {
     // deferred.
     float2 widthAxis [[function_constant(kTileCoverageFields)]];
     // No near cut: the depth is the projection's, so the hardware clips
-    // at the near plane. The first is a road ribbon invisible this frame,
-    // cut whole, the rest the slot's rectangle (see above).
-    float clipDistance [[clip_distance]] [5];
+    // at the near plane. The one distance cuts a road ribbon invisible
+    // this frame whole.
+    float clipDistance [[clip_distance]] [1];
 };
 
 // The fragment stage's view of VertexOut: the same interpolants matched by
@@ -182,9 +181,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
                                   constant FlatDepthBand& depthBand [[buffer(7)]],
                                   constant OverviewFadeUniform& overviewFade [[buffer(8)]],
                                   constant GroundReliefUniform& relief [[buffer(9), function_constant(kTileGroundRelief)]],
-                                  constant float4& clipRect [[buffer(12)]],
-                                  texture2d<float> reliefHeights [[texture(0), function_constant(kTileGroundRelief)]],
-                                  texture2d<float> reliefRoughness [[texture(1), function_constant(kTileGroundRelief)]]) {
+                                  texture2d<float> reliefHeights [[texture(0), function_constant(kTileGroundRelief)]]) {
     float2 localPosition = float2(vertexIn.position.xy);
     float deferredEdgePx = 0.0;
     float2 widthAxis = float2(0.0);
@@ -288,7 +285,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     }
     float4 worldPosition = modelMatrix * float4(localPosition, 0.0, 1.0);
     if (kTileGroundRelief) {
-        worldPosition.z += groundReliefLift(localPosition, reliefHeights, reliefRoughness, relief);
+        worldPosition.z += groundReliefLift(localPosition, reliefHeights, relief);
     }
 
     VertexOut out;
@@ -323,11 +320,6 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     out.worldPos = worldPosition.xyz;
     // Nothing cut: the hardware clips at the near plane.
     out.clipDistance[0] = 1.0;
-    // The slot's rectangle in the tile's local units (GroundSlotClip).
-    out.clipDistance[1] = localPosition.x - clipRect.x;
-    out.clipDistance[2] = clipRect.z - localPosition.x;
-    out.clipDistance[3] = localPosition.y - clipRect.y;
-    out.clipDistance[4] = clipRect.w - localPosition.y;
     if (kTileStyleIndexField) {
         out.styleIndex = uint(vertexIn.styleIndex);
         out.lineParameterRaw = float(vertexIn.lineParameter);

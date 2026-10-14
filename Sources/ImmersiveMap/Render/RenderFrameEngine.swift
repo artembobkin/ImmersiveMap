@@ -56,6 +56,17 @@ final class RenderFrameEngine {
     // MARK: - Settings State
 
     private var settings: ImmersiveMapSettings
+    /// The camera's zoom followed over time (`FrameContext.animatedZoom`),
+    /// and the camera jumps it has snapped to.
+    private var animatedZoom = AnimatedZoom()
+    private var animatedZoomCameraJumpCount = 0
+    /// The zoom the relief's collapse reads: the zoom a drag over the
+    /// terrain began at while the drag lasts, so the mountains stand
+    /// however the arm rides the slopes the drag crosses, then the
+    /// camera's zoom, followed over a few frames as `animatedZoom` is, so
+    /// the drag's end settles the relief rather than drops it. The appear
+    /// fade reads the camera's zoom as it is.
+    private var reliefZoom = AnimatedZoom()
 
     // MARK: - Frame State
 
@@ -295,7 +306,9 @@ final class RenderFrameEngine {
         eventSink.applyActivityState(RenderActivityState(labelFadeRenderingActive: hasActiveLabelFadeAnimations,
                                                          avatarAnimationRenderingActive: hasActiveAvatarAnimations,
                                                          sceneModelAnimationRenderingActive: hasActiveSceneModelAnimations,
-                                                         extrusionRiseRenderingActive: frameContext.sharedState.isExtrusionRising))
+                                                         extrusionRiseRenderingActive: frameContext.sharedState.isExtrusionRising,
+                                                         animatedZoomRenderingActive: animatedZoom.isSettling || reliefZoom.isSettling
+                                                             || (persistentContext.groundReliefStore?.isCollapsing ?? false)))
         // Independent of `didSchedule`: the animation advanced in `update`
         // whether or not this frame reached a drawable.
         let pathAnimationResults = frameContext.sharedState.sceneModelState.pathAnimationResults
@@ -338,6 +351,22 @@ final class RenderFrameEngine {
             return nil
         }
 
+        // The animated zoom: the camera's followed over a few frames, or
+        // snapped to a camera set outright.
+        let cameraJumpCount = renderCamera.cameraJumpCount
+        let cameraJumped = cameraJumpCount != animatedZoomCameraJumpCount
+        animatedZoomCameraJumpCount = cameraJumpCount
+        let animatedZoomValue = animatedZoom.advance(toward: cameraFrameState.mapCameraState.zoom,
+                                                     deltaTime: frameTick.deltaTime,
+                                                     halfLife: settings.camera.animatedZoomHalfLife,
+                                                     snap: cameraJumped)
+        // The relief's zoom: held at a drag's start through the drag, then
+        // the camera's, followed.
+        let reliefZoomValue = reliefZoom.advance(toward: renderCamera.panReferenceZoom ?? cameraFrameState.mapCameraState.zoom,
+                                                 deltaTime: frameTick.deltaTime,
+                                                 halfLife: settings.camera.animatedZoomHalfLife,
+                                                 snap: cameraJumped)
+
         guard let commandBuffer = persistentContext.metalContext.makeCommandBuffer() else {
             diagnostics.recordSkipReason(.missingCommandBuffer)
             currentDiagnostics = diagnostics
@@ -351,7 +380,14 @@ final class RenderFrameEngine {
         // in world units from the last frame's datum: the coverage reaches
         // the tiles the relief lifts into view (`CoveragePolygonBuilder`).
         var reliefHeights: ClosedRange<Float>?
-        persistentContext.groundReliefStore?.setFrame(cameraZoom: cameraFrameState.mapCameraState.zoom)
+        // The relief's appear fade reads the camera's zoom, its collapse
+        // the relief's zoom (`reliefZoom`): the camera flies over the
+        // relief as drawn, and through a drag the drawn relief must stand
+        // still.
+        persistentContext.groundReliefStore?.setFrame(cameraZoom: cameraFrameState.mapCameraState.zoom,
+                                                      reliefZoom: reliefZoomValue,
+                                                      deltaTime: frameTick.deltaTime,
+                                                      snap: cameraJumped)
         if let store = persistentContext.groundReliefStore, store.isActive,
            resolvedPresentation.renderSurfaceMode == .flat,
            let range = store.heightRangeMetres {
@@ -381,7 +417,8 @@ final class RenderFrameEngine {
         if let groundReliefStore = persistentContext.groundReliefStore {
             if resolvedPresentation.renderSurfaceMode == .flat {
                 groundReliefStore.setActive(visibleContent.tileZoomLevel >= groundReliefStore.fromTileZoom
-                                            && groundReliefStore.comesIn(atCameraZoom: cameraFrameState.mapCameraState.zoom))
+                                            && groundReliefStore.isVisible(atCameraZoom: cameraFrameState.mapCameraState.zoom,
+                                                                           reliefZoom: reliefZoomValue))
                 if let datum = GroundReliefCameraLift.datumMetres(store: groundReliefStore,
                                                                   centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
                                                                   tileZoom: visibleContent.tileZoomLevel) {
@@ -416,6 +453,8 @@ final class RenderFrameEngine {
                             commandBuffer: commandBuffer,
                             services: services,
                             mapCameraState: cameraFrameState.mapCameraState,
+                            animatedZoom: animatedZoomValue,
+                            terrainFollowReport: renderCamera.lastTerrainFollowReport,
                             resolvedPresentation: resolvedPresentation,
                             visibleContent: visibleContent,
                             shadowFrameState: shadowFrameState,

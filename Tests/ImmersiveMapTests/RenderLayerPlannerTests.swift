@@ -15,10 +15,12 @@ final class RenderLayerPlannerTests: XCTestCase {
         )
 
         XCTAssertEqual(plan.map(\.layer), [
+            .ringStencil,
             .flatMapSurface,
-            .surfaceLabels,
             .buildingExtrusion,
             .sceneModels,
+            .flatMapRoads,
+            .surfaceLabels,
             .horizon,
             .labels,
             .avatars,
@@ -38,16 +40,19 @@ final class RenderLayerPlannerTests: XCTestCase {
         )
 
         XCTAssertEqual(plan.map(\.layer), [
+            .ringStencil,
             .flatMapSurface,
-            .surfaceLabels,
             .buildingExtrusion,
             .sceneModels,
+            .flatMapRoads,
+            .surfaceLabels,
             .horizon,
             .labels,
             .avatars,
             .debugOverlay
         ])
-        XCTAssertEqual(enabledLayers(in: plan), [.flatMapSurface, .surfaceLabels, .buildingExtrusion, .sceneModels, .horizon])
+        XCTAssertEqual(enabledLayers(in: plan),
+                       [.ringStencil, .flatMapSurface, .buildingExtrusion, .sceneModels, .flatMapRoads, .surfaceLabels, .horizon])
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)
         XCTAssertEqual(skipReason(for: .debugOverlay, in: plan), .debugOverlayDisabled)

@@ -1,26 +1,34 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-/// The stencil reference of a tile source on the sphere: its zoom, shifted
-/// off the cleared value. The sphere's owner pass writes it wherever it
-/// paints and every sphere tile pass tests `greaterEqual` against it, so a
-/// coarser substitute's overflow fails wherever a finer tile painted, a
-/// tile's own later layers pass over its own mark, and same-zoom
-/// neighbours keep painting their stitching margins over each other. The
-/// flat map does not use the priority: there every placement draws only
-/// its own slot's ground (`GroundSlotClip`) and the depth orders the
-/// sources. The bits above the priority serve both surfaces.
+/// The stencil reference of a tile source, on either surface: its zoom,
+/// shifted off the cleared value. The owner pass (the opaque fills, and a
+/// raster tile's texture) writes it wherever it paints, sources drawn
+/// finest first, and every later tile pass tests `greaterEqual` against
+/// it, so a coarser substitute's overflow fails wherever a finer tile
+/// painted, a tile's own later layers pass over its own mark, and
+/// same-zoom neighbours keep painting their stitching margins over each
+/// other. A source draws at full extent, in every slot it stands in at
+/// once, so nothing is cut to a slot on the CPU or in the vertex stage.
+/// On the relief a finer tile owns its pixels whatever rises in front of
+/// them, so a coarser stand-in's near ridge gives way to a finer tile's
+/// far ground along the finer tile's edge: the price of ownership by
+/// zoom alone. The flat map packs the ring of a source's slot above its
+/// zoom (`FlatTileStencilPacking`), and a prepass marks the rings, so a
+/// source also never draws on a ring nearer than its own. The bits above
+/// the priority serve both surfaces.
 enum TileSourceStencilPriority {
-    /// 1...17: zoom clamped to the tile scheme's range, plus one so the
-    /// cleared stencil (0) reads as "nobody painted".
+    /// The sphere's reference, 1...17: zoom clamped to the tile scheme's
+    /// range, plus one so the cleared stencil (0) reads as "nobody
+    /// painted". The flat map's is `FlatTileStencilPacking`.
     static func reference(sourceZoom: Int) -> UInt32 {
         UInt32(min(max(sourceZoom, 0), 16) + 1)
     }
 
-    /// The bits the priority lives in (it is 17 at most): every tile pass
-    /// reads and writes the stencil through this mask, so the flags above
-    /// stay out of its way.
-    static let priorityMask: UInt32 = 0x1F
+    /// The bits the priority lives in, six: every tile pass reads and
+    /// writes the stencil through this mask, so the flags above stay out
+    /// of its way.
+    static let priorityMask: UInt32 = 0x3F
 
     /// The ground hole of a scene model that cuts into the ground
     /// (`ImmersiveMapSceneModel.cutsIntoGround`): raised over the model's

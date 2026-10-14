@@ -30,9 +30,16 @@ using namespace metal;
 constant float kTileRasterExtent = 4096.0;
 
 // The flat rank depth, one value with Tile.metal (kFlatTileLayerDepthStep,
-// kFlatRealDepthScale): the raster tile takes the ground band's first step,
-// where the opaque fills of a vector tile lie.
+// kFlatRealDepthScale): the raster tile lies half a step behind the ground
+// band's first step, where the opaque fills of a vector tile lie. Not on
+// it: a vector tile drawn over the raster (a finer tile reaching into the
+// raster ring, or the raster's own tile placed in a vector slot as a
+// stand-in) is then nearer by a margin, and wins its ground outright.
+// At the same depth the two met at the last bits of z, interpolated over
+// different triangles of the one plane, and the far ground rippled
+// between them.
 constant float kTileRasterFlatLayerDepthStep = 3.2e-6;
+constant float kTileRasterBehindFillsShare = 0.5;
 constant float kTileRasterFlatRealDepthScale = 1.0 - 1536.0 * kTileRasterFlatLayerDepthStep;
 // The relief's depth, one value with Tile.metal (kReliefBandScale,
 // kReliefGroundBehind): the raised ground keeps the real geometry's depth
@@ -94,14 +101,10 @@ struct TileRasterVertexOut {
     float2 uv;
     // The plane's point, for the ground fog. Unused on the sphere.
     float3 worldPosition;
-    // The slot's rectangle on the flat map (GroundSlotClip, buffer 12):
-    // the tile draws its slot's ground only. The whole tile and more on
-    // the sphere, which keeps the tile-priority stencil.
-    float clipDistance [[clip_distance]] [4];
 };
 
 // The fragment stage's view of TileRasterVertexOut: the same interpolants
-// matched by name, the clip distances left to the rasterizer.
+// matched by name.
 struct TileRasterFragmentIn {
     float4 position [[position]];
     float2 uv;
@@ -122,29 +125,26 @@ vertex TileRasterVertexOut tileRasterFlatVertexShader(uint vertexID [[vertex_id]
                                                       constant Camera& camera [[buffer(1)]],
                                                       constant float4x4& modelMatrix [[buffer(3)]],
                                                       constant GroundReliefUniform& relief [[buffer(9), function_constant(kTileRasterRelief)]],
-                                                      constant float4& clipRect [[buffer(12)]],
-                                                      texture2d<float> reliefHeights [[texture(0), function_constant(kTileRasterRelief)]],
-                                                      texture2d<float> reliefRoughness [[texture(1), function_constant(kTileRasterRelief)]]) {
+                                                      texture2d<float> reliefHeights [[texture(0), function_constant(kTileRasterRelief)]]) {
     float2 localPosition = grid[vertexID];
     TileRasterVertexOut out;
     float4 worldPosition = modelMatrix * float4(localPosition, 0.0, 1.0);
     if (kTileRasterRelief) {
-        worldPosition.z += groundReliefLift(localPosition, reliefHeights, reliefRoughness, relief);
+        worldPosition.z += groundReliefLift(localPosition, reliefHeights, relief);
     }
     out.position = camera.matrix * worldPosition;
     out.worldPosition = worldPosition.xyz;
-    out.clipDistance[0] = localPosition.x - clipRect.x;
-    out.clipDistance[1] = clipRect.z - localPosition.x;
-    out.clipDistance[2] = localPosition.y - clipRect.y;
-    out.clipDistance[3] = clipRect.w - localPosition.y;
+    float step = kTileRasterFlatLayerDepthStep * kTileRasterBehindFillsShare;
     if (kTileRasterRelief) {
-        // The relief's depth at the ground band's first step, as the
-        // vector ground's opaque fills over a relief (Tile.metal).
-        out.position.z *= 1.0 + kTileRasterReliefGroundBehind - kTileRasterFlatLayerDepthStep * kTileRasterReliefBandScale;
+        // The relief's depth half a step behind the ground band's first
+        // step, where the vector ground's opaque fills over a relief lie
+        // (Tile.metal).
+        out.position.z *= 1.0 + kTileRasterReliefGroundBehind - step * kTileRasterReliefBandScale;
     } else {
-        // The plane's depth scaled to the ground band's first step, as the
-        // vector ground's opaque fills (Tile.metal).
-        out.position.z *= (1.0 - kTileRasterFlatLayerDepthStep) / kTileRasterFlatRealDepthScale;
+        // The plane's depth scaled to half a step behind the ground band's
+        // first step, where the vector ground's opaque fills lie
+        // (Tile.metal).
+        out.position.z *= (1.0 - step) / kTileRasterFlatRealDepthScale;
     }
     out.uv = tileRasterTextureUv(localPosition);
     return out;
@@ -191,10 +191,6 @@ vertex TileRasterVertexOut tileRasterSpherePureVertexShader(uint vertexID [[vert
     out.position.z = (1.0 - kTileRasterSphereLayerDepthStep) * out.position.w;
     out.uv = tileRasterTextureUv(localPosition);
     out.worldPosition = float3(0.0);
-    out.clipDistance[0] = 1.0;
-    out.clipDistance[1] = 1.0;
-    out.clipDistance[2] = 1.0;
-    out.clipDistance[3] = 1.0;
     return out;
 }
 
