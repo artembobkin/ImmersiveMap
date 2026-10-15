@@ -22,8 +22,8 @@ enum RenderLayer: String, CaseIterable {
     /// against the sphere itself, see `GlobeVectorSurfaceRenderSubsystem`.
     case globeVectorSurface
     case globeCap
-    /// The flat map's placement prepass, right before the ground: the
-    /// planner's decision in the tile-priority stencil, see
+    /// The placement prepass of either surface, right before its ground:
+    /// the planner's decision in the tile-priority stencil, see
     /// `PlacementStencilRenderSubsystem`.
     case placementStencil
     /// The flat map's ground: the fills, as geometry and as textures. The
@@ -110,7 +110,7 @@ struct RenderLayerPlanner {
             // stars paint the whole frame and the tile geometry blends over
             // them, opaque where its background quad lands. The horizon last,
             // over the models near the limb.
-            [.starfield, .globeVectorSurface, .surfaceLabels, .globeCap, .sceneModels, .horizon]
+            [.starfield, .placementStencil, .globeVectorSurface, .surfaceLabels, .globeCap, .sceneModels, .horizon]
         }
 
         return worldLayers.map { layer in

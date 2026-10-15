@@ -5,10 +5,11 @@
 import simd
 import XCTest
 
-/// The building coverage: the frame's targets of its target zoom draw
-/// their buildings, each in its own place, once resident and within the
-/// near field. Nothing coarser stands in for them, and a frame below the
-/// buildings' zoom plans none.
+/// The building coverage: the tiles the ground shows, from the buildings'
+/// zoom on, draw their buildings, each whole in its own square, within the
+/// near field. Where a coarser one stands in over ground some of its
+/// children already show, it draws and they wait. Nothing coarser than the
+/// buildings' zoom draws.
 final class BuildingCoveragePlannerTests: XCTestCase {
     private let cell = Tile(x: 9908, y: 5140, z: 14)
     private var children: [Tile] {
@@ -31,14 +32,17 @@ final class BuildingCoveragePlannerTests: XCTestCase {
         tiles.map { VisibleTile(tile: $0, worldWrap: worldWrap) }
     }
 
+    /// The buildings over the ground the planner shows for `visible`.
     private func plan(resident: [Tile: MetalTile],
                       visible: [VisibleTile],
                       eye: SIMD2<Double>? = nil,
                       minimumZoom: Int = 15) -> PlaceTilesContext {
-        BuildingCoveragePlanner.plan(resident: resident,
-                                     visibleTiles: visible,
-                                     eyeGroundCell: eye ?? self.eye,
-                                     minimumZoom: minimumZoom)
+        let ground = TilePlacementPlanner.buildPlacements(targets: visible,
+                                                          resident: resident,
+                                                          zoom: visible.map(\.z).max() ?? 0)
+        return BuildingCoveragePlanner.plan(groundPlacements: ground.tilePlacements,
+                                            eyeGroundCell: eye ?? self.eye,
+                                            minimumZoom: minimumZoom)
     }
 
     private func slots(_ context: PlaceTilesContext) -> [Tile] {
@@ -46,16 +50,28 @@ final class BuildingCoveragePlannerTests: XCTestCase {
     }
 
     func testTheResidentTargetsDrawInTheirOwnPlaces() throws {
-        let context = plan(resident: try resident([cell] + children.prefix(2)), visible: visible(children))
-        XCTAssertEqual(Set(slots(context)), Set(children.prefix(2)))
+        let context = plan(resident: try resident(children), visible: visible(children))
+        XCTAssertEqual(Set(slots(context)), Set(children))
         XCTAssertTrue(context.tilePlacements.allSatisfy(\.inOwnSlot))
     }
 
-    /// The cell is resident, two of its children are not: the cell draws
-    /// no buildings in their places, they stay empty until they arrive.
-    func testACoarserTileNeverStandsInForAMissingTarget() throws {
+    /// The cell is resident, two of its children are not: the cell stands
+    /// in for them on the ground and draws its buildings whole, and the two
+    /// children that are in wait, so no building draws twice and none is
+    /// missing until the last child lands.
+    func testACoarserTileStandingInDrawsAndItsChildrenWait() throws {
+        let context = plan(resident: try resident([cell] + children.prefix(2)),
+                           visible: visible(children),
+                           minimumZoom: 14)
+        XCTAssertEqual(slots(context), [cell])
+        XCTAssertTrue(context.tilePlacements.allSatisfy(\.inOwnSlot), "Whole, in its own square")
+    }
+
+    /// Below the buildings' zoom the stand-in draws nothing, and the
+    /// children that are in draw theirs.
+    func testAStandInCoarserThanTheBuildingsZoomDrawsNone() throws {
         let context = plan(resident: try resident([cell] + children.prefix(2)), visible: visible(children))
-        XCTAssertFalse(context.tilePlacements.contains { $0.metalTile.tile == cell })
+        XCTAssertEqual(Set(slots(context)), Set(children.prefix(2)))
     }
 
     func testAFrameBelowTheBuildingsZoomPlansNone() throws {
@@ -65,8 +81,8 @@ final class BuildingCoveragePlannerTests: XCTestCase {
         XCTAssertEqual(slots(plan(resident: resident, visible: visible([cell]), minimumZoom: 14)), [cell],
                        "Buildings from 14: the z14 frame draws them")
         let coarse = [VisibleTile(x: cell.x / 2, y: cell.y / 2, z: 13)]
-        XCTAssertTrue(plan(resident: resident, visible: coarse, minimumZoom: 0).tilePlacements.isEmpty,
-                      "Coarser than the tiles that carry buildings, never")
+        XCTAssertEqual(slots(plan(resident: resident, visible: coarse, minimumZoom: 0)), [cell],
+                       "Coarser than the tiles that carry buildings, never: the z13 frame's ground is the z14 cell standing in, and it draws")
     }
 
     func testTargetsBeyondTheFieldRadiusAreSkipped() throws {
@@ -83,9 +99,10 @@ final class BuildingCoveragePlannerTests: XCTestCase {
     }
 
     func testTheGlobeHasNoBuildingCoverage() throws {
-        let context = BuildingCoveragePlanner.plan(resident: try resident(children),
-                                                   visibleTiles: visible(children),
-                                                   eyeGroundCell: nil)
+        let ground = TilePlacementPlanner.buildPlacements(targets: visible(children),
+                                                          resident: try resident(children),
+                                                          zoom: 15)
+        let context = BuildingCoveragePlanner.plan(groundPlacements: ground.tilePlacements, eyeGroundCell: nil)
         XCTAssertTrue(context.tilePlacements.isEmpty)
     }
 

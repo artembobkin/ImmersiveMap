@@ -205,9 +205,8 @@ final class GlobeTileCoverageTests: XCTestCase {
                        RasterTileSpec(size: 128))
         XCTAssertNil(resolution.rasterTargets[VisibleTile(x: 32, y: 32, z: 6)])
         XCTAssertTrue(Self.resolve().rasterTargets.allSatisfy { $0.key.z < 6 }, "the default's exact tiles are geometry")
-        let globe = Self.resolve(rules: FlatRingRules.globeDefault).rasterTargets
-        XCTAssertFalse(globe.isEmpty, "the globe's far ring draws from textures")
-        XCTAssertTrue(globe.allSatisfy { $0.key.z < 6 && $0.value == RasterTileSpec(size: 64) }, "and its exact tiles are geometry")
+        XCTAssertTrue(Self.resolve(rules: FlatRingRules.globeDefault).rasterTargets.isEmpty,
+                      "the globe's default draws every ring as geometry")
     }
 
     /// The rules are read frame by frame, with nothing carried over: the

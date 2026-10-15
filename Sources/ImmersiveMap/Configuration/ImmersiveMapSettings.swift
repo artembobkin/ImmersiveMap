@@ -1341,7 +1341,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// come up out of it whole, from `ModelArchiveSettings.minimumZoom`.
         public var riseSeconds: TimeInterval
 
-        public init(buildingsMinimumZoom: Double = 15,
+        public init(buildingsMinimumZoom: Double = 14,
                     riseSeconds: TimeInterval = 0.6) {
             self.buildingsMinimumZoom = buildingsMinimumZoom
             self.riseSeconds = riseSeconds

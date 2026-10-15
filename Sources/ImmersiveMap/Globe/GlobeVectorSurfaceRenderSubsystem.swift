@@ -6,11 +6,11 @@ import simd
 
 /// The globe's ground: the placements' ground geometry projected onto the
 /// sphere in the vertex stage (`GlobeVectorSurfaceDrawer`). A tile's extent
-/// is its full square: which source owns a pixel is the tile-priority
-/// stencil's answer, marked by whatever draws a tile's opaque ground first,
-/// and the far hemisphere goes to back-face culling. Every source draws in
-/// one call, finest first, so a coarser source's overflow stays out of a
-/// finer tile's ground.
+/// is its full square: which source owns a pixel is the planner's
+/// decision, marked by the placement prepass in the tile-priority
+/// stencil and tested by every pass, and the far hemisphere goes to
+/// back-face culling. Every source draws in one call, and a coarser
+/// source's overflow stays out of the ground given to a finer tile.
 final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
     let name: String = "GlobeVectorSurface"
 

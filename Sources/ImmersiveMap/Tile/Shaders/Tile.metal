@@ -130,9 +130,9 @@ constant float kTileRoadBandRanks = 12.0;
 struct VertexOut {
     float4 position [[position]];
     // No slot clip: a source draws at full extent, in every slot it stands
-    // in at once, and the tile-priority stencil keeps it out of the
-    // pixels a finer source painted (TileSourceStencilPriority), on the
-    // plane as on the sphere.
+    // in at once, and the tile-priority stencil keeps it to the ground
+    // the planner gave it (TileSourceStencilPriority), on the plane as on
+    // the sphere.
     float3 worldPos;
     half4 color [[function_constant(kTileColorField)]];
     // Lines classes: the style index rides flat and the fragment resolves

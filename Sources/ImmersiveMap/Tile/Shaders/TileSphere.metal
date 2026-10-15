@@ -95,8 +95,8 @@ constant float kTileSphereExtent = 4096.0;
 //    opaque layer, submission order free (TBDR hidden surface removal),
 //  - the ribbons of one tile pass over every fill of the same tile.
 // WHICH tile owns a pixel is not depth's job any more: the tile-priority
-// STENCIL decides it (TileSourceStencilPriority; the owner passes write
-// the source's mark, every pass tests greaterEqual), the same mechanism
+// STENCIL decides it (TileSourceStencilPriority; the placement prepass
+// writes the planner's marks, every pass tests equal), the same mechanism
 // the flat map uses. The band spans about 2.1e-4 at the far plane, far
 // behind the sphere's limb (z about 0.9954 at zoom 6) and everything that
 // depth-tests with real geometry (caps, models). The step is about

@@ -49,11 +49,11 @@ final class RingRuleSetsTests: XCTestCase {
         XCTAssertEqual(sets.rules(forZoom: 22), FlatRingRules.closeStreetDefault)
 
         let near = FlatRingRules.nearStreetDefault.rules
-        XCTAssertEqual(near.map(\.zoomDrop), [0, 2, 2])
-        XCTAssertEqual(near.map(\.distance), [1, 4, 13])
+        XCTAssertEqual(near.map(\.zoomDrop), [0, 1, 4])
+        XCTAssertEqual(near.map(\.distance), [1, 3, 13])
         XCTAssertEqual(near.map(\.drawsLines), [true, true, false])
         XCTAssertEqual(near.map(\.drawsLabels), [true, false, false])
-        XCTAssertEqual(near.map(\.rasterSize), [nil, nil, 256])
+        XCTAssertEqual(near.map(\.rasterSize), [nil, 64, 128])
         let close = FlatRingRules.closeStreetDefault.rules
         XCTAssertEqual(close.map(\.zoomDrop), [0, 2])
         XCTAssertEqual(close.map(\.distance), [1, 2])
@@ -66,7 +66,7 @@ final class RingRuleSetsTests: XCTestCase {
         XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.distance), [1, 3])
         XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.drawsLines), [true, false])
         XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.drawsLabels), [true, true])
-        XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.rasterSize), [nil, 64])
+        XCTAssertEqual(FlatRingRules.globeDefault.rules.map(\.rasterSize), [nil, nil])
     }
 
     /// A set starting past the tileset's deepest zoom is reached: the set

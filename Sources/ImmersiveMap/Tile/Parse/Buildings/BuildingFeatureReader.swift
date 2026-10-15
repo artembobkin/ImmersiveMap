@@ -34,10 +34,19 @@ struct BuildingFeatureReader {
     }
 
     private let minimumSourceZoom: Int
+    /// `TileParseOptions.buildingDeepestSourceZoom`.
+    private let deepestSourceZoom: Int?
     private let tileExtent = TileCoordinateSpace.tileExtentDouble
 
     init(options: TileParseOptions) {
         self.minimumSourceZoom = options.buildingMinimumSourceZoom
+        self.deepestSourceZoom = options.buildingDeepestSourceZoom
+    }
+
+    /// Whether a tile of `zoom` ships its buildings merged into groups
+    /// (`TileParseOptions.buildingDeepestSourceZoom`).
+    private func shipsMergedBuildings(tileZoom zoom: Int) -> Bool {
+        deepestSourceZoom.map { zoom < $0 } ?? false
     }
 
     /// One pass over a layer collecting both the part identifiers and the
@@ -64,7 +73,9 @@ struct BuildingFeatureReader {
     /// ground fill: the style does not raise it, the schema reading did not
     /// find it to be a building or says it is hidden, extrusion is off in
     /// the settings, the tile is coarser than the building grid, or the
-    /// footprint repeats a part of its own building. The extrusion flag is
+    /// footprint repeats a part of its own building, which on a tile of
+    /// merged buildings is read off the footprints instead
+    /// (`TileParseOptions.buildingDeepestSourceZoom`). The extrusion flag is
     /// prepared-cache identity, so toggling it re-parses instead of serving
     /// the other shape from disk.
     func extrusion(feature: MvtDecodedFeature,
@@ -79,13 +90,19 @@ struct BuildingFeatureReader {
             return nil
         }
         let buildingId = building.buildingIdentity ?? feature.id
-        let hasParts = partInfo.partIds.contains(buildingId)
+        // A merged group's id is one member's: the rules by id would lay
+        // the whole group flat for that member's parts. Each polygon then
+        // stands, and the resolver sorts an outline from its parts by
+        // their footprints.
+        let isMerged = shipsMergedBuildings(tileZoom: tile.z)
+        let hasParts = isMerged == false && partInfo.partIds.contains(buildingId)
         // The footprint signature's canonical rotation is O(n^2) in ring
         // vertices; only building-part dedup needs it. Skip it entirely when
         // there are no part signatures to match (always the case for
         // non-building layers), so large landcover/water polygons don't pay
         // the quadratic cost. Result is unchanged: an empty set never matches.
-        let matchesPartFootprint = building.isPart == false
+        let matchesPartFootprint = isMerged == false
+            && building.isPart == false
             && partInfo.footprintSignatures.isEmpty == false
             && polygons.contains { polygon in
                 guard let signature = BuildingFootprintSignature(polygon: polygon) else {

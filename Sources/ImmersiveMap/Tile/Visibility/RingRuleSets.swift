@@ -79,22 +79,22 @@ struct RingRuleSets: Hashable {
 
 extension FlatRingRules {
     /// The globe's zooms: the exact tiles with their lines to ring 1, then
-    /// two levels coarser to ring 3 as 64-texel textures, with their
-    /// labels and without lines. Ground past ring 3 is the pinned world
-    /// cover (`GlobeTileCoverage`).
+    /// two levels coarser to ring 3 as geometry, with their labels and
+    /// without lines. Ground past ring 3 is the pinned world cover
+    /// (`GlobeTileCoverage`).
     static let globeDefault = FlatRingRules(rules: [
         FlatRingRule(zoomDrop: 0, distance: 1),
-        FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false, rasterSize: 64)
+        FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false)
     ])
 
     /// Zooms 15 and 16: the exact tiles with their lines and labels to ring
-    /// 1, two levels coarser to ring 4 as geometry with its lines and
-    /// without labels, then the same zoom to ring 13 as 256-texel textures,
-    /// without lines or labels.
+    /// 1, one level coarser to ring 3 as 64-texel textures with their lines
+    /// and without labels, then four levels coarser to ring 13 as 128-texel
+    /// textures, without lines or labels.
     static let nearStreetDefault = FlatRingRules(rules: [
         FlatRingRule(zoomDrop: 0, distance: 1),
-        FlatRingRule(zoomDrop: 2, distance: 4, drawsLabels: false),
-        FlatRingRule(zoomDrop: 2, distance: 13, drawsLines: false, drawsLabels: false, rasterSize: 256)
+        FlatRingRule(zoomDrop: 1, distance: 3, drawsLabels: false, rasterSize: 64),
+        FlatRingRule(zoomDrop: 4, distance: 13, drawsLines: false, drawsLabels: false, rasterSize: 128)
     ])
 
     /// Zoom 17 and deeper: the exact tiles with their lines and labels to

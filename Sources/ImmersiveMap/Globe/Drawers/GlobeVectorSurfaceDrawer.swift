@@ -23,10 +23,10 @@ import simd
 /// band above every fill; the classes are separate index segments baked by
 /// the parser, so no class pass reads the other's vertices. With the rank
 /// in the vertex stage, adjacent runs headed for the same pass merge into
-/// one draw call. Which source owns a pixel is the tile-priority stencil's
-/// decision (`TileSourceStencilPriority`, sources drawn finest first), so
-/// the rank only has to be consistent within one tile. The morph keeps
-/// the single blended draw.
+/// one draw call. Which source owns a pixel is the planner's decision,
+/// marked by the placement prepass and tested by every pass
+/// (`TileSourceStencilPriority`), so the rank only has to be consistent
+/// within one tile. The morph keeps the single blended draw.
 enum GlobeVectorSurfaceDrawer {
 
     static func draw(renderEncoder: MTLRenderCommandEncoder,
@@ -87,11 +87,11 @@ enum GlobeVectorSurfaceDrawer {
             // The sphere draws unique SOURCES, not placements: a
             // coarse tile standing in for several missing slots is drawn
             // once at its full extent, and the slot clip is gone entirely.
-            // What keeps a substitute out of a covered slot is the depth
-            // band: sources draw finest first, every tile's opaque
-            // background quad writes depth over its whole slot, and a
-            // coarser source's overflow fails the test wherever a finer
-            // tile painted (see kTileSphereLayerDepthStep in TileSphere.metal).
+            // What keeps a substitute out of a covered slot is the
+            // tile-priority stencil, filled by the placement prepass with
+            // the planner's decision: a source paints the ground it was
+            // given and no other. Finest first for the pipeline's sake
+            // alone.
             var seenSources = Set<MetalTile>()
             var uniqueSources: [MetalTile] = []
             uniqueSources.reserveCapacity(placeTilesContext.tilePlacements.count)
@@ -222,9 +222,9 @@ enum GlobeVectorSurfaceDrawer {
                   let lineStyles = buffers.lineStyles else { continue }
 
             let tile = metalTile.tile
-            // The tile-priority stencil reference: the opaque owner pass
-            // replaces the stencil with it, every pass tests greaterEqual
-            // against the finest painter (TileSourceStencilPriority).
+            // The tile-priority stencil reference, the source's zoom: every
+            // pass tests equal to it, against the planner's marks
+            // (TileSourceStencilPriority).
             renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.reference(sourceZoom: tile.z))
             renderEncoder.setVertexBuffer(vertices.buffer, offset: vertices.offset, index: 0)
             renderEncoder.setVertexBuffer(styles.buffer, offset: styles.offset, index: 2)

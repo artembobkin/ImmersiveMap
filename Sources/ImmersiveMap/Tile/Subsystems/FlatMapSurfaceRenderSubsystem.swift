@@ -83,7 +83,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         // their ranks, and every group tests the tile-priority stencil
         // for its source's own mark. A source draws at full extent, and
         // the placement prepass has settled which source a pixel shows
-        // (`FlatTileStencilPacking`).
+        // (`TileSourceStencilPriority`).
         GroundFogUniform.bind(GroundFogUniform.resolve(frameContext: frameContext), encoder: encoder)
         FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,

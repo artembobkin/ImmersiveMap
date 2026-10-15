@@ -47,7 +47,9 @@ final class TileRenderStore: @unchecked Sendable {
             groundFlatteningFromTileZoom: parseOptions.groundFlatteningFromTileZoom,
             groundFlatteningGrid: parseOptions.groundFlatteningGrid,
             groundFlatteningGridByTileZoomKey: parseOptions.groundFlatteningGridByTileZoomKey,
-            groundReliefEnabled: parseOptions.groundReliefEnabled
+            groundReliefEnabled: parseOptions.groundReliefEnabled,
+            buildingMinimumSourceZoom: parseOptions.buildingMinimumSourceZoom,
+            buildingDeepestSourceZoom: parseOptions.buildingDeepestSourceZoom
         )
         let labelDecisions = TileLabelDecisions(style: styleRuntime.style,
                                                 glyphCoverage: textRenderer.glyphCoverage,

@@ -131,8 +131,9 @@ enum FlatMapSurfaceDrawer {
         // Unique SOURCES, not placements: a tile placed in several slots
         // draws once at full extent, and the tile-priority stencil, which
         // the placement prepass filled with the planner's decision, gives
-        // it exactly the ground of its placements (FlatTileStencilPacking),
-        // in whatever order the sources draw. The world wrap is part of
+        // it exactly the ground of its placements
+        // (TileSourceStencilPriority), in whatever order the sources
+        // draw. The world wrap is part of
         // the key: the flat world's wrap copies place the same tile at
         // different origins across the seam. A source's lines and fills are its
         // placements' rules' (`TileDrawRules`: a raster placement's ground
@@ -165,7 +166,7 @@ enum FlatMapSurfaceDrawer {
             }
         }
         for index in sources.indices {
-            sources[index].stencilReference = FlatTileStencilPacking.reference(sourceZoom: sources[index].metalTile.tile.z)
+            sources[index].stencilReference = TileSourceStencilPriority.reference(sourceZoom: sources[index].metalTile.tile.z)
         }
         // Finest first, for the pipeline's sake alone: the stencil has
         // settled every pixel already.
@@ -533,9 +534,9 @@ enum FlatMapSurfaceDrawer {
 
         let indexByteWidth = buffers.indexType == .uint16 ? 2 : 4
         // The tile-priority stencil value, the source's zoom
-        // (FlatTileStencilPacking): every pass tests equal to it, against
-        // the planner's marks. No slot clip: a stand-in draws at full
-        // extent and paints the ground marked for it.
+        // (TileSourceStencilPriority): every pass tests equal to it,
+        // against the planner's marks. No slot clip: a stand-in draws at
+        // full extent and paints the ground marked for it.
         renderEncoder.setStencilReferenceValue(stencilReference)
         for span in visibleSpans {
             renderEncoder.drawIndexedPrimitives(type: primitiveType,

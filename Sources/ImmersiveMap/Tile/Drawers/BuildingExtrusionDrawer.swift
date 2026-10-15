@@ -7,9 +7,9 @@ import simd
 enum BuildingExtrusionDrawer {
     /// Opaque building geometry with depth test and depth write, straight
     /// into the world pass. Nothing keeps tiles apart per pixel: the
-    /// building coverage draws the tiles of one zoom, each in its own place
-    /// (`BuildingCoveragePlanner`), so no two of them draw over the same
-    /// ground.
+    /// building coverage draws each tile whole in its own square and never
+    /// two that overlap (`BuildingCoveragePlanner`), so no two of them draw
+    /// over the same ground.
     ///
     /// `heightScales`, index-aligned with the placements, scale each
     /// placement's heights over the ground: how far its tile has risen out

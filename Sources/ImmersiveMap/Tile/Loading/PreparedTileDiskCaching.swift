@@ -31,8 +31,17 @@ struct PreparedTileCacheIdentity {
     /// Whether the roads and the lines of a flattened tile take a vertex at
     /// every grid crossing, for the ground relief (`TileParseOptions`).
     var groundReliefEnabled: Bool = false
+    /// The coarsest tile zoom whose buildings are extruded
+    /// (`TileParseOptions.buildingMinimumSourceZoom`): a tile prepared
+    /// without its buildings' walls must not answer a map that draws them,
+    /// and vice versa.
+    var buildingMinimumSourceZoom: Int = BuildingCoveragePlanner.minimumSourceZoom
+    /// The zoom below which the buildings ship merged
+    /// (`TileParseOptions.buildingDeepestSourceZoom`): the parts rules
+    /// read them otherwise there.
+    var buildingDeepestSourceZoom: Int?
     var namespaceComponent: String {
-        return "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)-g\(groundFlatteningFromTileZoom ?? -1)x\(groundFlatteningGrid)\(groundFlatteningGridByTileZoomKey.isEmpty ? "" : "[" + groundFlatteningGridByTileZoomKey + "]")\(groundReliefEnabled ? "r" : "")"
+        return "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)-g\(groundFlatteningFromTileZoom ?? -1)x\(groundFlatteningGrid)\(groundFlatteningGridByTileZoomKey.isEmpty ? "" : "[" + groundFlatteningGridByTileZoomKey + "]")\(groundReliefEnabled ? "r" : "")-e\(buildingMinimumSourceZoom)\(buildingDeepestSourceZoom.map { "m\($0)" } ?? "")"
     }
 
     static func tileSourceRevision(for network: ImmersiveMapSettings.TileSettings.NetworkSettings) -> UInt64 {
@@ -910,7 +919,12 @@ final class PreparedTileDiskCaching {
     // in the tile (`ExtrudedVertexIn.buildingOrdinal`, the bytes a v143
     // entry pads with) and the tile lists each volume's anchor
     // (`Extruded.buildingAnchors`), which the relief lifts the volume by.
-    static let preparedFormatVersion: UInt32 = 144
+    // 145: a tile coarser than the tileset's deepest zoom ships its
+    // buildings merged into groups of one height, by one member's id
+    // (`TileParseOptions.buildingDeepestSourceZoom`): each polygon of a
+    // group now stands at the group's height, and the parts rules by id
+    // are left to the footprints. A v144 entry lays whole groups flat.
+    static let preparedFormatVersion: UInt32 = 145
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

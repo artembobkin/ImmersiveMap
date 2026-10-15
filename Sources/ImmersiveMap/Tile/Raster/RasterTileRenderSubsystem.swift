@@ -25,10 +25,9 @@ import simd
 /// A texture is opaque and owns its pixels as an opaque fill does: it
 /// writes a depth half a rank step behind the ground's first, so the
 /// lines drawn over it pass and a vector tile drawn over it wins outright
-/// (TileRaster.metal), and the tile-priority stencil
-/// (`TileSourceStencilPriority`), drawn at
-/// full extent and finest first on either surface, so a coarser source
-/// stays out of the pixels a finer one painted. On the plane it takes the
+/// (TileRaster.metal), and it paints the ground the planner gave its
+/// tile, drawn at full extent under the tile-priority stencil
+/// (`TileSourceStencilPriority`) on either surface. On the plane it takes the
 /// ground shadow mask as the vector ground does, and rises by the ground
 /// relief where the frame is on it (`GroundReliefStore`), on a grid as
 /// fine as the zoom's flattening grid. On the sphere it follows the
@@ -66,9 +65,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
     private let groundReliefStore: GroundReliefStore?
     private let groundFlattening: ImmersiveMapSettings.TileSettings.GroundFlatteningSettings
 
-    /// The frame's sources, by the tile drawn: on the plane in the order
-    /// of their stencil references, the nearest ring's first and the
-    /// finest of a ring first, on the sphere finest first.
+    /// The frame's sources, by the tile drawn, finest first.
     private var sources: [Source] = []
     /// The textures by size, reused frame after frame. A size's pool grows
     /// to what a frame needs and shrinks when a frame needs much less, so
@@ -125,10 +122,9 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
     /// The frame's raster placements, grouped by the tile drawn: a tile
     /// placed in several raster slots draws into one texture, of the
     /// largest size among them, and is drawn once per wrap copy it is
-    /// placed at, at full extent. On the plane the placement prepass has
-    /// settled which source a pixel shows (`FlatTileStencilPacking`), and
-    /// the sources are ordered finest first for the pipeline's sake; on
-    /// the sphere finest first, which the tile-priority stencil reads.
+    /// placed at, at full extent. The placement prepass has settled which
+    /// source a pixel shows (`TileSourceStencilPriority`), and the sources
+    /// are ordered finest first for the pipeline's sake alone.
     func update(frameContext: FrameContext) {
         let placements = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
         sources.removeAll(keepingCapacity: true)
@@ -183,9 +179,9 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
         trimPools(needed: needed)
     }
 
-    /// The plane's stencil value of a source (`FlatTileStencilPacking`).
+    /// The stencil value of a source (`TileSourceStencilPriority`).
     private static func reference(of source: Source) -> UInt32 {
-        FlatTileStencilPacking.reference(sourceZoom: source.metalTile.tile.z)
+        TileSourceStencilPriority.reference(sourceZoom: source.metalTile.tile.z)
     }
 
     private func texture(size: Int, index: Int) -> MTLTexture? {
@@ -369,7 +365,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
             let tile = source.metalTile.tile
             encoder.setFragmentTexture(texture, index: 0)
             // The tile-priority value, the tile's zoom, tested equal to
-            // the planner's marks (FlatTileStencilPacking).
+            // the planner's marks (TileSourceStencilPriority).
             encoder.setStencilReferenceValue(Self.reference(of: source))
             for placement in source.placements {
                 let relief = groundReliefStore?.relief(for: tile,
@@ -430,8 +426,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
             guard let mesh = grid.mesh(forTileZoom: tile.z) else { continue }
             var surfaceTile = GlobeSurfaceTileUniform(tile: tile)
             encoder.setVertexBytes(&surfaceTile, length: MemoryLayout<GlobeSurfaceTileUniform>.stride, index: 9)
-            // The sphere's tile-priority mark (TileSourceStencilPriority).
-            encoder.setStencilReferenceValue(TileSourceStencilPriority.reference(sourceZoom: tile.z))
+            encoder.setStencilReferenceValue(Self.reference(of: source))
             encoder.setFragmentTexture(texture, index: 0)
             draw(mesh: mesh, encoder: encoder)
         }

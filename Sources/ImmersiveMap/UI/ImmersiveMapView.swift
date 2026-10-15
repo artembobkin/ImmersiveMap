@@ -983,7 +983,7 @@ public extension ImmersiveMapView {
     /// that is zero. An omitted value is left as configured:
     ///
     ///     ImmersiveMapView()
-    ///         .buildingExtrusion(buildingsMinimumZoom: 15, riseSeconds: 0.6)
+    ///         .buildingExtrusion(buildingsMinimumZoom: 14, riseSeconds: 0.6)
     ///         .buildingExtrusion(risesFromTheGround: false)
     ///
     /// Applies live.

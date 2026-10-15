@@ -26,13 +26,30 @@ struct ExtrusionRise<Key: Hashable> {
     /// camera is off the layer's zoom. The first frame stands its parts up
     /// at once: a map opened at a street zoom shows its buildings
     /// standing. `seconds` of zero stands every part up at once.
-    mutating func advance<Keys: Sequence>(keys: Keys, time: TimeInterval, seconds: TimeInterval) where Keys.Element == Key {
+    /// `overlaps` names the last frame's parts a new part takes the place
+    /// of: the new part goes on from the furthest risen of them, so a
+    /// part handed over to another (the buildings of a coarser tile to
+    /// those of its children when the zoom changes) stays standing, and
+    /// only a part on ground nothing stood on rises.
+    mutating func advance<Keys: Sequence>(keys: Keys,
+                                          time: TimeInterval,
+                                          seconds: TimeInterval,
+                                          overlaps: ((Key, Key) -> Bool)? = nil) where Keys.Element == Key {
         let isFirstFrame = lastTime == nil
         lastTime = time
         self.seconds = seconds
         var drawn: [Key: TimeInterval] = [:]
         for key in keys where drawn[key] == nil {
-            drawn[key] = startTimes[key] ?? (isFirstFrame ? -.infinity : time)
+            if let start = startTimes[key] {
+                drawn[key] = start
+            } else if isFirstFrame {
+                drawn[key] = -.infinity
+            } else if let overlaps,
+                      let inherited = startTimes.lazy.filter({ overlaps(key, $0.key) }).map(\.value).min() {
+                drawn[key] = inherited
+            } else {
+                drawn[key] = time
+            }
         }
         startTimes = drawn
         isAnimating = seconds > 0 && drawn.values.contains { time - $0 < seconds }

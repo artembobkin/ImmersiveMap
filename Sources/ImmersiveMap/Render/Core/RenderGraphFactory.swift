@@ -58,7 +58,7 @@ enum RenderGraphFactory {
                                                           riseSeconds: settings.scene.extrusion.riseSeconds)
         let flatMapSurfaceSubsystem = FlatMapSurfaceRenderSubsystem(tilePipeline: context.tilePipeline,
                                                                     groundOwnerState: context.groundOwnerState,
-                                                                    tileStencilTestState: context.flatTileStencilTestState,
+                                                                    tileStencilTestState: context.tileStencilTestState,
                                                                     roadRankState: context.roadRankState,
                                                                     depthDisabledState: context.depthDisabledState,
                                                                     debugOverlayControls: debugOverlayControls,
@@ -138,8 +138,9 @@ enum RenderGraphFactory {
             avatarSubsystem,
             markerSubsystem,
             groundShadowMaskSubsystem,
-            // Before the ground: the planner's decision in the stencil, the
-            // placements' marks (`FlatTileStencilPacking`).
+            // Before the ground of either surface: the planner's decision
+            // in the stencil, the placements' marks
+            // (`TileSourceStencilPriority`).
             placementStencilSubsystem,
             // The plane's vector ground, then its textures, each source
             // painting the ground its mark names, in whatever order.

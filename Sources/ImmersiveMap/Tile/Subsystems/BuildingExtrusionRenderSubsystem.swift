@@ -12,17 +12,19 @@ import Metal
 /// (`HiddenBuildingIndexBuffers`).
 ///
 /// The buildings draw from a camera zoom on
-/// (`ExtrusionSettings.buildingsMinimumZoom`), from the tiles of the
-/// frame's target zoom only (`BuildingCoveragePlanner`): a coarser tile
-/// standing in where those have not arrived draws none. A tile's buildings
-/// also wait for the model tile
+/// (`ExtrusionSettings.buildingsMinimumZoom`), from the tiles the ground
+/// shows, the buildings' zoom and finer (`BuildingCoveragePlanner`), so
+/// they stand through a change of zoom as the ground does. A tile's
+/// buildings also wait for the model tile
 /// over them (`FrameContextSharedState.pendingModelTiles`), so the ones a
 /// model stands in for are left out from their first frame. Each tile's
 /// buildings grow out of the flat map from the frame they first draw in
 /// (`ExtrusionRise`), their shadows with them: all of them when the camera
-/// reaches the zoom, and a tile arriving later on its own. Leaving the
-/// zoom, they are gone at once. The coverage is planned from the grid's zoom on
-/// regardless (`BuildingCoveragePlanner`), so the tiles are there to rise.
+/// reaches the zoom, and a tile on ground no buildings stood on. A tile
+/// taking over from the tiles that drew there keeps their height. Leaving
+/// the zoom, they are gone at once. The coverage is planned from the
+/// grid's zoom on regardless (`BuildingCoveragePlanner`), so the tiles
+/// are there to rise.
 final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     let name: String = "BuildingExtrusion"
 
@@ -96,7 +98,12 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
             return placement.placeIn
         }
         let time = frameContext.time
-        rise.advance(keys: drawnKeys.compactMap { $0 }, time: time, seconds: extrusion.riseSeconds)
+        // A tile taking over the ground of standing buildings (a coarser
+        // tile's children, or the other way) keeps their height.
+        rise.advance(keys: drawnKeys.compactMap { $0 },
+                     time: time,
+                     seconds: extrusion.riseSeconds,
+                     overlaps: Self.overlap)
 
         heightScales.removeAll(keepingCapacity: true)
         var drawnPlacements: [PlaceTile] = []
@@ -125,6 +132,14 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     }
 
     func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
+
+    /// Whether two squares share ground: one of them holds the other, in
+    /// the same world copy.
+    private static func overlap(_ lhs: VisibleTile, _ rhs: VisibleTile) -> Bool {
+        guard lhs.worldWrap == rhs.worldWrap else { return false }
+        let (coarse, fine) = lhs.z <= rhs.z ? (lhs, rhs) : (rhs, lhs)
+        return fine.tile.findParentTile(atZoom: coarse.z) == coarse.tile
+    }
 
     /// Each drawn placement's lifts over the relief: the terrain's height
     /// under each volume's anchor, in the terrain's metres, made once per

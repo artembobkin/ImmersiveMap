@@ -22,10 +22,11 @@
 ///   the ones that had;
 /// - and, wherever those leave a hole, its finest resident ancestor above
 ///   the backdrop's zoom: a zoom-in or a pan shows the parent until the
-///   child arrives. The ancestor is placed whole; both surfaces draw unique
-///   sources finest first and let the finer painter own each pixel (the
-///   flat map's tile-priority stencil, the sphere's rank depth), so the
-///   descendants stay on top and the ancestor shows through the holes only;
+///   child arrives. The ancestor is placed whole; the placement prepass
+///   marks every placement's ground in the tile-priority stencil, the
+///   finer over the coarser, and the ground paints by equality on both
+///   surfaces (`TileSourceStencilPriority`), so the descendants stay on
+///   top and the ancestor shows through the holes only;
 /// - nothing, when neither exists: the backdrop paints it, or the globe's
 ///   placeholder.
 ///
@@ -115,12 +116,25 @@ struct TilePlacementPlanner {
             }
         }
 
-        /// Whether `tile` is `other` or an ancestor of it.
-        func covers(_ tile: Tile, _ other: Tile) -> Bool {
-            tile.z <= other.z && other.findParentTile(atZoom: tile.z) == tile
+        // What the last frame showed and is still resident, indexed once
+        // per plan so a target finds it in as many lookups as there are
+        // zooms above it, not by a scan of every placement: by the ground
+        // a placement stood on (its `placeIn`, the square the prepass
+        // marked for it), and under every ancestor of that ground, in the
+        // last frame's order.
+        var shownByGround: [VisibleTile: [PlaceTile]] = [:]
+        var shownInsideByAncestor: [VisibleTile: [PlaceTile]] = [:]
+        for shown in previous {
+            let tile = shown.metalTile.tile
+            guard resident[tile] != nil, isUsefulSubstitute(tile) else { continue }
+            let ground = shown.placeIn
+            shownByGround[ground, default: []].append(shown)
+            var ancestorZoom = ground.z - 1
+            while ancestorZoom >= 0, let ancestor = ground.tile.findParentTile(atZoom: ancestorZoom) {
+                shownInsideByAncestor[VisibleTile(tile: ancestor, worldWrap: ground.worldWrap), default: []].append(shown)
+                ancestorZoom -= 1
+            }
         }
-        // What the last frame showed, by the world copy it was shown in.
-        let shownByWrap = Dictionary(grouping: previous, by: { $0.placeIn.worldWrap })
 
         for target in targets {
             let sourceTile = target.tile
@@ -144,17 +158,14 @@ struct TilePlacementPlanner {
             // tile with its labels stays one when the camera pulls back,
             // and a far ring's texture turns into its geometry when the
             // camera comes near, until the slot's own tile lands.
-            var shownInside: [PlaceTile] = []
+            let shownInside = shownInsideByAncestor[target] ?? []
+            // The finest ground over the slot: the slot itself, then its
+            // ancestors upward.
             var shownOver: PlaceTile?
-            for shown in shownByWrap[target.worldWrap] ?? [] {
-                let tile = shown.metalTile.tile
-                guard resident[tile] != nil, isUsefulSubstitute(tile) else { continue }
-                let ground = shown.placeIn.tile
-                if ground.z > sourceTile.z, covers(sourceTile, ground) {
-                    shownInside.append(shown)
-                } else if covers(ground, sourceTile), shownOver.map({ ground.z > $0.placeIn.tile.z }) ?? true {
-                    shownOver = shown
-                }
+            var groundZoom = sourceTile.z
+            while shownOver == nil, groundZoom >= 0, let ground = sourceTile.findParentTile(atZoom: groundZoom) {
+                shownOver = shownByGround[VisibleTile(tile: ground, worldWrap: target.worldWrap)]?.first
+                groundZoom -= 1
             }
             for shown in shownInside {
                 let tile = shown.metalTile.tile

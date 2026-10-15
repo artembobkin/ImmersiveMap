@@ -24,6 +24,16 @@ struct TileParseOptions: Equatable {
     /// The placement side decides the number, from the zoom the buildings
     /// draw from (`BuildingCoveragePlanner.minimumDrawZoom(settings:)`).
     var buildingMinimumSourceZoom: Int
+    /// The tileset's deepest zoom, where every building is a feature of
+    /// its own. A coarser tile ships its buildings merged: the features of
+    /// one height and kind are one feature, by the id of one of them, so
+    /// the parts rules that go by a feature's id (an outline with parts
+    /// stays flat, an outline that repeats a part goes) would lay a whole
+    /// group flat. There each polygon stands at its group's height, and
+    /// which of an outline and its parts stands is left to their geometry
+    /// (`BuildingExtrusionResolver`). Nil when every tile's buildings are
+    /// taken as features of their own.
+    var buildingDeepestSourceZoom: Int?
     /// The tile zoom the ground fills are flattened from, nil for never,
     /// and the grid they keep to (`GroundFlattening`,
     /// `TileSettings.GroundFlatteningSettings`).
@@ -43,6 +53,7 @@ struct TileParseOptions: Equatable {
     init(labelsEnabled: Bool,
          addTestBorders: Bool,
          buildingMinimumSourceZoom: Int,
+         buildingDeepestSourceZoom: Int? = nil,
          groundFlatteningFromTileZoom: Int? = nil,
          groundFlatteningGrid: Int = 16,
          groundFlatteningGridByTileZoom: [Int: Int] = [:],
@@ -50,6 +61,7 @@ struct TileParseOptions: Equatable {
         self.labelsEnabled = labelsEnabled
         self.addTestBorders = addTestBorders
         self.buildingMinimumSourceZoom = buildingMinimumSourceZoom
+        self.buildingDeepestSourceZoom = buildingDeepestSourceZoom
         self.groundFlatteningFromTileZoom = groundFlatteningFromTileZoom
         self.groundFlatteningGrid = min(max(groundFlatteningGrid, Self.groundFlatteningGridRange.lowerBound),
                                         Self.groundFlatteningGridRange.upperBound)
@@ -95,6 +107,7 @@ struct TileParseOptions: Equatable {
         self.init(labelsEnabled: settings.labels.isEnabled,
                   addTestBorders: settings.tiles.parsing.addTestBorders,
                   buildingMinimumSourceZoom: BuildingCoveragePlanner.minimumDrawZoom(settings: settings),
+                  buildingDeepestSourceZoom: settings.tiles.coverage.maximumZoomLevel,
                   groundFlatteningFromTileZoom: settings.tiles.resolvedGroundFlatteningFromTileZoom,
                   groundFlatteningGrid: settings.tiles.groundFlattening.grid,
                   groundFlatteningGridByTileZoom: settings.tiles.groundFlattening.gridByTileZoom,

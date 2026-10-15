@@ -143,18 +143,16 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
                                                                                        drawsLabels: visibleContent.unlabelledTiles.contains(slot) == false,
                                                                                        raster: visibleContent.rasterTiles[slot])
                                                                      })
-            // The buildings: a partition of the near field over the resident
-            // tiles, never a substitute (see the planner).
+            // The buildings: the tiles the ground shows, from the
+            // buildings' zoom on, in the near field (see the planner).
             let eyeGroundCell: SIMD2<Double>? = frameContext.renderSurfaceMode == .flat
                 ? BuildingCoveragePlanner.eyeGroundCell(eye: frameContext.cameraEye,
                                                         flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                                         lookAt: SIMD2<Double>(center.tileX, center.tileY),
                                                         targetZoom: tileZoomLevel)
                 : nil
-            buildingPlaceTilesContext = BuildingCoveragePlanner.plan(resident: resident,
-                                                                     visibleTiles: targets,
+            buildingPlaceTilesContext = BuildingCoveragePlanner.plan(groundPlacements: placeTilesContext.tilePlacements,
                                                                      eyeGroundCell: eyeGroundCell,
-                                                                     targetZoom: tileZoomLevel,
                                                                      minimumZoom: buildingsMinimumTileZoom)
             placementVersion &+= 1
             plannedCoverageVersion = coverageVersion

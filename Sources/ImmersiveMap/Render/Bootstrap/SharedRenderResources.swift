@@ -71,17 +71,17 @@ final class SharedRenderResources {
     /// is blended and lies on the same plane. Under a solid building the
     /// ground fails the test before its fragment is shaded.
     let groundDepthState: MTLDepthStencilState
-    /// The tile-priority stencil states (TileSourceStencilPriority): the
-    /// sphere's opaque owner (scene depth written) and the non-owning test
-    /// for the translucent fills and the ribbons of either surface.
+    /// The tile-priority stencil states (TileSourceStencilPriority), every
+    /// one testing `equal` to the source's zoom, the planner's mark, and
+    /// none writing the priority: the sphere's opaque ground (scene depth
+    /// written) and the non-owning test for the translucent fills, the
+    /// ribbons, the flat road edge lines and the bridge overlay of either
+    /// surface.
     let sphereOpaqueOwnerState: MTLDepthStencilState
     let tileStencilTestState: MTLDepthStencilState
-    /// The flat ground's opaque owner: the ground depth written, so a
-    /// pixel is shaded once by its topmost opaque layer, plus the owning
-    /// tile-priority stencil write, the sphere's scheme. The sources draw
-    /// at full extent, finest first, and a coarser source fails wherever
-    /// a finer one painted. The non-owning passes test through
-    /// `tileStencilTestState`.
+    /// The flat ground's opaque pass: the ground depth written, so a pixel
+    /// is shaded once by its topmost opaque layer, under the tile-priority
+    /// test.
     let groundOwnerState: MTLDepthStencilState
     /// The flat road buckets: the rank depth tested and written
     /// (`RoadRankDepth`), under the tile-priority test.
@@ -90,15 +90,10 @@ final class SharedRenderResources {
     /// their own walls and roofs) plus the tile-priority stencil test, which
     /// replaces the old per-placement slot clip.
     let extrudedStencilTestState: MTLDepthStencilState
-    /// The flat map's placement prepass (`PlacementStencilRenderSubsystem`):
-    /// the depth neither tested nor written, the source's zoom written into
-    /// the priority bits.
+    /// The placement prepass (`PlacementStencilRenderSubsystem`): the depth
+    /// neither tested nor written, the source's zoom written into the
+    /// priority bits.
     let placementStencilWriteState: MTLDepthStencilState
-    /// The flat map's non-owning ground passes (the translucent fills, the
-    /// ribbons, the road edge lines, the bridge overlay): the ground depth
-    /// test plus the tile-priority stencil tested `equal` to the source's
-    /// zoom, the planner's mark (`FlatTileStencilPacking`), nothing written.
-    let flatTileStencilTestState: MTLDepthStencilState
     /// Bound at the shadow-map slot when the shadow pass is skipped: receiver
     /// shaders reference the texture statically and Metal validation requires a
     /// bound depth texture even though strength = 0 skips the sampling branch.
@@ -253,7 +248,6 @@ final class SharedRenderResources {
         let roadRankState: MTLDepthStencilState
         let extrudedStencilTestState: MTLDepthStencilState
         let placementStencilWriteState: MTLDepthStencilState
-        let flatTileStencilTestState: MTLDepthStencilState
         let sceneModelSurfaceMaskState: MTLDepthStencilState
         let sceneModelGroundCutStates: SceneModelGroundCutStates
         let shadowFallbackTexture: MTLTexture
@@ -283,7 +277,6 @@ final class SharedRenderResources {
                      roadRankState: device.makeDepthStencilState(descriptor: Self.makeRoadRankDescriptor())!,
                      extrudedStencilTestState: device.makeDepthStencilState(descriptor: Self.makeExtrudedStencilTestDescriptor())!,
                      placementStencilWriteState: device.makeDepthStencilState(descriptor: Self.makePlacementStencilWriteDescriptor())!,
-                     flatTileStencilTestState: device.makeDepthStencilState(descriptor: Self.makeFlatTileStencilTestDescriptor())!,
                      sceneModelSurfaceMaskState: device.makeDepthStencilState(descriptor: Self.makeSceneModelSurfaceMaskDescriptor())!,
                      sceneModelGroundCutStates: SceneModelGroundCutStates(
                         holeWrite: device.makeDepthStencilState(descriptor: Self.makeSceneModelGroundHoleDescriptor(raises: true))!,
@@ -311,7 +304,6 @@ final class SharedRenderResources {
         self.roadRankState = built.roadRankState
         self.extrudedStencilTestState = built.extrudedStencilTestState
         self.placementStencilWriteState = built.placementStencilWriteState
-        self.flatTileStencilTestState = built.flatTileStencilTestState
         self.sceneModelSurfaceMaskState = built.sceneModelSurfaceMaskState
         self.sceneModelGroundCutStates = built.sceneModelGroundCutStates
         self.shadowFallbackTexture = built.shadowFallbackTexture
@@ -588,32 +580,28 @@ final class SharedRenderResources {
         return descriptor
     }
 
-    /// The tile-priority stencil (TileSourceStencilPriority). On the sphere
-    /// every tile pass tests greaterEqual against the finest painter's
-    /// mark, and the owner pass replaces it where it passes both tests, so
-    /// a coarser substitute's overflow is rejected wherever a finer tile
-    /// painted. On the flat map the stencil holds the planner's decision,
-    /// written by the placement prepass (`FlatTileStencilPacking`), and
+    /// The tile-priority stencil (TileSourceStencilPriority): the stencil
+    /// holds the planner's decision, written by the placement prepass, and
     /// every tile pass tests `equal` to its source's zoom and writes
     /// nothing: a source paints the ground it was given and no other.
-    private nonisolated static func makeTilePriorityStencil(compare: MTLCompareFunction = .greaterEqual,
-                                                            writes: Bool) -> MTLStencilDescriptor {
+    /// `opaque` is the pass that lays a source's ground: it reads the
+    /// priority bits alone, under the surface mask bit the buildings and
+    /// the models raise, which no tile pass clears. Every other pass reads
+    /// the mask bit too: a pixel a building or a model stands on carries
+    /// it, which puts the value past any reference, so the ribbons, the
+    /// roads and the translucent fills never paint over them, whatever
+    /// the depth says over a relief, where a road biased off the ground
+    /// would.
+    private nonisolated static func makeTilePriorityStencil(opaque: Bool) -> MTLStencilDescriptor {
         let stencil = MTLStencilDescriptor()
-        stencil.stencilCompareFunction = compare
+        stencil.stencilCompareFunction = .equal
         stencil.stencilFailureOperation = .keep
         stencil.depthFailureOperation = .keep
-        stencil.depthStencilPassOperation = writes ? .replace : .keep
-        // The owner reads and writes the priority bits alone: the surface
-        // mask bit above them belongs to the buildings and the models, and
-        // no tile pass clears it. The non-owning passes read it too: a
-        // pixel a building or a model stands on carries the bit, which
-        // puts the value past any reference, so the ribbons, the roads and
-        // the translucent fills never paint over them, whatever the depth
-        // says over a relief, where a road biased off the ground would.
-        stencil.readMask = writes
+        stencil.depthStencilPassOperation = .keep
+        stencil.readMask = opaque
             ? TileSourceStencilPriority.priorityMask
             : TileSourceStencilPriority.priorityMask | TileSourceStencilPriority.surfaceMaskBit
-        stencil.writeMask = TileSourceStencilPriority.priorityMask
+        stencil.writeMask = 0
         return stencil
     }
 
@@ -632,70 +620,58 @@ final class SharedRenderResources {
     }
 
     /// The sphere's opaque ground pass: the layer-rank depth (lessEqual,
-    /// written) plus the owning tile-priority stencil write.
+    /// written) under the tile-priority test.
     private nonisolated static func makeSphereOpaqueOwnerDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeSceneDepthDescriptor()
-        descriptor.frontFaceStencil = makeTilePriorityStencil(writes: true)
-        descriptor.backFaceStencil = makeTilePriorityStencil(writes: true)
+        descriptor.frontFaceStencil = makeTilePriorityStencil(opaque: true)
+        descriptor.backFaceStencil = makeTilePriorityStencil(opaque: true)
         return descriptor
     }
 
     /// The flat ground's opaque pass: the ground depth test (against the
     /// buildings), WRITING the rank band so a pixel is shaded once by its
-    /// topmost opaque layer, under the tile-priority stencil `equal` to
-    /// the source's zoom, the planner's mark (`FlatTileStencilPacking`):
-    /// a source paints the ground it was given and no other, whatever
-    /// the depth says there, so the sources never meet by depth. The
-    /// depth test is lessEqual for a source's own layers, which stack at
-    /// the band's steps, and a vector tile over a raster of the same
-    /// source (its lines) lies nearer by half a step (TileRaster.metal).
+    /// topmost opaque layer, under the tile-priority test: a source
+    /// paints the ground it was given and no other, whatever the depth
+    /// says there, so the sources never meet by depth. The depth test is
+    /// lessEqual for a source's own layers, which stack at the band's
+    /// steps, and a vector tile over a raster of the same source (its
+    /// lines) lies nearer by half a step (TileRaster.metal).
     private nonisolated static func makeGroundOwnerDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeGroundDepthDescriptor()
         descriptor.depthCompareFunction = .lessEqual
         descriptor.isDepthWriteEnabled = true
-        descriptor.frontFaceStencil = makeTilePriorityStencil(compare: .equal, writes: false)
-        descriptor.backFaceStencil = makeTilePriorityStencil(compare: .equal, writes: false)
+        descriptor.frontFaceStencil = makeTilePriorityStencil(opaque: true)
+        descriptor.backFaceStencil = makeTilePriorityStencil(opaque: true)
         return descriptor
     }
 
     /// The flat road buckets: the ground depth test against the ranks
     /// (`RoadRankDepth`), WRITING the rank, on the road's source's own
-    /// ground (the tile-priority stencil `equal` to its zoom). A fragment
-    /// passes only where it is nearer than what is there, so an opaque
-    /// road is shaded once per pixel by its highest rank, and a road that
-    /// blends lands once per pixel of a rank, an equal rank failing.
+    /// ground (the tile-priority test). A fragment passes only where it is
+    /// nearer than what is there, so an opaque road is shaded once per
+    /// pixel by its highest rank, and a road that blends lands once per
+    /// pixel of a rank, an equal rank failing.
     private nonisolated static func makeRoadRankDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeGroundDepthDescriptor()
         descriptor.isDepthWriteEnabled = true
-        descriptor.frontFaceStencil = makeTilePriorityStencil(compare: .equal, writes: false)
-        descriptor.backFaceStencil = makeTilePriorityStencil(compare: .equal, writes: false)
+        descriptor.frontFaceStencil = makeTilePriorityStencil(opaque: false)
+        descriptor.backFaceStencil = makeTilePriorityStencil(opaque: false)
         return descriptor
     }
 
-    /// The sphere's non-owning tile passes (translucent fills, ribbons):
-    /// the ground depth test plus the tile-priority stencil test, no
-    /// writes.
+    /// The non-owning tile passes of either surface (translucent fills,
+    /// ribbons, the flat road edge lines and the bridge overlay): the
+    /// ground depth test plus the tile-priority test, no writes.
     private nonisolated static func makeTileStencilTestDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeGroundDepthDescriptor()
-        descriptor.frontFaceStencil = makeTilePriorityStencil(writes: false)
-        descriptor.backFaceStencil = makeTilePriorityStencil(writes: false)
+        descriptor.frontFaceStencil = makeTilePriorityStencil(opaque: false)
+        descriptor.backFaceStencil = makeTilePriorityStencil(opaque: false)
         return descriptor
     }
 
-    /// The flat map's non-owning tile passes (translucent fills, ribbons,
-    /// the road edge lines and the bridge overlay): the ground depth test
-    /// plus the tile-priority stencil `equal` to the source's zoom, no
-    /// writes.
-    private nonisolated static func makeFlatTileStencilTestDescriptor() -> MTLDepthStencilDescriptor {
-        let descriptor = makeGroundDepthDescriptor()
-        descriptor.frontFaceStencil = makeTilePriorityStencil(compare: .equal, writes: false)
-        descriptor.backFaceStencil = makeTilePriorityStencil(compare: .equal, writes: false)
-        return descriptor
-    }
-
-    /// The flat map's placement prepass: the depth always passes and is
-    /// never written, so a placement's mark lands on every pixel of its
-    /// square, through the priority bits alone (`FlatTileStencilPacking`).
+    /// The placement prepass: the depth always passes and is never
+    /// written, so a placement's mark lands on every pixel of its square,
+    /// through the priority bits alone (`TileSourceStencilPriority`).
     private nonisolated static func makePlacementStencilWriteDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeDepthDisabledDescriptor()
         let stencil = MTLStencilDescriptor()

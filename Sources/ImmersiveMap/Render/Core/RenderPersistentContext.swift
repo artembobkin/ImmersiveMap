@@ -54,7 +54,6 @@ final class RenderPersistentContext {
     let roadRankState: MTLDepthStencilState
     let extrudedStencilTestState: MTLDepthStencilState
     let placementStencilWriteState: MTLDepthStencilState
-    let flatTileStencilTestState: MTLDepthStencilState
     /// See `SharedRenderResources.sceneModelSurfaceMaskState`.
     let sceneModelSurfaceMaskState: MTLDepthStencilState
     /// See `SharedRenderResources.sceneModelGroundCutStates`.
@@ -129,7 +128,6 @@ final class RenderPersistentContext {
         self.groundOwnerState = shared.groundOwnerState
         self.extrudedStencilTestState = shared.extrudedStencilTestState
         self.placementStencilWriteState = shared.placementStencilWriteState
-        self.flatTileStencilTestState = shared.flatTileStencilTestState
         self.sceneModelSurfaceMaskState = shared.sceneModelSurfaceMaskState
         self.sceneModelGroundCutStates = shared.sceneModelGroundCutStates
         self.tileStencilTestState = shared.tileStencilTestState
