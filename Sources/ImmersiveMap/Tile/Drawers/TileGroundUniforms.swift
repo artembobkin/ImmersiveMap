@@ -10,8 +10,10 @@ struct TileOverviewFadeUniform {
     /// Converts the per-style point-locked line widths into the pixels the
     /// shader's coverage math runs in.
     var pixelsPerPoint: Float
-    /// The live camera zoom every style's zoom fade is evaluated against
-    /// (`ImmersiveMapZoomFade`, `tileStyleFade`), and the point-width ramps.
+    /// The camera's planning zoom (`FrameContext.planningZoom`), the one
+    /// the frame's tiles are planned by: every style's zoom fade
+    /// (`ImmersiveMapZoomFade`, `tileStyleFade`) and the point-width ramps
+    /// are evaluated against it, so a tile and its styles answer one zoom.
     var cameraZoom: Float
     /// The drawable in pixels, what the deferred ribbons' vertex stage
     /// converts a tile unit's clip-space span into pixels with (Tile.metal).

@@ -1206,6 +1206,60 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         pipeline.completeMaterialize(downloadingTile, result: true)
     }
 
+    func testUnwantedDownloadedTileWaitingForAParseSlotIsDroppedOnTheNextRequest() async {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.network.maxConcurrentFetches = 2
+        let pipeline = ControlledTileLoadPipeline()
+        let reporter = TileLoadingStatusReporter()
+        let loader = ImmersiveMapNeedsTile(config: settings,
+                                           loadPipeline: pipeline,
+                                           maxConcurrentPrepares: 1,
+                                           tileLoadingStatusReporter: reporter)
+        let parsingTile = Tile(x: 1, y: 1, z: 4)
+        let waitingTile = Tile(x: 2, y: 1, z: 4)
+
+        loader.request(tiles: [parsingTile, waitingTile])
+        for tile in [parsingTile, waitingTile] {
+            let started = await pipeline.waitUntilStarted(tile)
+            XCTAssertTrue(started)
+        }
+        // The first tile takes the single parse slot, the second is
+        // downloaded and waits for it.
+        pipeline.completeDownload(parsingTile, result: .success(Data([1]), etag: nil))
+        let parsingPrepared = await pipeline.waitUntilPrepared(parsingTile)
+        XCTAssertTrue(parsingPrepared)
+        pipeline.completeDownload(waitingTile, result: .success(Data([2]), etag: nil))
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertFalse(pipeline.hasPrepared(waitingTile))
+
+        // Demand moves on while it waits: it must not take the slot when
+        // the first parse ends.
+        loader.request(tiles: [parsingTile])
+        XCTAssertEqual(reporter.snapshot().activeLoads, 1)
+        pipeline.completePrepare(parsingTile)
+        let materialized = await pipeline.waitUntilMaterialized(parsingTile)
+        XCTAssertTrue(materialized)
+        pipeline.completeMaterialize(parsingTile, result: true)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertFalse(pipeline.hasPrepared(waitingTile))
+
+        // Wanted again later: the whole chain runs afresh.
+        loader.request(tiles: [parsingTile, waitingTile])
+        let downloadedAgain = await pipeline.waitUntilStartCount(2, for: waitingTile)
+        XCTAssertTrue(downloadedAgain)
+        pipeline.completeDownload(waitingTile, result: .failure(.network))
+    }
+
+    func testCPUStageCeilingComesFromTheSettings() {
+        XCTAssertEqual(ImmersiveMapSettings.default.tiles.parsing.maximumConcurrentParses, 4)
+        XCTAssertEqual(ImmersiveMapNeedsTile.defaultMaxConcurrentPrepares, 4)
+        XCTAssertEqual(ImmersiveMapSettings.default.tileParsing(maximumConcurrentParses: 2).tiles.parsing.maximumConcurrentParses, 2)
+        XCTAssertEqual(ImmersiveMapSettings.default.tileParsing(maximumConcurrentParses: 0).tiles.parsing.maximumConcurrentParses, 1,
+                       "At least one slot")
+        XCTAssertEqual(ImmersiveMapSettings.default.tileParsing().tiles.parsing.maximumConcurrentParses, 4,
+                       "An omitted value is left as configured")
+    }
+
     func testRetryBlockedTileDoesNotReadDisk() async {
         var settings = ImmersiveMapSettings.default
         settings.tiles.network.maxConcurrentFetches = 1

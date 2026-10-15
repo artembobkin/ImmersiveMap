@@ -88,7 +88,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   cpuCameraMatrix: frameContext.cameraMatrices.projectionView,
-                                  cameraZoom: frameContext.animatedZoom,
+                                  cameraZoom: frameContext.planningZoom,
                                   pixelsPerPoint: Float(frameContext.pixelsPerPoint),
                                   drawableSizePx: drawableSizePx,
                                   placeTilesContext: placeTilesContext,

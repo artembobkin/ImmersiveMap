@@ -90,7 +90,7 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
         drawItems.removeAll(keepingCapacity: true)
         shadowCasterItems.removeAll(keepingCapacity: true)
         guard let store else { return }
-        let isRaised = frameContext.renderSurfaceMode == .flat && frameContext.animatedZoom >= minimumZoom
+        let isRaised = frameContext.renderSurfaceMode == .flat && frameContext.planningZoom >= minimumZoom
         let time = frameContext.time
 
         let wanted = Self.wantedTiles(visibleTiles: frameContext.visibleContent.visibleTiles)

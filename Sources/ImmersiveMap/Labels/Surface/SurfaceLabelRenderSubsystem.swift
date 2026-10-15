@@ -56,7 +56,7 @@ final class SurfaceLabelRenderSubsystem: RenderSubsystem {
                                          tileZoom: $0.metalTile.tile.z,
                                          worldWrap: $0.worldWrap)
         }
-        let selected = SurfaceLabelSelection.select(sources: sources, cameraZoom: frameContext.animatedZoom)
+        let selected = SurfaceLabelSelection.select(sources: sources, cameraZoom: frameContext.planningZoom)
         drawItems = selected.map { item in
             let source = sourceTiles[item.sourceIndex]
             return DrawItem(metalTile: source.metalTile,

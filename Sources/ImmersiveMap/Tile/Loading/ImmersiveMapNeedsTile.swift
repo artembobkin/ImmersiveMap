@@ -29,10 +29,8 @@ import MetalKit
 final class ImmersiveMapNeedsTile: @unchecked Sendable {
     typealias RetryPolicy = TileRetryController.Policy
 
-    // Default CPU-stage limit. Parsing runs at utility QoS and effectively
-    // executes on E-cores, so the ceiling is tied to the core count rather
-    // than to network slots.
-    static let defaultMaxConcurrentPrepares = max(2, min(ProcessInfo.processInfo.activeProcessorCount - 2, 6))
+    // Default CPU-stage limit, the settings' (`ParsingSettings.maximumConcurrentParses`).
+    static let defaultMaxConcurrentPrepares = ImmersiveMapSettings.TileSettings.ParsingSettings.defaultMaximumConcurrentParses
 
     // Default disk-stage limit. The file read itself is serialized on the
     // prepared cache's shared IO queue, so slots only buy overlap of the
@@ -147,6 +145,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
                                                         config: config,
                                                         preparedTileCacheIdentity: preparedTileCacheIdentity,
                                                         geometryTransport: geometryTransport),
+                  maxConcurrentPrepares: config.tiles.parsing.maximumConcurrentParses,
                   tileTraceRecorder: tileTraceRecorder,
                   tileLoadingStatusReporter: tileLoadingStatusReporter)
     }
@@ -180,9 +179,11 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
     
     // Updates the current tile set for the frame: clears the pending queue
     // and reschedules loading of the needed tiles in priority order.
-    // Already started downloads are not cancelled on a brief drop out of demand:
-    // the result still lands in the cache and keeps borderline tiles from
-    // looping in the loading/fallback state.
+    // Already started downloads and parses are not cancelled on a brief drop
+    // out of demand: the result still lands in the cache and keeps borderline
+    // tiles from looping in the loading/fallback state. What waits for a slot
+    // is dropped instead: the tiles parked for the network and the
+    // downloaded tiles waiting to be parsed.
     /// Whether the tile would come back from the prepared disk cache without
     /// a network request: false without a disk stage. Lock only, so the
     /// demand planner can ask per frame.
@@ -216,6 +217,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
             pendingTilesQueue.clear()
             retryController.retainOnly(tiles: wantedTiles)
             dropUnwantedQueuedNetworkWorkLocked()
+            dropUnwantedQueuedCPUWorkLocked()
             reapStalledLoadsLocked(now: now())
 
             // Schedule the whole batch inside one lock to avoid a sync per tile.
@@ -267,6 +269,30 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         queuedNetworkWork.removeAll { work in
             guard ongoingTasks[work.tile]?.generation == work.generation,
                   ongoingTasks[work.tile]?.stage == .networkQueued else {
+                return true
+            }
+            if wantedTiles.contains(work.tile) {
+                return false
+            }
+            ongoingTasks.removeValue(forKey: work.tile)
+            tileLoadingStatusReporter?.recordLoadDropped(tile: work.tile)
+            tileTraceRecorder.record(.tileLoadDropped(work.tile))
+            return true
+        }
+    }
+
+    // Downloaded tiles waiting for a parse slot are dropped when demand
+    // leaves them, as the ones parked for the network are: a fast zoom
+    // downloads a tile of every level on its way far quicker than the parse
+    // lane takes them, and a parse of a tile the camera has left only holds
+    // the slot the wanted tiles wait for. A later request runs the whole
+    // chain again, disk stage first.
+    // Must be called only from within `stateQueue`.
+    private func dropUnwantedQueuedCPUWorkLocked() {
+        dispatchPrecondition(condition: .onQueue(stateQueue))
+        queuedCPUWork.removeAll { work in
+            guard ongoingTasks[work.tile]?.generation == work.generation,
+                  ongoingTasks[work.tile]?.stage == .cpuQueued else {
                 return true
             }
             if wantedTiles.contains(work.tile) {
@@ -642,7 +668,8 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         }
     }
 
-    // Tiles outside the current demand (briefly dropped out) are parsed last.
+    // Tiles outside the current demand are dropped on the next request
+    // (`dropUnwantedQueuedCPUWorkLocked`); until then they are parsed last.
     private func priorityRankLocked(of tile: Tile) -> Int {
         wantedTilePriorities[tile] ?? Int.max
     }

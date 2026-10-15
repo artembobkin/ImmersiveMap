@@ -627,9 +627,20 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
         public struct ParsingSettings: Equatable, Sendable {
             public var addTestBorders: Bool
+            /// How many tiles are parsed at once, at least one. A parse runs
+            /// at utility priority on the efficiency cores and holds its
+            /// slot until the tile is in the GPU's buffers and saved. More
+            /// slots land a burst of tiles sooner and take the cores the
+            /// frame and the rest of the app share with them, fewer keep a
+            /// fast zoom from crowding the device. 4 by default.
+            public var maximumConcurrentParses: Int
 
-            public init(addTestBorders: Bool) {
+            public static let defaultMaximumConcurrentParses = 4
+
+            public init(addTestBorders: Bool,
+                        maximumConcurrentParses: Int = ParsingSettings.defaultMaximumConcurrentParses) {
                 self.addTestBorders = addTestBorders
+                self.maximumConcurrentParses = maximumConcurrentParses
             }
         }
 
@@ -2071,6 +2082,17 @@ public extension ImmersiveMapSettings {
 
     /// The deepest tile zoom level requested from the source. Past it the
     /// camera keeps zooming and the renderer scales the deepest tiles up.
+    /// How many tiles are parsed at once
+    /// (`TileSettings.ParsingSettings.maximumConcurrentParses`). An omitted
+    /// value is left as configured.
+    func tileParsing(maximumConcurrentParses: Int? = nil) -> ImmersiveMapSettings {
+        var settings = self
+        if let maximumConcurrentParses {
+            settings.tiles.parsing.maximumConcurrentParses = max(1, maximumConcurrentParses)
+        }
+        return settings
+    }
+
     func tileMaximumZoomLevel(_ maximumZoomLevel: Int) -> ImmersiveMapSettings {
         var settings = self
         settings.tiles.coverage.maximumZoomLevel = maximumZoomLevel

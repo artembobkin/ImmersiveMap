@@ -65,7 +65,7 @@ final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
     static func paintsOverNames(frameContext: FrameContext, fromZoom zoom: Float) -> Bool {
         frameContext.renderSurfaceMode == .flat
             && frameContext.screenSpaceProjectionMode == .flat
-            && Float(frameContext.animatedZoom) >= zoom
+            && Float(frameContext.planningZoom) >= zoom
     }
 
     func contributePassAvailability(settings _: ImmersiveMapSettings,

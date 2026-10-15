@@ -128,9 +128,10 @@ constant float kTileDeferredRibbonFeatherPx = 1.0;
 
 struct OverviewFadeUniform {
     float pixelsPerPoint;
-    // The live camera zoom: every style's zoom fade (tileStyleFade,
-    // ImmersiveMapZoomFade) and the point-width ramps are evaluated against
-    // it, continuous with the camera.
+    // The camera's planning zoom, the one the frame's tiles are planned by:
+    // every style's zoom fade (tileStyleFade, ImmersiveMapZoomFade) and the
+    // point-width ramps are evaluated against it, so a tile and its styles
+    // answer one zoom.
     float cameraZoom;
     // The drawable in pixels: what the deferred ribbons' vertex stage
     // converts a tile unit's clip-space span into pixels with.
@@ -357,7 +358,7 @@ static inline half tileLineCoverage(float lineDistance,
 
 /// The zoom fade of a style (ImmersiveMapZoomFade): x is the camera zoom of
 /// zero alpha, y the camera zoom of full alpha, and the alpha is a
-/// smoothstep between them, evaluated against the live camera zoom. A fade
+/// smoothstep between them, evaluated against the planning zoom. A fade
 /// out states x above y. Mirrored on the CPU by TileStyleFadeMath.
 static inline half tileStyleFade(float2 zoomFade, constant OverviewFadeUniform& overviewFade) {
     float span = zoomFade.y - zoomFade.x;

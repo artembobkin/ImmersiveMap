@@ -85,7 +85,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
 
     func update(frameContext: FrameContext) {
         let isRaised = frameContext.renderSurfaceMode == .flat
-            && frameContext.animatedZoom >= extrusion.buildingsMinimumZoom
+            && frameContext.planningZoom >= extrusion.buildingsMinimumZoom
         let placements = frameContext.sharedState.tilePlacementState.buildingPlaceTilesContext.tilePlacements
         let pendingModelTiles = frameContext.sharedState.pendingModelTiles
         // The placements that draw: the camera at the buildings' zoom, and

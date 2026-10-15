@@ -215,12 +215,12 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
     /// Draws every source's fills into its texture: one pass per texture
     /// on the frame's command buffer, through the multisampled target of
     /// its size, then the mip chains in one blit. The zoom fades are the
-    /// frame's camera zoom's, as the vector ground draws them.
+    /// planning zoom's, as the vector ground draws them.
     func prepareGPU(frameContext: FrameContext, resourceRegistry _: RenderResourceRegistry) {
         guard sources.isEmpty == false, let commandBuffer = frameContext.commandBuffer else { return }
         let base = frameContext.services.baseColors.map
         let clearColor = MTLClearColor(red: Double(base.x), green: Double(base.y), blue: Double(base.z), alpha: 1)
-        var fade = TileOverviewFadeUniform(pixelsPerPoint: 1, cameraZoom: Float(frameContext.animatedZoom))
+        var fade = TileOverviewFadeUniform(pixelsPerPoint: 1, cameraZoom: Float(frameContext.planningZoom))
         var drawn: [MTLTexture] = []
         drawn.reserveCapacity(sources.count)
         for source in sources {

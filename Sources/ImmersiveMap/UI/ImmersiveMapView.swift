@@ -750,6 +750,20 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// How many tiles are parsed at once, 4 by default
+    /// (`ImmersiveMapSettings.TileSettings.ParsingSettings.maximumConcurrentParses`).
+    /// Lower it when a fast zoom crowds a small device, raise it on a
+    /// machine with cores to spare. An omitted value is left as
+    /// configured:
+    ///
+    ///     ImmersiveMapView()
+    ///         .tileParsing(maximumConcurrentParses: 2)
+    public func tileParsing(maximumConcurrentParses: Int? = nil) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.tileParsing(maximumConcurrentParses: maximumConcurrentParses)
+        return view
+    }
+
     /// The byte quota of the prepared tile cache on disk: parsed and
     /// tessellated tiles, which is where every tile the camera has already
     /// looked at comes back from.

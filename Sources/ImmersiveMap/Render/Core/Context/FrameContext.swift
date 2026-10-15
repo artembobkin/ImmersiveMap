@@ -91,20 +91,24 @@ struct FrameContext {
 
     /// The camera's zoom, the fact of the frame: what the camera's pose is
     /// read from. The tiles and the rings are planned by `planningZoom`,
-    /// and what dresses the frame by the zoom reads `animatedZoom`.
+    /// and everything drawn from them reads it too (the styles' zoom fades
+    /// and widths, the labels, the buildings' and the models' zoom), so a
+    /// tile and how it draws never answer two zooms. The atmosphere reads
+    /// `animatedZoom`.
     var zoom: Double {
         mapCameraState.zoom
     }
 
     /// The camera's zoom followed over time (`AnimatedZoom`): the zoom the
-    /// ground fog, the styles' zoom fades, the labels' reach and the rest
-    /// of the frame's dressing are read at, so a zoom that jumps in one
-    /// frame dresses the frame over a few.
+    /// ground fog and the horizon are read at, so a zoom that jumps in one
+    /// frame changes the air over a few.
     let animatedZoom: Double
     /// The zoom the map is planned by (`CameraStateController.planningZoom`):
     /// the coverage's target tiles, the ring rules and the relief's
-    /// thresholds read it. Over the terrain it stays where the last zoom
-    /// set it while the camera's own follows the ground.
+    /// thresholds read it, and so does everything drawn from the tiles: the
+    /// styles' zoom fades and line widths, the labels, the zoom the
+    /// buildings and the models rise from. Over the terrain it stays where
+    /// the last zoom set it while the camera's own follows the ground.
     let planningZoom: Double
     /// How the camera's last move over the terrain was settled, for the
     /// debug panel (`TerrainFollowReport`), nil off the terrain.
