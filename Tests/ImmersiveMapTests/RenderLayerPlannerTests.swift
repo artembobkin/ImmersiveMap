@@ -15,7 +15,7 @@ final class RenderLayerPlannerTests: XCTestCase {
         )
 
         XCTAssertEqual(plan.map(\.layer), [
-            .ringStencil,
+            .placementStencil,
             .flatMapSurface,
             .buildingExtrusion,
             .sceneModels,
@@ -40,7 +40,7 @@ final class RenderLayerPlannerTests: XCTestCase {
         )
 
         XCTAssertEqual(plan.map(\.layer), [
-            .ringStencil,
+            .placementStencil,
             .flatMapSurface,
             .buildingExtrusion,
             .sceneModels,
@@ -52,7 +52,7 @@ final class RenderLayerPlannerTests: XCTestCase {
             .debugOverlay
         ])
         XCTAssertEqual(enabledLayers(in: plan),
-                       [.ringStencil, .flatMapSurface, .buildingExtrusion, .sceneModels, .flatMapRoads, .surfaceLabels, .horizon])
+                       [.placementStencil, .flatMapSurface, .buildingExtrusion, .sceneModels, .flatMapRoads, .surfaceLabels, .horizon])
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .avatars, in: plan), .noAvatarContent)
         XCTAssertEqual(skipReason(for: .debugOverlay, in: plan), .debugOverlayDisabled)

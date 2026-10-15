@@ -68,9 +68,8 @@ enum FlatMapSurfaceDrawer {
     ///   (`TileSourceStencilPriority`).
     /// - Parameter tileStencilTestState: the state of every other ground
     ///   pass, the depth and the priority tested and nothing written.
-    /// - Parameter stencilPacking: the frame's stencil references, a
-    ///   source's ring above its zoom (`FlatTileStencilPacking`).
-    /// - Parameter part: the ground's fills, or what lies on the ground.
+    /// - Parameter part: the targets' ground, the stand-ins' ground, or
+    ///   what lies on the ground.
     static func draw(renderEncoder: MTLRenderCommandEncoder,
                      cameraUniform: CameraUniform,
                      cpuCameraMatrix: matrix_float4x4,
@@ -84,7 +83,6 @@ enum FlatMapSurfaceDrawer {
                      groundOwnerState: MTLDepthStencilState,
                      tileStencilTestState: MTLDepthStencilState,
                      roadRankState: MTLDepthStencilState,
-                     stencilPacking: FlatTileStencilPacking,
                      part: Part,
                      isWireframeEnabled: Bool,
                      groundRelief: GroundReliefStore? = nil,
@@ -130,15 +128,13 @@ enum FlatMapSurfaceDrawer {
         // (fragment texture 1) instead of sampling the cascades per layer.
         renderEncoder.setFragmentTexture(groundShadowMask.texture, index: 1)
 
-        // Unique SOURCES, not placements: a tile standing in for several
-        // slots draws once at full extent, and the tile-priority stencil
-        // keeps it out of every pixel a finer source painted and off every
-        // ring nearer than its slot's (TileSourceStencilPriority,
-        // FlatTileStencilPacking), the sphere's scheme. In the order of
-        // their references, the nearest ring's sources first and the finest
-        // of a ring first, so the owner writes win. The world wrap is part of the key: the
-        // flat world's wrap copies place the same tile at different
-        // origins across the seam. A source's lines and fills are its
+        // Unique SOURCES, not placements: a tile placed in several slots
+        // draws once at full extent, and the tile-priority stencil, which
+        // the placement prepass filled with the planner's decision, gives
+        // it exactly the ground of its placements (FlatTileStencilPacking),
+        // in whatever order the sources draw. The world wrap is part of
+        // the key: the flat world's wrap copies place the same tile at
+        // different origins across the seam. A source's lines and fills are its
         // placements' rules' (`TileDrawRules`: a raster placement's ground
         // is its texture, `RasterTileRenderSubsystem`, so it draws only
         // its lines there): it draws them while any placement of it does.
@@ -169,9 +165,10 @@ enum FlatMapSurfaceDrawer {
             }
         }
         for index in sources.indices {
-            sources[index].stencilReference = stencilPacking.reference(sourceZoom: sources[index].metalTile.tile.z,
-                                                                       slotZoom: sources[index].targetZoom)
+            sources[index].stencilReference = FlatTileStencilPacking.reference(sourceZoom: sources[index].metalTile.tile.z)
         }
+        // Finest first, for the pipeline's sake alone: the stencil has
+        // settled every pixel already.
         sources.sort { $0.stencilReference > $1.stencilReference }
         for index in sources.indices where sources[index].metalTile.tileBuffers.ground.isFlattened {
             let tile = sources[index].metalTile.tile
@@ -535,12 +532,10 @@ enum FlatMapSurfaceDrawer {
         renderEncoder.setVertexBytes(&modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
 
         let indexByteWidth = buffers.indexType == .uint16 ? 2 : 4
-        // The tile-priority stencil reference, the source's ring above its
-        // zoom (FlatTileStencilPacking): the owner pass replaces the stencil
-        // with it, every pass tests greaterEqual against the ring's mark and
-        // the finest painter. No slot clip: a stand-in draws at full extent
-        // and the stencil keeps it out of the pixels a finer source painted
-        // and off the nearer rings.
+        // The tile-priority stencil value, the source's zoom
+        // (FlatTileStencilPacking): every pass tests equal to it, against
+        // the planner's marks. No slot clip: a stand-in draws at full
+        // extent and paints the ground marked for it.
         renderEncoder.setStencilReferenceValue(stencilReference)
         for span in visibleSpans {
             renderEncoder.drawIndexedPrimitives(type: primitiveType,
@@ -552,10 +547,9 @@ enum FlatMapSurfaceDrawer {
     }
 
     /// One source of the ground: a tile at one wrap copy of the world,
-    /// drawn at full extent, the finest target it stands in (the ring
-    /// whose terrain it rises by, and whose rank its stencil reference
-    /// carries), the terrain itself once it is in, and which of its
-    /// classes it draws.
+    /// drawn at full extent, the finest slot it stands in (the ring whose
+    /// terrain it rises by), its stencil value, the terrain itself once it
+    /// is in, and which of its classes it draws.
     struct Source {
         let metalTile: MetalTile
         let worldWrap: Int8

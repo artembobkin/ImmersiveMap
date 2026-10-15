@@ -1,11 +1,18 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-/// The frame's placements, a function of the targets and of what is
-/// resident right now: nothing is carried from one frame's placement to
-/// the next. A target that is resident draws itself. A target that is not
-/// yet resident draws its stand-ins from the resident tiles:
+/// The frame's placements, a function of the targets, of what is resident
+/// right now, and of what the last frame showed. A target that is
+/// resident draws itself. A target that is not yet resident draws its
+/// stand-ins:
 ///
+/// - first, what the last frame showed on its ground (`previous`), while
+///   it is still resident: the ground keeps the tiles it has until the
+///   target itself lands. A tile that arrives for a target the camera has
+///   left behind (a fast zoom asks for every level on the way) is never
+///   shown: it would replace what stands there only to be replaced again.
+///   Then, where the last frame showed nothing (ground the camera has
+///   just turned to), the resident tiles:
 /// - its resident descendants, at any depth, whether or not they cover it
 ///   whole: a zoom-out keeps showing the detailed tiles the camera was
 ///   looking at until the parent arrives, however far the zoom has run
@@ -53,6 +60,7 @@ struct TilePlacementPlanner {
                                 zoom: Int,
                                 backdropZoomLevel: Int? = nil,
                                 descendantSearchDepth: Int = descendantSearchDepth,
+                                previous: [PlaceTile] = [],
                                 slotRules: (VisibleTile) -> TileDrawRules = { _ in .all }) -> PlaceTilesContext {
         // The targets by their tile and world copy: a stand-in that is a
         // target itself draws by its own slot's rules.
@@ -107,6 +115,13 @@ struct TilePlacementPlanner {
             }
         }
 
+        /// Whether `tile` is `other` or an ancestor of it.
+        func covers(_ tile: Tile, _ other: Tile) -> Bool {
+            tile.z <= other.z && other.findParentTile(atZoom: tile.z) == tile
+        }
+        // What the last frame showed, by the world copy it was shown in.
+        let shownByWrap = Dictionary(grouping: previous, by: { $0.placeIn.worldWrap })
+
         for target in targets {
             let sourceTile = target.tile
             if let metalTile = resident[sourceTile] {
@@ -116,16 +131,62 @@ struct TilePlacementPlanner {
                 continue
             }
 
-            let below: (placements: [PlaceTile], complete: Bool) = descendantSearchDepth > 0 && branches.contains(sourceTile)
-                ? descendants(of: sourceTile, slot: target, depth: descendantSearchDepth)
-                : (placements: [], complete: false)
-            below.placements.forEach(append)
-            if below.complete, below.placements.isEmpty == false {
+            // What stood on this ground last frame and is still resident,
+            // by the ground it stood on (`placeIn`, the square the prepass
+            // marked for it), not by its tile: the placements inside the
+            // slot keep their squares, and the one whose square covers the
+            // slot, the finest such, fills the rest. A tile that arrived
+            // for a far slot of its own is not what stood on this ground,
+            // whatever its zoom, and does not take it: a ground changes
+            // only to its own target. Each is drawn no worse than it was
+            // shown and no worse than the slot asks (`TileDrawRules.finer`):
+            // the ground keeps not only its tiles but their look, a vector
+            // tile with its labels stays one when the camera pulls back,
+            // and a far ring's texture turns into its geometry when the
+            // camera comes near, until the slot's own tile lands.
+            var shownInside: [PlaceTile] = []
+            var shownOver: PlaceTile?
+            for shown in shownByWrap[target.worldWrap] ?? [] {
+                let tile = shown.metalTile.tile
+                guard resident[tile] != nil, isUsefulSubstitute(tile) else { continue }
+                let ground = shown.placeIn.tile
+                if ground.z > sourceTile.z, covers(sourceTile, ground) {
+                    shownInside.append(shown)
+                } else if covers(ground, sourceTile), shownOver.map({ ground.z > $0.placeIn.tile.z }) ?? true {
+                    shownOver = shown
+                }
+            }
+            for shown in shownInside {
+                let tile = shown.metalTile.tile
+                append(PlaceTile(metalTile: resident[tile]!,
+                                 placeIn: shown.placeIn,
+                                 slot: target,
+                                 rules: shown.rules.finer(than: rules(of: tile, in: target))))
+            }
+            if let shownOver {
+                let tile = shownOver.metalTile.tile
+                append(PlaceTile(metalTile: resident[tile]!,
+                                 placeIn: target,
+                                 rules: shownOver.rules.finer(than: rules(of: tile, in: target))))
                 continue
             }
 
-            // The holes between the descendants, or the whole target when
-            // there are none: the finest resident ancestor, drawn under them.
+            // Ground nothing was shown on, or the holes between what was:
+            // the resident tiles, the descendants first where nothing at
+            // all was shown.
+            if shownInside.isEmpty {
+                let below: (placements: [PlaceTile], complete: Bool) = descendantSearchDepth > 0 && branches.contains(sourceTile)
+                    ? descendants(of: sourceTile, slot: target, depth: descendantSearchDepth)
+                    : (placements: [], complete: false)
+                below.placements.forEach(append)
+                if below.complete, below.placements.isEmpty == false {
+                    continue
+                }
+            }
+
+            // The holes between the descendants or what was shown, or the
+            // whole target when there are none: the finest resident
+            // ancestor, drawn under them.
             if sourceTile.z > 0 {
                 for ancestorZoom in stride(from: sourceTile.z - 1, through: 0, by: -1) {
                     guard let ancestor = sourceTile.findParentTile(atZoom: ancestorZoom), isUsefulSubstitute(ancestor) else {

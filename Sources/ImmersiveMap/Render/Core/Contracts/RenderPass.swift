@@ -22,9 +22,10 @@ enum RenderLayer: String, CaseIterable {
     /// against the sphere itself, see `GlobeVectorSurfaceRenderSubsystem`.
     case globeVectorSurface
     case globeCap
-    /// The flat map's ring prepass, right before the ground: the rings'
-    /// ranks in the tile-priority stencil, see `RingStencilRenderSubsystem`.
-    case ringStencil
+    /// The flat map's placement prepass, right before the ground: the
+    /// planner's decision in the tile-priority stencil, see
+    /// `PlacementStencilRenderSubsystem`.
+    case placementStencil
     /// The flat map's ground: the fills, as geometry and as textures. The
     /// roads and the lines over it are a layer of their own.
     case flatMapSurface
@@ -102,7 +103,7 @@ struct RenderLayerPlanner {
             // horizon last: the fog band hazes everything painted near the
             // horizon line, buildings and models included, and the labels,
             // which come after, stay crisp.
-            [.ringStencil, .flatMapSurface, .buildingExtrusion, .sceneModels, .flatMapRoads, .surfaceLabels, .horizon]
+            [.placementStencil, .flatMapSurface, .buildingExtrusion, .sceneModels, .flatMapRoads, .surfaceLabels, .horizon]
         case .spherical:
             // Sky first: nothing writes surface depth any more (the
             // placeholder grid is gone), so the space background and the

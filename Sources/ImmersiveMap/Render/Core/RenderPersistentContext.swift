@@ -53,7 +53,8 @@ final class RenderPersistentContext {
     let groundOwnerState: MTLDepthStencilState
     let roadRankState: MTLDepthStencilState
     let extrudedStencilTestState: MTLDepthStencilState
-    let ringStencilWriteState: MTLDepthStencilState
+    let placementStencilWriteState: MTLDepthStencilState
+    let flatTileStencilTestState: MTLDepthStencilState
     /// See `SharedRenderResources.sceneModelSurfaceMaskState`.
     let sceneModelSurfaceMaskState: MTLDepthStencilState
     /// See `SharedRenderResources.sceneModelGroundCutStates`.
@@ -86,7 +87,7 @@ final class RenderPersistentContext {
     /// off (`TileSettings.GroundReliefSettings`).
     let groundReliefStore: GroundReliefStore?
     let modelTilePipeline: ModelTilePipeline
-    let ringStencilPipeline: RingStencilPipeline
+    let placementStencilPipeline: PlacementStencilPipeline
 
     // MARK: - Avatar and Debug Resources
 
@@ -127,7 +128,8 @@ final class RenderPersistentContext {
         self.sphereOpaqueOwnerState = shared.sphereOpaqueOwnerState
         self.groundOwnerState = shared.groundOwnerState
         self.extrudedStencilTestState = shared.extrudedStencilTestState
-        self.ringStencilWriteState = shared.ringStencilWriteState
+        self.placementStencilWriteState = shared.placementStencilWriteState
+        self.flatTileStencilTestState = shared.flatTileStencilTestState
         self.sceneModelSurfaceMaskState = shared.sceneModelSurfaceMaskState
         self.sceneModelGroundCutStates = shared.sceneModelGroundCutStates
         self.tileStencilTestState = shared.tileStencilTestState
@@ -176,7 +178,7 @@ final class RenderPersistentContext {
         self.sceneModelMeshStore.eventSink = eventSink
         self.sceneModelPipeline = shared.sceneModelPipeline
         self.modelTilePipeline = shared.modelTilePipeline
-        self.ringStencilPipeline = shared.ringStencilPipeline
+        self.placementStencilPipeline = shared.placementStencilPipeline
         self.modelTileStore = ModelTileStore.make(settings: config,
                                                   device: metal.device,
                                                   schema: styleRuntime.schema)

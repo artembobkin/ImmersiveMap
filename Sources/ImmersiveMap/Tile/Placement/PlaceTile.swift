@@ -26,6 +26,23 @@ struct TileDrawRules: Hashable {
     var raster: RasterTileSpec?
 
     static let all = TileDrawRules()
+
+    /// The finer of two rules, switch by switch: the geometry over a
+    /// texture, the larger texture over the smaller, lines and labels on
+    /// over off. For a stand-in carried from the last frame
+    /// (`TilePlacementPlanner`): it draws no worse than it was shown and
+    /// no worse than its new slot asks, and since every representation
+    /// draws from the one resident tile, the finer costs nothing to load.
+    func finer(than other: TileDrawRules) -> TileDrawRules {
+        var finer = self
+        finer.drawsLines = drawsLines || other.drawsLines
+        finer.drawsLabels = drawsLabels || other.drawsLabels
+        switch (raster, other.raster) {
+        case (nil, _), (_, nil): finer.raster = nil
+        case let (mine?, theirs?): finer.raster = mine.size >= theirs.size ? mine : theirs
+        }
+        return finer
+    }
 }
 
 struct PlaceTile: Hashable {

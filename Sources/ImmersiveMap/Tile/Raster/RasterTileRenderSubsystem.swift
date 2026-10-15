@@ -70,8 +70,6 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
     /// of their stencil references, the nearest ring's first and the
     /// finest of a ring first, on the sphere finest first.
     private var sources: [Source] = []
-    /// The frame's stencil references on the plane (`FlatTileStencilPacking`).
-    private var stencilPacking = FlatTileStencilPacking(bands: [], targetZoom: 0)
     /// The textures by size, reused frame after frame. A size's pool grows
     /// to what a frame needs and shrinks when a frame needs much less, so
     /// a camera that pans keeps its textures and one that zooms out of
@@ -127,11 +125,10 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
     /// The frame's raster placements, grouped by the tile drawn: a tile
     /// placed in several raster slots draws into one texture, of the
     /// largest size among them, and is drawn once per wrap copy it is
-    /// placed at, at full extent. The sources are ordered by their
-    /// stencil references, so the tile-priority stencil settles which one
-    /// a pixel shows: on the plane the nearest ring's first and the finest
-    /// of a ring first (`FlatTileStencilPacking`), on the sphere finest
-    /// first.
+    /// placed at, at full extent. On the plane the placement prepass has
+    /// settled which source a pixel shows (`FlatTileStencilPacking`), and
+    /// the sources are ordered finest first for the pipeline's sake; on
+    /// the sphere finest first, which the tile-priority stencil reads.
     func update(frameContext: FrameContext) {
         let placements = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
         sources.removeAll(keepingCapacity: true)
@@ -139,11 +136,19 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
             trimPools(needed: [:])
             return
         }
+        // A source has one representation a frame: a tile drawn as
+        // geometry anywhere (a stand-in carrying the vector rules it was
+        // shown with, `TilePlacementPlanner`) draws no texture, its
+        // geometry at full extent covers its raster slots too. Drawn both
+        // ways, the two would share one stencil mark and meet by depth,
+        // which on a relief, where their meshes sample the terrain apart,
+        // leaves patches of each.
+        let vectorTiles = Set(placements.filter { $0.rules.raster == nil }.map(\.metalTile.tile))
         var indexByTile: [Tile: Int] = [:]
         for placeTile in placements {
             // A raster placement (`TileDrawRules.raster`): a raster slot's
             // own tile, or a stand-in drawn as its own raster slot draws it.
-            guard let target = placeTile.rules.raster else { continue }
+            guard let target = placeTile.rules.raster, vectorTiles.contains(placeTile.metalTile.tile) == false else { continue }
             let tile = placeTile.metalTile.tile
             let index: Int
             if let found = indexByTile[tile] {
@@ -162,14 +167,8 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
                 sources[index].placements.append(Placement(worldWrap: worldWrap, targetZoom: placeTile.slot.z))
             }
         }
-        stencilPacking = FlatTileStencilPacking(bands: frameContext.visibleContent.flatRingBands,
-                                                targetZoom: frameContext.visibleContent.tileZoomLevel)
         if frameContext.renderSurfaceMode == .flat {
-            let packing = stencilPacking
-            func reference(of source: Source) -> UInt32 {
-                source.placements.map { packing.reference(sourceZoom: source.metalTile.tile.z, slotZoom: $0.targetZoom) }.max() ?? 0
-            }
-            sources.sort { reference(of: $0) > reference(of: $1) }
+            sources.sort { Self.reference(of: $0) > Self.reference(of: $1) }
         } else {
             sources.sort { $0.metalTile.tile.z > $1.metalTile.tile.z }
         }
@@ -182,6 +181,11 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
             sources[index].texture = texture(size: size, index: used)
         }
         trimPools(needed: needed)
+    }
+
+    /// The plane's stencil value of a source (`FlatTileStencilPacking`).
+    private static func reference(of source: Source) -> UInt32 {
+        FlatTileStencilPacking.reference(sourceZoom: source.metalTile.tile.z)
     }
 
     private func texture(size: Int, index: Int) -> MTLTexture? {
@@ -364,10 +368,10 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
             guard let texture = source.texture else { continue }
             let tile = source.metalTile.tile
             encoder.setFragmentTexture(texture, index: 0)
+            // The tile-priority value, the tile's zoom, tested equal to
+            // the planner's marks (FlatTileStencilPacking).
+            encoder.setStencilReferenceValue(Self.reference(of: source))
             for placement in source.placements {
-                // The tile-priority reference, the slot's ring above the
-                // tile's zoom (FlatTileStencilPacking).
-                encoder.setStencilReferenceValue(stencilPacking.reference(sourceZoom: tile.z, slotZoom: placement.targetZoom))
                 let relief = groundReliefStore?.relief(for: tile,
                                                        terrainZoom: GroundReliefStore.terrainZoom(forTargetZoom: placement.targetZoom))
                 let cells = relief == nil ? 0 : groundFlattening.grid(forTileZoom: tile.z)

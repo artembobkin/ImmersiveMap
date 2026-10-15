@@ -112,8 +112,11 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
                                                                                 renderSurfaceMode: frameContext.renderSurfaceMode)
         let demandedSourceTiles = Self.uniqueSourceTiles(of: targets)
         let prioritizedDemand = Self.uniqueSourceTiles(of: prioritizedTargets)
-        // The store keeps the demand and releases the rest.
+        // The store keeps the demand and what the last frame showed, and
+        // releases the rest.
+        let shownTiles = Set(placeTilesContext.tilePlacements.map(\.metalTile.tile))
         let tileRequestResult = tileRenderStore.requestTiles(prioritizedDemand,
+                                                             shown: shownTiles,
                                                              frameIndex: frameContext.frameIndex)
         let contentVersion = tileRenderStore.cacheContentVersion
 
@@ -134,6 +137,7 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
                                                                      resident: resident,
                                                                      zoom: tileZoomLevel,
                                                                      backdropZoomLevel: backdropZoomLevel,
+                                                                     previous: placeTilesContext.tilePlacements,
                                                                      slotRules: { slot in
                                                                          TileDrawRules(drawsLines: visibleContent.linelessTiles.contains(slot) == false,
                                                                                        drawsLabels: visibleContent.unlabelledTiles.contains(slot) == false,

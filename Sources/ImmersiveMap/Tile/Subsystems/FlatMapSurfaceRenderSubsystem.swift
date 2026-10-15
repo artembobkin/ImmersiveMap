@@ -79,15 +79,12 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                                                fallbackTexture: groundShadowMaskFallbackTexture)
         let drawableSizePx = SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height))
         // The drawer sets its own depth-stencil states per group: the
-        // opaque ground writes the rank depth and owns the tile-priority
-        // stencil, the road buckets write their ranks, the rest only test.
-        // A source draws at full extent, and the stencil settles which
-        // source a pixel shows (`TileSourceStencilPriority`): the ring
-        // prepass marked the rings, and a source's reference is its ring
-        // above its zoom (`FlatTileStencilPacking`).
+        // opaque ground writes the rank depth, the road buckets write
+        // their ranks, and every group tests the tile-priority stencil
+        // for its source's own mark. A source draws at full extent, and
+        // the placement prepass has settled which source a pixel shows
+        // (`FlatTileStencilPacking`).
         GroundFogUniform.bind(GroundFogUniform.resolve(frameContext: frameContext), encoder: encoder)
-        let stencilPacking = FlatTileStencilPacking(bands: frameContext.visibleContent.flatRingBands,
-                                                    targetZoom: frameContext.visibleContent.tileZoomLevel)
         FlatMapSurfaceDrawer.draw(renderEncoder: encoder,
                                   cameraUniform: frameContext.cameraUniform,
                                   cpuCameraMatrix: frameContext.cameraMatrices.projectionView,
@@ -101,7 +98,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   groundOwnerState: groundOwnerState,
                                   tileStencilTestState: tileStencilTestState,
                                   roadRankState: roadRankState,
-                                  stencilPacking: stencilPacking,
                                   part: part,
                                   isWireframeEnabled: isWireframeEnabled,
                                   groundRelief: groundReliefStore,

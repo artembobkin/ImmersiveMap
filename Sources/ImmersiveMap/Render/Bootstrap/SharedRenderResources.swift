@@ -90,10 +90,15 @@ final class SharedRenderResources {
     /// their own walls and roofs) plus the tile-priority stencil test, which
     /// replaces the old per-placement slot clip.
     let extrudedStencilTestState: MTLDepthStencilState
-    /// The flat map's ring prepass (`RingStencilRenderSubsystem`): the depth
-    /// neither tested nor written, the ring's rank written into the
-    /// priority bits.
-    let ringStencilWriteState: MTLDepthStencilState
+    /// The flat map's placement prepass (`PlacementStencilRenderSubsystem`):
+    /// the depth neither tested nor written, the source's zoom written into
+    /// the priority bits.
+    let placementStencilWriteState: MTLDepthStencilState
+    /// The flat map's non-owning ground passes (the translucent fills, the
+    /// ribbons, the road edge lines, the bridge overlay): the ground depth
+    /// test plus the tile-priority stencil tested `equal` to the source's
+    /// zoom, the planner's mark (`FlatTileStencilPacking`), nothing written.
+    let flatTileStencilTestState: MTLDepthStencilState
     /// Bound at the shadow-map slot when the shadow pass is skipped: receiver
     /// shaders reference the texture statically and Metal validation requires a
     /// bound depth texture even though strength = 0 skips the sampling branch.
@@ -125,8 +130,8 @@ final class SharedRenderResources {
     let sceneModelPipeline: SceneModelPipeline
     /// The models of the model tiles, see `ModelTilePipeline`.
     let modelTilePipeline: ModelTilePipeline
-    /// The flat map's ring prepass, see `RingStencilRenderSubsystem`.
-    let ringStencilPipeline: RingStencilPipeline
+    /// The flat map's placement prepass, see `PlacementStencilRenderSubsystem`.
+    let placementStencilPipeline: PlacementStencilPipeline
 
     // MARK: - Geometry and atlases
 
@@ -247,7 +252,8 @@ final class SharedRenderResources {
         let groundOwnerState: MTLDepthStencilState
         let roadRankState: MTLDepthStencilState
         let extrudedStencilTestState: MTLDepthStencilState
-        let ringStencilWriteState: MTLDepthStencilState
+        let placementStencilWriteState: MTLDepthStencilState
+        let flatTileStencilTestState: MTLDepthStencilState
         let sceneModelSurfaceMaskState: MTLDepthStencilState
         let sceneModelGroundCutStates: SceneModelGroundCutStates
         let shadowFallbackTexture: MTLTexture
@@ -276,7 +282,8 @@ final class SharedRenderResources {
                      groundOwnerState: device.makeDepthStencilState(descriptor: Self.makeGroundOwnerDescriptor())!,
                      roadRankState: device.makeDepthStencilState(descriptor: Self.makeRoadRankDescriptor())!,
                      extrudedStencilTestState: device.makeDepthStencilState(descriptor: Self.makeExtrudedStencilTestDescriptor())!,
-                     ringStencilWriteState: device.makeDepthStencilState(descriptor: Self.makeRingStencilWriteDescriptor())!,
+                     placementStencilWriteState: device.makeDepthStencilState(descriptor: Self.makePlacementStencilWriteDescriptor())!,
+                     flatTileStencilTestState: device.makeDepthStencilState(descriptor: Self.makeFlatTileStencilTestDescriptor())!,
                      sceneModelSurfaceMaskState: device.makeDepthStencilState(descriptor: Self.makeSceneModelSurfaceMaskDescriptor())!,
                      sceneModelGroundCutStates: SceneModelGroundCutStates(
                         holeWrite: device.makeDepthStencilState(descriptor: Self.makeSceneModelGroundHoleDescriptor(raises: true))!,
@@ -303,7 +310,8 @@ final class SharedRenderResources {
         self.groundOwnerState = built.groundOwnerState
         self.roadRankState = built.roadRankState
         self.extrudedStencilTestState = built.extrudedStencilTestState
-        self.ringStencilWriteState = built.ringStencilWriteState
+        self.placementStencilWriteState = built.placementStencilWriteState
+        self.flatTileStencilTestState = built.flatTileStencilTestState
         self.sceneModelSurfaceMaskState = built.sceneModelSurfaceMaskState
         self.sceneModelGroundCutStates = built.sceneModelGroundCutStates
         self.shadowFallbackTexture = built.shadowFallbackTexture
@@ -322,7 +330,7 @@ final class SharedRenderResources {
         self.horizonPipeline = compiled.horizonPipeline
         self.sceneModelPipeline = compiled.sceneModelPipeline
         self.modelTilePipeline = compiled.modelTilePipeline
-        self.ringStencilPipeline = compiled.ringStencilPipeline
+        self.placementStencilPipeline = compiled.placementStencilPipeline
         self.globeCap = compiled.globeCap
         self.avatars = compiled.avatars
         self.textRenderer = compiled.textRenderer
@@ -349,7 +357,7 @@ final class SharedRenderResources {
         let horizonPipeline: HorizonPipeline
         let sceneModelPipeline: SceneModelPipeline
         let modelTilePipeline: ModelTilePipeline
-        let ringStencilPipeline: RingStencilPipeline
+        let placementStencilPipeline: PlacementStencilPipeline
         let globeCap: GlobeCapRenderer.SharedResources
         let avatars: AvatarsRenderer.SharedResources
         let textRenderer: TextRenderer
@@ -381,7 +389,7 @@ final class SharedRenderResources {
         var horizonPipeline: HorizonPipeline?
         var sceneModelPipeline: SceneModelPipeline?
         var modelTilePipeline: ModelTilePipeline?
-        var ringStencilPipeline: RingStencilPipeline?
+        var placementStencilPipeline: PlacementStencilPipeline?
         var globeCap: GlobeCapRenderer.SharedResources?
         var avatars: AvatarsRenderer.SharedResources?
         var textRenderer: TextRenderer?
@@ -441,14 +449,14 @@ final class SharedRenderResources {
                                                       pixelFormat: pixelFormat,
                                                       library: library,
                                                       sampleCount: sampleCount) },
-            { ringStencilPipeline = RingStencilPipeline(metalDevice: device,
-                                                        pixelFormat: pixelFormat,
-                                                        library: library,
-                                                        sampleCount: sampleCount) },
             { modelTilePipeline = ModelTilePipeline(metalDevice: device,
                                                     pixelFormat: pixelFormat,
                                                     library: library,
-                                                    sampleCount: sampleCount) }
+                                                    sampleCount: sampleCount) },
+            { placementStencilPipeline = PlacementStencilPipeline(metalDevice: device,
+                                                                  pixelFormat: pixelFormat,
+                                                                  library: library,
+                                                                  sampleCount: sampleCount) }
         ]
         DispatchQueue.concurrentPerform(iterations: jobs.count) { jobs[$0]() }
 
@@ -465,7 +473,7 @@ final class SharedRenderResources {
             horizonPipeline: horizonPipeline!,
             sceneModelPipeline: sceneModelPipeline!,
             modelTilePipeline: modelTilePipeline!,
-            ringStencilPipeline: ringStencilPipeline!,
+            placementStencilPipeline: placementStencilPipeline!,
             globeCap: globeCap!,
             avatars: avatars!,
             textRenderer: textRenderer!
@@ -580,14 +588,18 @@ final class SharedRenderResources {
         return descriptor
     }
 
-    /// The tile-priority stencil (TileSourceStencilPriority), on either
-    /// surface: every tile pass tests greaterEqual against the finest
-    /// painter's mark, and the owner pass replaces it where it passes both
-    /// tests, so a coarser substitute's overflow is rejected wherever a
-    /// finer tile painted.
-    private nonisolated static func makeTilePriorityStencil(writes: Bool) -> MTLStencilDescriptor {
+    /// The tile-priority stencil (TileSourceStencilPriority). On the sphere
+    /// every tile pass tests greaterEqual against the finest painter's
+    /// mark, and the owner pass replaces it where it passes both tests, so
+    /// a coarser substitute's overflow is rejected wherever a finer tile
+    /// painted. On the flat map the stencil holds the planner's decision,
+    /// written by the placement prepass (`FlatTileStencilPacking`), and
+    /// every tile pass tests `equal` to its source's zoom and writes
+    /// nothing: a source paints the ground it was given and no other.
+    private nonisolated static func makeTilePriorityStencil(compare: MTLCompareFunction = .greaterEqual,
+                                                            writes: Bool) -> MTLStencilDescriptor {
         let stencil = MTLStencilDescriptor()
-        stencil.stencilCompareFunction = .greaterEqual
+        stencil.stencilCompareFunction = compare
         stencil.stencilFailureOperation = .keep
         stencil.depthFailureOperation = .keep
         stencil.depthStencilPassOperation = writes ? .replace : .keep
@@ -628,45 +640,73 @@ final class SharedRenderResources {
         return descriptor
     }
 
-    /// The flat ground's opaque owner pass: the ground depth test (against
-    /// the buildings, and against the other sources' ground on a relief),
-    /// WRITING the rank band so a pixel is shaded once by its topmost
-    /// opaque layer, and owning the tile-priority stencil. The test is
-    /// lessEqual, the sphere's: two vector tiles' opaque fills share the
-    /// band's first step, and a finer source drawn after a coarser one at
-    /// the same depth passes it where the stencil lets it through, so the
-    /// finer source wins the ground they both cover. A raster tile lies
-    /// half a step behind the fills (TileRaster.metal), so a vector tile
-    /// over it is nearer outright.
+    /// The flat ground's opaque pass: the ground depth test (against the
+    /// buildings), WRITING the rank band so a pixel is shaded once by its
+    /// topmost opaque layer, under the tile-priority stencil `equal` to
+    /// the source's zoom, the planner's mark (`FlatTileStencilPacking`):
+    /// a source paints the ground it was given and no other, whatever
+    /// the depth says there, so the sources never meet by depth. The
+    /// depth test is lessEqual for a source's own layers, which stack at
+    /// the band's steps, and a vector tile over a raster of the same
+    /// source (its lines) lies nearer by half a step (TileRaster.metal).
     private nonisolated static func makeGroundOwnerDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeGroundDepthDescriptor()
         descriptor.depthCompareFunction = .lessEqual
         descriptor.isDepthWriteEnabled = true
-        descriptor.frontFaceStencil = makeTilePriorityStencil(writes: true)
-        descriptor.backFaceStencil = makeTilePriorityStencil(writes: true)
+        descriptor.frontFaceStencil = makeTilePriorityStencil(compare: .equal, writes: false)
+        descriptor.backFaceStencil = makeTilePriorityStencil(compare: .equal, writes: false)
         return descriptor
     }
 
     /// The flat road buckets: the ground depth test against the ranks
-    /// (`RoadRankDepth`), WRITING the rank, under the tile-priority test.
-    /// A fragment passes only where it is nearer than what is there, so an
-    /// opaque road is shaded once per pixel by its highest rank, and a road
-    /// that blends lands once per pixel of a rank, an equal rank failing.
+    /// (`RoadRankDepth`), WRITING the rank, on the road's source's own
+    /// ground (the tile-priority stencil `equal` to its zoom). A fragment
+    /// passes only where it is nearer than what is there, so an opaque
+    /// road is shaded once per pixel by its highest rank, and a road that
+    /// blends lands once per pixel of a rank, an equal rank failing.
     private nonisolated static func makeRoadRankDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeGroundDepthDescriptor()
         descriptor.isDepthWriteEnabled = true
+        descriptor.frontFaceStencil = makeTilePriorityStencil(compare: .equal, writes: false)
+        descriptor.backFaceStencil = makeTilePriorityStencil(compare: .equal, writes: false)
+        return descriptor
+    }
+
+    /// The sphere's non-owning tile passes (translucent fills, ribbons):
+    /// the ground depth test plus the tile-priority stencil test, no
+    /// writes.
+    private nonisolated static func makeTileStencilTestDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = makeGroundDepthDescriptor()
         descriptor.frontFaceStencil = makeTilePriorityStencil(writes: false)
         descriptor.backFaceStencil = makeTilePriorityStencil(writes: false)
         return descriptor
     }
 
-    /// The non-owning tile passes of either surface (translucent fills,
-    /// ribbons, the flat road edge lines and the bridge overlay): the
-    /// ground depth test plus the tile-priority stencil test, no writes.
-    private nonisolated static func makeTileStencilTestDescriptor() -> MTLDepthStencilDescriptor {
+    /// The flat map's non-owning tile passes (translucent fills, ribbons,
+    /// the road edge lines and the bridge overlay): the ground depth test
+    /// plus the tile-priority stencil `equal` to the source's zoom, no
+    /// writes.
+    private nonisolated static func makeFlatTileStencilTestDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeGroundDepthDescriptor()
-        descriptor.frontFaceStencil = makeTilePriorityStencil(writes: false)
-        descriptor.backFaceStencil = makeTilePriorityStencil(writes: false)
+        descriptor.frontFaceStencil = makeTilePriorityStencil(compare: .equal, writes: false)
+        descriptor.backFaceStencil = makeTilePriorityStencil(compare: .equal, writes: false)
+        return descriptor
+    }
+
+    /// The flat map's placement prepass: the depth always passes and is
+    /// never written, so a placement's mark lands on every pixel of its
+    /// square, through the priority bits alone (`FlatTileStencilPacking`).
+    private nonisolated static func makePlacementStencilWriteDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = makeDepthDisabledDescriptor()
+        let stencil = MTLStencilDescriptor()
+        stencil.stencilCompareFunction = .always
+        stencil.stencilFailureOperation = .keep
+        stencil.depthFailureOperation = .keep
+        stencil.depthStencilPassOperation = .replace
+        stencil.readMask = 0
+        stencil.writeMask = TileSourceStencilPriority.priorityMask
+        descriptor.frontFaceStencil = stencil
+        descriptor.backFaceStencil = stencil
         return descriptor
     }
 
@@ -681,23 +721,6 @@ final class SharedRenderResources {
         let descriptor = makeSceneDepthDescriptor()
         descriptor.frontFaceStencil = makeSurfaceMaskWrite(compare: .always)
         descriptor.backFaceStencil = makeSurfaceMaskWrite(compare: .always)
-        return descriptor
-    }
-
-    /// The flat map's ring prepass: the depth always passes and is never
-    /// written, so the ring's mark lands on every pixel of its targets'
-    /// ground, through the priority bits alone (`FlatTileStencilPacking`).
-    private nonisolated static func makeRingStencilWriteDescriptor() -> MTLDepthStencilDescriptor {
-        let descriptor = makeDepthDisabledDescriptor()
-        let stencil = MTLStencilDescriptor()
-        stencil.stencilCompareFunction = .always
-        stencil.stencilFailureOperation = .keep
-        stencil.depthFailureOperation = .keep
-        stencil.depthStencilPassOperation = .replace
-        stencil.readMask = 0
-        stencil.writeMask = TileSourceStencilPriority.priorityMask
-        descriptor.frontFaceStencil = stencil
-        descriptor.backFaceStencil = stencil
         return descriptor
     }
 

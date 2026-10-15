@@ -58,7 +58,7 @@ enum RenderGraphFactory {
                                                           riseSeconds: settings.scene.extrusion.riseSeconds)
         let flatMapSurfaceSubsystem = FlatMapSurfaceRenderSubsystem(tilePipeline: context.tilePipeline,
                                                                     groundOwnerState: context.groundOwnerState,
-                                                                    tileStencilTestState: context.tileStencilTestState,
+                                                                    tileStencilTestState: context.flatTileStencilTestState,
                                                                     roadRankState: context.roadRankState,
                                                                     depthDisabledState: context.depthDisabledState,
                                                                     debugOverlayControls: debugOverlayControls,
@@ -69,12 +69,12 @@ enum RenderGraphFactory {
         let groundShadowMaskSubsystem = GroundShadowMaskRenderSubsystem(pipeline: context.groundShadowMaskPipeline,
                                                                         depthDisabledState: context.depthDisabledState,
                                                                         shadowMapTextureProvider: shadowMapTextureProvider)
-        let ringStencilSubsystem = RingStencilRenderSubsystem(device: context.metalContext.device,
-                                                              pipeline: context.ringStencilPipeline,
-                                                              ringStencilWriteState: context.ringStencilWriteState,
-                                                              depthDisabledState: context.depthDisabledState,
-                                                              groundReliefStore: context.groundReliefStore,
-                                                              groundFlattening: settings.tiles.groundFlattening)
+        let placementStencilSubsystem = PlacementStencilRenderSubsystem(device: context.metalContext.device,
+                                                                        pipeline: context.placementStencilPipeline,
+                                                                        placementStencilWriteState: context.placementStencilWriteState,
+                                                                        depthDisabledState: context.depthDisabledState,
+                                                                        groundReliefStore: context.groundReliefStore,
+                                                                        groundFlattening: settings.tiles.groundFlattening)
         let rasterTileSubsystem = RasterTileRenderSubsystem(device: context.metalContext.device,
                                                             pipeline: context.rasterTilePipeline,
                                                             settings: settings.tiles.rasterization,
@@ -138,16 +138,13 @@ enum RenderGraphFactory {
             avatarSubsystem,
             markerSubsystem,
             groundShadowMaskSubsystem,
-            // Before the ground: the rings' marks in the stencil.
-            ringStencilSubsystem,
-            // After the plane's vector ground: a texture takes only the
-            // pixels no finer source painted, by the tile-priority
-            // stencil, which is what keeps a coarse tile's raster standing
-            // in for a near slot (`TileDrawRules`) off the near tiles
-            // around it. The rank depth alone does not on the relief,
-            // where the two lie on different terrain samples and the
-            // coarse one pokes through. Before the sphere's vector ground,
-            // as the sphere's rank depth wants.
+            // Before the ground: the planner's decision in the stencil, the
+            // placements' marks (`FlatTileStencilPacking`).
+            placementStencilSubsystem,
+            // The plane's vector ground, then its textures, each source
+            // painting the ground its mark names, in whatever order.
+            // Before the sphere's vector ground, as the sphere's rank
+            // depth wants.
             flatMapSurfaceSubsystem,
             rasterTileSubsystem,
             starfieldSubsystem,

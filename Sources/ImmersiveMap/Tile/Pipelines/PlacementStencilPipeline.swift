@@ -3,12 +3,13 @@
 
 import Metal
 
-/// The ring prepass pipelines (`RingStencilRenderSubsystem`): the raster
-/// tile's grid on the plane and on the relief (TileRaster.metal,
-/// tileRasterFlatVertexShader) with no fragment function and every color
-/// attachment's write mask empty, so the draws touch nothing but the
-/// stencil, where they write the rings' ranks before the ground draws.
-final class RingStencilPipeline {
+/// The placement prepass pipelines (`PlacementStencilRenderSubsystem`):
+/// the raster tile's grid on the plane and on the relief
+/// (TileRaster.metal, tileRasterFlatVertexShader) with no fragment
+/// function and every color attachment's write mask empty, so the draws
+/// touch nothing but the stencil, where they write the planner's marks
+/// before the ground draws.
+final class PlacementStencilPipeline {
     let flatPipelineState: MTLRenderPipelineState
     /// The grid raised by the terrain bound at vertex texture 0 and buffer
     /// 9, as the raster tile's relief draw binds it.
@@ -33,7 +34,7 @@ final class RingStencilPipeline {
             descriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
             return try! metalDevice.makeRenderPipelineState(descriptor: descriptor)
         }
-        flatPipelineState = state(label: "RingStencilFlat", relief: false)
-        flatReliefPipelineState = state(label: "RingStencilFlatRelief", relief: true)
+        flatPipelineState = state(label: "PlacementStencilFlat", relief: false)
+        flatReliefPipelineState = state(label: "PlacementStencilFlatRelief", relief: true)
     }
 }

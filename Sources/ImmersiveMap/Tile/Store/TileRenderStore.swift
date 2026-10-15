@@ -107,8 +107,10 @@ final class TileRenderStore: @unchecked Sendable {
         workingSet.residentTiles()
     }
 
-    func requestTiles(_ tiles: [Tile], frameIndex: UInt64? = nil) -> TileRequestResult {
-        workingSet.updateDemandedTiles(tiles)
+    /// `shown` is what the last frame's placements drew: kept resident
+    /// while the planner keeps showing it (`TileWorkingSetStore`).
+    func requestTiles(_ tiles: [Tile], shown: Set<Tile> = [], frameIndex: UInt64? = nil) -> TileRequestResult {
+        workingSet.updateDemandedTiles(tiles, shown: shown)
         var request: [Tile] = []
         var readyTilesCount = 0
         for tile in tiles {

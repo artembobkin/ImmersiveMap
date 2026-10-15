@@ -48,6 +48,10 @@ final class TileWorkingSetStore {
     private var demandedTiles: Set<Tile> = []
     private var mutationVersion: UInt64 = 0
     private var residentBytes = 0
+    /// The tiles the last frame's placements drew (`updateDemandedTiles`):
+    /// kept while the demand does not name them, as the planner shows
+    /// them on until their targets land.
+    private var shownTiles: Set<Tile> = []
     /// Scratch for `updateDemandedTiles`, kept across calls so the steady
     /// state allocates nothing: the ancestors kept this pass, and the
     /// tiles to release.
@@ -89,12 +93,13 @@ final class TileWorkingSetStore {
     /// set's loading tiles is released here, synchronously: this is the one
     /// release path in the steady state. Decided from the set and the
     /// residency alone; the order carries no meaning here.
-    func updateDemandedTiles(_ orderedTiles: [Tile]) {
+    func updateDemandedTiles(_ orderedTiles: [Tile], shown: Set<Tile> = []) {
         stateLock.lock()
         demandedTiles.removeAll(keepingCapacity: true)
         for tile in orderedTiles {
             demandedTiles.insert(tile)
         }
+        shownTiles = shown
         collectReleasableLocked(pinnedCoverToo: false)
         for tile in releaseScratch {
             releaseLocked(tile)
@@ -139,7 +144,10 @@ final class TileWorkingSetStore {
             if tile.z <= Self.pinnedWorldCoverMaxZoomLevel, pinnedCoverToo == false {
                 continue
             }
-            if keptAncestors.contains(tile) || standsInBelowALoadingTarget(tile) {
+            // What the last frame showed stays while the planner keeps
+            // showing it (`TilePlacementPlanner`): the ground keeps its
+            // tiles until the target lands.
+            if shownTiles.contains(tile) || keptAncestors.contains(tile) || standsInBelowALoadingTarget(tile) {
                 continue
             }
             releaseScratch.append(tile)
