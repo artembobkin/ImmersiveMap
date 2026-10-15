@@ -3,7 +3,8 @@
 
 import simd
 
-/// The camera over a terrain (`GroundReliefStore`): the point it looks at
+/// The camera's relief (`Camera/Relief`, see `GroundReliefStore` for the
+/// relief's folders). The camera over a terrain: the point it looks at
 /// lies on the terrain, raised by the terrain under it
 /// (`GroundReliefCameraLift`), so a zoom closes in on the ground and the
 /// camera turns about a point on it. A pan moves the eye over the map

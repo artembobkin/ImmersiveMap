@@ -789,7 +789,8 @@ public extension ImmersiveMapView {
     /// Nothing of such a ground has to be ordered in depth, which keeps the
     /// near ground whole when the camera stands in the street with the
     /// tiles blown up to many screens, and the mesh is ready for a
-    /// heightmap. The default is the tileset's deepest zoom, 15, on a grid
+    /// heightmap. The default is the tileset's deepest zoom
+    /// (`tileMaximumZoomLevel(_:)`, 15 for the hosted archive), on a grid
     /// of 16. `gridByTileZoom` gives a zoom a grid of its own, over `grid`:
     /// with the ground relief on from a coarse zoom, a coarse tile's cell
     /// covers far more ground, and more cells keep its relief as fine. By

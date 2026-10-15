@@ -134,6 +134,20 @@ final class GroundReliefTile {
 ///
 /// Thread-safe (`@unchecked Sendable`): the loads run in tasks off the main
 /// thread and all mutable state is serialized by `lock`.
+///
+/// The main type of `Tile/Relief`, the relief's core. The relief draws
+/// nothing of its own: it changes how other features draw, so its code
+/// lies in a `Relief` folder of each feature it changes, and this folder
+/// holds what they all share: the terrain tiles and their store, the
+/// heights read on the CPU (`GroundRelief`, `GroundReliefTileLift`), the
+/// frame's datum (`GroundReliefCameraLift`), the GPU side every rising
+/// draw binds (`GroundReliefUniform`, `Shaders/GroundRelief.h`), and the
+/// relief of the tile's own features, the ground and the buildings
+/// (`BuildingReliefLifts`). It holds no drawing and no parsing, and
+/// depends on nothing of a feature but the tile's address. The other
+/// features' relief lies in their own `Relief` folders
+/// (`Camera/Relief`), and a feature whose relief is a call into this
+/// core (the labels) keeps the call where it is.
 final class GroundReliefStore: @unchecked Sendable {
     static let maximumConcurrentLoads = 4
     static let retryBaseDelay: TimeInterval = 5
@@ -499,8 +513,7 @@ final class GroundReliefStore: @unchecked Sendable {
     /// units per metre at the tile's latitude. The frame's strength is
     /// not in it (`GroundRelief.strength`).
     func worldUnitsPerMetre(over tile: Tile, renderMapSize: Double) -> Float {
-        let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: (Double(tile.y) + 0.5) / Double(1 << tile.z))
-        return Float(ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: latitude, renderMapSize: renderMapSize))
+        GroundReliefUniform.worldUnitsPerMetre(over: tile, renderMapSize: renderMapSize)
     }
 
     /// Half floats' values.

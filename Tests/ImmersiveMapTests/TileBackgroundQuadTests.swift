@@ -14,7 +14,7 @@ final class TileBackgroundQuadTests: XCTestCase {
         // The layered ground: the flattened ground cuts the background to
         // its own grid instead (GroundFlatteningParseTests).
         var config = ImmersiveMapSettings.default
-        config.tiles.groundFlattening.fromTileZoom = nil
+        config.tiles.groundFlattening.isEnabled = false
         let parser = TileMvtParser.forTests(settings: config)
         let parsed = try parser.parse(tile: tile,
                                       mvtData: VectorTileFixture.layerTile(layerName: "landcover", features: []))

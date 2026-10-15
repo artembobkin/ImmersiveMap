@@ -510,12 +510,11 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             // terrain is in.
             var lift: ((SIMD2<Float>) -> Float)?
             if let groundRelief,
-               let relief = groundRelief.relief(for: record.ownerKey.tile,
-                                                terrainZoom: GroundReliefStore.terrainZoom(
-                                                    forTargetZoom: targetZoomBySource[record.ownerKey.tile] ?? record.ownerKey.z)) {
-                let unitsPerMetre = groundRelief.worldUnitsPerMetre(over: record.ownerKey.tile, renderMapSize: renderMapSize)
-                let datumMetres = groundRelief.datumMetres
-                lift = { uv in relief.drawnMetres(atTileUV: uv, datumMetres: datumMetres) * unitsPerMetre }
+               let tileLift = GroundReliefTileLift(store: groundRelief,
+                                                   tile: record.ownerKey.tile,
+                                                   targetZoom: targetZoomBySource[record.ownerKey.tile] ?? record.ownerKey.z,
+                                                   renderMapSize: renderMapSize) {
+                lift = tileLift.worldUnits(atTileUV:)
             }
             RoadLabelPlacer.place(geometry: record.geometry,
                                   origin: tileOriginData[originIndex],

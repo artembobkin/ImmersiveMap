@@ -92,12 +92,11 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
                 encoder.setRenderPipelineState(relief != nil ? pipeline.flatReliefPipelineState : pipeline.flatPipelineState)
             }
             if let relief, let groundReliefStore {
-                var uniform = GroundReliefUniform(relief: relief,
-                                                  worldUnitsPerMetre: groundReliefStore.worldUnitsPerMetre(over: tile,
-                                                                                                           renderMapSize: flatRenderState.renderMapSize),
-                                                  datumMetres: groundReliefStore.datumMetres)
-                encoder.setVertexTexture(relief.texture, index: 0)
-                encoder.setVertexBytes(&uniform, length: MemoryLayout<GroundReliefUniform>.stride, index: 9)
+                GroundReliefUniform.bind(relief,
+                                         over: tile,
+                                         datumMetres: groundReliefStore.datumMetres,
+                                         renderMapSize: flatRenderState.renderMapSize,
+                                         encoder: encoder)
             }
             let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: tile.x,
                                                                              y: tile.y,

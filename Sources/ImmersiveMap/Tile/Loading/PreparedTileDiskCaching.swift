@@ -22,7 +22,7 @@ struct PreparedTileCacheIdentity {
     let labelsEnabled: Bool
     /// The flattened ground's zoom and grid (`TileParseOptions`): a tile
     /// flattened, or on another grid, is another tile.
-    var groundFlatteningFromTileZoom: Int? = ImmersiveMapSettings.TileSettings.GroundFlatteningSettings().fromTileZoom
+    var groundFlatteningFromTileZoom: Int? = ImmersiveMapSettings.default.tiles.resolvedGroundFlatteningFromTileZoom
     var groundFlatteningGrid: Int = ImmersiveMapSettings.TileSettings.GroundFlatteningSettings().grid
     /// The grids by zoom over `groundFlatteningGrid`
     /// (`TileParseOptions.groundFlatteningGridByTileZoomKey`), empty

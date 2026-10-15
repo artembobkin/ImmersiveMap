@@ -55,12 +55,8 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     /// with the relief's fade: the drawer binds the units a metre rises
     /// by this frame beside them, the exaggeration in them.
     private var liftBuffers: [MTLBuffer?] = []
-    /// The lifts of each tile, kept while the tile is drawn with the same
-    /// terrain: a frame makes a tile's lifts once, when its terrain
-    /// arrives or changes. The tile is named by its object's identity, and
-    /// the entry carries the tile's address as well, so a tile allocated
-    /// where a released one was is not handed the old lifts.
-    private var liftBuffersByTile: [ObjectIdentifier: (tile: Tile, terrain: ObjectIdentifier, buffer: MTLBuffer)] = [:]
+    /// The lifts' cache, by tile and terrain (`BuildingReliefLifts`).
+    private let reliefLifts = BuildingReliefLifts()
     private var drawsAny = false
 
     init(extrudedTilePipeline: ExtrudedTilePipeline,
@@ -141,54 +137,12 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
         return fine.tile.findParentTile(atZoom: coarse.z) == coarse.tile
     }
 
-    /// Each drawn placement's lifts over the relief: the terrain's height
-    /// under each volume's anchor, in the terrain's metres, made once per
-    /// tile and terrain. Buildings on a slope stand level at the height
-    /// of their anchor, which the ground round them rises above and sinks
-    /// below.
-    private func updateLiftBuffers(placements: [PlaceTile], drawnKeys: [VisibleTile?], frameContext: FrameContext) {
-        liftBuffers.removeAll(keepingCapacity: true)
-        guard let groundReliefStore else {
-            liftBuffersByTile.removeAll()
-            return
-        }
-        var kept: [ObjectIdentifier: (tile: Tile, terrain: ObjectIdentifier, buffer: MTLBuffer)] = [:]
-        for (placement, key) in zip(placements, drawnKeys) {
-            let metalTile = placement.metalTile
-            let anchors = metalTile.tileBuffers.extruded.buildingAnchors
-            guard key != nil, anchors.isEmpty == false,
-                  let relief = groundReliefStore.relief(for: metalTile.tile,
-                                                        terrainZoom: GroundReliefStore.terrainZoom(forTargetZoom: placement.placeIn.z)) else {
-                liftBuffers.append(nil)
-                continue
-            }
-            let tileIdentity = ObjectIdentifier(metalTile)
-            let terrainIdentity = ObjectIdentifier(relief.terrain)
-            if let cached = liftBuffersByTile[tileIdentity],
-               cached.terrain == terrainIdentity,
-               cached.tile == metalTile.tile,
-               cached.buffer.length == anchors.count * MemoryLayout<Float>.stride {
-                kept[tileIdentity] = cached
-                liftBuffers.append(cached.buffer)
-                continue
-            }
-            var lifts = [Float](repeating: 0, count: anchors.count)
-            for (index, anchor) in anchors.enumerated() {
-                // The anchor is render space (y up), the terrain's v grows
-                // from the north edge.
-                let uv = SIMD2<Float>(anchor.x, TileCoordinateSpace.tileExtent - anchor.y) / TileCoordinateSpace.tileExtent
-                lifts[index] = relief.metres(atTileUV: uv)
-            }
-            guard let buffer = lifts.withUnsafeBytes({ bytes in
-                extrudedTilePipeline.pipelineState.device.makeBuffer(bytes: bytes.baseAddress!, length: bytes.count, options: .storageModeShared)
-            }) else {
-                liftBuffers.append(nil)
-                continue
-            }
-            kept[tileIdentity] = (metalTile.tile, terrainIdentity, buffer)
-            liftBuffers.append(buffer)
-        }
-        liftBuffersByTile = kept
+    /// Each drawn placement's lifts over the relief (`BuildingReliefLifts`).
+    private func updateLiftBuffers(placements: [PlaceTile], drawnKeys: [VisibleTile?], frameContext _: FrameContext) {
+        liftBuffers = reliefLifts.update(placements: placements,
+                                         drawnKeys: drawnKeys,
+                                         store: groundReliefStore,
+                                         device: extrudedTilePipeline.pipelineState.device)
     }
 
     /// The datum the lifts are drawn from this frame, in the lifts' own
@@ -243,7 +197,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
 
     func evict() {
         rise.reset()
-        liftBuffersByTile.removeAll()
+        reliefLifts.evict()
     }
 
     private func drawBuildings(encoder: MTLRenderCommandEncoder,

@@ -446,12 +446,11 @@ enum FlatMapSurfaceDrawer {
                                          datumMetres: Float,
                                          renderMapSize: Double,
                                          renderEncoder: MTLRenderCommandEncoder) {
-        let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: (Double(tile.y) + 0.5) / Double(1 << tile.z))
-        let unitsPerMetre = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: latitude,
-                                                                      renderMapSize: renderMapSize)
-        var uniform = GroundReliefUniform(relief: relief, worldUnitsPerMetre: Float(unitsPerMetre), datumMetres: datumMetres)
-        renderEncoder.setVertexTexture(relief.texture, index: 0)
-        renderEncoder.setVertexBytes(&uniform, length: MemoryLayout<GroundReliefUniform>.stride, index: 9)
+        GroundReliefUniform.bind(relief,
+                                 over: tile,
+                                 datumMetres: datumMetres,
+                                 renderMapSize: renderMapSize,
+                                 encoder: renderEncoder)
     }
 
     private static func drawFlatGeometryLayer(renderEncoder: MTLRenderCommandEncoder,
@@ -594,21 +593,6 @@ enum FlatMapSurfaceDrawer {
         }
         if spanCount > 0 { spans.append((spanStart, spanCount)) }
         return spans
-    }
-}
-
-/// Mirror of `GroundReliefUniform` in GroundRelief.h (vertex buffer 9):
-/// the tile's corner and side in its terrain texture and the world units
-/// a metre of terrain rises by, then the datum, the terrain's metres the
-/// ground is drawn from (`GroundReliefStore.datumMetres`), and the frame's
-/// strength (`GroundRelief.strength`).
-struct GroundReliefUniform {
-    var placement: SIMD4<Float>
-    var frame: SIMD4<Float>
-
-    init(relief: GroundRelief, worldUnitsPerMetre: Float, datumMetres: Float) {
-        placement = SIMD4<Float>(relief.origin.x, relief.origin.y, relief.scale, worldUnitsPerMetre)
-        frame = SIMD4<Float>(datumMetres, relief.strength, 0, 0)
     }
 }
 

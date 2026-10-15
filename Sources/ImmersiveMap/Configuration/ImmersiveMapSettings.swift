@@ -654,9 +654,17 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// the mesh ready for a heightmap. Baked into the prepared tiles,
         /// so a change re-parses them.
         public struct GroundFlatteningSettings: Equatable, Sendable {
-            /// The tile zoom the ground is flattened from, nil for never.
-            /// A tile of this zoom or deeper is flattened whatever the
-            /// camera's zoom, a coarser one keeps its layers.
+            /// Whether the ground is flattened at all. Off, every tile keeps
+            /// its layers at every zoom.
+            public var isEnabled: Bool
+            /// The tile zoom the ground is flattened from: a tile of this
+            /// zoom or deeper is flattened whatever the camera's zoom, a
+            /// coarser one keeps its layers. Nil, the default, is the
+            /// tileset's deepest zoom (`CoverageSettings.maximumZoomLevel`,
+            /// `tileMaximumZoomLevel(_:)`): only the tiles the camera blows
+            /// up to many screens are flattened, whatever depth the archive
+            /// is built to. With the ground relief on, the relief's zoom
+            /// stands in for this one (`GroundReliefSettings.fromTileZoom`).
             public var fromTileZoom: Int?
             /// The grid a flattened tile's triangles keep to, cells a side:
             /// no triangle crosses a cell. More cells, more triangles.
@@ -686,7 +694,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             public static let defaultGridByTileZoom: [Int: Int] = [0: 64, 1: 64, 2: 32, 3: 32,
                                                                    9: 256, 10: 256, 11: 256, 12: 128, 13: 64, 14: 32]
 
-            public init(fromTileZoom: Int? = 15, grid: Int = 16, gridByTileZoom: [Int: Int] = Self.defaultGridByTileZoom) {
+            public init(isEnabled: Bool = true,
+                        fromTileZoom: Int? = nil,
+                        grid: Int = 16,
+                        gridByTileZoom: [Int: Int] = Self.defaultGridByTileZoom) {
+                self.isEnabled = isEnabled
                 self.fromTileZoom = fromTileZoom
                 self.grid = grid
                 self.gridByTileZoom = gridByTileZoom
@@ -943,10 +955,15 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// the relief's own (`GroundReliefSettings.fromTileZoom`), since a
         /// frame on the terrain raises every tile it draws, the coarse
         /// tiles of its far rings too, and only a flattened tile can rise.
-        /// Else the flattening's own. Every reader of the flattening's zoom
-        /// reads this.
+        /// Else the flattening's own, the tileset's deepest zoom when it
+        /// names none, and nil when the flattening is off. Every reader of
+        /// the flattening's zoom reads this.
         var resolvedGroundFlatteningFromTileZoom: Int? {
-            groundRelief.isEnabled ? max(0, groundRelief.fromTileZoom) : groundFlattening.fromTileZoom
+            if groundRelief.isEnabled {
+                return max(0, groundRelief.fromTileZoom)
+            }
+            guard groundFlattening.isEnabled else { return nil }
+            return groundFlattening.fromTileZoom ?? coverage.maximumZoomLevel
         }
 
         func resolvedCoverageZoomLevel(forCameraZoom cameraZoom: Double) -> Int {
@@ -2070,13 +2087,7 @@ public extension ImmersiveMapSettings {
     /// On, the zoom it starts from is the configured one.
     func groundFlattening(isEnabled: Bool) -> ImmersiveMapSettings {
         var settings = self
-        if isEnabled {
-            if settings.tiles.groundFlattening.fromTileZoom == nil {
-                settings.tiles.groundFlattening.fromTileZoom = TileSettings.GroundFlatteningSettings().fromTileZoom
-            }
-        } else {
-            settings.tiles.groundFlattening.fromTileZoom = nil
-        }
+        settings.tiles.groundFlattening.isEnabled = isEnabled
         return settings
     }
 

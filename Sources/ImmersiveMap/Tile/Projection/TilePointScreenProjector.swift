@@ -238,24 +238,23 @@ struct TilePointScreenProjector {
         // of the projection, nil for a tile whose terrain is not in.
         let groundRelief = frameContext.services.groundRelief
         let renderMapSize = frameContext.resolvedPresentation.flatRenderState.renderMapSize
-        var reliefByTile: [Tile: (relief: GroundRelief, unitsPerMetre: Float)?] = [:]
+        var reliefByTile: [Tile: GroundReliefTileLift?] = [:]
         // The ring each source is raised by: its finest target's.
         let targetZoomBySource = groundRelief == nil || liftsByRelief == false
             ? [:] : frameContext.sharedState.tilePlacementState.placeTilesContext.targetZoomBySource()
         func lift(tile: Tile, uv: SIMD2<Float>) -> Float {
             guard let groundRelief, liftsByRelief else { return 0 }
-            let entry: (relief: GroundRelief, unitsPerMetre: Float)?
+            let entry: GroundReliefTileLift?
             if let known = reliefByTile[tile] {
                 entry = known
             } else {
-                let terrainZoom = GroundReliefStore.terrainZoom(forTargetZoom: targetZoomBySource[tile] ?? tile.z)
-                entry = groundRelief.relief(for: tile, terrainZoom: terrainZoom).map {
-                    ($0, groundRelief.worldUnitsPerMetre(over: tile, renderMapSize: renderMapSize))
-                }
+                entry = GroundReliefTileLift(store: groundRelief,
+                                             tile: tile,
+                                             targetZoom: targetZoomBySource[tile] ?? tile.z,
+                                             renderMapSize: renderMapSize)
                 reliefByTile[tile] = entry
             }
-            guard let entry else { return 0 }
-            return entry.relief.drawnMetres(atTileUV: uv, datumMetres: groundRelief.datumMetres) * entry.unitsPerMetre
+            return entry?.worldUnits(atTileUV: uv) ?? 0
         }
 
         snapshot.pointInputs.withUnsafeBufferPointer { inputs in

@@ -4,7 +4,7 @@
 #include <metal_stdlib>
 using namespace metal;
 #include "TileShading.h"
-#include "GroundRelief.h"
+#include "../Relief/Shaders/GroundRelief.h"
 #include "../../Render/Shaders/Shared/GroundFog.h"
 
 // Ground shadow source. The flat world pass reads the per-pixel ground

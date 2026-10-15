@@ -32,8 +32,10 @@ final class GroundFlatteningParseTests: XCTestCase {
         ])
     }
 
+    /// `fromTileZoom` nil turns the flattening off.
     private func makeParser(fromTileZoom: Int?, grid: Int = 16) -> TileMvtParser {
         var config = ImmersiveMapSettings.default
+        config.tiles.groundFlattening.isEnabled = fromTileZoom != nil
         config.tiles.groundFlattening.fromTileZoom = fromTileZoom
         config.tiles.groundFlattening.grid = grid
         return TileMvtParser.forTests(settings: config, mapStyle: ProtomapsBasemapDefaultMapStyle())
@@ -266,8 +268,20 @@ final class GroundFlatteningParseTests: XCTestCase {
         XCTAssertEqual(settings.tiles.groundFlattening.fromTileZoom, 14)
         XCTAssertEqual(settings.tiles.groundFlattening.grid, 32)
         let off = settings.groundFlattening(isEnabled: false)
-        XCTAssertNil(off.tiles.groundFlattening.fromTileZoom)
-        XCTAssertEqual(off.groundFlattening(isEnabled: true).tiles.groundFlattening.fromTileZoom, 15,
-                       "Back on without a zoom, it starts from the default")
+        XCTAssertNil(off.tiles.resolvedGroundFlatteningFromTileZoom)
+        XCTAssertEqual(off.groundFlattening(isEnabled: true).tiles.resolvedGroundFlatteningFromTileZoom, 14,
+                       "Back on, it starts from the configured zoom")
+    }
+
+    /// Without a zoom of its own the flattening starts at the tileset's
+    /// deepest zoom, whatever depth the archive is built to.
+    func testTheDefaultFollowsTheTilesetsDeepestZoom() {
+        XCTAssertEqual(ImmersiveMapSettings.default.tiles.resolvedGroundFlatteningFromTileZoom,
+                       ImmersiveMapSettings.default.tiles.coverage.maximumZoomLevel)
+        XCTAssertEqual(ImmersiveMapSettings.default.tileMaximumZoomLevel(14).tiles.resolvedGroundFlatteningFromTileZoom, 14)
+        XCTAssertEqual(ImmersiveMapSettings.default.tileMaximumZoomLevel(16).tiles.resolvedGroundFlatteningFromTileZoom, 16)
+        XCTAssertEqual(ImmersiveMapSettings.default.groundRelief(isEnabled: true).tiles.resolvedGroundFlatteningFromTileZoom,
+                       ImmersiveMapSettings.default.tiles.groundRelief.fromTileZoom,
+                       "The relief's zoom stands in for it")
     }
 }

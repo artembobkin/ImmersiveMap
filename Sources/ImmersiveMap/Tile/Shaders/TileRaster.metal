@@ -23,7 +23,7 @@
 #include <metal_stdlib>
 using namespace metal;
 #include "TileShading.h"
-#include "GroundRelief.h"
+#include "../Relief/Shaders/GroundRelief.h"
 #include "../../Globe/Shaders/GlobeTileProjection.h"
 #include "../../Render/Shaders/Shared/GroundFog.h"
 
