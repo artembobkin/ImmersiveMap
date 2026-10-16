@@ -158,6 +158,12 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
         groundReliefStore?.strengthScale ?? 1
     }
 
+    /// The world units a metre of terrain rises by this frame, one for
+    /// every tile (`GroundReliefStore.worldUnitsPerMetre`).
+    private var liftUnitsPerMetre: Float {
+        groundReliefStore?.worldUnitsPerMetre ?? 0
+    }
+
     /// The model tile (`ModelTileStore.tileZoom`) a map tile lies in.
     static func modelTile(over tile: Tile) -> Tile {
         let shift = max(tile.z - ModelTileStore.tileZoom, 0)
@@ -184,6 +190,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
                 liftBuffers: liftBuffers,
                 liftDatumMetres: liftDatumMetres,
                 liftStrength: liftStrength,
+                liftUnitsPerMetre: liftUnitsPerMetre,
                 extrudedTilePipeline: extrudedTilePipeline,
                 extrudedDepthState: extrudedDepthState)
             return
@@ -217,6 +224,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
                                               liftBuffers: liftBuffers,
                                               liftDatumMetres: liftDatumMetres,
                                               liftStrength: liftStrength,
+                                              liftUnitsPerMetre: liftUnitsPerMetre,
                                               extrudedTilePipeline: extrudedTilePipeline,
                                               extrudedStencilTestState: extrudedStencilTestState,
                                               depthDisabledState: depthDisabledState)

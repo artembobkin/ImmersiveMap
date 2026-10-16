@@ -114,12 +114,24 @@ enum FixtureTiles {
     static let deadEndArchiveURL = URL(string: "http://127.0.0.1:1/planet.pmtiles")!
 
     /// Points the network settings at the given archive the same way the
-    /// shipped defaults point at the hosted one.
+    /// shipped defaults point at the hosted one. The other hosted sources
+    /// the default turns on, the terrain and the models, go to the dead
+    /// port: a test that wants them serves its own, and its template or
+    /// archive is left as it set it.
     private static func sourced(_ settings: ImmersiveMapSettings, archiveURL: URL) -> ImmersiveMapSettings {
         var sourced = settings
         sourced.tiles.network.tileArchiveURL = archiveURL
+        if sourced.tiles.groundRelief.tileURLTemplate == ImmersiveMapSettings.TileSettings.GroundReliefSettings().tileURLTemplate {
+            sourced.tiles.groundRelief.tileURLTemplate = deadEndTerrainTemplate
+        }
+        if sourced.modelArchive?.archiveURL == ImmersiveMapTilesService.modelArchiveURL {
+            sourced.modelArchive?.archiveURL = deadEndArchiveURL
+        }
         return sourced
     }
+
+    /// The terrain tiles on the port nothing listens on.
+    static let deadEndTerrainTemplate = "http://127.0.0.1:1/{z}/{x}/{y}.webp"
 
     /// Both disk caches off, and downloaded regions ignored.
     ///

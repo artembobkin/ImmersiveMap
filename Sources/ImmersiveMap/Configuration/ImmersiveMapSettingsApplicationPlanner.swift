@@ -13,6 +13,7 @@ public enum ImmersiveMapSettingsChangeDomain: String, CaseIterable, Equatable {
     case attribution
     case postProcessing
     case debug
+    case controls
     case landmarks
     case modelArchive
 }
@@ -119,6 +120,10 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         }
         if oldValue.attribution != newValue.attribution {
             mark(.attribution, actions: [.liveApply])
+        }
+        // The controls are views over the map: hidden and shown in place.
+        if oldValue.controls != newValue.controls {
+            mark(.controls, actions: [.liveApply])
         }
         // FXAA is a pass-plan flag read per frame; the sample count is baked
         // into every pipeline state, so it rebuilds the renderer.

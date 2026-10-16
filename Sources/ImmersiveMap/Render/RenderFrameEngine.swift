@@ -363,6 +363,10 @@ final class RenderFrameEngine {
                                                      deltaTime: frameTick.deltaTime,
                                                      halfLife: settings.camera.animatedZoomHalfLife,
                                                      snap: cameraJumped)
+        // The terrain tiles' edges welded to their neighbours' since the
+        // last frame, written before this frame's command buffer, on the
+        // same queue (`GroundReliefStore.applyPendingWelds`).
+        persistentContext.groundReliefStore?.applyPendingWelds(commandQueue: persistentContext.metalContext.commandQueue)
         guard let commandBuffer = persistentContext.metalContext.makeCommandBuffer() else {
             diagnostics.recordSkipReason(.missingCommandBuffer)
             currentDiagnostics = diagnostics
@@ -382,15 +386,23 @@ final class RenderFrameEngine {
         persistentContext.groundReliefStore?.setFrame(zoom: cameraFrameState.planningZoom,
                                                       deltaTime: frameTick.deltaTime,
                                                       snap: cameraJumped)
+        // One rise a metre for every tile this frame, the latitude of the
+        // point the camera looks at.
+        persistentContext.groundReliefStore?.setWorldScale(centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
+                                                           renderMapSize: resolvedPresentation.flatRenderState.renderMapSize)
+        // The slopes are shaded by the scene's light, which the settings
+        // change live, and fade with the distance from the eye.
+        persistentContext.groundReliefStore?.setLight(direction: settings.scene.light.direction,
+                                                      cameraEye: cameraFrameState.cameraEye,
+                                                      fadeCameraDistances: debugOverlayControls.hillshadeFadeCameraDistances())
+        // The mountains' shadows, as the settings and the debug panel say.
+        persistentContext.groundReliefStore?.setCastsShadows(settings.tiles.groundRelief.castsShadows
+            && debugOverlayControls.reliefCastsShadows() != false)
         if let store = persistentContext.groundReliefStore, store.isActive,
            resolvedPresentation.renderSurfaceMode == .flat,
            let range = store.heightRangeMetres {
-            let centre = cameraFrameState.mapCameraState.centerWorldMercator
-            let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: centre.y)
             // At the strength of a mountain: the most any point rises.
-            let unitsPerMetre = Float(ImmersiveMapProjection.worldUnitsPerMeter(
-                latitudeRadians: latitude,
-                renderMapSize: resolvedPresentation.flatRenderState.renderMapSize)) * store.strengthScale
+            let unitsPerMetre = store.worldUnitsPerMetre * store.strengthScale
             reliefHeights = ((range.lowerBound - store.datumMetres) * unitsPerMetre)
                 ... ((range.upperBound - store.datumMetres) * unitsPerMetre)
         }
@@ -431,6 +443,9 @@ final class RenderFrameEngine {
             centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
             flatRenderPan: resolvedPresentation.flatRenderState.pan,
             renderMapSize: resolvedPresentation.flatRenderState.renderMapSize,
+            // The relief's heights as the coverage reads them: the window
+            // reaches the valleys and the summits.
+            groundHeights: reliefHeights,
             scene: settings.scene
         )
 
@@ -479,7 +494,8 @@ final class RenderFrameEngine {
     /// in step with the frame, one to one, and the frame pays for one
     /// tab's data.
     private func publishDebugOverlayHUDSnapshot(frameContext: FrameContext) {
-        guard settings.debug.enableDebugPanel else {
+        // A panel hidden with the map's controls reads nothing.
+        guard settings.debug.enableDebugPanel, settings.controls.isHidden == false else {
             return
         }
         let content = eventSink.debugOverlayHUDContentRequest()

@@ -11,6 +11,7 @@ final class DebugOverlayHUDView: UIView {
         case tiles = 1
         case baseLabels = 2
         case controls = 3
+        case relief = 4
     }
 
     private enum Layout {
@@ -41,7 +42,7 @@ final class DebugOverlayHUDView: UIView {
     private let wireframeLabel = UILabel()
     private let wireframeSwitch = UISwitch()
     private let surfaceModeButton = UIButton(type: .system)
-    private let tabControl = UISegmentedControl(items: ["Stats", "Tiles", "Base labels", "Controls"])
+    private let tabControl = UISegmentedControl(items: ["Stats", "Tiles", "Base labels", "Controls", "Relief"])
     private let tileTraceButton = UIButton(type: .system)
     private let tileTraceStatusLabel = UILabel()
     private let baseLabelTraceButton = UIButton(type: .system)
@@ -59,6 +60,12 @@ final class DebugOverlayHUDView: UIView {
     private let tilesScrollView = UIScrollView()
     private let tilesStatusListView = DebugOverlayTilesStatusListView()
     private let tileCoverageView = DebugOverlayTileCoverageView()
+    /// The relief tab: the terrain store's summary, its tiles from above
+    /// and as cards, as the tiles' tab shows the map tiles.
+    private let reliefStatusLabel = UILabel()
+    private let reliefCoverageView = DebugOverlayReliefCoverageView()
+    private let reliefScrollView = UIScrollView()
+    private let reliefListView = DebugOverlayTilesStatusListView()
     private var snapshot: DebugOverlayHUDSnapshot?
     private var isPanelEnabled = false
     private var isCollapsed = false
@@ -86,6 +93,7 @@ final class DebugOverlayHUDView: UIView {
         switch selectedTab {
         case .stats: .stats
         case .tiles: .tiles
+        case .relief: .relief
         case .baseLabels, .controls: []
         }
     }
@@ -172,7 +180,7 @@ final class DebugOverlayHUDView: UIView {
         baseLabelTraceStatusLabel.lineBreakMode = .byTruncatingMiddle
         containerView.addSubview(baseLabelTraceStatusLabel)
 
-        [zoomLabel, latLonLabel, diagnosticsLabel, tilesStatusLabel].forEach { label in
+        [zoomLabel, latLonLabel, diagnosticsLabel, tilesStatusLabel, reliefStatusLabel].forEach { label in
             label.numberOfLines = 0
             label.lineBreakMode = .byCharWrapping
             label.adjustsFontSizeToFitWidth = false
@@ -186,6 +194,14 @@ final class DebugOverlayHUDView: UIView {
         tilesScrollView.showsVerticalScrollIndicator = true
         containerView.addSubview(tilesScrollView)
         tilesScrollView.addSubview(tilesStatusListView)
+        containerView.addSubview(reliefCoverageView)
+        reliefScrollView.backgroundColor = .clear
+        reliefScrollView.alwaysBounceVertical = false
+        reliefScrollView.delaysContentTouches = false
+        reliefScrollView.showsHorizontalScrollIndicator = false
+        reliefScrollView.showsVerticalScrollIndicator = true
+        containerView.addSubview(reliefScrollView)
+        reliefScrollView.addSubview(reliefListView)
         updateCollapseButtonImage()
         updateTileTraceControl()
         updateBaseLabelTraceControl()
@@ -268,6 +284,8 @@ final class DebugOverlayHUDView: UIView {
         let diagnosticsSize = diagnosticsLabel.sizeThatFits(constrainedSize)
         let tilesStatusSize = tilesStatusLabel.sizeThatFits(constrainedSize)
         let tilesListHeight = tilesStatusListView.preferredHeight(forWidth: maxContentWidth)
+        let reliefStatusSize = reliefStatusLabel.sizeThatFits(constrainedSize)
+        let reliefListHeight = reliefListView.preferredHeight(forWidth: maxContentWidth)
         let traceBlockHeight = selectedTab == .tiles || selectedTab == .baseLabels
             ? Layout.controlRowHeight + Layout.controlSpacing + Layout.traceStatusHeight + sectionSpacing
             : 0
@@ -299,12 +317,22 @@ final class DebugOverlayHUDView: UIView {
             chromeHeight: chromeHeight,
             minimumBodyHeight: tilesStatusSize.height + tilesListSpacing + 48
         )
+        let reliefListSpacing = reliefListHeight > 0 ? sectionSpacing : 0
+        let visibleReliefBodyHeight = DebugOverlayPanelLayout.visibleBodyHeight(
+            preferredBodyHeight: reliefStatusSize.height + sectionSpacing + coverageSide + reliefListSpacing + reliefListHeight,
+            viewportHeight: bounds.height,
+            panelMinY: panelY,
+            chromeHeight: chromeHeight,
+            minimumBodyHeight: reliefStatusSize.height + reliefListSpacing + 48
+        )
         let bodyHeight: CGFloat
         switch selectedTab {
         case .stats:
             bodyHeight = statsBodyHeight
         case .tiles:
             bodyHeight = visibleTilesBodyHeight
+        case .relief:
+            bodyHeight = visibleReliefBodyHeight
         case .baseLabels:
             bodyHeight = baseLabelsBodyHeight
         case .controls:
@@ -470,6 +498,24 @@ final class DebugOverlayHUDView: UIView {
                                        width: contentWidth,
                                        height: updatedTilesScrollHeight)
         tilesScrollView.isScrollEnabled = tilesScrollView.contentSize.height > updatedTilesScrollHeight + 0.5
+
+        reliefStatusLabel.frame = CGRect(x: Layout.contentInset,
+                                         y: textTop,
+                                         width: contentWidth,
+                                         height: reliefStatusSize.height)
+        reliefCoverageView.frame = CGRect(x: Layout.contentInset,
+                                          y: reliefStatusLabel.frame.maxY + sectionSpacing,
+                                          width: coverageSide,
+                                          height: coverageSide)
+        let reliefScrollHeight = max(0, visibleReliefBodyHeight - reliefStatusSize.height - sectionSpacing
+                                         - coverageSide - reliefListSpacing)
+        reliefScrollView.frame = CGRect(x: Layout.contentInset,
+                                        y: reliefCoverageView.frame.maxY + reliefListSpacing,
+                                        width: contentWidth,
+                                        height: reliefScrollHeight)
+        reliefListView.frame = CGRect(x: 0, y: 0, width: contentWidth, height: reliefListHeight)
+        reliefScrollView.contentSize = CGSize(width: contentWidth, height: reliefListHeight)
+        reliefScrollView.isScrollEnabled = reliefListHeight > reliefScrollHeight + 0.5
         updateContentVisibility()
     }
 
@@ -510,6 +556,9 @@ final class DebugOverlayHUDView: UIView {
             tilesStatusLabel.attributedText = nil
             tileCoverageView.apply(coverage: nil)
             tilesStatusListView.apply(tiles: [])
+            reliefStatusLabel.attributedText = nil
+            reliefCoverageView.apply(coverage: nil)
+            reliefListView.apply(cards: [])
             return
         }
 
@@ -538,6 +587,24 @@ final class DebugOverlayHUDView: UIView {
         tilesStatusLabel.attributedText = tilesStatusText
         tileCoverageView.apply(coverage: snapshot.tileCoverage)
         tilesStatusListView.apply(tiles: snapshot.tileLoadingStatusTiles)
+
+        let reliefText = NSMutableAttributedString(
+            attributedString: attributedText(snapshot.reliefStatus?.lines.joined(separator: "\n") ?? "relief: off",
+                                             fontSize: diagnosticsFontSize,
+                                             color: color)
+        )
+        if let status = snapshot.reliefStatus {
+            reliefText.append(attributedText("\nterrain tiles: \(status.tiles.count)",
+                                             fontSize: diagnosticsFontSize,
+                                             color: .systemYellow))
+        }
+        reliefStatusLabel.attributedText = reliefText
+        reliefCoverageView.apply(coverage: snapshot.reliefCoverage)
+        let reliefCountBefore = reliefListView.rowCount
+        reliefListView.apply(cards: snapshot.reliefStatus.map(DebugOverlayTileCard.reliefCards(for:)) ?? [])
+        if reliefListView.rowCount != reliefCountBefore {
+            setNeedsLayout()
+        }
     }
 
     private func updateVisibility() {
@@ -677,6 +744,7 @@ final class DebugOverlayHUDView: UIView {
         let isTilesVisible = selectedTab == .tiles && isContentHidden == false
         let isBaseLabelsVisible = selectedTab == .baseLabels && isContentHidden == false
         let isControlsVisible = selectedTab == .controls && isContentHidden == false
+        let isReliefVisible = selectedTab == .relief && isContentHidden == false
         [tabControl].forEach {
             $0.isHidden = isContentHidden
         }
@@ -701,6 +769,9 @@ final class DebugOverlayHUDView: UIView {
         baseLabelBoundsSwitch.isHidden = isBaseLabelsVisible == false
         roadLabelBoundsLabel.isHidden = isBaseLabelsVisible == false
         roadLabelBoundsSwitch.isHidden = isBaseLabelsVisible == false
+        reliefStatusLabel.isHidden = isReliefVisible == false
+        reliefCoverageView.isHidden = isReliefVisible == false
+        reliefScrollView.isHidden = isReliefVisible == false || reliefListView.rowCount == 0
     }
 
     @objc private func toggleCollapsed() {
@@ -851,7 +922,13 @@ private final class DebugOverlayTilesStatusListView: UIView {
     }
 
     func apply(tiles: [TileLoadingStatusTileSnapshot]) {
-        cards = DebugOverlayTileCard.cards(for: tiles)
+        apply(cards: DebugOverlayTileCard.cards(for: tiles))
+    }
+
+    /// The relief tab's cards, already in their order.
+    func apply(cards: [DebugOverlayTileCard]) {
+        guard self.cards != cards else { return }
+        self.cards = cards
         setNeedsDisplay()
     }
 
@@ -1035,6 +1112,111 @@ private final class DebugOverlayTileCoverageView: UIView {
                                                 .strokeColor: UIColor.black.withAlphaComponent(0.8), .strokeWidth: -2.5])
                 top += font.lineHeight
             }
+        }
+        if coverage.footprint.count >= 3 {
+            let path = UIBezierPath()
+            for (index, vertex) in coverage.footprint.enumerated() {
+                let point = CoverageLayout.point(vertex, window: window, side: side)
+                if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+            }
+            path.close()
+            UIColor.white.withAlphaComponent(CoverageLayout.footprintFillAlpha).setFill()
+            path.fill()
+            UIColor.white.setStroke()
+            path.lineWidth = CoverageLayout.footprintLineWidth
+            path.stroke()
+        }
+        let center = CoverageLayout.point(coverage.center, window: window, side: side)
+        let cross = UIBezierPath()
+        let arm = CoverageLayout.markerRadius * 1.6
+        cross.move(to: CGPoint(x: center.x - arm, y: center.y))
+        cross.addLine(to: CGPoint(x: center.x + arm, y: center.y))
+        cross.move(to: CGPoint(x: center.x, y: center.y - arm))
+        cross.addLine(to: CGPoint(x: center.x, y: center.y + arm))
+        cross.lineWidth = 1.5
+        UIColor.white.setStroke()
+        cross.stroke()
+        if let eye = coverage.eye {
+            let point = CoverageLayout.point(eye, window: window, side: side)
+            let radius = CoverageLayout.markerRadius
+            UIColor.white.setFill()
+            UIBezierPath(ovalIn: CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)).fill()
+        }
+        context.restoreGState()
+    }
+
+    private static func color(_ rgb: SIMD3<Float>) -> UIColor {
+        UIColor(red: CGFloat(rgb.x), green: CGFloat(rgb.y), blue: CGFloat(rgb.z), alpha: 1)
+    }
+}
+
+/// The relief tab's map (`DebugOverlayReliefCoverage`): each terrain tile
+/// as its square in its zoom's colour, filled once it is in, outlined in
+/// yellow while it loads, in grey while it waits for a slot and in red
+/// after a failure, the frame's wanted tiles strong and the ones kept from
+/// earlier frames faint, under the view's footprint, the point the camera
+/// looks at and the eye, as the tiles' map draws them.
+private final class DebugOverlayReliefCoverageView: UIView {
+    private typealias CoverageLayout = DebugOverlayTileCoverageLayout
+
+    private var coverage: DebugOverlayReliefCoverage?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isOpaque = false
+        backgroundColor = .clear
+        isUserInteractionEnabled = false
+        contentMode = .redraw
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func apply(coverage: DebugOverlayReliefCoverage?) {
+        guard self.coverage != coverage else { return }
+        self.coverage = coverage
+        setNeedsDisplay()
+    }
+
+    override func draw(_: CGRect) {
+        let shape = UIBezierPath(roundedRect: bounds, cornerRadius: CoverageLayout.cornerRadius)
+        UIColor.black.withAlphaComponent(0.45).setFill()
+        shape.fill()
+        guard let coverage, let context = UIGraphicsGetCurrentContext() else { return }
+        context.saveGState()
+        shape.addClip()
+        let window = coverage.window
+        let side = bounds.width
+        let font = UIFont.monospacedSystemFont(ofSize: CoverageLayout.labelFontSize, weight: .bold)
+        for square in coverage.drawingOrder {
+            let rect = CoverageLayout.rect(square.square, window: window, side: side)
+            let zoomColor = Self.color(DebugTileZoomPalette.color(forZoom: square.tile.z))
+            let strength: CGFloat = square.isWanted ? 1 : 0.35
+            let stroke: UIColor
+            switch square.state {
+            case .resident:
+                zoomColor.withAlphaComponent(CoverageLayout.tileFillAlpha * strength).setFill()
+                UIBezierPath(rect: rect).fill()
+                stroke = zoomColor
+            case .loading:
+                stroke = .systemYellow
+            case .queued:
+                stroke = .systemGray
+            case .failed:
+                UIColor.systemRed.withAlphaComponent(0.2 * strength).setFill()
+                UIBezierPath(rect: rect).fill()
+                stroke = .systemRed
+            }
+            stroke.withAlphaComponent(strength).setStroke()
+            let outline = UIBezierPath(rect: rect.insetBy(dx: CoverageLayout.tileLineWidth / 2, dy: CoverageLayout.tileLineWidth / 2))
+            outline.lineWidth = CoverageLayout.tileLineWidth
+            outline.stroke()
+            guard square.isWanted, rect.width >= CoverageLayout.labelledSquareSide else { continue }
+            "\(square.tile.x)/\(square.tile.y)/\(square.tile.z)".draw(
+                in: CGRect(x: rect.minX + 4, y: rect.minY + 3, width: rect.width - 8, height: font.lineHeight),
+                withAttributes: [.font: font, .foregroundColor: zoomColor,
+                                 .strokeColor: UIColor.black.withAlphaComponent(0.8), .strokeWidth: -2.5])
         }
         if coverage.footprint.count >= 3 {
             let path = UIBezierPath()

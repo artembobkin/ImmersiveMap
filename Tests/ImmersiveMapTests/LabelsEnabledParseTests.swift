@@ -11,7 +11,7 @@ final class LabelsEnabledParseTests: XCTestCase {
     private static let tile = Tile(x: 9908, y: 5140, z: 14)
 
     private func makeParser(labelsEnabled: Bool) -> TileMvtParser {
-        var config = ImmersiveMapSettings.default
+        var config = ImmersiveMapSettings.defaultWithoutRelief
         config.labels.isEnabled = labelsEnabled
         return TileMvtParser.forTests(settings: config,
                                       mapStyle: ProtomapsBasemapDefaultMapStyle())

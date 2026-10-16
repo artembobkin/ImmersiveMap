@@ -22,7 +22,7 @@ final class BuildingExtrusionToggleTests: XCTestCase {
     }
 
     private func makeParser(extrusion: Bool) -> TileMvtParser {
-        TileMvtParser.forTests(settings: .default,
+        TileMvtParser.forTests(settings: .defaultWithoutRelief,
                                mapStyle: ProtomapsBasemapDefaultMapStyle(theme: Self.theme(extrusion: extrusion)))
     }
 

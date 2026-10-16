@@ -20,7 +20,7 @@ final class RoadContinuationCapTests: XCTestCase {
     private let node: (Int32, Int32) = (1500, 900)
 
     private func parse(_ features: [VectorTileFixture.Feature]) throws -> ParsedTile {
-        try TileMvtParser.forTests(settings: .default)
+        try TileMvtParser.forTests(settings: .defaultWithoutRelief)
             .parse(tile: tile,
                    mvtData: VectorTileFixture.layerTile(layerName: "roads", features: features))
     }

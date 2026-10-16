@@ -1083,7 +1083,7 @@ final class DebugOverlayRenderer {
         if let groundRelief = frameContext.services.groundRelief, groundRelief.isActive {
             terrainText = Self.formatTerrainTag(placeTile.metalTile.tile,
                                                 relief: groundRelief.relief(for: placeTile.metalTile.tile,
-                                                                            terrainZoom: GroundReliefStore.terrainZoom(forTargetZoom: placeTile.placeIn.z)))
+                                                                            targetZoom: placeTile.placeIn.z))
         } else {
             terrainText = nil
         }

@@ -156,17 +156,57 @@ fragment half4 tileRasterFlatFragmentShader(TileRasterFragmentIn in [[stage_in]]
                                             constant GroundFog& groundFog [[buffer(kGroundFogBufferIndex)]],
                                             texture2d<half> raster [[texture(0)]],
                                             texture2d<half> groundShadowMask [[texture(1)]],
+                                            depth2d<float> shadowMap [[texture(2), function_constant(kTileRasterRelief)]],
+                                            constant GroundReliefUniform& relief [[buffer(9), function_constant(kTileRasterRelief)]],
+                                            texture2d<float> reliefHeights [[texture(3), function_constant(kTileRasterRelief)]],
                                             sampler rasterSampler [[sampler(0)]]) {
     half4 color = tileRasterColor(in.uv, raster, rasterSampler, sampling);
+    // The slopes shaded as the vector ground's fills shade them: the
+    // texture's uv is the tile's (tileRasterTextureUv, groundReliefTileUV).
+    if (kTileRasterRelief) {
+        color.rgb = groundReliefHillshade(color.rgb,
+                                          relief.placement.xy + saturate(in.uv) * relief.placement.z,
+                                          in.worldPosition,
+                                          reliefHeights,
+                                          relief);
+    }
     // The ground shadow mask, read as the vector ground reads it
-    // (tileGroundShadowFactor in Tile.metal).
-    constexpr sampler maskSampler(coord::pixel, filter::linear, address::clamp_to_edge);
-    float shadowFactor = shadow.strength > 0.0
-        ? float(groundShadowMask.sample(maskSampler, in.position.xy * kTileRasterGroundShadowMaskScale).r)
-        : 1.0;
+    // (tileGroundShadowFactor in Tile.metal). The mask is the plane's
+    // shadow: on the relief the cascades are sampled at the raised point
+    // itself, as the vector ground's relief variants do.
+    float shadowFactor = 1.0;
+    if (kTileRasterRelief) {
+        shadowFactor = sampleShadowFactor(shadow, shadowMap, in.worldPosition, float3(0.0));
+    } else if (shadow.strength > 0.0) {
+        constexpr sampler maskSampler(coord::pixel, filter::linear, address::clamp_to_edge);
+        shadowFactor = float(groundShadowMask.sample(maskSampler, in.position.xy * kTileRasterGroundShadowMaskScale).r);
+    }
     color.rgb *= shadowColorMultiplier(shadow, half(shadowFactor));
     color.rgb = applyGroundFog(color.rgb, in.worldPosition, groundFog);
     return color;
+}
+
+// MARK: - The relief's shadow
+
+struct TileRasterReliefShadowVertexOut {
+    float4 position [[position]];
+};
+
+/// The ground relief as a shadow caster (GroundReliefShadowCasterSubsystem):
+/// the raster tiles' grid over a placement's square, raised by the terrain
+/// as the ground is, seen from the light. Depth only, no fragment stage.
+vertex TileRasterReliefShadowVertexOut tileRasterReliefShadowVertexShader(uint vertexID [[vertex_id]],
+                                                                          constant float2* grid [[buffer(0)]],
+                                                                          constant ShadowCasterMatrices& casters [[buffer(1)]],
+                                                                          constant float4x4& modelMatrix [[buffer(3)]],
+                                                                          constant GroundReliefUniform& relief [[buffer(9)]],
+                                                                          texture2d<float> reliefHeights [[texture(0)]]) {
+    float2 localPosition = grid[vertexID];
+    float4 worldPosition = modelMatrix * float4(localPosition, 0.0, 1.0);
+    worldPosition.z += groundReliefLift(localPosition, reliefHeights, relief);
+    TileRasterReliefShadowVertexOut out;
+    out.position = casters.lightProjectionView * worldPosition;
+    return out;
 }
 
 /// Mirror of GlobeSurfaceTileUniform.swift, as TileSphere.metal declares it.

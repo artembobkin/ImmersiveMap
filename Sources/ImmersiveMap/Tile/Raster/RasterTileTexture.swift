@@ -3,10 +3,11 @@
 
 import Metal
 
-/// The texture a raster tile is drawn into each frame
-/// (`RasterTileRenderSubsystem`): a square of the ring rule's size, with
-/// its mip chain, private to the GPU, drawn into by the frame's pass and
-/// sampled by the frame's draw.
+/// The texture a raster tile is drawn into (`RasterTileRenderSubsystem`):
+/// a square of the ring rule's size, with its mip chain, private to the
+/// GPU, kept from frame to frame and filled again only when what it shows
+/// changes, copied from the frame's atlas pass and sampled by the frame's
+/// draws.
 enum RasterTileTexture {
     /// The texture format: the colour the engine renders in, unconverted.
     /// The world pass draws into `bgra8Unorm` and blends there, so the

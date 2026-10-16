@@ -16,13 +16,14 @@ struct GroundReliefTileLift {
     let datumMetres: Float
 
     /// `targetZoom` is the ring the tile is drawn in, which picks the
-    /// terrain (`GroundReliefStore.terrainZoom(forTargetZoom:)`).
-    init?(store: GroundReliefStore, tile: Tile, targetZoom: Int, renderMapSize: Double) {
-        guard let relief = store.relief(for: tile, terrainZoom: GroundReliefStore.terrainZoom(forTargetZoom: targetZoom)) else {
+    /// terrain (`GroundReliefStore.terrainZoom(forTargetZoom:)`). The
+    /// rise is the frame's, the ground's (`GroundReliefStore.worldUnitsPerMetre`).
+    init?(store: GroundReliefStore, tile: Tile, targetZoom: Int) {
+        guard let relief = store.relief(for: tile, targetZoom: targetZoom) else {
             return nil
         }
         self.relief = relief
-        self.unitsPerMetre = GroundReliefUniform.worldUnitsPerMetre(over: tile, renderMapSize: renderMapSize)
+        self.unitsPerMetre = store.worldUnitsPerMetre
         self.datumMetres = store.datumMetres
     }
 

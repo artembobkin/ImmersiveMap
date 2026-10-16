@@ -64,6 +64,8 @@ enum RenderGraphFactory {
                                                                     debugOverlayControls: debugOverlayControls,
                                                                     groundShadowMaskTextureProvider: groundShadowMaskTextureProvider,
                                                                     groundShadowMaskFallbackTexture: context.groundShadowMaskFallbackTexture,
+                                                                    shadowMapTextureProvider: shadowMapTextureProvider,
+                                                                    shadowFallbackTexture: context.shadowFallbackTexture,
                                                                     groundReliefStore: context.groundReliefStore,
                                                                     groundFlatteningFromTileZoom: settings.tiles.resolvedGroundFlatteningFromTileZoom)
         let groundShadowMaskSubsystem = GroundShadowMaskRenderSubsystem(pipeline: context.groundShadowMaskPipeline,
@@ -74,7 +76,7 @@ enum RenderGraphFactory {
                                                                         placementStencilWriteState: context.placementStencilWriteState,
                                                                         depthDisabledState: context.depthDisabledState,
                                                                         groundReliefStore: context.groundReliefStore,
-                                                                        groundFlattening: settings.tiles.groundFlattening)
+                                                                        groundFlattening: settings.tiles.resolvedGroundFlattening)
         let rasterTileSubsystem = RasterTileRenderSubsystem(device: context.metalContext.device,
                                                             pipeline: context.rasterTilePipeline,
                                                             settings: settings.tiles.rasterization,
@@ -84,8 +86,10 @@ enum RenderGraphFactory {
                                                             debugOverlayControls: debugOverlayControls,
                                                             groundShadowMaskTextureProvider: groundShadowMaskTextureProvider,
                                                             groundShadowMaskFallbackTexture: context.groundShadowMaskFallbackTexture,
+                                                            shadowMapTextureProvider: shadowMapTextureProvider,
+                                                            shadowFallbackTexture: context.shadowFallbackTexture,
                                                             groundReliefStore: context.groundReliefStore,
-                                                            groundFlattening: settings.tiles.groundFlattening)
+                                                            groundFlattening: settings.tiles.resolvedGroundFlattening)
         let buildingExtrusionSubsystem = BuildingExtrusionRenderSubsystem(extrudedTilePipeline: context.extrudedTilePipeline,
                                                                           extrudedDepthState: context.extrudedDepthState,
                                                                           extrudedStencilTestState: context.extrudedStencilTestState,
@@ -95,6 +99,11 @@ enum RenderGraphFactory {
                                                                           extrusion: settings.scene.extrusion,
                                                                           debugOverlayControls: debugOverlayControls,
                                                                           groundReliefStore: context.groundReliefStore)
+        let reliefShadowCasterSubsystem = GroundReliefShadowCasterSubsystem(device: context.metalContext.device,
+                                                                            pipeline: context.rasterTilePipeline,
+                                                                            depthState: context.extrudedDepthState,
+                                                                            groundReliefStore: context.groundReliefStore,
+                                                                            groundFlattening: settings.tiles.resolvedGroundFlattening)
         let starfieldSubsystem = StarfieldRenderSubsystem(starfieldRenderer: context.starfieldRenderer,
                                                           skyBackdropDepthState: context.skyBackdropDepthState,
                                                           depthDisabledState: context.depthDisabledState)
@@ -148,6 +157,8 @@ enum RenderGraphFactory {
             // depth wants.
             flatMapSurfaceSubsystem,
             rasterTileSubsystem,
+            // The mountains into the shadow map, beside the buildings.
+            reliefShadowCasterSubsystem,
             starfieldSubsystem,
             globeVectorSurfaceSubsystem,
             surfaceLabelSubsystem,

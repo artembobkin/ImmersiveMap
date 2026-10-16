@@ -10,6 +10,12 @@ import AppKit
 @MainActor
 final class ImmersiveMapDebugOverlayRuntime {
     private let hudView = DebugOverlayHUDView()
+    /// The panel's zoom badge (`DebugSettings.showsZoomBadge`), read off
+    /// the same snapshots, laid out in the map's corner.
+    private let zoomBadgeView = DebugOverlayZoomBadgeView()
+    private var showsZoomBadge = false
+    private var layoutBounds: CGRect = .zero
+    private var layoutTopInset: CGFloat = 0
     private let controls: DebugOverlayControlState
     private let hudSnapshotStore: DebugOverlayHUDSnapshotStore
     private let tileTraceRecorder: TileTraceRecorder
@@ -142,6 +148,14 @@ final class ImmersiveMapDebugOverlayRuntime {
             controls?.setLabelPerspectiveMinimumScale(scale)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
+        hudView.onHillshadeFadeChanged = { [weak controls, weak renderRuntime] fade in
+            controls?.setHillshadeFadeCameraDistances(fade)
+            renderRuntime?.requestFrame(reason: .externalStateChanged)
+        }
+        hudView.onReliefShadowsChanged = { [weak controls, weak renderRuntime] isEnabled in
+            controls?.setReliefCastsShadows(isEnabled)
+            renderRuntime?.requestFrame(reason: .externalStateChanged)
+        }
         hudView.onShadowSettingsChanged = { [weak self] shadows in
             guard let self, var settings = currentSettings else { return }
             settingsOverride.shadows = shadows
@@ -185,6 +199,7 @@ final class ImmersiveMapDebugOverlayRuntime {
         hudView.apply(tileTraceSnapshot: tileTraceRecorder.snapshot())
         hudView.apply(baseLabelTraceSnapshot: baseLabelTraceRecorder.snapshot())
         mapView.addSubview(hudView)
+        mapView.addSubview(zoomBadgeView)
     }
 
     #if os(macOS)
@@ -239,6 +254,21 @@ final class ImmersiveMapDebugOverlayRuntime {
     func layout(in bounds: CGRect, safeAreaTopInset: CGFloat) {
         hudView.safeAreaTopInset = safeAreaTopInset
         hudView.frame = bounds
+        layoutBounds = bounds
+        layoutTopInset = safeAreaTopInset
+        zoomBadgeView.layout(in: bounds, topInset: safeAreaTopInset)
+    }
+
+    /// The badge on the panel's snapshot: shown with the panel while it
+    /// asks for it, hidden without a snapshot to read.
+    private func applyZoomBadge(_ snapshot: DebugOverlayHUDSnapshot?) {
+        guard showsZoomBadge, let snapshot else {
+            zoomBadgeView.isHidden = true
+            return
+        }
+        zoomBadgeView.apply(zoom: snapshot.zoom, planningZoom: snapshot.cameraZoom)
+        zoomBadgeView.layout(in: layoutBounds, topInset: layoutTopInset)
+        zoomBadgeView.isHidden = false
     }
 
     func apply(snapshot: DebugOverlayHUDSnapshot?) {
@@ -253,8 +283,14 @@ final class ImmersiveMapDebugOverlayRuntime {
         if appGroundFog == nil, settingsOverride.groundFog == nil {
             appGroundFog = settings.scene.groundFog
         }
-        hudView.apply(isDebugPanelEnabled: settings.debug.enableDebugPanel,
+        // Hidden with the map's controls (`ControlsSettings.isHidden`), the
+        // panel keeps what was dragged in it and only stops showing and
+        // reading the frames.
+        let showsPanel = settings.debug.enableDebugPanel && settings.controls.isHidden == false
+        hudView.apply(isDebugPanelEnabled: showsPanel,
                       controls: controls.snapshot())
+        showsZoomBadge = showsPanel && settings.debug.showsZoomBadge
+        applyZoomBadge(appliedHUDSnapshot)
         #if os(macOS)
         hudView.apply(shadowSettings: settings.scene.shadows,
                       sunDirection: settings.scene.light.direction)
@@ -265,7 +301,13 @@ final class ImmersiveMapDebugOverlayRuntime {
             // The panel's reach goes with the panel, like its other values.
             controls.setLocalLabelMaximumDistanceMeters(nil)
             controls.setLabelPerspectiveMinimumScale(nil)
+            controls.setHillshadeFadeCameraDistances(nil)
+            controls.setReliefCastsShadows(nil)
         }
+        hudView.apply(reliefCastsShadows: controls.reliefCastsShadows() ?? settings.tiles.groundRelief.castsShadows)
+        let hillshade = settings.mapStyle.vectorTileStyle.hillshade
+        hudView.apply(hillshadeFade: controls.hillshadeFadeCameraDistances()
+            ?? hillshade.fadeStartCameraDistances ... max(hillshade.fadeStartCameraDistances, hillshade.fadeEndCameraDistances))
         hudView.apply(labelMinimumScale: controls.labelPerspectiveMinimum()
             ?? settings.labels.base.perspectiveMinimumScale)
         hudView.apply(localLabelDistanceMeters: controls.localLabelMaximumDistance()
@@ -273,7 +315,7 @@ final class ImmersiveMapDebugOverlayRuntime {
         #endif
         hudView.apply(tileTraceSnapshot: tileTraceRecorder.snapshot())
         hudView.apply(baseLabelTraceSnapshot: baseLabelTraceRecorder.snapshot())
-        if settings.debug.enableDebugPanel {
+        if showsPanel {
             startHUDSnapshotTimer()
             flushPendingHUDSnapshot()
         } else {
@@ -281,6 +323,7 @@ final class ImmersiveMapDebugOverlayRuntime {
             consumedHUDSnapshotVersion = hudSnapshotStore.publish(nil)
             appliedHUDSnapshot = nil
             hudView.apply(snapshot: nil)
+            applyZoomBadge(nil)
         }
     }
 
@@ -320,6 +363,7 @@ final class ImmersiveMapDebugOverlayRuntime {
             consumedHUDSnapshotVersion = value.version
             appliedHUDSnapshot = value.snapshot
             hudView.apply(snapshot: value.snapshot)
+            applyZoomBadge(value.snapshot)
             return
         }
         refreshTileLoadingStatusBetweenFrames()

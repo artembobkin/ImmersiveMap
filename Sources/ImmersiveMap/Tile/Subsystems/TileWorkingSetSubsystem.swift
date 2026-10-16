@@ -41,6 +41,10 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
     private var plannedCoverageVersion: UInt64?
     private var plannedContentVersion: UInt64?
     private var plannedReliefVersion: UInt64?
+    /// Whether the frame was on the terrain when the placements were last
+    /// planned: a tile parsed in layers draws differently on it
+    /// (`drawingOnTheRelief`).
+    private var plannedReliefActive: Bool?
     private var latestRequestedTilesCount: Int = 0
     private var latestCounts = (visible: 0, demanded: 0, ready: 0)
 
@@ -59,11 +63,26 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
         self.buildingsMinimumTileZoom = buildingsMinimumTileZoom
     }
 
-    /// Starts the load of the terrain a placed tile is raised by, the
-    /// ring's over it, so it is on its way from the tile's first frame.
-    private func requestTerrain(_ tile: Tile, tileZoomLevel: Int) {
-        guard let groundReliefStore, groundReliefStore.isActive else { return }
-        _ = groundReliefStore.relief(for: tile, terrainZoom: GroundReliefStore.terrainZoom(forTargetZoom: tileZoomLevel))
+    /// The texture's size a tile parsed in layers draws at on the relief
+    /// (`drawingOnTheRelief`): a stand-in near the camera, for the moments
+    /// its slot's own tile loads.
+    static let layeredTileRasterSize = 512
+
+    /// A placement as it draws on the relief. A tile parsed in layers, one
+    /// coarser than the relief's zoom (`GroundReliefSettings.appearZoom`),
+    /// cannot rise as geometry: placed to draw as geometry (a stand-in for
+    /// a slot still loading, a ring the rules draw as geometry), it draws
+    /// its ground from a texture on the raster tiles' raised grid instead
+    /// (`RasterTileRenderSubsystem`), and leaves its lines out, which could
+    /// not rise either. Every other placement is as planned.
+    static func drawingOnTheRelief(_ placement: PlaceTile) -> PlaceTile {
+        guard placement.rules.raster == nil, placement.metalTile.tileBuffers.ground.isFlattened == false else {
+            return placement
+        }
+        var rules = placement.rules
+        rules.raster = RasterTileSpec(size: layeredTileRasterSize)
+        rules.drawsLines = false
+        return PlaceTile(metalTile: placement.metalTile, placeIn: placement.placeIn, slot: placement.slot, rules: rules)
     }
 
     func update(frameContext: FrameContext) {
@@ -84,8 +103,10 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
         // do. A tile in flight keeps the per-frame request going, which
         // the loader's retries rely on.
         let coverageVersion = visibleContent.coverageVersion
+        let reliefActive = groundReliefStore?.isActive ?? false
         if coverageVersion == plannedCoverageVersion,
            tileRenderStore.cacheContentVersion == plannedContentVersion,
+           reliefActive == plannedReliefActive,
            latestRequestedTilesCount == 0 {
             publishState(frameContext: frameContext,
                          visibleTilesCount: latestCounts.visible,
@@ -127,22 +148,23 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
         let placementChanged = coverageVersion != plannedCoverageVersion
             || contentVersion != plannedContentVersion
             || reliefVersion != plannedReliefVersion
+            || reliefActive != plannedReliefActive
         // What is resident now, read only when something is planned over it.
         let resident = placementChanged ? tileRenderStore.residentTiles() : [:]
         if placementChanged {
-            for tile in resident.keys {
-                requestTerrain(tile, tileZoomLevel: tileZoomLevel)
-            }
-            placeTilesContext = TilePlacementPlanner.buildPlacements(targets: targets,
-                                                                     resident: resident,
-                                                                     zoom: tileZoomLevel,
-                                                                     backdropZoomLevel: backdropZoomLevel,
-                                                                     previous: placeTilesContext.tilePlacements,
-                                                                     slotRules: { slot in
-                                                                         TileDrawRules(drawsLines: visibleContent.linelessTiles.contains(slot) == false,
-                                                                                       drawsLabels: visibleContent.unlabelledTiles.contains(slot) == false,
-                                                                                       raster: visibleContent.rasterTiles[slot])
-                                                                     })
+            let planned = TilePlacementPlanner.buildPlacements(targets: targets,
+                                                               resident: resident,
+                                                               zoom: tileZoomLevel,
+                                                               backdropZoomLevel: backdropZoomLevel,
+                                                               previous: placeTilesContext.tilePlacements,
+                                                               slotRules: { slot in
+                                                                   TileDrawRules(drawsLines: visibleContent.linelessTiles.contains(slot) == false,
+                                                                                 drawsLabels: visibleContent.unlabelledTiles.contains(slot) == false,
+                                                                                 raster: visibleContent.rasterTiles[slot])
+                                                               })
+            placeTilesContext = reliefActive && frameContext.renderSurfaceMode == .flat
+                ? PlaceTilesContext(tilePlacements: planned.tilePlacements.map(Self.drawingOnTheRelief))
+                : planned
             // The buildings: the tiles the ground shows, from the
             // buildings' zoom on, in the near field (see the planner).
             let eyeGroundCell: SIMD2<Double>? = frameContext.renderSurfaceMode == .flat
@@ -158,6 +180,19 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
             plannedCoverageVersion = coverageVersion
             plannedContentVersion = contentVersion
             plannedReliefVersion = reliefVersion
+            plannedReliefActive = reliefActive
+        }
+
+        // The terrain the frame reads, nearest first, asked for once a
+        // frame, as the map tiles are: what the camera reads moves with
+        // it between replans. Off the terrain, nothing.
+        if let groundReliefStore {
+            groundReliefStore.request(tiles: groundReliefStore.isActive
+                ? GroundReliefDemand.tiles(groundPlacements: placeTilesContext.tilePlacements,
+                                           buildingPlacements: buildingPlaceTilesContext.tilePlacements,
+                                           centerWorldMercator: visibleContent.centerWorldMercator,
+                                           zooms: groundReliefStore.zooms)
+                : [])
         }
 
         let visibleTilesCount = targets.count

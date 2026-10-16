@@ -25,12 +25,13 @@ final class ImmersiveMapControlsRuntime {
          mapPanGesture: UIPanGestureRecognizer,
          settings: ImmersiveMapSettings) {
         let controlZones = settings.camera.controlZones
+        let isHidden = settings.controls.isHidden
         self.pitchControlZone = PitchControlZone(mapView: mapView,
                                                  mapPanGesture: mapPanGesture,
-                                                 isEnabled: controlZones.isPitchZoneEnabled)
+                                                 isEnabled: controlZones.isPitchZoneEnabled && isHidden == false)
         self.zoomControlZone = ZoomControlZone(mapView: mapView,
                                                mapPanGesture: mapPanGesture,
-                                               isEnabled: controlZones.isZoomZoneEnabled)
+                                               isEnabled: controlZones.isZoomZoneEnabled && isHidden == false)
         self.scrollZoomGesture = ScrollZoomGesture(mapView: mapView)
         self.attributionBadge = AttributionBadgeView(attribution: settings.resolvedAttribution,
                                                      settings: settings.attribution)
@@ -90,10 +91,13 @@ final class ImmersiveMapControlsRuntime {
         attributionBadge.apply(attribution, settings: settings)
     }
 
-    func applyControlZones(_ controlZones: ImmersiveMapSettings.CameraSettings.ControlZoneSettings) {
+    /// The zones as configured, or none while the map's controls are
+    /// hidden (`ControlsSettings.isHidden`).
+    func applyControlZones(_ controlZones: ImmersiveMapSettings.CameraSettings.ControlZoneSettings,
+                           isHidden: Bool) {
         #if canImport(UIKit)
-        pitchControlZone.isEnabled = controlZones.isPitchZoneEnabled
-        zoomControlZone.isEnabled = controlZones.isZoomZoneEnabled
+        pitchControlZone.isEnabled = controlZones.isPitchZoneEnabled && isHidden == false
+        zoomControlZone.isEnabled = controlZones.isZoomZoneEnabled && isHidden == false
         #endif
     }
 

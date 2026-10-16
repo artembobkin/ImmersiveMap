@@ -200,6 +200,13 @@ enum ShadowFrameStateResolver {
         let spec: CascadeSpec
         /// The visible ground the window has to cover, in flat world XY.
         let footprint: [SIMD2<Float>]
+        /// How far the ground falls and rises about the plane, in world
+        /// units: the ground relief's heights over the frame's datum
+        /// (`GroundReliefStore`), the plane alone without it. The window's
+        /// depth spans the lowest ground to the highest ground plus the
+        /// caster-height cap, so a valley's floor and a building on a
+        /// summit are both inside it.
+        var groundHeights: ClosedRange<Float> = 0 ... 0
         let normalOffsetTexels: Float
         /// Tap spread of the tent, clamped to `softnessRange`.
         let softness: Float
@@ -214,6 +221,7 @@ enum ShadowFrameStateResolver {
                               centerWorldMercator: SIMD2<Double>,
                               flatRenderPan: SIMD2<Double>,
                               renderMapSize: Double,
+                              groundHeights: ClosedRange<Float>? = nil,
                               scene: ImmersiveMapSettings.SceneSettings) -> FitInputs? {
         guard renderSurfaceMode == .flat,
               scene.shadows.isEnabled,
@@ -268,6 +276,7 @@ enum ShadowFrameStateResolver {
                                          normalOffsetTexelsRange.lowerBound),
                                      normalOffsetTexelsRange.upperBound)
 
+        let ground = groundHeights.map { min($0.lowerBound, 0) ... max($0.upperBound, 0) } ?? 0 ... 0
         return FitInputs(lightDirection: lightDirection,
                          lightView: lightView,
                          cameraEye: cameraEye,
@@ -276,6 +285,7 @@ enum ShadowFrameStateResolver {
                          farRadius: spec.radius,
                          spec: spec,
                          footprint: footprint,
+                         groundHeights: ground,
                          normalOffsetTexels: normalOffsetTexels,
                          softness: min(max(scene.shadows.softness, softnessRange.lowerBound),
                                        softnessRange.upperBound),
@@ -410,6 +420,7 @@ enum ShadowFrameStateResolver {
 
     static func cascadeExtremes(footprint: [SIMD2<Float>],
                                 maxCasterHeight: Float,
+                                groundHeights: ClosedRange<Float> = 0 ... 0,
                                 lightView: matrix_float4x4) -> CascadeExtremes? {
         guard footprint.isEmpty == false,
               maxCasterHeight > 0, maxCasterHeight.isFinite else {
@@ -425,8 +436,10 @@ enum ShadowFrameStateResolver {
         // The lifted copies matter for the light-space extent, which grows
         // with the horizontal light tilt: a caster that tall standing on the
         // footprint's rim still has to be inside the window.
+        // Over a relief the ground lies anywhere from its lowest to its
+        // highest height, and a caster stands on the highest.
         for point in footprint {
-            for z in [Float(0), maxCasterHeight] {
+            for z in [groundHeights.lowerBound, groundHeights.upperBound + maxCasterHeight] {
                 let view = lightView * SIMD4<Float>(point.x, point.y, z, 1)
                 minX = min(minX, view.x)
                 maxX = max(maxX, view.x)
@@ -482,6 +495,7 @@ enum ShadowFrameStateResolver {
                                     margin: radiusMargin)
         guard let extremes = cascadeExtremes(footprint: fitFootprint,
                                              maxCasterHeight: inputs.spec.maxCasterHeight,
+                                             groundHeights: inputs.groundHeights,
                                              lightView: inputs.lightView) else {
             return nil
         }
@@ -546,6 +560,7 @@ enum ShadowFrameStateResolver {
         let spec = inputs.spec
         guard let extremes = cascadeExtremes(footprint: inputs.footprint,
                                              maxCasterHeight: spec.maxCasterHeight,
+                                             groundHeights: inputs.groundHeights,
                                              lightView: inputs.lightView) else {
             return false
         }

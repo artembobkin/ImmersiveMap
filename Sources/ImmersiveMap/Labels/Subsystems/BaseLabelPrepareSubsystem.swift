@@ -481,7 +481,6 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         // the camera's depth of the point it looks at, the world origin.
         let maximumDepth = (cameraMatrix * SIMD4<Float>(0, 0, 0, 1)).w * max(distanceScale, 0)
         let groundRelief = frameContext.services.groundRelief
-        let renderMapSize = frameContext.resolvedPresentation.flatRenderState.renderMapSize
         // The ring each source is raised by: its finest target's.
         let targetZoomBySource = groundRelief == nil
             ? [:] : frameContext.sharedState.tilePlacementState.placeTilesContext.targetZoomBySource()
@@ -512,8 +511,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             if let groundRelief,
                let tileLift = GroundReliefTileLift(store: groundRelief,
                                                    tile: record.ownerKey.tile,
-                                                   targetZoom: targetZoomBySource[record.ownerKey.tile] ?? record.ownerKey.z,
-                                                   renderMapSize: renderMapSize) {
+                                                   targetZoom: targetZoomBySource[record.ownerKey.tile] ?? record.ownerKey.z) {
                 lift = tileLift.worldUnits(atTileUV:)
             }
             RoadLabelPlacer.place(geometry: record.geometry,

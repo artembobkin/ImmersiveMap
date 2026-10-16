@@ -25,6 +25,10 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     private let debugOverlayControls: DebugOverlayControlState
     private let groundShadowMaskTextureProvider: () -> MTLTexture?
     private let groundShadowMaskFallbackTexture: MTLTexture
+    /// The shadow map the relief's draws sample at their raised points
+    /// (`GroundShadowMaskBinding.cascades`), and its depth fallback.
+    private let shadowMapTextureProvider: () -> MTLTexture?
+    private let shadowFallbackTexture: MTLTexture?
     private let groundReliefStore: GroundReliefStore?
     /// The tile zoom the ground is flattened from, the coarsest the
     /// terrain under the screen's centre is read at.
@@ -42,6 +46,8 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
          debugOverlayControls: DebugOverlayControlState,
          groundShadowMaskTextureProvider: @escaping () -> MTLTexture?,
          groundShadowMaskFallbackTexture: MTLTexture,
+         shadowMapTextureProvider: @escaping () -> MTLTexture? = { nil },
+         shadowFallbackTexture: MTLTexture? = nil,
          groundReliefStore: GroundReliefStore? = nil,
          groundFlatteningFromTileZoom: Int? = nil) {
         self.tilePipeline = tilePipeline
@@ -52,6 +58,8 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         self.debugOverlayControls = debugOverlayControls
         self.groundShadowMaskTextureProvider = groundShadowMaskTextureProvider
         self.groundShadowMaskFallbackTexture = groundShadowMaskFallbackTexture
+        self.shadowMapTextureProvider = shadowMapTextureProvider
+        self.shadowFallbackTexture = shadowFallbackTexture
         self.groundReliefStore = groundReliefStore
         self.groundFlatteningFromTileZoom = groundFlatteningFromTileZoom
     }
@@ -76,7 +84,9 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         let isWireframeEnabled = debugOverlayControls.snapshot().wireframeEnabled
         let groundShadowMask = GroundShadowMaskBinding.resolve(frameContext: frameContext,
                                                                maskTexture: groundShadowMaskTextureProvider(),
-                                                               fallbackTexture: groundShadowMaskFallbackTexture)
+                                                               fallbackTexture: groundShadowMaskFallbackTexture,
+                                                               shadowMapTexture: shadowMapTextureProvider(),
+                                                               shadowFallbackTexture: shadowFallbackTexture ?? groundShadowMaskFallbackTexture)
         let drawableSizePx = SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height))
         // The drawer sets its own depth-stencil states per group: the
         // opaque ground writes the rank depth, the road buckets write

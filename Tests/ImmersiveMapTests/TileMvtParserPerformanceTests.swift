@@ -20,7 +20,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         let tile = Tile(x: 39_167, y: 21_090, z: 16)
         let mvtData = MvtFixtureTileMessages.denseCity().serializedData()
 
-        let config = ImmersiveMapSettings.default
+        let config = ImmersiveMapSettings.defaultWithoutRelief
         let parser = TileMvtParser.forTests(settings: config)
 
         // The benchmark is only meaningful if the tile drives every stage.
@@ -52,7 +52,7 @@ final class TileMvtParserPerformanceTests: XCTestCase {
         let tile = Tile(x: 9, y: 5, z: 4)
         let mvtData = MvtFixtureTileMessages.oceanOverview().serializedData()
 
-        let config = ImmersiveMapSettings.default
+        let config = ImmersiveMapSettings.defaultWithoutRelief
         let parser = TileMvtParser.forTests(settings: config)
 
         let parsed = try parser.parse(tile: tile, mvtData: mvtData)

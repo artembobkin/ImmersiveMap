@@ -5,11 +5,20 @@
 
 import AppKit
 
-/// Renders a compact attribution overlay (AppKit).
+/// Renders the compact attribution overlay (AppKit), as UIKit's does: plain
+/// bold text over the map, no plate, each glyph in a dark halo that fades
+/// out around it so the words read on any map colour underneath.
 /// Owns only the badge labels, styling and layout; map state stays in the
 /// surrounding runtimes. Size, position and text color come from
 /// `AttributionSettings`; the geometry lives in `AttributionBadgeLayoutMath`.
 final class AttributionBadgeView: NSView {
+    /// The halo around every glyph, UIKit's badge's: a dark shadow on the
+    /// glyph itself, blurred by this many points, so its edge fades into the
+    /// map rather than ends in a hard line, which a stroke on glyphs this
+    /// small draws ragged.
+    static let haloBlurRadius: CGFloat = 3.5
+    static let haloColor = NSColor.black.withAlphaComponent(0.95)
+
     private let titleLabel = NSTextField(labelWithString: "")
     private let copyrightLabel = NSTextField(labelWithString: "")
     private var linkURL: URL?
@@ -27,10 +36,13 @@ final class AttributionBadgeView: NSView {
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        wantsLayer = true
-        layer?.backgroundColor = NSColor.black.withAlphaComponent(0.56).cgColor
-        layer?.masksToBounds = true
 
+        for label in [titleLabel, copyrightLabel] {
+            label.drawsBackground = false
+            label.isBezeled = false
+            label.isEditable = false
+            label.isSelectable = false
+        }
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.maximumNumberOfLines = 1
 
@@ -58,7 +70,7 @@ final class AttributionBadgeView: NSView {
         return super.hitTest(point)
     }
 
-    /// Empty attribution hides the badge entirely: no point drawing an empty plate.
+    /// Empty attribution hides the badge entirely: no point drawing an empty badge.
     /// An empty copyright collapses the second line: the field must be hidden,
     /// not just emptied - an empty NSTextField still measures a nonzero size.
     func apply(_ attribution: ImmersiveMapAttribution,
@@ -68,26 +80,36 @@ final class AttributionBadgeView: NSView {
         margin = CGFloat(settings.margin)
         isHidden = settings.isVisible == false || attribution.isEmpty
         linkURL = attribution.linkURL
-        titleLabel.stringValue = attribution.title
-        copyrightLabel.stringValue = attribution.copyright
         copyrightLabel.isHidden = attribution.copyright.isEmpty
-        titleLabel.font = .systemFont(ofSize: metrics.titleFontSize, weight: .semibold)
-        copyrightLabel.font = .systemFont(ofSize: metrics.copyrightFontSize, weight: .regular)
-        layer?.cornerRadius = metrics.cornerRadius
-        applyTextColor(settings.textColor)
+        let color = settings.textColor ?? SIMD4<Float>(1, 1, 1, 1)
+        titleLabel.attributedStringValue = Self.haloText(attribution.title,
+                                                         font: .systemFont(ofSize: metrics.titleFontSize, weight: .bold),
+                                                             color: color,
+                                                             alpha: 1)
+        copyrightLabel.attributedStringValue = Self.haloText(attribution.copyright,
+                                                             font: .systemFont(ofSize: metrics.copyrightFontSize, weight: .semibold),
+                                                                 color: color,
+                                                                 alpha: 0.76)
         needsLayout = true
     }
 
-    private func applyTextColor(_ textColor: SIMD4<Float>?) {
-        let color = textColor ?? SIMD4<Float>(1, 1, 1, 1)
-        titleLabel.textColor = NSColor(red: CGFloat(color.x),
-                                       green: CGFloat(color.y),
-                                       blue: CGFloat(color.z),
-                                       alpha: CGFloat(color.w))
-        copyrightLabel.textColor = NSColor(red: CGFloat(color.x),
-                                           green: CGFloat(color.y),
-                                           blue: CGFloat(color.z),
-                                           alpha: CGFloat(color.w) * 0.76)
+    /// The text filled in the settings' colour in a dark halo that fades
+    /// out around every glyph, which is what keeps it legible over water,
+    /// forest or a dark palette alike without a plate behind it.
+    static func haloText(_ text: String, font: NSFont, color: SIMD4<Float>, alpha: CGFloat) -> NSAttributedString {
+        let fill = NSColor(red: CGFloat(color.x),
+                           green: CGFloat(color.y),
+                           blue: CGFloat(color.z),
+                           alpha: CGFloat(color.w) * alpha)
+        let halo = NSShadow()
+        halo.shadowOffset = .zero
+        halo.shadowBlurRadius = haloBlurRadius
+        halo.shadowColor = haloColor.withAlphaComponent(haloColor.alphaComponent * alpha)
+        return NSAttributedString(string: text, attributes: [
+            .font: font,
+            .foregroundColor: fill,
+            .shadow: halo
+        ])
     }
 
     @objc private func handleClick() {
@@ -112,19 +134,6 @@ final class AttributionBadgeView: NSView {
             margin: margin,
             isRightToLeft: userInterfaceLayoutDirection == .rightToLeft
         )
-        // Same min/max mapping as UIKit: the view is flipped, so AppKit keeps
-        // the layer geometry flipped with it and minY renders at the top.
-        layer?.maskedCorners = Self.cornerMask(
-            for: AttributionBadgeLayoutMath.roundedCorners(badgeFrame: frame, bounds: bounds))
-    }
-
-    private static func cornerMask(for rounded: AttributionBadgeLayoutMath.RoundedCorners) -> CACornerMask {
-        var mask: CACornerMask = []
-        if rounded.topLeft { mask.insert(.layerMinXMinYCorner) }
-        if rounded.topRight { mask.insert(.layerMaxXMinYCorner) }
-        if rounded.bottomLeft { mask.insert(.layerMinXMaxYCorner) }
-        if rounded.bottomRight { mask.insert(.layerMaxXMaxYCorner) }
-        return mask
     }
 
     private func badgeSizeThatFits(_ size: CGSize) -> CGSize {

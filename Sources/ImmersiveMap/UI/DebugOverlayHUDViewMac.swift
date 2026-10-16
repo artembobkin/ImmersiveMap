@@ -30,6 +30,8 @@ final class DebugOverlayHUDView: NSView {
         static let headerHeight: CGFloat = 30.0
         static let groupHeaderHeight: CGFloat = 24.0
         static let controlRowHeight: CGFloat = 28.0
+        /// The sun picker's views, each a square of this side at most.
+        static let sunPickerSide: CGFloat = 200.0
         static let controlSpacing: CGFloat = 6.0
         static let groupSpacing: CGFloat = 16.0
         static let traceStatusHeight: CGFloat = 24.0
@@ -94,6 +96,13 @@ final class DebugOverlayHUDView: NSView {
     private let tilesStatusListView = DebugOverlayTilesStatusListView()
     private let tileCoverageView = DebugOverlayTileCoverageView()
 
+    /// The relief tab: the terrain store's summary, its tiles from above
+    /// and as cards, as the tiles' tab shows the map tiles.
+    private let reliefGroupLabel = NSTextField(labelWithString: "Relief")
+    private let reliefStatusLabel = NSTextField(wrappingLabelWithString: "")
+    private let reliefCoverageView = DebugOverlayReliefCoverageView()
+    private let reliefListView = DebugOverlayTilesStatusListView()
+
     private let baseLabelsGroupLabel = NSTextField(labelWithString: "Base labels")
     private let baseLabelTraceButton = NSButton()
     private let baseLabelTraceStatusLabel = NSTextField(labelWithString: "")
@@ -113,6 +122,7 @@ final class DebugOverlayHUDView: NSView {
     /// The local detail's reach from the camera, in metres.
     private static let localLabelDistanceRange: ClosedRange<Double> = 25...2000
 
+    private let lightGroupLabel = NSTextField(labelWithString: "Light")
     private let shadowsGroupLabel = NSTextField(labelWithString: "Shadows")
     private let shadowsEnabledLabel = NSTextField(labelWithString: "")
     private let shadowsEnabledSwitch = NSSwitch()
@@ -135,9 +145,19 @@ final class DebugOverlayHUDView: NSView {
     private let shadowSoftnessLabel = NSTextField(labelWithString: "")
     private let shadowSoftnessSlider = NSSlider()
     private let sunAzimuthLabel = NSTextField(labelWithString: "")
-    private let sunAzimuthSlider = NSSlider()
     private let sunElevationLabel = NSTextField(labelWithString: "")
-    private let sunElevationSlider = NSSlider()
+    /// The sun picked on the sky from above, turned with the view, and on
+    /// its quarter circle from the side (`DebugOverlaySunDial`).
+    private let sunDialView = DebugOverlaySunDialView()
+    private let sunElevationView = DebugOverlaySunElevationView()
+    private let hillshadeFadeLabel = NSTextField(labelWithString: "")
+    /// The mountains' shadows (`GroundReliefSettings.castsShadows`).
+    private let reliefShadowsLabel = NSTextField(labelWithString: "")
+    private let reliefShadowsSwitch = NSSwitch()
+    private let hillshadeFadeSlider = DebugOverlayRangeSliderView()
+    /// The hillshade's fade, in the eye's distances to the point it looks
+    /// at (`ImmersiveMapHillshade.fadeStartCameraDistances`).
+    private static let hillshadeFadeRange: ClosedRange<Double> = 0...12
 
     private let fogGroupLabel = NSTextField(labelWithString: "Horizon")
     private let fogEnabledLabel = NSTextField(labelWithString: "")
@@ -299,6 +319,7 @@ final class DebugOverlayHUDView: NSView {
         case .all: .all
         case .stats: .stats
         case .tiles: .tiles
+        case .relief: .relief
         case .labels, .shadows, .sky, .map, .export: []
         }
     }
@@ -312,6 +333,10 @@ final class DebugOverlayHUDView: NSView {
     var onLocalLabelDistanceChanged: ((Float) -> Void)?
     /// The labels' shrink floor, on every drag.
     var onLabelMinimumScaleChanged: ((Float) -> Void)?
+    /// The hillshade's fade dragged to, in the eye's distances.
+    var onHillshadeFadeChanged: ((ClosedRange<Float>) -> Void)?
+    /// The mountains' shadows switched on or off.
+    var onReliefShadowsChanged: ((Bool) -> Void)?
 
     var onSurfaceModeSwitchRequested: (() -> Void)?
     var onTileTraceRecordingToggle: (() -> Void)?
@@ -355,10 +380,8 @@ final class DebugOverlayHUDView: NSView {
 
         tabScrollView.drawsBackground = false
         tabScrollView.hasVerticalScroller = false
-        tabScrollView.hasHorizontalScroller = true
-        tabScrollView.autohidesScrollers = true
-        tabScrollView.scrollerStyle = .overlay
-        tabScrollView.horizontalScrollElasticity = .allowed
+        tabScrollView.hasHorizontalScroller = false
+        tabScrollView.horizontalScrollElasticity = .none
         tabScrollView.verticalScrollElasticity = .none
         tabScrollView.documentView = tabStripView
         containerView.addSubview(tabScrollView)
@@ -371,8 +394,8 @@ final class DebugOverlayHUDView: NSView {
         }
         updateTabButtons()
 
-        [statsGroupLabel, tilesGroupLabel, baseLabelsGroupLabel, labelDistanceGroupLabel,
-         shadowsGroupLabel, fogGroupLabel, groundFogGroupLabel, atmosphereGroupLabel, controlsGroupLabel,
+        [statsGroupLabel, tilesGroupLabel, reliefGroupLabel, baseLabelsGroupLabel, labelDistanceGroupLabel,
+         lightGroupLabel, shadowsGroupLabel, fogGroupLabel, groundFogGroupLabel, atmosphereGroupLabel, controlsGroupLabel,
          exportGroupLabel].forEach(configureGroupLabel)
 
         configureControlLabel(axesLabel, text: "Axes")
@@ -401,6 +424,23 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(shadowSoftnessLabel, text: "")
         configureControlLabel(sunAzimuthLabel, text: "")
         configureControlLabel(sunElevationLabel, text: "")
+        configureControlLabel(hillshadeFadeLabel, text: "")
+        configureControlLabel(reliefShadowsLabel, text: "Mountain shadows")
+        configureSwitch(reliefShadowsSwitch, action: #selector(reliefShadowsSwitchChanged))
+        hillshadeFadeSlider.range = Self.hillshadeFadeRange
+        hillshadeFadeSlider.onChange = { [weak self] fade in
+            self?.hillshadeFadeChanged(Float(fade.lowerBound) ... Float(fade.upperBound))
+        }
+        sunDialView.elevationRange = DebugOverlayShadowSettingsPlanner.elevationRange
+        sunElevationView.elevationRange = DebugOverlayShadowSettingsPlanner.elevationRange
+        sunDialView.onChange = { [weak self] azimuth, elevation in
+            self?.publishSunDirection(azimuthDegrees: azimuth, elevationDegrees: elevation)
+        }
+        sunElevationView.onChange = { [weak self] elevation in
+            guard let self else { return }
+            publishSunDirection(azimuthDegrees: DebugOverlaySunAngles.angles(direction: sunDirection).azimuthDegrees,
+                                elevationDegrees: elevation)
+        }
         configureControlLabel(fogEnabledLabel, text: "Enabled")
         configureControlLabel(fogSkyColorLabel, text: "Sky colour")
         configureControlLabel(fogHorizonColorLabel, text: "Horizon colour")
@@ -491,12 +531,6 @@ final class DebugOverlayHUDView: NSView {
         configureSlider(shadowSoftnessSlider,
                         range: DebugOverlayShadowSettingsPlanner.softnessRange,
                         action: #selector(shadowSoftnessSliderChanged))
-        configureSlider(sunAzimuthSlider,
-                        range: DebugOverlayShadowSettingsPlanner.azimuthRange,
-                        action: #selector(sunAzimuthSliderChanged))
-        configureSlider(sunElevationSlider,
-                        range: DebugOverlayShadowSettingsPlanner.elevationRange,
-                        action: #selector(sunElevationSliderChanged))
         configureColorWell(fogSkyColorWell, action: #selector(fogSkyColorWellChanged))
         configureColorWell(fogHorizonColorWell, action: #selector(fogHorizonColorWellChanged))
         configureSlider(atmosphereIntensitySlider,
@@ -579,7 +613,7 @@ final class DebugOverlayHUDView: NSView {
                               action: #selector(baseLabelTraceButtonTapped))
         configureStatusLabel(baseLabelTraceStatusLabel)
 
-        [zoomLabel, latLonLabel, diagnosticsLabel, tilesStatusLabel].forEach { label in
+        [zoomLabel, latLonLabel, diagnosticsLabel, tilesStatusLabel, reliefStatusLabel].forEach { label in
             label.textColor = .white
         }
 
@@ -617,8 +651,11 @@ final class DebugOverlayHUDView: NSView {
          shadowNormalOffsetLabel, shadowNormalOffsetSlider,
          shadowCasterHeightLabel, shadowCasterHeightSlider,
          shadowSoftnessLabel, shadowSoftnessSlider,
-         sunAzimuthLabel, sunAzimuthSlider,
-         sunElevationLabel, sunElevationSlider,
+         lightGroupLabel,
+         sunDialView, sunElevationView,
+         sunAzimuthLabel, sunElevationLabel,
+         hillshadeFadeLabel, hillshadeFadeSlider,
+         reliefShadowsLabel, reliefShadowsSwitch,
          fogGroupLabel, fogEnabledLabel, fogEnabledSwitch,
          fogSkyColorLabel, fogSkyColorWell,
          fogHorizonColorLabel, fogHorizonColorWell,
@@ -650,6 +687,7 @@ final class DebugOverlayHUDView: NSView {
          ringRuleSetsAddButton, ringRuleSetsRemoveButton,
          ringRulesAddButton, ringRulesRemoveButton,
          surfaceModeButton,
+         reliefGroupLabel, reliefStatusLabel, reliefCoverageView, reliefListView,
          tilesGroupLabel, tileTraceButton, tileTraceCopyButton, tileTraceStatusLabel, tilesStatusLabel, tileCoverageView,
          tilesStatusListView]
     }
@@ -662,6 +700,10 @@ final class DebugOverlayHUDView: NSView {
         }
 
         self.snapshot = snapshot
+        if let viewAzimuth = snapshot?.viewAzimuthDegrees {
+            // The sky from above turns with the view.
+            sunDialView.viewAzimuthDegrees = viewAzimuth
+        }
         if let zoom = snapshot?.cameraZoom, zoom != groundFogCameraZoom {
             // The fog's sliders read their curves at the camera's zoom.
             groundFogCameraZoom = zoom
@@ -1177,9 +1219,9 @@ final class DebugOverlayHUDView: NSView {
         let panelHeight = max(Layout.headerHeight, bounds.height - panelTop)
         containerView.frame = CGRect(x: 0, y: panelTop, width: panelWidth, height: panelHeight)
         layoutHeader(width: panelWidth)
-        layoutTabs(width: panelWidth)
+        let tabsHeight = layoutTabs(width: panelWidth)
 
-        let scrollTop = Layout.headerHeight + Layout.tabBarHeight
+        let scrollTop = Layout.headerHeight + tabsHeight
         scrollView.isHidden = false
         scrollView.frame = CGRect(x: 0,
                                   y: scrollTop,
@@ -1201,21 +1243,27 @@ final class DebugOverlayHUDView: NSView {
     }
 
     /// The tab strip under the header: one button per category, as wide as
-    /// its title, scrolled sideways when they do not all fit.
-    private func layoutTabs(width: CGFloat) {
-        tabScrollView.isHidden = false
-        tabScrollView.frame = CGRect(x: 0, y: Layout.headerHeight, width: width, height: Layout.tabBarHeight)
+    /// its title, wrapped onto as many rows as the panel's width needs, so
+    /// every tab is in sight and nothing scrolls sideways over them.
+    /// Returns the strip's height.
+    private func layoutTabs(width: CGFloat) -> CGFloat {
+        let margin = (Layout.tabBarHeight - Layout.tabHeight) / 2
         var x = Layout.contentInset
-        let y = (Layout.tabBarHeight - Layout.tabHeight) / 2
+        var y = margin
         for button in tabButtons {
             let buttonWidth = ceil(button.intrinsicContentSize.width) + Layout.tabPadding
+            if x > Layout.contentInset, x + buttonWidth > width - Layout.contentInset {
+                x = Layout.contentInset
+                y += Layout.tabHeight + Layout.controlSpacing
+            }
             button.frame = CGRect(x: x, y: y, width: buttonWidth, height: Layout.tabHeight)
             x += buttonWidth + Layout.controlSpacing
         }
-        tabStripView.frame = CGRect(x: 0,
-                                    y: 0,
-                                    width: max(x - Layout.controlSpacing + Layout.contentInset, width),
-                                    height: Layout.tabBarHeight)
+        let height = y + Layout.tabHeight + margin
+        tabScrollView.isHidden = false
+        tabScrollView.frame = CGRect(x: 0, y: Layout.headerHeight, width: width, height: height)
+        tabStripView.frame = CGRect(x: 0, y: 0, width: width, height: height)
+        return height
     }
 
     /// Walks the groups of the selected tab top-down with one cursor and
@@ -1235,6 +1283,7 @@ final class DebugOverlayHUDView: NSView {
             cursor = layoutLabelGroups(at: cursor, contentWidth: contentWidth)
         }
         if tab.shows(.shadows) {
+            cursor = layoutLightGroup(at: cursor, contentWidth: contentWidth)
             cursor = layoutShadowsGroup(at: cursor, contentWidth: contentWidth)
         }
         if tab.shows(.sky) {
@@ -1245,6 +1294,9 @@ final class DebugOverlayHUDView: NSView {
         }
         if tab.shows(.export) {
             cursor = layoutExportGroup(at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+        }
+        if tab.shows(.relief) {
+            cursor = layoutReliefGroup(at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
         }
         if tab.shows(.tiles) {
             cursor = layoutTilesGroup(at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
@@ -1294,8 +1346,31 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutControlRow(shadowNormalOffsetLabel, shadowNormalOffsetSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowCasterHeightLabel, shadowCasterHeightSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowSoftnessLabel, shadowSoftnessSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(sunAzimuthLabel, sunAzimuthSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(sunElevationLabel, sunElevationSlider, at: cursor, contentWidth: contentWidth)
+        return cursor + Layout.groupSpacing
+    }
+
+    /// The scene's one light, the sun the buildings cast their shadows by
+    /// and the relief's slopes are shaded by: live with the shadows off,
+    /// since the slopes still take it.
+    private func layoutLightGroup(at top: CGFloat, contentWidth: CGFloat) -> CGFloat {
+        var cursor = layoutGroupHeader(lightGroupLabel, at: top, contentWidth: contentWidth)
+        // The sky from above and from the side, side by side, the angles
+        // under each.
+        let half = ((contentWidth - Layout.controlSpacing) / 2).rounded(.down)
+        let side = min(half, Layout.sunPickerSide)
+        sunDialView.isHidden = false
+        sunElevationView.isHidden = false
+        sunDialView.frame = CGRect(x: Layout.contentInset, y: cursor, width: side, height: side)
+        sunElevationView.frame = CGRect(x: Layout.contentInset + half + Layout.controlSpacing, y: cursor, width: side, height: side)
+        cursor += side + Layout.controlSpacing
+        sunAzimuthLabel.isHidden = false
+        sunElevationLabel.isHidden = false
+        sunAzimuthLabel.frame = CGRect(x: Layout.contentInset, y: cursor, width: half, height: Layout.controlRowHeight)
+        sunElevationLabel.frame = CGRect(x: Layout.contentInset + half + Layout.controlSpacing, y: cursor,
+                                         width: half, height: Layout.controlRowHeight)
+        cursor += Layout.controlRowHeight + Layout.controlSpacing
+        cursor = layoutControlRow(hillshadeFadeLabel, hillshadeFadeSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(reliefShadowsLabel, reliefShadowsSwitch, at: cursor, contentWidth: contentWidth)
         return cursor + Layout.groupSpacing
     }
 
@@ -1397,6 +1472,24 @@ final class DebugOverlayHUDView: NSView {
                                   height: tilesStatusListView.preferredHeight(forWidth: contentWidth))
     }
 
+    /// The relief tab, laid out as the tiles' tab: the summary, the map,
+    /// the cards.
+    private func layoutReliefGroup(at top: CGFloat, contentWidth: CGFloat, constrainedSize: CGSize) -> CGFloat {
+        var cursor = layoutGroupHeader(reliefGroupLabel, at: top, contentWidth: contentWidth)
+        cursor = layoutTextRow(reliefStatusLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+        cursor += Layout.controlSpacing
+        cursor = layoutFullWidthRow(reliefCoverageView,
+                                    at: cursor,
+                                    contentWidth: contentWidth,
+                                    height: min(DebugOverlayTileCoverageLayout.side, contentWidth))
+        reliefCoverageView.frame.size.width = reliefCoverageView.frame.height
+        cursor = layoutFullWidthRow(reliefListView,
+                                    at: cursor,
+                                    contentWidth: contentWidth,
+                                    height: reliefListView.preferredHeight(forWidth: contentWidth))
+        return cursor + Layout.controlSpacing
+    }
+
     private func layoutGroupHeader(_ label: NSTextField, at top: CGFloat, contentWidth: CGFloat) -> CGFloat {
         label.isHidden = false
         label.frame = CGRect(x: Layout.contentInset,
@@ -1491,6 +1584,9 @@ final class DebugOverlayHUDView: NSView {
             tilesStatusLabel.attributedStringValue = NSAttributedString(string: "")
             tileCoverageView.apply(coverage: nil)
             applyTiles([])
+            reliefStatusLabel.attributedStringValue = NSAttributedString(string: "")
+            reliefCoverageView.apply(coverage: nil)
+            applyRelief(nil)
             return
         }
 
@@ -1519,6 +1615,29 @@ final class DebugOverlayHUDView: NSView {
         tilesStatusLabel.attributedStringValue = tilesStatusText
         tileCoverageView.apply(coverage: snapshot.tileCoverage)
         applyTiles(snapshot.tileLoadingStatusTiles)
+
+        let reliefText = NSMutableAttributedString(
+            attributedString: attributedText(snapshot.reliefStatus?.lines.joined(separator: "\n") ?? "relief: off",
+                                             fontSize: diagnosticsFontSize,
+                                             color: color)
+        )
+        if let status = snapshot.reliefStatus {
+            reliefText.append(attributedText("\nterrain tiles: \(status.tiles.count)",
+                                             fontSize: diagnosticsFontSize,
+                                             color: .systemYellow))
+        }
+        reliefStatusLabel.attributedStringValue = reliefText
+        reliefCoverageView.apply(coverage: snapshot.reliefCoverage)
+        applyRelief(snapshot.reliefStatus)
+    }
+
+    /// The terrain cards, laid out again when their count changes.
+    private func applyRelief(_ status: GroundReliefStatusSnapshot?) {
+        let countBefore = reliefListView.rowCount
+        reliefListView.apply(cards: status.map(DebugOverlayTileCard.reliefCards(for:)) ?? [])
+        if reliefListView.rowCount != countBefore {
+            needsLayout = true
+        }
     }
 
     /// The list's height follows its cards: a tile arriving or leaving
@@ -1555,16 +1674,17 @@ final class DebugOverlayHUDView: NSView {
         shadowSoftnessLabel.stringValue = DebugOverlayShadowSettingsPlanner.softnessTitle(shadowSettings.softness)
 
         let angles = DebugOverlaySunAngles.angles(direction: sunDirection)
-        sunAzimuthSlider.doubleValue = angles.azimuthDegrees
+        sunDialView.azimuthDegrees = angles.azimuthDegrees
+        sunDialView.elevationDegrees = angles.elevationDegrees
+        sunElevationView.elevationDegrees = angles.elevationDegrees
         sunAzimuthLabel.stringValue = DebugOverlayShadowSettingsPlanner.azimuthTitle(angles.azimuthDegrees)
-        sunElevationSlider.doubleValue = angles.elevationDegrees
         sunElevationLabel.stringValue = DebugOverlayShadowSettingsPlanner.elevationTitle(angles.elevationDegrees)
 
-        // Everything below the switch only means something with shadows on.
+        // Everything below the switch only means something with shadows
+        // on. The light is the slopes' too, so it stays live.
         [shadowStrengthSlider, shadowMapResolutionControl, shadowCoverageSlider, shadowMinimumCoverageSlider,
-         shadowNormalOffsetSlider, shadowCasterHeightSlider, shadowSoftnessSlider,
-         sunAzimuthSlider,
-         sunElevationSlider].forEach { $0.isEnabled = shadowSettings.isEnabled }
+         shadowNormalOffsetSlider, shadowCasterHeightSlider,
+         shadowSoftnessSlider].forEach { $0.isEnabled = shadowSettings.isEnabled }
     }
 
     // MARK: - Configuration
@@ -1834,6 +1954,32 @@ final class DebugOverlayHUDView: NSView {
         onLocalLabelDistanceChanged?(meters)
     }
 
+    /// The hillshade's fade, as the map runs with it: the panel's own once
+    /// dragged, the style's before.
+    func apply(hillshadeFade fade: ClosedRange<Float>) {
+        hillshadeFadeSlider.value = Double(fade.lowerBound) ... Double(fade.upperBound)
+        updateHillshadeFadeLabel(fade)
+    }
+
+    /// The mountains' shadows as the map runs with them: the panel's own
+    /// once switched, the setting's before.
+    func apply(reliefCastsShadows: Bool) {
+        reliefShadowsSwitch.state = reliefCastsShadows ? .on : .off
+    }
+
+    @objc private func reliefShadowsSwitchChanged() {
+        onReliefShadowsChanged?(reliefShadowsSwitch.state == .on)
+    }
+
+    private func hillshadeFadeChanged(_ fade: ClosedRange<Float>) {
+        updateHillshadeFadeLabel(fade)
+        onHillshadeFadeChanged?(fade)
+    }
+
+    private func updateHillshadeFadeLabel(_ fade: ClosedRange<Float>) {
+        hillshadeFadeLabel.stringValue = "Hillshade \(String(format: "%.1f", fade.lowerBound))–\(String(format: "%.1f", fade.upperBound))× eye"
+    }
+
     @objc private func labelMinimumScaleSliderChanged() {
         let scale = Float((labelMinimumScaleSlider.doubleValue * 100).rounded() / 100)
         labelMinimumScaleLabel.stringValue = Self.labelMinimumScaleTitle(scale)
@@ -1913,16 +2059,6 @@ final class DebugOverlayHUDView: NSView {
         var settings = shadowSettings
         settings.softness = Float(shadowSoftnessSlider.doubleValue)
         publish(shadowSettings: settings)
-    }
-
-    @objc private func sunAzimuthSliderChanged() {
-        publishSunDirection(azimuthDegrees: sunAzimuthSlider.doubleValue,
-                            elevationDegrees: DebugOverlaySunAngles.angles(direction: sunDirection).elevationDegrees)
-    }
-
-    @objc private func sunElevationSliderChanged() {
-        publishSunDirection(azimuthDegrees: DebugOverlaySunAngles.angles(direction: sunDirection).azimuthDegrees,
-                            elevationDegrees: sunElevationSlider.doubleValue)
     }
 
     @objc private func fogEnabledSwitchChanged() {
@@ -2157,7 +2293,13 @@ private final class DebugOverlayTilesStatusListView: NSView {
     }
 
     func apply(tiles: [TileLoadingStatusTileSnapshot]) {
-        cards = DebugOverlayTileCard.cards(for: tiles)
+        apply(cards: DebugOverlayTileCard.cards(for: tiles))
+    }
+
+    /// The relief tab's cards, already in their order.
+    func apply(cards: [DebugOverlayTileCard]) {
+        guard self.cards != cards else { return }
+        self.cards = cards
         needsDisplay = true
     }
 
@@ -2309,6 +2451,102 @@ private final class DebugOverlayTileCoverageView: NSView {
                                                 .strokeColor: NSColor.black.withAlphaComponent(0.8), .strokeWidth: -2.5])
                 top += lineHeight
             }
+        }
+        if coverage.footprint.count >= 3 {
+            let path = NSBezierPath()
+            for (index, vertex) in coverage.footprint.enumerated() {
+                let point = CoverageLayout.point(vertex, window: window, side: side)
+                if index == 0 { path.move(to: point) } else { path.line(to: point) }
+            }
+            path.close()
+            NSColor.white.withAlphaComponent(CoverageLayout.footprintFillAlpha).setFill()
+            path.fill()
+            NSColor.white.setStroke()
+            path.lineWidth = CoverageLayout.footprintLineWidth
+            path.stroke()
+        }
+        let center = CoverageLayout.point(coverage.center, window: window, side: side)
+        let cross = NSBezierPath()
+        let arm = CoverageLayout.markerRadius * 1.6
+        cross.move(to: CGPoint(x: center.x - arm, y: center.y))
+        cross.line(to: CGPoint(x: center.x + arm, y: center.y))
+        cross.move(to: CGPoint(x: center.x, y: center.y - arm))
+        cross.line(to: CGPoint(x: center.x, y: center.y + arm))
+        cross.lineWidth = 1.5
+        NSColor.white.setStroke()
+        cross.stroke()
+        if let eye = coverage.eye {
+            let point = CoverageLayout.point(eye, window: window, side: side)
+            let radius = CoverageLayout.markerRadius
+            NSColor.white.setFill()
+            NSBezierPath(ovalIn: CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)).fill()
+        }
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private static func color(_ rgb: SIMD3<Float>) -> NSColor {
+        NSColor(red: CGFloat(rgb.x), green: CGFloat(rgb.y), blue: CGFloat(rgb.z), alpha: 1)
+    }
+}
+
+/// The relief tab's map (`DebugOverlayReliefCoverage`): each terrain tile
+/// as its square in its zoom's colour, filled once it is in, outlined in
+/// yellow while it loads, in grey while it waits for a slot and in red
+/// after a failure, the frame's wanted tiles strong and the ones kept from
+/// earlier frames faint, under the view's footprint, the point the camera
+/// looks at and the eye, as the tiles' map draws them.
+private final class DebugOverlayReliefCoverageView: NSView {
+    private typealias CoverageLayout = DebugOverlayTileCoverageLayout
+
+    private var coverage: DebugOverlayReliefCoverage?
+
+    override var isFlipped: Bool { true }
+
+    func apply(coverage: DebugOverlayReliefCoverage?) {
+        guard self.coverage != coverage else { return }
+        self.coverage = coverage
+        needsDisplay = true
+    }
+
+    override func draw(_: NSRect) {
+        let shape = NSBezierPath(roundedRect: bounds, xRadius: CoverageLayout.cornerRadius, yRadius: CoverageLayout.cornerRadius)
+        NSColor.black.withAlphaComponent(0.45).setFill()
+        shape.fill()
+        guard let coverage else { return }
+        NSGraphicsContext.saveGraphicsState()
+        shape.addClip()
+        let window = coverage.window
+        let side = bounds.width
+        let font = NSFont.monospacedSystemFont(ofSize: CoverageLayout.labelFontSize, weight: .bold)
+        for square in coverage.drawingOrder {
+            let rect = CoverageLayout.rect(square.square, window: window, side: side)
+            let zoomColor = Self.color(DebugTileZoomPalette.color(forZoom: square.tile.z))
+            let strength: CGFloat = square.isWanted ? 1 : 0.35
+            let stroke: NSColor
+            switch square.state {
+            case .resident:
+                zoomColor.withAlphaComponent(CoverageLayout.tileFillAlpha * strength).setFill()
+                rect.fill(using: .sourceOver)
+                stroke = zoomColor
+            case .loading:
+                stroke = .systemYellow
+            case .queued:
+                stroke = .systemGray
+            case .failed:
+                NSColor.systemRed.withAlphaComponent(0.2 * strength).setFill()
+                rect.fill(using: .sourceOver)
+                stroke = .systemRed
+            }
+            stroke.withAlphaComponent(strength).setStroke()
+            let outline = NSBezierPath(rect: rect.insetBy(dx: CoverageLayout.tileLineWidth / 2, dy: CoverageLayout.tileLineWidth / 2))
+            outline.lineWidth = CoverageLayout.tileLineWidth
+            outline.stroke()
+            guard square.isWanted, rect.width >= CoverageLayout.labelledSquareSide else { continue }
+            let lineHeight = font.ascender - font.descender + font.leading
+            "\(square.tile.x)/\(square.tile.y)/\(square.tile.z)".draw(
+                in: CGRect(x: rect.minX + 4, y: rect.minY + 3, width: rect.width - 8, height: lineHeight),
+                withAttributes: [.font: font, .foregroundColor: zoomColor,
+                                 .strokeColor: NSColor.black.withAlphaComponent(0.8), .strokeWidth: -2.5])
         }
         if coverage.footprint.count >= 3 {
             let path = NSBezierPath()

@@ -237,7 +237,6 @@ struct TilePointScreenProjector {
         // the world units a metre of it rises by, looked up once per tile
         // of the projection, nil for a tile whose terrain is not in.
         let groundRelief = frameContext.services.groundRelief
-        let renderMapSize = frameContext.resolvedPresentation.flatRenderState.renderMapSize
         var reliefByTile: [Tile: GroundReliefTileLift?] = [:]
         // The ring each source is raised by: its finest target's.
         let targetZoomBySource = groundRelief == nil || liftsByRelief == false
@@ -250,8 +249,7 @@ struct TilePointScreenProjector {
             } else {
                 entry = GroundReliefTileLift(store: groundRelief,
                                              tile: tile,
-                                             targetZoom: targetZoomBySource[tile] ?? tile.z,
-                                             renderMapSize: renderMapSize)
+                                             targetZoom: targetZoomBySource[tile] ?? tile.z)
                 reliefByTile[tile] = entry
             }
             return entry?.worldUnits(atTileUV: uv) ?? 0

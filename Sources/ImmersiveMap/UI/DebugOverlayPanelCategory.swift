@@ -15,6 +15,7 @@ enum DebugOverlayPanelCategory: Int, CaseIterable {
     case sky
     case map
     case tiles
+    case relief
     case export
 
     var title: String {
@@ -22,10 +23,11 @@ enum DebugOverlayPanelCategory: Int, CaseIterable {
         case .all: "All"
         case .stats: "Stats"
         case .labels: "Labels"
-        case .shadows: "Shadows"
+        case .shadows: "Light & shadows"
         case .sky: "Sky & fog"
         case .map: "Map"
         case .tiles: "Tiles"
+        case .relief: "Relief"
         case .export: "Export"
         }
     }

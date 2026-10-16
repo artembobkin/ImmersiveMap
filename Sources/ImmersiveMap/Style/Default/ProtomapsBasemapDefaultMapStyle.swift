@@ -37,6 +37,11 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
         theme.baseColors
     }
 
+    /// The theme's shading of the slopes.
+    public var hillshade: ImmersiveMapHillshade {
+        theme.hillshade
+    }
+
     public init(theme: ProtomapsBasemapTheme = .default) {
         self.theme = theme
     }

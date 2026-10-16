@@ -88,6 +88,22 @@ struct DebugOverlayTileCard: Equatable {
     static let stageAgeDisplayThreshold = 2
     static let separator = " · "
 
+    init(tile: Tile,
+         status: TileLoadingTileStatus,
+         progress: Double,
+         title: String,
+         statusText: String,
+         stagesText: String,
+         layersText: String) {
+        self.tile = tile
+        self.status = status
+        self.progress = progress
+        self.title = title
+        self.statusText = statusText
+        self.stagesText = stagesText
+        self.layersText = layersText
+    }
+
     init(_ snapshot: TileLoadingStatusTileSnapshot) {
         tile = snapshot.tile
         status = snapshot.status
@@ -121,6 +137,46 @@ struct DebugOverlayTileCard: Equatable {
             if a.tile.x != b.tile.x { return a.tile.x < b.tile.x }
             return a.tile.y < b.tile.y
         }.map(DebugOverlayTileCard.init)
+    }
+
+    /// The cards of the relief tab, one per terrain tile in the order the
+    /// store lists them, the frame's wanted tiles nearest first: the
+    /// address, what the tile is doing ("in 1.0 MB", "loading 3s",
+    /// "failed ×2 retry 8s", "queued"), its place in the frame's demand
+    /// or "kept" for one held from earlier frames, and its heights.
+    static func reliefCards(for snapshot: GroundReliefStatusSnapshot) -> [DebugOverlayTileCard] {
+        snapshot.tiles.map { entry in
+            let status: TileLoadingTileStatus
+            let progress: Double
+            let statusText: String
+            switch entry.state {
+            case .resident:
+                status = .ready
+                progress = 1
+                statusText = String(format: "in %.1f MB", Double(entry.bytes) / 1_048_576)
+            case .loading:
+                status = .loading
+                progress = 0.5
+                statusText = entry.seconds >= stageAgeDisplayThreshold ? "loading \(entry.seconds)s" : "loading"
+            case .failed:
+                status = .failed
+                progress = 0
+                statusText = "failed ×\(entry.attempts) retry \(entry.seconds)s"
+            case .queued:
+                status = .queued
+                progress = 0.1
+                statusText = "queued"
+            }
+            let demand = entry.priority.map { "wanted #\($0 + 1)" } ?? "kept"
+            let heights = entry.heightRange.map { String(format: "%.0f–%.0f m", $0.lowerBound, $0.upperBound) } ?? ""
+            return DebugOverlayTileCard(tile: entry.tile,
+                                        status: status,
+                                        progress: progress,
+                                        title: "z\(entry.tile.z)/\(entry.tile.x)/\(entry.tile.y)",
+                                        statusText: statusText,
+                                        stagesText: demand,
+                                        layersText: heights)
+        }
     }
 
     static func statusText(_ status: TileLoadingTileStatus) -> String {

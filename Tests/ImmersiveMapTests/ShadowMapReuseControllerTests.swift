@@ -74,6 +74,27 @@ final class ShadowMapReuseControllerTests: XCTestCase {
                        "A static camera materializes an identical light matrix")
     }
 
+    /// The mountains' map is drawn again when the terrain under it changes
+    /// (a tile arriving or welded, the rise, the datum), and reused while it
+    /// holds.
+    func testTheTerrainChangingDrawsTheMapAgain() throws {
+        let controller = ShadowMapReuseController()
+        let texture = try makeTexture()
+        let terrain = GroundReliefStore.ShadowSignature(version: 1, strength: 1, worldUnitsPerMetre: 0.5, datumMetres: 1200)
+        _ = try XCTUnwrap(resolve(controller))
+        XCTAssertTrue(controller.planShadowRender(casterKeys: [], hasModelCasters: false, terrain: terrain, texture: texture))
+        _ = try XCTUnwrap(resolve(controller))
+        XCTAssertFalse(controller.planShadowRender(casterKeys: [], hasModelCasters: false, terrain: terrain, texture: texture),
+                       "The same terrain reuses the map")
+        let welded = GroundReliefStore.ShadowSignature(version: 2, strength: 1, worldUnitsPerMetre: 0.5, datumMetres: 1200)
+        XCTAssertTrue(controller.planShadowRender(casterKeys: [], hasModelCasters: false, terrain: welded, texture: texture))
+        let panned = GroundReliefStore.ShadowSignature(version: 2, strength: 1, worldUnitsPerMetre: 0.5, datumMetres: 1250)
+        XCTAssertTrue(controller.planShadowRender(casterKeys: [], hasModelCasters: false, terrain: panned, texture: texture),
+                      "A pan to another datum")
+        XCTAssertTrue(controller.planShadowRender(casterKeys: [], hasModelCasters: false, terrain: nil, texture: texture),
+                      "The mountains gone")
+    }
+
     func testSmallPanReusesAndKeepsContentGlued() throws {
         let controller = ShadowMapReuseController()
         let texture = try makeTexture()

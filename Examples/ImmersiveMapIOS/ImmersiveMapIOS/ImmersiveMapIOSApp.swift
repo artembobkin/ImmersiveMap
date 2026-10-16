@@ -18,19 +18,9 @@ struct ImmersiveMapIOSApp: App {
 /// is the app the binary-size numbers in the README are measured frowm. The
 /// feature demos are the macOS examples; the API they use is identical here.
 private struct MapScreen: View {
-    @State private var camera = ImmersiveMapCameraController()
-
     var body: some View {
         ImmersiveMapView()
-            .tileArchive(hostedTileArchive)
-            .camera(camera)
-            // One-thumb pitch and zoom drag zones in the bottom corners. Touch
-            // platforms only, so this is the one example that can show them.
-            .cameraControlZones()
+            .controlsHidden(false)
             .ignoresSafeArea()
     }
 }
-
-/// The hosted tile endpoint, written as the one-line URL template. It is
-/// public: no key, no account.
-private let hostedTileArchive = URL(string: "https://tiles.immersivemap.dev/20260922.pmtiles")!

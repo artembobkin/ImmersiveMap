@@ -45,6 +45,8 @@ final class ShadowMapReuseController {
     private var renderedStaticModelCasters: Set<StaticModelCasterKey> = []
     private var renderedHiddenBuildings = ReplacedBuildings.none
     private var renderedHeightScales: SIMD2<Float>?
+    /// The mountains the rendered map holds (`GroundReliefStore.shadowSignature`).
+    private var renderedTerrain: GroundReliefStore.ShadowSignature?
 
     /// The per-frame shadow state: a cached fit re-materialized under the
     /// current pan when it still covers the frame, a fresh (margined) fit
@@ -55,6 +57,7 @@ final class ShadowMapReuseController {
                            centerWorldMercator: SIMD2<Double>,
                            flatRenderPan: SIMD2<Double>,
                            renderMapSize: Double,
+                           groundHeights: ClosedRange<Float>? = nil,
                            scene: ImmersiveMapSettings.SceneSettings) -> ShadowFrameState? {
         guard let inputs = ShadowFrameStateResolver.resolveInputs(renderSurfaceMode: renderSurfaceMode,
                                                                   projectionView: projectionView,
@@ -62,6 +65,7 @@ final class ShadowMapReuseController {
                                                                   centerWorldMercator: centerWorldMercator,
                                                                   flatRenderPan: flatRenderPan,
                                                                   renderMapSize: renderMapSize,
+                                                                  groundHeights: groundHeights,
                                                                   scene: scene) else {
             return nil
         }
@@ -91,6 +95,7 @@ final class ShadowMapReuseController {
                                 hiddenBuildings: sceneModelState.replacedBuildings,
                                 heightScales: SIMD2<Float>(frameContext.sharedState.buildingRiseSignature,
                                                            frameContext.sharedState.modelTileRiseSignature),
+                                terrain: frameContext.services.groundRelief?.shadowSignature,
                                 texture: texture)
     }
 
@@ -101,6 +106,7 @@ final class ShadowMapReuseController {
                           staticModelCasters: Set<StaticModelCasterKey> = [],
                           hiddenBuildings: ReplacedBuildings = .none,
                           heightScales: SIMD2<Float> = SIMD2<Float>(1, 1),
+                          terrain: GroundReliefStore.ShadowSignature? = nil,
                           texture: MTLTexture) -> Bool {
         let needsRender = renderedGeneration != fitGeneration
             || renderedTextureIdentity != ObjectIdentifier(texture)
@@ -115,6 +121,10 @@ final class ShadowMapReuseController {
             // going when the camera leaves their zoom (`ExtrusionRise`),
             // change what casts.
             || heightScales != renderedHeightScales
+            // The mountains: a terrain tile arriving or welded, the rise,
+            // and the datum the ground is drawn from, which a pan over the
+            // relief moves.
+            || terrain != renderedTerrain
             // Any change of the caster set: a caster arriving is not in the
             // rendered map, and a caster leaving may leave its shadows on
             // ground whose buildings are no longer drawn (a cell handing
@@ -129,6 +139,7 @@ final class ShadowMapReuseController {
         renderedStaticModelCasters = staticModelCasters
         renderedHiddenBuildings = hiddenBuildings
         renderedHeightScales = heightScales
+        renderedTerrain = terrain
         return true
     }
 

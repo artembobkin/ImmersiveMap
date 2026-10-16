@@ -42,6 +42,17 @@ struct GroundRelief {
         (metres(atTileUV: uv) - datumMetres) * strength
     }
 
+    /// The same heights over `part`, a square inside the ground tile
+    /// `tile` this relief is over: what draws a part of the tile on its own
+    /// grid and lifts it exactly as the whole tile's draw does.
+    func narrowed(to part: Tile, in tile: Tile) -> GroundRelief {
+        let inner = Self.placement(of: part, in: tile)
+        return GroundRelief(terrain: terrain,
+                            origin: origin + inner.origin * scale,
+                            scale: scale * inner.scale,
+                            strength: strength)
+    }
+
     /// Where a tile lies in the terrain tile `source` over it.
     static func placement(of tile: Tile, in source: Tile) -> (origin: SIMD2<Float>, scale: Float) {
         let depth = max(0, tile.z - source.z)
@@ -57,24 +68,72 @@ struct GroundRelief {
 /// camera, the labels, the buildings' lifts). Half floats filter on every
 /// GPU, so the vertex stage takes one bilinear sample, and they step by
 /// half a metre at 1000 m and 2 m at 4000 m, well under the ground's grid.
+///
+/// The edges are welded to the neighbours' of the same zoom once they are
+/// in (`GroundReliefEdgeWeld`): the texels along an edge take the mean of
+/// the tile's and its neighbour's, the height that lies on the edge
+/// itself, so two tiles meet there with one height and the ground drawn
+/// over them closes. The texels change in place, written on the main
+/// thread only (`GroundReliefStore.applyPendingWelds`), as everything that
+/// reads them reads there.
 final class GroundReliefTile {
     /// `r16Float`, row 0 at the north edge.
     let texture: MTLTexture
     let size: Int
-    /// The texture's texels, row by row.
-    let halves: [UInt16]
-    /// The lowest and the highest height in the tile, in metres.
-    let heightRange: ClosedRange<Float>
+    /// The texture's texels, row by row, with the edges as welded.
+    private(set) var halves: [UInt16]
+    /// The edges as decoded, which every weld averages from, so the weld
+    /// is the same whatever order the neighbours came in.
+    let originalEdges: Edges
+    /// The lowest and the highest height in the tile, in metres, the
+    /// welded edges included.
+    private(set) var heightRange: ClosedRange<Float>
+    /// Grows with every weld written into the texels: what was placed by
+    /// them on the CPU (the buildings' lifts) is placed again.
+    private(set) var revision: UInt64 = 0
+
+    /// A tile's four edges, `size` texels each: the north and the south
+    /// rows west to east, the west and the east columns north to south.
+    struct Edges {
+        let north: [UInt16]
+        let south: [UInt16]
+        let west: [UInt16]
+        let east: [UInt16]
+    }
 
     init(texture: MTLTexture, size: Int, halves: [UInt16], heightRange: ClosedRange<Float>) {
         self.texture = texture
         self.size = size
         self.halves = halves
         self.heightRange = heightRange
+        self.originalEdges = Edges(north: Array(halves[0 ..< size]),
+                                   south: Array(halves[(size - 1) * size ..< size * size]),
+                                   west: (0 ..< size).map { halves[$0 * size] },
+                                   east: (0 ..< size).map { halves[$0 * size + size - 1] })
     }
 
     var costInBytes: Int {
-        texture.allocatedSize + halves.count * MemoryLayout<UInt16>.stride
+        texture.allocatedSize + (halves.count + size * 4) * MemoryLayout<UInt16>.stride
+    }
+
+    /// Writes texels of a welded edge on the CPU, a rectangle of `width` by
+    /// `height` from the column `x` and the row `y`, row by row: the
+    /// texture takes the same through the GPU
+    /// (`GroundReliefStore.applyPendingWelds`). Main thread only.
+    func writeTexels(_ values: [UInt16], x: Int, y: Int, width: Int, height: Int) {
+        var lowest = heightRange.lowerBound
+        var highest = heightRange.upperBound
+        for row in 0 ..< height {
+            for column in 0 ..< width {
+                let value = values[row * width + column]
+                halves[(y + row) * size + x + column] = value
+                let metres = Self.float(halfBits: value)
+                lowest = min(lowest, metres)
+                highest = max(highest, metres)
+            }
+        }
+        heightRange = lowest ... highest
+        revision &+= 1
     }
 
     /// The height in metres at a point of the texture, in 0...1, bilinear
@@ -118,19 +177,29 @@ final class GroundReliefTile {
 /// Loads the terrain tiles the flattened ground rises by
 /// (`TileSettings.GroundReliefSettings`) and keeps them as textures.
 ///
-/// A frame asks for each flattened tile it draws (`relief(for:)`). The store
-/// answers with the terrain of the tile's own address, or of the deepest
-/// ancestor the source has where it has none that deep, and starts loading
-/// what is missing, a few at a time. Until the terrain is in, the answer is
-/// nil and the tile draws flat. A terrain tile that arrives invalidates a
-/// frame through `eventSink`, as a map tile does, so the on-demand render
-/// loop draws it without waiting for a gesture.
+/// The frame states once which terrain tiles it needs, nearest first
+/// (`request(tiles:)`, `GroundReliefDemand`), as it states its map tiles:
+/// the store loads them in that order, a few at a time
+/// (`GroundReliefSettings.maximumConcurrentLoads`), and keeps them while
+/// they are wanted. Whatever reads the terrain (`relief(for:)`, the point
+/// lookups) only reads: it answers with the terrain of the tile's own
+/// address or, while that is on its way, the finest coarser one in, and
+/// never starts a load. Until any terrain over the tile is in, the answer
+/// is nil and the tile draws flat. A terrain tile that arrives invalidates
+/// a frame through `eventSink`, as a map tile does, so the on-demand
+/// render loop draws it without waiting for a gesture. Its edges are
+/// welded to its neighbours' of the same zoom (`GroundReliefEdgeWeld`), so
+/// the ground over two tiles meets without a crack, written at the next
+/// frame's start (`applyPendingWelds`).
 ///
 /// A terrain tile the source does not have (an HTTP 404) is remembered as
-/// missing, and the tile's ancestor is asked instead. One that could not be
-/// fetched is asked again after a pause that grows with each failure. The
-/// decoded tiles are kept to the memory budget, the longest unused released
-/// first.
+/// missing, and its ancestor is wanted in its place, down to the source's
+/// floor. One that could not be fetched is asked again after a pause that
+/// grows with each failure. A load the camera has left behind finishes,
+/// as a map tile's does, and its tile stays as a cached one. The decoded
+/// tiles are kept to the memory budget, the wanted ones whatever they
+/// cost, the others released longest unused first. `statusSnapshot()`
+/// tells the debug panel all of it.
 ///
 /// Thread-safe (`@unchecked Sendable`): the loads run in tasks off the main
 /// thread and all mutable state is serialized by `lock`.
@@ -149,7 +218,9 @@ final class GroundReliefTile {
 /// (`Camera/Relief`), and a feature whose relief is a call into this
 /// core (the labels) keeps the call where it is.
 final class GroundReliefStore: @unchecked Sendable {
-    static let maximumConcurrentLoads = 4
+    /// How many terrain tiles load at once
+    /// (`GroundReliefSettings.maximumConcurrentLoads`).
+    let maximumConcurrentLoads: Int
     static let retryBaseDelay: TimeInterval = 5
     static let retryMaximumDelay: TimeInterval = 60
 
@@ -181,6 +252,20 @@ final class GroundReliefStore: @unchecked Sendable {
     /// the zoom itself: a relief scaled with the zoom breathes with every
     /// drag over the terrain, whose slopes move the zoom.
     private(set) var standingShare: Float = 1
+    /// The standing share eased as the relief rises and collapses
+    /// (`setFrame`): what the strength and the hillshade scale by.
+    private(set) var risenShare: Float = 1
+    /// How the slopes are shaded (`ImmersiveMapHillshade`, the style's) and
+    /// the scene's light they are shaded by this frame (`setLight`).
+    private let hillshadeStyle: ImmersiveMapHillshade
+    private var lightDirection = ImmersiveMapSettings.SceneLightSettings().direction
+    private var cameraEye = SIMD3<Float>(0, 0, 1)
+    private var hillshadeFadeCameraDistances: ClosedRange<Float>?
+    /// The shading of the slopes this frame, what every draw on the relief
+    /// binds (`GroundReliefUniform`): the scene's light and the style's
+    /// intensity at the share of the relief that has risen, so the shading
+    /// rises and collapses with the relief.
+    private(set) var hillshade: GroundReliefHillshade = .none
     /// Whether the rise or the collapse is under way this frame: the
     /// frames keep coming while it is (`RenderFrameEngine`).
     var isTransitioning: Bool { standingShare > 0 && standingShare < 1 }
@@ -188,9 +273,13 @@ final class GroundReliefStore: @unchecked Sendable {
     private let appearZoom: Double
     private let collapseZoom: Double
     private let transitionSeconds: TimeInterval
+    /// Which terrain tiles the ground and the camera read, by the
+    /// relief's detail (`GroundReliefSettings.detail`).
+    let zooms: GroundReliefTerrainZooms
     /// The zoom of the terrain tiles the camera and the frame's datum read
-    /// (`GroundReliefSettings.cameraTerrainZoom`).
-    let cameraTerrainZoom: Int
+    /// (`GroundReliefSettings.cameraTerrainZoom`, the detail's own when
+    /// unset).
+    var cameraTerrainZoom: Int { zooms.cameraZoom }
 
     /// The frame's zoom (`RenderFrameEngine`, once a frame, before
     /// anything of the frame reads the relief): the zoom held through a
@@ -208,7 +297,30 @@ final class GroundReliefStore: @unchecked Sendable {
             standingShare = target
         }
         let eased = standingShare * standingShare * (3 - 2 * standingShare)
+        risenShare = eased
         strengthScale = configuredExaggeration * eased
+        resolveHillshade()
+    }
+
+    /// The scene's light this frame (`SceneLightSettings.direction`, toward
+    /// the light, `RenderFrameEngine`), which the slopes are shaded by, and
+    /// the eye they fade with the distance from. `fadeCameraDistances`
+    /// replaces the style's fade (the debug panel's), nil keeps it.
+    func setLight(direction: SIMD3<Float>,
+                  cameraEye: SIMD3<Float>,
+                  fadeCameraDistances: ClosedRange<Float>? = nil) {
+        lightDirection = direction
+        self.cameraEye = cameraEye
+        hillshadeFadeCameraDistances = fadeCameraDistances
+        resolveHillshade()
+    }
+
+    private func resolveHillshade() {
+        hillshade = GroundReliefHillshade.resolve(style: hillshadeStyle,
+                                                  lightDirection: lightDirection,
+                                                  risenShare: risenShare,
+                                                  cameraEye: cameraEye,
+                                                  fadeCameraDistances: hillshadeFadeCameraDistances)
     }
 
     /// Whether the relief stands at a zoom: from `appearZoom` up to
@@ -216,10 +328,11 @@ final class GroundReliefStore: @unchecked Sendable {
     func stands(atZoom zoom: Double) -> Bool {
         zoom >= appearZoom && zoom < collapseZoom
     }
-    /// The frame's tile zoom the ground rises from
-    /// (`GroundReliefSettings.fromTileZoom`): a frame of coarser tiles,
-    /// and whatever stands on them, lies on the plane, and so does the
-    /// camera over such a frame.
+    /// The frame's tile zoom the ground rises from, the tile zoom of
+    /// `GroundReliefSettings.appearZoom` (`tileZoom(deepestTileZoom:)`), the
+    /// zoom the ground is flattened from too: a frame of coarser tiles, and
+    /// whatever stands on them, lies on the plane, and so does the camera
+    /// over such a frame.
     let fromTileZoom: Int
     /// Whether the frame is on the terrain (`RenderFrameEngine`, once a
     /// frame): the flat map with tiles of the relief's zoom or deeper,
@@ -239,6 +352,47 @@ final class GroundReliefStore: @unchecked Sendable {
     }
     /// The least height the camera keeps over the relief under it.
     let cameraClearanceMetres: Float
+    /// Whether the mountains may cast their shadows
+    /// (`GroundReliefSettings.castsShadows`, the debug panel's over it),
+    /// set once a frame (`setCastsShadows`).
+    private var castsShadowsEnabled = false
+
+    /// Whether the mountains may cast their shadows this frame
+    /// (`RenderFrameEngine`, once a frame).
+    func setCastsShadows(_ isEnabled: Bool) {
+        castsShadowsEnabled = isEnabled
+    }
+
+    /// Whether the mountains cast into the shadow map this frame
+    /// (`GroundReliefShadowCasterSubsystem`): allowed to, on the terrain,
+    /// and risen. It opens the shadow pass as a building does
+    /// (`ShadowPassGateResolver`).
+    var castsShadowsThisFrame: Bool {
+        castsShadowsEnabled && isActive && strengthScale > 0
+    }
+
+    /// What the mountains' shadow in the map is drawn from: the terrain
+    /// tiles in and their welds (`version`), the rise, the world scale and
+    /// the datum the ground is drawn from. The map is drawn again when it
+    /// changes (`ShadowMapReuseController`), nil while the mountains cast
+    /// nothing.
+    struct ShadowSignature: Equatable {
+        let version: UInt64
+        let strength: Float
+        let worldUnitsPerMetre: Float
+        let datumMetres: Float
+    }
+
+    var shadowSignature: ShadowSignature? {
+        guard castsShadowsThisFrame else { return nil }
+        lock.lock()
+        let version = version
+        lock.unlock()
+        return ShadowSignature(version: version,
+                               strength: strengthScale,
+                               worldUnitsPerMetre: worldUnitsPerMetre,
+                               datumMetres: datumMetres)
+    }
     /// The terrain under the point the camera looks at this frame, in
     /// metres before the exaggeration (`GroundReliefCameraLift.datumMetres`):
     /// the height the relief is drawn from. The ground, the buildings and
@@ -265,6 +419,17 @@ final class GroundReliefStore: @unchecked Sendable {
     private var missingTiles: Set<Tile> = []
     private var statesByTile: [Tile: LoadState] = [:]
     private var activeLoads = 0
+    /// The frame's demand (`request(tiles:)`), nearest first, and the same
+    /// as a set: loaded in that order, never released.
+    private var wantedOrder: [Tile] = []
+    private var wantedTiles: Set<Tile> = []
+    /// When each load started, for the debug panel.
+    private var loadStartedAt: [Tile: TimeInterval] = [:]
+    /// The welds of the tiles' edges to their neighbours' still to write
+    /// (`GroundReliefEdgeWeld`), queued as the tiles arrive and written at
+    /// the next frame's start (`applyPendingWelds`).
+    private var pendingWelds: [GroundReliefEdgeWeld.Write] = []
+    private let memoryBudgetInBytes: Int
     private var heightRange: ClosedRange<Float>?
     private var heightRangeVersion: UInt64?
 
@@ -291,17 +456,29 @@ final class GroundReliefStore: @unchecked Sendable {
         return heightRange
     }
     /// The store of a map's settings: nil while the relief is off.
-    static func make(settings: ImmersiveMapSettings, device: MTLDevice) -> GroundReliefStore? {
+    /// `hillshade` is the style's (`MapStyleRuntime.hillshade`).
+    static func make(settings: ImmersiveMapSettings,
+                     hillshade: ImmersiveMapHillshade,
+                     device: MTLDevice) -> GroundReliefStore? {
         let relief = settings.tiles.groundRelief
         guard relief.isEnabled else {
             return nil
         }
-        return GroundReliefStore(device: device, settings: relief)
+        return GroundReliefStore(device: device,
+                                 settings: relief,
+                                 flattening: settings.tiles.resolvedGroundFlattening,
+                                 deepestTileZoom: settings.tiles.coverage.maximumZoomLevel,
+                                 hillshade: hillshade)
     }
 
     /// The test seam: the terrain bytes from a closure, and a clock.
+    /// `flattening` and `deepestTileZoom` are what the detail is matched
+    /// to (`GroundReliefTerrainZooms`).
     init(device: MTLDevice,
          settings: ImmersiveMapSettings.TileSettings.GroundReliefSettings,
+         flattening: ImmersiveMapSettings.TileSettings.GroundFlatteningSettings = .init(),
+         deepestTileZoom: Int = ImmersiveMapSettings.default.tiles.coverage.maximumZoomLevel,
+         hillshade: ImmersiveMapHillshade = ImmersiveMapHillshade(),
          fetch: @escaping @Sendable (URL) async throws -> Fetched = GroundReliefStore.fetchOverHTTP,
          now: @escaping @Sendable () -> TimeInterval = { Date().timeIntervalSinceReferenceDate }) {
         self.device = device
@@ -309,17 +486,22 @@ final class GroundReliefStore: @unchecked Sendable {
         self.appearZoom = settings.appearZoom
         self.collapseZoom = settings.collapseZoom
         self.transitionSeconds = max(settings.transitionSeconds, 0)
-        self.cameraTerrainZoom = max(0, settings.cameraTerrainZoom)
+        self.zooms = GroundReliefTerrainZooms(relief: settings, flattening: flattening, deepestTileZoom: deepestTileZoom)
+        self.hillshadeStyle = hillshade
         // Until the first frame: the relief as configured, standing.
         self.strengthScale = settings.exaggeration
-        self.fromTileZoom = settings.fromTileZoom
+        self.fromTileZoom = settings.tileZoom(deepestTileZoom: deepestTileZoom)
         self.cameraClearanceMetres = max(0, settings.cameraClearanceMetres)
         self.tileURLTemplate = settings.tileURLTemplate
         self.encoding = settings.encoding
         self.minimumSourceZoom = max(0, settings.minimumSourceZoom)
-        self.terrains = LRUMemoryCache(costLimit: max(0, settings.memoryBudgetInBytes))
+        let memoryBudgetInBytes = max(0, settings.memoryBudgetInBytes ?? settings.detail.defaultMemoryBudgetInBytes)
+        self.terrains = LRUMemoryCache(costLimit: memoryBudgetInBytes)
+        self.memoryBudgetInBytes = memoryBudgetInBytes
+        self.maximumConcurrentLoads = max(1, settings.maximumConcurrentLoads)
         self.fetch = fetch
         self.now = now
+        resolveHillshade()
     }
 
     /// The frame's datum (`RenderFrameEngine`, once a frame).
@@ -333,20 +515,10 @@ final class GroundReliefStore: @unchecked Sendable {
         self.isActive = isActive
     }
 
-    /// The zoom a ring reads its terrain at: one coarser than the ring's
-    /// own tiles. The terrain is the ring's, not the tile's: whatever
-    /// stands in a ring's slot, the tile itself or a stand-in while it
-    /// loads, is raised by the same terrain, so a tile landing changes
-    /// the fills and never the ground's shape, and the whole ring moves to
-    /// the next terrain at once, at the zoom crossing, as its tiles do. A
-    /// coarser stand-in, the parent, can read that terrain too, which it
-    /// could not read one of its own zoom (four terrain tiles under one
-    /// ground tile). The datum and the camera read the first ring's. A
-    /// terrain tile is 512 heights across and a ground tile's grid at most
-    /// 128 cells, so the coarser terrain is still finer than the grid that
-    /// samples it, at a quarter of the tiles.
-    static func terrainZoom(forTargetZoom zoom: Int) -> Int {
-        max(zoom - 1, 0)
+    /// The zoom a ring of `zoom` reads its terrain at, by the relief's
+    /// detail (`GroundReliefTerrainZooms.terrainZoom(forTargetZoom:)`).
+    func terrainZoom(forTargetZoom zoom: Int) -> Int {
+        zooms.terrainZoom(forTargetZoom: zoom)
     }
 
     /// The camera's terrain (`CameraTerrainFollow`): a pan keeps the eye's
@@ -382,10 +554,12 @@ final class GroundReliefStore: @unchecked Sendable {
             sampleStepWorld: 1 / (Double(1 << cameraTerrainZoom) * Double(Self.nominalTerrainTileSize)))
     }
 
-    /// The texels across a terrain tile the camera's march is stepped by
-    /// (`CameraTerrainFollow.sampleStepWorld`): Mapterhorn's 512. A source
-    /// of coarser tiles is marched finer than its texel, which costs
-    /// samples and nothing else.
+    /// The texels across a terrain tile: Mapterhorn's 512. The camera's
+    /// march is stepped by it (`CameraTerrainFollow.sampleStepWorld`), and
+    /// the relief's detail matches the terrain to the grids by it
+    /// (`GroundReliefTerrainZooms`). A source of coarser tiles is marched
+    /// finer than its texel and read a zoom finer than its heights need,
+    /// which costs samples and tiles and nothing else.
     static let nominalTerrainTileSize = 512
 
     /// The relief of a ground tile, read out of the terrain of
@@ -410,43 +584,71 @@ final class GroundReliefStore: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         var source = tile.findParentTile(atZoom: max(min(terrainZoom, tile.z), 0)) ?? tile
-        // Past a source on its way, only what is in stands in: nothing
-        // else is asked for.
-        var standInOnly = false
         while true {
             if let terrain = terrains.value(forKey: source) {
                 let placement = GroundRelief.placement(of: tile, in: source)
                 return GroundRelief(terrain: terrain, origin: placement.origin, scale: placement.scale, strength: strengthScale)
             }
-            if standInOnly == false, missingTiles.contains(source) == false {
-                switch statesByTile[source] {
-                case .loading:
-                    break
-                case .failed(let attempts, let retryAt):
-                    if now() >= retryAt, activeLoads < Self.maximumConcurrentLoads {
-                        startLoad(source, failedAttempts: attempts)
-                    }
-                case nil:
-                    if activeLoads < Self.maximumConcurrentLoads {
-                        startLoad(source, failedAttempts: 0)
-                    }
-                }
-                guard orCoarser else {
-                    return nil
-                }
-                standInOnly = true
-            }
-            if standInOnly == false, source.z <= minimumSourceZoom {
-                // Missing at the floor: the source has nothing over the tile.
-                return nil
-            }
-            guard source.z > 0, let parent = source.findParentTile(atZoom: source.z - 1) else {
+            guard orCoarser, source.z > 0, let parent = source.findParentTile(atZoom: source.z - 1) else {
                 return nil
             }
             source = parent
         }
     }
 
+    /// The relief of a ground tile drawn in a ring of `targetZoom`: the
+    /// ring's terrain (`terrainZoom(forTargetZoom:)`), or the finest
+    /// coarser one in (`relief(for:terrainZoom:)`).
+    func relief(for tile: Tile, targetZoom: Int) -> GroundRelief? {
+        relief(for: tile, terrainZoom: terrainZoom(forTargetZoom: targetZoom))
+    }
+
+
+    // MARK: - Demand
+
+    /// The frame's terrain, nearest first (`GroundReliefDemand`): what the
+    /// store loads, in that order, and keeps whatever the budget. A tile
+    /// the source does not have is replaced by its ancestor, down to the
+    /// source's floor. Called once a frame; an empty list wants nothing,
+    /// which a frame off the terrain asks.
+    func request(tiles: [Tile]) {
+        lock.lock()
+        var order: [Tile] = []
+        order.reserveCapacity(tiles.count)
+        var seen: Set<Tile> = []
+        for tile in tiles {
+            var source = tile
+            while missingTiles.contains(source), source.z > minimumSourceZoom,
+                  let parent = source.findParentTile(atZoom: source.z - 1) {
+                source = parent
+            }
+            guard missingTiles.contains(source) == false, seen.insert(source).inserted else { continue }
+            order.append(source)
+        }
+        wantedOrder = order
+        wantedTiles = seen
+        startWantedLoadsLocked()
+        lock.unlock()
+    }
+
+    /// Starts the loads of the wanted tiles that are neither in nor on
+    /// their way, nearest first, while slots are free. Called under `lock`.
+    private func startWantedLoadsLocked() {
+        let time = now()
+        for tile in wantedOrder where activeLoads < maximumConcurrentLoads {
+            guard terrains.peekValue(forKey: tile) == nil else { continue }
+            switch statesByTile[tile] {
+            case .loading:
+                continue
+            case .failed(let attempts, let retryAt):
+                if time >= retryAt {
+                    startLoad(tile, failedAttempts: attempts)
+                }
+            case nil:
+                startLoad(tile, failedAttempts: 0)
+            }
+        }
+    }
 
     /// The relief under a point of the world (normalized world mercator),
     /// from the terrain tile of `terrainZoom` that holds it, or the finest
@@ -509,16 +711,143 @@ final class GroundReliefStore: @unchecked Sendable {
         return datumMetres + found.relief.drawnMetres(atTileUV: found.uv, datumMetres: datumMetres)
     }
 
-    /// The world units a metre of terrain rises by over a tile: the world
-    /// units per metre at the tile's latitude. The frame's strength is
-    /// not in it (`GroundRelief.strength`).
-    func worldUnitsPerMetre(over tile: Tile, renderMapSize: Double) -> Float {
-        GroundReliefUniform.worldUnitsPerMetre(over: tile, renderMapSize: renderMapSize)
+    /// The world units a metre of terrain rises by this frame, one for
+    /// every tile and everything on them: the world units per metre at the
+    /// latitude of the point the camera looks at (`setWorldScale`). The
+    /// map stretches a metre by its latitude, and a tile that rose by its
+    /// own latitude's would meet its north and south neighbours with the
+    /// same heights at different rises, a seam the ground flickers along.
+    /// One rise for the frame closes them, and the mountains keep their
+    /// proportions where the camera looks, a far one to the north or the
+    /// south a share of a percent off. The frame's strength is not in it
+    /// (`GroundRelief.strength`).
+    private(set) var worldUnitsPerMetre: Float = 0
+
+    /// The frame's world units a metre of terrain rises by
+    /// (`RenderFrameEngine`, once a frame, before anything of the frame
+    /// reads the relief): at the latitude of `centerWorldMercator`, the
+    /// point the camera looks at, on a map `renderMapSize` across.
+    func setWorldScale(centerWorldMercator: SIMD2<Double>, renderMapSize: Double) {
+        worldUnitsPerMetre = GroundReliefUniform.worldUnitsPerMetre(atNormalizedWorldY: centerWorldMercator.y,
+                                                                    renderMapSize: renderMapSize)
     }
 
     /// Half floats' values.
     static func floats(halfBits bits: [UInt16]) -> [Float] {
         bits.map(GroundReliefTile.float(halfBits:))
+    }
+
+    /// What the store holds and does now, for the debug panel's relief tab.
+    func statusSnapshot() -> GroundReliefStatusSnapshot {
+        lock.lock()
+        defer { lock.unlock() }
+        let time = now()
+        var tiles: [GroundReliefStatusSnapshot.TileStatus] = []
+        var listed: Set<Tile> = []
+        var wantedResident = 0
+        func status(of tile: Tile, priority: Int?) -> GroundReliefStatusSnapshot.TileStatus {
+            if let terrain = terrains.peekValue(forKey: tile) {
+                return .init(tile: tile, state: .resident, priority: priority, bytes: terrain.costInBytes,
+                             heightRange: terrain.heightRange, seconds: 0, attempts: 0)
+            }
+            switch statesByTile[tile] {
+            case .loading(let failedAttempts):
+                let started = loadStartedAt[tile] ?? time
+                return .init(tile: tile, state: .loading, priority: priority, bytes: 0, heightRange: nil,
+                             seconds: Int(max(0, time - started)), attempts: failedAttempts)
+            case .failed(let attempts, let retryAt):
+                return .init(tile: tile, state: .failed, priority: priority, bytes: 0, heightRange: nil,
+                             seconds: Int(max(0, retryAt - time).rounded(.up)), attempts: attempts)
+            case nil:
+                return .init(tile: tile, state: .queued, priority: priority, bytes: 0, heightRange: nil,
+                             seconds: 0, attempts: 0)
+            }
+        }
+        for (priority, tile) in wantedOrder.enumerated() {
+            let entry = status(of: tile, priority: priority)
+            if entry.state == .resident { wantedResident += 1 }
+            tiles.append(entry)
+            listed.insert(tile)
+        }
+        let kept = (terrains.keys + statesByTile.keys).filter { listed.contains($0) == false }
+        for tile in Set(kept).sorted(by: { ($0.z, $0.x, $0.y) < ($1.z, $1.x, $1.y) }) {
+            tiles.append(status(of: tile, priority: nil))
+        }
+        let failed = statesByTile.values.reduce(0) { count, state in
+            if case .failed = state { return count + 1 }
+            return count
+        }
+        return GroundReliefStatusSnapshot(tiles: tiles,
+                                          isActive: isActive,
+                                          standingShare: standingShare,
+                                          datumMetres: datumMetres,
+                                          cameraTerrainZoom: cameraTerrainZoom,
+                                          detail: zooms.detail,
+                                          wantedCount: wantedOrder.count,
+                                          wantedResidentCount: wantedResident,
+                                          residentCount: terrains.count,
+                                          residentBytes: terrains.totalCost,
+                                          budgetBytes: memoryBudgetInBytes,
+                                          loadingCount: activeLoads,
+                                          maximumConcurrentLoads: maximumConcurrentLoads,
+                                          failedCount: failed,
+                                          missingCount: missingTiles.count)
+    }
+
+    /// Writes the welds queued since the last frame
+    /// (`GroundReliefEdgeWeld`): the texels on the CPU, here on the main
+    /// thread, where they are read, and the textures through a blit in a
+    /// command buffer of the frame's queue, committed before the frame's
+    /// own. Metal tracks the textures' hazards in a queue's order, so the
+    /// blit lands after every frame before it has read them and before
+    /// this frame reads them: no texture changes under a frame in flight.
+    /// Called once a frame, before the frame's command buffer
+    /// (`RenderFrameEngine`). Returns the blit's command buffer, nil with
+    /// nothing to write.
+    @discardableResult
+    func applyPendingWelds(commandQueue: MTLCommandQueue) -> MTLCommandBuffer? {
+        lock.lock()
+        let writes = pendingWelds
+        pendingWelds.removeAll()
+        lock.unlock()
+        guard writes.isEmpty == false else { return nil }
+
+        var staging: [UInt16] = []
+        staging.reserveCapacity(writes.reduce(0) { $0 + $1.values.count })
+        var offsets: [Int] = []
+        for write in writes {
+            write.terrain.writeTexels(write.values, x: write.x, y: write.y, width: write.width, height: write.height)
+            offsets.append(staging.count * MemoryLayout<UInt16>.stride)
+            staging += write.values
+        }
+        guard let buffer = staging.withUnsafeBytes({ bytes in
+                  device.makeBuffer(bytes: bytes.baseAddress!, length: bytes.count, options: .storageModeShared)
+              }),
+              let commandBuffer = commandQueue.makeCommandBuffer(),
+              let blit = commandBuffer.makeBlitCommandEncoder() else {
+            return nil
+        }
+        commandBuffer.label = "GroundReliefEdgeWeld"
+        for (write, offset) in zip(writes, offsets) {
+            let rowBytes = write.width * MemoryLayout<UInt16>.stride
+            blit.copy(from: buffer,
+                      sourceOffset: offset,
+                      sourceBytesPerRow: rowBytes,
+                      sourceBytesPerImage: rowBytes * write.height,
+                      sourceSize: MTLSize(width: write.width, height: write.height, depth: 1),
+                      to: write.terrain.texture,
+                      destinationSlice: 0,
+                      destinationLevel: 0,
+                      destinationOrigin: MTLOrigin(x: write.x, y: write.y, z: 0))
+        }
+        blit.endEncoding()
+        commandBuffer.commit()
+        // What is placed by the terrain on the CPU (the labels) is placed
+        // again on the welded edges.
+        lock.lock()
+        version &+= 1
+        lock.unlock()
+        return commandBuffer
     }
 
     /// Releases every terrain tile, for a memory warning. The tiles still
@@ -566,6 +895,7 @@ final class GroundReliefStore: @unchecked Sendable {
     /// Called under `lock`.
     private func startLoad(_ tile: Tile, failedAttempts: Int) {
         statesByTile[tile] = .loading(failedAttempts: failedAttempts)
+        loadStartedAt[tile] = now()
         activeLoads += 1
         guard let url = url(for: tile) else {
             finishLoad(tile, terrain: nil, locked: true)
@@ -637,13 +967,20 @@ final class GroundReliefStore: @unchecked Sendable {
             lock.lock()
         }
         statesByTile.removeValue(forKey: tile)
+        loadStartedAt.removeValue(forKey: tile)
         activeLoads -= 1
         if let terrain {
-            _ = terrains.setValue(terrain, forKey: tile, cost: terrain.costInBytes)
+            _ = terrains.setValue(terrain, forKey: tile, cost: terrain.costInBytes, protectedKeys: wantedTiles)
             version &+= 1
+            // Its edges to the neighbours in, and theirs to it: written
+            // with the frame, never into a texture a frame may be reading.
+            pendingWelds += GroundReliefEdgeWeld.writes(for: tile, terrain: terrain) { [terrains] neighbour in
+                terrains.peekValue(forKey: neighbour)
+            }
         } else {
             missingTiles.insert(tile)
         }
+        startWantedLoadsLocked()
         if locked == false {
             lock.unlock()
         }
@@ -660,7 +997,9 @@ final class GroundReliefStore: @unchecked Sendable {
         }
         let delay = min(Self.retryMaximumDelay, Self.retryBaseDelay * pow(2, Double(attempts - 1)))
         statesByTile[tile] = .failed(attempts: attempts, retryAt: now() + delay)
+        loadStartedAt.removeValue(forKey: tile)
         activeLoads -= 1
+        startWantedLoadsLocked()
         lock.unlock()
 
         // The pause's end must draw a frame: on-demand rendering would

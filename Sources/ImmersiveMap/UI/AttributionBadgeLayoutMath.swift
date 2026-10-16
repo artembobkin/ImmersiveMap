@@ -16,7 +16,6 @@ enum AttributionBadgeLayoutMath {
         let horizontalInset: CGFloat
         let verticalInset: CGFloat
         let interLabelSpacing: CGFloat
-        let cornerRadius: CGFloat
         let maximumWidth: CGFloat
     }
 
@@ -28,7 +27,6 @@ enum AttributionBadgeLayoutMath {
                            horizontalInset: 8,
                            verticalInset: 5,
                            interLabelSpacing: 2,
-                           cornerRadius: 6,
                            maximumWidth: 200)
         case .regular:
             return Metrics(titleFontSize: 12,
@@ -36,7 +34,6 @@ enum AttributionBadgeLayoutMath {
                            horizontalInset: 10,
                            verticalInset: 7,
                            interLabelSpacing: 2,
-                           cornerRadius: 8,
                            maximumWidth: 240)
         case .large:
             return Metrics(titleFontSize: 14,
@@ -44,7 +41,6 @@ enum AttributionBadgeLayoutMath {
                            horizontalInset: 12,
                            verticalInset: 9,
                            interLabelSpacing: 3,
-                           cornerRadius: 10,
                            maximumWidth: 300)
         }
     }
@@ -59,7 +55,7 @@ enum AttributionBadgeLayoutMath {
         max(0, bounds.width - safeAreaInsets.left - safeAreaInsets.right - margin * 2)
     }
 
-    /// Plate size from measured label sizes. A zero copyright size means a
+    /// Badge size from measured label sizes. A zero copyright size means a
     /// one-line badge: neither the second row nor the inter-label spacing
     /// contributes.
     static func badgeSize(titleSize: CGSize,
@@ -136,35 +132,7 @@ enum AttributionBadgeLayoutMath {
         return CGRect(x: x, y: y, width: badgeSize.width, height: badgeSize.height)
     }
 
-    /// Which plate corners keep their radius. Flags follow the top-left
-    /// origin of every other function here.
-    struct RoundedCorners: Equatable {
-        let topLeft: Bool
-        let topRight: Bool
-        let bottomLeft: Bool
-        let bottomRight: Bool
-    }
-
-    /// A corner sitting on a view edge renders square; only corners facing
-    /// the map interior keep the radius. A rounded corner pressed into the
-    /// container corner reads as a notch against the edge, not as a shape,
-    /// which is exactly what the default zero margin would otherwise produce.
-    /// Decided against the physical bounds, not the safe area: a badge
-    /// resting on the safe-area inset visibly floats, so it keeps its full
-    /// rounding.
-    static func roundedCorners(badgeFrame: CGRect, bounds: CGRect) -> RoundedCorners {
-        let epsilon: CGFloat = 0.5
-        let touchesLeft = badgeFrame.minX <= bounds.minX + epsilon
-        let touchesRight = badgeFrame.maxX >= bounds.maxX - epsilon
-        let touchesTop = badgeFrame.minY <= bounds.minY + epsilon
-        let touchesBottom = badgeFrame.maxY >= bounds.maxY - epsilon
-        return RoundedCorners(topLeft: !(touchesTop || touchesLeft),
-                              topRight: !(touchesTop || touchesRight),
-                              bottomLeft: !(touchesBottom || touchesLeft),
-                              bottomRight: !(touchesBottom || touchesRight))
-    }
-
-    /// Title/copyright frames inside the plate; a zero copyright height
+    /// Title/copyright frames inside the badge; a zero copyright height
     /// yields a zero copyright frame and no spacing.
     static func labelFrames(badgeBounds: CGRect,
                             titleHeight: CGFloat,

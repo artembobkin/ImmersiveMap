@@ -10,7 +10,7 @@ import XCTest
 
 final class TileMvtParserRoadLabelTests: XCTestCase {
     func testRoadLabelsUseSharedResolverLanguagePreferences() throws {
-        var config = ImmersiveMapSettings.default
+        var config = ImmersiveMapSettings.defaultWithoutRelief
         config.labels.language = .french
 
         let parser = TileMvtParser.forTests(settings: config,

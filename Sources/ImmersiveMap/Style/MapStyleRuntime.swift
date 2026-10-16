@@ -27,6 +27,9 @@ struct MapStyleRuntime {
     let style: any ImmersiveMapVectorTileStyle
     /// What no tile paints, as the style states it.
     let baseColors: ImmersiveMapBaseColors
+    /// How the slopes are shaded where the relief stands, as the style
+    /// states it.
+    let hillshade: ImmersiveMapHillshade
     /// The style's identity, the namespace its label identities are minted
     /// in.
     let styleID: String
@@ -46,6 +49,7 @@ struct MapStyleRuntime {
         self.style = style
         self.styleID = style.styleID
         self.baseColors = style.baseColors
+        self.hillshade = style.hillshade
     }
 
     /// The style's part of the prepared-tile cache identity: the reading's

@@ -17,7 +17,7 @@ final class TileGeometryWindingTests: XCTestCase {
     private static let streetTile = Tile(x: 19807, y: 10243, z: 15)
 
     private func makeParser(addTestBorders: Bool = false) -> TileMvtParser {
-        var config = ImmersiveMapSettings.default
+        var config = ImmersiveMapSettings.defaultWithoutRelief
         config.tiles.parsing.addTestBorders = addTestBorders
         return TileMvtParser.forTests(settings: config)
     }

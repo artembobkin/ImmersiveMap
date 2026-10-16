@@ -151,6 +151,9 @@ final class GroundReliefOffscreenRenderTests: XCTestCase {
                 theme.layers.roads.primary = Self.roadColour
                 theme.layers.roads.casing = Self.roadColour
                 theme.features.buildingFillColor = Self.buildingColour
+                // The geometry alone: the slopes' shading would tint the
+                // park's colour the pixels are told by.
+                theme.hillshade = .none
             })
         settings.camera.maximumZoom = 22
         settings.scene.starfield.starCount = 0
@@ -159,11 +162,13 @@ final class GroundReliefOffscreenRenderTests: XCTestCase {
         settings.labels.isEnabled = false
         if let terrain {
             // The relief at every zoom: the collapse would draw the street
-            // zooms on the plane.
+            // zooms on the plane. Every height, so each ring reads the
+            // terrain of its own zoom, which the fixture serves.
             settings = settings.groundRelief(isEnabled: true,
                                              tileURLTemplate: terrain.absoluteString + "{z}/{x}/{y}.png",
                                              exaggeration: exaggeration,
-                                             collapseZoom: 30)
+                                             collapseZoom: 30,
+                                             detail: .maximum)
         }
         let harness = try OffscreenFrameHarness.makeOrSkip(settings: settings, size: 768)
         var layers: [(layerName: String, features: [VectorTileFixture.Feature])] = [

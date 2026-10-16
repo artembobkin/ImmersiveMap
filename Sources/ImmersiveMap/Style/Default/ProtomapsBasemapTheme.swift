@@ -17,7 +17,8 @@ import simd
 /// ```
 ///
 /// Colours are RGBA in 0...1. Every value feeds the cache fingerprint, so a
-/// change rebakes the prepared tiles by itself.
+/// change rebakes the prepared tiles by itself, but the hillshade, which is
+/// drawn at frame time and baked into nothing.
 public struct ProtomapsBasemapTheme: Equatable, Sendable {
     public struct LabelAppearance: Equatable, Sendable {
         public var fillColor: SIMD3<Float>
@@ -517,19 +518,24 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
     public var features: FeatureStyles
     public var roadMetrics: RoadMetrics
     public var routeShields: RouteShields
+    /// How the slopes are shaded where the ground relief stands
+    /// (`ImmersiveMapHillshade`).
+    public var hillshade: ImmersiveMapHillshade
 
     public init(labels: LabelStyles = .default,
                 labelVisibility: LabelVisibility = LabelVisibility(),
                 layers: LayerStyles = .default,
                 features: FeatureStyles = .default,
                 roadMetrics: RoadMetrics = RoadMetrics(),
-                routeShields: RouteShields = RouteShields()) {
+                routeShields: RouteShields = RouteShields(),
+                hillshade: ImmersiveMapHillshade = ImmersiveMapHillshade()) {
         self.labels = labels
         self.labelVisibility = labelVisibility
         self.layers = layers
         self.features = features
         self.roadMetrics = roadMetrics
         self.routeShields = routeShields
+        self.hillshade = hillshade
     }
 
     public static let `default` = ProtomapsBasemapTheme()

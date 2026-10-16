@@ -68,6 +68,10 @@ public protocol ImmersiveMapVectorTileStyle: Sendable {
     /// The colours of what no tile paints: the map where no tile has
     /// arrived and the two polar caps. The default is the built-in theme's.
     var baseColors: ImmersiveMapBaseColors { get }
+    /// How the slopes are shaded where the ground relief stands. Drawn at
+    /// frame time, not part of the cache fingerprint. The default is the
+    /// built-in theme's.
+    var hillshade: ImmersiveMapHillshade { get }
     /// The style's identity: the namespace its label identities are minted
     /// in, so two styles never share a label across tiles. The default is
     /// one shared namespace for styles that state none.
@@ -94,6 +98,10 @@ public protocol ImmersiveMapVectorTileStyle: Sendable {
 public extension ImmersiveMapVectorTileStyle {
     var baseColors: ImmersiveMapBaseColors {
         ProtomapsBasemapTheme.default.baseColors
+    }
+
+    var hillshade: ImmersiveMapHillshade {
+        ProtomapsBasemapTheme.default.hillshade
     }
 
     var styleID: String {

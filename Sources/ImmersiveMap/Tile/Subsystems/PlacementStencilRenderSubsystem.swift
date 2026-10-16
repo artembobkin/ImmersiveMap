@@ -81,11 +81,21 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
         // one for the rest, selected only where it changes from the last
         // draw.
         var selectedRelief: Bool?
+        // A raster placement's mark takes the raster ground's grid
+        // (`RasterTileGrid.reliefCells`), at its source's raster size; a
+        // vector one the flattening's, as the vector ground has, and so
+        // does a raster placement of a tile drawn as geometry elsewhere
+        // (`RasterTileRenderSubsystem`).
+        let rasterSizeByTile = RasterTileGrid.rasterSizesBySource(placements)
         for placement in placements {
             let tile = placement.placeIn.tile
-            let relief = groundReliefStore?.relief(for: tile,
-                                                   terrainZoom: GroundReliefStore.terrainZoom(forTargetZoom: placement.slot.z))
-            let cells = relief == nil ? 0 : groundFlattening.grid(forTileZoom: tile.z)
+            let relief = groundReliefStore?.relief(for: tile, targetZoom: placement.slot.z)
+            let gridCells = groundFlattening.grid(forTileZoom: tile.z)
+            let cells = relief.map { relief in
+                rasterSizeByTile[placement.metalTile.tile].map {
+                    RasterTileGrid.reliefCells(gridCells: gridCells, relief: relief, rasterSize: $0)
+                } ?? gridCells
+            } ?? 0
             guard let mesh = grid.mesh(forTileZoom: tile.z, atLeast: cells) else { continue }
             if selectedRelief != (relief != nil) {
                 selectedRelief = relief != nil
@@ -94,7 +104,7 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
             if let relief, let groundReliefStore {
                 GroundReliefUniform.bind(relief,
                                          over: tile,
-                                         datumMetres: groundReliefStore.datumMetres,
+                                         store: groundReliefStore,
                                          renderMapSize: flatRenderState.renderMapSize,
                                          encoder: encoder)
             }

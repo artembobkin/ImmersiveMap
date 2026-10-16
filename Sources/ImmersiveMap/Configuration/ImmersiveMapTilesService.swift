@@ -3,10 +3,13 @@
 
 import Foundation
 
-/// The hosted ImmersiveMap tile archive: one PMTiles file of vector tiles
-/// built from OpenStreetMap data, under ODbL, read over HTTP range requests.
-/// These constants are what a bare `ImmersiveMapView()` renders with. Pointing
-/// the map elsewhere is one `.tileArchive(_:headers:)` call.
+/// The hosted ImmersiveMap archives: one PMTiles file of vector tiles built
+/// from OpenStreetMap data, under ODbL, and one of building models, both
+/// read over HTTP range requests. These constants are what a bare
+/// `ImmersiveMapView()` renders with, the ground relief on Mapterhorn's open
+/// terrain beside them (`GroundReliefSettings.tileURLTemplate`). Pointing
+/// the map elsewhere is one `.tileArchive(_:headers:)` or
+/// `.modelArchive(_:headers:depthBias:)` call.
 public enum ImmersiveMapTilesService {
     /// The hosted PMTiles archive. The file name carries the planet's date:
     /// a new planet is a new URL, which starts new cache namespaces. An
@@ -17,6 +20,11 @@ public enum ImmersiveMapTilesService {
 
     /// The deepest zoom the hosted archive ships.
     public static let maximumTileZoomLevel = 15
+
+    /// The hosted archive of building models (`ModelArchiveSettings`), one
+    /// fixed name overwritten by each bake: the engine tells the uploads
+    /// apart by the ETag the host gives the file.
+    public static let modelArchiveURL = URL(string: "https://tiles.immersivemap.dev/models.pmtiles")!
 
     /// Manual "invalidate every cached tile" lever: bump to force all clients
     /// to re-fetch and re-parse. A new planet at a new URL does not need a

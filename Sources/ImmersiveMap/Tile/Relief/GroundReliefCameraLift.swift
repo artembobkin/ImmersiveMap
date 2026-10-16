@@ -70,7 +70,7 @@ enum GroundReliefCameraLift {
         guard abs(descent) > .leastNormalMagnitude else {
             return nil
         }
-        let zoom = GroundReliefStore.terrainZoom(forTargetZoom: tileZoom)
+        let zoom = store.terrainZoom(forTargetZoom: tileZoom)
         var height: Float = 0
         var ground = near
         for _ in 0 ..< 3 {
@@ -83,10 +83,8 @@ enum GroundReliefCameraLift {
             guard let drawn = store.drawnMetres(atNormalizedWorld: point, terrainZoom: zoom) else {
                 return nil
             }
-            let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: point.y)
-            let unitsPerMetre = Float(ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: latitude,
-                                                                                renderMapSize: renderMapSize))
-            height = (drawn - store.datumMetres) * unitsPerMetre
+            // The ground's rise, the frame's (`GroundReliefStore.worldUnitsPerMetre`).
+            height = (drawn - store.datumMetres) * store.worldUnitsPerMetre
         }
         let depth = (cameraMatrix * SIMD4<Float>(ground.x, ground.y, height, 1)).w
         return depth.isFinite && depth > 0 ? depth : nil

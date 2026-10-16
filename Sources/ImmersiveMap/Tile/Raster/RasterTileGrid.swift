@@ -36,6 +36,34 @@ final class RasterTileGrid {
         return max(minimumCells, 4096 / step)
     }
 
+    /// The cells a side of a raster tile's grid on the relief: the zoom's
+    /// flattening grid (`gridCells`), but never finer than the terrain
+    /// under the tile has heights a side, as a vertex between two heights
+    /// shows nothing new, nor than a cell to two texels of the tile's
+    /// raster of `rasterSize`, the detail the ring was given. A far ring
+    /// that reads a coarse terrain map (the cinematic far map) takes a grid
+    /// of a few dozen cells instead of the flattening's hundreds. The
+    /// raster tile's draw and its placement's stencil mark take the same,
+    /// so the mark lies where the ground does.
+    static func reliefCells(gridCells: Int, relief: GroundRelief, rasterSize: Int) -> Int {
+        let terrainTexels = Int((Float(relief.terrain.size) * relief.scale).rounded(.down))
+        return max(1, min(gridCells, terrainTexels, rasterSize / 2))
+    }
+
+    /// The raster size each source of a frame's placements draws its ground
+    /// at (`RasterTileRenderSubsystem`): the largest of its raster
+    /// placements, and none for a source drawn as geometry anywhere, which
+    /// covers its raster slots with its geometry.
+    static func rasterSizesBySource(_ placements: [PlaceTile]) -> [Tile: Int] {
+        let vectorTiles = Set(placements.filter { $0.rules.raster == nil }.map(\.metalTile.tile))
+        var sizes: [Tile: Int] = [:]
+        for placement in placements {
+            guard let raster = placement.rules.raster, vectorTiles.contains(placement.metalTile.tile) == false else { continue }
+            sizes[placement.metalTile.tile] = max(sizes[placement.metalTile.tile] ?? 0, raster.size)
+        }
+        return sizes
+    }
+
     private let device: MTLDevice
     private var meshesByCells: [Int: Mesh] = [:]
 

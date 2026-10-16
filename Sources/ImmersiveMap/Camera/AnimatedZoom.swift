@@ -8,7 +8,7 @@ import Foundation
 /// (`ImmersiveMapSettings.CameraSettings.animatedZoomHalfLife`). The
 /// camera's own zoom is the fact of the frame, and the tiles, the rings
 /// and the camera's pose read it as it is. What dresses the frame by the
-/// zoom (the ground fog, the styles' zoom fades, the labels' reach) reads
+/// zoom (the styles' zoom fades, the labels' reach) reads
 /// this one (`FrameContext.animatedZoom`), and the relief's collapse reads a
 /// zoom held through a drag and then followed the same way
 /// (`RenderFrameEngine`), so a zoom

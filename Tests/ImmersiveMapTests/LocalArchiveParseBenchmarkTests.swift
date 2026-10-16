@@ -35,7 +35,7 @@ final class LocalArchiveParseBenchmarkTests: XCTestCase {
         let tiles = [Tile(x: 16, y: 11, z: 5), Tile(x: 16, y: 10, z: 5), Tile(x: 66, y: 45, z: 7),
                      Tile(x: 531, y: 364, z: 10), Tile(x: 2127, y: 1457, z: 12)]
         let withRelief = ImmersiveMapSettings.default.groundRelief(isEnabled: true)
-        let withoutRelief = ImmersiveMapSettings.default
+        let withoutRelief = ImmersiveMapSettings.defaultWithoutRelief
         for tile in tiles {
             guard case .tile(let data, _) = try await client.tileBytes(z: tile.z, x: tile.x, y: tile.y) else {
                 print("z\(tile.z)/\(tile.x)/\(tile.y): no tile")

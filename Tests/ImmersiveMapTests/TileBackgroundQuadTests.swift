@@ -13,7 +13,7 @@ final class TileBackgroundQuadTests: XCTestCase {
     private func parseBackgroundOnly(_ tile: Tile) throws -> DrawingPolygonBytes {
         // The layered ground: the flattened ground cuts the background to
         // its own grid instead (GroundFlatteningParseTests).
-        var config = ImmersiveMapSettings.default
+        var config = ImmersiveMapSettings.defaultWithoutRelief
         config.tiles.groundFlattening.isEnabled = false
         let parser = TileMvtParser.forTests(settings: config)
         let parsed = try parser.parse(tile: tile,

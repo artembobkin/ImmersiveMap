@@ -18,7 +18,7 @@ final class LabelCopiesAcrossZoomsTests: XCTestCase {
         let tile = WebMercatorTileScheme.tile(latitude: Self.latitude, longitude: Self.longitude, z: z)
         let point = WebMercatorTileScheme.tileLocalPoint(latitude: Self.latitude, longitude: Self.longitude, in: tile)
         let data = VectorTileFixture.layersTile([(layerName: layerName, features: features(point))])
-        let parser = TileMvtParser.forTests(settings: .default, mapStyle: ProtomapsBasemapDefaultMapStyle())
+        let parser = TileMvtParser.forTests(settings: .defaultWithoutRelief, mapStyle: ProtomapsBasemapDefaultMapStyle())
         return try parser.parse(tile: tile, mvtData: data).textLabels
     }
 

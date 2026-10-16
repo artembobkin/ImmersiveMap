@@ -169,7 +169,11 @@ final class RenderPersistentContext {
                                                tileLoadingStatusReporter: tileLoadingStatusReporter)
         self.tileRenderStore.eventSink = eventSink
         self.baseLabelCache = BaseLabelCache(metalDevice: metal.device)
-        self.roadLabelCache = RoadLabelCache(metalDevice: metal.device)
+        // On the relief the labels' paths are cut where the roads' ribbons
+        // were, so the names ride the relief with the roads.
+        let parseOptions = TileParseOptions(settings: config)
+        self.roadLabelCache = RoadLabelCache(metalDevice: metal.device,
+                                             reliefSubdivisionStep: { parseOptions.reliefSubdivisionStep(tileZoom: $0) })
 
         self.sceneModelSource = sceneModelSource
         self.sceneModelMeshStore = SceneModelMeshStore(device: metal.device)
@@ -181,7 +185,9 @@ final class RenderPersistentContext {
                                                   device: metal.device,
                                                   schema: styleRuntime.schema)
         self.modelTileStore?.eventSink = eventSink
-        self.groundReliefStore = GroundReliefStore.make(settings: config, device: metal.device)
+        self.groundReliefStore = GroundReliefStore.make(settings: config,
+                                                        hillshade: styleRuntime.hillshade,
+                                                        device: metal.device)
         self.groundReliefStore?.eventSink = eventSink
 
         self.avatarSource = avatarSource

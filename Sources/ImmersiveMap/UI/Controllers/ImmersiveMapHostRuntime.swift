@@ -174,7 +174,8 @@ final class ImmersiveMapHostRuntime {
         runtimeGraph.cameraAnimationRuntime.updateSettings()
         runtimeGraph.controlsRuntime.applyAttribution(settings.resolvedAttribution,
                                                       settings: settings.attribution)
-        runtimeGraph.controlsRuntime.applyControlZones(settings.camera.controlZones)
+        runtimeGraph.controlsRuntime.applyControlZones(settings.camera.controlZones,
+                                                       isHidden: settings.controls.isHidden)
         runtimeGraph.debugOverlayRuntime.apply(settings: settings)
         requestsLayout()
         runtimeGraph.renderRuntime.updateRenderLoopSettings(settings.renderLoop)

@@ -115,6 +115,23 @@ final class ShadowFrameStateResolverTests: XCTestCase {
     /// of the window is spent behind the camera; the cost is this. Pinned so
     /// nobody mistakes it for a regression, and so the day it has to go back
     /// the contract is written down.
+    /// Over a relief the window's depth reaches the valleys below the
+    /// plane and the casters on the summits above it: the receiver volume
+    /// spans the ground's lowest to its highest plus the caster cap.
+    func testTheWindowsDepthSpansTheReliefsHeights() throws {
+        let lightView = Matrix.lookAt(eye: simd_normalize(SIMD3<Float>(0.3, -0.4, 0.8)), center: .zero, up: SIMD3<Float>(0, 0, 1))
+        let footprint: [SIMD2<Float>] = [SIMD2(-10, -10), SIMD2(10, -10), SIMD2(10, 10), SIMD2(-10, 10)]
+        let plane = try XCTUnwrap(ShadowFrameStateResolver.cascadeExtremes(footprint: footprint,
+                                                                           maxCasterHeight: 2,
+                                                                           lightView: lightView))
+        let relief = try XCTUnwrap(ShadowFrameStateResolver.cascadeExtremes(footprint: footprint,
+                                                                            maxCasterHeight: 2,
+                                                                            groundHeights: -3 ... 5,
+                                                                            lightView: lightView))
+        XCTAssertLessThan(relief.minDepth, plane.minDepth, "A summit and its casters lie nearer the light")
+        XCTAssertGreaterThan(relief.maxDepth, plane.maxDepth, "A valley lies farther from it")
+    }
+
     func testTheWindowFollowsWhereTheCameraLooks() throws {
         let reference = try XCTUnwrap(Self.resolve(eye: Self.makeEye(pitch: 55 * .pi / 180,
                                                                      bearing: 0,

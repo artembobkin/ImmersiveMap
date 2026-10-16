@@ -127,6 +127,9 @@ enum FlatMapSurfaceDrawer {
         // The flat ground pipeline reads the per-pixel ground shadow mask
         // (fragment texture 1) instead of sampling the cascades per layer.
         renderEncoder.setFragmentTexture(groundShadowMask.texture, index: 1)
+        // The relief's variants sample the cascades at their raised points
+        // (Tile.metal, kSamplesShadowCascades), not the plane's mask.
+        renderEncoder.setFragmentTexture(groundShadowMask.cascades, index: 0)
 
         // Unique SOURCES, not placements: a tile placed in several slots
         // draws once at full extent, and the tile-priority stencil, which
@@ -173,8 +176,7 @@ enum FlatMapSurfaceDrawer {
         sources.sort { $0.stencilReference > $1.stencilReference }
         for index in sources.indices where sources[index].metalTile.tileBuffers.ground.isFlattened {
             let tile = sources[index].metalTile.tile
-            sources[index].relief = reliefStore?.relief(for: tile,
-                                                        terrainZoom: GroundReliefStore.terrainZoom(forTargetZoom: sources[index].targetZoom))
+            sources[index].relief = reliefStore?.relief(for: tile, targetZoom: sources[index].targetZoom)
         }
         let linedSources = sources.filter(\.drawsLines)
         let groundSources = sources.filter(\.drawsGround)
@@ -227,11 +229,11 @@ enum FlatMapSurfaceDrawer {
                 return
             }
             selectPipeline(pipeline, relief: true)
-            bindGroundRelief(relief,
-                             tile: source.metalTile.tile,
-                             datumMetres: groundRelief.datumMetres,
-                             renderMapSize: flatRenderState.renderMapSize,
-                             renderEncoder: renderEncoder)
+            GroundReliefUniform.bind(relief,
+                                     over: source.metalTile.tile,
+                                     store: groundRelief,
+                                     renderMapSize: flatRenderState.renderMapSize,
+                                     encoder: renderEncoder)
         }
 
         func drawLayer(_ keyPath: KeyPath<TileBuffers, TileBuffers.GeometryLayer>,
@@ -441,18 +443,6 @@ enum FlatMapSurfaceDrawer {
     /// by at the tile's latitude, worked out here once for the tile, the
     /// frame's datum (`GroundReliefStore.datumMetres`) and the frame's
     /// strength.
-    private static func bindGroundRelief(_ relief: GroundRelief,
-                                         tile: Tile,
-                                         datumMetres: Float,
-                                         renderMapSize: Double,
-                                         renderEncoder: MTLRenderCommandEncoder) {
-        GroundReliefUniform.bind(relief,
-                                 over: tile,
-                                 datumMetres: datumMetres,
-                                 renderMapSize: renderMapSize,
-                                 encoder: renderEncoder)
-    }
-
     private static func drawFlatGeometryLayer(renderEncoder: MTLRenderCommandEncoder,
                                               buffers: TileBuffers.GeometryLayer,
                                               tile: Tile,

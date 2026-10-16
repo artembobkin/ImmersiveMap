@@ -105,7 +105,8 @@ final class GroundReliefRoadParseTests: XCTestCase {
                                              groundReliefEnabled: options.groundReliefEnabled).namespaceComponent
         }
         XCTAssertNotEqual(namespace(relief: true), namespace(relief: false))
-        XCTAssertNil(TileParseOptions(settings: .default).reliefSubdivisionStep(tileZoom: 15), "Off by default")
+        XCTAssertNotNil(TileParseOptions(settings: .default).reliefSubdivisionStep(tileZoom: 15), "On by default")
+        XCTAssertNil(TileParseOptions(settings: .defaultWithoutRelief).reliefSubdivisionStep(tileZoom: 15), "Off, laid flat")
         var settings = ImmersiveMapSettings.default
         settings.tiles.groundRelief.isEnabled = true
         settings.tiles.groundFlattening.grid = 32

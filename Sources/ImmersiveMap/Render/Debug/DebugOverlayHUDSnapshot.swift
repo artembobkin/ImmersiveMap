@@ -19,7 +19,9 @@ struct DebugOverlayHUDContentRequest: OptionSet, Sendable, Equatable {
     static let stats = DebugOverlayHUDContentRequest(rawValue: 1 << 0)
     /// The loader's status, the tile cards and the coverage map.
     static let tiles = DebugOverlayHUDContentRequest(rawValue: 1 << 1)
-    static let all: DebugOverlayHUDContentRequest = [.stats, .tiles]
+    /// The terrain store's status, the terrain cards and their map.
+    static let relief = DebugOverlayHUDContentRequest(rawValue: 1 << 2)
+    static let all: DebugOverlayHUDContentRequest = [.stats, .tiles, .relief]
 }
 
 struct DebugOverlayHUDSnapshot: Equatable {
@@ -33,12 +35,24 @@ struct DebugOverlayHUDSnapshot: Equatable {
     let topPadding: Float
     let sectionSpacing: Float
     let textColor: SIMD3<Float>
-    /// The animated zoom as a number (`FrameContext.animatedZoom`), for the
+    /// The planning zoom as a number (`FrameContext.planningZoom`), for the
     /// controls that read a value off a zoom curve (the ground fog group),
     /// which the frame reads at that zoom.
     var cameraZoom: Double = 0
+    /// The camera's own zoom as a number, for the zoom badge
+    /// (`DebugOverlayZoomBadge`), which shows it beside `cameraZoom`.
+    var zoom: Double = 0
+    /// The compass direction the camera looks in, in degrees clockwise
+    /// from north (`DebugOverlaySunDial.viewAzimuthDegrees`): the sun
+    /// picker turns with it.
+    var viewAzimuthDegrees: Double = 0
     /// The frame's tile coverage from above, for the panel's coverage map.
     var tileCoverage: DebugOverlayTileCoverage? = nil
+    /// The terrain store's status (`GroundReliefStatusSnapshot`), nil with
+    /// the relief off or its tab not shown.
+    var reliefStatus: GroundReliefStatusSnapshot? = nil
+    /// The terrain from above, for the relief tab's map.
+    var reliefCoverage: DebugOverlayReliefCoverage? = nil
 
     /// The same frame snapshot with the tile list read again from the
     /// reporter: what the panel applies between frames.
@@ -54,18 +68,25 @@ struct DebugOverlayHUDSnapshot: Equatable {
                                 sectionSpacing: sectionSpacing,
                                 textColor: textColor,
                                 cameraZoom: cameraZoom,
-                                tileCoverage: tileCoverage)
+                                zoom: self.zoom,
+                                viewAzimuthDegrees: viewAzimuthDegrees,
+                                tileCoverage: tileCoverage,
+                                reliefStatus: reliefStatus,
+                                reliefCoverage: reliefCoverage)
     }
 
     static func make(settings: ImmersiveMapSettings.DebugSettings,
                      zoom: Double,
-                     animatedZoom: Double? = nil,
+                     planningZoom: Double? = nil,
+                     viewAzimuthDegrees: Double = 0,
                      latitude: Double,
                      longitude: Double,
                      cameraDebugLines: [String],
                      diagnostics: FrameDiagnostics?,
                      tileLoadingStatus: TileLoadingStatusSnapshot? = nil,
                      tileCoverage: DebugOverlayTileCoverage? = nil,
+                     reliefStatus: GroundReliefStatusSnapshot? = nil,
+                     reliefCoverage: DebugOverlayReliefCoverage? = nil,
                      content: DebugOverlayHUDContentRequest = .all) -> DebugOverlayHUDSnapshot? {
         guard settings.enableDebugPanel else {
             return nil
@@ -90,8 +111,12 @@ struct DebugOverlayHUDSnapshot: Equatable {
             topPadding: settings.topPadding,
             sectionSpacing: settings.sectionSpacing,
             textColor: settings.textColor,
-            cameraZoom: animatedZoom ?? zoom,
-            tileCoverage: content.contains(.tiles) ? tileCoverage : nil
+            cameraZoom: planningZoom ?? zoom,
+            zoom: zoom,
+            viewAzimuthDegrees: viewAzimuthDegrees,
+            tileCoverage: content.contains(.tiles) ? tileCoverage : nil,
+            reliefStatus: content.contains(.relief) ? reliefStatus : nil,
+            reliefCoverage: content.contains(.relief) ? reliefCoverage : nil
         )
     }
 
@@ -103,15 +128,23 @@ struct DebugOverlayHUDSnapshot: Equatable {
                      tileLoadingStatus: TileLoadingStatusSnapshot? = nil,
                      content: DebugOverlayHUDContentRequest = .all) -> DebugOverlayHUDSnapshot? {
         let cameraPosition = frameContext.mapCameraState.cameraPosition()
+        let reliefStatus = content.contains(.relief) ? frameContext.services.groundRelief?.statusSnapshot() : nil
+        let viewCoverage = content.contains(.tiles) || reliefStatus != nil
+            ? DebugOverlayTileCoverage.make(frameContext: frameContext) : nil
         return make(settings: settings,
                     zoom: frameContext.mapCameraState.zoom,
-                    animatedZoom: frameContext.animatedZoom,
+                    planningZoom: frameContext.planningZoom,
+                    viewAzimuthDegrees: DebugOverlaySunDial.viewAzimuthDegrees(bearingRadians: Double(frameContext.mapCameraState.bearing)),
                     latitude: cameraPosition.latitudeDegrees,
                     longitude: cameraPosition.longitudeDegrees,
                     cameraDebugLines: content.contains(.stats) ? makeCameraDebugLines(frameContext: frameContext) : [],
                     diagnostics: diagnostics,
                     tileLoadingStatus: tileLoadingStatus,
-                    tileCoverage: content.contains(.tiles) ? DebugOverlayTileCoverage.make(frameContext: frameContext) : nil,
+                    tileCoverage: content.contains(.tiles) ? viewCoverage : nil,
+                    reliefStatus: reliefStatus,
+                    reliefCoverage: reliefStatus.flatMap { status in
+                        viewCoverage.map { DebugOverlayReliefCoverage.make(status: status, view: $0) }
+                    },
                     content: content)
     }
 
@@ -163,7 +196,7 @@ struct DebugOverlayHUDSnapshot: Equatable {
                                                                       renderMapSize: frameContext.flatRenderState.renderMapSize)
         let eyeHeightMetres = Double(frameContext.cameraEye.z) / unitsPerMetre
         let state = store.isActive ? "on" : "off"
-        let terrainZoom = GroundReliefStore.terrainZoom(forTargetZoom: frameContext.visibleContent.tileZoomLevel)
+        let terrainZoom = store.terrainZoom(forTargetZoom: frameContext.visibleContent.tileZoomLevel)
         let strength = store.strength(atNormalizedWorld: centre, terrainZoom: terrainZoom).map { Double($0) }
         return "relief:\(state) datum:\(format(Double(store.datumMetres)))m eye alt:\(format(Double(store.datumMetres) + eyeHeightMetres))m"
             + " height:\(format(eyeHeightMetres))m x\(strength.map(format) ?? "-")"

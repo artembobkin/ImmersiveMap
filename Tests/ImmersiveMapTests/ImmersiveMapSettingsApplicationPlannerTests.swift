@@ -53,9 +53,23 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         XCTAssertEqual(settings.modelArchive?.requestHeaders, ["Authorization": "Bearer x"])
         XCTAssertEqual(settings.modelArchive?.memoryBudgetInBytes, 1_000)
         XCTAssertEqual(settings.modelArchive?.diskCacheSizeInBytes, 2_000)
-        XCTAssertNil(ImmersiveMapSettings.default.modelArchive)
+        XCTAssertEqual(ImmersiveMapSettings.default.modelArchive?.archiveURL, ImmersiveMapTilesService.modelArchiveURL,
+                       "The hosted models by default")
+        XCTAssertNil(ImmersiveMapSettings.default.modelArchiveSettings(nil).modelArchive, "Nil turns them off")
     }
 
+
+    /// Hiding the controls hides views over the map: nothing is rebuilt,
+    /// and the debug panel stays enabled with what was dragged in it.
+    func testHidingTheControlsIsLiveApplied() {
+        let shown = ImmersiveMapSettings.default.debugPanel()
+        XCTAssertFalse(shown.controls.isHidden, "Shown by default")
+        let hidden = shown.controlsHidden()
+        XCTAssertTrue(hidden.debug.enableDebugPanel)
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: shown, to: hidden)
+        XCTAssertEqual(plan.changedDomains, [.controls])
+        XCTAssertEqual(plan.actions, [.liveApply])
+    }
 
     func testSceneLightDirectionChangeIsLiveApplied() {
         let oldSettings = ImmersiveMapSettings.default

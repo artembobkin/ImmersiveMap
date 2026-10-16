@@ -31,6 +31,16 @@ final class ShadowPassGateResolverTests: XCTestCase {
                                                        hasModelCasters: true))
     }
 
+    /// The mountains cast with no building or model in sight: the relief
+    /// stands at zooms with no buildings.
+    func testTheMountainsAloneGateOn() {
+        XCTAssertNotNil(ShadowPassGateResolver.resolve(shadowFrameState: Self.state,
+                                                       hasBuildingCasters: false,
+                                                       hasModelCasters: false,
+                                                       hasTerrainCasters: true))
+        XCTAssertTrue(ImmersiveMapSettings.TileSettings.GroundReliefSettings().castsShadows, "On by default")
+    }
+
     /// The buildings cast only where they draw: a frame that draws none
     /// (off the buildings' zoom, or every tile waiting for its model tile)
     /// runs no shadow pass for them, whatever the coverage planned.

@@ -61,7 +61,8 @@ public struct ImmersiveMapView: View {
                                         markerContent: markerContent,
                                         tourVideoRecorder: tourVideoRecorder)
             .immersiveMapCameraControlsOverlay(
-                isEnabled: (cameraUIControls?.isEnabled ?? false) && cameraController != nil,
+                isEnabled: (cameraUIControls?.isEnabled ?? false) && cameraController != nil
+                    && settings.controls.isHidden == false,
                 camera: cameraController,
                 initialCameraPosition: cameraPosition ?? Self.defaultCameraControlsPosition,
                 maximumPitch: cameraUIControls?.maximumPitch ?? ImmersiveMapSettings.default.camera.maximumPitch
@@ -302,7 +303,7 @@ public extension ImmersiveMapView {
     /// which it closes half of what is left of the way. The camera's zoom
     /// is the fact of a frame, and the tiles, the rings and the camera's
     /// pose read it as it is. What dresses the frame by the zoom (the
-    /// ground fog, the styles' zoom fades, the labels' reach) reads the
+    /// styles' zoom fades, the labels' reach) reads the
     /// animated one, and the relief's collapse a zoom held through a drag and
     /// then followed the same way, so a zoom that jumps in one frame, as
     /// it does over a relief when the point the camera looks at drops off
@@ -686,10 +687,13 @@ public extension ImmersiveMapView {
     }
 
     /// Loads the 3D models of the map's buildings from an archive of model
-    /// tiles:
+    /// tiles, the hosted one by default
+    /// (`ImmersiveMapTilesService.modelArchiveURL`):
     ///
     ///     ImmersiveMapView()
     ///         .modelArchive(URL(string: "https://tiles.example.com/models.pmtiles")!)
+    ///
+    /// `modelArchiveSettings(nil)` turns the models off.
     ///
     /// The archive is one PMTiles v3 file whose zoom 14 tiles hold models
     /// ready for the GPU (`ModelTileContents` is the format). It is read over HTTP
@@ -822,50 +826,67 @@ public extension ImmersiveMapView {
     /// `transitionSeconds` (0.3), everywhere alike, and never a scaling
     /// with the zoom, which would breathe with every drag over the
     /// slopes. An `appearZoom` of 0, or a `collapseZoom` past the deepest
-    /// zoom, keeps the relief at every zoom. The camera flies
+    /// zoom, keeps the relief at every zoom. `detail` picks the terrain
+    /// tiles the ground reads (`GroundReliefDetail`): the cinematic two
+    /// maps around the point the camera looks at by default, of
+    /// `cinematicNearZoom` (10) near and `cinematicFarZoom` (6) past it,
+    /// the heights the flattening's grid can show (`.matchingGrid`), or
+    /// every height the source has (`.maximum`). The camera flies
     /// over one map at every zoom, the terrain tiles of
-    /// `cameraTerrainZoom` (12 by default). The roads,
+    /// `cameraTerrainZoom`, the detail's own when unset. The roads,
     /// the buildings and the labels rise with
-    /// it. The ground rises from `fromTileZoom` on (6 by default, the
-    /// coarsest far ring where the relief comes in): a tile of that zoom
-    /// or deeper is flattened for it whatever the flattening's own zoom
-    /// says, since only a flattened tile can rise, and a coarser one is
-    /// spared the flattening. The camera
+    /// it. The tiles of `appearZoom`'s tile zoom and deeper are flattened
+    /// for it whatever the flattening's own zoom says, since only a
+    /// flattened tile rises as geometry, and a coarser one, which the
+    /// relief shows only from a texture on a raised grid, is spared the
+    /// flattening: one zoom for both, so they never part. The camera
     /// keeps its height and flies right up to a ridge between it and the
     /// point it looks at, or stays `cameraClearanceMetres` over one when
-    /// that is set. The decoded terrain tiles
-    /// keep to `memoryBudgetInBytes`. Off by default, on Mapterhorn's open
-    /// terrain when on. An omitted value is left as configured:
+    /// that is set. The mountains cast their shadows into the shadow map
+    /// unless `castsShadows` is false. The decoded terrain tiles
+    /// keep to `memoryBudgetInBytes`, the detail's own when unset (20 MB
+    /// for the cinematic two maps), and `maximumConcurrentLoads` of them
+    /// load at once, the frame's nearest first. On by default, on
+    /// Mapterhorn's open terrain: `isEnabled: false` lays the map flat. An
+    /// omitted value is left as configured:
     ///
     ///     ImmersiveMapView()
     ///         .groundFlattening(grid: 64)
-    ///         .groundRelief(isEnabled: true, fromTileZoom: 10, exaggeration: 2)
+    ///         .groundRelief(isEnabled: true, exaggeration: 2, appearZoom: 11, detail: .matchingGrid)
     ///
     /// The relief is as fine as the flattening's grid. See
     /// `ImmersiveMapSettings.TileSettings.GroundReliefSettings`.
     public func groundRelief(isEnabled: Bool? = nil,
-                             fromTileZoom: Int? = nil,
                              tileURLTemplate: String? = nil,
                              encoding: ImmersiveMapSettings.TileSettings.GroundReliefEncoding? = nil,
                              exaggeration: Float? = nil,
                              appearZoom: Double? = nil,
                              collapseZoom: Double? = nil,
                              transitionSeconds: TimeInterval? = nil,
+                             detail: ImmersiveMapSettings.TileSettings.GroundReliefDetail? = nil,
+                             cinematicNearZoom: Int? = nil,
+                             cinematicFarZoom: Int? = nil,
                              cameraTerrainZoom: Int? = nil,
                              memoryBudgetInBytes: Int? = nil,
-                             cameraClearanceMetres: Float? = nil) -> ImmersiveMapView {
+                             maximumConcurrentLoads: Int? = nil,
+                             cameraClearanceMetres: Float? = nil,
+                             castsShadows: Bool? = nil) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.groundRelief(isEnabled: isEnabled,
-                                                   fromTileZoom: fromTileZoom,
                                                    tileURLTemplate: tileURLTemplate,
                                                    encoding: encoding,
                                                    exaggeration: exaggeration,
                                                    appearZoom: appearZoom,
                                                    collapseZoom: collapseZoom,
                                                    transitionSeconds: transitionSeconds,
+                                                   detail: detail,
+                                                   cinematicNearZoom: cinematicNearZoom,
+                                                   cinematicFarZoom: cinematicFarZoom,
                                                    cameraTerrainZoom: cameraTerrainZoom,
                                                    memoryBudgetInBytes: memoryBudgetInBytes,
-                                                   cameraClearanceMetres: cameraClearanceMetres)
+                                                   maximumConcurrentLoads: maximumConcurrentLoads,
+                                                   cameraClearanceMetres: cameraClearanceMetres,
+                                                   castsShadows: castsShadows)
         return view
     }
 
@@ -1288,9 +1309,36 @@ public extension ImmersiveMapView {
         return view
     }
 
-    public func debugPanel(_ isEnabled: Bool = true) -> ImmersiveMapView {
+    /// The debug panel: camera coordinates, renderer diagnostics and the
+    /// bench controls, drawn over the map. A development aid, off by
+    /// default. `zoomBadge` shows or hides the panel's zoom badge in the
+    /// map's top trailing corner, the camera's zoom and the planning zoom
+    /// (`DebugSettings.showsZoomBadge`, on by default), an omitted value
+    /// left as configured:
+    ///
+    ///     ImmersiveMapView()
+    ///         .debugPanel(zoomBadge: false)
+    public func debugPanel(_ isEnabled: Bool = true, zoomBadge: Bool? = nil) -> ImmersiveMapView {
         var view = self
-        view.settings = view.settings.debugPanel(isEnabled)
+        view.settings = view.settings.debugPanel(isEnabled, zoomBadge: zoomBadge)
+        return view
+    }
+
+    /// Hides every control drawn over the map at once, for a clean frame:
+    /// the debug panel, the camera's on-screen controls and the control
+    /// zones. Each keeps its configuration and the debug panel the values
+    /// dragged in it, so `controlsHidden(false)` brings them back as they
+    /// were, without rebuilding the renderer. The attribution stays, as
+    /// the map data's license requires.
+    ///
+    ///     ImmersiveMapView()
+    ///         .debugPanel()
+    ///         .controlsHidden(isRecording)
+    ///
+    /// See `ImmersiveMapSettings.ControlsSettings`.
+    public func controlsHidden(_ isHidden: Bool = true) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.controlsHidden(isHidden)
         return view
     }
 

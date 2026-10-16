@@ -6,11 +6,21 @@ import ImmersiveMap
 
 @main
 struct ImmersiveMapDevMacApp: App {
+    /// Every control over the map hidden for a clean frame
+    /// (`controlsHidden`): Map > Hide Controls, Shift-Command-H.
+    @State private var controlsHidden = false
+
     var body: some Scene {
         WindowGroup("ImmersiveMap Dev") {
-            MapScreen()
+            MapScreen(controlsHidden: controlsHidden)
         }
         .defaultSize(width: 1200, height: 860)
+        .commands {
+            CommandMenu("Map") {
+                Toggle("Hide Controls", isOn: $controlsHidden)
+                    .keyboardShortcut("h", modifiers: [.command, .shift])
+            }
+        }
     }
 }
 
@@ -24,41 +34,11 @@ struct ImmersiveMapDevMacApp: App {
 /// position, the settings, and leave the state of the current experiment
 /// committed, because that is the point of the folder.
 private struct MapScreen: View {
+    /// Every control over the map hidden.
+    let controlsHidden: Bool
     @State private var camera = ImmersiveMapCameraController()
-    /// The camera's zoom and the planning zoom, read off the screen's
-    /// corner while a gesture is under way: quicker to glance at than the
-    /// debug panel's line. Over the relief the two part through a drag.
-    @State private var zoom: Double?
-    @State private var planningZoom: Double?
 
     var body: some View {
-        map
-            .overlay(alignment: .topTrailing) {
-                if let zoom, let planningZoom {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(String(format: "z %.2f", zoom))
-                        Text(String(format: "plan %.2f", planningZoom))
-                    }
-                    .font(.system(size: 22, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
-                    .padding(16)
-                    .allowsHitTesting(false)
-                }
-            }
-            .onAppear {
-                zoom = Self.start.zoom
-                planningZoom = Self.start.zoom
-                camera.onCameraSnapshotChanged = { snapshot in
-                    zoom = snapshot.position.zoom
-                    planningZoom = snapshot.planningZoom
-                }
-            }
-    }
-
-    private var map: some View {
         ImmersiveMapView()
             .tileArchive(devTileArchive)
             .mapStyle(.default.apply { theme in
@@ -67,7 +47,6 @@ private struct MapScreen: View {
             // The buildings from zoom 14, a level before the default's 15,
             // standing up at once.
             .buildingExtrusion(buildingsMinimumZoom: 14, risesFromTheGround: false)
-            .shadows(isEnabled: false)
             .labels(isEnabled: true)
             // The controls are drawn only when a camera controller is attached:
             // they drive it, so without one the modifier does nothing.
@@ -99,11 +78,14 @@ private struct MapScreen: View {
             // A tileset under development is rebuilt and re-served under the
             // same coordinates, so a warm disk cache would keep showing the
             // previous build. Every launch here starts from the network.
-            .tileSettings(clearDiskCachesOnLaunch: true)
+            .tileSettings(clearDiskCachesOnLaunch: false)
             .labelSettings(language: .english)
             // Camera coordinates and renderer diagnostics, drawn as host-view
-            // chrome above the map. A development aid, off by default.
+            // chrome above the map, with the zoom badge in the corner: the
+            // camera's zoom and the planning zoom, which part over the
+            // relief through a drag. A development aid, off by default.
             .debugPanel()
+            .controlsHidden(false)
             .ignoresSafeArea()
     }
 

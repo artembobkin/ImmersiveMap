@@ -23,7 +23,6 @@ final class AttributionBadgeLayoutMathTests: XCTestCase {
         XCTAssertEqual(metrics.horizontalInset, 10)
         XCTAssertEqual(metrics.verticalInset, 7)
         XCTAssertEqual(metrics.interLabelSpacing, 2)
-        XCTAssertEqual(metrics.cornerRadius, 8)
         XCTAssertEqual(metrics.maximumWidth, 240)
     }
 
@@ -37,7 +36,6 @@ final class AttributionBadgeLayoutMathTests: XCTestCase {
             XCTAssertLessThan(smaller.copyrightFontSize, larger.copyrightFontSize)
             XCTAssertLessThan(smaller.horizontalInset, larger.horizontalInset)
             XCTAssertLessThan(smaller.verticalInset, larger.verticalInset)
-            XCTAssertLessThan(smaller.cornerRadius, larger.cornerRadius)
             XCTAssertLessThan(smaller.maximumWidth, larger.maximumWidth)
         }
     }

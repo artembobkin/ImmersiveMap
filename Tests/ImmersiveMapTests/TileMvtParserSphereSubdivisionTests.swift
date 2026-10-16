@@ -8,7 +8,7 @@ import XCTest
 /// street-zoom tile alone.
 final class TileMvtParserSphereSubdivisionTests: XCTestCase {
     private func makeParser() -> TileMvtParser {
-        let config = ImmersiveMapSettings.default
+        let config = ImmersiveMapSettings.defaultWithoutRelief
         return TileMvtParser.forTests(settings: config)
     }
 

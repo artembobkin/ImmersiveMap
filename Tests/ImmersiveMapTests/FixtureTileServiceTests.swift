@@ -147,6 +147,9 @@ final class FixtureTileServiceTests: XCTestCase {
         for (label, settings) in [("served", FixtureTiles.settings()),
                                   ("tileless", FixtureTiles.tilelessSettings())] {
             XCTAssertEqual(settings.tiles.network.tileArchiveURL.host, "127.0.0.1", "\(label) archive URL")
+            // The terrain and the models the default turns on stay home too.
+            XCTAssertTrue(settings.tiles.groundRelief.tileURLTemplate.hasPrefix("http://127.0.0.1:"), "\(label) terrain")
+            XCTAssertEqual(settings.modelArchive?.archiveURL.host, "127.0.0.1", "\(label) model archive URL")
             // A run must leave nothing behind in the user's caches, and must
             // not be able to read what an earlier run wrote.
             XCTAssertFalse(settings.tiles.cache.urlCacheEnabled, "\(label) raw tile cache")

@@ -56,6 +56,10 @@ constant bool kSamplesShadowCascades = !kGroundShadowMaskEnabled;
 /// opaque fills of a flattened tile whose terrain is in. The vertex rises
 /// by the terrain's height under it, read from the relief texture.
 constant bool kTileGroundRelief [[function_constant(6)]];
+/// The fills on the relief shade their slopes (groundReliefHillshade): the
+/// fragment stage reads the terrain at the point's place in the terrain
+/// texture, which the vertex stage passes on.
+constant bool kTileGroundReliefShade = kTileGroundRelief && kTileFillFields;
 
 // The terrain's sample and the uniform it reads: GroundRelief.h, shared
 // with the raster ground.
@@ -153,6 +157,8 @@ struct VertexOut {
     // the centreline, and only the axis is read). Zero where nothing is
     // deferred.
     float2 widthAxis [[function_constant(kTileCoverageFields)]];
+    // The point's place in the terrain texture, for the slopes' shading.
+    float2 reliefUV [[function_constant(kTileGroundReliefShade)]];
     // No near cut: the depth is the projection's, so the hardware clips
     // at the near plane. The one distance cuts a road ribbon invisible
     // this frame whole.
@@ -170,6 +176,7 @@ struct FragmentIn {
     float lineParameterRaw [[function_constant(kTileStyleIndexField)]];
     float deferredEdgePx [[flat, function_constant(kTileCoverageFields)]];
     float2 widthAxis [[function_constant(kTileCoverageFields)]];
+    float2 reliefUV [[function_constant(kTileGroundReliefShade)]];
 };
 
 vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
@@ -318,6 +325,9 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
         out.position.z *= layerDepthScale / kFlatRealDepthScale;
     }
     out.worldPos = worldPosition.xyz;
+    if (kTileGroundReliefShade) {
+        out.reliefUV = groundReliefTextureUV(localPosition, relief);
+    }
     // Nothing cut: the hardware clips at the near plane.
     out.clipDistance[0] = 1.0;
     if (kTileStyleIndexField) {
@@ -406,7 +416,9 @@ static inline half4 tileFragmentColor(FragmentIn in,
                                       constant float2* styleZoomFades,
                                       constant LineStyle* lineStyles,
                                       depth2d<float> shadowMap,
-                                      texture2d<half> groundShadowMask) {
+                                      texture2d<half> groundShadowMask,
+                                      constant GroundReliefUniform& relief,
+                                      texture2d<float> reliefHeights) {
     float shadowFactor = tileGroundShadowFactor(in, shadow, shadowMap, groundShadowMask);
     // The fills classes carry no line fields: their coverage is identically
     // 1 and the colour (fade already folded in the vertex stage) is final.
@@ -421,6 +433,9 @@ static inline half4 tileFragmentColor(FragmentIn in,
     } else {
         color = in.color;
     }
+    if (kTileGroundReliefShade) {
+        color.rgb = groundReliefHillshade(color.rgb, in.reliefUV, in.worldPos, reliefHeights, relief);
+    }
     color.rgb *= shadowColorMultiplier(shadow, half(shadowFactor));
     return color;
 }
@@ -434,9 +449,11 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                                   constant float2* styleZoomFades [[buffer(6), function_constant(kTileLineFields)]],
                                   constant LineStyle* lineStyles [[buffer(7), function_constant(kTileLineFields)]],
                                   depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
-                                  texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
+                                  texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]],
+                                  constant GroundReliefUniform& relief [[buffer(9), function_constant(kTileGroundReliefShade)]],
+                                  texture2d<float> reliefHeights [[texture(3), function_constant(kTileGroundReliefShade)]]) {
     half4 color = tileFragmentColor(in, overviewFade, shadow, lineDash, styles, styleZoomFades, lineStyles,
-                                    shadowMap, groundShadowMask);
+                                    shadowMap, groundShadowMask, relief, reliefHeights);
     color.rgb = applyGroundFog(color.rgb, in.worldPos, groundFog);
     return color;
 }

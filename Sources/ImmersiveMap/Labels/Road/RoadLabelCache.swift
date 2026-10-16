@@ -138,8 +138,19 @@ final class RoadLabelTileRecord {
 /// instance set the fades and the collision decisions are index-aligned
 /// with. A tile that stays keeps its record; a topology change repacks the
 /// instance set and reports the runs that survived.
+///
+/// On the ground relief a label's path is cut where the road's ribbon is,
+/// at every crossing of the tile's flattening grid
+/// (`TileParseOptions.reliefSubdivisionStep`), when its record is made: the
+/// placer raises every point of the path by the relief
+/// (`RoadLabelPlacer.project`), so the path follows the drawn road from
+/// crossing to crossing instead of cutting straight between the road's own
+/// points, which on a cable car are its two stations kilometres apart.
 final class RoadLabelCache {
     private let metalDevice: MTLDevice
+    /// The grid step a tile of a zoom cuts its label paths at, in tile
+    /// units, nil off the relief.
+    private let reliefSubdivisionStep: (Int) -> Float?
 
     private var tileRecordsByOwnerKey: [VisibleTile: RoadLabelTileRecord] = [:]
 
@@ -150,8 +161,12 @@ final class RoadLabelCache {
     /// in synchronize and evict, and the frame reads this in several places.
     private(set) var orderedTileRecords: [RoadLabelTileRecord] = []
 
-    init(metalDevice: MTLDevice) {
+    /// `reliefSubdivisionStep` is the parse's
+    /// (`TileParseOptions.reliefSubdivisionStep(tileZoom:)`), what the
+    /// roads' ribbons were cut at.
+    init(metalDevice: MTLDevice, reliefSubdivisionStep: @escaping (Int) -> Float? = { _ in nil }) {
         self.metalDevice = metalDevice
+        self.reliefSubdivisionStep = reliefSubdivisionStep
     }
 
     @discardableResult
@@ -248,6 +263,8 @@ final class RoadLabelCache {
                                 visibleTileIndex: UInt32) -> RoadLabelTileRecord {
         let roadLabels = sourceEntry.metalTile.tileBuffers.roadLabels
         let style = roadLabels.labelStyle ?? Self.fallbackStyle
+        let gridStepUV = reliefSubdivisionStep(sourceEntry.metalTile.tile.z)
+            .map { $0 / Float(TileCoordinateSpace.tileExtentDouble) }
 
         var instanceKeys: [UInt64] = []
         var instanceLabelSizes: [SIMD2<Float>] = []
@@ -318,8 +335,11 @@ final class RoadLabelCache {
                                              pathRange: pathRange)
             let labelSize = roadLabels.sizes[labelIndex]
 
+            // On the relief, the path cut at the grid as the road is; the
+            // anchors are moved onto the cut segments below.
+            let cutPath = gridStepUV.map { Self.cutAtGrid(localPathInputs, stepUV: $0) }
             let pathStart = pathPoints.count
-            pathPoints.append(contentsOf: localPathInputs)
+            pathPoints.append(contentsOf: cutPath?.points ?? localPathInputs)
             pathRanges.append(pathStart..<pathPoints.count)
 
             let labelMinY = glyphBounds.reduce(Float.greatestFiniteMagnitude) { min($0, $1.z) }
@@ -337,7 +357,7 @@ final class RoadLabelCache {
                 // lerping along the projected segment, which drifts under
                 // perspective.
                 pendingAnchors.append(PendingAnchor(pathIndex: pathIndex,
-                                                    segmentIndex: Int32(anchor.segmentIndex),
+                                                    segmentIndex: Int32(cutPath?.segment(of: anchor) ?? Int(anchor.segmentIndex)),
                                                     anchorPointOffset: anchorPointInputs.count))
                 anchorPointInputs.append(Self.makeAnchorPointInput(anchor: anchor, path: localPathInputs))
 
@@ -385,6 +405,75 @@ final class RoadLabelCache {
                                    instanceLabelSizes: instanceLabelSizes,
                                    instanceAnchorOrdinals: instanceAnchorOrdinals,
                                    localGlyphVertices: roadLabels.localGlyphVertices)
+    }
+
+    /// A label's path cut at the grid, and where each segment of the path
+    /// as it came went.
+    struct CutPath {
+        let points: [TilePointInput]
+        /// For each segment of the path as it came, the index of its first
+        /// segment in `points`, and the points the grid put in it, by
+        /// their place along it, 0 to 1, ascending.
+        let firstSegments: [Int]
+        let cuts: [[Float]]
+
+        /// The segment of `points` an anchor lies on: the one its place
+        /// along its own segment falls in.
+        func segment(of anchor: RoadLabelAnchor) -> Int {
+            let segment = min(Int(anchor.segmentIndex), firstSegments.count - 1)
+            guard segment >= 0 else { return 0 }
+            return firstSegments[segment] + cuts[segment].reduce(0) { $1 <= anchor.t ? $0 + 1 : $0 }
+        }
+    }
+
+    /// Cuts a path, in tile uv, at every crossing of the lines of a grid
+    /// of `stepUV`, as the parse cut the road's ribbon (`ParseLine`), so the
+    /// path has a point wherever the ribbon has a row. A point on a grid
+    /// line is not doubled.
+    static func cutAtGrid(_ path: [TilePointInput], stepUV: Float) -> CutPath {
+        guard path.count >= 2, stepUV > 0 else {
+            return CutPath(points: path, firstSegments: Array(0 ..< max(path.count - 1, 0)),
+                           cuts: Array(repeating: [], count: max(path.count - 1, 0)))
+        }
+        // A crossing this close to a segment's end is the end itself.
+        let epsilon: Float = 1e-4
+        var points: [TilePointInput] = [path[0]]
+        var firstSegments: [Int] = []
+        var cuts: [[Float]] = []
+        for index in 0 ..< path.count - 1 {
+            let start = path[index]
+            let end = path[index + 1]
+            firstSegments.append(points.count - 1)
+            var along: [Float] = []
+            for axis in 0 ..< 2 {
+                let from = start.uv[axis]
+                let to = end.uv[axis]
+                guard abs(to - from) > 0 else { continue }
+                let lower = min(from, to)
+                let upper = max(from, to)
+                var line = (lower / stepUV).rounded(.down) + 1
+                while line * stepUV < upper {
+                    let t = (line * stepUV - from) / (to - from)
+                    if t > epsilon, t < 1 - epsilon {
+                        along.append(t)
+                    }
+                    line += 1
+                }
+            }
+            along.sort()
+            var kept: [Float] = []
+            for t in along where kept.last.map({ t - $0 > epsilon }) ?? true {
+                kept.append(t)
+            }
+            for t in kept {
+                var point = start
+                point.uv = start.uv + (end.uv - start.uv) * t
+                points.append(point)
+            }
+            points.append(end)
+            cuts.append(kept)
+        }
+        return CutPath(points: points, firstSegments: firstSegments, cuts: cuts)
     }
 
     // The anchor's world position as a projectable point: interpolated in tile

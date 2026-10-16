@@ -4,8 +4,9 @@
 import Metal
 
 /// The pipelines of the raster tiles (TileRaster.metal): the bake, which
-/// draws a tile's fills into its texture each frame, and the draws of the
-/// texture on the plane, on the resting sphere and through the unroll.
+/// draws a tile's fills into its window of the frame's atlas when its
+/// texture must be drawn again, and the draws of the texture on the plane,
+/// on the resting sphere and through the unroll.
 final class RasterTilePipeline {
     /// The samples per texel the bake draws with, resolved into the
     /// texture's first level: the edges of the fills are smooth before the
@@ -20,6 +21,10 @@ final class RasterTilePipeline {
     let flatReliefPipelineState: MTLRenderPipelineState
     let spherePurePipelineState: MTLRenderPipelineState
     let sphereMorphPipelineState: MTLRenderPipelineState
+    /// The ground relief as a shadow caster (`GroundReliefShadowCasterSubsystem`):
+    /// the grid raised by the terrain, from the light, depth only into the
+    /// shadow map, as the buildings' caster pass draws.
+    let reliefShadowPipelineState: MTLRenderPipelineState
 
     init(metalDevice: MTLDevice,
          pixelFormat: MTLPixelFormat,
@@ -52,7 +57,9 @@ final class RasterTilePipeline {
             var reliefValue = relief
             values.setConstantValue(&reliefValue, type: .bool, index: 0)
             descriptor.vertexFunction = try! library.makeFunction(name: vertex, constantValues: values)
-            descriptor.fragmentFunction = library.makeFunction(name: fragment)
+            // The fragment too: the relief's samples the shadow cascades
+            // at its raised point (TileRaster.metal).
+            descriptor.fragmentFunction = try! library.makeFunction(name: fragment, constantValues: values)
             descriptor.rasterSampleCount = sampleCount
             descriptor.colorAttachments[0].pixelFormat = pixelFormat
             descriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
@@ -72,5 +79,15 @@ final class RasterTilePipeline {
         sphereMorphPipelineState = drawState(label: "RasterTileSphereMorph",
                                              vertex: "tileRasterSphereMorphVertexShader",
                                              fragment: "tileRasterSphereFragmentShader")
+
+        let shadow = MTLRenderPipelineDescriptor()
+        shadow.label = "RasterTileReliefShadow"
+        shadow.vertexFunction = library.makeFunction(name: "tileRasterReliefShadowVertexShader")
+        shadow.fragmentFunction = nil
+        shadow.rasterSampleCount = 1
+        shadow.depthAttachmentPixelFormat = ShadowCascadeAtlas.depthPixelFormat
+        // A plain 2D depth attachment, as the buildings' caster pass.
+        shadow.inputPrimitiveTopology = .triangle
+        reliefShadowPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: shadow)
     }
 }

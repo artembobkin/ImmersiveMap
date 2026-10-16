@@ -106,7 +106,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
     }
 
     func testPointLabelsAreIdentifiedInTheStyleOwnNamespace() throws {
-        let config = ImmersiveMapSettings.default
+        let config = ImmersiveMapSettings.defaultWithoutRelief
             .mapStyle(VectorTileMapStyle(style: FallbackWaterLabelStyle(styleID: "parser-provider")))
 
         let parser = TileMvtParser.forTests(settings: config)
@@ -124,7 +124,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
     }
 
     func testParserNormalizesLayerExtentToInternalTileExtent() throws {
-        let config = ImmersiveMapSettings.default
+        let config = ImmersiveMapSettings.defaultWithoutRelief
         let parser = TileMvtParser.forTests(settings: config,
                                             mapStyle: ParserSolidPolygonStyle())
         let parsedTile = try parser.parse(tile: Tile(x: 0, y: 0, z: 0),
@@ -140,7 +140,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
     }
 
     func testParserSplitsComplexOceanHolesIntoBackgroundPolygons() throws {
-        let config = ImmersiveMapSettings.default
+        let config = ImmersiveMapSettings.defaultWithoutRelief
         let parser = TileMvtParser.forTests(settings: config,
                                             mapStyle: ParserSolidPolygonStyle())
         let parsedTile = try parser.parse(tile: Tile(x: 0, y: 0, z: 0),
@@ -254,7 +254,7 @@ final class TileMvtParserFallbackLabelTests: XCTestCase {
         glyphCoverage: VectorTileLabelGlyphCoverage = .legacyAtlasForTests,
         fallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy = .international
     ) throws -> [String] {
-        var config = ImmersiveMapSettings.default
+        var config = ImmersiveMapSettings.defaultWithoutRelief
         config.labels.language = language
         config.labels.fallbackPolicy = fallbackPolicy
 

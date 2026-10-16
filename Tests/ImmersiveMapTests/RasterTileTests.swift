@@ -57,6 +57,29 @@ final class RasterTileTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(grid.mesh(forTileZoom: 10, atLeast: 256)).indexCount, 255 * 255 * 6, "16-bit indices")
     }
 
+    /// A raster tile on the relief takes the flattening's grid, no finer
+    /// than its terrain has heights over it nor than a cell to two texels
+    /// of its raster: a far tile under the cinematic far map, an eighth of
+    /// a 512 terrain tile, takes 64 cells, not the flattening's 256.
+    func testTheReliefGridIsNoFinerThanItsTerrainAndRaster() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            throw XCTSkip("A Metal device is required for the relief texture.")
+        }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r16Float, width: 512, height: 512, mipmapped: false)
+        let texture = try XCTUnwrap(device.makeTexture(descriptor: descriptor))
+        let terrain = GroundReliefTile(texture: texture, size: 512, halves: Array(repeating: 0, count: 512 * 512),
+                                       heightRange: 0 ... 0)
+        func relief(scale: Float) -> GroundRelief {
+            GroundRelief(terrain: terrain, origin: .zero, scale: scale, strength: 1)
+        }
+        XCTAssertEqual(RasterTileGrid.reliefCells(gridCells: 256, relief: relief(scale: 1.0 / 8), rasterSize: 256), 64,
+                       "The terrain's 64 heights over the tile")
+        XCTAssertEqual(RasterTileGrid.reliefCells(gridCells: 256, relief: relief(scale: 1), rasterSize: 64), 32,
+                       "Two texels of a 64 raster a cell")
+        XCTAssertEqual(RasterTileGrid.reliefCells(gridCells: 16, relief: relief(scale: 1), rasterSize: 128), 16,
+                       "Never finer than the flattening")
+    }
+
     // MARK: - The settings
 
     func testTheModifierLeavesTheOtherValuesAsConfigured() {

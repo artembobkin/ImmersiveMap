@@ -64,6 +64,8 @@ final class DebugOverlayControlState {
     private var labelDistanceRules = LabelDistanceRules.default
     private var localLabelMaximumDistanceMeters: Float?
     private var labelPerspectiveMinimumScale: Float?
+    private var hillshadeFade: ClosedRange<Float>?
+    private var reliefShadows: Bool?
 
     /// The controls as a frame reads them.
     func snapshot() -> DebugOverlayControlSnapshot {
@@ -103,6 +105,36 @@ final class DebugOverlayControlState {
         lock.lock()
         defer { lock.unlock() }
         return labelDistanceRules.scale(forCameraZoom: cameraZoom)
+    }
+
+    /// The hillshade's fade the panel has been dragged to, in the eye's
+    /// distances to the point it looks at, nil for the style's
+    /// (`ImmersiveMapHillshade.fadeStartCameraDistances`,
+    /// `fadeEndCameraDistances`).
+    func hillshadeFadeCameraDistances() -> ClosedRange<Float>? {
+        lock.lock()
+        defer { lock.unlock() }
+        return hillshadeFade
+    }
+
+    /// Whether the mountains cast their shadows as the panel set it, nil
+    /// for the setting's (`GroundReliefSettings.castsShadows`).
+    func reliefCastsShadows() -> Bool? {
+        lock.lock()
+        defer { lock.unlock() }
+        return reliefShadows
+    }
+
+    func setReliefCastsShadows(_ isEnabled: Bool?) {
+        lock.lock()
+        reliefShadows = isEnabled
+        lock.unlock()
+    }
+
+    func setHillshadeFadeCameraDistances(_ fade: ClosedRange<Float>?) {
+        lock.lock()
+        hillshadeFade = fade.map { max(0, $0.lowerBound) ... max(0, $0.lowerBound, $0.upperBound) }
+        lock.unlock()
     }
 
     func setLabelPerspectiveMinimumScale(_ scale: Float?) {

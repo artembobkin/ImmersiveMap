@@ -20,7 +20,7 @@ import simd
 /// well, so a tile allocated where a released one was is not handed the
 /// old lifts.
 final class BuildingReliefLifts {
-    private var buffersByTile: [ObjectIdentifier: (tile: Tile, terrain: ObjectIdentifier, buffer: MTLBuffer)] = [:]
+    private var buffersByTile: [ObjectIdentifier: (tile: Tile, terrain: ObjectIdentifier, revision: UInt64, buffer: MTLBuffer)] = [:]
 
     /// Lets go of every tile's lifts.
     func evict() {
@@ -41,20 +41,22 @@ final class BuildingReliefLifts {
         }
         var lifts: [MTLBuffer?] = []
         lifts.reserveCapacity(placements.count)
-        var kept: [ObjectIdentifier: (tile: Tile, terrain: ObjectIdentifier, buffer: MTLBuffer)] = [:]
+        var kept: [ObjectIdentifier: (tile: Tile, terrain: ObjectIdentifier, revision: UInt64, buffer: MTLBuffer)] = [:]
         for (placement, key) in zip(placements, drawnKeys) {
             let metalTile = placement.metalTile
             let anchors = metalTile.tileBuffers.extruded.buildingAnchors
             guard key != nil, anchors.isEmpty == false,
-                  let relief = store.relief(for: metalTile.tile,
-                                            terrainZoom: GroundReliefStore.terrainZoom(forTargetZoom: placement.placeIn.z)) else {
+                  let relief = store.relief(for: metalTile.tile, targetZoom: placement.placeIn.z) else {
                 lifts.append(nil)
                 continue
             }
             let tileIdentity = ObjectIdentifier(metalTile)
             let terrainIdentity = ObjectIdentifier(relief.terrain)
+            // A weld of the terrain's edges (`GroundReliefTile.revision`)
+            // moves the buildings by the edges with it.
             if let cached = buffersByTile[tileIdentity],
                cached.terrain == terrainIdentity,
+               cached.revision == relief.terrain.revision,
                cached.tile == metalTile.tile,
                cached.buffer.length == anchors.count * MemoryLayout<Float>.stride {
                 kept[tileIdentity] = cached
@@ -74,7 +76,7 @@ final class BuildingReliefLifts {
                 lifts.append(nil)
                 continue
             }
-            kept[tileIdentity] = (metalTile.tile, terrainIdentity, buffer)
+            kept[tileIdentity] = (metalTile.tile, terrainIdentity, relief.terrain.revision, buffer)
             lifts.append(buffer)
         }
         buffersByTile = kept
