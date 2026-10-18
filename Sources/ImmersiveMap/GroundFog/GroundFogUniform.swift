@@ -34,7 +34,11 @@ struct GroundFogUniform {
     /// The sky's colour away from the line and the e-fold of the horizon's
     /// glow in radians, 0 where no sky is painted.
     var skyColorAndGradient: SIMD4<Float>
-    /// The start's softness in meters in x, the rest padding.
+    /// The start's softness in meters in x, the altitude of the plane the
+    /// ground is drawn from in y (the terrain under the point the camera
+    /// looks at, in meters, 0 off the relief or with the heights from the
+    /// plane) and the altitude the density is stated at in z, the rest
+    /// padding.
     var startSoftness: SIMD4<Float>
 
     static let disabled = GroundFogUniform(colorAndDensity: .zero,
@@ -51,12 +55,17 @@ struct GroundFogUniform {
     /// plane is fogged: the sphere's shaders draw none of it, and on a map
     /// with the globe the fog comes in over `morphFadeSpanShare` of the
     /// transition span past the zoom the morph ends at (`morphFade`).
+    /// `datumMetres` is the altitude of the plane the ground is drawn from
+    /// on the relief (`GroundReliefStore.datumMetres`): with
+    /// `GroundFogSettings.heightsFromSeaLevel` the fog's heights are the
+    /// ground's own altitudes, the plane's plus it.
     static func resolve(settings: ImmersiveMapSettings,
                         renderSurfaceMode: ViewMode,
                         cameraEye: SIMD3<Float>,
                         worldUnitsPerMeter: Double,
                         zoom: Double,
-                        onGroundRelief: Bool = false) -> GroundFogUniform {
+                        onGroundRelief: Bool = false,
+                        datumMetres: Float = 0) -> GroundFogUniform {
         let fog = settings.scene.groundFog
         let strength = morphFade(presentation: settings.presentation, zoom: zoom)
         let maximumOpacity = min(max(fog.maximumOpacity.value(atZoom: zoom), 0), 1)
@@ -90,7 +99,10 @@ struct GroundFogUniform {
                                                          maximumOpacity,
                                                          strength),
                                 skyColorAndGradient: SIMD4<Float>(sky.skyColor, skyGradient),
-                                startSoftness: SIMD4<Float>(length(fog.startSoftnessMeters), 0, 0, 0))
+                                startSoftness: SIMD4<Float>(length(fog.startSoftnessMeters),
+                                                            fog.heightsFromSeaLevel ? datumMetres : 0,
+                                                            fog.heightsFromSeaLevel ? fog.baseAltitudeMeters : 0,
+                                                            0))
     }
 
     /// CPU mirror of the shader's `groundFogColor`: the fog's colour in a
@@ -120,8 +132,17 @@ struct GroundFogUniform {
                        renderSurfaceMode: frameContext.renderSurfaceMode,
                        cameraEye: frameContext.cameraEye,
                        worldUnitsPerMeter: unitsPerMeter,
+                       // The air reads the planning zoom: over the terrain the
+                       // camera's own zoom follows the ground under the point
+                       // it looks at, a summit or a valley floor, and the air
+                       // is the same air whichever the camera settles on.
                        zoom: frameContext.planningZoom,
-                       onGroundRelief: frameContext.services.groundRelief?.isActive ?? false)
+                       onGroundRelief: frameContext.services.groundRelief?.isActive ?? false,
+                       // The plane's altitude: the ground rises from the
+                       // terrain under the point the camera looks at.
+                       datumMetres: (frameContext.services.groundRelief?.isActive ?? false)
+                           ? (frameContext.services.groundRelief?.datumMetres ?? 0)
+                           : 0)
     }
 
     /// How much of the fog is in at a camera zoom, by the globe's morph: 1

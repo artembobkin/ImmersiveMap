@@ -120,6 +120,15 @@ final class DebugOverlayShadowGroupTests: XCTestCase {
 
     /// The slider reaches the resolver's floor, which is what makes winding
     /// the window right down possible from the panel.
+    /// The far slider runs the setting's whole range: coarse is what the
+    /// far window is for, and the default has to be on it.
+    func testFarCoverageSliderCoversTheRangeAndTheDefault() {
+        let range = DebugOverlayShadowSettingsPlanner.farCoverageRange
+        XCTAssertEqual(range.lowerBound, Double(ShadowFrameStateResolver.coverageRange.lowerBound))
+        XCTAssertEqual(range.upperBound, Double(ShadowFrameStateResolver.coverageRange.upperBound))
+        XCTAssertTrue(range.contains(Double(ImmersiveMapSettings.ShadowSettings().farCoverageCameraDistances)))
+    }
+
     func testCoverageSliderReachesTheResolverFloor() {
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.coverageRange.lowerBound,
                        Double(ShadowFrameStateResolver.coverageRange.lowerBound))
@@ -176,7 +185,10 @@ final class DebugOverlayShadowGroupTests: XCTestCase {
 
     func testTitlesCarryTheValue() {
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.strengthTitle(0.22), "Strength 0.22")
-        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.coverageTitle(3), "Coverage 3.0x")
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.coverageTitle(3), "Near coverage 3.0x")
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.farCoverageTitle(12, nearCoverage: 3), "Far coverage 12.0x")
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.farCoverageTitle(3.5, nearCoverage: 3),
+                       "Far coverage 3.5x (off, under the near)")
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.normalOffsetTitle(2.5), "Normal offset 2.5tx")
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.casterHeightTitle(50), "Caster height 50 m")
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.softnessTitle(1.75), "Softness 1.75x")
@@ -322,6 +334,21 @@ final class DebugOverlayGroundFogGroupTests: XCTestCase {
         XCTAssertEqual(Planner.heightTitle([13: 4000, 15: 150], cameraZoom: 16), "Height 150 m")
         XCTAssertEqual(Planner.startSoftnessTitle(25_000, cameraZoom: 12), "Soft start 25 km")
         XCTAssertEqual(Planner.maximumOpacityTitle([18: 1, 19: 0], cameraZoom: 15), "Max opacity 1.00")
+        XCTAssertEqual(Planner.baseAltitudeTitle(1500), "Full density up to 1.5 km")
+    }
+
+    /// The mountain air preset replaces the overview's stops and keeps the
+    /// street zooms' as the app has them.
+    func testTheMountainAirPresetKeepsTheStreetZooms() {
+        let fog = ImmersiveMapSettings.GroundFogSettings()
+        let preset = Planner.mountainAirPreset(from: fog)
+        XCTAssertEqual(preset.densityPerKilometer, [7: 0.02, 12: 0.02, 16: 17, 22: 6])
+        XCTAssertEqual(preset.startDistanceMeters, [7: 10, 12: 10, 16: 400, 22: 250])
+        XCTAssertEqual(preset.heightMeters.value(atZoom: 10), 2500)
+        XCTAssertEqual(preset.baseAltitudeMeters, 1500)
+        XCTAssertTrue(preset.heightsFromSeaLevel)
+        XCTAssertEqual(preset.maximumOpacity, fog.maximumOpacity, "Untouched")
+        XCTAssertTrue(Planner.baseAltitudeRange.contains(Double(ImmersiveMapSettings.GroundFogSettings().baseAltitudeMeters)))
     }
 }
 
@@ -395,6 +422,8 @@ final class DebugOverlayPanelCategoryTests: XCTestCase {
         }
         XCTAssertTrue(DebugOverlayPanelCategory.sky.shows(.sky))
         XCTAssertFalse(DebugOverlayPanelCategory.sky.shows(.tiles))
+        XCTAssertFalse(DebugOverlayPanelCategory.sky.shows(.air), "The air has a tab of its own")
+        XCTAssertEqual(DebugOverlayPanelCategory.air.title, "Air")
     }
 }
 
@@ -430,6 +459,7 @@ final class DebugOverlaySettingsExportTests: XCTestCase {
         XCTAssertTrue(code.contains(".groundFog(isEnabled: true, densityPerKilometer: [12: 0.45, 16: 17], heightMeters: "),
                       code)
         XCTAssertTrue(code.contains("startDistanceMeters: 400"), code)
+        XCTAssertTrue(code.contains("heightsFromSeaLevel: true, baseAltitudeMeters: 0)"), code)
         XCTAssertFalse(code.contains("http"), "No tile address, and so no request header, is written")
     }
 }
@@ -440,13 +470,18 @@ final class DebugOverlayAtmosphereGroupTests: XCTestCase {
     func testTheSlidersCoverTheShippingDefault() {
         let atmosphere = ImmersiveMapSettings.AtmosphereSettings()
         XCTAssertTrue(DebugOverlayAtmosphereSettingsPlanner.intensityRange.contains(Double(atmosphere.intensity)))
-        XCTAssertTrue(DebugOverlayAtmosphereSettingsPlanner.thicknessRange.contains(Double(atmosphere.thickness)))
+        for stop in atmosphere.thickness.stops {
+            XCTAssertTrue(DebugOverlayAtmosphereSettingsPlanner.thicknessAxes.valueRange.contains(Double(stop.value)))
+            XCTAssertTrue(DebugOverlayAtmosphereSettingsPlanner.thicknessAxes.zoomRange.contains(stop.zoom))
+        }
         XCTAssertTrue(DebugOverlayAtmosphereSettingsPlanner.sunInfluenceRange.contains(Double(atmosphere.sunInfluence)))
     }
 
     func testTitlesCarryTheValue() {
         XCTAssertEqual(DebugOverlayAtmosphereSettingsPlanner.intensityTitle(1), "Intensity 1.00")
-        XCTAssertEqual(DebugOverlayAtmosphereSettingsPlanner.thicknessTitle(2), "Thickness 2.00x")
+        XCTAssertEqual(DebugOverlayAtmosphereSettingsPlanner.thicknessTitle(2, cameraZoom: 3), "Thickness 2.00x")
+        XCTAssertEqual(DebugOverlayAtmosphereSettingsPlanner.thicknessTitle([2: 3, 6: 1], cameraZoom: 4), "Thickness 2.00x",
+                       "Linear between the stops, as the halo reads it")
         XCTAssertEqual(DebugOverlayAtmosphereSettingsPlanner.sunInfluenceTitle(0.6), "Sun influence 0.60")
     }
 }

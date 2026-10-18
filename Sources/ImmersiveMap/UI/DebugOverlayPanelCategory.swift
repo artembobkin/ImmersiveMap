@@ -11,8 +11,16 @@ enum DebugOverlayPanelCategory: Int, CaseIterable {
     case all
     case stats
     case labels
+    /// The sun and the hillshade of the slopes.
+    case light
+    /// The shadow map's settings.
     case shadows
     case sky
+    /// The sun on the globe (`GlobeLightSettings`).
+    case globe
+    /// The air over the flat map: the ground fog's curves and its heights
+    /// on the relief (`GroundFogSettings`).
+    case air
     case map
     case tiles
     case relief
@@ -23,8 +31,11 @@ enum DebugOverlayPanelCategory: Int, CaseIterable {
         case .all: "All"
         case .stats: "Stats"
         case .labels: "Labels"
-        case .shadows: "Light & shadows"
-        case .sky: "Sky & fog"
+        case .light: "Light"
+        case .shadows: "Shadows"
+        case .sky: "Sky"
+        case .globe: "Globe"
+        case .air: "Air"
         case .map: "Map"
         case .tiles: "Tiles"
         case .relief: "Relief"

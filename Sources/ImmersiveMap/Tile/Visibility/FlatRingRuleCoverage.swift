@@ -78,9 +78,11 @@ struct FlatRingRules: Hashable {
     /// The exact tiles to one ring around the look-at tile, as geometry
     /// with their lines and labels. Past it the ground is textures, without
     /// lines or labels: one level coarser to ring 2 and two levels coarser
-    /// to ring 3 at 128 texels, four levels coarser to ring 9 at 64,
-    /// nothing beyond. The map recedes toward the horizon soft and quiet,
-    /// and the textures, drawn every frame, stay small.
+    /// to ring 3 at 128 texels, four levels coarser to ring 9 at 64. The
+    /// ground beyond is the horizon backdrop
+    /// (`TileWorkingSetSubsystem.horizonBackdrops`). The map recedes toward
+    /// the horizon soft and quiet, and the textures, drawn every frame,
+    /// stay small.
     static let `default` = FlatRingRules(rules: [
         FlatRingRule(zoomDrop: 0, distance: 1),
         FlatRingRule(zoomDrop: 1, distance: 2, drawsLines: false, drawsLabels: false, rasterSize: 128),
@@ -171,18 +173,25 @@ struct FlatRingSquare: Equatable {
 /// tile is placed for the part of it that is in view. Where a coarse tile
 /// of a farther band reaches under a nearer band, the nearer band's finer
 /// tiles are drawn over it by the tile-priority stencil. Beyond the last
-/// rule's square nothing is placed: the haze paints the horizon.
+/// rule's square nothing is placed by the rules: the horizon backdrop is
+/// the ground there (`TileWorkingSetSubsystem.horizonBackdrops`).
 enum FlatRingRuleCoverage {
     /// How far a band's ground is drawn in from its squares' sides, in
     /// target tiles: well over the polygon test's tolerance, far under
     /// anything a tile could lie in.
     static let edgeInsetInTargetTiles = 1e-3
 
+    /// `rasterPolygon` is the footprint the texture bands (the rules with a
+    /// `rasterSize`) are placed over, the footprint pushed out past the
+    /// visible ground (`CoverageSettings.rasterBandMarginShare`), so their
+    /// tiles are in before a turn of the camera brings them into view.
+    /// Nil places them over `polygon` like the rest.
     static func resolve(flatRenderState: FlatRenderState,
                         targetZoom: Int,
                         backdropZoom: Int?,
                         rules: FlatRingRules,
-                        polygon: CoveragePolygon) -> FlatRingRuleCoverageResolution {
+                        polygon: CoveragePolygon,
+                        rasterPolygon: CoveragePolygon? = nil) -> FlatRingRuleCoverageResolution {
         guard targetZoom >= 0 else { return .empty }
         let floorZoom = min(backdropZoom.map { $0 + 1 } ?? 0, targetZoom)
 
@@ -198,7 +207,8 @@ enum FlatRingRuleCoverage {
             let zoom = max(floorZoom, targetZoom - rule.zoomDrop)
             let square = Self.square(rings: rule.distance, targetZoom: targetZoom, flatRenderState: flatRenderState)
             var tiles = Set<VisibleTile>()
-            for ground in Self.bandPolygons(polygon, square: square, innerSquare: innerSquare, inset: inset) {
+            let footprint = rule.rasterSize != nil ? (rasterPolygon ?? polygon) : polygon
+            for ground in Self.bandPolygons(footprint, square: square, innerSquare: innerSquare, inset: inset) {
                 tiles.formUnion(FlatTileCoverage.tiles(atZoom: zoom,
                                                        polygon: ground,
                                                        flatRenderState: flatRenderState,

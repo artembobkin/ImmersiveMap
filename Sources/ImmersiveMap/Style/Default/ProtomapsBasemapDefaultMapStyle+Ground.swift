@@ -224,7 +224,14 @@ extension ProtomapsBasemapDefaultMapStyle {
         switch level {
         case .country:
             key = 103
-            widthPoints = 1.6
+            widthPoints = 1.0
+            // A national border is a reference line, not the subject of
+            // the map: it draws through the fills, and over a country or
+            // the globe, where the lines are the one cold hue in the
+            // frame, it lightens as the regional ones do.
+            color = tileZoom <= 6
+                ? Self.softenedBoundaryColor(color, towardWhite: 0.3, alpha: 0.5)
+                : Self.softenedBoundaryColor(color, towardWhite: 0, alpha: 0.65)
         case .region:
             key = 100
             widthPoints = 1.1
@@ -232,7 +239,7 @@ extension ProtomapsBasemapDefaultMapStyle {
             // purple that separates districts at street zooms is the one
             // cold hue in a whole-region frame and reads as scribble
             // there. Until the region zooms the line lightens and turns
-            // half transparent. National borders keep their full weight.
+            // half transparent.
             if tileZoom <= 6 {
                 color = Self.softenedBoundaryColor(color, towardWhite: 0.35, alpha: 0.6)
             }

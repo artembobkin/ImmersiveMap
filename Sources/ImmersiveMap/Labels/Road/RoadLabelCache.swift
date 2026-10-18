@@ -39,6 +39,35 @@ final class RoadLabelTileRecord {
     /// hidden until the record is first placed.
     var placement = RoadLabelPlacer.Output()
 
+    /// The terrain's metres under each path point, read once per terrain
+    /// the tile rises by and kept (`reliefMetres(for:)`): a frame's lift is
+    /// then a multiply over them (`RoadLabelPlacer.PointLifts`), not a read
+    /// of the heights for every point of every road in view.
+    private var reliefMetres: [Float] = []
+    private var reliefMetresKey: ReliefMetresKey?
+
+    /// What the kept metres were read from: the terrain tile and the
+    /// ground tile's place in it. The datum and the strength are the
+    /// frame's and stay out of it.
+    private struct ReliefMetresKey: Equatable {
+        let terrain: ObjectIdentifier
+        let origin: SIMD2<Float>
+        let scale: Float
+    }
+
+    /// The terrain's metres under the record's path points, by `relief`:
+    /// read now when the terrain or the tile's place in it changed, kept
+    /// otherwise.
+    func reliefMetres(for relief: GroundRelief) -> [Float] {
+        let key = ReliefMetresKey(terrain: ObjectIdentifier(relief.terrain), origin: relief.origin, scale: relief.scale)
+        if key == reliefMetresKey, reliefMetres.count == geometry.pathPoints.count {
+            return reliefMetres
+        }
+        reliefMetres = geometry.pathPoints.map { relief.metres(atTileUV: $0.uv) }
+        reliefMetresKey = key
+        return reliefMetres
+    }
+
     private let placementBufferStore: FrameSlottedDynamicMetalBuffer<RoadGlyphPlacementOutput>
     private let runtimeMetaBufferStore: FrameSlottedDynamicMetalBuffer<LabelRuntimeMeta>
 

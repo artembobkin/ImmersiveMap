@@ -78,8 +78,11 @@ final class GlobeCapRenderer {
 
     func draw(renderEncoder: MTLRenderCommandEncoder,
               globeFrame: GlobeFrameConstantsUniform,
-              globe: GlobeUniform) {
+              globe: GlobeUniform,
+              globeLight: GlobeLightUniform = .disabled) {
         pipeline.selectPipeline(renderEncoder: renderEncoder)
+        // The sun on the globe: the caps are planet and shade with the tiles.
+        GlobeLightUniform.bind(globeLight, encoder: renderEncoder)
         // Both caps carry the same winding seen from outside the sphere (the
         // generator flips the south fan), so back-face culling removes the
         // far half of each polar fan the way it removes the tiles' far side:

@@ -162,7 +162,9 @@ enum HorizonFrameResolver {
         // The two fades never overlap, so a frame is either the globe's
         // (its atmosphere at some strength, or nothing) or the plane's.
         let showsFog = fogFade > 0
-        let thickness = max(atmosphere.thickness, 0.05)
+        // The halo's width at the camera zoom, floored: a shell of nothing
+        // would put the feather and the rim at the same angle.
+        let thickness = max(atmosphere.thickness.value(atZoom: zoom), 0.05)
         let intensity = max(atmosphere.intensity, 0)
 
         // A shell of `radii` planet radii subtends `radii * R / limbDistance`
@@ -189,7 +191,14 @@ enum HorizonFrameResolver {
         let cutoffEndRadians = max(showsFog ? 0 : rimRadians * rimCutoffEndWidths, minimumRadians)
         let skyOpacity = fog.isEnabled ? fogFade : 0
 
-        let lightDirection = settings.scene.light.direction
+        // The sun the halo brightens toward: the globe's, fixed over its
+        // subsolar point and turned with the globe (`GlobeLightUniform
+        // .sunWorldDirection`), so the halo's day is the surface's; the
+        // flat map's static sun with the globe's light off.
+        let globeLight = settings.scene.globeLight
+        let lightDirection = globeLight.isEnabled
+            ? GlobeLightUniform.sunWorldDirection(settings: globeLight, globe: globe)
+            : settings.scene.light.direction
         let light = simd_length_squared(lightDirection) > 1e-12
             ? simd_normalize(lightDirection)
             : SIMD3<Float>(0, 0, 1)

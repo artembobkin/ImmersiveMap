@@ -25,6 +25,7 @@ using namespace metal;
 #include "TileShading.h"
 #include "../Relief/Shaders/GroundRelief.h"
 #include "../../Globe/Shaders/GlobeTileProjection.h"
+#include "../../Globe/Shaders/GlobeLight.h"
 #include "../../Render/Shaders/Shared/GroundFog.h"
 
 constant float kTileRasterExtent = 4096.0;
@@ -101,6 +102,9 @@ struct TileRasterVertexOut {
     float2 uv;
     // The plane's point, for the ground fog. Unused on the sphere.
     float3 worldPosition;
+    // The sphere's normal in world space, the sun's side (GlobeLight.h).
+    // Unused on the plane.
+    float3 sphereNormal;
 };
 
 // The fragment stage's view of TileRasterVertexOut: the same interpolants
@@ -109,6 +113,7 @@ struct TileRasterFragmentIn {
     float4 position [[position]];
     float2 uv;
     float3 worldPosition;
+    float3 sphereNormal;
 };
 
 static inline half4 tileRasterColor(float2 uv,
@@ -134,6 +139,8 @@ vertex TileRasterVertexOut tileRasterFlatVertexShader(uint vertexID [[vertex_id]
     }
     out.position = camera.matrix * worldPosition;
     out.worldPosition = worldPosition.xyz;
+    // The plane has no sphere: the light reads nothing there.
+    out.sphereNormal = float3(0.0, 0.0, 1.0);
     float step = kTileRasterFlatLayerDepthStep * kTileRasterBehindFillsShare;
     if (kTileRasterRelief) {
         // The relief's depth half a step behind the ground band's first
@@ -156,7 +163,7 @@ fragment half4 tileRasterFlatFragmentShader(TileRasterFragmentIn in [[stage_in]]
                                             constant GroundFog& groundFog [[buffer(kGroundFogBufferIndex)]],
                                             texture2d<half> raster [[texture(0)]],
                                             texture2d<half> groundShadowMask [[texture(1)]],
-                                            depth2d<float> shadowMap [[texture(2), function_constant(kTileRasterRelief)]],
+                                            depth2d_array<float> shadowMap [[texture(2), function_constant(kTileRasterRelief)]],
                                             constant GroundReliefUniform& relief [[buffer(9), function_constant(kTileRasterRelief)]],
                                             texture2d<float> reliefHeights [[texture(3), function_constant(kTileRasterRelief)]],
                                             sampler rasterSampler [[sampler(0)]]) {
@@ -209,6 +216,21 @@ vertex TileRasterReliefShadowVertexOut tileRasterReliefShadowVertexShader(uint v
     return out;
 }
 
+// MARK: - The placement prepass's depth reset
+
+/// One triangle over the whole screen at the far plane
+/// (PlacementStencilRenderSubsystem): after the relief's marks are tested
+/// against the ground's depth, that depth is put back to the cleared far
+/// plane, so the ground passes meet the depth they met before the prepass
+/// wrote any, their own and nothing else. Depth only, no fragment stage,
+/// counter-clockwise like every triangle of the flat map.
+vertex TileRasterReliefShadowVertexOut placementDepthResetVertexShader(uint vertexID [[vertex_id]]) {
+    const float2 positions[3] = { float2(-1.0, -1.0), float2(3.0, -1.0), float2(-1.0, 3.0) };
+    TileRasterReliefShadowVertexOut out;
+    out.position = float4(positions[vertexID], 1.0, 1.0);
+    return out;
+}
+
 /// Mirror of GlobeSurfaceTileUniform.swift, as TileSphere.metal declares it.
 struct TileRasterSurfaceTile {
     float2 uvOrigin;
@@ -231,6 +253,7 @@ vertex TileRasterVertexOut tileRasterSpherePureVertexShader(uint vertexID [[vert
     out.position.z = (1.0 - kTileRasterSphereLayerDepthStep) * out.position.w;
     out.uv = tileRasterTextureUv(localPosition);
     out.worldPosition = float3(0.0);
+    out.sphereNormal = (globeFrame.sphereWorld * float4(unitDirection, 0.0)).xyz;
     return out;
 }
 
@@ -240,6 +263,7 @@ struct TileRasterMorphVertexOut {
     float clipDistance [[clip_distance]] [1];
     float2 uv;
     float3 worldPosition;
+    float3 sphereNormal;
 };
 
 vertex TileRasterMorphVertexOut tileRasterSphereMorphVertexShader(uint vertexID [[vertex_id]],
@@ -265,12 +289,16 @@ vertex TileRasterMorphVertexOut tileRasterSphereMorphVertexShader(uint vertexID 
                                                   globe.transition, globe.radius);
     out.uv = tileRasterTextureUv(localPosition);
     out.worldPosition = float3(0.0);
+    out.sphereNormal = (globeFrame.sphereWorld * float4(unitDirection, 0.0)).xyz;
     return out;
 }
 
 fragment half4 tileRasterSphereFragmentShader(TileRasterFragmentIn in [[stage_in]],
                                               constant TileRasterSampling& sampling [[buffer(1)]],
+                                              constant GlobeLight& globeLight [[buffer(kGlobeLightBufferIndex)]],
                                               texture2d<half> raster [[texture(0)]],
                                               sampler rasterSampler [[sampler(0)]]) {
-    return tileRasterColor(in.uv, raster, rasterSampler, sampling);
+    half4 color = tileRasterColor(in.uv, raster, rasterSampler, sampling);
+    color.rgb = globeLitColor(color.rgb, in.sphereNormal, globeLight);
+    return color;
 }

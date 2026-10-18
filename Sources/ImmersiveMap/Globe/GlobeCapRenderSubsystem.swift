@@ -36,7 +36,8 @@ final class GlobeCapRenderSubsystem: RenderSubsystem {
         globeCapRenderer.draw(renderEncoder: encoder,
                               globeFrame: GlobeFrameConstantsUniform.make(globe: frameContext.globeRenderUniform,
                                                                           cameraMatrix: frameContext.cameraUniform.matrix),
-                              globe: frameContext.globeRenderUniform)
+                              globe: frameContext.globeRenderUniform,
+                              globeLight: GlobeLightUniform.resolve(frameContext: frameContext))
         encoder.setDepthStencilState(depthDisabledState)
     }
 

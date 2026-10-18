@@ -4,18 +4,20 @@
 @testable import ImmersiveMap
 import XCTest
 
-/// The atmosphere's public API, as it shipped in 0.7.1: the same fields,
-/// the same defaults, the same two modifiers on the settings value and on
-/// the view.
+/// The atmosphere's public API: its fields and defaults, the thickness a
+/// curve over the zoom, and the two modifiers on the settings value and
+/// on the view.
 @MainActor
 final class AtmosphereSettingsTests: XCTestCase {
     func testTheDefaultsAreTheShippedOnes() {
         let atmosphere = ImmersiveMapSettings.AtmosphereSettings()
         XCTAssertTrue(atmosphere.isEnabled)
-        XCTAssertEqual(atmosphere.color, SIMD3<Float>(0.40, 0.66, 1.0))
-        XCTAssertEqual(atmosphere.intensity, 1.0)
-        XCTAssertEqual(atmosphere.thickness, 0.38)
-        XCTAssertEqual(atmosphere.sunInfluence, 0.44)
+        XCTAssertEqual(atmosphere.color, SIMD3<Float>(0.008, 0.18, 0.482))
+        XCTAssertEqual(atmosphere.intensity, 1.2)
+        XCTAssertEqual(atmosphere.thickness, [2: 3, 6: 0.25])
+        XCTAssertEqual(atmosphere.thickness.value(atZoom: 0), 3, "A wide glow around the whole planet")
+        XCTAssertEqual(atmosphere.thickness.value(atZoom: 7), 0.25, "A thin ring by the unroll")
+        XCTAssertEqual(atmosphere.sunInfluence, 0.69)
         XCTAssertEqual(ImmersiveMapSettings.default.scene.atmosphere, atmosphere)
     }
 

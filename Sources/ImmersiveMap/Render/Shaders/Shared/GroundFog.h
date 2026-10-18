@@ -41,7 +41,10 @@ struct GroundFog {
     /// painted: the fog keeps its colour).
     float4 skyColorAndGradient;
     /// The distance, in meters, the fog's density takes to come in past its
-    /// start. The rest is padding.
+    /// start, the altitude of the plane the ground is drawn from (the fog's
+    /// heights are the ground's altitudes, the plane's plus it, 0 where the
+    /// heights are the plane's own) and the altitude the density is stated
+    /// at. The rest is padding.
     float4 startSoftness;
 };
 
@@ -71,8 +74,13 @@ static inline float groundFogAmount(float3 worldPosition, constant GroundFog& fo
         return 0.0;
     }
     float height = max(fog.parameters.x, 1e-3);
-    float z0 = max(eye.z + ray.z * (start / rayLength), 0.0);
-    float z1 = max(eye.z + ray.z, 0.0);
+    // Heights over the altitude the density is stated at: the plane's
+    // altitude is added to the render world's z, so on the relief a valley
+    // under the plane lies deeper in the fog and a summit over it higher,
+    // and at and below the base altitude the fog is at its full density.
+    float base = fog.startSoftness.y - fog.startSoftness.z;
+    float z0 = max(eye.z + ray.z * (start / rayLength) + base, 0.0);
+    float z1 = max(eye.z + ray.z + base, 0.0);
     float rise = (z1 - z0) / height;
     float e0 = exp(-z0 / height);
     float meanDensity = abs(rise) > 1e-4 ? (e0 - exp(-z1 / height)) / rise : e0;

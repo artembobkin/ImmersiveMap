@@ -7,15 +7,18 @@ import simd
 /// `ShadowFrameState`. Pure input → output; runs once per frame in
 /// `RenderFrameEngine.collectInput`.
 ///
-/// There is one shadow window, fitted to a **pose-invariant disc** centered at
-/// the flat world origin, the camera's look-at point
-/// (`RenderCameraPoseResolver` orbits the origin). Its radius is a multiple of
-/// the camera distance `|eye|`, which does not depend on pitch or bearing, so
-/// tilting or rotating the camera changes nothing about the window: texel
-/// world size, and therefore edge sharpness, stays constant. The price is
-/// fitting a full disc instead of the camera frustum's footprint, and the
-/// reach the single window can cover at a usable density: shadows end at
-/// `coverageCameraDistances` and the eye-distance fade hides that edge.
+/// There are two shadow windows (`ShadowCascadeSlot`), each fitted the same
+/// way to the ground the camera sees inside a disc around it: the near one
+/// to `coverageCameraDistances` camera distances, sharp, and the far one to
+/// `farCoverageCameraDistances`, coarse, for the mountains casting across a
+/// valley from beyond the near window. A disc's radius is a multiple of the
+/// camera distance `|eye|`, which does not depend on pitch or bearing, so
+/// tilting or rotating the camera changes nothing about a window's texel
+/// world size, and therefore edge sharpness. Shadows end at the far
+/// window's radius (the near one's without a far window) and the
+/// eye-distance fade hides that edge. The far window is fitted only when
+/// its fade band starts where the near window ends or beyond
+/// (`fadeStartShare`), so no point is faded by both windows at once.
 ///
 /// Casters outside a disc are captured by extending the **near** plane towards
 /// the light by `maxCasterHeight / L.z`: any caster occluding a receiver `r`
@@ -184,22 +187,43 @@ enum ShadowFrameStateResolver {
     /// lay in front of the nearest visible ground, so every shadow in the
     /// frame vanished instead of an edge being hidden.
     static func fadeDistances(farRadius: Float) -> (start: Float, end: Float) {
-        (farRadius * 0.75, farRadius)
+        (farRadius * fadeStartShare, farRadius)
+    }
+
+    /// Where a window's fade band starts, as a share of its radius.
+    static let fadeStartShare: Float = 0.75
+
+    /// Whether a far window of `farRadius` is worth fitting next to a near
+    /// window of `nearRadius`: its band has to start where the near window
+    /// ends or beyond, so a receiver is faded by one window at a time and
+    /// the far window adds ground the near one does not reach. Under that
+    /// the far coverage is off, and the frame has the near window alone.
+    static func farWindowReaches(farRadius: Float, nearRadius: Float) -> Bool {
+        farRadius * fadeStartShare >= nearRadius
     }
 
     /// Everything the fit and the materialization derive from the frame:
     /// resolved once per frame, shared by `resolveAnchoredFit`,
     /// `materialize` and `fitCovers` so the three can never disagree.
+    /// One window's inputs: its spec and the visible ground it has to
+    /// cover, in flat world XY, clamped to its radius.
+    struct CascadeInputs {
+        let spec: CascadeSpec
+        let footprint: [SIMD2<Float>]
+        var radius: Float { spec.radius }
+    }
+
     struct FitInputs {
         let lightDirection: SIMD3<Float>
         let lightView: matrix_float4x4
         let cameraEye: SIMD3<Float>
         let unitsPerMeter: Double
         let mapResolution: Int
-        let farRadius: Float
-        let spec: CascadeSpec
-        /// The visible ground the window has to cover, in flat world XY.
-        let footprint: [SIMD2<Float>]
+        /// The near window, always.
+        let near: CascadeInputs
+        /// The far window, when its coverage reaches past the near one
+        /// (`farWindowReaches`).
+        let far: CascadeInputs?
         /// How far the ground falls and rises about the plane, in world
         /// units: the ground relief's heights over the frame's datum
         /// (`GroundReliefStore`), the plane alone without it. The window's
@@ -213,6 +237,33 @@ enum ShadowFrameStateResolver {
         let panShift: SIMD3<Double>
         let strength: Float
         let tint: SIMD3<Float>
+
+        /// A window's inputs, nil for a far window the frame has not got.
+        func cascade(_ slot: ShadowCascadeSlot) -> CascadeInputs? {
+            switch slot {
+            case .near: near
+            case .far: far
+            }
+        }
+
+        /// The windows the frame fits.
+        var slots: [ShadowCascadeSlot] {
+            far == nil ? [.near] : [.near, .far]
+        }
+    }
+
+    /// The share of `ShadowSettings.strength` the shadows have at a camera
+    /// zoom: nothing below `minimumZoom` less `fadeInZooms`, all of it from
+    /// `minimumZoom` on, a smooth rise between. Nil for a zoom not known,
+    /// which is all of it.
+    static func strengthShare(atZoom zoom: Double?, shadows: ImmersiveMapSettings.ShadowSettings) -> Float {
+        guard let zoom else { return 1 }
+        let fade = max(shadows.fadeInZooms, 0)
+        let start = shadows.minimumZoom - fade
+        guard zoom < shadows.minimumZoom else { return 1 }
+        guard fade > 0, zoom > start else { return 0 }
+        let t = Float((zoom - start) / fade)
+        return t * t * (3 - 2 * t)
     }
 
     static func resolveInputs(renderSurfaceMode: ViewMode,
@@ -222,10 +273,14 @@ enum ShadowFrameStateResolver {
                               flatRenderPan: SIMD2<Double>,
                               renderMapSize: Double,
                               groundHeights: ClosedRange<Float>? = nil,
+                              zoom: Double? = nil,
                               scene: ImmersiveMapSettings.SceneSettings) -> FitInputs? {
+        // The strength at this zoom: below the shadows' zoom there is
+        // none, and no shadow pass runs.
+        let strength = min(max(scene.shadows.strength, 0), 1) * strengthShare(atZoom: zoom, shadows: scene.shadows)
         guard renderSurfaceMode == .flat,
               scene.shadows.isEnabled,
-              scene.shadows.strength > 0 else {
+              strength > 0 else {
             return nil
         }
 
@@ -256,21 +311,37 @@ enum ShadowFrameStateResolver {
             : SIMD3<Float>(0, 0, 1)
         let lightView = Matrix.lookAt(eye: lightDirection, center: .zero, up: up)
 
-        let spec = windowSpec(cameraDistance: cameraDistance,
-                              unitsPerMeter: unitsPerMeter,
-                              coverageCameraDistances: scene.shadows.coverageCameraDistances,
-                              minimumCoverageMeters: scene.shadows.minimumCoverageMeters,
-                              maxCasterHeightMeters: scene.shadows.maxCasterHeightMeters)
+        let nearSpec = windowSpec(cameraDistance: cameraDistance,
+                                  unitsPerMeter: unitsPerMeter,
+                                  coverageCameraDistances: scene.shadows.coverageCameraDistances,
+                                  minimumCoverageMeters: scene.shadows.minimumCoverageMeters,
+                                  maxCasterHeightMeters: scene.shadows.maxCasterHeightMeters)
+        // The far window takes no floor in meters: the floor keeps the
+        // shadows down a street, which is the near window's business.
+        let farSpec = windowSpec(cameraDistance: cameraDistance,
+                                 unitsPerMeter: unitsPerMeter,
+                                 coverageCameraDistances: scene.shadows.farCoverageCameraDistances,
+                                 maxCasterHeightMeters: scene.shadows.maxCasterHeightMeters)
 
         let halfMapSize = renderMapSize * 0.5
         let panShift = SIMD3<Double>(flatRenderPan.x * halfMapSize,
                                      -flatRenderPan.y * halfMapSize,
                                      0)
 
-        let footprint = visibleGroundFootprint(inverseProjectionView: simd_inverse(projectionView),
-                                               cameraEye: cameraEye,
-                                               maxDistance: spec.radius)
-        guard footprint.isEmpty == false else { return nil }
+        let inverseProjectionView = simd_inverse(projectionView)
+        let nearFootprint = visibleGroundFootprint(inverseProjectionView: inverseProjectionView,
+                                                   cameraEye: cameraEye,
+                                                   maxDistance: nearSpec.radius)
+        guard nearFootprint.isEmpty == false else { return nil }
+        var far: CascadeInputs?
+        if farWindowReaches(farRadius: farSpec.radius, nearRadius: nearSpec.radius) {
+            let farFootprint = visibleGroundFootprint(inverseProjectionView: inverseProjectionView,
+                                                      cameraEye: cameraEye,
+                                                      maxDistance: farSpec.radius)
+            if farFootprint.isEmpty == false {
+                far = CascadeInputs(spec: farSpec, footprint: farFootprint)
+            }
+        }
 
         let normalOffsetTexels = min(max(scene.shadows.normalOffsetTexels,
                                          normalOffsetTexelsRange.lowerBound),
@@ -282,15 +353,14 @@ enum ShadowFrameStateResolver {
                          cameraEye: cameraEye,
                          unitsPerMeter: unitsPerMeter,
                          mapResolution: mapResolution,
-                         farRadius: spec.radius,
-                         spec: spec,
-                         footprint: footprint,
+                         near: CascadeInputs(spec: nearSpec, footprint: nearFootprint),
+                         far: far,
                          groundHeights: ground,
                          normalOffsetTexels: normalOffsetTexels,
                          softness: min(max(scene.shadows.softness, softnessRange.lowerBound),
                                        softnessRange.upperBound),
                          panShift: panShift,
-                         strength: min(max(scene.shadows.strength, 0), 1),
+                         strength: strength,
                          tint: simd_clamp(scene.shadows.tint,
                                           SIMD3<Float>(repeating: 0),
                                           SIMD3<Float>(repeating: 1)))
@@ -309,11 +379,18 @@ enum ShadowFrameStateResolver {
                                          centerWorldMercator: centerWorldMercator,
                                          flatRenderPan: flatRenderPan,
                                          renderMapSize: renderMapSize,
-                                         scene: scene),
-              let fit = resolveAnchoredFit(inputs: inputs, radiusMargin: 1.0) else {
+                                         scene: scene) else {
             return nil
         }
-        return materialize(fit: fit, inputs: inputs)
+        var fits: [ShadowCascadeSlot: ShadowAnchoredFit] = [:]
+        for slot in inputs.slots {
+            guard let fit = resolveAnchoredFit(inputs: inputs, slot: slot, radiusMargin: 1.0) else {
+                if slot == .near { return nil }
+                continue
+            }
+            fits[slot] = fit
+        }
+        return materialize(fits: fits, inputs: inputs)
     }
 
     /// The ground the camera can actually see, in flat world XY.
@@ -482,24 +559,28 @@ enum ShadowFrameStateResolver {
                 simd_dot(lightRowDepth, panShift))
     }
 
-    /// Fits the window and returns it in pan-anchored form.
+    /// Fits one window (`slot`) and returns it in pan-anchored form, nil
+    /// for a window the frame has not got.
     /// `radiusMargin` inflates the receiver discs before fitting: the slack
     /// is what lets `ShadowMapReuseController` keep a rendered map alive
     /// while the camera travels inside it. `resolve` (and its tests) fit
     /// with margin 1.0, which reproduces the historical frame-exact fit.
-    static func resolveAnchoredFit(inputs: FitInputs, radiusMargin: Float) -> ShadowAnchoredFit? {
+    static func resolveAnchoredFit(inputs: FitInputs,
+                                   slot: ShadowCascadeSlot,
+                                   radiusMargin: Float) -> ShadowAnchoredFit? {
+        guard let cascade = inputs.cascade(slot) else { return nil }
         let pan = panProjections(lightView: inputs.lightView, panShift: inputs.panShift)
         let cameraGround = SIMD2<Float>(inputs.cameraEye.x, inputs.cameraEye.y)
-        let fitFootprint = inflated(footprint: inputs.footprint,
+        let fitFootprint = inflated(footprint: cascade.footprint,
                                     about: cameraGround,
                                     margin: radiusMargin)
         guard let extremes = cascadeExtremes(footprint: fitFootprint,
-                                             maxCasterHeight: inputs.spec.maxCasterHeight,
+                                             maxCasterHeight: cascade.spec.maxCasterHeight,
                                              groundHeights: inputs.groundHeights,
                                              lightView: inputs.lightView) else {
             return nil
         }
-        let spec = inputs.spec
+        let spec = cascade.spec
 
         // Square quantized window: the raw extent varies smoothly with the
         // zoom fraction, and letting the texel size follow it makes shadow
@@ -550,15 +631,19 @@ enum ShadowFrameStateResolver {
     /// uv-inset margin the tap needs), and the window no coarser than a fresh
     /// fit would be by more than the quantization step (else the shadows would
     /// stay visibly softer than a refit while zooming in).
-    static func fitCovers(fit: ShadowAnchoredFit, inputs: FitInputs, radiusMargin: Float) -> Bool {
-        guard fit.lightDirection == inputs.lightDirection,
+    static func fitCovers(fit: ShadowAnchoredFit,
+                          inputs: FitInputs,
+                          slot: ShadowCascadeSlot,
+                          radiusMargin: Float) -> Bool {
+        guard let cascade = inputs.cascade(slot),
+              fit.lightDirection == inputs.lightDirection,
               fit.mapResolution == inputs.mapResolution else {
             return false
         }
         let pan = panProjections(lightView: inputs.lightView, panShift: inputs.panShift)
         let resolution = Float(fit.mapResolution)
-        let spec = inputs.spec
-        guard let extremes = cascadeExtremes(footprint: inputs.footprint,
+        let spec = cascade.spec
+        guard let extremes = cascadeExtremes(footprint: cascade.footprint,
                                              maxCasterHeight: spec.maxCasterHeight,
                                              groundHeights: inputs.groundHeights,
                                              lightView: inputs.lightView) else {
@@ -590,12 +675,52 @@ enum ShadowFrameStateResolver {
         return window.extent <= neededExtent * sqrt(2.0) * 1.001
     }
 
-    /// Rebuilds the frame's world-space matrix and sampling uniform from a
-    /// pan-anchored fit: the window follows the pan by whole construction
-    /// (its center was snapped in pan-anchored space), so a shadow map
-    /// rendered under one pan reads back correctly under any later pan for
-    /// which `fitCovers` still holds.
-    static func materialize(fit: ShadowAnchoredFit, inputs: FitInputs) -> ShadowFrameState? {
+    /// Rebuilds the frame's world-space matrices and sampling uniform from
+    /// the windows' pan-anchored fits (the near one required): a window
+    /// follows the pan by whole construction (its center was snapped in
+    /// pan-anchored space), so a shadow map rendered under one pan reads
+    /// back correctly under any later pan for which `fitCovers` still
+    /// holds. A far window without a fit, or one the frame has not got, is
+    /// disabled in the uniform and the near window's fade ends the shadows.
+    static func materialize(fits: [ShadowCascadeSlot: ShadowAnchoredFit],
+                            inputs: FitInputs) -> ShadowFrameState? {
+        guard let nearFit = fits[.near],
+              let near = materializeWindow(fit: nearFit, inputs: inputs, cascade: inputs.near) else {
+            return nil
+        }
+        var far: MaterializedWindow?
+        if let farInputs = inputs.far, let farFit = fits[.far] {
+            far = materializeWindow(fit: farFit, inputs: inputs, cascade: farInputs)
+        }
+        let uniform = ShadowUniform(near: near.uniform,
+                                    far: far?.uniform ?? .disabled,
+                                    eye: inputs.cameraEye,
+                                    strength: inputs.strength,
+                                    lightDirection: inputs.lightDirection,
+                                    tint: inputs.tint,
+                                    // The footprints are clamped to circles
+                                    // around the camera, so those circles are
+                                    // the only window edges a viewer can
+                                    // reach, and the fades have to be
+                                    // measured from there.
+                                    fadeCenter: SIMD2<Float>(inputs.cameraEye.x,
+                                                             inputs.cameraEye.y))
+        return ShadowFrameState(lightProjectionView: near.lightProjectionView,
+                                farLightProjectionView: far?.lightProjectionView,
+                                shadowUniform: uniform,
+                                mapResolution: nearFit.mapResolution)
+    }
+
+    /// One window materialized: its light matrix for the caster pass and
+    /// its sampling parameters for the receivers.
+    struct MaterializedWindow {
+        let lightProjectionView: matrix_float4x4
+        let uniform: ShadowCascadeUniform
+    }
+
+    static func materializeWindow(fit: ShadowAnchoredFit,
+                                  inputs: FitInputs,
+                                  cascade: CascadeInputs) -> MaterializedWindow? {
         guard fit.lightDirection == inputs.lightDirection,
               fit.mapResolution == inputs.mapResolution else {
             return nil
@@ -644,30 +769,16 @@ enum ShadowFrameStateResolver {
 
         let texelUV = SIMD2<Float>(repeating: 1.0 / resolution)
         let inset = uvInsetTexels * texelUV
-        let cascade = ShadowCascadeUniform(worldToShadowTexture: uvBias * lightProjectionView,
+        let fade = fadeDistances(farRadius: cascade.radius)
+        let uniform = ShadowCascadeUniform(worldToShadowTexture: uvBias * lightProjectionView,
                                            tentSpread: inputs.softness,
+                                           fadeStartDistance: fade.start,
                                            depthBias: depthBias,
+                                           fadeEndDistance: fade.end,
                                            uvMinimum: inset,
                                            uvMaximum: SIMD2<Float>(1, 1) - inset,
                                            normalOffsetWorld: inputs.normalOffsetTexels * texelWorldSize,
                                            texelSizeUV: texelUV)
-
-        let fade = fadeDistances(farRadius: inputs.farRadius)
-        let uniform = ShadowUniform(cascade: cascade,
-                                    eye: inputs.cameraEye,
-                                    strength: inputs.strength,
-                                    fadeStartDistance: fade.start,
-                                    fadeEndDistance: fade.end,
-                                    lightDirection: inputs.lightDirection,
-                                    tint: inputs.tint,
-                                    // The footprint is clamped to a circle
-                                    // around the camera, so that circle is the
-                                    // only window edge a viewer can reach, and
-                                    // the fade has to be measured from there.
-                                    fadeCenter: SIMD2<Float>(inputs.cameraEye.x,
-                                                             inputs.cameraEye.y))
-        return ShadowFrameState(lightProjectionView: lightProjectionView,
-                                shadowUniform: uniform,
-                                mapResolution: fit.mapResolution)
+        return MaterializedWindow(lightProjectionView: lightProjectionView, uniform: uniform)
     }
 }

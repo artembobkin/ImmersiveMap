@@ -11,7 +11,7 @@ final class ShadowsModifierTests: XCTestCase {
     func testAValueSetInPlaceLeavesTheOthers() {
         let settings = ImmersiveMapView()
             .shadows(strength: 0.4, coverageCameraDistances: 5)
-            .shadows(minimumCoverageMeters: 500)
+            .shadows(farCoverageCameraDistances: 20, minimumCoverageMeters: 500)
             .settings
         let shadows = settings.scene.shadows
         let defaults = ImmersiveMapSettings.default.scene.shadows
@@ -20,6 +20,7 @@ final class ShadowsModifierTests: XCTestCase {
         XCTAssertEqual(shadows.minimumCoverageMeters, 500)
         XCTAssertEqual(shadows.strength, 0.4, "Set by the first modifier, kept by the second")
         XCTAssertEqual(shadows.coverageCameraDistances, 5)
+        XCTAssertEqual(shadows.farCoverageCameraDistances, 20)
         XCTAssertEqual(shadows.mapResolution, defaults.mapResolution)
         XCTAssertEqual(shadows.softness, defaults.softness)
     }

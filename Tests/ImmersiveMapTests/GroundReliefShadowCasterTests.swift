@@ -13,7 +13,7 @@ final class GroundReliefShadowCasterTests: XCTestCase {
         let parent = try placement(source: Tile(x: 2, y: 3, z: 8), placeIn: Tile(x: 2, y: 3, z: 8), slot: 8)
         let child = try placement(source: Tile(x: 9, y: 13, z: 10), placeIn: Tile(x: 9, y: 13, z: 10), slot: 10)
 
-        let casters = GroundReliefShadowCasterSubsystem.casters(of: [parent, child])
+        let casters = PlacementGroundSquare.squares(of: [parent, child])
 
         let parentSquares = Set(casters.filter { $0.source.tile == parent.metalTile.tile }.map(\.square.tile))
         XCTAssertEqual(parentSquares, [Tile(x: 5, y: 6, z: 9),
@@ -32,7 +32,7 @@ final class GroundReliefShadowCasterTests: XCTestCase {
         let first = try placement(source: Tile(x: 4, y: 6, z: 9), placeIn: Tile(x: 8, y: 12, z: 10), slot: 10)
         let last = try placement(source: Tile(x: 8, y: 12, z: 10), placeIn: Tile(x: 8, y: 12, z: 10), slot: 10)
 
-        let casters = GroundReliefShadowCasterSubsystem.casters(of: [first, last])
+        let casters = PlacementGroundSquare.squares(of: [first, last])
 
         XCTAssertEqual(casters.map(\.source.tile), [last.metalTile.tile],
                        "The last mark of a square is the one the stencil keeps")
@@ -43,7 +43,7 @@ final class GroundReliefShadowCasterTests: XCTestCase {
         let near = try placement(source: source, placeIn: Tile(x: 8, y: 12, z: 10), slot: 10)
         let far = try placement(source: source, placeIn: Tile(x: 9, y: 12, z: 10), slot: 9)
 
-        let casters = GroundReliefShadowCasterSubsystem.casters(of: [near, far])
+        let casters = PlacementGroundSquare.squares(of: [near, far])
 
         XCTAssertEqual(Set(casters.map(\.source.targetZoom)), [10],
                        "As the ground draws it, the source takes its deepest ring's terrain")
@@ -75,6 +75,14 @@ final class GroundReliefShadowCasterTests: XCTestCase {
                            relief.metres(atTileUV: SIMD2<Float>(0.5, 0.5) + uv * 0.5),
                            accuracy: 1e-3)
         }
+    }
+
+    /// A square takes its source's cells over the part of the source it
+    /// is, on the source's lines, and never none.
+    func testASquareTakesItsSourcesCellsOverItsPart() {
+        XCTAssertEqual(PlacementGroundSquare.cells(ofSource: 256, sourceZoom: 8, squareZoom: 8), 256)
+        XCTAssertEqual(PlacementGroundSquare.cells(ofSource: 256, sourceZoom: 8, squareZoom: 10), 64)
+        XCTAssertEqual(PlacementGroundSquare.cells(ofSource: 2, sourceZoom: 8, squareZoom: 12), 1)
     }
 
     private func placement(source: Tile, placeIn: Tile, slot: Int) throws -> PlaceTile {

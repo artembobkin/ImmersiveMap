@@ -46,7 +46,7 @@ vertex GroundShadowMaskVertexOut groundShadowMaskVertexShader(uint vertexID [[ve
 }
 
 // Intersects the pixel's view ray with the ground plane and samples the
-// shadow window there. Unlike the generic `sampleShadowFactor`, this path
+// shadow windows there. Unlike the generic `sampleShadowFactor`, this path
 // never needs the normal handling: the plane always faces up, so geometric
 // visibility is 1 and the factor reduces to
 // 1 - (1 - mapVisibility) * strength * fade. Nothing here takes a screen
@@ -60,7 +60,7 @@ vertex GroundShadowMaskVertexOut groundShadowMaskVertexShader(uint vertexID [[ve
 fragment half groundShadowMaskFragmentShader(GroundShadowMaskVertexOut in [[stage_in]],
                                              constant GroundShadowMaskUniform& mask [[buffer(0)]],
                                              constant Shadow& shadow [[buffer(1)]],
-                                             depth2d<float> shadowMap [[texture(0)]]) {
+                                             depth2d_array<float> shadowMap [[texture(0)]]) {
     float2 ndc = float2(2.0 * in.position.x / mask.viewportSize.x - 1.0,
                         1.0 - 2.0 * in.position.y / mask.viewportSize.y);
     float4 nearPoint = mask.inverseProjectionView * float4(ndc, 0.0, 1.0);
@@ -84,17 +84,11 @@ fragment half groundShadowMaskFragmentShader(GroundShadowMaskVertexOut in [[stag
     if (shadow.strength <= 0.0) {
         return 1.0h;
     }
-    float distanceToCenter = length(worldPosition.xy - shadow.fadeCenter);
-    if (distanceToCenter >= shadow.fadeEndDistance) {
+    ShadowCascadeBlend blend = shadowCascadeBlend(shadow, worldPosition.xy);
+    if (blend.fade <= 0.0) {
         return 1.0h;
     }
 
-    // Orthographic light projection: w is 1, no divide.
-    float3 uvz = (shadow.cascade.worldToShadowTexture * float4(worldPosition, 1.0)).xyz;
-    float mapVisibility = shadowWindowContains(shadow.cascade, uvz)
-        ? shadowWindowVisibility(shadow.cascade, shadowMap, uvz)
-        : 1.0;
-
-    float fade = 1.0 - smoothstep(shadow.fadeStartDistance, shadow.fadeEndDistance, distanceToCenter);
-    return half(1.0 - (1.0 - mapVisibility) * shadow.strength * fade);
+    float mapVisibility = shadowMapVisibility(shadow, shadowMap, worldPosition, float3(0.0), blend);
+    return half(1.0 - (1.0 - mapVisibility) * shadow.strength * blend.fade);
 }

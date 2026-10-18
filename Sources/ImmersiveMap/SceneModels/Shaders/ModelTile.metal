@@ -99,7 +99,7 @@ fragment half4 modelTileFragmentShader(ModelTileVertexOut in [[stage_in]],
                                        constant Shadow& shadow [[buffer(4)]],
                                        constant GroundFog& groundFog [[buffer(kGroundFogBufferIndex)]],
                                        texture2d_array<half> baseColorTextures [[texture(0)]],
-                                       depth2d<float> shadowMap [[texture(1)]],
+                                       depth2d_array<float> shadowMap [[texture(1)]],
                                        sampler baseColorSampler [[sampler(0)]]) {
     if (kModelTileClipsBelowGround && in.worldPosition.z < 0.0) {
         discard_fragment();

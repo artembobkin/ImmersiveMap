@@ -128,6 +128,8 @@ final class DebugOverlayHUDView: NSView {
     private let shadowsEnabledSwitch = NSSwitch()
     private let shadowStrengthLabel = NSTextField(labelWithString: "")
     private let shadowStrengthSlider = NSSlider()
+    private let shadowMinimumZoomLabel = NSTextField(labelWithString: "")
+    private let shadowMinimumZoomSlider = NSSlider()
     private let shadowMapResolutionLabel = NSTextField(labelWithString: "")
     private let shadowMapResolutionControl = NSSegmentedControl(
         labels: DebugOverlayShadowSettingsPlanner.mapResolutionTitles,
@@ -136,6 +138,8 @@ final class DebugOverlayHUDView: NSView {
         action: nil)
     private let shadowCoverageLabel = NSTextField(labelWithString: "")
     private let shadowCoverageSlider = NSSlider()
+    private let shadowFarCoverageLabel = NSTextField(labelWithString: "")
+    private let shadowFarCoverageSlider = NSSlider()
     private let shadowMinimumCoverageLabel = NSTextField(labelWithString: "")
     private let shadowMinimumCoverageSlider = NSSlider()
     private let shadowNormalOffsetLabel = NSTextField(labelWithString: "")
@@ -158,6 +162,16 @@ final class DebugOverlayHUDView: NSView {
     /// The hillshade's fade, in the eye's distances to the point it looks
     /// at (`ImmersiveMapHillshade.fadeStartCameraDistances`).
     private static let hillshadeFadeRange: ClosedRange<Double> = 0...12
+    /// The hillshade's amounts (`GroundReliefHillshade.Amounts`): the
+    /// intensity, and how far a slope goes toward the shadow colour and
+    /// toward the highlight colour, each 0 to 1.
+    private let hillshadeIntensityLabel = NSTextField(labelWithString: "")
+    private let hillshadeIntensitySlider = NSSlider()
+    private let hillshadeShadowLabel = NSTextField(labelWithString: "")
+    private let hillshadeShadowSlider = NSSlider()
+    private let hillshadeHighlightLabel = NSTextField(labelWithString: "")
+    private let hillshadeHighlightSlider = NSSlider()
+    private static let hillshadeAmountRange: ClosedRange<Double> = 0...1
 
     private let fogGroupLabel = NSTextField(labelWithString: "Horizon")
     private let fogEnabledLabel = NSTextField(labelWithString: "")
@@ -167,13 +181,19 @@ final class DebugOverlayHUDView: NSView {
     private let fogHorizonColorLabel = NSTextField(labelWithString: "")
     private let fogHorizonColorWell = NSColorWell(style: .minimal)
 
-    private let groundFogGroupLabel = NSTextField(labelWithString: "Ground fog")
+    private let groundFogGroupLabel = NSTextField(labelWithString: "Air")
     private let groundFogEnabledLabel = NSTextField(labelWithString: "")
     private let groundFogEnabledSwitch = NSSwitch()
     private let groundFogBuildingsLabel = NSTextField(labelWithString: "")
     private let groundFogBuildingsSwitch = NSSwitch()
     private let groundFogSkyColorLabel = NSTextField(labelWithString: "")
     private let groundFogSkyColorSwitch = NSSwitch()
+    /// The air's heights on the relief (`GroundFogSettings.heightsFromSeaLevel`,
+    /// `baseAltitudeMeters`).
+    private let groundFogSeaLevelLabel = NSTextField(labelWithString: "")
+    private let groundFogSeaLevelSwitch = NSSwitch()
+    private let groundFogBaseAltitudeLabel = NSTextField(labelWithString: "")
+    private let groundFogBaseAltitudeSlider = NSSlider()
     // Every value of the fog but the colour is a curve over the zoom, each
     // on a graph of its own under its title.
     private let groundFogDensityLabel = NSTextField(labelWithString: "")
@@ -190,12 +210,29 @@ final class DebugOverlayHUDView: NSView {
     private let groundFogColorLabel = NSTextField(labelWithString: "")
     private let groundFogColorWell = NSColorWell(style: .minimal)
     private let groundFogResetButton = NSButton()
+    /// The mountain air preset (`DebugOverlayGroundFogSettingsPlanner.mountainAirPreset(from:)`).
+    private let groundFogMountainPresetButton = NSButton()
 
     /// The Export tab: the tuned values written to a file as the modifiers
     /// that set them (`DebugOverlaySettingsExport`), the file's path copied.
     private let exportGroupLabel = NSTextField(labelWithString: "Export")
     private let exportButton = NSButton()
     private let exportStatusLabel = NSTextField(wrappingLabelWithString: "")
+
+    /// The Globe tab: the sun on the globe (`GlobeLightSettings`).
+    private let globeLightGroupLabel = NSTextField(labelWithString: "Globe light")
+    private let globeLightEnabledLabel = NSTextField(labelWithString: "")
+    private let globeLightEnabledSwitch = NSSwitch()
+    private let globeLightLatitudeLabel = NSTextField(labelWithString: "")
+    private let globeLightLatitudeSlider = NSSlider()
+    private let globeLightLongitudeLabel = NSTextField(labelWithString: "")
+    private let globeLightLongitudeSlider = NSSlider()
+    private let globeLightStrengthLabel = NSTextField(labelWithString: "")
+    private let globeLightStrengthGraph = DebugOverlayZoomCurveView()
+    private let globeLightSoftnessLabel = NSTextField(labelWithString: "")
+    private let globeLightSoftnessSlider = NSSlider()
+    private let globeLightNightColorLabel = NSTextField(labelWithString: "")
+    private let globeLightNightColorWell = NSColorWell(style: .minimal)
 
     private let atmosphereGroupLabel = NSTextField(labelWithString: "Atmosphere")
     private let atmosphereEnabledLabel = NSTextField(labelWithString: "")
@@ -205,7 +242,8 @@ final class DebugOverlayHUDView: NSView {
     private let atmosphereIntensityLabel = NSTextField(labelWithString: "")
     private let atmosphereIntensitySlider = NSSlider()
     private let atmosphereThicknessLabel = NSTextField(labelWithString: "")
-    private let atmosphereThicknessSlider = NSSlider()
+    /// The halo's width over the zoom, on a graph like the air's curves.
+    private let atmosphereThicknessGraph = DebugOverlayZoomCurveView()
     private let atmosphereSunInfluenceLabel = NSTextField(labelWithString: "")
     private let atmosphereSunInfluenceSlider = NSSlider()
 
@@ -288,6 +326,7 @@ final class DebugOverlayHUDView: NSView {
     private var sunDirection = ImmersiveMapSettings.SceneLightSettings().direction
     private var fogSettings = ImmersiveMapSettings.FogSettings()
     private var atmosphereSettings = ImmersiveMapSettings.AtmosphereSettings()
+    private var globeLightSettings = ImmersiveMapSettings.GlobeLightSettings()
     private var groundFogSettings = ImmersiveMapSettings.GroundFogSettings()
     private var groundFogHorizonColor = ImmersiveMapSettings.FogSettings().horizonColor
     /// The camera zoom the fog's curves are read and edited at, from the
@@ -320,7 +359,7 @@ final class DebugOverlayHUDView: NSView {
         case .stats: .stats
         case .tiles: .tiles
         case .relief: .relief
-        case .labels, .shadows, .sky, .map, .export: []
+        case .labels, .light, .shadows, .sky, .globe, .air, .map, .export: []
         }
     }
     /// The labels' reach by camera zoom, on every edit.
@@ -335,6 +374,8 @@ final class DebugOverlayHUDView: NSView {
     var onLabelMinimumScaleChanged: ((Float) -> Void)?
     /// The hillshade's fade dragged to, in the eye's distances.
     var onHillshadeFadeChanged: ((ClosedRange<Float>) -> Void)?
+    /// The hillshade's amounts dragged to.
+    var onHillshadeAmountsChanged: ((GroundReliefHillshade.Amounts) -> Void)?
     /// The mountains' shadows switched on or off.
     var onReliefShadowsChanged: ((Bool) -> Void)?
 
@@ -345,6 +386,7 @@ final class DebugOverlayHUDView: NSView {
     var onSunDirectionChanged: ((SIMD3<Float>) -> Void)?
     var onFogSettingsChanged: ((ImmersiveMapSettings.FogSettings) -> Void)?
     var onAtmosphereSettingsChanged: ((ImmersiveMapSettings.AtmosphereSettings) -> Void)?
+    var onGlobeLightSettingsChanged: ((ImmersiveMapSettings.GlobeLightSettings) -> Void)?
     var onGroundFogSettingsChanged: ((ImmersiveMapSettings.GroundFogSettings) -> Void)?
     /// The ground fog group's reset: back to the values the app gave.
     var onGroundFogResetRequested: (() -> Void)?
@@ -395,7 +437,8 @@ final class DebugOverlayHUDView: NSView {
         updateTabButtons()
 
         [statsGroupLabel, tilesGroupLabel, reliefGroupLabel, baseLabelsGroupLabel, labelDistanceGroupLabel,
-         lightGroupLabel, shadowsGroupLabel, fogGroupLabel, groundFogGroupLabel, atmosphereGroupLabel, controlsGroupLabel,
+         lightGroupLabel, shadowsGroupLabel, fogGroupLabel, groundFogGroupLabel, atmosphereGroupLabel, globeLightGroupLabel,
+         controlsGroupLabel,
          exportGroupLabel].forEach(configureGroupLabel)
 
         configureControlLabel(axesLabel, text: "Axes")
@@ -416,8 +459,10 @@ final class DebugOverlayHUDView: NSView {
                         action: #selector(localLabelDistanceSliderChanged))
         configureControlLabel(shadowsEnabledLabel, text: "Enabled")
         configureControlLabel(shadowStrengthLabel, text: "")
+        configureControlLabel(shadowMinimumZoomLabel, text: "")
         configureControlLabel(shadowMapResolutionLabel, text: "Map px")
         configureControlLabel(shadowCoverageLabel, text: "")
+        configureControlLabel(shadowFarCoverageLabel, text: "")
         configureControlLabel(shadowMinimumCoverageLabel, text: "")
         configureControlLabel(shadowNormalOffsetLabel, text: "")
         configureControlLabel(shadowCasterHeightLabel, text: "")
@@ -430,6 +475,12 @@ final class DebugOverlayHUDView: NSView {
         hillshadeFadeSlider.range = Self.hillshadeFadeRange
         hillshadeFadeSlider.onChange = { [weak self] fade in
             self?.hillshadeFadeChanged(Float(fade.lowerBound) ... Float(fade.upperBound))
+        }
+        configureControlLabel(hillshadeIntensityLabel, text: "")
+        configureControlLabel(hillshadeShadowLabel, text: "")
+        configureControlLabel(hillshadeHighlightLabel, text: "")
+        for slider in [hillshadeIntensitySlider, hillshadeShadowSlider, hillshadeHighlightSlider] {
+            configureSlider(slider, range: Self.hillshadeAmountRange, action: #selector(hillshadeAmountSliderChanged))
         }
         sunDialView.elevationRange = DebugOverlayShadowSettingsPlanner.elevationRange
         sunElevationView.elevationRange = DebugOverlayShadowSettingsPlanner.elevationRange
@@ -447,12 +498,39 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(groundFogEnabledLabel, text: "Enabled")
         configureControlLabel(groundFogBuildingsLabel, text: "Veil buildings")
         configureControlLabel(groundFogSkyColorLabel, text: "Sky colour above the line")
+        configureControlLabel(groundFogSeaLevelLabel, text: "Heights from sea level")
+        configureControlLabel(groundFogBaseAltitudeLabel, text: "")
         configureControlLabel(groundFogDensityLabel, text: "")
         configureControlLabel(groundFogHeightLabel, text: "")
         configureControlLabel(groundFogStartLabel, text: "")
         configureControlLabel(groundFogSoftnessLabel, text: "")
         configureControlLabel(groundFogOpacityLabel, text: "")
         configureControlLabel(groundFogColorLabel, text: "Colour")
+        configureControlLabel(globeLightEnabledLabel, text: "Enabled")
+        configureControlLabel(globeLightLatitudeLabel, text: "")
+        configureControlLabel(globeLightLongitudeLabel, text: "")
+        configureSlider(globeLightLatitudeSlider,
+                        range: DebugOverlayGlobeLightSettingsPlanner.subsolarLatitudeRange,
+                        action: #selector(globeLightLatitudeSliderChanged))
+        configureSlider(globeLightLongitudeSlider,
+                        range: DebugOverlayGlobeLightSettingsPlanner.subsolarLongitudeRange,
+                        action: #selector(globeLightLongitudeSliderChanged))
+        configureControlLabel(globeLightStrengthLabel, text: "")
+        configureControlLabel(globeLightSoftnessLabel, text: "")
+        configureControlLabel(globeLightNightColorLabel, text: "Night colour")
+        configureSwitch(globeLightEnabledSwitch, action: #selector(globeLightEnabledSwitchChanged))
+        globeLightStrengthGraph.axes = DebugOverlayGlobeLightSettingsPlanner.strengthAxes
+        globeLightStrengthGraph.valueText = DebugOverlayGlobeLightSettingsPlanner.strengthText
+        globeLightStrengthGraph.onChange = { [weak self] curve in
+            guard let self else { return }
+            var settings = globeLightSettings
+            settings.strength = curve
+            publish(globeLightSettings: settings)
+        }
+        configureSlider(globeLightSoftnessSlider,
+                        range: DebugOverlayGlobeLightSettingsPlanner.softnessRange,
+                        action: #selector(globeLightSoftnessSliderChanged))
+        configureColorWell(globeLightNightColorWell, action: #selector(globeLightNightColorWellChanged))
         configureControlLabel(atmosphereEnabledLabel, text: "Enabled")
         configureControlLabel(atmosphereColorLabel, text: "Colour")
         configureControlLabel(atmosphereIntensityLabel, text: "")
@@ -472,6 +550,10 @@ final class DebugOverlayHUDView: NSView {
         configureSwitch(groundFogEnabledSwitch, action: #selector(groundFogEnabledSwitchChanged))
         configureSwitch(groundFogBuildingsSwitch, action: #selector(groundFogBuildingsSwitchChanged))
         configureSwitch(groundFogSkyColorSwitch, action: #selector(groundFogSkyColorSwitchChanged))
+        configureSwitch(groundFogSeaLevelSwitch, action: #selector(groundFogSeaLevelSwitchChanged))
+        configureSlider(groundFogBaseAltitudeSlider,
+                        range: DebugOverlayGroundFogSettingsPlanner.baseAltitudeRange,
+                        action: #selector(groundFogBaseAltitudeSliderChanged))
         typealias FogPlanner = DebugOverlayGroundFogSettingsPlanner
         configureGroundFogGraph(groundFogDensityGraph,
                                 axes: FogPlanner.densityAxes,
@@ -502,6 +584,10 @@ final class DebugOverlayHUDView: NSView {
                               title: "Reset to the app's values",
                               symbolName: "arrow.uturn.backward",
                               action: #selector(groundFogResetButtonTapped))
+        configureActionButton(groundFogMountainPresetButton,
+                              title: "Mountain air preset",
+                              symbolName: "mountain.2",
+                              action: #selector(groundFogMountainPresetButtonTapped))
         configureActionButton(exportButton,
                               title: "Export settings to a file",
                               symbolName: "square.and.arrow.up",
@@ -516,9 +602,15 @@ final class DebugOverlayHUDView: NSView {
         configureSlider(shadowStrengthSlider,
                         range: DebugOverlayShadowSettingsPlanner.strengthRange,
                         action: #selector(shadowStrengthSliderChanged))
+        configureSlider(shadowMinimumZoomSlider,
+                        range: DebugOverlayShadowSettingsPlanner.minimumZoomRange,
+                        action: #selector(shadowMinimumZoomSliderChanged))
         configureSlider(shadowCoverageSlider,
                         range: DebugOverlayShadowSettingsPlanner.coverageRange,
                         action: #selector(shadowCoverageSliderChanged))
+        configureSlider(shadowFarCoverageSlider,
+                        range: DebugOverlayShadowSettingsPlanner.farCoverageRange,
+                        action: #selector(shadowFarCoverageSliderChanged))
         configureSlider(shadowMinimumCoverageSlider,
                         range: DebugOverlayShadowSettingsPlanner.minimumCoverageRange,
                         action: #selector(shadowMinimumCoverageSliderChanged))
@@ -536,9 +628,14 @@ final class DebugOverlayHUDView: NSView {
         configureSlider(atmosphereIntensitySlider,
                         range: DebugOverlayAtmosphereSettingsPlanner.intensityRange,
                         action: #selector(atmosphereIntensitySliderChanged))
-        configureSlider(atmosphereThicknessSlider,
-                        range: DebugOverlayAtmosphereSettingsPlanner.thicknessRange,
-                        action: #selector(atmosphereThicknessSliderChanged))
+        atmosphereThicknessGraph.axes = DebugOverlayAtmosphereSettingsPlanner.thicknessAxes
+        atmosphereThicknessGraph.valueText = DebugOverlayAtmosphereSettingsPlanner.thicknessText
+        atmosphereThicknessGraph.onChange = { [weak self] curve in
+            guard let self else { return }
+            var settings = atmosphereSettings
+            settings.thickness = curve
+            publish(atmosphereSettings: settings)
+        }
         configureSlider(atmosphereSunInfluenceSlider,
                         range: DebugOverlayAtmosphereSettingsPlanner.sunInfluenceRange,
                         action: #selector(atmosphereSunInfluenceSliderChanged))
@@ -645,8 +742,10 @@ final class DebugOverlayHUDView: NSView {
          labelMinimumScaleLabel, labelMinimumScaleSlider,
          shadowsGroupLabel, shadowsEnabledLabel, shadowsEnabledSwitch,
          shadowStrengthLabel, shadowStrengthSlider,
+         shadowMinimumZoomLabel, shadowMinimumZoomSlider,
          shadowMapResolutionLabel, shadowMapResolutionControl,
          shadowCoverageLabel, shadowCoverageSlider,
+         shadowFarCoverageLabel, shadowFarCoverageSlider,
          shadowMinimumCoverageLabel, shadowMinimumCoverageSlider,
          shadowNormalOffsetLabel, shadowNormalOffsetSlider,
          shadowCasterHeightLabel, shadowCasterHeightSlider,
@@ -655,6 +754,9 @@ final class DebugOverlayHUDView: NSView {
          sunDialView, sunElevationView,
          sunAzimuthLabel, sunElevationLabel,
          hillshadeFadeLabel, hillshadeFadeSlider,
+         hillshadeIntensityLabel, hillshadeIntensitySlider,
+         hillshadeShadowLabel, hillshadeShadowSlider,
+         hillshadeHighlightLabel, hillshadeHighlightSlider,
          reliefShadowsLabel, reliefShadowsSwitch,
          fogGroupLabel, fogEnabledLabel, fogEnabledSwitch,
          fogSkyColorLabel, fogSkyColorWell,
@@ -662,6 +764,8 @@ final class DebugOverlayHUDView: NSView {
          groundFogGroupLabel, groundFogEnabledLabel, groundFogEnabledSwitch,
          groundFogBuildingsLabel, groundFogBuildingsSwitch,
          groundFogSkyColorLabel, groundFogSkyColorSwitch,
+         groundFogSeaLevelLabel, groundFogSeaLevelSwitch,
+         groundFogBaseAltitudeLabel, groundFogBaseAltitudeSlider,
          groundFogGraphHint,
          groundFogDensityLabel, groundFogDensityGraph,
          groundFogHeightLabel, groundFogHeightGraph,
@@ -669,12 +773,19 @@ final class DebugOverlayHUDView: NSView {
          groundFogSoftnessLabel, groundFogSoftnessGraph,
          groundFogOpacityLabel, groundFogOpacityGraph,
          groundFogColorLabel, groundFogColorWell,
+         groundFogMountainPresetButton,
          groundFogResetButton,
          exportGroupLabel, exportButton, exportStatusLabel,
+         globeLightGroupLabel, globeLightEnabledLabel, globeLightEnabledSwitch,
+         globeLightLatitudeLabel, globeLightLatitudeSlider,
+         globeLightLongitudeLabel, globeLightLongitudeSlider,
+         globeLightStrengthLabel, globeLightStrengthGraph,
+         globeLightSoftnessLabel, globeLightSoftnessSlider,
+         globeLightNightColorLabel, globeLightNightColorWell,
          atmosphereGroupLabel, atmosphereEnabledLabel, atmosphereEnabledSwitch,
          atmosphereColorLabel, atmosphereColorWell,
          atmosphereIntensityLabel, atmosphereIntensitySlider,
-         atmosphereThicknessLabel, atmosphereThicknessSlider,
+         atmosphereThicknessLabel, atmosphereThicknessGraph,
          atmosphereSunInfluenceLabel, atmosphereSunInfluenceSlider,
          controlsGroupLabel, axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch,
          tileGridLabel, tileGridSwitch, tileGridDensityControl,
@@ -705,9 +816,13 @@ final class DebugOverlayHUDView: NSView {
             sunDialView.viewAzimuthDegrees = viewAzimuth
         }
         if let zoom = snapshot?.cameraZoom, zoom != groundFogCameraZoom {
+            // The air's, the atmosphere's and the globe light's graphs mark
+            // the camera's zoom.
             // The fog's sliders read their curves at the camera's zoom.
             groundFogCameraZoom = zoom
             updateGroundFogControls()
+            updateAtmosphereControls()
+            updateGlobeLightControls()
         }
         updateText()
         updateVisibility()
@@ -1159,6 +1274,16 @@ final class DebugOverlayHUDView: NSView {
         needsLayout = true
     }
 
+    /// The globe light group reflects the live settings, like the others.
+    func apply(globeLightSettings: ImmersiveMapSettings.GlobeLightSettings) {
+        guard self.globeLightSettings != globeLightSettings else {
+            return
+        }
+        self.globeLightSettings = globeLightSettings
+        updateGlobeLightControls()
+        needsLayout = true
+    }
+
     func apply(atmosphereSettings: ImmersiveMapSettings.AtmosphereSettings) {
         guard self.atmosphereSettings != atmosphereSettings else {
             return
@@ -1282,12 +1407,20 @@ final class DebugOverlayHUDView: NSView {
         if tab.shows(.labels) {
             cursor = layoutLabelGroups(at: cursor, contentWidth: contentWidth)
         }
-        if tab.shows(.shadows) {
+        if tab.shows(.light) {
             cursor = layoutLightGroup(at: cursor, contentWidth: contentWidth)
+        }
+        if tab.shows(.shadows) {
             cursor = layoutShadowsGroup(at: cursor, contentWidth: contentWidth)
         }
         if tab.shows(.sky) {
             cursor = layoutSkyGroups(at: cursor, contentWidth: contentWidth)
+        }
+        if tab.shows(.globe) {
+            cursor = layoutGlobeLightGroup(at: cursor, contentWidth: contentWidth)
+        }
+        if tab.shows(.air) {
+            cursor = layoutAirGroup(at: cursor, contentWidth: contentWidth)
         }
         if tab.shows(.map) {
             cursor = layoutControlsGroup(at: cursor, contentWidth: contentWidth)
@@ -1340,8 +1473,10 @@ final class DebugOverlayHUDView: NSView {
         var cursor = layoutGroupHeader(shadowsGroupLabel, at: top, contentWidth: contentWidth)
         cursor = layoutSwitchRow(shadowsEnabledLabel, shadowsEnabledSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowStrengthLabel, shadowStrengthSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(shadowMinimumZoomLabel, shadowMinimumZoomSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowMapResolutionLabel, shadowMapResolutionControl, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowCoverageLabel, shadowCoverageSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(shadowFarCoverageLabel, shadowFarCoverageSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowMinimumCoverageLabel, shadowMinimumCoverageSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowNormalOffsetLabel, shadowNormalOffsetSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowCasterHeightLabel, shadowCasterHeightSlider, at: cursor, contentWidth: contentWidth)
@@ -1370,12 +1505,14 @@ final class DebugOverlayHUDView: NSView {
                                          width: half, height: Layout.controlRowHeight)
         cursor += Layout.controlRowHeight + Layout.controlSpacing
         cursor = layoutControlRow(hillshadeFadeLabel, hillshadeFadeSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(hillshadeIntensityLabel, hillshadeIntensitySlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(hillshadeShadowLabel, hillshadeShadowSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(hillshadeHighlightLabel, hillshadeHighlightSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(reliefShadowsLabel, reliefShadowsSwitch, at: cursor, contentWidth: contentWidth)
         return cursor + Layout.groupSpacing
     }
 
-    /// The horizon, the ground fog with a graph per zoom curve, and the
-    /// globe's atmosphere.
+    /// The horizon and the globe's atmosphere.
     private func layoutSkyGroups(at top: CGFloat, contentWidth: CGFloat) -> CGFloat {
         var cursor = layoutGroupHeader(fogGroupLabel, at: top, contentWidth: contentWidth)
         cursor = layoutSwitchRow(fogEnabledLabel, fogEnabledSwitch, at: cursor, contentWidth: contentWidth)
@@ -1383,10 +1520,39 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutControlRow(fogHorizonColorLabel, fogHorizonColorWell, at: cursor, contentWidth: contentWidth)
         cursor += Layout.groupSpacing
 
-        cursor = layoutGroupHeader(groundFogGroupLabel, at: cursor, contentWidth: contentWidth)
+        cursor = layoutGroupHeader(atmosphereGroupLabel, at: cursor, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(atmosphereEnabledLabel, atmosphereEnabledSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(atmosphereColorLabel, atmosphereColorWell, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(atmosphereIntensityLabel, atmosphereIntensitySlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutFullWidthRow(atmosphereThicknessLabel, at: cursor, contentWidth: contentWidth, height: Layout.graphTitleHeight)
+        cursor = layoutFullWidthRow(atmosphereThicknessGraph, at: cursor, contentWidth: contentWidth, height: Layout.graphHeight)
+        cursor = layoutControlRow(atmosphereSunInfluenceLabel, atmosphereSunInfluenceSlider, at: cursor, contentWidth: contentWidth)
+        return cursor + Layout.groupSpacing
+    }
+
+    /// The sun on the globe: its switch, its strength over the zoom on a
+    /// graph, the terminator's softness and the night colour.
+    private func layoutGlobeLightGroup(at top: CGFloat, contentWidth: CGFloat) -> CGFloat {
+        var cursor = layoutGroupHeader(globeLightGroupLabel, at: top, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(globeLightEnabledLabel, globeLightEnabledSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(globeLightLatitudeLabel, globeLightLatitudeSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(globeLightLongitudeLabel, globeLightLongitudeSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutFullWidthRow(globeLightStrengthLabel, at: cursor, contentWidth: contentWidth, height: Layout.graphTitleHeight)
+        cursor = layoutFullWidthRow(globeLightStrengthGraph, at: cursor, contentWidth: contentWidth, height: Layout.graphHeight)
+        cursor = layoutControlRow(globeLightSoftnessLabel, globeLightSoftnessSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(globeLightNightColorLabel, globeLightNightColorWell, at: cursor, contentWidth: contentWidth)
+        return cursor + Layout.groupSpacing
+    }
+
+    /// The air over the flat map: the ground fog's switches, its heights on
+    /// the relief, and a graph per zoom curve.
+    private func layoutAirGroup(at top: CGFloat, contentWidth: CGFloat) -> CGFloat {
+        var cursor = layoutGroupHeader(groundFogGroupLabel, at: top, contentWidth: contentWidth)
         cursor = layoutSwitchRow(groundFogEnabledLabel, groundFogEnabledSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(groundFogBuildingsLabel, groundFogBuildingsSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(groundFogSkyColorLabel, groundFogSkyColorSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(groundFogSeaLevelLabel, groundFogSeaLevelSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(groundFogBaseAltitudeLabel, groundFogBaseAltitudeSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutFullWidthRow(groundFogGraphHint, at: cursor, contentWidth: contentWidth, height: Layout.hintRowHeight)
         for (label, graph) in [(groundFogDensityLabel, groundFogDensityGraph),
                                (groundFogHeightLabel, groundFogHeightGraph),
@@ -1397,15 +1563,8 @@ final class DebugOverlayHUDView: NSView {
             cursor = layoutFullWidthRow(graph, at: cursor, contentWidth: contentWidth, height: Layout.graphHeight)
         }
         cursor = layoutControlRow(groundFogColorLabel, groundFogColorWell, at: cursor, contentWidth: contentWidth)
+        cursor = layoutFullWidthRow(groundFogMountainPresetButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutFullWidthRow(groundFogResetButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
-        cursor += Layout.groupSpacing
-
-        cursor = layoutGroupHeader(atmosphereGroupLabel, at: cursor, contentWidth: contentWidth)
-        cursor = layoutSwitchRow(atmosphereEnabledLabel, atmosphereEnabledSwitch, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(atmosphereColorLabel, atmosphereColorWell, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(atmosphereIntensityLabel, atmosphereIntensitySlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(atmosphereThicknessLabel, atmosphereThicknessSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(atmosphereSunInfluenceLabel, atmosphereSunInfluenceSlider, at: cursor, contentWidth: contentWidth)
         return cursor + Layout.groupSpacing
     }
 
@@ -1660,10 +1819,15 @@ final class DebugOverlayHUDView: NSView {
         shadowsEnabledSwitch.state = shadowSettings.isEnabled ? .on : .off
         shadowStrengthSlider.doubleValue = Double(shadowSettings.strength)
         shadowStrengthLabel.stringValue = DebugOverlayShadowSettingsPlanner.strengthTitle(shadowSettings.strength)
+        shadowMinimumZoomSlider.doubleValue = shadowSettings.minimumZoom
+        shadowMinimumZoomLabel.stringValue = DebugOverlayShadowSettingsPlanner.minimumZoomTitle(shadowSettings.minimumZoom)
         shadowMapResolutionControl.selectedSegment =
             DebugOverlayShadowSettingsPlanner.mapResolutionIndex(for: shadowSettings.mapResolution)
         shadowCoverageSlider.doubleValue = Double(shadowSettings.coverageCameraDistances)
         shadowCoverageLabel.stringValue = DebugOverlayShadowSettingsPlanner.coverageTitle(shadowSettings.coverageCameraDistances)
+        shadowFarCoverageSlider.doubleValue = Double(shadowSettings.farCoverageCameraDistances)
+        shadowFarCoverageLabel.stringValue = DebugOverlayShadowSettingsPlanner.farCoverageTitle(
+            shadowSettings.farCoverageCameraDistances, nearCoverage: shadowSettings.coverageCameraDistances)
         shadowMinimumCoverageSlider.doubleValue = Double(shadowSettings.minimumCoverageMeters)
         shadowMinimumCoverageLabel.stringValue = DebugOverlayShadowSettingsPlanner.minimumCoverageTitle(shadowSettings.minimumCoverageMeters)
         shadowNormalOffsetSlider.doubleValue = Double(shadowSettings.normalOffsetTexels)
@@ -1682,7 +1846,8 @@ final class DebugOverlayHUDView: NSView {
 
         // Everything below the switch only means something with shadows
         // on. The light is the slopes' too, so it stays live.
-        [shadowStrengthSlider, shadowMapResolutionControl, shadowCoverageSlider, shadowMinimumCoverageSlider,
+        [shadowStrengthSlider, shadowMinimumZoomSlider, shadowMapResolutionControl, shadowCoverageSlider, shadowFarCoverageSlider,
+         shadowMinimumCoverageSlider,
          shadowNormalOffsetSlider, shadowCasterHeightSlider,
          shadowSoftnessSlider].forEach { $0.isEnabled = shadowSettings.isEnabled }
     }
@@ -1708,6 +1873,11 @@ final class DebugOverlayHUDView: NSView {
         groundFogBuildingsSwitch.isEnabled = fog.isEnabled
         groundFogSkyColorSwitch.state = fog.takesSkyColor ? .on : .off
         groundFogSkyColorSwitch.isEnabled = fog.isEnabled
+        groundFogSeaLevelSwitch.state = fog.heightsFromSeaLevel ? .on : .off
+        groundFogSeaLevelSwitch.isEnabled = fog.isEnabled
+        groundFogBaseAltitudeSlider.doubleValue = Double(fog.baseAltitudeMeters)
+        groundFogBaseAltitudeSlider.isEnabled = fog.isEnabled && fog.heightsFromSeaLevel
+        groundFogBaseAltitudeLabel.stringValue = Planner.baseAltitudeTitle(fog.baseAltitudeMeters)
         groundFogDensityLabel.stringValue = Planner.densityTitle(fog.densityPerKilometer, cameraZoom: zoom)
         groundFogHeightLabel.stringValue = Planner.heightTitle(fog.heightMeters, cameraZoom: zoom)
         groundFogStartLabel.stringValue = Planner.startDistanceTitle(fog.startDistanceMeters, cameraZoom: zoom)
@@ -1740,19 +1910,43 @@ final class DebugOverlayHUDView: NSView {
         }
     }
 
+    private func updateGlobeLightControls() {
+        let light = globeLightSettings
+        globeLightEnabledSwitch.state = light.isEnabled ? .on : .off
+        globeLightLatitudeSlider.doubleValue = Double(light.subsolarLatitudeDegrees)
+        globeLightLatitudeSlider.isEnabled = light.isEnabled
+        globeLightLatitudeLabel.stringValue = DebugOverlayGlobeLightSettingsPlanner.subsolarLatitudeTitle(light.subsolarLatitudeDegrees)
+        globeLightLongitudeSlider.doubleValue = Double(light.subsolarLongitudeDegrees)
+        globeLightLongitudeSlider.isEnabled = light.isEnabled
+        globeLightLongitudeLabel.stringValue = DebugOverlayGlobeLightSettingsPlanner.subsolarLongitudeTitle(light.subsolarLongitudeDegrees)
+        globeLightStrengthGraph.curve = light.strength
+        globeLightStrengthGraph.cameraZoom = groundFogCameraZoom
+        globeLightStrengthGraph.isEnabled = light.isEnabled
+        globeLightStrengthLabel.stringValue = DebugOverlayGlobeLightSettingsPlanner.strengthTitle(light.strength,
+                                                                                                 cameraZoom: groundFogCameraZoom)
+        globeLightSoftnessSlider.doubleValue = Double(light.terminatorSoftness)
+        globeLightSoftnessSlider.isEnabled = light.isEnabled
+        globeLightSoftnessLabel.stringValue = DebugOverlayGlobeLightSettingsPlanner.softnessTitle(light.terminatorSoftness)
+        globeLightNightColorWell.color = Self.color(light.nightColor)
+        globeLightNightColorWell.isEnabled = light.isEnabled
+    }
+
     private func updateAtmosphereControls() {
         atmosphereEnabledSwitch.state = atmosphereSettings.isEnabled ? .on : .off
         atmosphereColorWell.color = Self.color(atmosphereSettings.color)
         atmosphereIntensitySlider.doubleValue = Double(atmosphereSettings.intensity)
         atmosphereIntensityLabel.stringValue = DebugOverlayAtmosphereSettingsPlanner.intensityTitle(atmosphereSettings.intensity)
-        atmosphereThicknessSlider.doubleValue = Double(atmosphereSettings.thickness)
-        atmosphereThicknessLabel.stringValue = DebugOverlayAtmosphereSettingsPlanner.thicknessTitle(atmosphereSettings.thickness)
+        atmosphereThicknessGraph.curve = atmosphereSettings.thickness
+        atmosphereThicknessGraph.cameraZoom = groundFogCameraZoom
+        atmosphereThicknessLabel.stringValue = DebugOverlayAtmosphereSettingsPlanner.thicknessTitle(atmosphereSettings.thickness,
+                                                                                                    cameraZoom: groundFogCameraZoom)
         atmosphereSunInfluenceSlider.doubleValue = Double(atmosphereSettings.sunInfluence)
         atmosphereSunInfluenceLabel.stringValue = DebugOverlayAtmosphereSettingsPlanner.sunInfluenceTitle(atmosphereSettings.sunInfluence)
 
         // Off keeps only the limb feather; the rest means nothing then.
-        [atmosphereColorWell, atmosphereIntensitySlider, atmosphereThicknessSlider, atmosphereSunInfluenceSlider]
+        [atmosphereColorWell, atmosphereIntensitySlider, atmosphereSunInfluenceSlider]
             .forEach { $0.isEnabled = atmosphereSettings.isEnabled }
+        atmosphereThicknessGraph.isEnabled = atmosphereSettings.isEnabled
     }
 
     /// The settings state their colours in sRGB; the well shows and hands
@@ -1980,6 +2174,33 @@ final class DebugOverlayHUDView: NSView {
         hillshadeFadeLabel.stringValue = "Hillshade \(String(format: "%.1f", fade.lowerBound))–\(String(format: "%.1f", fade.upperBound))× eye"
     }
 
+    /// The hillshade's amounts, as the map runs with them: the panel's own
+    /// once dragged, the style's before.
+    func apply(hillshadeAmounts amounts: GroundReliefHillshade.Amounts) {
+        hillshadeIntensitySlider.doubleValue = Double(amounts.intensity)
+        hillshadeShadowSlider.doubleValue = Double(amounts.shadow)
+        hillshadeHighlightSlider.doubleValue = Double(amounts.highlight)
+        updateHillshadeAmountLabels(amounts)
+    }
+
+    /// The three sliders as one: a drag of any of them sends them all.
+    @objc private func hillshadeAmountSliderChanged() {
+        func rounded(_ slider: NSSlider) -> Float {
+            Float((slider.doubleValue * 100).rounded() / 100)
+        }
+        let amounts = GroundReliefHillshade.Amounts(intensity: rounded(hillshadeIntensitySlider),
+                                                    shadow: rounded(hillshadeShadowSlider),
+                                                    highlight: rounded(hillshadeHighlightSlider))
+        updateHillshadeAmountLabels(amounts)
+        onHillshadeAmountsChanged?(amounts)
+    }
+
+    private func updateHillshadeAmountLabels(_ amounts: GroundReliefHillshade.Amounts) {
+        hillshadeIntensityLabel.stringValue = "Hillshade intensity \(String(format: "%.2f", amounts.intensity))"
+        hillshadeShadowLabel.stringValue = "Slope shadow \(String(format: "%.2f", amounts.shadow))"
+        hillshadeHighlightLabel.stringValue = "Slope highlight \(String(format: "%.2f", amounts.highlight))"
+    }
+
     @objc private func labelMinimumScaleSliderChanged() {
         let scale = Float((labelMinimumScaleSlider.doubleValue * 100).rounded() / 100)
         labelMinimumScaleLabel.stringValue = Self.labelMinimumScaleTitle(scale)
@@ -2025,6 +2246,12 @@ final class DebugOverlayHUDView: NSView {
         publish(shadowSettings: settings)
     }
 
+    @objc private func shadowMinimumZoomSliderChanged() {
+        var settings = shadowSettings
+        settings.minimumZoom = (shadowMinimumZoomSlider.doubleValue * 2).rounded() / 2
+        publish(shadowSettings: settings)
+    }
+
     @objc private func shadowMapResolutionControlChanged() {
         var settings = shadowSettings
         settings.mapResolution = DebugOverlayShadowSettingsPlanner.mapResolution(atIndex: shadowMapResolutionControl.selectedSegment)
@@ -2034,6 +2261,12 @@ final class DebugOverlayHUDView: NSView {
     @objc private func shadowCoverageSliderChanged() {
         var settings = shadowSettings
         settings.coverageCameraDistances = Float(shadowCoverageSlider.doubleValue)
+        publish(shadowSettings: settings)
+    }
+
+    @objc private func shadowFarCoverageSliderChanged() {
+        var settings = shadowSettings
+        settings.farCoverageCameraDistances = Float((shadowFarCoverageSlider.doubleValue * 2).rounded() / 2)
         publish(shadowSettings: settings)
     }
 
@@ -2110,6 +2343,22 @@ final class DebugOverlayHUDView: NSView {
         onGroundFogResetRequested?()
     }
 
+    @objc private func groundFogMountainPresetButtonTapped() {
+        publish(groundFogSettings: DebugOverlayGroundFogSettingsPlanner.mountainAirPreset(from: groundFogSettings))
+    }
+
+    @objc private func groundFogSeaLevelSwitchChanged() {
+        var settings = groundFogSettings
+        settings.heightsFromSeaLevel = groundFogSeaLevelSwitch.state == .on
+        publish(groundFogSettings: settings)
+    }
+
+    @objc private func groundFogBaseAltitudeSliderChanged() {
+        var settings = groundFogSettings
+        settings.baseAltitudeMeters = Float((groundFogBaseAltitudeSlider.doubleValue / 50).rounded() * 50)
+        publish(groundFogSettings: settings)
+    }
+
     @objc private func exportButtonTapped() {
         onExportSettingsRequested?()
     }
@@ -2177,16 +2426,48 @@ final class DebugOverlayHUDView: NSView {
         publish(atmosphereSettings: settings)
     }
 
-    @objc private func atmosphereThicknessSliderChanged() {
-        var settings = atmosphereSettings
-        settings.thickness = Float(atmosphereThicknessSlider.doubleValue)
-        publish(atmosphereSettings: settings)
-    }
-
     @objc private func atmosphereSunInfluenceSliderChanged() {
         var settings = atmosphereSettings
         settings.sunInfluence = Float(atmosphereSunInfluenceSlider.doubleValue)
         publish(atmosphereSettings: settings)
+    }
+
+    @objc private func globeLightEnabledSwitchChanged() {
+        var settings = globeLightSettings
+        settings.isEnabled = globeLightEnabledSwitch.state == .on
+        publish(globeLightSettings: settings)
+    }
+
+    @objc private func globeLightLatitudeSliderChanged() {
+        var settings = globeLightSettings
+        settings.subsolarLatitudeDegrees = Float(globeLightLatitudeSlider.doubleValue.rounded())
+        publish(globeLightSettings: settings)
+    }
+
+    @objc private func globeLightLongitudeSliderChanged() {
+        var settings = globeLightSettings
+        settings.subsolarLongitudeDegrees = Float(globeLightLongitudeSlider.doubleValue.rounded())
+        publish(globeLightSettings: settings)
+    }
+
+    @objc private func globeLightSoftnessSliderChanged() {
+        var settings = globeLightSettings
+        settings.terminatorSoftness = Float((globeLightSoftnessSlider.doubleValue * 100).rounded() / 100)
+        publish(globeLightSettings: settings)
+    }
+
+    @objc private func globeLightNightColorWellChanged() {
+        guard let rgb = Self.rgb(globeLightNightColorWell.color) else { return }
+        var settings = globeLightSettings
+        settings.nightColor = rgb
+        publish(globeLightSettings: settings)
+    }
+
+    private func publish(globeLightSettings settings: ImmersiveMapSettings.GlobeLightSettings) {
+        globeLightSettings = settings
+        updateGlobeLightControls()
+        needsLayout = true
+        onGlobeLightSettingsChanged?(settings)
     }
 
     private func publish(atmosphereSettings settings: ImmersiveMapSettings.AtmosphereSettings) {

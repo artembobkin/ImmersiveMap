@@ -924,7 +924,11 @@ final class PreparedTileDiskCaching {
     // (`TileParseOptions.buildingDeepestSourceZoom`): each polygon of a
     // group now stands at the group's height, and the parts rules by id
     // are left to the footprints. A v144 entry lays whole groups flat.
-    static let preparedFormatVersion: UInt32 = 145
+    // 146: the national borders are thinner and translucent
+    // (`ProtomapsBasemapDefaultMapStyle.boundaryStyle`): 1 point wide,
+    // lightened over a country view, at 0.65 of the colour's alpha nearer.
+    // A v145 entry holds the 1.6 point near-opaque stroke.
+    static let preparedFormatVersion: UInt32 = 146
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

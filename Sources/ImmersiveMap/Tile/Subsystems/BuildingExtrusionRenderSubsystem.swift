@@ -175,14 +175,14 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
             return
         }
 
-        if layer == .shadowCasters {
-            guard let shadowState = frameContext.shadowFrameState else { return }
+        if let slot = ShadowCascadeSlot(casterLayer: layer) {
+            guard let lightProjectionView = frameContext.shadowFrameState?.lightProjectionView(for: slot) else { return }
             // The casters are the building coverage, the same partition the
-            // world pass draws, so a building casts exactly once.
+            // world pass draws, so a building casts exactly once a window.
             hiddenBuildingIndexBuffers.update(frameContext.sharedState.sceneModelState.replacedBuildings)
             BuildingExtrusionDrawer.drawShadowCasters(
                 renderEncoder: encoder,
-                lightProjectionView: shadowState.lightProjectionView,
+                lightProjectionView: lightProjectionView,
                 placeTilesContext: frameContext.sharedState.tilePlacementState.buildingPlaceTilesContext,
                 indexBuffers: hiddenBuildingIndexBuffers,
                 flatRenderState: frameContext.resolvedPresentation.flatRenderState,

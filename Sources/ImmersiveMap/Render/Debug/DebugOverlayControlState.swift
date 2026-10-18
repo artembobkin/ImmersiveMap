@@ -65,6 +65,7 @@ final class DebugOverlayControlState {
     private var localLabelMaximumDistanceMeters: Float?
     private var labelPerspectiveMinimumScale: Float?
     private var hillshadeFade: ClosedRange<Float>?
+    private var draggedHillshadeAmounts: GroundReliefHillshade.Amounts?
     private var reliefShadows: Bool?
 
     /// The controls as a frame reads them.
@@ -115,6 +116,21 @@ final class DebugOverlayControlState {
         lock.lock()
         defer { lock.unlock() }
         return hillshadeFade
+    }
+
+    /// The hillshade's amounts the panel has been dragged to, nil for
+    /// the style's (`ImmersiveMapHillshade.intensity`, the alphas of
+    /// `shadowColor` and `highlightColor`).
+    func hillshadeAmounts() -> GroundReliefHillshade.Amounts? {
+        lock.lock()
+        defer { lock.unlock() }
+        return draggedHillshadeAmounts
+    }
+
+    func setHillshadeAmounts(_ amounts: GroundReliefHillshade.Amounts?) {
+        lock.lock()
+        draggedHillshadeAmounts = amounts
+        lock.unlock()
     }
 
     /// Whether the mountains cast their shadows as the panel set it, nil

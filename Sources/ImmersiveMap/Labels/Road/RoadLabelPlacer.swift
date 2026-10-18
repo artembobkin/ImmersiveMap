@@ -87,13 +87,37 @@ enum RoadLabelPlacer {
     /// glyphs. The record is one tile, so `origin` places all its points.
     /// A point deeper than `maximumDepth` (clip w) is out of reach, and a
     /// glyph on it is not placed (`LabelDistanceRule.scale`).
+    /// The lift of a tile's path points on the ground relief: the terrain's
+    /// metres under each point, read once per terrain and kept on the
+    /// tile's record (`RoadLabelTileRecord.reliefMetres(for:)`), and the
+    /// frame's datum and scale, so a frame's lift is one multiply-add per
+    /// point and no read of the heights. Reading them per frame was the
+    /// cost of a frame on the relief: a bilinear read of the terrain and
+    /// four half-float decodes for every point of every road in view.
+    struct PointLifts {
+        /// The terrain's metres under each path point, `pathPoints.count` of them.
+        let metres: [Float]
+        /// The frame's datum (`GroundReliefStore.datumMetres`).
+        let datumMetres: Float
+        /// World units per metre over the datum this frame: the rise
+        /// (`GroundReliefStore.worldUnitsPerMetre`) times the relief's
+        /// strength (`GroundRelief.strength`).
+        let unitsPerMetre: Float
+
+        /// The lift under the path point at `index`, in world units.
+        @inline(__always)
+        func worldUnits(at index: Int) -> Float {
+            (metres[index] - datumMetres) * unitsPerMetre
+        }
+    }
+
     static func place(geometry: Geometry,
                       origin: FlatTileOriginData,
                       cameraMatrix: simd_float4x4,
                       viewportSize: SIMD2<Float>,
                       pixelsPerPoint: Float,
                       maximumDepth: Float = .infinity,
-                      lift: ((SIMD2<Float>) -> Float)? = nil,
+                      lifts: PointLifts? = nil,
                       scratch: inout Scratch,
                       output: inout Output) {
         project(pathPoints: geometry.pathPoints,
@@ -101,7 +125,7 @@ enum RoadLabelPlacer {
                 cameraMatrix: cameraMatrix,
                 viewportSize: viewportSize,
                 maximumDepth: maximumDepth,
-                lift: lift,
+                lifts: lifts,
                 screenPoints: &scratch.screenPoints,
                 visible: &scratch.visible)
         place(geometry: geometry,
@@ -122,7 +146,7 @@ enum RoadLabelPlacer {
                         cameraMatrix: simd_float4x4,
                         viewportSize: SIMD2<Float>,
                         maximumDepth: Float = .infinity,
-                        lift: ((SIMD2<Float>) -> Float)? = nil,
+                        lifts: PointLifts? = nil,
                         screenPoints: inout [SIMD2<Float>],
                         visible: inout [Bool]) {
         let count = pathPoints.count
@@ -136,16 +160,23 @@ enum RoadLabelPlacer {
         let size = origin.size
         let panRelativeOrigin = origin.panRelativeOrigin
         let halfViewport = viewportSize * 0.5
+        // The lift as two scalars over the kept metres: nothing read per
+        // point but the metres themselves.
+        let liftMetres = lifts?.metres.count == count ? lifts?.metres : nil
+        let datumMetres = lifts?.datumMetres ?? 0
+        let liftScale = lifts?.unitsPerMetre ?? 0
+        (liftMetres ?? []).withUnsafeBufferPointer { metres in
         pathPoints.withUnsafeBufferPointer { points in
         screenPoints.withUnsafeMutableBufferPointer { screen in
         visible.withUnsafeMutableBufferPointer { visible in
             var index = 0
             while index < count {
                 let uv = points[index].uv
+                let lift = metres.isEmpty ? 0.0 : (metres[index] - datumMetres) * liftScale
                 // v grows from the north edge, the flat render world is y-up.
                 let world = SIMD4<Float>(panRelativeOrigin.x + uv.x * size,
                                          panRelativeOrigin.y + (1.0 - uv.y) * size,
-                                         lift?(uv) ?? 0.0,
+                                         lift,
                                          1.0)
                 let clip = cameraMatrix * world
                 if clip.w > 0.0 {
@@ -158,7 +189,7 @@ enum RoadLabelPlacer {
                 }
                 index += 1
             }
-        }}}
+        }}}}
     }
 
     /// Places the record's glyphs from its projected path points.

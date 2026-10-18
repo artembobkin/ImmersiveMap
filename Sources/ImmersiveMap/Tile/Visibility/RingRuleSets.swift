@@ -33,7 +33,8 @@ struct RingRuleSets: Hashable {
     /// the buildings (`FlatRingRules.nearStreetDefault`) and closer still
     /// (`FlatRingRules.closeStreetDefault`) the near rings are tighter, and
     /// every set past the globe's draws its far rings from textures
-    /// (`FlatRingRule.rasterSize`).
+    /// (`FlatRingRule.rasterSize`). Beyond every set's last rule the plane
+    /// is the horizon backdrop (`TileWorkingSetSubsystem.horizonBackdrops`).
     static let `default` = RingRuleSets(sets: [
         RingRuleSet(firstZoom: 0, rules: .globeDefault),
         RingRuleSet(firstZoom: defaultStreetFirstZoom, rules: .default),
@@ -99,7 +100,7 @@ extension FlatRingRules {
 
     /// Zoom 17 and deeper: the exact tiles with their lines and labels to
     /// ring 1, then two levels coarser to ring 2 as 128-texel textures,
-    /// without lines or labels, nothing beyond.
+    /// without lines or labels, nothing beyond but the horizon backdrop.
     static let closeStreetDefault = FlatRingRules(rules: [
         FlatRingRule(zoomDrop: 0, distance: 1),
         FlatRingRule(zoomDrop: 2, distance: 2, drawsLines: false, drawsLabels: false, rasterSize: 128)

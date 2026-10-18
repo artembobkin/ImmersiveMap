@@ -33,6 +33,7 @@ class TileCulling {
                                cameraEye: SIMD3<Float>,
                                reliefHeights: ClosedRange<Float>? = nil,
                                rules: FlatRingRules = .default,
+                               rasterBandMarginShare: Float = 0,
                                diagnostics: (any FrameDiagnosticsService)? = nil) -> VisibleContentState {
         let semanticCenterWorldMercator = cameraState.centerWorldMercator
         let center = Self.makeCenter(centerWorldMercator: semanticCenterWorldMercator,
@@ -62,12 +63,19 @@ class TileCulling {
                 // The flat map draws the rules' bands and nothing under
                 // them, and the world cover's zoom stays the floor no band
                 // and no stand-in goes down to. Beyond the last rule the
-                // haze paints the horizon over the clear colour.
+                // world tile is the horizon backdrop, placed by the working
+                // set under the plan (`TileWorkingSetSubsystem.horizonBackdrops`).
+                // The texture bands over a footprint pushed out from the
+                // camera's ground point, so a turn finds their tiles in.
+                let rasterPolygon = rasterBandMarginShare > 0
+                    ? polygon.inflated(about: SIMD2<Float>(cameraEye.x, cameraEye.y), by: 1 + rasterBandMarginShare)
+                    : nil
                 let resolution = FlatRingRuleCoverage.resolve(flatRenderState: flatRenderState,
                                                               targetZoom: targetZoom,
                                                               backdropZoom: Self.flatBackdropZoomLevel,
                                                               rules: rules,
-                                                              polygon: polygon)
+                                                              polygon: polygon,
+                                                              rasterPolygon: rasterPolygon)
                 visibleTiles = resolution.targets
                 flatRingBands = resolution.bands
                 linelessTiles = resolution.linelessTargets

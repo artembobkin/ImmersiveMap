@@ -34,6 +34,10 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
     private let groundReliefStore: GroundReliefStore?
 
     private var placeTilesContext: PlaceTilesContext = .empty
+    /// The planner's placements alone, without the horizon backdrop: what
+    /// the next plan remembers as the last frame's ground, and what the
+    /// buildings and the terrain are planned from.
+    private var plannedPlacements: [PlaceTile] = []
     private var buildingPlaceTilesContext: PlaceTilesContext = .empty
     private var placementVersion: UInt64 = 0
     /// The coverage and the working set the last placements were planned
@@ -75,6 +79,36 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
     /// its ground from a texture on the raster tiles' raised grid instead
     /// (`RasterTileRenderSubsystem`), and leaves its lines out, which could
     /// not rise either. Every other placement is as planned.
+    /// The world tile, the flat map's horizon backdrop
+    /// (`TileWorkingSetStore.pinnedWorldCoverMaxZoomLevel`).
+    static let horizonBackdropTile = Tile(x: 0, y: 0, z: TileWorkingSetStore.pinnedWorldCoverMaxZoomLevel)
+    /// The texture the backdrop draws its ground from: the smallest, the
+    /// backdrop is the far ground under the haze.
+    static let horizonBackdropRasterSize = 64
+
+    /// The flat map's horizon backdrop: the world tile placed under every
+    /// placement, once per world copy the targets stand in, flat on the
+    /// plane, a 64-texel texture without lines or labels
+    /// (`PlaceTile.isHorizonBackdrop`). The rules' bands end somewhere,
+    /// and from a tilted camera the ground beyond the last band showed the
+    /// clear colour under the sky, an edge the haze drew over: the
+    /// backdrop is the ground there, the same at every zoom and whatever
+    /// the rules. Its mark has the lowest priority of all
+    /// (`TileSourceStencilPriority`), so every other placement paints over
+    /// it. Nothing while the world tile is not resident yet.
+    static func horizonBackdrops(targets: [VisibleTile], resident: [Tile: MetalTile]) -> [PlaceTile] {
+        guard let cover = resident[horizonBackdropTile] else { return [] }
+        let rules = TileDrawRules(drawsLines: false,
+                                  drawsLabels: false,
+                                  raster: RasterTileSpec(size: horizonBackdropRasterSize))
+        return Set(targets.map(\.worldWrap)).sorted().map { worldWrap in
+            PlaceTile(metalTile: cover,
+                      placeIn: VisibleTile(tile: horizonBackdropTile, worldWrap: worldWrap),
+                      rules: rules,
+                      isHorizonBackdrop: true)
+        }
+    }
+
     static func drawingOnTheRelief(_ placement: PlaceTile) -> PlaceTile {
         guard placement.rules.raster == nil, placement.metalTile.tileBuffers.ground.isFlattened == false else {
             return placement
@@ -136,7 +170,12 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
         // The store keeps the demand and what the last frame showed, and
         // releases the rest.
         let shownTiles = Set(placeTilesContext.tilePlacements.map(\.metalTile.tile))
-        let tileRequestResult = tileRenderStore.requestTiles(prioritizedDemand,
+        // The flat map asks for the world tile too, last: its horizon
+        // backdrop (`horizonBackdrops`), pinned once it lands.
+        let demand = frameContext.renderSurfaceMode == .flat && prioritizedDemand.contains(Self.horizonBackdropTile) == false
+            ? prioritizedDemand + [Self.horizonBackdropTile]
+            : prioritizedDemand
+        let tileRequestResult = tileRenderStore.requestTiles(demand,
                                                              shown: shownTiles,
                                                              frameIndex: frameContext.frameIndex)
         let contentVersion = tileRenderStore.cacheContentVersion
@@ -156,15 +195,20 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
                                                                resident: resident,
                                                                zoom: tileZoomLevel,
                                                                backdropZoomLevel: backdropZoomLevel,
-                                                               previous: placeTilesContext.tilePlacements,
+                                                               previous: plannedPlacements,
                                                                slotRules: { slot in
                                                                    TileDrawRules(drawsLines: visibleContent.linelessTiles.contains(slot) == false,
                                                                                  drawsLabels: visibleContent.unlabelledTiles.contains(slot) == false,
                                                                                  raster: visibleContent.rasterTiles[slot])
                                                                })
-            placeTilesContext = reliefActive && frameContext.renderSurfaceMode == .flat
-                ? PlaceTilesContext(tilePlacements: planned.tilePlacements.map(Self.drawingOnTheRelief))
-                : planned
+            plannedPlacements = reliefActive && frameContext.renderSurfaceMode == .flat
+                ? planned.tilePlacements.map(Self.drawingOnTheRelief)
+                : planned.tilePlacements
+            // The horizon backdrop under the plan, on the flat map.
+            let backdrops = frameContext.renderSurfaceMode == .flat
+                ? Self.horizonBackdrops(targets: targets, resident: resident)
+                : []
+            placeTilesContext = PlaceTilesContext(tilePlacements: plannedPlacements + backdrops)
             // The buildings: the tiles the ground shows, from the
             // buildings' zoom on, in the near field (see the planner).
             let eyeGroundCell: SIMD2<Double>? = frameContext.renderSurfaceMode == .flat
@@ -173,7 +217,7 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
                                                         lookAt: SIMD2<Double>(center.tileX, center.tileY),
                                                         targetZoom: tileZoomLevel)
                 : nil
-            buildingPlaceTilesContext = BuildingCoveragePlanner.plan(groundPlacements: placeTilesContext.tilePlacements,
+            buildingPlaceTilesContext = BuildingCoveragePlanner.plan(groundPlacements: plannedPlacements,
                                                                      eyeGroundCell: eyeGroundCell,
                                                                      minimumZoom: buildingsMinimumTileZoom)
             placementVersion &+= 1
@@ -188,7 +232,7 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
         // it between replans. Off the terrain, nothing.
         if let groundReliefStore {
             groundReliefStore.request(tiles: groundReliefStore.isActive
-                ? GroundReliefDemand.tiles(groundPlacements: placeTilesContext.tilePlacements,
+                ? GroundReliefDemand.tiles(groundPlacements: plannedPlacements,
                                            buildingPlacements: buildingPlaceTilesContext.tilePlacements,
                                            centerWorldMercator: visibleContent.centerWorldMercator,
                                            zooms: groundReliefStore.zooms)

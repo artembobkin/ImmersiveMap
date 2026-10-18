@@ -73,18 +73,27 @@ struct SunVisualState {
 constant float kShadowGeometricCutoffStart = 0.18;
 constant float kShadowGeometricCutoffEnd = 0.35;
 
-// The single shadow window; the layout mirrors ShadowCascadeUniform.swift
+// The slices of the shadow map, one per window; mirrored by
+// ShadowCascadeSlot.swift.
+constant uint kShadowNearSlice = 0;
+constant uint kShadowFarSlice = 1;
+
+// One shadow window; the layout mirrors ShadowCascadeUniform.swift
 // (pinned by ShadowUniformLayoutTests). worldToShadowTexture maps world space
-// straight to the shadow map: xy = texture UV, z = the comparison depth.
+// straight to the window's slice: xy = texture UV, z = the comparison depth.
 struct ShadowCascade {
     float4x4 worldToShadowTexture;
     // Softness: the factor the tent's taps are pushed out by, about the
     // sample point. 1 is the plain 3x3 tent; higher lengthens the ramp
     // without moving the edge (see shadowWindowVisibility).
     float tentSpread;
-    float _padding2;
+    // Where the window's shadows start to fade and where they are gone, as
+    // radial distances from Shadow.fadeCenter: the outer quarter of its
+    // disc. The near window's band is where the far window takes over, the
+    // far window's (the near one's alone without it) where shadows end.
+    float fadeStartDistance;
     float depthBias;
-    float _padding1;
+    float fadeEndDistance;
     // Valid UV rectangle, inset so the tent's taps never leave the window,
     // at the widest spread the softness allows.
     float2 uvMinimum;
@@ -98,21 +107,25 @@ struct ShadowCascade {
     float2 texelSizeUV;
 };
 
-// Light matrix of the caster pass; the layout mirrors ShadowCasterUniform.swift
-// (pinned by ShadowUniformLayoutTests). One window means one matrix and one
-// draw per caster geometry.
+// Light matrix of a caster pass; the layout mirrors ShadowCasterUniform.swift
+// (pinned by ShadowUniformLayoutTests). Each window's pass binds its own
+// matrix, so a caster geometry renders with one draw per window.
 struct ShadowCasterMatrices {
     float4x4 lightProjectionView;
 };
 
 // Directional shadow sampling parameters; the layout mirrors ShadowUniform.swift.
 struct Shadow {
-    ShadowCascade cascade;
+    // The near window, sharp, around the ground the camera looks at, and the
+    // far window, coarse, for the ground beyond it. A far window the frame
+    // has not got is disabled: an empty UV rectangle (shadowCascadeIsEnabled).
+    ShadowCascade near;
+    ShadowCascade far;
     float3 eye;
     float strength;
-    float fadeStartDistance;
-    float fadeEndDistance;
-    float _padding;
+    float _padding0;
+    float _padding1;
+    float _padding2;
     // Normalized direction towards the static sun, for the geometric
     // self-shadow test of receivers that have normals.
     float3 lightDirection;
@@ -120,13 +133,39 @@ struct Shadow {
     // white keeps the neutral darkening, a bluish tint gives shadows the cool
     // cast of light coming only from the sky.
     float3 tint;
-    // Centre of the shadow window in world XY: what the fade distances are
-    // measured from. It is the window's own centre and not the camera, so the
-    // fade band always lies inside the fitted disc whatever the coverage, and
-    // tilting the camera cannot move where shadows end.
+    // Centre of the windows in world XY: what every fade distance is
+    // measured from. It is the camera's ground point, the centre of the
+    // circle each visible footprint is clamped to, so a fade band always lies
+    // inside its fitted window whatever the coverage.
     float2 fadeCenter;
-    float2 _padding1;
+    float2 _padding3;
 };
+
+static inline bool shadowCascadeIsEnabled(constant ShadowCascade& cascade) {
+    return cascade.uvMaximum.x >= cascade.uvMinimum.x;
+}
+
+// Which window a point reads and how far its shadows have faded there.
+struct ShadowCascadeBlend {
+    // 1 inside the near window, 0 past its fade band: the share of the near
+    // window in the map's visibility, the rest is the far window's.
+    float nearWeight;
+    // 1 at full shadow strength, 0 where the shadows have ended: the far
+    // window's fade, or the near window's when the frame has no far window.
+    float fade;
+    bool hasFar;
+};
+
+static inline ShadowCascadeBlend shadowCascadeBlend(constant Shadow& shadow, float2 worldXY) {
+    float distanceToCenter = length(worldXY - shadow.fadeCenter);
+    ShadowCascadeBlend blend;
+    blend.hasFar = shadowCascadeIsEnabled(shadow.far);
+    blend.nearWeight = 1.0 - smoothstep(shadow.near.fadeStartDistance, shadow.near.fadeEndDistance, distanceToCenter);
+    blend.fade = blend.hasFar
+        ? 1.0 - smoothstep(shadow.far.fadeStartDistance, shadow.far.fadeEndDistance, distanceToCenter)
+        : blend.nearWeight;
+    return blend;
+}
 
 static inline bool shadowWindowContains(constant ShadowCascade& cascade, float3 uvz) {
     return uvz.x >= cascade.uvMinimum.x && uvz.x <= cascade.uvMaximum.x &&
@@ -164,7 +203,8 @@ static inline bool shadowWindowContains(constant ShadowCascade& cascade, float3 
 // needs a per-tap depth prediction. Nothing here takes a derivative, so
 // callers may branch freely around the call.
 static inline float shadowWindowVisibility(constant ShadowCascade& cascade,
-                                           depth2d<float> shadowMap,
+                                           depth2d_array<float> shadowMap,
+                                           uint slice,
                                            float3 uvz) {
     constexpr sampler shadowSampler(coord::normalized,
                                     filter::linear,
@@ -207,17 +247,61 @@ static inline float shadowWindowVisibility(constant ShadowCascade& cascade,
     float visibility = 0.0;
     visibility += uw0 * vw0 * shadowMap.sample_compare(shadowSampler,
                                                        baseUV + float2(u0, v0) * cascade.texelSizeUV,
+                                                       slice,
                                                        reference);
     visibility += uw1 * vw0 * shadowMap.sample_compare(shadowSampler,
                                                        baseUV + float2(u1, v0) * cascade.texelSizeUV,
+                                                       slice,
                                                        reference);
     visibility += uw0 * vw1 * shadowMap.sample_compare(shadowSampler,
                                                        baseUV + float2(u0, v1) * cascade.texelSizeUV,
+                                                       slice,
                                                        reference);
     visibility += uw1 * vw1 * shadowMap.sample_compare(shadowSampler,
                                                        baseUV + float2(u1, v1) * cascade.texelSizeUV,
+                                                       slice,
                                                        reference);
     return visibility * (1.0 / 16.0);
+}
+
+// One window's visibility at a point: the receiver stepped off its surface
+// by the window's normal offset (`normal` zero for the ground), projected
+// into the window's slice, lit outside its sampling rectangle.
+static inline float shadowCascadeVisibility(constant ShadowCascade& cascade,
+                                            depth2d_array<float> shadowMap,
+                                            uint slice,
+                                            float3 worldPos,
+                                            float3 normal) {
+    float3 position = worldPos + normal * cascade.normalOffsetWorld;
+    // The light projection is orthographic, so w is 1 and no divide is needed.
+    float3 uvz = (cascade.worldToShadowTexture * float4(position, 1.0)).xyz;
+    return shadowWindowContains(cascade, uvz)
+        ? shadowWindowVisibility(cascade, shadowMap, slice, uvz)
+        : 1.0;
+}
+
+// The map's visibility at a point, 1 = fully lit: the near window where it
+// reaches, the far window beyond it, the two blended over the near window's
+// fade band, where a point costs both lookups. Without a far window the near
+// window alone, and the band is then the fade of the shadows themselves
+// (`blend.fade`), applied by the caller.
+static inline float shadowMapVisibility(constant Shadow& shadow,
+                                        depth2d_array<float> shadowMap,
+                                        float3 worldPos,
+                                        float3 normal,
+                                        ShadowCascadeBlend blend) {
+    float nearVisibility = 1.0;
+    if (blend.nearWeight > 0.0) {
+        nearVisibility = shadowCascadeVisibility(shadow.near, shadowMap, kShadowNearSlice, worldPos, normal);
+    }
+    if (!blend.hasFar) {
+        return nearVisibility;
+    }
+    float farVisibility = 1.0;
+    if (blend.nearWeight < 1.0) {
+        farVisibility = shadowCascadeVisibility(shadow.far, shadowMap, kShadowFarSlice, worldPos, normal);
+    }
+    return mix(farVisibility, nearVisibility, blend.nearWeight);
 }
 
 // Shadow visibility factor in [1 - strength, 1]; 1 = fully lit.
@@ -237,26 +321,27 @@ static inline float shadowWindowVisibility(constant ShadowCascade& cascade,
 //    stripe against its own quantized depth record, while occluders farther
 //    away than the offset still shadow it.
 //
-// One window: a point outside it is lit by construction, and the eye-distance
-// fade hides that edge. Derivative-free, so the early exits below are free to
-// return before the projection: beyond the distance fade, or geometrically
-// self-shadowed (a face fully turned from the sun).
+// Two windows: a point outside both is lit by construction, and the last
+// window's eye-distance fade hides that edge (shadowMapVisibility).
+// Derivative-free, so the early exits below are free to return before the
+// projection: beyond the distance fade, or geometrically self-shadowed (a
+// face fully turned from the sun).
 static inline float sampleShadowFactor(constant Shadow& shadow,
-                                       depth2d<float> shadowMap,
+                                       depth2d_array<float> shadowMap,
                                        float3 worldPos,
                                        float3 surfaceNormal) {
     if (shadow.strength <= 0.0) {
         return 1.0;
     }
-    // Distance fade first: everything past the fade end is fully lit and
-    // never touches the map. Measured radially from the window's centre, the
-    // same thing the window is fitted around, so the band is inside the disc
-    // by construction and no pose of the camera moves it.
-    float distanceToCenter = length(worldPos.xy - shadow.fadeCenter);
-    if (distanceToCenter >= shadow.fadeEndDistance) {
+    // Distance fade first: everything past the last window's fade end is
+    // fully lit and never touches the map. Measured radially from the
+    // windows' centre, the same thing they are fitted around, so a band is
+    // inside its window by construction and no pose of the camera moves it.
+    ShadowCascadeBlend blend = shadowCascadeBlend(shadow, worldPos.xy);
+    if (blend.fade <= 0.0) {
         return 1.0;
     }
-    float fade = 1.0 - smoothstep(shadow.fadeStartDistance, shadow.fadeEndDistance, distanceToCenter);
+    float fade = blend.fade;
 
     float normalLength = length(surfaceNormal);
     float hasNormal = normalLength > 1e-5 ? 1.0 : 0.0;
@@ -288,12 +373,7 @@ static inline float sampleShadowFactor(constant Shadow& shadow,
         return 1.0 - selfShadowStrengthFraction * shadow.strength * fade;
     }
 
-    float3 position = worldPos + normal * shadow.cascade.normalOffsetWorld;
-    // The light projection is orthographic, so w is 1 and no divide is needed.
-    float3 uvz = (shadow.cascade.worldToShadowTexture * float4(position, 1.0)).xyz;
-    float mapVisibility = shadowWindowContains(shadow.cascade, uvz)
-        ? shadowWindowVisibility(shadow.cascade, shadowMap, uvz)
-        : 1.0;
+    float mapVisibility = shadowMapVisibility(shadow, shadowMap, worldPos, normal, blend);
 
     float selfShadowAmount = (1.0 - geometricVisibility) * selfShadowStrengthFraction;
     float castShadowAmount = geometricVisibility * (1.0 - mapVisibility);

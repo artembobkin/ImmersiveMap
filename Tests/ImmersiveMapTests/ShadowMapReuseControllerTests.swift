@@ -119,8 +119,8 @@ final class ShadowMapReuseControllerTests: XCTestCase {
                                    probe.y + Float(contentShift.y),
                                    probe.z)
         do {
-            let uv1 = projectUV(state1.shadowUniform.cascade.worldToShadowTexture, probe)
-            let uv2 = projectUV(state2.shadowUniform.cascade.worldToShadowTexture, shifted)
+            let uv1 = projectUV(state1.shadowUniform.near.worldToShadowTexture, probe)
+            let uv2 = projectUV(state2.shadowUniform.near.worldToShadowTexture, shifted)
             XCTAssertEqual(uv1.x, uv2.x, accuracy: 1e-5)
             XCTAssertEqual(uv1.y, uv2.y, accuracy: 1e-5)
         }
@@ -267,6 +267,37 @@ final class ShadowMapReuseControllerTests: XCTestCase {
         XCTAssertNotNil(resolve(controller))
         XCTAssertTrue(controller.planShadowRender(casterKeys: keys, hasModelCasters: false,
                                                   staticModelCasters: two, texture: texture))
+    }
+
+    /// The windows are rendered on their own: a refit of the near window,
+    /// which follows the camera, does not redraw the far one, and the far
+    /// window is not rendered at all while the frame has not got it.
+    func testTheWindowsRenderOnTheirOwn() throws {
+        let controller = ShadowMapReuseController()
+        let texture = try makeTexture()
+        let keys = makeKeys([DummyCaster()])
+
+        let both = try XCTUnwrap(resolve(controller, eye: Self.baseEye))
+        XCTAssertEqual(both.slots, [.near, .far])
+        XCTAssertTrue(controller.planShadowRender(casterKeys: keys, hasModelCasters: false, texture: texture, slot: .near))
+        XCTAssertTrue(controller.planShadowRender(casterKeys: keys, hasModelCasters: false, texture: texture, slot: .far))
+        // Halving the camera distance refits the near window for sharpness.
+        // The far window's √2 quantum is as wide as the near one's, so it
+        // refits too, but a travel the near window's margin cannot absorb
+        // and the far one's can is reuse for the far window alone.
+        XCTAssertNotNil(resolve(controller, pan: Self.basePan + SIMD2<Double>(2e-5, 0)))
+        XCTAssertTrue(controller.planShadowRender(casterKeys: keys, hasModelCasters: false, texture: texture, slot: .near),
+                      "Travel beyond the near window's margin refits it")
+        XCTAssertFalse(controller.planShadowRender(casterKeys: keys, hasModelCasters: false, texture: texture, slot: .far),
+                       "The far window is four times as wide and still covers the frame")
+
+        // Without a far window its slice is never planned, and when the far
+        // coverage is back the window is fitted afresh and rendered.
+        var nearOnly = Self.scene
+        nearOnly.shadows.farCoverageCameraDistances = 1
+        XCTAssertEqual(try XCTUnwrap(resolve(controller, scene: nearOnly)).slots, [.near])
+        XCTAssertEqual(try XCTUnwrap(resolve(controller)).slots, [.near, .far])
+        XCTAssertTrue(controller.planShadowRender(casterKeys: keys, hasModelCasters: false, texture: texture, slot: .far))
     }
 
     func testTextureIdentityChangeForcesRender() throws {

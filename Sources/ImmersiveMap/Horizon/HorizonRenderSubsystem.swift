@@ -46,7 +46,9 @@ final class HorizonRenderSubsystem: RenderSubsystem {
         HorizonFrameResolver.resolve(settings: frameContext.services.settings,
                                      mapColor: frameContext.services.baseColors.map,
                                      transition: frameContext.transition,
-                                     zoom: frameContext.planningZoom,
+                                     // The air follows the camera's zoom over
+                                     // time, as the ground fog does.
+                                     zoom: frameContext.animatedZoom,
                                      globe: frameContext.globeRenderUniform,
                                      renderSurfaceMode: frameContext.renderSurfaceMode,
                                      cameraEye: frameContext.cameraEye,

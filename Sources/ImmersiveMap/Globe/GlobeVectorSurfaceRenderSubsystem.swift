@@ -64,7 +64,8 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
                                       depthDisabledState: depthDisabledState,
                                       isWireframeEnabled: isWireframeEnabled,
                                       pureSphere: pureSphere,
-                                      globeFrame: globeFrame)
+                                      globeFrame: globeFrame,
+                                      globeLight: GlobeLightUniform.resolve(frameContext: frameContext))
     }
 
     func handleMemoryWarning() {}

@@ -483,7 +483,12 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
             // the planner's marks (TileSourceStencilPriority).
             encoder.setStencilReferenceValue(Self.reference(of: source))
             for placement in source.placements {
-                let relief = groundReliefStore?.relief(for: tile, targetZoom: placement.targetZoom)
+                // The world tile is the horizon backdrop, flat on the plane
+                // (`TileWorkingSetSubsystem.horizonBackdrops`): no band
+                // places a tile that coarse.
+                let relief = tile.z > TileCulling.flatBackdropZoomLevel
+                    ? groundReliefStore?.relief(for: tile, targetZoom: placement.targetZoom)
+                    : nil
                 // As fine as the terrain and the raster can show, no finer.
                 let cells = relief.map {
                     RasterTileGrid.reliefCells(gridCells: groundFlattening.grid(forTileZoom: tile.z), relief: $0, rasterSize: source.size)
@@ -507,15 +512,32 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
                                                                                  flatRenderPan: flatRenderState.pan,
                                                                                  renderMapSize: flatRenderState.renderMapSize)
                 let scale = originAndSize.z / 4096.0
+                // The horizon backdrop lies under the relief, at the lowest
+                // height of the frame's terrain: on the plane the ground is
+                // drawn from (the terrain under the point looked at) it
+                // would hang over the valleys below that point, a sheet in
+                // the air wherever a far tile is still on its way.
+                let floorLift: Float = tile.z <= TileCulling.flatBackdropZoomLevel
+                    ? Self.backdropFloorLift(store: groundReliefStore)
+                    : 0
                 var modelMatrix = Matrix.translationMatrix(x: originAndSize.x,
                                                            y: originAndSize.y,
-                                                           z: 0) * Matrix.scaleMatrix(sx: scale, sy: scale, sz: 1)
+                                                           z: floorLift) * Matrix.scaleMatrix(sx: scale, sy: scale, sz: 1)
                 encoder.setVertexBytes(&modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
                 draw(mesh: mesh, encoder: encoder)
             }
         }
         endDraws(encoder: encoder)
         encoder.popDebugGroup()
+    }
+
+    /// The world z the horizon backdrop lies at on the relief: the frame's
+    /// lowest terrain over the datum, in world units at the frame's rise,
+    /// never over the plane. Zero off the relief.
+    static func backdropFloorLift(store: GroundReliefStore?) -> Float {
+        guard let store, store.isActive, let range = store.heightRangeMetres else { return 0 }
+        let metres = min(range.lowerBound - store.datumMetres, 0)
+        return metres * store.worldUnitsPerMetre * store.strengthScale
     }
 
     private func encodeSphere(encoder: MTLRenderCommandEncoder,
@@ -525,7 +547,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
         let pureSphere = GlobeSphereVertexPath.isPureSphere(renderSurfaceMode: frameContext.renderSurfaceMode,
                                                             transition: globe.transition)
         encoder.pushDebugGroup("ground.rasterTiles")
-        beginDraws(encoder: encoder, sampler: sampler)
+        beginDraws(encoder: encoder, sampler: sampler, globeLight: GlobeLightUniform.resolve(frameContext: frameContext))
         encoder.setRenderPipelineState(pureSphere ? pipeline.spherePurePipelineState : pipeline.sphereMorphPipelineState)
         encoder.setDepthStencilState(sphereOpaqueOwnerState)
         var cameraUniform = frameContext.cameraUniform
@@ -553,7 +575,11 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
     /// Every grid triangle is counter-clockwise in render space, as every
     /// tile triangle is, and neither surface mirrors: back faces are culled,
     /// which on the sphere removes its far side.
-    private func beginDraws(encoder: MTLRenderCommandEncoder, sampler: MTLSamplerState) {
+    /// `globeLight` is the sun on the globe, which the sphere's rings shade
+    /// by as the vector surface does, none on the plane.
+    private func beginDraws(encoder: MTLRenderCommandEncoder,
+                            sampler: MTLSamplerState,
+                            globeLight: GlobeLightUniform = .disabled) {
         encoder.setFrontFacing(.counterClockwise)
         encoder.setCullMode(.back)
         if debugOverlayControls.snapshot().wireframeEnabled {
@@ -561,6 +587,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
         }
         var sampling = RasterTileSamplingUniform(mipLevelBias: mipLevelBias)
         encoder.setFragmentBytes(&sampling, length: MemoryLayout<RasterTileSamplingUniform>.stride, index: 1)
+        GlobeLightUniform.bind(globeLight, encoder: encoder)
         encoder.setFragmentSamplerState(sampler, index: 0)
     }
 
@@ -575,7 +602,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
         encoder.setVertexBuffer(mesh.vertices, offset: 0, index: 0)
         encoder.drawIndexedPrimitives(type: .triangle,
                                       indexCount: mesh.indexCount,
-                                      indexType: .uint16,
+                                      indexType: mesh.indexType,
                                       indexBuffer: mesh.indices,
                                       indexBufferOffset: 0)
     }

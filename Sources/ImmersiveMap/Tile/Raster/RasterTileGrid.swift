@@ -19,14 +19,21 @@ final class RasterTileGrid {
         let vertices: MTLBuffer
         let indices: MTLBuffer
         let indexCount: Int
+        /// 16-bit indices up to 255 cells a side, 32-bit past it.
+        let indexType: MTLIndexType
     }
 
     /// The cells a side of the plane's grid and of the sphere's deep
     /// tiles: enough for a heightmap to shape a tile.
     static let minimumCells = 16
-    /// The most cells a side: the indices are 16 bits, and a side of 256
-    /// vertices is the last that fits.
-    static let maximumCells = 255
+    /// The most cells a side: the flattening grid's ceiling
+    /// (`GroundFlatteningSettings`), so the raster ground and the
+    /// placement marks lie on the vector ground's lines at every zoom. A
+    /// side of 257 vertices is past 16-bit indices, so such a grid takes
+    /// 32-bit ones.
+    static let maximumCells = 256
+    /// The most cells a side 16-bit indices reach: a side of 256 vertices.
+    static let maximumCellsWith16BitIndices = 255
 
     /// The cells a side of a tile of zoom `zoom`: the vector ground's split
     /// where the sphere needs one, so the raster tile bends as its
@@ -76,27 +83,48 @@ final class RasterTileGrid {
     /// flattening grid, so the raster ground is as fine as the vector
     /// ground beside it. Main thread only, as the draw is.
     func mesh(forTileZoom zoom: Int, atLeast cells: Int = 0) -> Mesh? {
-        let cells = min(max(Self.cells(forTileZoom: zoom), cells), Self.maximumCells)
+        mesh(cells: max(Self.cells(forTileZoom: zoom), cells))
+    }
+
+    /// The grid of exactly `cells` cells a side (1 to `maximumCells`),
+    /// whatever the zoom: a part of a source's grid, drawn on the source's
+    /// own lines (`PlacementGroundSquare.cells(ofSource:sourceZoom:squareZoom:)`).
+    func mesh(cells: Int) -> Mesh? {
+        let cells = min(max(cells, 1), Self.maximumCells)
         if let mesh = meshesByCells[cells] {
             return mesh
         }
-        let geometry = Self.geometry(cells: cells)
-        guard let vertices = device.makeBuffer(bytes: geometry.vertices,
-                                               length: geometry.vertices.count * MemoryLayout<SIMD2<Float>>.stride),
-              let indices = device.makeBuffer(bytes: geometry.indices,
-                                              length: geometry.indices.count * MemoryLayout<UInt16>.stride) else {
-            return nil
+        let mesh: Mesh?
+        if cells <= Self.maximumCellsWith16BitIndices {
+            mesh = makeMesh(geometry: Self.geometry(cells: cells, index: UInt16.self), indexType: .uint16)
+        } else {
+            mesh = makeMesh(geometry: Self.geometry(cells: cells, index: UInt32.self), indexType: .uint32)
         }
-        vertices.label = "RasterTileGrid.vertices.\(cells)"
-        indices.label = "RasterTileGrid.indices.\(cells)"
-        let mesh = Mesh(vertices: vertices, indices: indices, indexCount: geometry.indices.count)
         meshesByCells[cells] = mesh
         return mesh
     }
 
+    private func makeMesh<Index: FixedWidthInteger>(geometry: (vertices: [SIMD2<Float>], indices: [Index]),
+                                                    indexType: MTLIndexType) -> Mesh? {
+        guard let vertices = device.makeBuffer(bytes: geometry.vertices,
+                                               length: geometry.vertices.count * MemoryLayout<SIMD2<Float>>.stride),
+              let indices = device.makeBuffer(bytes: geometry.indices,
+                                              length: geometry.indices.count * MemoryLayout<Index>.stride) else {
+            return nil
+        }
+        let cells = Int(Double(geometry.vertices.count).squareRoot().rounded()) - 1
+        vertices.label = "RasterTileGrid.vertices.\(cells)"
+        indices.label = "RasterTileGrid.indices.\(cells)"
+        return Mesh(vertices: vertices, indices: indices, indexCount: geometry.indices.count, indexType: indexType)
+    }
+
     /// The vertices row by row from the tile's south edge, and two
-    /// counter-clockwise triangles per cell.
+    /// counter-clockwise triangles per cell, with 16-bit indices.
     static func geometry(cells: Int) -> (vertices: [SIMD2<Float>], indices: [UInt16]) {
+        geometry(cells: cells, index: UInt16.self)
+    }
+
+    static func geometry<Index: FixedWidthInteger>(cells: Int, index _: Index.Type) -> (vertices: [SIMD2<Float>], indices: [Index]) {
         let side = cells + 1
         var vertices: [SIMD2<Float>] = []
         vertices.reserveCapacity(side * side)
@@ -106,13 +134,13 @@ final class RasterTileGrid {
                                              Float(row) / Float(cells) * 4096))
             }
         }
-        var indices: [UInt16] = []
+        var indices: [Index] = []
         indices.reserveCapacity(cells * cells * 6)
         for row in 0 ..< cells {
             for column in 0 ..< cells {
-                let southWest = UInt16(row * side + column)
+                let southWest = Index(row * side + column)
                 let southEast = southWest + 1
-                let northWest = southWest + UInt16(side)
+                let northWest = southWest + Index(side)
                 let northEast = northWest + 1
                 indices.append(contentsOf: [southWest, southEast, northEast, southWest, northEast, northWest])
             }

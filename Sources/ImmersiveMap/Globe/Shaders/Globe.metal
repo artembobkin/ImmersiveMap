@@ -4,6 +4,7 @@
 #include <metal_stdlib>
 using namespace metal;
 #include "GlobeTransitionProjection.h"
+#include "GlobeLight.h"
 
 struct CapVertexIn {
     float2 latLon [[attribute(0)]];
@@ -12,6 +13,8 @@ struct CapVertexIn {
 struct CapVertexOut {
     float4 position [[position]];
     float capAlpha;
+    // The sphere's normal in world space, the sun's side (GlobeLight.h).
+    float3 sphereNormal;
 };
 
 /// One cap's constant colour, straight from the style palette (the north cap
@@ -50,14 +53,17 @@ vertex CapVertexOut globeCapVertexShader(CapVertexIn vertexIn [[stage_in]],
     CapVertexOut out;
     out.position = clip;
     out.capAlpha = 1.0 - transitionFade;
+    out.sphereNormal = (globeFrame.sphereWorld * float4(unitDirection, 0.0)).xyz;
     return out;
 }
 
 fragment half4 globeCapFragmentShader(CapVertexOut in [[stage_in]],
-                                      constant CapParams& params [[buffer(0)]]) {
+                                      constant CapParams& params [[buffer(0)]],
+                                      constant GlobeLight& globeLight [[buffer(kGlobeLightBufferIndex)]]) {
     // Opaque surface colour: the cap is planet, and only the unfurl's fade
     // thins it out (it diverges from the tile surface mid-morph).
     half4 color = half4(half3(params.color.rgb), 1.0h);
+    color.rgb = globeLitColor(color.rgb, in.sphereNormal, globeLight);
     color.a *= half(in.capAlpha);
     return color;
 }

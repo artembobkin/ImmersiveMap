@@ -109,7 +109,7 @@ fragment half4 sceneModelFragmentShader(SceneModelVertexOut in [[stage_in]],
                                         constant Shadow& shadow [[buffer(4)]],
                                         constant GroundFog& groundFog [[buffer(kGroundFogBufferIndex)]],
                                         texture2d<half> baseColorTexture [[texture(0)]],
-                                        depth2d<float> shadowMap [[texture(1)]],
+                                        depth2d_array<float> shadowMap [[texture(1)]],
                                         sampler baseColorSampler [[sampler(0)]]) {
     if (kSceneModelClipsBelowGround && in.groundHeight < 0.0) {
         discard_fragment();

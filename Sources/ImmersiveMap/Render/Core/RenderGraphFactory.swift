@@ -29,7 +29,7 @@ enum RenderGraphFactory {
         let roadLabelDrawSubsystem = RoadLabelDrawSubsystem(textRenderer: context.textRenderer,
                                                             labelDepthState: context.labelDepthState,
                                                             depthDisabledState: context.depthDisabledState,
-                                                            fallbackDepthTexture: context.shadowFallbackTexture,
+                                                            fallbackDepthTexture: context.sceneDepthFallbackTexture,
                                                             hidesBehindBuildingsFromZoom: settings.labels.road.hidesBehindBuildingsFromZoom,
                                                             metalDevice: context.metalContext.device)
         let avatarSubsystem = AvatarRenderSubsystem(avatarsRenderer: context.avatarsRenderer,
@@ -74,6 +74,9 @@ enum RenderGraphFactory {
         let placementStencilSubsystem = PlacementStencilRenderSubsystem(device: context.metalContext.device,
                                                                         pipeline: context.placementStencilPipeline,
                                                                         placementStencilWriteState: context.placementStencilWriteState,
+                                                                        placementDepthWriteState: context.placementDepthWriteState,
+                                                                        placementStencilReliefWriteState: context.placementStencilReliefWriteState,
+                                                                        placementDepthResetState: context.placementDepthResetState,
                                                                         depthDisabledState: context.depthDisabledState,
                                                                         groundReliefStore: context.groundReliefStore,
                                                                         groundFlattening: settings.tiles.resolvedGroundFlattening)

@@ -748,6 +748,17 @@ public extension ImmersiveMapView {
     /// archive cannot answer. Past the deepest level the camera keeps
     /// zooming and the deepest tiles are scaled up, exactly as before; offline
     /// region downloads clamp to the same level.
+    /// How far past the visible ground the flat map's far texture bands
+    /// ask for their tiles, as a share of the footprint's reach from the
+    /// camera (`ImmersiveMapSettings.TileSettings.CoverageSettings
+    /// .rasterBandMarginShare`): a turn of the camera then finds the far
+    /// tiles in already. 0.25 by default, 0 for none. Applies live.
+    public func tileCoverage(rasterBandMarginShare: Float) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.tileCoverage(rasterBandMarginShare: rasterBandMarginShare)
+        return view
+    }
+
     public func tileMaximumZoomLevel(_ maximumZoomLevel: Int) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.tileMaximumZoomLevel(maximumZoomLevel)
@@ -1078,6 +1089,41 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// The sun on the globe (`ImmersiveMapSettings.GlobeLightSettings`),
+    /// whole. Applies live.
+    public func globeLightSettings(_ globeLight: ImmersiveMapSettings.GlobeLightSettings) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.globeLightSettings(globeLight)
+        return view
+    }
+
+    /// The sun on the globe: the planet's surface shaded by the sphere
+    /// against a sun fixed over the subsolar point
+    /// (`subsolarLatitudeDegrees`, `subsolarLongitudeDegrees`), the night
+    /// side drawn toward `nightColor`, `strength` by the camera zoom and
+    /// the terminator `terminatorSoftness` wide. On by default. An omitted
+    /// value is left as configured:
+    ///
+    ///     ImmersiveMapView()
+    ///         .globeLight(subsolarLongitudeDegrees: 30, strength: [2: 0.8, 6: 0.2])
+    ///
+    /// See `ImmersiveMapSettings.GlobeLightSettings`. Applies live.
+    public func globeLight(isEnabled: Bool = true,
+                           subsolarLatitudeDegrees: Float? = nil,
+                           subsolarLongitudeDegrees: Float? = nil,
+                           strength: ImmersiveMapZoomCurve? = nil,
+                           terminatorSoftness: Float? = nil,
+                           nightColor: SIMD3<Float>? = nil) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.globeLight(isEnabled: isEnabled,
+                                                 subsolarLatitudeDegrees: subsolarLatitudeDegrees,
+                                                 subsolarLongitudeDegrees: subsolarLongitudeDegrees,
+                                                 strength: strength,
+                                                 terminatorSoftness: terminatorSoftness,
+                                                 nightColor: nightColor)
+        return view
+    }
+
     /// Turns the globe's atmosphere on or off. Off leaves the planet bare
     /// against space, apart from the thin glow at the limb that hides the
     /// tile mesh's edge; the flat map's fog band is not affected.
@@ -1098,8 +1144,11 @@ public extension ImmersiveMapView {
     /// by default) and `maximumOpacity` the most it veils. `veilsBuildings`
     /// sinks the buildings and the models into it with the ground (on by
     /// default), and `takesSkyColor` turns the fog into the sky's colour
-    /// above the horizon line (off by default). On by default, and the
-    /// globe has none.
+    /// above the horizon line (off by default). On the ground relief
+    /// `heightsFromSeaLevel` measures the fog's height from sea level (on
+    /// by default), so the valleys lie deeper in it than the summits, and
+    /// `baseAltitudeMeters` is the altitude the density is stated at. On
+    /// by default, and the globe has none.
     ///
     /// Every value but the colour is a value or a curve over the camera
     /// zoom (`ImmersiveMapZoomCurve`), so the fog never changes at a step.
@@ -1122,7 +1171,9 @@ public extension ImmersiveMapView {
                           color: SIMD3<Float>? = nil,
                           maximumOpacity: ImmersiveMapZoomCurve? = nil,
                           veilsBuildings: Bool? = nil,
-                          takesSkyColor: Bool? = nil) -> ImmersiveMapView {
+                          takesSkyColor: Bool? = nil,
+                          heightsFromSeaLevel: Bool? = nil,
+                          baseAltitudeMeters: Float? = nil) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.groundFog(isEnabled: isEnabled,
                                                 densityPerKilometer: densityPerKilometer,
@@ -1132,14 +1183,16 @@ public extension ImmersiveMapView {
                                                 color: color,
                                                 maximumOpacity: maximumOpacity,
                                                 veilsBuildings: veilsBuildings,
-                                                takesSkyColor: takesSkyColor)
+                                                takesSkyColor: takesSkyColor,
+                                                heightsFromSeaLevel: heightsFromSeaLevel,
+                                                baseAltitudeMeters: baseAltitudeMeters)
         return view
     }
 
     /// The sky of the flat presentation: a sky gradient above the horizon
     /// line and a thin band whitening the ground into the horizon colour at
     /// the line. The far ground is the ground fog's
-    /// (`groundFog(isEnabled:densityPerKilometer:heightMeters:startDistanceMeters:startSoftnessMeters:color:maximumOpacity:veilsBuildings:takesSkyColor:)`).
+    /// (`groundFog(isEnabled:densityPerKilometer:heightMeters:startDistanceMeters:startSoftnessMeters:color:maximumOpacity:veilsBuildings:takesSkyColor:heightsFromSeaLevel:baseAltitudeMeters:)`).
     /// Applies live.
     public func fogSettings(_ fog: ImmersiveMapSettings.FogSettings) -> ImmersiveMapView {
         var view = self
@@ -1167,12 +1220,17 @@ public extension ImmersiveMapView {
     ///
     /// The values are `ImmersiveMapSettings.ShadowSettings`'s, where each is
     /// described. `coverageCameraDistances` and `minimumCoverageMeters`
-    /// together size the ground the shadows reach: high over the map the
-    /// first, close to the ground the second. Applies live.
+    /// together size the ground the sharp near window reaches: high over
+    /// the map the first, close to the ground the second, and
+    /// `farCoverageCameraDistances` the coarse far window beyond it.
+    /// Applies live.
     public func shadows(isEnabled: Bool = true,
                         strength: Float? = nil,
+                        minimumZoom: Double? = nil,
+                        fadeInZooms: Double? = nil,
                         mapResolution: Int? = nil,
                         coverageCameraDistances: Float? = nil,
+                        farCoverageCameraDistances: Float? = nil,
                         minimumCoverageMeters: Float? = nil,
                         maxCasterHeightMeters: Float? = nil,
                         normalOffsetTexels: Float? = nil,
@@ -1182,8 +1240,11 @@ public extension ImmersiveMapView {
         var shadows = view.settings.scene.shadows
         shadows.isEnabled = isEnabled
         if let strength { shadows.strength = strength }
+        if let minimumZoom { shadows.minimumZoom = minimumZoom }
+        if let fadeInZooms { shadows.fadeInZooms = fadeInZooms }
         if let mapResolution { shadows.mapResolution = mapResolution }
         if let coverageCameraDistances { shadows.coverageCameraDistances = coverageCameraDistances }
+        if let farCoverageCameraDistances { shadows.farCoverageCameraDistances = farCoverageCameraDistances }
         if let minimumCoverageMeters { shadows.minimumCoverageMeters = minimumCoverageMeters }
         if let maxCasterHeightMeters { shadows.maxCasterHeightMeters = maxCasterHeightMeters }
         if let normalOffsetTexels { shadows.normalOffsetTexels = normalOffsetTexels }

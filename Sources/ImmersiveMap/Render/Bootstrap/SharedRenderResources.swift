@@ -94,12 +94,26 @@ final class SharedRenderResources {
     /// neither tested nor written, the source's zoom written into the
     /// priority bits.
     let placementStencilWriteState: MTLDepthStencilState
+    /// The placement prepass on the relief (`PlacementStencilRenderSubsystem`):
+    /// first the ground's depth, every point once, the stencil untouched,
+    /// then the marks tested against that depth and writing none.
+    let placementDepthWriteState: MTLDepthStencilState
+    let placementStencilReliefWriteState: MTLDepthStencilState
+    /// The prepass's depth reset: the depth written whatever is there, the
+    /// stencil untouched.
+    let placementDepthResetState: MTLDepthStencilState
     /// Bound at the shadow-map slot when the shadow pass is skipped: receiver
     /// shaders reference the texture statically and Metal validation requires a
     /// bound depth texture even though strength = 0 skips the sampling branch.
     /// Depth textures cannot be filled from the CPU, so a one-time no-draw pass
     /// clears this 1x1 texture to 1.0 ("lit everywhere") at creation.
     let shadowFallbackTexture: MTLTexture
+    /// Bound at the scene depth slot of the road labels on a frame whose
+    /// depth was not kept for them (`RoadLabelDrawSubsystem`): the shader
+    /// skips the read when the uniform says so, but the binding itself is
+    /// mandatory, and it has to be a plain `depth2d`, which the shadow map's
+    /// texture array is not. A 1x1 depth texture cleared to the far plane.
+    let sceneDepthFallbackTexture: MTLTexture
     /// Bound at the ground shadow mask slot of the flat ground pipeline when
     /// the mask pass did not run this frame: the shader guards the read with
     /// the disabled uniform's zero strength, but the binding itself is
@@ -248,9 +262,13 @@ final class SharedRenderResources {
         let roadRankState: MTLDepthStencilState
         let extrudedStencilTestState: MTLDepthStencilState
         let placementStencilWriteState: MTLDepthStencilState
+        let placementDepthWriteState: MTLDepthStencilState
+        let placementStencilReliefWriteState: MTLDepthStencilState
+        let placementDepthResetState: MTLDepthStencilState
         let sceneModelSurfaceMaskState: MTLDepthStencilState
         let sceneModelGroundCutStates: SceneModelGroundCutStates
         let shadowFallbackTexture: MTLTexture
+        let sceneDepthFallbackTexture: MTLTexture
         let groundShadowMaskFallbackTexture: MTLTexture
         let compiled: ConcurrentlyCompiledResources
     }
@@ -277,12 +295,16 @@ final class SharedRenderResources {
                      roadRankState: device.makeDepthStencilState(descriptor: Self.makeRoadRankDescriptor())!,
                      extrudedStencilTestState: device.makeDepthStencilState(descriptor: Self.makeExtrudedStencilTestDescriptor())!,
                      placementStencilWriteState: device.makeDepthStencilState(descriptor: Self.makePlacementStencilWriteDescriptor())!,
+                     placementDepthWriteState: device.makeDepthStencilState(descriptor: Self.makePlacementDepthWriteDescriptor())!,
+                     placementStencilReliefWriteState: device.makeDepthStencilState(descriptor: Self.makePlacementStencilReliefWriteDescriptor())!,
+                     placementDepthResetState: device.makeDepthStencilState(descriptor: Self.makePlacementDepthResetDescriptor())!,
                      sceneModelSurfaceMaskState: device.makeDepthStencilState(descriptor: Self.makeSceneModelSurfaceMaskDescriptor())!,
                      sceneModelGroundCutStates: SceneModelGroundCutStates(
                         holeWrite: device.makeDepthStencilState(descriptor: Self.makeSceneModelGroundHoleDescriptor(raises: true))!,
                         holeClear: device.makeDepthStencilState(descriptor: Self.makeSceneModelGroundHoleDescriptor(raises: false))!,
                         holeTest: device.makeDepthStencilState(descriptor: Self.makeSceneModelGroundHoleTestDescriptor())!),
                      shadowFallbackTexture: Self.makeShadowFallbackTexture(device: device),
+                     sceneDepthFallbackTexture: Self.makeSceneDepthFallbackTexture(device: device),
                      groundShadowMaskFallbackTexture: Self.makeGroundShadowMaskFallbackTexture(device: device),
                      compiled: compiled)
     }
@@ -304,9 +326,13 @@ final class SharedRenderResources {
         self.roadRankState = built.roadRankState
         self.extrudedStencilTestState = built.extrudedStencilTestState
         self.placementStencilWriteState = built.placementStencilWriteState
+        self.placementDepthWriteState = built.placementDepthWriteState
+        self.placementStencilReliefWriteState = built.placementStencilReliefWriteState
+        self.placementDepthResetState = built.placementDepthResetState
         self.sceneModelSurfaceMaskState = built.sceneModelSurfaceMaskState
         self.sceneModelGroundCutStates = built.sceneModelGroundCutStates
         self.shadowFallbackTexture = built.shadowFallbackTexture
+        self.sceneDepthFallbackTexture = built.sceneDepthFallbackTexture
         self.groundShadowMaskFallbackTexture = built.groundShadowMaskFallbackTexture
 
         let compiled = built.compiled
@@ -496,7 +522,8 @@ final class SharedRenderResources {
 
     private nonisolated static func makeShadowFallbackTexture(device: MTLDevice) -> MTLTexture {
         let descriptor = MTLTextureDescriptor()
-        descriptor.textureType = .type2D
+        descriptor.textureType = .type2DArray
+        descriptor.arrayLength = ShadowCascadeAtlas.sliceCount
         descriptor.pixelFormat = ShadowCascadeAtlas.depthPixelFormat
         descriptor.width = 1
         descriptor.height = 1
@@ -505,8 +532,33 @@ final class SharedRenderResources {
         let texture = device.makeTexture(descriptor: descriptor)!
         texture.label = "ShadowFallbackTexture"
 
-        // A throwaway queue: the clear runs once per process, before any view
-        // samples the texture.
+        // A throwaway queue: the clears run once per process, before any
+        // view samples the texture. One plain pass per slice, never a
+        // layered pass, which the iOS Simulator does not implement.
+        guard let commandBuffer = device.makeCommandQueue()?.makeCommandBuffer() else {
+            return texture
+        }
+        for slice in 0..<ShadowCascadeAtlas.sliceCount {
+            let passDescriptor = makeShadowFallbackClearDescriptor(texture: texture, slice: slice)
+            commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor)?.endEncoding()
+        }
+        commandBuffer.commit()
+        return texture
+    }
+
+    /// One texel of depth at the far plane for the road labels' scene depth
+    /// slot on frames without a kept scene depth: a plain 2D depth texture,
+    /// as the shader's `depth2d` wants, cleared by the same no-draw pass.
+    private nonisolated static func makeSceneDepthFallbackTexture(device: MTLDevice) -> MTLTexture {
+        let descriptor = MTLTextureDescriptor()
+        descriptor.textureType = .type2D
+        descriptor.pixelFormat = ShadowCascadeAtlas.depthPixelFormat
+        descriptor.width = 1
+        descriptor.height = 1
+        descriptor.usage = [.renderTarget, .shaderRead]
+        descriptor.storageMode = .private
+        let texture = device.makeTexture(descriptor: descriptor)!
+        texture.label = "SceneDepthFallbackTexture"
         guard let commandBuffer = device.makeCommandQueue()?.makeCommandBuffer() else {
             return texture
         }
@@ -516,12 +568,13 @@ final class SharedRenderResources {
         return texture
     }
 
-    /// The no-draw pass that leaves the fallback texture cleared to the far
-    /// plane. Every receiver samples this texture while shadows are off, so it
-    /// has to arrive cleared.
-    nonisolated static func makeShadowFallbackClearDescriptor(texture: MTLTexture) -> MTLRenderPassDescriptor {
+    /// The no-draw pass that leaves one slice of the fallback texture
+    /// cleared to the far plane. Every receiver samples this texture while
+    /// shadows are off, so it has to arrive cleared.
+    nonisolated static func makeShadowFallbackClearDescriptor(texture: MTLTexture, slice: Int = 0) -> MTLRenderPassDescriptor {
         let passDescriptor = MTLRenderPassDescriptor()
         passDescriptor.depthAttachment.texture = texture
+        passDescriptor.depthAttachment.slice = slice
         passDescriptor.depthAttachment.loadAction = .clear
         passDescriptor.depthAttachment.storeAction = .store
         passDescriptor.depthAttachment.clearDepth = 1.0
@@ -669,11 +722,48 @@ final class SharedRenderResources {
         return descriptor
     }
 
-    /// The placement prepass: the depth always passes and is never
-    /// written, so a placement's mark lands on every pixel of its square,
-    /// through the priority bits alone (`TileSourceStencilPriority`).
+    /// The placement prepass on the plane and the sphere: the depth always
+    /// passes and is never written, so a placement's mark lands on every
+    /// pixel of its square, through the priority bits alone
+    /// (`TileSourceStencilPriority`).
     private nonisolated static func makePlacementStencilWriteDescriptor() -> MTLDepthStencilDescriptor {
         let descriptor = makeDepthDisabledDescriptor()
+        descriptor.frontFaceStencil = makePlacementMarkStencil()
+        descriptor.backFaceStencil = makePlacementMarkStencil()
+        return descriptor
+    }
+
+    /// The relief's first prepass: the ground's depth, every point of it
+    /// once, the nearer of two surfaces kept, the stencil untouched.
+    private nonisolated static func makePlacementDepthWriteDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = MTLDepthStencilDescriptor()
+        descriptor.depthCompareFunction = .lessEqual
+        descriptor.isDepthWriteEnabled = true
+        return descriptor
+    }
+
+    /// The relief's marks: a placement's mark lands where its ground is
+    /// the one in front, at or before the ground's depth, and the depth
+    /// is left as it is.
+    private nonisolated static func makePlacementStencilReliefWriteDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = MTLDepthStencilDescriptor()
+        descriptor.depthCompareFunction = .lessEqual
+        descriptor.isDepthWriteEnabled = false
+        descriptor.frontFaceStencil = makePlacementMarkStencil()
+        descriptor.backFaceStencil = makePlacementMarkStencil()
+        return descriptor
+    }
+
+    /// The relief's depth reset: the far plane written over every pixel,
+    /// the stencil untouched, so the ground passes meet the cleared depth.
+    private nonisolated static func makePlacementDepthResetDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = MTLDepthStencilDescriptor()
+        descriptor.depthCompareFunction = .always
+        descriptor.isDepthWriteEnabled = true
+        return descriptor
+    }
+
+    private nonisolated static func makePlacementMarkStencil() -> MTLStencilDescriptor {
         let stencil = MTLStencilDescriptor()
         stencil.stencilCompareFunction = .always
         stencil.stencilFailureOperation = .keep
@@ -681,9 +771,7 @@ final class SharedRenderResources {
         stencil.depthStencilPassOperation = .replace
         stencil.readMask = 0
         stencil.writeMask = TileSourceStencilPriority.priorityMask
-        descriptor.frontFaceStencil = stencil
-        descriptor.backFaceStencil = stencil
-        return descriptor
+        return stencil
     }
 
     /// The world-pass buildings: scene depth for their own occlusion and

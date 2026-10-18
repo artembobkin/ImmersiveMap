@@ -175,6 +175,40 @@ final class RoadLabelPlacerTests: XCTestCase {
         XCTAssertEqual(visible, [true, true], "No reach keeps every point in front of the camera")
     }
 
+    /// On the relief a point rises by its kept metres over the frame's
+    /// datum, at the frame's scale: the projection reads no heights.
+    func testTheLiftsRaiseThePointsByTheirKeptMetres() {
+        // A camera that puts the world z straight into the screen's y.
+        let matrix = simd_float4x4(columns: (SIMD4<Float>(1, 0, 0, 0),
+                                             SIMD4<Float>(0, 0, 0, 0),
+                                             SIMD4<Float>(0, 1, 0, 0),
+                                             SIMD4<Float>(0, 0, 0, 1)))
+        let points = [TilePointInput(uv: SIMD2<Float>(0.5, 0.5), tile: .zero),
+                      TilePointInput(uv: SIMD2<Float>(0.5, 0.5), tile: .zero)]
+        let lifts = RoadLabelPlacer.PointLifts(metres: [1600, 2100], datumMetres: 1600, unitsPerMetre: 0.01)
+        XCTAssertEqual(lifts.worldUnits(at: 0), 0)
+        XCTAssertEqual(lifts.worldUnits(at: 1), 5, accuracy: 1e-5)
+        var screenPoints: [SIMD2<Float>] = []
+        var visible: [Bool] = []
+        RoadLabelPlacer.project(pathPoints: points,
+                                origin: FlatTileOriginData(panRelativeOrigin: .zero, size: 10),
+                                cameraMatrix: matrix,
+                                viewportSize: SIMD2<Float>(100, 100),
+                                lifts: lifts,
+                                screenPoints: &screenPoints,
+                                visible: &visible)
+        XCTAssertEqual(screenPoints[1].y - screenPoints[0].y, 5 * 50, accuracy: 1e-3,
+                       "Five world units of lift, half a viewport per unit")
+        RoadLabelPlacer.project(pathPoints: points,
+                                origin: FlatTileOriginData(panRelativeOrigin: .zero, size: 10),
+                                cameraMatrix: matrix,
+                                viewportSize: SIMD2<Float>(100, 100),
+                                lifts: RoadLabelPlacer.PointLifts(metres: [1], datumMetres: 0, unitsPerMetre: 1),
+                                screenPoints: &screenPoints,
+                                visible: &visible)
+        XCTAssertEqual(screenPoints[0].y, screenPoints[1].y, "Metres of the wrong count lift nothing")
+    }
+
     func testInstanceBoxesComeFromThePlacement() {
         var output = RoadLabelPlacer.Output()
         output.placements = [Self.placement(SIMD2<Float>(10, 20), angle: 0.1),

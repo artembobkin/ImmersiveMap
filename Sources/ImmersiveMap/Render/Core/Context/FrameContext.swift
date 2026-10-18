@@ -93,23 +93,25 @@ struct FrameContext {
     /// read from. The tiles and the rings are planned by `planningZoom`,
     /// and everything drawn from them reads it too (the styles' zoom fades
     /// and widths, the labels, the buildings' and the models' zoom), so a
-    /// tile and how it draws never answer two zooms. The air reads
-    /// `planningZoom` too.
+    /// tile and how it draws never answer two zooms. The ground fog, the
+    /// air, reads `planningZoom` too, and the horizon `animatedZoom`.
     var zoom: Double {
         mapCameraState.zoom
     }
 
-    /// The camera's zoom followed over time (`AnimatedZoom`), for the
-    /// debug panel's camera line.
+    /// The camera's zoom followed over time (`AnimatedZoom`): what the
+    /// horizon's fog and atmosphere read, so the sky changes with the zoom
+    /// the eye sees, and the debug panel's camera line.
     let animatedZoom: Double
     /// The zoom the map is planned by (`CameraStateController.planningZoom`):
     /// the coverage's target tiles, the ring rules and the relief's
     /// thresholds read it, and so does everything drawn from the tiles: the
     /// styles' zoom fades and line widths, the labels, the zoom the
-    /// buildings and the models rise from, and the air: the ground fog and
-    /// the horizon's fog and atmosphere. Over the terrain it stays where
-    /// the last zoom set it while the camera's own follows the ground, so a
-    /// drag over the slopes neither thickens nor thins the fog.
+    /// buildings and the models rise from, and the ground fog, the air.
+    /// Over the terrain it stays where the last zoom set it while the
+    /// camera's own follows the ground, so a drag over the slopes changes
+    /// nothing of what the tiles draw, and the air over a summit is the air
+    /// over the valley floor beside it.
     let planningZoom: Double
     /// How the camera's last move over the terrain was settled, for the
     /// debug panel (`TerrainFollowReport`), nil off the terrain.

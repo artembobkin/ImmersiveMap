@@ -391,10 +391,12 @@ final class RenderFrameEngine {
         persistentContext.groundReliefStore?.setWorldScale(centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
                                                            renderMapSize: resolvedPresentation.flatRenderState.renderMapSize)
         // The slopes are shaded by the scene's light, which the settings
-        // change live, and fade with the distance from the eye.
+        // change live, and fade with the distance from the eye. The debug
+        // panel drags the fade and the amounts over the style's.
         persistentContext.groundReliefStore?.setLight(direction: settings.scene.light.direction,
                                                       cameraEye: cameraFrameState.cameraEye,
-                                                      fadeCameraDistances: debugOverlayControls.hillshadeFadeCameraDistances())
+                                                      fadeCameraDistances: debugOverlayControls.hillshadeFadeCameraDistances(),
+                                                      amounts: debugOverlayControls.hillshadeAmounts())
         // The mountains' shadows, as the settings and the debug panel say.
         persistentContext.groundReliefStore?.setCastsShadows(settings.tiles.groundRelief.castsShadows
             && debugOverlayControls.reliefCastsShadows() != false)
@@ -446,6 +448,8 @@ final class RenderFrameEngine {
             // The relief's heights as the coverage reads them: the window
             // reaches the valleys and the summits.
             groundHeights: reliefHeights,
+            // The shadows come in with the zoom the eye sees, as the air does.
+            zoom: animatedZoomValue,
             scene: settings.scene
         )
 

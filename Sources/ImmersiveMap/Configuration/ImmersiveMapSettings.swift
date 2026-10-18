@@ -522,9 +522,23 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     public struct TileSettings: Equatable, Sendable {
         public struct CoverageSettings: Equatable, Sendable {
             public var maximumZoomLevel: Int
+            /// How far past the visible ground the flat map's texture bands
+            /// (the ring rules with a `rasterSize`) ask for their tiles, as
+            /// a share of the footprint's reach from the camera: 0.25 by
+            /// default, a quarter of the way further out on every side, 0
+            /// for the visible ground alone. A far band's tile has no
+            /// resident stand-in when it comes into view (its ancestors are
+            /// the world cover, which nothing goes down to), so a turn of
+            /// the camera that brings one in shows a hole in the far ground
+            /// for the frames its load takes. With the margin the tile is
+            /// asked for before it is in view, and it is in by the time it
+            /// is. The geometry bands take no margin: their stand-ins cover
+            /// a loading tile, and their tiles cost far more.
+            public var rasterBandMarginShare: Float
 
-            public init(maximumZoomLevel: Int) {
+            public init(maximumZoomLevel: Int, rasterBandMarginShare: Float = 0.25) {
                 self.maximumZoomLevel = maximumZoomLevel
+                self.rasterBandMarginShare = rasterBandMarginShare
             }
         }
 
@@ -888,9 +902,13 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// so a ridge darkens the valley behind it from the scene's sun
             /// (`SceneLightSettings.direction`), and the ground, its
             /// buildings and its labels' ground take the shadow. Within the
-            /// shadow map's window only (`ShadowSettings.coverageCameraDistances`),
-            /// fading at its rim, and only with the shadows on. The slopes'
-            /// own shading is the hillshade's (`ImmersiveMapHillshade`).
+            /// shadow map's windows only (`ShadowSettings.coverageCameraDistances`,
+            /// `farCoverageCameraDistances`), fading at their rim, only with
+            /// the shadows on and from the shadows' zoom
+            /// (`ShadowSettings.minimumZoom`, 14 by default, past the zoom the
+            /// relief collapses at, so the mountains cast only where that zoom
+            /// is set lower, and the hillshade carries them otherwise). The slopes' own
+            /// shading is the hillshade's (`ImmersiveMapHillshade`).
             /// True by default. The shadow map is drawn again when the
             /// terrain under it changes, so a camera at rest costs nothing.
             public var castsShadows: Bool
@@ -1321,20 +1339,51 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var isEnabled: Bool
         /// Shadow darkening amount. Expected range: `0...1`.
         public var strength: Float
+        /// The camera zoom the shadows are drawn from: 14 by default, the
+        /// buildings' zoom (`ExtrusionSettings.buildingsMinimumZoom`). Below
+        /// it no shadow pass runs, and coming up to it the shadows fade in
+        /// over `fadeInZooms`, so they never appear at one frame. From an
+        /// overview the shadows of the mountains and the buildings read as
+        /// stains on the map, and the hillshade carries the relief on its
+        /// own. Set it lower for a map that wants the mountains' shadows
+        /// from afar (the relief draws from `GroundReliefSettings.appearZoom`,
+        /// 10 by default), higher for shadows in street views alone.
+        public var minimumZoom: Double
+        /// How many zooms before `minimumZoom` the shadows start to come
+        /// in, 1 by default: their strength rises from nothing to
+        /// `strength` over this span. 0 switches them on at the zoom.
+        public var fadeInZooms: Double
         /// Square shadow map side in pixels. Clamped to `256...4096` at render time.
         public var mapResolution: Int
-        /// Coverage radius of the shadow map, measured in multiples of the
-        /// camera distance, a quantity independent of pitch and bearing, so
-        /// tilting or rotating the camera never changes shadow coverage or
-        /// sharpness. Beyond the radius shadows fade out. There is one map
-        /// stretched over the radius, so raising this coarsens every shadow in
-        /// the frame in proportion, and `mapResolution` is what buys the
-        /// density back. Clamped to `0.25...48`. Shadows fade out over the
-        /// outer quarter of the radius, so the window's edge is never visible
-        /// as a circle at any coverage. Values well under 1 are a debugging
-        /// aid: they wind the window down onto the point the camera looks at,
-        /// which is how the shadow map's texel grid is looked at up close.
+        /// Coverage radius of the shadow map's near window, measured in
+        /// multiples of the camera distance, a quantity independent of pitch
+        /// and bearing, so tilting or rotating the camera never changes
+        /// shadow coverage or sharpness. One slice of the map is stretched
+        /// over the radius, so raising this coarsens every shadow in the
+        /// window in proportion, and `mapResolution` is what buys the
+        /// density back. Clamped to `0.25...48`. Over the outer quarter of
+        /// the radius the near window hands over to the far one
+        /// (`farCoverageCameraDistances`), or the shadows fade out without
+        /// it, so the window's edge is never visible as a circle at any
+        /// coverage. Values well under 1 are a debugging aid: they wind the
+        /// window down onto the point the camera looks at, which is how the
+        /// shadow map's texel grid is looked at up close.
         public var coverageCameraDistances: Float
+        /// Coverage radius of the shadow map's far window, in the same
+        /// camera distances: the second slice of the map, as many texels
+        /// over a wider disc and so coarser, for the shadows beyond the
+        /// near window, the mountains casting across a valley from
+        /// kilometres away. A receiver reads the near window where it
+        /// reaches and the far one past it, and the shadows fade out over
+        /// the outer quarter of this radius. Clamped to `0.25...48`. The
+        /// far window is fitted only when its fade band starts where the
+        /// near window ends or beyond, at four thirds of
+        /// `coverageCameraDistances` or more: under that the setting is
+        /// off, the frame has the near window alone and pays for one. Raise
+        /// it to shadow farther ground, lower it for sharper far shadows,
+        /// and set it under the near coverage for the one window of a city
+        /// map without a relief.
+        public var farCoverageCameraDistances: Float
         /// The least coverage radius of the shadow map, in meters, whatever
         /// `coverageCameraDistances` gives. Close to the ground the camera is
         /// a few tens of meters from the point it looks at, and a few camera
@@ -1420,8 +1469,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
         public init(isEnabled: Bool = true,
                     strength: Float = 0.22,
+                    minimumZoom: Double = 14,
+                    fadeInZooms: Double = 1,
                     mapResolution: Int = 4096,
                     coverageCameraDistances: Float = 3.0,
+                    farCoverageCameraDistances: Float = 12.0,
                     minimumCoverageMeters: Float = 500,
                     maxCasterHeightMeters: Float = 500,
                     normalOffsetTexels: Float = 2.5,
@@ -1429,8 +1481,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     tint: SIMD3<Float> = SIMD3<Float>(0.88, 0.92, 1.0)) {
             self.isEnabled = isEnabled
             self.strength = strength
+            self.minimumZoom = minimumZoom
+            self.fadeInZooms = fadeInZooms
             self.mapResolution = mapResolution
             self.coverageCameraDistances = coverageCameraDistances
+            self.farCoverageCameraDistances = farCoverageCameraDistances
             self.minimumCoverageMeters = minimumCoverageMeters
             self.maxCasterHeightMeters = maxCasterHeightMeters
             self.normalOffsetTexels = normalOffsetTexels
@@ -1449,19 +1504,24 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     /// with the atmosphere off.
     public struct AtmosphereSettings: Equatable, Sendable {
         public var isEnabled: Bool
-        /// The color of the scattered light, RGB in `0...1`. Sky blue by default;
-        /// the very edge of the halo whitens toward the limb on its own.
+        /// The color of the scattered light, RGB in `0...1`. A deep blue by
+        /// default; the very edge of the halo whitens toward the limb on
+        /// its own.
         public var color: SIMD3<Float>
         /// Brightness multiplier of the halo and of the surface glow. Expected
         /// range: `0...2`; 1 is the designed look, 0 leaves the sphere bare
         /// while keeping the layer on.
         public var intensity: Float
-        /// Width multiplier of the halo, relative to the globe radius: 1 is
-        /// the full shell, 0.38 (the default) a thin bright ring hugging the
-        /// limb, 2 twice the full shell. The
-        /// halo scales with the globe on screen, so it looks the same at every
-        /// zoom of the globe presentation.
-        public var thickness: Float
+        /// Width multiplier of the halo, relative to the globe radius, by
+        /// the camera zoom (`ImmersiveMapZoomCurve`): 1 is the full shell,
+        /// 0.25 a thin bright ring hugging the limb, 3 three times the full
+        /// shell. The halo scales with the globe on screen, so at one zoom
+        /// it looks the same from every side, and the curve lets it be a
+        /// wide glow around the whole planet from afar and a thin ring as
+        /// the camera comes down to the surface. By default 3 up to zoom 2,
+        /// down to 0.25 by zoom 6, where the globe unrolls. A single value
+        /// states the same at every zoom.
+        public var thickness: ImmersiveMapZoomCurve
         /// How much the scene light (`SceneLightSettings.direction`, the sun
         /// the buildings cast their shadows from) shapes the halo, `0...1`:
         /// at 1 the halo is full where the limb faces the light and dims to
@@ -1470,10 +1530,10 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var sunInfluence: Float
 
         public init(isEnabled: Bool = true,
-                    color: SIMD3<Float> = SIMD3<Float>(0.40, 0.66, 1.0),
-                    intensity: Float = 1.0,
-                    thickness: Float = 0.38,
-                    sunInfluence: Float = 0.44) {
+                    color: SIMD3<Float> = SIMD3<Float>(0.008, 0.18, 0.482),
+                    intensity: Float = 1.2,
+                    thickness: ImmersiveMapZoomCurve = [2: 3, 6: 0.25],
+                    sunInfluence: Float = 0.69) {
             self.isEnabled = isEnabled
             self.color = color
             self.intensity = intensity
@@ -1569,6 +1629,13 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     /// transition span (`PresentationSettings.automaticTransitionSpan`)
     /// past the zoom the globe's morph into the plane ends at, so it never
     /// appears at one frame. Applies live.
+    ///
+    /// On the ground relief the fog is the air over the mountains: its
+    /// height is measured from sea level (`heightsFromSeaLevel`), so a
+    /// valley lies deeper in it than the summit over it, and the far
+    /// ridges stand out of the hazed valleys behind them, each lighter
+    /// than the one before. `baseAltitudeMeters` is the altitude the
+    /// density is stated at. The debug panel's Air tab drags all of it.
     public struct GroundFogSettings: Equatable, Sendable {
         public var isEnabled: Bool
         /// How thick the fog is at the ground, per kilometer: the share of
@@ -1611,6 +1678,24 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// haze. On, a building veiled in full is the sky behind it, which
         /// reads as the building turning see-through.
         public var takesSkyColor: Bool
+        /// On the ground relief, whether the fog's height is measured from
+        /// sea level, the terrain's own metres (on, the default), or from
+        /// the plane the ground is drawn from, the terrain under the point
+        /// the camera looks at. From sea level, the density falls with the
+        /// altitude of the ground itself: the floor of a valley at 1500 m
+        /// is in denser air than a ridge at 3000 m whatever the camera
+        /// looks at, which is what layers the ridges. From the plane, the
+        /// ground under the camera's point is always at the full density,
+        /// and the fog follows the camera up and down the slopes. Off the
+        /// relief the two are one and the same.
+        public var heightsFromSeaLevel: Bool
+        /// The altitude the density is stated at, in meters: at and below
+        /// it the fog is `densityPerKilometer` thick, above it the density
+        /// falls by a factor of e every `heightMeters`. 0 by default, sea
+        /// level. Raise it to the valleys' floor for mountains whose air is
+        /// meant to be thick in the valleys and thin on the summits, at a
+        /// smaller `heightMeters`. Read only with `heightsFromSeaLevel`.
+        public var baseAltitudeMeters: Float
 
         public init(isEnabled: Bool = true,
                     densityPerKilometer: ImmersiveMapZoomCurve = [7: 0.0019, 12: 0.06, 16: 17, 22: 6],
@@ -1620,7 +1705,9 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     color: SIMD3<Float>? = nil,
                     maximumOpacity: ImmersiveMapZoomCurve = [8: 0, 10: 1],
                     veilsBuildings: Bool = true,
-                    takesSkyColor: Bool = false) {
+                    takesSkyColor: Bool = false,
+                    heightsFromSeaLevel: Bool = true,
+                    baseAltitudeMeters: Float = 0) {
             self.isEnabled = isEnabled
             self.densityPerKilometer = densityPerKilometer
             self.heightMeters = heightMeters
@@ -1630,6 +1717,61 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.maximumOpacity = maximumOpacity
             self.veilsBuildings = veilsBuildings
             self.takesSkyColor = takesSkyColor
+            self.heightsFromSeaLevel = heightsFromSeaLevel
+            self.baseAltitudeMeters = baseAltitudeMeters
+        }
+    }
+
+    /// The sun on the globe: the planet's surface shaded by the sphere's
+    /// normal against a sun fixed to the Earth, over the subsolar point
+    /// (`subsolarLatitudeDegrees`, `subsolarLongitudeDegrees`), the day
+    /// side as the style paints it and the night side drawn toward a night
+    /// colour, with a soft terminator between. The terminator lies on one
+    /// part of the planet whichever way the globe is turned, and the
+    /// atmosphere's halo brightens toward the same sun. Without it the
+    /// sphere is lit the same all over and reads flat. Globe presentation
+    /// only: through the morph into the plane the shading fades out with
+    /// the atmosphere, and the flat map has its own static sun
+    /// (`SceneLightSettings.direction`), the hillshade and the shadows.
+    public struct GlobeLightSettings: Equatable, Sendable {
+        public var isEnabled: Bool
+        /// Where the sun stands overhead, in degrees: the latitude north
+        /// positive, the longitude east positive. Over the Atlantic off
+        /// West Africa by default (10, -15), which lights Europe and Africa
+        /// from the south-west and puts the night over Asia and the
+        /// Pacific. The sun stays there as the globe turns.
+        public var subsolarLatitudeDegrees: Float
+        public var subsolarLongitudeDegrees: Float
+        /// How far the night side goes toward `nightColor`, 0 to 1, by the
+        /// camera zoom (`ImmersiveMapZoomCurve`): 1 draws the night side in
+        /// the night colour outright, 0 leaves the surface as it is. By
+        /// default 0.6 up to zoom 4, down to 0.3 by zoom 6, where the
+        /// camera is close to the surface and the shading would only
+        /// darken the map in view. A single value states the same at every
+        /// zoom.
+        public var strength: ImmersiveMapZoomCurve
+        /// The width of the terminator, as the cosine of the sun's angle to
+        /// the surface: the shading runs from day to night over
+        /// `-terminatorSoftness...terminatorSoftness` of it. 0.25 by
+        /// default, the halo's own dusk. Smaller is a sharper line, 1 a
+        /// dusk over the whole lit half.
+        public var terminatorSoftness: Float
+        /// The colour the night side is drawn toward, RGB in `0...1`: a
+        /// deep blue by default, the planet's night under a blue sky.
+        public var nightColor: SIMD3<Float>
+
+        public init(isEnabled: Bool = true,
+                    subsolarLatitudeDegrees: Float = 10,
+                    subsolarLongitudeDegrees: Float = -15,
+                    strength: ImmersiveMapZoomCurve = [4: 0.6, 6: 0.3],
+                    terminatorSoftness: Float = 0.25,
+                    nightColor: SIMD3<Float> = SIMD3<Float>(0.05, 0.08, 0.18)) {
+            self.isEnabled = isEnabled
+            self.subsolarLatitudeDegrees = subsolarLatitudeDegrees
+            self.subsolarLongitudeDegrees = subsolarLongitudeDegrees
+            self.strength = strength
+            self.terminatorSoftness = terminatorSoftness
+            self.nightColor = nightColor
         }
     }
 
@@ -1639,6 +1781,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var light: SceneLightSettings
         public var shadows: ShadowSettings
         public var atmosphere: AtmosphereSettings
+        public var globeLight: GlobeLightSettings
         public var fog: FogSettings
         public var groundFog: GroundFogSettings
         public var extrusion: ExtrusionSettings
@@ -1648,6 +1791,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     light: SceneLightSettings = SceneLightSettings(),
                     shadows: ShadowSettings = ShadowSettings(),
                     atmosphere: AtmosphereSettings = AtmosphereSettings(),
+                    globeLight: GlobeLightSettings = GlobeLightSettings(),
                     fog: FogSettings = FogSettings(),
                     groundFog: GroundFogSettings = GroundFogSettings(),
                     extrusion: ExtrusionSettings = ExtrusionSettings()) {
@@ -1656,6 +1800,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.light = light
             self.shadows = shadows
             self.atmosphere = atmosphere
+            self.globeLight = globeLight
             self.fog = fog
             self.groundFog = groundFog
             self.extrusion = extrusion
@@ -2286,6 +2431,14 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
+    /// The flat map's texture bands' margin past the visible ground
+    /// (`TileSettings.CoverageSettings.rasterBandMarginShare`).
+    func tileCoverage(rasterBandMarginShare: Float) -> ImmersiveMapSettings {
+        var settings = self
+        settings.tiles.coverage.rasterBandMarginShare = max(rasterBandMarginShare, 0)
+        return settings
+    }
+
     func tileMaximumZoomLevel(_ maximumZoomLevel: Int) -> ImmersiveMapSettings {
         var settings = self
         settings.tiles.coverage.maximumZoomLevel = maximumZoomLevel
@@ -2429,6 +2582,41 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
+    /// The sun on the globe (`GlobeLightSettings`), whole.
+    func globeLightSettings(_ globeLight: GlobeLightSettings) -> ImmersiveMapSettings {
+        var settings = self
+        settings.scene.globeLight = globeLight
+        return settings
+    }
+
+    /// The sun on the globe on or off, and any of its values set in place,
+    /// a nil leaving a value as configured.
+    func globeLight(isEnabled: Bool = true,
+                    subsolarLatitudeDegrees: Float? = nil,
+                    subsolarLongitudeDegrees: Float? = nil,
+                    strength: ImmersiveMapZoomCurve? = nil,
+                    terminatorSoftness: Float? = nil,
+                    nightColor: SIMD3<Float>? = nil) -> ImmersiveMapSettings {
+        var settings = self
+        settings.scene.globeLight.isEnabled = isEnabled
+        if let subsolarLatitudeDegrees {
+            settings.scene.globeLight.subsolarLatitudeDegrees = subsolarLatitudeDegrees
+        }
+        if let subsolarLongitudeDegrees {
+            settings.scene.globeLight.subsolarLongitudeDegrees = subsolarLongitudeDegrees
+        }
+        if let strength {
+            settings.scene.globeLight.strength = strength
+        }
+        if let terminatorSoftness {
+            settings.scene.globeLight.terminatorSoftness = terminatorSoftness
+        }
+        if let nightColor {
+            settings.scene.globeLight.nightColor = nightColor
+        }
+        return settings
+    }
+
     /// The globe's atmosphere: the halo around the planet and the glow on the
     /// surface toward the limb.
     func atmosphere(isEnabled: Bool = true) -> ImmersiveMapSettings {
@@ -2466,7 +2654,9 @@ public extension ImmersiveMapSettings {
                    color: SIMD3<Float>? = nil,
                    maximumOpacity: ImmersiveMapZoomCurve? = nil,
                    veilsBuildings: Bool? = nil,
-                   takesSkyColor: Bool? = nil) -> ImmersiveMapSettings {
+                   takesSkyColor: Bool? = nil,
+                   heightsFromSeaLevel: Bool? = nil,
+                   baseAltitudeMeters: Float? = nil) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.groundFog.isEnabled = isEnabled
         if let veilsBuildings {
@@ -2474,6 +2664,12 @@ public extension ImmersiveMapSettings {
         }
         if let takesSkyColor {
             settings.scene.groundFog.takesSkyColor = takesSkyColor
+        }
+        if let heightsFromSeaLevel {
+            settings.scene.groundFog.heightsFromSeaLevel = heightsFromSeaLevel
+        }
+        if let baseAltitudeMeters {
+            settings.scene.groundFog.baseAltitudeMeters = baseAltitudeMeters
         }
         if let densityPerKilometer {
             settings.scene.groundFog.densityPerKilometer = densityPerKilometer

@@ -11,7 +11,7 @@ final class RenderPassGraph {
              .placementStencil, .flatMapSurface, .flatMapRoads, .surfaceLabels, .buildingExtrusion, .sceneModels,
              .horizon:
             return true
-        case .shadowCasters, .groundShadowMask, .postProcessing,
+        case .shadowCasters, .farShadowCasters, .groundShadowMask, .postProcessing,
              .labels, .avatars, .debugOverlay:
             return false
         }
@@ -21,7 +21,7 @@ final class RenderPassGraph {
         switch layer {
         case .labels, .avatars, .debugOverlay:
             return true
-        case .shadowCasters, .groundShadowMask, .starfield,
+        case .shadowCasters, .farShadowCasters, .groundShadowMask, .starfield,
              .globeVectorSurface, .globeCap, .placementStencil, .flatMapSurface, .flatMapRoads, .surfaceLabels,
              .buildingExtrusion, .sceneModels, .horizon, .postProcessing:
             return false
@@ -57,20 +57,30 @@ final class RenderPassGraph {
         return ordered
     }
 
-    /// Depth-only pass of the directional light. Ignores the drawable target:
-    /// the shadow map is a fixed-resolution offscreen depth texture that must
-    /// be stored for sampling by the world pass.
+    /// Depth-only pass of the directional light into one window's slice of
+    /// the shadow map. Ignores the drawable target: the map is a
+    /// fixed-resolution offscreen depth texture that must be stored for
+    /// sampling by the world pass. A plain pass into one slice, never a
+    /// layered one.
     private final class ShadowMapDescriptorProvider: RenderPassDescriptorProvider {
+        private let slot: ShadowCascadeSlot
+
+        init(slot: ShadowCascadeSlot) {
+            self.slot = slot
+        }
+
         func makeRenderPassDescriptor(frameContext: FrameContext,
                                       attachments: FrameAttachmentStore,
                                       target _: FrameRenderTarget?) -> MTLRenderPassDescriptor? {
             guard let shadowState = ShadowPassGateResolver.resolve(frameContext: frameContext),
+                  shadowState.slots.contains(slot),
                   let shadowMapTexture = attachments.ensureShadowMapTexture(resolution: shadowState.mapResolution) else {
                 return nil
             }
 
             let descriptor = MTLRenderPassDescriptor()
             descriptor.depthAttachment.texture = shadowMapTexture
+            descriptor.depthAttachment.slice = slot.rawValue
             descriptor.depthAttachment.loadAction = .clear
             descriptor.depthAttachment.storeAction = .store
             descriptor.depthAttachment.clearDepth = 1.0
@@ -265,20 +275,25 @@ final class RenderPassGraph {
         if let shadowState = ShadowPassGateResolver.resolve(frameContext: frameContext),
            let shadowMapTexture = attachments.ensureShadowMapTexture(resolution: shadowState.mapResolution) {
             resourceRegistry.setTexture(shadowMapTexture, named: .shadowMapTexture)
-            // The sun is static and the buildings do not move: the caster
-            // pass runs only when the rendered map went stale (fresh fit,
-            // new caster tile, new texture, or animating model casters);
-            // otherwise the receivers keep sampling the map rendered some
-            // frames ago through matrices re-materialized for this frame.
-            if frameContext.shadowMapReuse.planShadowRender(frameContext: frameContext,
-                                                            texture: shadowMapTexture) {
-                nodes.append(RenderPassNode(name: .shadowMap,
-                                            descriptorProvider: ShadowMapDescriptorProvider(),
-                                            layers: [.shadowCasters]))
+            // The sun is static and the buildings do not move: a window's
+            // caster pass runs only when its rendered slice went stale
+            // (fresh fit, new caster tile, new texture, or animating model
+            // casters); otherwise the receivers keep sampling the slice
+            // rendered some frames ago through matrices re-materialized for
+            // this frame. The near window follows the camera and refits
+            // often, the far one seldom, and each runs on its own.
+            for slot in shadowState.slots
+            where frameContext.shadowMapReuse.planShadowRender(frameContext: frameContext,
+                                                               texture: shadowMapTexture,
+                                                               slot: slot) {
+                nodes.append(RenderPassNode(name: slot.passName,
+                                            descriptorProvider: ShadowMapDescriptorProvider(slot: slot),
+                                            layers: [slot.casterLayer]))
             }
-            // The ground shadow mask follows the map it samples: one cascade
-            // lookup per pixel on the ground plane, read by every blended
-            // ground layer of the world pass instead of a lookup per layer.
+            // The ground shadow mask follows the map it samples: one lookup
+            // per pixel on the ground plane (two in the band between the
+            // windows), read by every blended ground layer of the world
+            // pass instead of a lookup per layer.
             if frameContext.renderSurfaceMode == .flat,
                let maskTexture = attachments.ensureGroundShadowMaskTexture(drawSize: frameContext.drawSize) {
                 resourceRegistry.setTexture(maskTexture, named: .groundShadowMaskTexture)

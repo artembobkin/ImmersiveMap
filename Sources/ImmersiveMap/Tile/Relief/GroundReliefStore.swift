@@ -261,6 +261,7 @@ final class GroundReliefStore: @unchecked Sendable {
     private var lightDirection = ImmersiveMapSettings.SceneLightSettings().direction
     private var cameraEye = SIMD3<Float>(0, 0, 1)
     private var hillshadeFadeCameraDistances: ClosedRange<Float>?
+    private var hillshadeAmounts: GroundReliefHillshade.Amounts?
     /// The shading of the slopes this frame, what every draw on the relief
     /// binds (`GroundReliefUniform`): the scene's light and the style's
     /// intensity at the share of the relief that has risen, so the shading
@@ -305,13 +306,16 @@ final class GroundReliefStore: @unchecked Sendable {
     /// The scene's light this frame (`SceneLightSettings.direction`, toward
     /// the light, `RenderFrameEngine`), which the slopes are shaded by, and
     /// the eye they fade with the distance from. `fadeCameraDistances`
-    /// replaces the style's fade (the debug panel's), nil keeps it.
+    /// replaces the style's fade and `amounts` its amounts (the debug
+    /// panel's), nil keeps the style's.
     func setLight(direction: SIMD3<Float>,
                   cameraEye: SIMD3<Float>,
-                  fadeCameraDistances: ClosedRange<Float>? = nil) {
+                  fadeCameraDistances: ClosedRange<Float>? = nil,
+                  amounts: GroundReliefHillshade.Amounts? = nil) {
         lightDirection = direction
         self.cameraEye = cameraEye
         hillshadeFadeCameraDistances = fadeCameraDistances
+        hillshadeAmounts = amounts
         resolveHillshade()
     }
 
@@ -320,7 +324,8 @@ final class GroundReliefStore: @unchecked Sendable {
                                                   lightDirection: lightDirection,
                                                   risenShare: risenShare,
                                                   cameraEye: cameraEye,
-                                                  fadeCameraDistances: hillshadeFadeCameraDistances)
+                                                  fadeCameraDistances: hillshadeFadeCameraDistances,
+                                                  amounts: hillshadeAmounts)
     }
 
     /// Whether the relief stands at a zoom: from `appearZoom` up to

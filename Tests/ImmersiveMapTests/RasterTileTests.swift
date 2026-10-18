@@ -54,7 +54,11 @@ final class RasterTileTests: XCTestCase {
         let grid = RasterTileGrid(device: device)
         XCTAssertEqual(try XCTUnwrap(grid.mesh(forTileZoom: 10)).indexCount, RasterTileGrid.cells(forTileZoom: 10) * RasterTileGrid.cells(forTileZoom: 10) * 6)
         XCTAssertEqual(try XCTUnwrap(grid.mesh(forTileZoom: 10, atLeast: 128)).indexCount, 128 * 128 * 6)
-        XCTAssertEqual(try XCTUnwrap(grid.mesh(forTileZoom: 10, atLeast: 256)).indexCount, 255 * 255 * 6, "16-bit indices")
+        XCTAssertEqual(try XCTUnwrap(grid.mesh(forTileZoom: 10, atLeast: 256)).indexCount, 256 * 256 * 6)
+        XCTAssertEqual(try XCTUnwrap(grid.mesh(forTileZoom: 10, atLeast: 256)).indexType, .uint32, "A side of 257 vertices is past 16-bit indices")
+        XCTAssertEqual(try XCTUnwrap(grid.mesh(forTileZoom: 10, atLeast: 255)).indexType, .uint16)
+        XCTAssertEqual(try XCTUnwrap(grid.mesh(forTileZoom: 10, atLeast: 1000)).indexCount, 256 * 256 * 6, "The flattening grid's ceiling")
+        XCTAssertEqual(try XCTUnwrap(grid.mesh(cells: 3)).indexCount, 3 * 3 * 6, "A part of a source's grid, under the zoom's floor")
     }
 
     /// A raster tile on the relief takes the flattening's grid, no finer

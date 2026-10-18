@@ -20,10 +20,11 @@ final class ShadowMapAttachmentTests: XCTestCase {
     }
 
     @MainActor
-    func testTheFallbackClearAsksForNoArraySlices() throws {
+    func testTheFallbackClearIsAPlainPassPerSlice() throws {
         let device = try makeDevice()
         let descriptor = MTLTextureDescriptor()
-        descriptor.textureType = .type2D
+        descriptor.textureType = .type2DArray
+        descriptor.arrayLength = ShadowCascadeAtlas.sliceCount
         descriptor.pixelFormat = ShadowCascadeAtlas.depthPixelFormat
         descriptor.width = 1
         descriptor.height = 1
@@ -31,13 +32,15 @@ final class ShadowMapAttachmentTests: XCTestCase {
         descriptor.storageMode = .private
         let texture = try XCTUnwrap(device.makeTexture(descriptor: descriptor))
 
-        let passDescriptor = SharedRenderResources.makeShadowFallbackClearDescriptor(texture: texture)
+        for slice in 0..<ShadowCascadeAtlas.sliceCount {
+            let passDescriptor = SharedRenderResources.makeShadowFallbackClearDescriptor(texture: texture, slice: slice)
 
-        XCTAssertEqual(passDescriptor.renderTargetArrayLength, 0,
-                       "Asking for a slice is what fails validation and aborts the process")
-        XCTAssertEqual(passDescriptor.depthAttachment.slice, 0)
-        XCTAssertEqual(passDescriptor.depthAttachment.loadAction, .clear)
-        XCTAssertEqual(passDescriptor.depthAttachment.clearDepth, 1.0)
+            XCTAssertEqual(passDescriptor.renderTargetArrayLength, 0,
+                           "Layered rendering is what fails validation and aborts the process")
+            XCTAssertEqual(passDescriptor.depthAttachment.slice, slice)
+            XCTAssertEqual(passDescriptor.depthAttachment.loadAction, .clear)
+            XCTAssertEqual(passDescriptor.depthAttachment.clearDepth, 1.0)
+        }
     }
 
     /// Building the shared resources is what crashed at launch, so it is done
@@ -51,22 +54,23 @@ final class ShadowMapAttachmentTests: XCTestCase {
 
         let fallback = SharedRenderResources.shared(sampleCount: 1).shadowFallbackTexture
 
-        XCTAssertEqual(fallback.textureType, .type2D)
-        XCTAssertEqual(fallback.arrayLength, 1)
+        XCTAssertEqual(fallback.textureType, .type2DArray)
+        XCTAssertEqual(fallback.arrayLength, ShadowCascadeAtlas.sliceCount)
         XCTAssertEqual(fallback.pixelFormat, ShadowCascadeAtlas.depthPixelFormat)
     }
 
-    /// The render attachment the caster pass writes: same shape, so the
-    /// receivers' `depth2d<float>` binding matches at runtime.
+    /// The render attachment the caster passes write: same shape as the
+    /// fallback, a slice a window, so the receivers' `depth2d_array<float>`
+    /// binding matches at runtime.
     @MainActor
-    func testTheShadowMapAttachmentIsAPlain2DTexture() throws {
+    func testTheShadowMapAttachmentHasASlicePerWindow() throws {
         let device = try makeDevice()
         let attachments = FrameAttachmentStore(metalDevice: device, renderSampleCount: 1)
 
         let texture = try XCTUnwrap(attachments.ensureShadowMapTexture(resolution: 512))
 
-        XCTAssertEqual(texture.textureType, .type2D)
-        XCTAssertEqual(texture.arrayLength, 1)
+        XCTAssertEqual(texture.textureType, .type2DArray)
+        XCTAssertEqual(texture.arrayLength, ShadowCascadeAtlas.sliceCount)
         XCTAssertEqual(texture.width, 512)
         XCTAssertEqual(texture.height, 512)
         XCTAssertEqual(texture.pixelFormat, ShadowCascadeAtlas.depthPixelFormat)

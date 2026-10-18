@@ -16,6 +16,10 @@ final class PlacementStencilPipeline {
     let flatReliefPipelineState: MTLRenderPipelineState
     let spherePurePipelineState: MTLRenderPipelineState
     let sphereMorphPipelineState: MTLRenderPipelineState
+    /// The screen at the far plane, depth only: puts the depth the
+    /// relief's marks were tested against back to the cleared far plane
+    /// before the ground draws (`placementDepthResetVertexShader`).
+    let depthResetPipelineState: MTLRenderPipelineState
 
     init(metalDevice: MTLDevice,
          pixelFormat: MTLPixelFormat,
@@ -40,5 +44,6 @@ final class PlacementStencilPipeline {
         flatReliefPipelineState = state(label: "PlacementStencilFlatRelief", vertex: "tileRasterFlatVertexShader", relief: true)
         spherePurePipelineState = state(label: "PlacementStencilSpherePure", vertex: "tileRasterSpherePureVertexShader")
         sphereMorphPipelineState = state(label: "PlacementStencilSphereMorph", vertex: "tileRasterSphereMorphVertexShader")
+        depthResetPipelineState = state(label: "PlacementDepthReset", vertex: "placementDepthResetVertexShader")
     }
 }

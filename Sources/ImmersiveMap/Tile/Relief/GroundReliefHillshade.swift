@@ -29,18 +29,51 @@ struct GroundReliefHillshade: Equatable {
                                             eye: .zero,
                                             fade: .zero)
 
+    /// How much the slopes are shaded, the three amounts of a style
+    /// (`ImmersiveMapHillshade`) the debug panel drags live: the
+    /// intensity, and how far a slope goes toward the shadow colour and
+    /// toward the highlight colour (the colours' alphas). Each 0 to 1.
+    struct Amounts: Equatable {
+        var intensity: Float
+        var shadow: Float
+        var highlight: Float
+
+        init(intensity: Float, shadow: Float, highlight: Float) {
+            self.intensity = min(max(intensity, 0), 1)
+            self.shadow = min(max(shadow, 0), 1)
+            self.highlight = min(max(highlight, 0), 1)
+        }
+
+        /// The amounts a style shades by.
+        init(style: ImmersiveMapHillshade) {
+            self.init(intensity: style.intensity, shadow: style.shadowColor.w, highlight: style.highlightColor.w)
+        }
+
+        /// The style with these amounts in place of its own.
+        func applied(to style: ImmersiveMapHillshade) -> ImmersiveMapHillshade {
+            var adjusted = style
+            adjusted.intensity = intensity
+            adjusted.shadowColor.w = shadow
+            adjusted.highlightColor.w = highlight
+            return adjusted
+        }
+    }
+
     /// The shading of a style under a light (`SceneLightSettings.direction`,
     /// toward the light) with the relief risen by `risenShare`, 0 to 1,
     /// seen from `cameraEye`, the world's origin being the point it looks
-    /// at. `fadeCameraDistances` replaces the style's fade (the debug
-    /// panel's). A light at or under the horizon shades nothing: the level
-    /// ground would be lit as edgewise as the steepest slope.
+    /// at. `fadeCameraDistances` replaces the style's fade and `amounts`
+    /// its amounts (the debug panel's). A light at or under the horizon
+    /// shades nothing: the level ground would be lit as edgewise as the
+    /// steepest slope.
     static func resolve(style: ImmersiveMapHillshade,
                         lightDirection: SIMD3<Float>,
                         risenShare: Float,
                         cameraEye: SIMD3<Float>,
-                        fadeCameraDistances: ClosedRange<Float>? = nil) -> GroundReliefHillshade {
+                        fadeCameraDistances: ClosedRange<Float>? = nil,
+                        amounts: Amounts? = nil) -> GroundReliefHillshade {
         guard simd_length_squared(lightDirection) > 1e-12 else { return .none }
+        let style = amounts?.applied(to: style) ?? style
         let light = simd_normalize(lightDirection)
         let amount = max(0, style.intensity) * min(max(risenShare, 0), 1)
         let cameraDistance = simd_length(cameraEye)

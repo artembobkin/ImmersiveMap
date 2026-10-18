@@ -5,7 +5,8 @@ import Metal
 import simd
 
 /// The mountains' shadows: the ground relief drawn into the shadow map
-/// (`RenderLayer.shadowCasters`), as the buildings are, so a ridge darkens
+/// (`RenderLayer.shadowCasters` and `.farShadowCasters`, one pass a
+/// window), as the buildings are, so a ridge darkens
 /// the valley behind it from the scene's sun, and everything that reads
 /// the shadow map on the relief takes the shadow (the ground's relief
 /// variants, Tile.metal and TileRaster.metal, the buildings, the models).
@@ -14,10 +15,11 @@ import simd
 /// there. Placements overlap (a finer one inside a coarser one, a child
 /// target under its parent), and the tile-priority stencil shows the
 /// finest square's source over each point, so each placement casts from
-/// its square less the finer squares inside it (`casters(of:)`), split
-/// into the descendants left over. A square left whole is drawn too: the
-/// coarse surface under a finer one is smoothed, lies above the true
-/// valleys, and would darken them with shadows of hills nobody sees.
+/// its square less the finer squares inside it
+/// (`PlacementGroundSquare.squares(of:)`), split into the descendants left
+/// over. A square left whole is drawn too: the coarse surface under a
+/// finer one is smoothed, lies above the true valleys, and would darken
+/// them with shadows of hills nobody sees.
 /// The heights are the ones the ground draws with: the source tile's
 /// relief at the deepest ring the source is placed in
 /// (`FlatMapSurfaceDrawer`, `RasterTileRenderSubsystem`), narrowed to the
@@ -72,12 +74,13 @@ final class GroundReliefShadowCasterSubsystem: RenderSubsystem {
     func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
 
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
-        guard layer == .shadowCasters,
+        guard let slot = ShadowCascadeSlot(casterLayer: layer),
               frameContext.renderSurfaceMode == .flat,
               let store = groundReliefStore, store.castsShadowsThisFrame,
-              let shadowState = frameContext.shadowFrameState else { return }
+              let lightProjectionView = frameContext.shadowFrameState?.lightProjectionView(for: slot) else { return }
         let placements = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
-        let casters = Self.casters(of: placements)
+        // The horizon backdrop is no ground of the planner's and casts nothing.
+        let casters = PlacementGroundSquare.squares(of: placements.filter { $0.isHorizonBackdrop == false })
         guard casters.isEmpty == false else { return }
         let flatRenderState = frameContext.resolvedPresentation.flatRenderState
         let rasterSizeByTile = RasterTileGrid.rasterSizesBySource(placements)
@@ -90,10 +93,10 @@ final class GroundReliefShadowCasterSubsystem: RenderSubsystem {
         encoder.setDepthClipMode(.clamp)
         encoder.setCullMode(.none)
         encoder.setDepthBias(0, slopeScale: Self.slopeDepthBias, clamp: 0)
-        var casterUniform = ShadowCasterUniform(lightProjectionView: shadowState.lightProjectionView)
+        var casterUniform = ShadowCasterUniform(lightProjectionView: lightProjectionView)
         encoder.setVertexBytes(&casterUniform, length: MemoryLayout<ShadowCasterUniform>.stride, index: 1)
         // A source split into several squares looks its relief up once.
-        var sourceReliefs: [Caster.Source: (relief: GroundRelief, cells: Int)?] = [:]
+        var sourceReliefs: [PlacementGroundSquare.Source: (relief: GroundRelief, cells: Int)?] = [:]
         for caster in casters {
             let source = caster.source
             let resolved: (relief: GroundRelief, cells: Int)?
@@ -112,7 +115,7 @@ final class GroundReliefShadowCasterSubsystem: RenderSubsystem {
             guard let resolved else { continue }
             let square = caster.square.tile
             // The source's cells over the part of it drawn, on the same lines.
-            let squareCells = max(1, resolved.cells >> (square.z - source.tile.z))
+            let squareCells = PlacementGroundSquare.cells(ofSource: resolved.cells, sourceZoom: source.tile.z, squareZoom: square.z)
             guard let mesh = grid.mesh(forTileZoom: square.z, atLeast: squareCells) else { continue }
             GroundReliefUniform.bind(resolved.relief.narrowed(to: square, in: source.tile),
                                      over: square,
@@ -132,82 +135,13 @@ final class GroundReliefShadowCasterSubsystem: RenderSubsystem {
             encoder.setVertexBuffer(mesh.vertices, offset: 0, index: 0)
             encoder.drawIndexedPrimitives(type: .triangle,
                                           indexCount: mesh.indexCount,
-                                          indexType: .uint16,
+                                          indexType: mesh.indexType,
                                           indexBuffer: mesh.indices,
                                           indexBufferOffset: 0)
         }
         encoder.setDepthBias(0, slopeScale: 0, clamp: 0)
         encoder.setDepthClipMode(.clip)
         encoder.popDebugGroup()
-    }
-
-    /// One square of ground drawn into the shadow map, from one source.
-    struct Caster: Hashable {
-        /// A ground source as the ground draws it: the tile, the world
-        /// copy, and the deepest ring it is placed in, whose terrain lifts
-        /// it.
-        struct Source: Hashable {
-            let tile: Tile
-            let worldWrap: Int8
-            let targetZoom: Int
-        }
-
-        let source: Source
-        /// The source's tile itself or a square inside it.
-        let square: VisibleTile
-    }
-
-    /// The squares the frame's ground casts from, each point once: every
-    /// placement's square (`placeIn`) less the finer squares inside it,
-    /// which the tile-priority stencil gives to the finer placements, the
-    /// rest split into the largest descendants that hold none of them.
-    /// Placements sharing a square cast once, from the last one, as the
-    /// last mark of a square is the one the stencil keeps.
-    static func casters(of placements: [PlaceTile]) -> [Caster] {
-        var targetZooms: [VisibleTile: Int] = [:]
-        var owners: [VisibleTile: PlaceTile] = [:]
-        for placement in placements {
-            let source = VisibleTile(tile: placement.metalTile.tile, worldWrap: placement.placeIn.worldWrap)
-            targetZooms[source] = max(targetZooms[source] ?? placement.slot.z, placement.slot.z)
-            owners[placement.placeIn] = placement
-        }
-        guard let shallowest = owners.keys.map(\.tile.z).min() else { return [] }
-        // Every square with a finer square inside it.
-        var holdsFiner: Set<VisibleTile> = []
-        for square in owners.keys {
-            var zoom = square.tile.z - 1
-            while zoom >= shallowest, let ancestor = square.tile.findParentTile(atZoom: zoom),
-                  holdsFiner.insert(VisibleTile(tile: ancestor, worldWrap: square.worldWrap)).inserted {
-                zoom -= 1
-            }
-        }
-        var casters: [Caster] = []
-        casters.reserveCapacity(owners.count)
-        for (square, placement) in owners {
-            let tile = placement.metalTile.tile
-            let wrap = square.worldWrap
-            let source = Caster.Source(tile: tile,
-                                       worldWrap: wrap,
-                                       targetZoom: targetZooms[VisibleTile(tile: tile, worldWrap: wrap)] ?? placement.slot.z)
-            var pending = [square]
-            while let next = pending.popLast() {
-                guard holdsFiner.contains(next) else {
-                    casters.append(Caster(source: source, square: next))
-                    continue
-                }
-                let child = next.tile.z + 1
-                for dy in 0 ... 1 {
-                    for dx in 0 ... 1 {
-                        let part = VisibleTile(x: next.tile.x * 2 + dx, y: next.tile.y * 2 + dy, z: child, worldWrap: wrap)
-                        // A finer placement's own square is its to cast.
-                        if owners[part] == nil {
-                            pending.append(part)
-                        }
-                    }
-                }
-            }
-        }
-        return casters
     }
 
     func handleMemoryWarning() {}

@@ -96,14 +96,16 @@ private struct MapScreen: View {
     /// for. Outside that box the server answers with no tile and the map
     /// is empty by construction, not by a fault in the engine, so a start
     /// position over an uncovered city reads as a bug that is not there.
-    /// Zermatt, looking south-west up the valley toward the Matterhorn:
-    /// a mountain town for the ground relief, with Swiss lidar terrain.
+    /// The Matterhorn's summit from the north, the camera tilted to the
+    /// horizon over the ridges toward Italy: the ground relief's test
+    /// view, with Swiss lidar terrain, the far texture bands at the
+    /// horizon and the air over them. Bearing and pitch in radians.
     private static let start = ImmersiveMapCameraPosition(
-        latitudeDegrees: 46.02,
-        longitudeDegrees: 7.749,
-        zoom: 12.6,
-        bearing: 2.36,
-        pitch: 1.1
+        latitudeDegrees: 45.978,
+        longitudeDegrees: 7.654,
+        zoom: 12.68,
+        bearing: -0.086,
+        pitch: 1.263
     )
 }
 

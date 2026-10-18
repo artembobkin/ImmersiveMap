@@ -50,12 +50,25 @@ struct PlaceTile: Hashable {
     let placeIn: VisibleTile
     let slot: VisibleTile
     let rules: TileDrawRules
+    /// The flat map's horizon backdrop (`TileWorkingSetSubsystem
+    /// .horizonBackdrops`): the pinned world tile drawn under every
+    /// placement, flat on the plane, as a small texture without lines or
+    /// labels, so the ground reaches the horizon whatever the rules place.
+    /// It is no ground of the planner's: it takes no part in the ground's
+    /// partition (`PlacementGroundSquare`), casts no shadow, asks for no
+    /// terrain, and its mark lies under every other's.
+    let isHorizonBackdrop: Bool
 
-    init(metalTile: MetalTile, placeIn: VisibleTile, slot: VisibleTile? = nil, rules: TileDrawRules = .all) {
+    init(metalTile: MetalTile,
+         placeIn: VisibleTile,
+         slot: VisibleTile? = nil,
+         rules: TileDrawRules = .all,
+         isHorizonBackdrop: Bool = false) {
         self.metalTile = metalTile
         self.placeIn = placeIn
         self.slot = slot ?? placeIn
         self.rules = rules
+        self.isHorizonBackdrop = isHorizonBackdrop
     }
 
     /// The tile is drawn in its own slot, at its own extent.

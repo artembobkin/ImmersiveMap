@@ -142,8 +142,8 @@ final class ShadowFrameStateResolverTests: XCTestCase {
 
         // Turned around, the window covers different ground.
         var moved = false
-        for column in 0..<4 where simd_distance(reference.shadowUniform.cascade.worldToShadowTexture[column],
-                                                turned.shadowUniform.cascade.worldToShadowTexture[column]) > 1e-4 {
+        for column in 0..<4 where simd_distance(reference.shadowUniform.near.worldToShadowTexture[column],
+                                                turned.shadowUniform.near.worldToShadowTexture[column]) > 1e-4 {
             moved = true
         }
         XCTAssertTrue(moved, "The fitted window has to follow the bearing")
@@ -153,8 +153,8 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         let steep = try XCTUnwrap(Self.resolve(eye: Self.makeEye(pitch: 5 * .pi / 180,
                                                                   bearing: 0,
                                                                   distance: 0.8)))
-        XCTAssertGreaterThan(reference.shadowUniform.cascade.normalOffsetWorld,
-                             steep.shadowUniform.cascade.normalOffsetWorld,
+        XCTAssertGreaterThan(reference.shadowUniform.near.normalOffsetWorld,
+                             steep.shadowUniform.near.normalOffsetWorld,
                              "A tilted camera sees further, so its window is coarser")
     }
 
@@ -185,8 +185,8 @@ final class ShadowFrameStateResolverTests: XCTestCase {
             let w2 = SIMD3<Float>(w1.x + Float(contentShift.x),
                                   w1.y + Float(contentShift.y),
                                   w1.z)
-            let uv1 = Self.projectUV(state1.shadowUniform.cascade.worldToShadowTexture, w1)
-            let uv2 = Self.projectUV(state2.shadowUniform.cascade.worldToShadowTexture, w2)
+            let uv1 = Self.projectUV(state1.shadowUniform.near.worldToShadowTexture, w1)
+            let uv2 = Self.projectUV(state2.shadowUniform.near.worldToShadowTexture, w2)
             let dx = (uv1.x - uv2.x) * texelsU
             let dy = (uv1.y - uv2.y) * texelsV
             XCTAssertEqual(dx, dx.rounded(), accuracy: 0.05, "the grid slid along X")
@@ -204,8 +204,8 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         scene.shadows.mapResolution = 4096
         let fine = try XCTUnwrap(Self.resolve(scene: scene))
 
-        let coarseCascade = coarse.shadowUniform.cascade
-        let fineCascade = fine.shadowUniform.cascade
+        let coarseCascade = coarse.shadowUniform.near
+        let fineCascade = fine.shadowUniform.near
         XCTAssertGreaterThan(coarseCascade.depthBias, 0)
         XCTAssertGreaterThan(fineCascade.depthBias, 0)
         XCTAssertEqual(coarseCascade.depthBias / fineCascade.depthBias, 4.0, accuracy: 0.2)
@@ -228,7 +228,7 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         for distance in [Float(0.05), 0.3, 0.8, 2.0] {
             let eye = Self.makeEye(pitch: 30 * .pi / 180, bearing: 0.4, distance: distance)
             let state = try XCTUnwrap(Self.resolve(eye: eye, scene: scene))
-            let cascade = state.shadowUniform.cascade
+            let cascade = state.shadowUniform.near
             let texelWorldSize = cascade.normalOffsetWorld / requestedTexels
 
             XCTAssertGreaterThan(cascade.normalOffsetWorld, 0, "distance \(distance)")
@@ -257,8 +257,8 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         scene.shadows.normalOffsetTexels = 4.0
         let wide = try XCTUnwrap(Self.resolve(scene: scene))
 
-        XCTAssertEqual(wide.shadowUniform.cascade.normalOffsetWorld
-                        / narrow.shadowUniform.cascade.normalOffsetWorld,
+        XCTAssertEqual(wide.shadowUniform.near.normalOffsetWorld
+                        / narrow.shadowUniform.near.normalOffsetWorld,
                        4.0,
                        accuracy: 1e-4)
     }
@@ -269,18 +269,18 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         var scene = Self.makeScene()
         scene.shadows.normalOffsetTexels = 0
         let none = try XCTUnwrap(Self.resolve(scene: scene))
-        XCTAssertEqual(none.shadowUniform.cascade.normalOffsetWorld, 0)
+        XCTAssertEqual(none.shadowUniform.near.normalOffsetWorld, 0)
 
         scene.shadows.normalOffsetTexels = 1_000
         let clamped = try XCTUnwrap(Self.resolve(scene: scene))
         scene.shadows.normalOffsetTexels = ShadowFrameStateResolver.normalOffsetTexelsRange.upperBound
         let atMaximum = try XCTUnwrap(Self.resolve(scene: scene))
-        XCTAssertEqual(clamped.shadowUniform.cascade.normalOffsetWorld,
-                       atMaximum.shadowUniform.cascade.normalOffsetWorld)
+        XCTAssertEqual(clamped.shadowUniform.near.normalOffsetWorld,
+                       atMaximum.shadowUniform.near.normalOffsetWorld)
 
         scene.shadows.normalOffsetTexels = -5
         let negative = try XCTUnwrap(Self.resolve(scene: scene))
-        XCTAssertEqual(negative.shadowUniform.cascade.normalOffsetWorld, 0,
+        XCTAssertEqual(negative.shadowUniform.near.normalOffsetWorld, 0,
                        "A negative offset would step the sample point into the surface")
     }
 
@@ -292,20 +292,20 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         var scene = Self.makeScene()
         scene.shadows.softness = 1.0
         let plain = try XCTUnwrap(Self.resolve(scene: scene))
-        XCTAssertEqual(plain.shadowUniform.cascade.tentSpread, 1.0)
+        XCTAssertEqual(plain.shadowUniform.near.tentSpread, 1.0)
 
         scene.shadows.softness = 1.8
         let softer = try XCTUnwrap(Self.resolve(scene: scene))
-        XCTAssertEqual(softer.shadowUniform.cascade.tentSpread, 1.8, accuracy: 1e-6)
+        XCTAssertEqual(softer.shadowUniform.near.tentSpread, 1.8, accuracy: 1e-6)
 
         scene.shadows.softness = 100
         let clamped = try XCTUnwrap(Self.resolve(scene: scene))
-        XCTAssertEqual(clamped.shadowUniform.cascade.tentSpread,
+        XCTAssertEqual(clamped.shadowUniform.near.tentSpread,
                        ShadowFrameStateResolver.softnessRange.upperBound)
 
         scene.shadows.softness = -1
         let floored = try XCTUnwrap(Self.resolve(scene: scene))
-        XCTAssertEqual(floored.shadowUniform.cascade.tentSpread,
+        XCTAssertEqual(floored.shadowUniform.near.tentSpread,
                        ShadowFrameStateResolver.softnessRange.lowerBound,
                        "Below 1 the taps would collapse onto the sample point and the tent would be gone")
     }
@@ -321,12 +321,12 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         scene.shadows.softness = ShadowFrameStateResolver.softnessRange.upperBound
         let softest = try XCTUnwrap(Self.resolve(scene: scene))
 
-        XCTAssertEqual(plain.shadowUniform.cascade.texelSizeUV, softest.shadowUniform.cascade.texelSizeUV)
-        XCTAssertEqual(plain.shadowUniform.cascade.depthBias, softest.shadowUniform.cascade.depthBias)
-        XCTAssertEqual(plain.shadowUniform.cascade.uvMinimum, softest.shadowUniform.cascade.uvMinimum)
-        XCTAssertEqual(plain.shadowUniform.cascade.uvMaximum, softest.shadowUniform.cascade.uvMaximum)
-        XCTAssertEqual(plain.shadowUniform.cascade.normalOffsetWorld,
-                       softest.shadowUniform.cascade.normalOffsetWorld)
+        XCTAssertEqual(plain.shadowUniform.near.texelSizeUV, softest.shadowUniform.near.texelSizeUV)
+        XCTAssertEqual(plain.shadowUniform.near.depthBias, softest.shadowUniform.near.depthBias)
+        XCTAssertEqual(plain.shadowUniform.near.uvMinimum, softest.shadowUniform.near.uvMinimum)
+        XCTAssertEqual(plain.shadowUniform.near.uvMaximum, softest.shadowUniform.near.uvMaximum)
+        XCTAssertEqual(plain.shadowUniform.near.normalOffsetWorld,
+                       softest.shadowUniform.near.normalOffsetWorld)
         XCTAssertEqual(plain.lightProjectionView, softest.lightProjectionView)
     }
 
@@ -354,8 +354,8 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         let tight = try XCTUnwrap(Self.resolve(eye: eye, scene: scene))
 
         // A tenth of the coverage is a much finer texel, which is the point.
-        XCTAssertLessThan(tight.shadowUniform.cascade.normalOffsetWorld,
-                          wide.shadowUniform.cascade.normalOffsetWorld,
+        XCTAssertLessThan(tight.shadowUniform.near.normalOffsetWorld,
+                          wide.shadowUniform.near.normalOffsetWorld,
                           "The offset tracks the texel, so a tighter window must shrink it")
         // And the ground the camera is looking at, the window's own centre,
         // must still be fully shadowed, or the frame has nothing to look at.
@@ -364,10 +364,10 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         // ground and every shadow in the frame vanished.
         let centre = tight.shadowUniform.fadeCenter
         XCTAssertEqual(simd_length(centre - tight.shadowUniform.fadeCenter), 0)
-        XCTAssertGreaterThan(tight.shadowUniform.fadeStartDistance, 0,
+        XCTAssertGreaterThan(tight.shadowUniform.near.fadeStartDistance, 0,
                              "The band has to have somewhere to start")
-        XCTAssertLessThan(tight.shadowUniform.fadeStartDistance,
-                          tight.shadowUniform.fadeEndDistance)
+        XCTAssertLessThan(tight.shadowUniform.near.fadeStartDistance,
+                          tight.shadowUniform.near.fadeEndDistance)
     }
 
     /// The band is the outer quarter of the window at every size, which is
@@ -387,15 +387,15 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         let floored = try XCTUnwrap(Self.resolve(scene: scene))
         scene.shadows.coverageCameraDistances = ShadowFrameStateResolver.coverageRange.lowerBound
         let atFloor = try XCTUnwrap(Self.resolve(scene: scene))
-        XCTAssertEqual(floored.shadowUniform.cascade.worldToShadowTexture,
-                       atFloor.shadowUniform.cascade.worldToShadowTexture)
+        XCTAssertEqual(floored.shadowUniform.near.worldToShadowTexture,
+                       atFloor.shadowUniform.near.worldToShadowTexture)
 
         scene.shadows.coverageCameraDistances = 10_000
         let ceilinged = try XCTUnwrap(Self.resolve(scene: scene))
         scene.shadows.coverageCameraDistances = ShadowFrameStateResolver.coverageRange.upperBound
         let atCeiling = try XCTUnwrap(Self.resolve(scene: scene))
-        XCTAssertEqual(ceilinged.shadowUniform.cascade.worldToShadowTexture,
-                       atCeiling.shadowUniform.cascade.worldToShadowTexture)
+        XCTAssertEqual(ceilinged.shadowUniform.near.worldToShadowTexture,
+                       atCeiling.shadowUniform.near.worldToShadowTexture)
     }
 
     /// The whole point of the change: at a coverage far under one camera
@@ -413,19 +413,19 @@ final class ShadowFrameStateResolverTests: XCTestCase {
             // The point the camera looks at, and a point a third of the way
             // out towards the window's rim.
             for probe in [uniform.fadeCenter,
-                          uniform.fadeCenter + SIMD2<Float>(uniform.fadeEndDistance / 3, 0)] {
+                          uniform.fadeCenter + SIMD2<Float>(uniform.near.fadeEndDistance / 3, 0)] {
                 let radial = simd_length(probe - uniform.fadeCenter)
-                let fade = 1 - simd_smoothstep(uniform.fadeStartDistance,
-                                               uniform.fadeEndDistance,
+                let fade = 1 - simd_smoothstep(uniform.near.fadeStartDistance,
+                                               uniform.near.fadeEndDistance,
                                                radial)
                 XCTAssertEqual(fade, 1, accuracy: 1e-5,
                                "coverage \(coverage): the inner window must be fully shadowed")
             }
 
             // And the rim is still faded out, so the disc's edge stays hidden.
-            let rim = uniform.fadeCenter + SIMD2<Float>(uniform.fadeEndDistance, 0)
-            let rimFade = 1 - simd_smoothstep(uniform.fadeStartDistance,
-                                              uniform.fadeEndDistance,
+            let rim = uniform.fadeCenter + SIMD2<Float>(uniform.near.fadeEndDistance, 0)
+            let rimFade = 1 - simd_smoothstep(uniform.near.fadeStartDistance,
+                                              uniform.near.fadeEndDistance,
                                               simd_length(rim - uniform.fadeCenter))
             XCTAssertEqual(rimFade, 0, accuracy: 1e-5, "coverage \(coverage)")
         }
@@ -444,7 +444,7 @@ final class ShadowFrameStateResolverTests: XCTestCase {
             var scene = Self.makeScene()
             scene.shadows.coverageCameraDistances = coverage
             let state = try XCTUnwrap(Self.resolve(eye: eye, scene: scene))
-            return state.shadowUniform.cascade.normalOffsetWorld / scene.shadows.normalOffsetTexels
+            return state.shadowUniform.near.normalOffsetWorld / scene.shadows.normalOffsetTexels
         }
 
         let wide = try texel(coverage: 3)
@@ -513,7 +513,7 @@ final class ShadowFrameStateResolverTests: XCTestCase {
             var scene = Self.makeScene()
             scene.shadows.maxCasterHeightMeters = heightMeters
             let state = try XCTUnwrap(Self.resolve(eye: eye, scene: scene))
-            return state.shadowUniform.cascade.normalOffsetWorld / scene.shadows.normalOffsetTexels
+            return state.shadowUniform.near.normalOffsetWorld / scene.shadows.normalOffsetTexels
         }
 
         XCTAssertGreaterThan(try texel(heightMeters: 500) / texel(heightMeters: 50), 1.9,
@@ -532,7 +532,7 @@ final class ShadowFrameStateResolverTests: XCTestCase {
             var scene = Self.makeScene()
             scene.shadows.coverageCameraDistances = coverage
             let state = try XCTUnwrap(Self.resolve(eye: eye, scene: scene))
-            return state.shadowUniform.cascade.normalOffsetWorld / scene.shadows.normalOffsetTexels
+            return state.shadowUniform.near.normalOffsetWorld / scene.shadows.normalOffsetTexels
         }
 
         XCTAssertEqual(try texel(coverage: 12), try texel(coverage: 3), accuracy: 1e-9,
@@ -548,20 +548,150 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         XCTAssertLessThan(ShadowFrameStateResolver.geometricCutoffEnd, 1)
     }
 
+    // MARK: - The shadows' zoom
+
+    /// Below the shadows' zoom there is no shadow state, so no pass runs,
+    /// and coming up to it the strength rises smoothly to the setting's.
+    func testTheShadowsComeInWithTheZoom() throws {
+        var scene = Self.makeScene()
+        scene.shadows.minimumZoom = 13
+        scene.shadows.fadeInZooms = 1
+        let shadows = scene.shadows
+        XCTAssertEqual(ShadowFrameStateResolver.strengthShare(atZoom: 10, shadows: shadows), 0)
+        XCTAssertEqual(ShadowFrameStateResolver.strengthShare(atZoom: 12, shadows: shadows), 0)
+        XCTAssertEqual(ShadowFrameStateResolver.strengthShare(atZoom: 12.5, shadows: shadows), 0.5, accuracy: 1e-6)
+        XCTAssertEqual(ShadowFrameStateResolver.strengthShare(atZoom: 13, shadows: shadows), 1)
+        XCTAssertEqual(ShadowFrameStateResolver.strengthShare(atZoom: 16, shadows: shadows), 1)
+        XCTAssertEqual(ShadowFrameStateResolver.strengthShare(atZoom: nil, shadows: shadows), 1, "No zoom known: the setting's strength")
+
+        scene.shadows.fadeInZooms = 0
+        XCTAssertEqual(ShadowFrameStateResolver.strengthShare(atZoom: 12.99, shadows: scene.shadows), 0, "No fade: a switch at the zoom")
+        XCTAssertEqual(ShadowFrameStateResolver.strengthShare(atZoom: 13, shadows: scene.shadows), 1)
+
+        let eye = SIMD3<Float>(0.2, -0.35, 0.7)
+        XCTAssertNil(ShadowFrameStateResolver.resolveInputs(renderSurfaceMode: .flat,
+                                                            projectionView: Self.makeProjectionView(eye: eye),
+                                                            cameraEye: eye,
+                                                            centerWorldMercator: Self.equatorCenter,
+                                                            flatRenderPan: .zero,
+                                                            renderMapSize: Self.renderMapSize,
+                                                            zoom: 10,
+                                                            scene: scene),
+                     "Below the shadows' zoom the frame has no shadows at all")
+        let faded = try XCTUnwrap(ShadowFrameStateResolver.resolveInputs(renderSurfaceMode: .flat,
+                                                                         projectionView: Self.makeProjectionView(eye: eye),
+                                                                         cameraEye: eye,
+                                                                         centerWorldMercator: Self.equatorCenter,
+                                                                         flatRenderPan: .zero,
+                                                                         renderMapSize: Self.renderMapSize,
+                                                                         zoom: 12.5,
+                                                                         scene: { var s = scene; s.shadows.fadeInZooms = 1; return s }()))
+        XCTAssertEqual(faded.strength, scene.shadows.strength * 0.5, accuracy: 1e-6)
+    }
+
+    // MARK: - The far window
+
+    /// By default the frame has both windows: the far one's disc is wider,
+    /// its texel coarser, its fade band where the shadows end, and the near
+    /// one's band inside it, where the far window takes over.
+    func testTheFarWindowReachesPastTheNearOne() throws {
+        let eye = Self.makeEye(pitch: 40 * .pi / 180, bearing: 0.4, distance: 0.8)
+        let state = try XCTUnwrap(Self.resolve(eye: eye))
+        let near = state.shadowUniform.near
+        let far = state.shadowUniform.far
+
+        XCTAssertTrue(far.isEnabled)
+        XCTAssertNotNil(state.farLightProjectionView)
+        XCTAssertEqual(state.slots, [.near, .far])
+        let shadows = ImmersiveMapSettings.default.scene.shadows
+        XCTAssertEqual(far.fadeEndDistance, shadows.farCoverageCameraDistances * simd_length(eye),
+                       accuracy: far.fadeEndDistance * 1e-5)
+        XCTAssertEqual(near.fadeEndDistance, shadows.coverageCameraDistances * simd_length(eye),
+                       accuracy: near.fadeEndDistance * 1e-5)
+        XCTAssertGreaterThanOrEqual(far.fadeStartDistance, near.fadeEndDistance,
+                                    "The far band starts where the near window ends or beyond")
+        XCTAssertGreaterThan(far.normalOffsetWorld, near.normalOffsetWorld,
+                             "The same map over a wider disc is a coarser texel")
+        XCTAssertEqual(far.texelSizeUV, near.texelSizeUV, "The same map size a slice")
+        XCTAssertEqual(state.casterCullingProjectionView, state.farLightProjectionView)
+    }
+
+    /// Every point the near window covers, the far window covers too: a
+    /// receiver in the blend band reads both, and a caster culled by the
+    /// far window's frustum casts into neither.
+    func testTheFarWindowHoldsTheNearOne() throws {
+        let eye = Self.makeEye(pitch: 50 * .pi / 180, bearing: 1.1, distance: 0.6)
+        let state = try XCTUnwrap(Self.resolve(eye: eye))
+        let farMatrix = try XCTUnwrap(state.farLightProjectionView)
+        let unitsPerMeter = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: 0,
+                                                                      renderMapSize: Self.renderMapSize)
+        let near = ShadowFrameStateResolver.windowSpec(
+            cameraDistance: simd_length(eye),
+            unitsPerMeter: unitsPerMeter,
+            coverageCameraDistances: ImmersiveMapSettings.default.scene.shadows.coverageCameraDistances,
+            maxCasterHeightMeters: ImmersiveMapSettings.default.scene.shadows.maxCasterHeightMeters)
+        let footprint = ShadowFrameStateResolver.visibleGroundFootprint(
+            inverseProjectionView: simd_inverse(Self.makeProjectionView(eye: eye)),
+            cameraEye: eye,
+            maxDistance: near.radius)
+        for point in footprint {
+            for z in [Float(0), near.maxCasterHeight] {
+                let ndc = Self.project(farMatrix, SIMD3<Float>(point.x, point.y, z))
+                XCTAssertLessThanOrEqual(abs(ndc.x), 1 + 1e-3)
+                XCTAssertLessThanOrEqual(abs(ndc.y), 1 + 1e-3)
+                XCTAssertGreaterThanOrEqual(ndc.z, -1e-3)
+                XCTAssertLessThanOrEqual(ndc.z, 1 + 1e-3)
+            }
+        }
+    }
+
+    /// A far coverage that does not reach past the near window's band is
+    /// off: one window, one pass, the near window's fade ends the shadows,
+    /// exactly as before the far window existed.
+    func testAFarCoverageUnderTheNearOneLeavesOneWindow() throws {
+        var scene = Self.makeScene()
+        scene.shadows.coverageCameraDistances = 3
+        scene.shadows.farCoverageCameraDistances = 3.5
+        let state = try XCTUnwrap(Self.resolve(scene: scene))
+
+        XCTAssertFalse(state.shadowUniform.far.isEnabled)
+        XCTAssertNil(state.farLightProjectionView)
+        XCTAssertEqual(state.slots, [.near])
+        XCTAssertEqual(state.casterCullingProjectionView, state.lightProjectionView)
+
+        scene.shadows.farCoverageCameraDistances = 4
+        let both = try XCTUnwrap(Self.resolve(scene: scene))
+        XCTAssertTrue(both.shadowUniform.far.isEnabled, "Four thirds of the near coverage is the threshold")
+        XCTAssertTrue(ShadowFrameStateResolver.farWindowReaches(farRadius: 4, nearRadius: 3))
+        XCTAssertFalse(ShadowFrameStateResolver.farWindowReaches(farRadius: 3.9, nearRadius: 3))
+    }
+
+    /// The far window takes no floor in meters: close to the ground the
+    /// near window is held open by the floor and the far coverage, in
+    /// camera distances, falls under it, so the frame has the near window
+    /// alone there.
+    func testTheFloorInMetersIsTheNearWindowsAlone() throws {
+        var scene = ImmersiveMapSettings.default.scene
+        scene.shadows.minimumCoverageMeters = 500
+        let street = Self.makeEye(pitch: 55 * .pi / 180, bearing: 0.3, distance: 0.05)
+        let state = try XCTUnwrap(Self.resolve(eye: street, scene: scene))
+        XCTAssertFalse(state.shadowUniform.far.isEnabled)
+    }
+
     func testSliceRectsAndFadeFollowCameraDistance() throws {
         let eye = Self.makeEye(pitch: 30 * .pi / 180, bearing: 0.4, distance: 0.8)
         let state = try XCTUnwrap(Self.resolve(eye: eye))
 
         // The window owns the whole map, inset by the tap's reach.
-        let cascade = state.shadowUniform.cascade
+        let cascade = state.shadowUniform.near
         XCTAssertGreaterThan(cascade.uvMinimum.x, 0)
         XCTAssertLessThan(cascade.uvMaximum.x, 1)
         XCTAssertEqual(cascade.uvMinimum.x, cascade.uvMinimum.y)
         XCTAssertEqual(cascade.uvMaximum.x, cascade.uvMaximum.y)
 
         let expectedRadius = ImmersiveMapSettings.default.scene.shadows.coverageCameraDistances * simd_length(eye)
-        XCTAssertEqual(state.shadowUniform.fadeEndDistance, expectedRadius, accuracy: expectedRadius * 1e-5)
-        XCTAssertEqual(state.shadowUniform.fadeStartDistance, expectedRadius * 0.75, accuracy: expectedRadius * 1e-5)
+        XCTAssertEqual(state.shadowUniform.near.fadeEndDistance, expectedRadius, accuracy: expectedRadius * 1e-5)
+        XCTAssertEqual(state.shadowUniform.near.fadeStartDistance, expectedRadius * 0.75, accuracy: expectedRadius * 1e-5)
         XCTAssertEqual(state.shadowUniform.eye, eye)
 
         // The geometric self-shadow test in the shaders relies on a normalized

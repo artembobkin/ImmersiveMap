@@ -109,10 +109,11 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
                                                                cameraUniform: frameContext.cameraUniform,
                                                                resolvedPresentation: frameContext.resolvedPresentation)
         let frustum = Frustum(pv: frameContext.cameraMatrices.projectionView)
-        // The shadow pass culls with the LIGHT frustum and without the horizon
-        // gate: a model outside the camera view still casts into it.
+        // The shadow passes cull with the LIGHT frustum (the far window's,
+        // which holds the near one) and without the horizon gate: a model
+        // outside the camera view still casts into it.
         let shadowFrustum = frameContext.shadowFrameState.map { state in
-            Frustum(pv: state.lightProjectionView)
+            Frustum(pv: state.casterCullingProjectionView)
         }
         var items: [SceneModelDrawItem] = []
         var shadowItems: [SceneModelDrawItem] = []
@@ -249,11 +250,12 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
                                   surfaceMaskState: surfaceMaskState,
                                   groundCutStates: groundCutStates,
                                   depthDisabledState: depthDisabledState)
-        case .shadowCasters:
-            guard let shadowState = frameContext.shadowFrameState,
+        case .shadowCasters, .farShadowCasters:
+            guard let slot = ShadowCascadeSlot(casterLayer: layer),
+                  let lightProjectionView = frameContext.shadowFrameState?.lightProjectionView(for: slot),
                   shadowCasterItems.isEmpty == false else { return }
             SceneModelDrawer.drawShadowCasters(renderEncoder: encoder,
-                                               lightProjectionView: shadowState.lightProjectionView,
+                                               lightProjectionView: lightProjectionView,
                                                items: shadowCasterItems,
                                                pipeline: pipeline,
                                                extrudedDepthState: extrudedDepthState)

@@ -43,7 +43,8 @@ enum GlobeVectorSurfaceDrawer {
                      depthDisabledState: MTLDepthStencilState,
                      isWireframeEnabled: Bool,
                      pureSphere: Bool,
-                     globeFrame: GlobeFrameConstantsUniform) {
+                     globeFrame: GlobeFrameConstantsUniform,
+                     globeLight: GlobeLightUniform = .disabled) {
         guard placeTilesContext.tilePlacements.isEmpty == false else {
             return
         }
@@ -76,6 +77,8 @@ enum GlobeVectorSurfaceDrawer {
                                      length: MemoryLayout<GlobeFrameConstantsUniform>.stride,
                                      index: 10)
         renderEncoder.setFragmentBytes(&overviewFadeValue, length: MemoryLayout<TileOverviewFadeUniform>.stride, index: 0)
+        // The sun on the globe, for every fragment of the surface.
+        GlobeLightUniform.bind(globeLight, encoder: renderEncoder)
         // The vertex stages fold the zoom fade into the colour's alpha, so
         // they read the same uniform (TileSphere.metal, buffer 11).
         renderEncoder.setVertexBytes(&overviewFadeValue, length: MemoryLayout<TileOverviewFadeUniform>.stride, index: 11)

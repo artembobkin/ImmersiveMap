@@ -386,7 +386,7 @@ static inline float tileFragmentDeferredEdgePx(FragmentIn in,
 /// pass reads the per-pixel mask, the atlas bake samples the cascades.
 static inline float tileGroundShadowFactor(FragmentIn in,
                                            constant Shadow& shadow,
-                                           depth2d<float> shadowMap,
+                                           depth2d_array<float> shadowMap,
                                            texture2d<half> groundShadowMask) {
     if (kGroundShadowMaskEnabled) {
         // One bilinear tap of the mask instead of a cascade lookup in every
@@ -415,7 +415,7 @@ static inline half4 tileFragmentColor(FragmentIn in,
                                       constant Style* styles,
                                       constant float2* styleZoomFades,
                                       constant LineStyle* lineStyles,
-                                      depth2d<float> shadowMap,
+                                      depth2d_array<float> shadowMap,
                                       texture2d<half> groundShadowMask,
                                       constant GroundReliefUniform& relief,
                                       texture2d<float> reliefHeights) {
@@ -448,7 +448,7 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                                   constant Style* styles [[buffer(5), function_constant(kTileLineFields)]],
                                   constant float2* styleZoomFades [[buffer(6), function_constant(kTileLineFields)]],
                                   constant LineStyle* lineStyles [[buffer(7), function_constant(kTileLineFields)]],
-                                  depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
+                                  depth2d_array<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
                                   texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]],
                                   constant GroundReliefUniform& relief [[buffer(9), function_constant(kTileGroundReliefShade)]],
                                   texture2d<float> reliefHeights [[texture(3), function_constant(kTileGroundReliefShade)]]) {
@@ -484,7 +484,7 @@ static inline half4 tileRoadFragmentColor(FragmentIn in,
                                           constant Shadow& shadow,
                                           constant LineDashUniform& lineDash,
                                           constant LineStyle* lineStyles,
-                                          depth2d<float> shadowMap,
+                                          depth2d_array<float> shadowMap,
                                           texture2d<half> groundShadowMask) {
     half4 color = in.color;
     float shadowFactor = tileGroundShadowFactor(in, shadow, shadowMap, groundShadowMask);
@@ -519,7 +519,7 @@ fragment half4 tileRoadFragmentShader(FragmentIn in [[stage_in]],
                                       constant Shadow& shadow [[buffer(3)]],
                                       constant LineDashUniform& lineDash [[buffer(4), function_constant(kTileRoadBlended)]],
                                       constant LineStyle* lineStyles [[buffer(7), function_constant(kTileRoadBlended)]],
-                                      depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
+                                      depth2d_array<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
                                       texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]) {
     half4 color = tileRoadFragmentColor(in, alphaScale, shadow, lineDash, lineStyles, shadowMap, groundShadowMask);
     color.rgb = applyGroundFog(color.rgb, in.worldPos, groundFog);

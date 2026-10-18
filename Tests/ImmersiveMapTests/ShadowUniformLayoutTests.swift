@@ -13,7 +13,9 @@ final class ShadowUniformLayoutTests: XCTestCase {
         XCTAssertEqual(MemoryLayout<ShadowCascadeUniform>.stride, 112)
         XCTAssertEqual(MemoryLayout<ShadowCascadeUniform>.offset(of: \.worldToShadowTexture), 0)
         XCTAssertEqual(MemoryLayout<ShadowCascadeUniform>.offset(of: \.tentSpread), 64)
+        XCTAssertEqual(MemoryLayout<ShadowCascadeUniform>.offset(of: \.fadeStartDistance), 68)
         XCTAssertEqual(MemoryLayout<ShadowCascadeUniform>.offset(of: \.depthBias), 72)
+        XCTAssertEqual(MemoryLayout<ShadowCascadeUniform>.offset(of: \.fadeEndDistance), 76)
         XCTAssertEqual(MemoryLayout<ShadowCascadeUniform>.offset(of: \.uvMinimum), 80)
         XCTAssertEqual(MemoryLayout<ShadowCascadeUniform>.offset(of: \.uvMaximum), 88)
         XCTAssertEqual(MemoryLayout<ShadowCascadeUniform>.offset(of: \.normalOffsetWorld), 96)
@@ -21,15 +23,14 @@ final class ShadowUniformLayoutTests: XCTestCase {
     }
 
     func testShadowUniformMatchesMetalLayout() {
-        XCTAssertEqual(MemoryLayout<ShadowUniform>.stride, 192)
-        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.cascade), 0)
-        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.eye), 112)
-        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.strength), 128)
-        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.fadeStartDistance), 132)
-        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.fadeEndDistance), 136)
-        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.lightDirection), 144)
-        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.tint), 160)
-        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.fadeCenter), 176)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.stride, 304)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.near), 0)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.far), 112)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.eye), 224)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.strength), 240)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.lightDirection), 256)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.tint), 272)
+        XCTAssertEqual(MemoryLayout<ShadowUniform>.offset(of: \.fadeCenter), 288)
     }
 
     func testGroundShadowMaskUniformMatchesMetalLayout() {
@@ -68,7 +69,20 @@ final class ShadowUniformLayoutTests: XCTestCase {
     func testDisabledUniformHasZeroStrengthAndEmptyRects() {
         XCTAssertEqual(ShadowUniform.disabled.strength, 0)
         // Empty rectangle: minimum > maximum, so containment always fails.
-        XCTAssertGreaterThan(ShadowUniform.disabled.cascade.uvMinimum.x,
-                             ShadowUniform.disabled.cascade.uvMaximum.x)
+        XCTAssertGreaterThan(ShadowUniform.disabled.near.uvMinimum.x,
+                             ShadowUniform.disabled.near.uvMaximum.x)
+        XCTAssertFalse(ShadowUniform.disabled.far.isEnabled, "The shader's test of a window the frame has not got")
+    }
+
+    /// The slices the shaders read are the slots' raw values.
+    func testTheSlotsAreTheSlices() {
+        XCTAssertEqual(ShadowCascadeSlot.near.rawValue, 0)
+        XCTAssertEqual(ShadowCascadeSlot.far.rawValue, 1)
+        XCTAssertEqual(ShadowCascadeAtlas.sliceCount, 2)
+        XCTAssertEqual(ShadowCascadeSlot(casterLayer: .shadowCasters), .near)
+        XCTAssertEqual(ShadowCascadeSlot(casterLayer: .farShadowCasters), .far)
+        XCTAssertNil(ShadowCascadeSlot(casterLayer: .buildingExtrusion))
+        XCTAssertEqual(ShadowCascadeSlot.near.passName, .shadowMap)
+        XCTAssertEqual(ShadowCascadeSlot.far.passName, .farShadowMap)
     }
 }

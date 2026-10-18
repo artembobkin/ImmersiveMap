@@ -8,14 +8,17 @@ import Foundation
 ///
 /// The panel edits `ImmersiveMapSettings.ShadowSettings` live. Ranges are the
 /// ones that are useful to drag through rather than the full settable range:
-/// coverage stops at 12 camera distances because one shadow map is stretched
-/// over whatever is asked for, so past that the texels are too coarse to judge
-/// anything by, and the map size is a ladder of powers of two because those
-/// are the only sizes worth comparing.
+/// the near coverage stops at 12 camera distances because one slice of the
+/// map is stretched over whatever is asked for, so past that the texels are
+/// too coarse to judge anything by, the far coverage runs to the setting's
+/// ceiling, since coarse is what it is for, and the map size is a ladder of
+/// powers of two because those are the only sizes worth comparing.
 enum DebugOverlayShadowSettingsPlanner {
     static let mapResolutions = [512, 1024, 2048, 4096]
     static let mapResolutionTitles = ["512", "1K", "2K", "4K"]
     static let strengthRange: ClosedRange<Double> = 0...1
+    /// The zoom the shadows draw from, over the map's zooms.
+    static let minimumZoomRange: ClosedRange<Double> = 0...20
     /// Down to the resolver's floor, which is far below anything worth
     /// shipping: winding the window right down is how the texel grid itself is
     /// looked at. Under a coverage of 1 the window's edge shows as a circle,
@@ -23,6 +26,13 @@ enum DebugOverlayShadowSettingsPlanner {
     /// `ShadowFrameStateResolver.fadeDistances`).
     static var coverageRange: ClosedRange<Double> {
         Double(ShadowFrameStateResolver.coverageRange.lowerBound)...12
+    }
+    /// The far window's coverage, the resolver's whole range: under four
+    /// thirds of the near coverage the far window is off
+    /// (`ShadowFrameStateResolver.farWindowReaches`), which the title says.
+    static var farCoverageRange: ClosedRange<Double> {
+        let range = ShadowFrameStateResolver.coverageRange
+        return Double(range.lowerBound)...Double(range.upperBound)
     }
     /// The coverage floor in meters, off at the bottom, up to the reach of
     /// a long street.
@@ -76,8 +86,23 @@ enum DebugOverlayShadowSettingsPlanner {
         String(format: "Strength %.2f", strength)
     }
 
+    static func minimumZoomTitle(_ zoom: Double) -> String {
+        String(format: "From zoom %.1f", zoom)
+    }
+
     static func coverageTitle(_ coverage: Float) -> String {
-        String(format: "Coverage %.1fx", coverage)
+        String(format: "Near coverage %.1fx", coverage)
+    }
+
+    /// The far coverage's title, or that the far window is off because the
+    /// far coverage does not reach past the near one.
+    static func farCoverageTitle(_ farCoverage: Float, nearCoverage: Float) -> String {
+        let clamp = ShadowFrameStateResolver.coverageRange
+        let far = min(max(farCoverage, clamp.lowerBound), clamp.upperBound)
+        let near = min(max(nearCoverage, clamp.lowerBound), clamp.upperBound)
+        return ShadowFrameStateResolver.farWindowReaches(farRadius: far, nearRadius: near)
+            ? String(format: "Far coverage %.1fx", farCoverage)
+            : String(format: "Far coverage %.1fx (off, under the near)", farCoverage)
     }
 
     static func minimumCoverageTitle(_ meters: Float) -> String {

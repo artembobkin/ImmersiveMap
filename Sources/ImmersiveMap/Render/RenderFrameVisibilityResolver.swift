@@ -42,7 +42,8 @@ final class RenderFrameVisibilityResolver {
                                                resolvedPresentation: resolvedPresentation,
                                                targetZoom: zoomPlan.baseZoom,
                                                rules: rules,
-                                               reliefHeights: reliefHeights)
+                                               reliefHeights: reliefHeights,
+                                               rasterBandMarginShare: tileSettings.coverage.rasterBandMarginShare)
         if fingerprint == cachedFingerprint,
            let cachedContent {
             return cachedContent
@@ -56,6 +57,7 @@ final class RenderFrameVisibilityResolver {
                                                         cameraEye: cameraFrameState.cameraEye,
                                                         reliefHeights: reliefHeights,
                                                         rules: rules,
+                                                        rasterBandMarginShare: tileSettings.coverage.rasterBandMarginShare,
                                                         diagnostics: diagnostics)
         cachedFingerprint = fingerprint
         cachedContent = content
@@ -73,8 +75,10 @@ final class RenderFrameVisibilityResolver {
                                         resolvedPresentation: ResolvedPresentationState,
                                         targetZoom: Int,
                                         rules: FlatRingRules,
-                                        reliefHeights: ClosedRange<Float>?) -> Int {
+                                        reliefHeights: ClosedRange<Float>?,
+                                        rasterBandMarginShare: Float = 0) -> Int {
         var hasher = Hasher()
+        hasher.combine(rasterBandMarginShare.bitPattern)
         hasher.combine(reliefHeights?.lowerBound.bitPattern)
         hasher.combine(reliefHeights?.upperBound.bitPattern)
         let cameraState = cameraFrameState.mapCameraState

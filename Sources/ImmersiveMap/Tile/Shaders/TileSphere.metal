@@ -28,6 +28,7 @@
 using namespace metal;
 #include "TileShading.h"
 #include "../../Globe/Shaders/GlobeTileProjection.h"
+#include "../../Globe/Shaders/GlobeLight.h"
 
 /// Per-draw tile identity for the projection, precomputed on the CPU so the
 /// vertex stage does no per-vertex pow(2, z); the layout mirrors
@@ -63,6 +64,9 @@ constant bool kTileSphereFillClass = !kTileSphereLineFields;
 
 struct SphereVertexOut {
     float4 position [[position]];
+    // The sphere's normal at the vertex in world space, the sun's side
+    // (GlobeLight.h).
+    float3 sphereNormal;
     // The morphed surface position the fog distances read; morph only.
     float3 worldPos [[function_constant(kTileSphereFog)]];
     // Fills class: the resolved colour with the zoom fade already folded
@@ -80,6 +84,7 @@ struct SphereVertexOut {
 // The fragment stage's view of SphereVertexOut, without the clip distances.
 struct SphereFragmentIn {
     float4 position [[position]];
+    float3 sphereNormal;
     float3 worldPos [[function_constant(kTileSphereFog)]];
     half4 color [[function_constant(kTileSphereFillClass)]];
     uint styleIndex [[flat, function_constant(kTileSphereLineFields)]];
@@ -155,6 +160,7 @@ vertex SphereVertexOut tileSpherePureVertexShader(VertexIn vertexIn [[stage_in]]
 
     SphereVertexOut out;
     out.position = globeFrame.sphereClip * float4(unitDirection, 1.0);
+    out.sphereNormal = (globeFrame.sphereWorld * float4(unitDirection, 0.0)).xyz;
     // The ground carries no geometric depth of its own; its z is the rank
     // band described at kTileSphereLayerDepthStep: class, then style.
     float layerNdcZ = 1.0
@@ -177,6 +183,7 @@ struct SphereMorphVertexOut {
     // depth band as the resting sphere, which is what rejects a coarse
     // substitute wherever a finer tile painted.
     float clipDistance [[clip_distance]] [1];
+    float3 sphereNormal;
     float3 worldPos [[function_constant(kTileSphereFog)]];
     half4 color [[function_constant(kTileSphereFillClass)]];
     uint styleIndex [[flat, function_constant(kTileSphereLineFields)]];
@@ -218,6 +225,9 @@ vertex SphereMorphVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stag
 
     SphereMorphVertexOut out;
     out.position = camera.matrix * float4(worldPosition, 1.0);
+    // The sphere's normal, whatever the unroll did to the surface: the
+    // light fades out through the morph (GlobeLightUniform).
+    out.sphereNormal = (globeFrame.sphereWorld * float4(unitDirection, 0.0)).xyz;
     // The rank band replaces the surface's own z, exactly as on the
     // resting sphere (see kTileSphereLayerDepthStep).
     float layerNdcZ = 1.0
@@ -244,15 +254,16 @@ vertex SphereMorphVertexOut tileSphereMorphVertexShader(VertexIn vertexIn [[stag
     return out;
 }
 
-// No shadows on the globe (a flat-world effect), no textures, no lighting,
-// no fog: the colour comes from the style and the coverage, on the resting
-// sphere and through the morph alike.
+// No shadows on the globe (a flat-world effect), no textures, no fog: the
+// colour comes from the style and the coverage, on the resting sphere and
+// through the morph alike, under the globe's light (GlobeLight.h).
 fragment half4 tileSphereFragmentShader(SphereFragmentIn in [[stage_in]],
                                         constant OverviewFadeUniform& overviewFade [[buffer(0)]],
                                         constant LineDashUniform& lineDash [[buffer(4)]],
                                         constant Style* styles [[buffer(5), function_constant(kTileSphereLineFields)]],
                                         constant float2* styleZoomFades [[buffer(6), function_constant(kTileSphereLineFields)]],
-                                        constant LineStyle* lineStyles [[buffer(7), function_constant(kTileSphereLineFields)]]) {
+                                        constant LineStyle* lineStyles [[buffer(7), function_constant(kTileSphereLineFields)]],
+                                        constant GlobeLight& globeLight [[buffer(kGlobeLightBufferIndex)]]) {
     // The fills class arrives with its final colour (fade folded in the
     // vertex stage); the ribbons class resolves colour, fade and coverage
     // from the flat style index right here.
@@ -265,5 +276,6 @@ fragment half4 tileSphereFragmentShader(SphereFragmentIn in [[stage_in]],
     } else {
         color = in.color;
     }
+    color.rgb = globeLitColor(color.rgb, in.sphereNormal, globeLight);
     return color;
 }

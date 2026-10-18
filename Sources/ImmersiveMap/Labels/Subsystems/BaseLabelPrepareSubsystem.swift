@@ -506,13 +506,16 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                 continue
             }
             // The names ride the ground relief of their tile, where its
-            // terrain is in.
-            var lift: ((SIMD2<Float>) -> Float)?
+            // terrain is in: the terrain's metres under the points kept on
+            // the record, the frame's datum and rise over them.
+            var lifts: RoadLabelPlacer.PointLifts?
             if let groundRelief,
                let tileLift = GroundReliefTileLift(store: groundRelief,
                                                    tile: record.ownerKey.tile,
                                                    targetZoom: targetZoomBySource[record.ownerKey.tile] ?? record.ownerKey.z) {
-                lift = tileLift.worldUnits(atTileUV:)
+                lifts = RoadLabelPlacer.PointLifts(metres: record.reliefMetres(for: tileLift.relief),
+                                                   datumMetres: tileLift.datumMetres,
+                                                   unitsPerMetre: tileLift.relief.strength * tileLift.unitsPerMetre)
             }
             RoadLabelPlacer.place(geometry: record.geometry,
                                   origin: tileOriginData[originIndex],
@@ -520,7 +523,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                   viewportSize: viewportSize,
                                   pixelsPerPoint: pixelsPerPoint,
                                   maximumDepth: maximumDepth,
-                                  lift: lift,
+                                  lifts: lifts,
                                   scratch: &roadPlacerScratch,
                                   output: &record.placement)
         }

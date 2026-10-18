@@ -22,6 +22,30 @@ final class GroundFogTests: XCTestCase {
                                  zoom: zoom)
     }
 
+    /// On the relief the fog's heights are the ground's altitudes: the
+    /// plane's altitude goes to the shader, less the altitude the density
+    /// is stated at, and with the heights from the plane neither does.
+    func testTheReliefsAltitudeReachesTheShader() {
+        let base = FixtureTiles.tilelessSettings()
+        XCTAssertTrue(base.scene.groundFog.heightsFromSeaLevel)
+        XCTAssertEqual(base.scene.groundFog.baseAltitudeMeters, 0)
+        let onPlane = GroundFogUniform.resolve(settings: base, renderSurfaceMode: .flat, cameraEye: Self.eye,
+                                               worldUnitsPerMeter: Self.worldUnitsPerMeter, zoom: 12)
+        XCTAssertEqual(onPlane.startSoftness.y, 0, "Off the relief the plane is at sea level")
+        let overZermatt = GroundFogUniform.resolve(settings: base.groundFog(baseAltitudeMeters: 1500),
+                                                   renderSurfaceMode: .flat, cameraEye: Self.eye,
+                                                   worldUnitsPerMeter: Self.worldUnitsPerMeter, zoom: 12,
+                                                   onGroundRelief: true, datumMetres: 1608)
+        XCTAssertEqual(overZermatt.startSoftness.y, 1608)
+        XCTAssertEqual(overZermatt.startSoftness.z, 1500)
+        let fromPlane = GroundFogUniform.resolve(settings: base.groundFog(heightsFromSeaLevel: false, baseAltitudeMeters: 1500),
+                                                 renderSurfaceMode: .flat, cameraEye: Self.eye,
+                                                 worldUnitsPerMeter: Self.worldUnitsPerMeter, zoom: 12,
+                                                 onGroundRelief: true, datumMetres: 1608)
+        XCTAssertEqual(fromPlane.startSoftness.y, 0, "From the plane: the heights the plane's own")
+        XCTAssertEqual(fromPlane.startSoftness.z, 0)
+    }
+
     func testTheFogIsOnByDefaultAndOffTheGlobe() {
         let base = FixtureTiles.tilelessSettings()
         XCTAssertTrue(base.scene.groundFog.isEnabled)

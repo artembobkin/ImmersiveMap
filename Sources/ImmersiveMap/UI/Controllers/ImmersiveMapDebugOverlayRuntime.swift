@@ -152,6 +152,10 @@ final class ImmersiveMapDebugOverlayRuntime {
             controls?.setHillshadeFadeCameraDistances(fade)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
+        hudView.onHillshadeAmountsChanged = { [weak controls, weak renderRuntime] amounts in
+            controls?.setHillshadeAmounts(amounts)
+            renderRuntime?.requestFrame(reason: .externalStateChanged)
+        }
         hudView.onReliefShadowsChanged = { [weak controls, weak renderRuntime] isEnabled in
             controls?.setReliefCastsShadows(isEnabled)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
@@ -172,6 +176,12 @@ final class ImmersiveMapDebugOverlayRuntime {
             guard let self, var settings = currentSettings else { return }
             settingsOverride.fog = fog
             settings.scene.fog = fog
+            onSettingsChangeRequested?(settings)
+        }
+        hudView.onGlobeLightSettingsChanged = { [weak self] globeLight in
+            guard let self, var settings = currentSettings else { return }
+            settingsOverride.globeLight = globeLight
+            settings.scene.globeLight = globeLight
             onSettingsChangeRequested?(settings)
         }
         hudView.onAtmosphereSettingsChanged = { [weak self] atmosphere in
@@ -296,18 +306,21 @@ final class ImmersiveMapDebugOverlayRuntime {
                       sunDirection: settings.scene.light.direction)
         hudView.apply(fogSettings: settings.scene.fog)
         hudView.apply(atmosphereSettings: settings.scene.atmosphere)
+        hudView.apply(globeLightSettings: settings.scene.globeLight)
         hudView.apply(groundFogSettings: settings.scene.groundFog, horizonColor: settings.scene.fog.horizonColor)
         if settings.debug.enableDebugPanel == false {
             // The panel's reach goes with the panel, like its other values.
             controls.setLocalLabelMaximumDistanceMeters(nil)
             controls.setLabelPerspectiveMinimumScale(nil)
             controls.setHillshadeFadeCameraDistances(nil)
+            controls.setHillshadeAmounts(nil)
             controls.setReliefCastsShadows(nil)
         }
         hudView.apply(reliefCastsShadows: controls.reliefCastsShadows() ?? settings.tiles.groundRelief.castsShadows)
         let hillshade = settings.mapStyle.vectorTileStyle.hillshade
         hudView.apply(hillshadeFade: controls.hillshadeFadeCameraDistances()
             ?? hillshade.fadeStartCameraDistances ... max(hillshade.fadeStartCameraDistances, hillshade.fadeEndCameraDistances))
+        hudView.apply(hillshadeAmounts: controls.hillshadeAmounts() ?? GroundReliefHillshade.Amounts(style: hillshade))
         hudView.apply(labelMinimumScale: controls.labelPerspectiveMinimum()
             ?? settings.labels.base.perspectiveMinimumScale)
         hudView.apply(localLabelDistanceMeters: controls.localLabelMaximumDistance()

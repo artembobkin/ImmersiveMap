@@ -31,7 +31,7 @@ final class HorizonFrameResolverTests: XCTestCase {
         // seen as angle at the limb.
         let centerDistance = 1 + radius
         let limbDistance = (centerDistance * centerDistance - radius * radius).squareRoot()
-        let shell = radius * atmosphere.thickness / limbDistance
+        let shell = radius * atmosphere.thickness.value(atZoom: 8) / limbDistance
         XCTAssertEqual(haze.bandRadians, HorizonFrameResolver.haloBandRadii * shell, accuracy: 1e-5)
         XCTAssertEqual(haze.glowRadians, HorizonFrameResolver.haloGlowRadii * shell, accuracy: 1e-5)
         XCTAssertEqual(haze.groundBandRadians, HorizonFrameResolver.haloRimRadii * shell, accuracy: 1e-5)
@@ -44,7 +44,7 @@ final class HorizonFrameResolverTests: XCTestCase {
         settings.scene.atmosphere.thickness = 2
         let thick = resolve(settings: settings, transition: 0, geometryTransition: 0, mode: .spherical)
         let shipped = resolve(settings: .default, transition: 0, geometryTransition: 0, mode: .spherical)
-        let ratio = 2 / ImmersiveMapSettings.default.scene.atmosphere.thickness
+        let ratio = 2 / ImmersiveMapSettings.default.scene.atmosphere.thickness.value(atZoom: 8)
         XCTAssertEqual(thick.bandRadians, shipped.bandRadians * ratio, accuracy: 1e-5)
         XCTAssertEqual(thick.glowRadians, shipped.glowRadians * ratio, accuracy: 1e-5)
     }

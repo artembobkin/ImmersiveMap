@@ -37,6 +37,7 @@ enum DebugOverlaySettingsExport {
         let groundFog = scene.groundFog
         let shadows = scene.shadows
         let atmosphere = scene.atmosphere
+        let globeLight = scene.globeLight
         var groundFogArguments = ["isEnabled: \(groundFog.isEnabled)",
                                   "densityPerKilometer: \(curve(groundFog.densityPerKilometer))",
                                   "heightMeters: \(curve(groundFog.heightMeters))",
@@ -48,6 +49,8 @@ enum DebugOverlaySettingsExport {
         groundFogArguments.append("maximumOpacity: \(curve(groundFog.maximumOpacity))")
         groundFogArguments.append("veilsBuildings: \(groundFog.veilsBuildings)")
         groundFogArguments.append("takesSkyColor: \(groundFog.takesSkyColor)")
+        groundFogArguments.append("heightsFromSeaLevel: \(groundFog.heightsFromSeaLevel)")
+        groundFogArguments.append("baseAltitudeMeters: \(number(groundFog.baseAltitudeMeters))")
         return [
             ".fogSettings(ImmersiveMapSettings.FogSettings(isEnabled: \(fog.isEnabled), "
                 + "skyColor: \(vector(fog.skyColor)), "
@@ -56,8 +59,11 @@ enum DebugOverlaySettingsExport {
             ".sceneLight(direction: \(vector(scene.light.direction)))",
             ".shadows(isEnabled: \(shadows.isEnabled), "
                 + "strength: \(number(shadows.strength)), "
+                + "minimumZoom: \(number(Float(shadows.minimumZoom))), "
+                + "fadeInZooms: \(number(Float(shadows.fadeInZooms))), "
                 + "mapResolution: \(shadows.mapResolution), "
                 + "coverageCameraDistances: \(number(shadows.coverageCameraDistances)), "
+                + "farCoverageCameraDistances: \(number(shadows.farCoverageCameraDistances)), "
                 + "minimumCoverageMeters: \(number(shadows.minimumCoverageMeters)), "
                 + "maxCasterHeightMeters: \(number(shadows.maxCasterHeightMeters)), "
                 + "normalOffsetTexels: \(number(shadows.normalOffsetTexels)), "
@@ -66,8 +72,14 @@ enum DebugOverlaySettingsExport {
             ".atmosphereSettings(ImmersiveMapSettings.AtmosphereSettings(isEnabled: \(atmosphere.isEnabled), "
                 + "color: \(vector(atmosphere.color)), "
                 + "intensity: \(number(atmosphere.intensity)), "
-                + "thickness: \(number(atmosphere.thickness)), "
-                + "sunInfluence: \(number(atmosphere.sunInfluence))))"
+                + "thickness: \(curve(atmosphere.thickness)), "
+                + "sunInfluence: \(number(atmosphere.sunInfluence))))",
+            ".globeLight(isEnabled: \(globeLight.isEnabled), "
+                + "subsolarLatitudeDegrees: \(number(globeLight.subsolarLatitudeDegrees)), "
+                + "subsolarLongitudeDegrees: \(number(globeLight.subsolarLongitudeDegrees)), "
+                + "strength: \(curve(globeLight.strength)), "
+                + "terminatorSoftness: \(number(globeLight.terminatorSoftness)), "
+                + "nightColor: \(vector(globeLight.nightColor)))"
         ]
     }
 

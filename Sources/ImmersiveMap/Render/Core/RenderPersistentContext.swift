@@ -54,6 +54,10 @@ final class RenderPersistentContext {
     let roadRankState: MTLDepthStencilState
     let extrudedStencilTestState: MTLDepthStencilState
     let placementStencilWriteState: MTLDepthStencilState
+    /// See `SharedRenderResources.placementDepthWriteState`.
+    let placementDepthWriteState: MTLDepthStencilState
+    let placementStencilReliefWriteState: MTLDepthStencilState
+    let placementDepthResetState: MTLDepthStencilState
     /// See `SharedRenderResources.sceneModelSurfaceMaskState`.
     let sceneModelSurfaceMaskState: MTLDepthStencilState
     /// See `SharedRenderResources.sceneModelGroundCutStates`.
@@ -64,6 +68,8 @@ final class RenderPersistentContext {
     /// Depth textures cannot be filled from the CPU, so a one-time no-draw pass
     /// clears this 1x1 texture to 1.0 ("lit everywhere") at init.
     let shadowFallbackTexture: MTLTexture
+    /// See `SharedRenderResources.sceneDepthFallbackTexture`.
+    let sceneDepthFallbackTexture: MTLTexture
     /// See `SharedRenderResources.groundShadowMaskFallbackTexture`.
     let groundShadowMaskFallbackTexture: MTLTexture
 
@@ -128,11 +134,15 @@ final class RenderPersistentContext {
         self.groundOwnerState = shared.groundOwnerState
         self.extrudedStencilTestState = shared.extrudedStencilTestState
         self.placementStencilWriteState = shared.placementStencilWriteState
+        self.placementDepthWriteState = shared.placementDepthWriteState
+        self.placementStencilReliefWriteState = shared.placementStencilReliefWriteState
+        self.placementDepthResetState = shared.placementDepthResetState
         self.sceneModelSurfaceMaskState = shared.sceneModelSurfaceMaskState
         self.sceneModelGroundCutStates = shared.sceneModelGroundCutStates
         self.tileStencilTestState = shared.tileStencilTestState
         self.roadRankState = shared.roadRankState
         self.shadowFallbackTexture = shared.shadowFallbackTexture
+        self.sceneDepthFallbackTexture = shared.sceneDepthFallbackTexture
         self.groundShadowMaskFallbackTexture = shared.groundShadowMaskFallbackTexture
 
         self.baseColors = styleRuntime.baseColors

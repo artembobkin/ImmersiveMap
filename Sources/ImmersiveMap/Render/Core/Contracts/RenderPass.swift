@@ -9,7 +9,13 @@
 import Foundation
 
 enum RenderLayer: String, CaseIterable {
+    /// The casters of the shadow map's near window, in its own depth-only
+    /// pass (`ShadowCascadeSlot.near`).
     case shadowCasters
+    /// The same casters into the far window, in a second pass of its own
+    /// (`ShadowCascadeSlot.far`), run only when the frame has that window
+    /// and it went stale.
+    case farShadowCasters
     /// The per-pixel shadow factor of the flat ground plane, written by its
     /// own pass right after the shadow map and read by every ground layer of
     /// the world pass in place of a cascade lookup per layer.

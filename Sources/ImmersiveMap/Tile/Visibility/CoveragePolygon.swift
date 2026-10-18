@@ -208,6 +208,16 @@ struct CoveragePolygon {
     let vertices: [SIMD2<Float>]
     let bounds: CoverageBounds
 
+    /// The polygon scaled about a point by `factor`: the footprint pushed
+    /// out from the camera's ground point, which is what the far texture
+    /// bands are asked for ahead of a turn
+    /// (`CoverageSettings.rasterBandMarginShare`). Convex stays convex,
+    /// and the winding is kept.
+    func inflated(about center: SIMD2<Float>, by factor: Float) -> CoveragePolygon {
+        guard factor != 1 else { return self }
+        return CoveragePolygon(vertices: vertices.map { center + ($0 - center) * factor })
+    }
+
     /// Twice the signed area: the sign is the winding, which the clipping
     /// against the polygon's edges needs.
     var signedArea: Double {

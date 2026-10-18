@@ -6,6 +6,7 @@ import QuartzCore
 
 enum RenderPassName: String, CaseIterable {
     case shadowMap
+    case farShadowMap
     case groundShadowMask
     case world
     case postProcessing

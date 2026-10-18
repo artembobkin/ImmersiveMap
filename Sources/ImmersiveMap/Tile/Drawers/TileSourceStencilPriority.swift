@@ -8,12 +8,14 @@
 /// coarser, and every tile pass then draws its source at full extent, in
 /// every slot it stands in at once, and tests `equal` to the source's
 /// zoom: a tile paints exactly the ground the planner gave it, and
-/// nothing else, whatever the order of the draws and whatever the depth
-/// says on a relief. Two tiles of one zoom never share a pixel, so the
-/// zoom names the source, and same-zoom neighbours keep painting their
-/// stitching margins over each other. Nothing is cut to a slot on the
-/// CPU or in the vertex stage, and no tile pass writes the priority. The
-/// bits above the priority serve both surfaces.
+/// nothing else, whatever the order of the draws. Two tiles of one zoom
+/// never share a point of the ground, so the zoom names the source, and
+/// same-zoom neighbours keep painting their stitching margins over each
+/// other. On a relief the squares do share pixels, a near mountain in
+/// front of the ground behind it, and the prepass gives such a pixel to
+/// the ground in front by the ground's depth. Nothing is cut to a slot on
+/// the CPU or in the vertex stage, and no tile pass writes the priority.
+/// The bits above the priority serve both surfaces.
 enum TileSourceStencilPriority {
     /// The reference of a source, 1...17: zoom clamped to the tile
     /// scheme's range, plus one so the cleared stencil (0) reads as
