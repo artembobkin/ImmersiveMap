@@ -69,7 +69,7 @@ https://github.com/artembobkin/ImmersiveMap.git
 
 ## Attribution
 
-"© OpenStreetMap" is required if you use the built-in tiles, which are OpenStreetMap data. Otherwise the license is MIT and nothing here changes that. It would just be cool if you mention ImmersiveMap somewhere:
+"© OpenStreetMap" is required if you use the built-in tiles, which are OpenStreetMap data. The globe's overview the engine ships (the biomes painted under the land at zooms 0 to 7) is RESOLVE Ecoregions 2017 under CC BY 4.0, so "Biomes © RESOLVE" is required while it is on screen: the attribution badge shows both credits on one line and drops the biomes' past zoom 8, where none is drawn, and `.overviewTiles(isEnabled: false)` leaves the overview out together with its credit. The coast, the lakes and the roads of the overview are Natural Earth, public domain, and ask for nothing. Otherwise the license is MIT and nothing here changes that. It would just be cool if you mention ImmersiveMap somewhere:
 
 ```text
 Maps powered by ImmersiveMap (immersivemap.dev)
