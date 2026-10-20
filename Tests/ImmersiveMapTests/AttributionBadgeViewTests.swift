@@ -11,6 +11,10 @@ import XCTest
 final class AttributionBadgeViewTests: XCTestCase {
     private let boundingSize = CGSize(width: 400, height: 400)
 
+    private func lineText(of view: AttributionBadgeView) -> NSAttributedString? {
+        view.subviews.compactMap { $0 as? UILabel }.first?.attributedText
+    }
+
     func testDefaultAttributionBadgeIsInteractive() {
         let settings = ImmersiveMapSettings.default
         let view = AttributionBadgeView(attribution: settings.resolvedAttribution,
@@ -20,21 +24,41 @@ final class AttributionBadgeViewTests: XCTestCase {
         XCTAssertFalse(view.isHidden)
     }
 
-    /// No plate behind the words: the badge is the text itself, each glyph
-    /// stroked dark so it reads on any map colour underneath.
-    func testTheBadgeIsPlainTextOutlinedForAnyBackground() throws {
+    /// No plate behind the words: the badge is one line of text, each
+    /// glyph in a dark halo so it reads on any map colour underneath.
+    func testTheBadgeIsOneLineOfPlainTextInAHaloForAnyBackground() throws {
         let settings = ImmersiveMapSettings.default
         let view = AttributionBadgeView(attribution: settings.resolvedAttribution,
                                         settings: settings.attribution)
 
         XCTAssertEqual(view.backgroundColor, .clear, "Nothing is painted behind the text")
-        let title = try XCTUnwrap(view.subviews.compactMap { $0 as? UILabel }.first?.attributedText)
-        XCTAssertEqual(title.string, settings.resolvedAttribution.title)
-        let attributes = title.attributes(at: 0, effectiveRange: nil)
-        let strokeWidth = try XCTUnwrap(attributes[.strokeWidth] as? CGFloat)
-        XCTAssertLessThan(strokeWidth, 0, "A negative stroke width fills and strokes the glyphs")
-        XCTAssertNotNil(attributes[.strokeColor] as? UIColor)
+        XCTAssertEqual(view.subviews.compactMap { $0 as? UILabel }.count, 1, "One line")
+        let line = try XCTUnwrap(lineText(of: view))
+        XCTAssertEqual(line.string, "© OpenStreetMap · Biomes © RESOLVE, CC BY 4.0",
+                       "Before the camera is placed every credit shows")
+        let attributes = line.attributes(at: 0, effectiveRange: nil)
+        let halo = try XCTUnwrap(attributes[.shadow] as? NSShadow)
+        XCTAssertEqual(halo.shadowBlurRadius, AttributionBadgeView.haloBlurRadius)
         XCTAssertNotNil(attributes[.foregroundColor] as? UIColor)
+    }
+
+    /// The overview's credit is on the line at the zooms the overview is
+    /// drawn at and off it past them, and the badge narrows with the line.
+    func testACreditLeavesTheLineWithTheZoom() throws {
+        let settings = ImmersiveMapSettings.default
+        let view = AttributionBadgeView(attribution: settings.resolvedAttribution,
+                                        settings: settings.attribution)
+
+        view.apply(zoom: 3)
+        XCTAssertEqual(lineText(of: view)?.string, "© OpenStreetMap · Biomes © RESOLVE, CC BY 4.0")
+        let widthWithOverview = view.sizeThatFits(boundingSize).width
+
+        view.apply(zoom: 12.2)
+        XCTAssertEqual(lineText(of: view)?.string, "© OpenStreetMap")
+        XCTAssertLessThan(view.sizeThatFits(boundingSize).width, widthWithOverview)
+
+        view.apply(zoom: 7.9)
+        XCTAssertEqual(lineText(of: view)?.string, "© OpenStreetMap · Biomes © RESOLVE, CC BY 4.0")
     }
 
     func testEmptyAttributionHidesBadge() {
@@ -45,23 +69,37 @@ final class AttributionBadgeViewTests: XCTestCase {
         XCTAssertFalse(view.isUserInteractionEnabled)
     }
 
-    /// An empty copyright collapses the second line: the one-line badge must be
-    /// strictly shorter than the same badge with a copyright line.
-    func testOneLineAttributionIsShorterThanTwoLine() {
-        let oneLine = AttributionBadgeView(
-            attribution: ImmersiveMapAttribution(title: "© Data", copyright: ""),
+    /// A line whose every credit has left at a zoom hides the badge, and
+    /// a credit coming back shows it again.
+    func testTheBadgeHidesWhenNoCreditShowsAtTheZoom() {
+        let view = AttributionBadgeView(attribution: ImmersiveMapAttribution(credits: [.init("© Low", zoomRange: 0..<5)]),
+                                        settings: ImmersiveMapSettings.AttributionSettings())
+
+        view.apply(zoom: 9)
+        XCTAssertTrue(view.isHidden)
+        XCTAssertEqual(view.sizeThatFits(boundingSize), .zero)
+
+        view.apply(zoom: 2)
+        XCTAssertFalse(view.isHidden)
+    }
+
+    /// Two credits make a longer line, not a taller badge.
+    func testASecondCreditWidensTheLine() {
+        let one = AttributionBadgeView(
+            attribution: ImmersiveMapAttribution("© Data"),
             settings: ImmersiveMapSettings.AttributionSettings()
         )
-        let twoLine = AttributionBadgeView(
-            attribution: ImmersiveMapAttribution(title: "© Data", copyright: "© More data"),
+        let two = AttributionBadgeView(
+            attribution: ImmersiveMapAttribution(credits: [.init("© Data"), .init("© More data")]),
             settings: ImmersiveMapSettings.AttributionSettings()
         )
 
-        let oneLineHeight = oneLine.sizeThatFits(boundingSize).height
-        let twoLineHeight = twoLine.sizeThatFits(boundingSize).height
+        let oneSize = one.sizeThatFits(boundingSize)
+        let twoSize = two.sizeThatFits(boundingSize)
 
-        XCTAssertGreaterThan(oneLineHeight, 0)
-        XCTAssertGreaterThan(twoLineHeight, oneLineHeight)
+        XCTAssertGreaterThan(oneSize.height, 0)
+        XCTAssertEqual(twoSize.height, oneSize.height)
+        XCTAssertGreaterThan(twoSize.width, oneSize.width)
     }
 
     /// Size presets must order the rendered badge monotonically.

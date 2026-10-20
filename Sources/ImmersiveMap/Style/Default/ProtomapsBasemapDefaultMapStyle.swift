@@ -8,7 +8,9 @@ import simd
 /// the layers `earth`, `landcover`, `landuse`, `water`, `buildings`,
 /// `roads`, `boundaries`, `places` and `pois`, each feature told apart by
 /// `kind` and `kind_detail`, over the reading `ProtomapsBasemapSchema`
-/// makes of it.
+/// makes of it, and the layers `biome`, `lake` and `road` the engine's
+/// overview of the globe lays into the tiles of the overview zooms
+/// (`OverviewTileSource`).
 ///
 /// This file is the dispatch: the layer switch in `makeStyle`, the
 /// road policy every road feature carries, and the builders the rules
@@ -18,7 +20,7 @@ import simd
 /// Nothing in them is public: the members are
 /// internal only so that the extensions can share them across files.
 public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
-    static let implementationRevision: UInt32 = 15
+    static let implementationRevision: UInt32 = 22
     /// The style draws what the tile carries and adds no zoom gate of its
     /// own: the basemap already thins every layer per tile level, so a
     /// feature in a tile is a feature on the map. A road shows from the
@@ -40,6 +42,11 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
     /// The theme's shading of the slopes.
     public var hillshade: ImmersiveMapHillshade {
         theme.hillshade
+    }
+
+    /// The theme's darkening where the terrain hides the sky.
+    public var terrainOcclusion: ImmersiveMapTerrainOcclusion {
+        theme.terrainOcclusion
     }
 
     public init(theme: ProtomapsBasemapTheme = .default) {
@@ -114,7 +121,13 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
         case "landcover":
             return landcoverStyle(kind: kind, tileZoom: z)
         case "landuse":
-            return landuseStyle(kind: kind)
+            return landuseStyle(kind: kind, tileZoom: z)
+        case "biome":
+            return biomeStyle(kind: kind, tileZoom: z)
+        case "lake":
+            return overviewLakeStyle(tileZoom: z)
+        case "road":
+            return overviewRoadNetworkStyle(rank: parseIntValue(props["rank"]), tileZoom: z)
         case "water":
             switch data.geometry {
             case .point:
@@ -122,7 +135,7 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
             case .line:
                 return waterwayStyle(kind: kind, kindDetail: kindDetail, props: props)
             case .polygon, .unknown:
-                return polygon(key: 20, color: theme.layers.water)
+                return polygon(key: Self.waterKey, color: theme.layers.water)
             }
         case "buildings":
             if data.geometry == .point {

@@ -56,6 +56,60 @@ final class RoadSymbolWidthFadeTests: XCTestCase {
         XCTAssertEqual(TileUnificationStage.makeTileLineStyle(from: pass).worldLockZoom, 14)
     }
 
+    /// The sphere's veil on a stroke is a style field the parser bakes:
+    /// one unless the style says otherwise, so every other line is the
+    /// same on both surfaces.
+    func testTheSphereAlphaReachesTheShaderStyle() {
+        let plain = LinePass(key: 1, color: .one, lineGeometry: LineGeometryStyle(lineWidth: 8))
+        XCTAssertEqual(plain.sphereAlpha, 1)
+        XCTAssertEqual(TileUnificationStage.makeTileLineStyle(from: plain).sphereAlpha, 1)
+        let veiled = LinePass(key: 1, color: .one, sphereAlpha: 0.4, lineGeometry: LineGeometryStyle(lineWidth: 8))
+        XCTAssertEqual(TileUnificationStage.makeTileLineStyle(from: veiled).sphereAlpha, 0.4)
+        XCTAssertEqual(TileLineStyle.polygon.sphereAlpha, 1)
+        // The globe colour: the style's own unless the pass states one.
+        let grey = LinePass(key: 1, color: SIMD4<Float>(0.5, 0.6, 0.7, 1), lineGeometry: LineGeometryStyle(lineWidth: 8))
+        let own = TileUnificationStage.makeTileLineStyle(from: grey)
+        XCTAssertEqual([own.sphereColorRed, own.sphereColorGreen, own.sphereColorBlue], [0.5, 0.6, 0.7])
+        let yellow = LinePass(key: 1, color: SIMD4<Float>(0.5, 0.6, 0.7, 1), sphereColor: SIMD3<Float>(1, 0.8, 0.3),
+                              lineGeometry: LineGeometryStyle(lineWidth: 8))
+        let worn = TileUnificationStage.makeTileLineStyle(from: yellow)
+        XCTAssertEqual([worn.sphereColorRed, worn.sphereColorGreen, worn.sphereColorBlue], [1, 0.8, 0.3])
+    }
+
+    /// The overview strokes wear the theme's globe veil, the street era's
+    /// symbols do not: a road of the street zooms is never on the sphere,
+    /// and the veil is part of what the tiles bake.
+    func testTheOverviewStrokesWearTheGlobeVeil() throws {
+        func fill(_ theme: ProtomapsBasemapTheme, cls: String, z: Int) -> TestRoadPass? {
+            ProtomapsBasemapDefaultMapStyle(theme: theme)
+                .makeStyle(data: DetFeatureStyleData(layerName: "roads",
+                                                     properties: ProtomapsRoadSpelling.values(forClass: cls),
+                                                     tile: Tile(x: 0, y: 0, z: z)))
+                .resolvedLineRenderPasses.first { $0.roadPassRole == .fill }
+        }
+        let standard = ProtomapsBasemapTheme.default
+        XCTAssertEqual(standard.roadMetrics.globeOpacity, 0.6)
+        XCTAssertEqual(fill(standard, cls: "motorway", z: 6)?.sphereAlpha, 0.6)
+        XCTAssertEqual(fill(standard, cls: "motorway", z: 7)?.sphereAlpha, 0.6)
+        XCTAssertEqual(fill(standard, cls: "minor", z: 14)?.sphereAlpha, 1)
+
+        // On the globe the strokes wear the overview network's tones: the
+        // motorways and the trunks the main one, the rest the minor one,
+        // and the street era's symbols their own asphalt.
+        let network = standard.layers.overviewRoads
+        let majorTone = SIMD3<Float>(network.major.x, network.major.y, network.major.z)
+        let minorTone = SIMD3<Float>(network.minor.x, network.minor.y, network.minor.z)
+        XCTAssertEqual(fill(standard, cls: "motorway", z: 6)?.sphereColor, majorTone)
+        XCTAssertEqual(fill(standard, cls: "trunk", z: 6)?.sphereColor, majorTone)
+        XCTAssertEqual(fill(standard, cls: "primary", z: 7)?.sphereColor, minorTone)
+        XCTAssertNil(fill(standard, cls: "minor", z: 14)?.sphereColor)
+
+        let lifted = standard.roadMetrics { $0.globeOpacity = 1 }
+        XCTAssertEqual(fill(lifted, cls: "motorway", z: 6)?.sphereAlpha, 1)
+        XCTAssertNotEqual(lifted.cacheFingerprint, standard.cacheFingerprint,
+                          "the veil is baked into the tiles, so it is part of the cache identity")
+    }
+
     func testRoadMarkingsShowWhereverTheTileStatesThem() {
         let paint = ProtomapsBasemapDefaultMapStyle.roadMarkingZoomFade
         for zoom in [12.0, 13.0, 14.9, 15.0, 16.0] {

@@ -431,55 +431,52 @@ final class DebugOverlayRenderer {
         let fpsText = hasKnownFrameDelta
             ? String(format: "%.1f", 1.0 / diagnostics.frameDeltaTime)
             : "--"
-        var frameLine = "frame:\(diagnostics.frameIndex) dt:\(frameTimeText) fps:\(fpsText)"
+        // One value a line in every section, so a reader finds the one
+        // they watch.
+        var frameLines = ["frame:\(diagnostics.frameIndex)", "dt:\(frameTimeText)", "fps:\(fpsText)"]
         let gpuFrameMs = diagnostics.measurementValue(.gpuFrameDurationMs)
         if gpuFrameMs > 0 {
-            frameLine += " gpu:\(String(format: "%.2f", gpuFrameMs))ms"
+            frameLines.append("gpu:\(String(format: "%.2f", gpuFrameMs))ms")
         }
-        let memoryLine = memorySnapshot.map { snapshot in
-            "memory ram:\(String(format: "%.1f", snapshot.physicalFootprintMegabytes))MB"
+        if let memorySnapshot {
+            frameLines.append("memory ram:\(String(format: "%.1f", memorySnapshot.physicalFootprintMegabytes))MB")
         }
-        appendSection(title: "Frame",
-                      body: [frameLine, memoryLine].compactMap(\.self),
-                      into: &lines)
+        appendSection(title: "Frame", body: frameLines, into: &lines)
 
-        let tileLine = "vis:\(diagnostics.counterValue(.visibleTiles)) " +
-            "ready:\(diagnostics.counterValue(.readyTiles)) " +
-            "req:\(diagnostics.counterValue(.requestedTiles)) " +
-            "draw:\(diagnostics.counterValue(.renderedTiles))"
-        appendSection(title: "Tiles", body: [tileLine], into: &lines)
+        let tileLines = ["vis:\(diagnostics.counterValue(.visibleTiles))",
+                         "ready:\(diagnostics.counterValue(.readyTiles))",
+                         "req:\(diagnostics.counterValue(.requestedTiles))",
+                         "draw:\(diagnostics.counterValue(.renderedTiles))"]
+        appendSection(title: "Tiles", body: tileLines, into: &lines)
 
-        let labelLine = "base:\(diagnostics.counterValue(.baseLabelCount)) " +
-            "roadG:\(diagnostics.counterValue(.roadLabelGlyphCount)) " +
-            "roadI:\(diagnostics.counterValue(.roadLabelInstanceCount)) " +
-            "roadCull:\(diagnostics.counterValue(.roadLabelNearCameraCulledPathCount))/" +
-            "\(diagnostics.counterValue(.roadLabelNearCameraCulledAnchorCount))"
-        appendSection(title: "Labels", body: [labelLine], into: &lines)
+        let labelLines = ["base:\(diagnostics.counterValue(.baseLabelCount))",
+                          "roadG:\(diagnostics.counterValue(.roadLabelGlyphCount))",
+                          "roadI:\(diagnostics.counterValue(.roadLabelInstanceCount))",
+                          "roadCull:\(diagnostics.counterValue(.roadLabelNearCameraCulledPathCount))/"
+                              + "\(diagnostics.counterValue(.roadLabelNearCameraCulledAnchorCount))"]
+        appendSection(title: "Labels", body: labelLines, into: &lines)
 
         // The frame's CPU time by subsystem (update plus prepareGPU), the
         // heaviest first: where a slow frame's milliseconds go.
-        let cpuLine = diagnostics.subsystemDurations
+        let cpuLines = diagnostics.subsystemDurations
             .sorted { lhs, rhs in lhs.value != rhs.value ? lhs.value > rhs.value : lhs.key < rhs.key }
             .prefix(4)
             .map { "\($0.key):\(String(format: "%.2f", $0.value * 1000.0))" }
-            .joined(separator: " ")
-        if cpuLine.isEmpty == false {
-            appendSection(title: "CPU ms", body: [cpuLine], into: &lines)
-        }
+        appendSection(title: "CPU ms", body: Array(cpuLines), into: &lines)
 
-        let resourcesLine = "buffers:\(diagnostics.counterValue(.resourceBufferCount)) " +
-            "textures:\(diagnostics.counterValue(.resourceTextureCount)) " +
-            "pipelines:\(diagnostics.counterValue(.resourcePipelineCount))"
-        appendSection(title: "Resources", body: [resourcesLine], into: &lines)
+        let resourcesLines = ["buffers:\(diagnostics.counterValue(.resourceBufferCount))",
+                              "textures:\(diagnostics.counterValue(.resourceTextureCount))",
+                              "pipelines:\(diagnostics.counterValue(.resourcePipelineCount))"]
+        appendSection(title: "Resources", body: resourcesLines, into: &lines)
 
         let globeCullingMs = String(format: "%.2f", diagnostics.measurementValue(.globeCullingDurationMs))
-        let globeCullingLine = "ms:\(globeCullingMs) " +
-            "nodes:\(diagnostics.counterValue(.globeCullingVisitedNodes)) " +
-            "frustum:\(diagnostics.counterValue(.globeCullingFrustumRejects)) " +
-            "horizon:\(diagnostics.counterValue(.globeCullingHorizonRejects)) " +
-            "placed:\(diagnostics.counterValue(.globeCullingPlacedTiles)) " +
-            "subtree:\(diagnostics.counterValue(.globeCullingAcceptedWholeSubtrees))"
-        appendSection(title: "Globe culling", body: [globeCullingLine], into: &lines)
+        let globeCullingLines = ["ms:\(globeCullingMs)",
+                                 "nodes:\(diagnostics.counterValue(.globeCullingVisitedNodes))",
+                                 "frustum:\(diagnostics.counterValue(.globeCullingFrustumRejects))",
+                                 "horizon:\(diagnostics.counterValue(.globeCullingHorizonRejects))",
+                                 "placed:\(diagnostics.counterValue(.globeCullingPlacedTiles))",
+                                 "subtree:\(diagnostics.counterValue(.globeCullingAcceptedWholeSubtrees))"]
+        appendSection(title: "Globe culling", body: globeCullingLines, into: &lines)
 
         let skipBody: String
         if diagnostics.skipReasons.isEmpty {
@@ -1082,8 +1079,9 @@ final class DebugOverlayRenderer {
         let terrainText: String?
         if let groundRelief = frameContext.services.groundRelief, groundRelief.isActive {
             terrainText = Self.formatTerrainTag(placeTile.metalTile.tile,
-                                                relief: groundRelief.relief(for: placeTile.metalTile.tile,
-                                                                            targetZoom: placeTile.placeIn.z))
+                                                relief: placeTile.displacement.flatMap {
+                                                    groundRelief.relief(for: placeTile.metalTile.tile, terrain: $0)
+                                                })
         } else {
             terrainText = nil
         }

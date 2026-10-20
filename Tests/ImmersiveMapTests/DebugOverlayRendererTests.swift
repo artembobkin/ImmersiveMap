@@ -350,7 +350,9 @@ final class DebugOverlayRendererTests: XCTestCase {
             diagnostics: diagnostics
         )
 
-        XCTAssertTrue(lines.contains("frame:1 dt:-- fps:--"))
+        XCTAssertTrue(lines.contains("frame:1"))
+        XCTAssertTrue(lines.contains("dt:--"))
+        XCTAssertTrue(lines.contains("fps:--"))
     }
 
     func testOverlayDiagnosticsAppendGPUFrameTimeWhenMeasured() {

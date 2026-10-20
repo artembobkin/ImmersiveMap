@@ -76,8 +76,10 @@ final class SharedRenderResources {
     /// none writing the priority: the sphere's opaque ground (scene depth
     /// written) and the non-owning test for the translucent fills, the
     /// ribbons, the flat road edge lines and the bridge overlay of either
-    /// surface.
+    /// surface. `sphereRibbonOwnerState` is the sphere's ribbon cores: the
+    /// rank depth written under a strict test (`makeSphereRibbonOwnerDescriptor`).
     let sphereOpaqueOwnerState: MTLDepthStencilState
+    let sphereRibbonOwnerState: MTLDepthStencilState
     let tileStencilTestState: MTLDepthStencilState
     /// The flat ground's opaque pass: the ground depth written, so a pixel
     /// is shaded once by its topmost opaque layer, under the tile-priority
@@ -257,6 +259,7 @@ final class SharedRenderResources {
         let depthDisabledState: MTLDepthStencilState
         let groundDepthState: MTLDepthStencilState
         let sphereOpaqueOwnerState: MTLDepthStencilState
+        let sphereRibbonOwnerState: MTLDepthStencilState
         let tileStencilTestState: MTLDepthStencilState
         let groundOwnerState: MTLDepthStencilState
         let roadRankState: MTLDepthStencilState
@@ -290,6 +293,7 @@ final class SharedRenderResources {
                      depthDisabledState: device.makeDepthStencilState(descriptor: Self.makeDepthDisabledDescriptor())!,
                      groundDepthState: device.makeDepthStencilState(descriptor: Self.makeGroundDepthDescriptor())!,
                      sphereOpaqueOwnerState: device.makeDepthStencilState(descriptor: Self.makeSphereOpaqueOwnerDescriptor())!,
+                     sphereRibbonOwnerState: device.makeDepthStencilState(descriptor: Self.makeSphereRibbonOwnerDescriptor())!,
                      tileStencilTestState: device.makeDepthStencilState(descriptor: Self.makeTileStencilTestDescriptor())!,
                      groundOwnerState: device.makeDepthStencilState(descriptor: Self.makeGroundOwnerDescriptor())!,
                      roadRankState: device.makeDepthStencilState(descriptor: Self.makeRoadRankDescriptor())!,
@@ -321,6 +325,7 @@ final class SharedRenderResources {
         self.depthDisabledState = built.depthDisabledState
         self.groundDepthState = built.groundDepthState
         self.sphereOpaqueOwnerState = built.sphereOpaqueOwnerState
+        self.sphereRibbonOwnerState = built.sphereRibbonOwnerState
         self.tileStencilTestState = built.tileStencilTestState
         self.groundOwnerState = built.groundOwnerState
         self.roadRankState = built.roadRankState
@@ -678,6 +683,21 @@ final class SharedRenderResources {
         let descriptor = makeSceneDepthDescriptor()
         descriptor.frontFaceStencil = makeTilePriorityStencil(opaque: true)
         descriptor.backFaceStencil = makeTilePriorityStencil(opaque: true)
+        return descriptor
+    }
+
+    /// The sphere's ribbon cores (TilePipeline.SphereRibbonPhase.core):
+    /// the rank depth written under a strict test, drawn highest rank
+    /// first, so a pixel several strokes cover blends once, by the highest
+    /// of them, and a second piece of the same stroke, at the same rank,
+    /// is rejected where the first already painted. Under the tile-priority
+    /// test with the surface mask, as every non-owning pass.
+    private nonisolated static func makeSphereRibbonOwnerDescriptor() -> MTLDepthStencilDescriptor {
+        let descriptor = MTLDepthStencilDescriptor()
+        descriptor.depthCompareFunction = .less
+        descriptor.isDepthWriteEnabled = true
+        descriptor.frontFaceStencil = makeTilePriorityStencil(opaque: false)
+        descriptor.backFaceStencil = makeTilePriorityStencil(opaque: false)
         return descriptor
     }
 

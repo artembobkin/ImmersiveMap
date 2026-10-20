@@ -286,6 +286,7 @@ final class TileRoadLabelsBuilder {
         hasher.combine(style.sizePoints.bitPattern)
         hasher.combine(style.weight.rawValue)
         hasher.combine(style.emboldenPoints.bitPattern)
+        hasher.combine(style.opacity.bitPattern)
         hasher.combine(path.count)
         for point in path {
             hasher.combine(point.x)
@@ -397,6 +398,7 @@ private struct MergeKey: Hashable {
     let sizePoints: UInt32
     let weightRawValue: UInt8
     let emboldenPoints: UInt32
+    let opacity: UInt32
 
     init(text: String, style: LabelTextStyle) {
         self.text = text
@@ -411,6 +413,7 @@ private struct MergeKey: Hashable {
         self.sizePoints = style.sizePoints.bitPattern
         self.weightRawValue = style.weight.rawValue
         self.emboldenPoints = style.emboldenPoints.bitPattern
+        self.opacity = style.opacity.bitPattern
     }
 
     static func sortForDeterministicOrder(lhs: MergeKey, rhs: MergeKey) -> Bool {
@@ -431,6 +434,9 @@ private struct MergeKey: Hashable {
         }
         if lhs.emboldenPoints != rhs.emboldenPoints {
             return lhs.emboldenPoints < rhs.emboldenPoints
+        }
+        if lhs.opacity != rhs.opacity {
+            return lhs.opacity < rhs.opacity
         }
         if lhs.fillColor.x != rhs.fillColor.x {
             return lhs.fillColor.x < rhs.fillColor.x

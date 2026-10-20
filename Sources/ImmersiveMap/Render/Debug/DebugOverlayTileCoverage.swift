@@ -44,9 +44,7 @@ struct DebugOverlayTileCoverage: Equatable {
     /// The frame's coverage: the flat map's footprint and eye, the globe's
     /// placements alone.
     static func make(frameContext: FrameContext) -> DebugOverlayTileCoverage {
-        let placements = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements.map {
-            Placement(slot: $0.placeIn.tile, source: $0.metalTile.tile, worldWrap: $0.placeIn.worldWrap)
-        }
+        let placements = placements(of: frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements)
         let center = frameContext.mapCameraState.centerWorldMercator
         guard frameContext.renderSurfaceMode == .flat else {
             return DebugOverlayTileCoverage(placements: placements, footprint: [], center: center, eye: nil)
@@ -57,6 +55,18 @@ struct DebugOverlayTileCoverage: Equatable {
         let eye = mercator(flatWorld: SIMD2<Double>(Double(frameContext.cameraEye.x), Double(frameContext.cameraEye.y)),
                            flatRenderState: flat)
         return DebugOverlayTileCoverage(placements: placements, footprint: footprint, center: center, eye: eye)
+    }
+
+    /// The frame's placements as the map shows them, without the flat
+    /// map's horizon backdrop (`PlaceTile.isHorizonBackdrop`): the world
+    /// tile under everything is no ground of the planner's, and its
+    /// square, the whole world, would be the map's window, with the
+    /// placements the map is there to show a few pixels in it.
+    static func placements(of placeTiles: [PlaceTile]) -> [Placement] {
+        placeTiles.compactMap {
+            guard $0.isHorizonBackdrop == false else { return nil }
+            return Placement(slot: $0.placeIn.tile, source: $0.metalTile.tile, worldWrap: $0.placeIn.worldWrap)
+        }
     }
 
     /// A point of the flat render world (y up, the world `renderMapSize`

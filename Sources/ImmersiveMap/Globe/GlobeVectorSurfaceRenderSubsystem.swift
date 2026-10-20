@@ -17,17 +17,20 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
     private let pipeline: TilePipeline
     private let depthDisabledState: MTLDepthStencilState
     private let opaqueDepthState: MTLDepthStencilState
+    private let ribbonOwnerDepthState: MTLDepthStencilState
     private let translucentDepthState: MTLDepthStencilState
     private let debugOverlayControls: DebugOverlayControlState
 
     init(pipeline: TilePipeline,
          depthDisabledState: MTLDepthStencilState,
          opaqueDepthState: MTLDepthStencilState,
+         ribbonOwnerDepthState: MTLDepthStencilState,
          translucentDepthState: MTLDepthStencilState,
          debugOverlayControls: DebugOverlayControlState) {
         self.pipeline = pipeline
         self.depthDisabledState = depthDisabledState
         self.opaqueDepthState = opaqueDepthState
+        self.ribbonOwnerDepthState = ribbonOwnerDepthState
         self.translucentDepthState = translucentDepthState
         self.debugOverlayControls = debugOverlayControls
     }
@@ -60,12 +63,16 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
                                       placeTilesContext: placeTilesContext,
                                       pipeline: pipeline,
                                       opaqueDepthState: opaqueDepthState,
+                                      ribbonOwnerDepthState: ribbonOwnerDepthState,
                                       translucentDepthState: translucentDepthState,
                                       depthDisabledState: depthDisabledState,
                                       isWireframeEnabled: isWireframeEnabled,
                                       pureSphere: pureSphere,
                                       globeFrame: globeFrame,
-                                      globeLight: GlobeLightUniform.resolve(frameContext: frameContext))
+                                      globeLight: GlobeLightUniform.resolve(frameContext: frameContext),
+                                      ribbonUniform: TileSphereRibbonUniform.make(
+                                          transition: globe.transition,
+                                          presentation: frameContext.services.settings.presentation))
     }
 
     func handleMemoryWarning() {}

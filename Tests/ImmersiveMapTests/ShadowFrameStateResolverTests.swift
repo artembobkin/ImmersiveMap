@@ -8,6 +8,26 @@ import XCTest
 final class ShadowFrameStateResolverTests: XCTestCase {
     private static let equatorCenter = SIMD2<Double>(0.5, 0.5)
     private static let renderMapSize = 2.0 * Double.pi * 0.14 * pow(2.0, 16)
+    /// The zoom the curves are read at: past the default strength's rise.
+    private static let zoom = 16.0
+    private static let unitsPerMeter = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: 0,
+                                                                                 renderMapSize: renderMapSize)
+
+    /// A coverage of so many camera distances of `eye`, as the metres the
+    /// setting takes: the tests below pin the window's scaling with the
+    /// camera distance, which the metres by the zoom replaced.
+    private static func coverage(cameraDistances: Float, eye: SIMD3<Float>) -> ImmersiveMapZoomCurve {
+        ImmersiveMapZoomCurve(meters(cameraDistances: cameraDistances, eye: eye))
+    }
+
+    private static func meters(cameraDistances: Float, eye: SIMD3<Float>) -> Float {
+        Float(Double(cameraDistances * simd_length(eye)) / unitsPerMeter)
+    }
+
+    /// World units of a coverage curve at the tests' zoom.
+    private static func radius(_ coverage: ImmersiveMapZoomCurve) -> Float {
+        Float(Double(coverage.value(atZoom: zoom, interpolation: .geometric)) * unitsPerMeter)
+    }
 
     // MARK: - Gates
 
@@ -76,12 +96,9 @@ final class ShadowFrameStateResolverTests: XCTestCase {
                 continue
             }
 
-            let unitsPerMeter = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: 0,
-                                                                          renderMapSize: Self.renderMapSize)
             let spec = ShadowFrameStateResolver.windowSpec(
-                cameraDistance: simd_length(eye),
-                unitsPerMeter: unitsPerMeter,
-                coverageCameraDistances: scene.shadows.coverageCameraDistances,
+                radiusMeters: scene.shadows.nearCoverageMeters(atZoom: Self.zoom),
+                unitsPerMeter: Self.unitsPerMeter,
                 maxCasterHeightMeters: scene.shadows.maxCasterHeightMeters)
             let footprint = ShadowFrameStateResolver.visibleGroundFootprint(
                 inverseProjectionView: simd_inverse(Self.makeProjectionView(eye: eye)),
@@ -347,10 +364,10 @@ final class ShadowFrameStateResolverTests: XCTestCase {
     func testSmallCoverageShrinksTheWindowAndKeepsShadows() throws {
         let eye = Self.makeEye(pitch: 40 * .pi / 180, bearing: 0.4, distance: 0.8)
         var scene = Self.makeScene()
-        scene.shadows.coverageCameraDistances = 3
+        scene.shadows.nearCoverageMeters = Self.coverage(cameraDistances: 3, eye: eye)
         let wide = try XCTUnwrap(Self.resolve(eye: eye, scene: scene))
 
-        scene.shadows.coverageCameraDistances = 0.25
+        scene.shadows.nearCoverageMeters = Self.coverage(cameraDistances: 0.25, eye: eye)
         let tight = try XCTUnwrap(Self.resolve(eye: eye, scene: scene))
 
         // A tenth of the coverage is a much finer texel, which is the point.
@@ -383,16 +400,16 @@ final class ShadowFrameStateResolverTests: XCTestCase {
 
     func testCoverageIsClampedToItsRange() throws {
         var scene = Self.makeScene()
-        scene.shadows.coverageCameraDistances = 0
+        scene.shadows.nearCoverageMeters = 0
         let floored = try XCTUnwrap(Self.resolve(scene: scene))
-        scene.shadows.coverageCameraDistances = ShadowFrameStateResolver.coverageRange.lowerBound
+        scene.shadows.nearCoverageMeters = ImmersiveMapZoomCurve(ShadowFrameStateResolver.coverageMetersRange.lowerBound)
         let atFloor = try XCTUnwrap(Self.resolve(scene: scene))
         XCTAssertEqual(floored.shadowUniform.near.worldToShadowTexture,
                        atFloor.shadowUniform.near.worldToShadowTexture)
 
-        scene.shadows.coverageCameraDistances = 10_000
+        scene.shadows.nearCoverageMeters = 1e9
         let ceilinged = try XCTUnwrap(Self.resolve(scene: scene))
-        scene.shadows.coverageCameraDistances = ShadowFrameStateResolver.coverageRange.upperBound
+        scene.shadows.nearCoverageMeters = ImmersiveMapZoomCurve(ShadowFrameStateResolver.coverageMetersRange.upperBound)
         let atCeiling = try XCTUnwrap(Self.resolve(scene: scene))
         XCTAssertEqual(ceilinged.shadowUniform.near.worldToShadowTexture,
                        atCeiling.shadowUniform.near.worldToShadowTexture)
@@ -406,7 +423,7 @@ final class ShadowFrameStateResolverTests: XCTestCase {
 
         for coverage in [Float(3.0), 1.0, 0.5, 0.25] {
             var scene = Self.makeScene()
-            scene.shadows.coverageCameraDistances = coverage
+            scene.shadows.nearCoverageMeters = Self.coverage(cameraDistances: coverage, eye: eye)
             let state = try XCTUnwrap(Self.resolve(eye: eye, scene: scene))
             let uniform = state.shadowUniform
 
@@ -442,7 +459,7 @@ final class ShadowFrameStateResolverTests: XCTestCase {
 
         func texel(coverage: Float) throws -> Float {
             var scene = Self.makeScene()
-            scene.shadows.coverageCameraDistances = coverage
+            scene.shadows.nearCoverageMeters = Self.coverage(cameraDistances: coverage, eye: eye)
             let state = try XCTUnwrap(Self.resolve(eye: eye, scene: scene))
             return state.shadowUniform.near.normalOffsetWorld / scene.shadows.normalOffsetTexels
         }
@@ -471,12 +488,10 @@ final class ShadowFrameStateResolverTests: XCTestCase {
     /// The caster limit is the setting, clamped, and never more than the
     /// window can spend on it.
     func testTheCasterLimitFollowsTheSettingAndTheWindow() {
-        let unitsPerMeter = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: 0,
-                                                                      renderMapSize: Self.renderMapSize)
+        let unitsPerMeter = Self.unitsPerMeter
         func spec(distance: Float, coverage: Float, heightMeters: Float) -> ShadowFrameStateResolver.CascadeSpec {
-            ShadowFrameStateResolver.windowSpec(cameraDistance: distance,
+            ShadowFrameStateResolver.windowSpec(radiusMeters: Float(Double(coverage * distance) / unitsPerMeter),
                                                 unitsPerMeter: unitsPerMeter,
-                                                coverageCameraDistances: coverage,
                                                 maxCasterHeightMeters: heightMeters)
         }
 
@@ -530,7 +545,7 @@ final class ShadowFrameStateResolverTests: XCTestCase {
 
         func texel(coverage: Float) throws -> Float {
             var scene = Self.makeScene()
-            scene.shadows.coverageCameraDistances = coverage
+            scene.shadows.nearCoverageMeters = Self.coverage(cameraDistances: coverage, eye: eye)
             let state = try XCTUnwrap(Self.resolve(eye: eye, scene: scene))
             return state.shadowUniform.near.normalOffsetWorld / scene.shadows.normalOffsetTexels
         }
@@ -550,23 +565,19 @@ final class ShadowFrameStateResolverTests: XCTestCase {
 
     // MARK: - The shadows' zoom
 
-    /// Below the shadows' zoom there is no shadow state, so no pass runs,
-    /// and coming up to it the strength rises smoothly to the setting's.
+    /// Where the strength's curve is at nothing there is no shadow state,
+    /// so no pass runs, and coming up to its rise the strength follows
+    /// the curve smoothly to the setting's.
     func testTheShadowsComeInWithTheZoom() throws {
         var scene = Self.makeScene()
-        scene.shadows.minimumZoom = 13
-        scene.shadows.fadeInZooms = 1
+        scene.shadows.strength = [12: 0, 13: 0.22]
         let shadows = scene.shadows
-        XCTAssertEqual(ShadowFrameStateResolver.strengthShare(atZoom: 10, shadows: shadows), 0)
-        XCTAssertEqual(ShadowFrameStateResolver.strengthShare(atZoom: 12, shadows: shadows), 0)
-        XCTAssertEqual(ShadowFrameStateResolver.strengthShare(atZoom: 12.5, shadows: shadows), 0.5, accuracy: 1e-6)
-        XCTAssertEqual(ShadowFrameStateResolver.strengthShare(atZoom: 13, shadows: shadows), 1)
-        XCTAssertEqual(ShadowFrameStateResolver.strengthShare(atZoom: 16, shadows: shadows), 1)
-        XCTAssertEqual(ShadowFrameStateResolver.strengthShare(atZoom: nil, shadows: shadows), 1, "No zoom known: the setting's strength")
-
-        scene.shadows.fadeInZooms = 0
-        XCTAssertEqual(ShadowFrameStateResolver.strengthShare(atZoom: 12.99, shadows: scene.shadows), 0, "No fade: a switch at the zoom")
-        XCTAssertEqual(ShadowFrameStateResolver.strengthShare(atZoom: 13, shadows: scene.shadows), 1)
+        XCTAssertEqual(shadows.strength(atZoom: 10), 0)
+        XCTAssertEqual(shadows.strength(atZoom: 12), 0)
+        XCTAssertEqual(shadows.strength(atZoom: 12.5), 0.11, accuracy: 1e-6)
+        XCTAssertEqual(shadows.strength(atZoom: 13), 0.22)
+        XCTAssertEqual(shadows.strength(atZoom: 16), 0.22)
+        XCTAssertEqual(ImmersiveMapSettings.ShadowSettings(strength: 3).strength(atZoom: 16), 1, "Clamped to one")
 
         let eye = SIMD3<Float>(0.2, -0.35, 0.7)
         XCTAssertNil(ShadowFrameStateResolver.resolveInputs(renderSurfaceMode: .flat,
@@ -585,8 +596,8 @@ final class ShadowFrameStateResolverTests: XCTestCase {
                                                                          flatRenderPan: .zero,
                                                                          renderMapSize: Self.renderMapSize,
                                                                          zoom: 12.5,
-                                                                         scene: { var s = scene; s.shadows.fadeInZooms = 1; return s }()))
-        XCTAssertEqual(faded.strength, scene.shadows.strength * 0.5, accuracy: 1e-6)
+                                                                         scene: scene))
+        XCTAssertEqual(faded.strength, 0.11, accuracy: 1e-6)
     }
 
     // MARK: - The far window
@@ -596,17 +607,23 @@ final class ShadowFrameStateResolverTests: XCTestCase {
     /// one's band inside it, where the far window takes over.
     func testTheFarWindowReachesPastTheNearOne() throws {
         let eye = Self.makeEye(pitch: 40 * .pi / 180, bearing: 0.4, distance: 0.8)
-        let state = try XCTUnwrap(Self.resolve(eye: eye))
+        // The near window inside the visible ground, the far one past it:
+        // both fitted to the ground the camera sees, a near window as wide
+        // as that ground would be the far one.
+        var scene = Self.makeScene()
+        scene.shadows.nearCoverageMeters = Self.coverage(cameraDistances: 1, eye: eye)
+        scene.shadows.farCoverageMeters = Self.coverage(cameraDistances: 4, eye: eye)
+        let state = try XCTUnwrap(Self.resolve(eye: eye, scene: scene))
         let near = state.shadowUniform.near
         let far = state.shadowUniform.far
 
         XCTAssertTrue(far.isEnabled)
         XCTAssertNotNil(state.farLightProjectionView)
         XCTAssertEqual(state.slots, [.near, .far])
-        let shadows = ImmersiveMapSettings.default.scene.shadows
-        XCTAssertEqual(far.fadeEndDistance, shadows.farCoverageCameraDistances * simd_length(eye),
+        let shadows = scene.shadows
+        XCTAssertEqual(far.fadeEndDistance, Self.radius(shadows.farCoverageMeters),
                        accuracy: far.fadeEndDistance * 1e-5)
-        XCTAssertEqual(near.fadeEndDistance, shadows.coverageCameraDistances * simd_length(eye),
+        XCTAssertEqual(near.fadeEndDistance, Self.radius(shadows.nearCoverageMeters),
                        accuracy: near.fadeEndDistance * 1e-5)
         XCTAssertGreaterThanOrEqual(far.fadeStartDistance, near.fadeEndDistance,
                                     "The far band starts where the near window ends or beyond")
@@ -623,12 +640,9 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         let eye = Self.makeEye(pitch: 50 * .pi / 180, bearing: 1.1, distance: 0.6)
         let state = try XCTUnwrap(Self.resolve(eye: eye))
         let farMatrix = try XCTUnwrap(state.farLightProjectionView)
-        let unitsPerMeter = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: 0,
-                                                                      renderMapSize: Self.renderMapSize)
         let near = ShadowFrameStateResolver.windowSpec(
-            cameraDistance: simd_length(eye),
-            unitsPerMeter: unitsPerMeter,
-            coverageCameraDistances: ImmersiveMapSettings.default.scene.shadows.coverageCameraDistances,
+            radiusMeters: ImmersiveMapSettings.default.scene.shadows.nearCoverageMeters(atZoom: Self.zoom),
+            unitsPerMeter: Self.unitsPerMeter,
             maxCasterHeightMeters: ImmersiveMapSettings.default.scene.shadows.maxCasterHeightMeters)
         let footprint = ShadowFrameStateResolver.visibleGroundFootprint(
             inverseProjectionView: simd_inverse(Self.makeProjectionView(eye: eye)),
@@ -650,8 +664,8 @@ final class ShadowFrameStateResolverTests: XCTestCase {
     /// exactly as before the far window existed.
     func testAFarCoverageUnderTheNearOneLeavesOneWindow() throws {
         var scene = Self.makeScene()
-        scene.shadows.coverageCameraDistances = 3
-        scene.shadows.farCoverageCameraDistances = 3.5
+        scene.shadows.nearCoverageMeters = 3000
+        scene.shadows.farCoverageMeters = 3500
         let state = try XCTUnwrap(Self.resolve(scene: scene))
 
         XCTAssertFalse(state.shadowUniform.far.isEnabled)
@@ -659,26 +673,37 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         XCTAssertEqual(state.slots, [.near])
         XCTAssertEqual(state.casterCullingProjectionView, state.lightProjectionView)
 
-        scene.shadows.farCoverageCameraDistances = 4
+        scene.shadows.farCoverageMeters = 4000
         let both = try XCTUnwrap(Self.resolve(scene: scene))
         XCTAssertTrue(both.shadowUniform.far.isEnabled, "Four thirds of the near coverage is the threshold")
         XCTAssertTrue(ShadowFrameStateResolver.farWindowReaches(farRadius: 4, nearRadius: 3))
         XCTAssertFalse(ShadowFrameStateResolver.farWindowReaches(farRadius: 3.9, nearRadius: 3))
     }
 
-    /// The far window takes no floor in meters: close to the ground the
-    /// near window is held open by the floor and the far coverage, in
-    /// camera distances, falls under it, so the frame has the near window
-    /// alone there.
-    func testTheFloorInMetersIsTheNearWindowsAlone() throws {
-        var scene = ImmersiveMapSettings.default.scene
-        scene.shadows.minimumCoverageMeters = 500
-        let street = Self.makeEye(pitch: 55 * .pi / 180, bearing: 0.3, distance: 0.05)
-        let state = try XCTUnwrap(Self.resolve(eye: street, scene: scene))
-        XCTAssertFalse(state.shadowUniform.far.isEnabled)
+    /// The coverages are read at the frame's zoom: the same scene has
+    /// wider windows from an overview than in a street view, as the
+    /// curves say, and a far coverage that falls under the near one at a
+    /// zoom leaves one window there.
+    func testTheCoveragesFollowTheZoom() throws {
+        var scene = Self.makeScene()
+        // Shadows at every zoom read here: the default strength is off at 14.
+        scene.shadows.strength = 0.22
+        scene.shadows.nearCoverageMeters = [14: 6000, 18: 500]
+        scene.shadows.farCoverageMeters = [14: 24_000, 18: 600]
+        let overview = try XCTUnwrap(Self.resolve(scene: scene, zoom: 14))
+        let street = try XCTUnwrap(Self.resolve(scene: scene, zoom: 18))
+        XCTAssertEqual(overview.shadowUniform.near.fadeEndDistance, Float(6000 * Self.unitsPerMeter),
+                       accuracy: Float(6 * Self.unitsPerMeter))
+        XCTAssertEqual(street.shadowUniform.near.fadeEndDistance, Float(500 * Self.unitsPerMeter),
+                       accuracy: Float(0.5 * Self.unitsPerMeter))
+        XCTAssertTrue(overview.shadowUniform.far.isEnabled)
+        XCTAssertFalse(street.shadowUniform.far.isEnabled, "600 m does not reach past 500 m's band")
+        let between = try XCTUnwrap(Self.resolve(scene: scene, zoom: 16))
+        XCTAssertEqual(between.shadowUniform.near.fadeEndDistance, Float(sqrt(6000.0 * 500) * Self.unitsPerMeter),
+                       accuracy: Float(2 * Self.unitsPerMeter), "Geometric between the stops")
     }
 
-    func testSliceRectsAndFadeFollowCameraDistance() throws {
+    func testSliceRectsAndFadeFollowTheCoverage() throws {
         let eye = Self.makeEye(pitch: 30 * .pi / 180, bearing: 0.4, distance: 0.8)
         let state = try XCTUnwrap(Self.resolve(eye: eye))
 
@@ -689,7 +714,7 @@ final class ShadowFrameStateResolverTests: XCTestCase {
         XCTAssertEqual(cascade.uvMinimum.x, cascade.uvMinimum.y)
         XCTAssertEqual(cascade.uvMaximum.x, cascade.uvMaximum.y)
 
-        let expectedRadius = ImmersiveMapSettings.default.scene.shadows.coverageCameraDistances * simd_length(eye)
+        let expectedRadius = Self.radius(ImmersiveMapSettings.default.scene.shadows.nearCoverageMeters)
         XCTAssertEqual(state.shadowUniform.near.fadeEndDistance, expectedRadius, accuracy: expectedRadius * 1e-5)
         XCTAssertEqual(state.shadowUniform.near.fadeStartDistance, expectedRadius * 0.75, accuracy: expectedRadius * 1e-5)
         XCTAssertEqual(state.shadowUniform.eye, eye)
@@ -703,35 +728,26 @@ final class ShadowFrameStateResolverTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// The default scene with the coverage floor off: these tests pin the
-    /// window's scaling with the camera distance, which the floor in meters
-    /// would cut off at small distances. The floor has its own test.
+    /// The default scene: the tests that pin the window's scaling with
+    /// the camera distance set the coverages in metres for their eye.
     private static func makeScene() -> ImmersiveMapSettings.SceneSettings {
-        var scene = ImmersiveMapSettings.default.scene
-        scene.shadows.minimumCoverageMeters = 0
-        return scene
+        ImmersiveMapSettings.default.scene
     }
 
-    /// Close to the ground the window never shrinks under the floor in
-    /// meters, and from high over the map the camera distances win.
-    func testTheWindowNeverShrinksUnderTheFloorInMeters() {
-        let unitsPerMeter = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: 0,
-                                                                      renderMapSize: Self.renderMapSize)
-        func radius(distance: Float, floorMeters: Float) -> Float {
-            ShadowFrameStateResolver.windowSpec(cameraDistance: distance,
-                                                unitsPerMeter: unitsPerMeter,
-                                                coverageCameraDistances: 3,
-                                                minimumCoverageMeters: floorMeters,
+    /// The window is the coverage in metres, in the frame's world units,
+    /// within the resolver's clamp.
+    func testTheWindowIsTheCoverageInMeters() {
+        func radius(meters: Float) -> Float {
+            ShadowFrameStateResolver.windowSpec(radiusMeters: meters,
+                                                unitsPerMeter: Self.unitsPerMeter,
                                                 maxCasterHeightMeters: 10).radius
         }
-        let floor = Float(300 * unitsPerMeter)
-        XCTAssertEqual(radius(distance: floor / 30, floorMeters: 300), floor, accuracy: floor * 1e-5,
-                       "Close to the ground: the floor")
-        XCTAssertEqual(radius(distance: floor, floorMeters: 300), 3 * floor, accuracy: floor * 1e-5,
-                       "High over the map: the camera distances")
-        XCTAssertEqual(radius(distance: floor / 30, floorMeters: 0), floor / 10, accuracy: floor * 1e-5,
-                       "Zero turns the floor off")
-        XCTAssertEqual(ImmersiveMapSettings.default.scene.shadows.minimumCoverageMeters, 500)
+        let threeHundred = Float(300 * Self.unitsPerMeter)
+        XCTAssertEqual(radius(meters: 300), threeHundred, accuracy: threeHundred * 1e-5)
+        let range = ShadowFrameStateResolver.coverageMetersRange
+        XCTAssertEqual(radius(meters: 0), radius(meters: range.lowerBound), "Clamped at the floor")
+        XCTAssertEqual(radius(meters: .infinity), radius(meters: range.lowerBound), "Nothing finite: the floor")
+        XCTAssertEqual(radius(meters: 1e12), radius(meters: range.upperBound), "Clamped at the ceiling")
     }
 
     private static func makeEye(pitch: Float, bearing: Float, distance: Float) -> SIMD3<Float> {
@@ -743,13 +759,15 @@ final class ShadowFrameStateResolverTests: XCTestCase {
     private static func resolve(renderSurfaceMode: ViewMode = .flat,
                                 eye: SIMD3<Float> = SIMD3<Float>(0.2, -0.35, 0.7),
                                 flatRenderPan: SIMD2<Double> = SIMD2<Double>(0.312, -0.144),
-                                scene: ImmersiveMapSettings.SceneSettings = ImmersiveMapSettings.default.scene) -> ShadowFrameState? {
+                                scene: ImmersiveMapSettings.SceneSettings = ImmersiveMapSettings.default.scene,
+                                zoom: Double = ShadowFrameStateResolverTests.zoom) -> ShadowFrameState? {
         ShadowFrameStateResolver.resolve(renderSurfaceMode: renderSurfaceMode,
                                          projectionView: makeProjectionView(eye: eye),
                                          cameraEye: eye,
                                          centerWorldMercator: equatorCenter,
                                          flatRenderPan: flatRenderPan,
                                          renderMapSize: renderMapSize,
+                                         zoom: zoom,
                                          scene: scene)
     }
 

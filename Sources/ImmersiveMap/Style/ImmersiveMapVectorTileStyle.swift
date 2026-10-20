@@ -72,6 +72,10 @@ public protocol ImmersiveMapVectorTileStyle: Sendable {
     /// frame time, not part of the cache fingerprint. The default is the
     /// built-in theme's.
     var hillshade: ImmersiveMapHillshade { get }
+    /// How the ground is darkened where the terrain hides the sky, where
+    /// the ground relief stands. Drawn at frame time, not part of the
+    /// cache fingerprint. The default is the built-in theme's.
+    var terrainOcclusion: ImmersiveMapTerrainOcclusion { get }
     /// The style's identity: the namespace its label identities are minted
     /// in, so two styles never share a label across tiles. The default is
     /// one shared namespace for styles that state none.
@@ -102,6 +106,10 @@ public extension ImmersiveMapVectorTileStyle {
 
     var hillshade: ImmersiveMapHillshade {
         ProtomapsBasemapTheme.default.hillshade
+    }
+
+    var terrainOcclusion: ImmersiveMapTerrainOcclusion {
+        ProtomapsBasemapTheme.default.terrainOcclusion
     }
 
     var styleID: String {

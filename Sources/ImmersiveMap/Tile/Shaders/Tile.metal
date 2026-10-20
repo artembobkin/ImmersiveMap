@@ -326,7 +326,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
     }
     out.worldPos = worldPosition.xyz;
     if (kTileGroundReliefShade) {
-        out.reliefUV = groundReliefTextureUV(localPosition, relief);
+        out.reliefUV = groundReliefShadingUV(localPosition, relief);
     }
     // Nothing cut: the hardware clips at the near plane.
     out.clipDistance[0] = 1.0;
@@ -418,7 +418,8 @@ static inline half4 tileFragmentColor(FragmentIn in,
                                       depth2d_array<float> shadowMap,
                                       texture2d<half> groundShadowMask,
                                       constant GroundReliefUniform& relief,
-                                      texture2d<float> reliefHeights) {
+                                      texture2d<float> reliefHeights,
+                                      texture2d<float> reliefOcclusion) {
     float shadowFactor = tileGroundShadowFactor(in, shadow, shadowMap, groundShadowMask);
     // The fills classes carry no line fields: their coverage is identically
     // 1 and the colour (fade already folded in the vertex stage) is final.
@@ -435,6 +436,7 @@ static inline half4 tileFragmentColor(FragmentIn in,
     }
     if (kTileGroundReliefShade) {
         color.rgb = groundReliefHillshade(color.rgb, in.reliefUV, in.worldPos, reliefHeights, relief);
+        color.rgb = groundReliefOcclude(color.rgb, in.reliefUV, reliefOcclusion, relief);
     }
     color.rgb *= shadowColorMultiplier(shadow, half(shadowFactor));
     return color;
@@ -451,9 +453,10 @@ fragment half4 tileFragmentShader(FragmentIn in [[stage_in]],
                                   depth2d_array<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]],
                                   texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]],
                                   constant GroundReliefUniform& relief [[buffer(9), function_constant(kTileGroundReliefShade)]],
-                                  texture2d<float> reliefHeights [[texture(3), function_constant(kTileGroundReliefShade)]]) {
+                                  texture2d<float> reliefHeights [[texture(3), function_constant(kTileGroundReliefShade)]],
+                                  texture2d<float> reliefOcclusion [[texture(4), function_constant(kTileGroundReliefShade)]]) {
     half4 color = tileFragmentColor(in, overviewFade, shadow, lineDash, styles, styleZoomFades, lineStyles,
-                                    shadowMap, groundShadowMask, relief, reliefHeights);
+                                    shadowMap, groundShadowMask, relief, reliefHeights, reliefOcclusion);
     color.rgb = applyGroundFog(color.rgb, in.worldPos, groundFog);
     return color;
 }

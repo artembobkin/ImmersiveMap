@@ -394,6 +394,7 @@ final class ImmersiveMapCameraRuntime {
             return
         }
 
+        controlsRuntime.syncAttribution(zoom: position.zoom)
         let snapshot = currentCameraSnapshot(position: position)
         cameraNotificationGeneration += 1
         let notificationGeneration = cameraNotificationGeneration
@@ -426,6 +427,7 @@ final class ImmersiveMapCameraRuntime {
         controlsRuntime.syncPitch(cameraPosition: currentCameraPosition,
                                   minimumPitch: currentMinimumPitch(),
                                   maximumPitch: currentMaximumPitch())
+        controlsRuntime.syncAttribution(zoom: currentCameraPosition?.zoom)
     }
 
     private func applyCurrentCameraConstraints() {

@@ -238,9 +238,9 @@ struct TilePointScreenProjector {
         // of the projection, nil for a tile whose terrain is not in.
         let groundRelief = frameContext.services.groundRelief
         var reliefByTile: [Tile: GroundReliefTileLift?] = [:]
-        // The ring each source is raised by: its finest target's.
-        let targetZoomBySource = groundRelief == nil || liftsByRelief == false
-            ? [:] : frameContext.sharedState.tilePlacementState.placeTilesContext.targetZoomBySource()
+        // The terrain each source's ground rises by: its placements'.
+        let displacementBySource = groundRelief == nil || liftsByRelief == false
+            ? [:] : frameContext.sharedState.tilePlacementState.placeTilesContext.displacementBySource()
         func lift(tile: Tile, uv: SIMD2<Float>) -> Float {
             guard let groundRelief, liftsByRelief else { return 0 }
             let entry: GroundReliefTileLift?
@@ -249,7 +249,7 @@ struct TilePointScreenProjector {
             } else {
                 entry = GroundReliefTileLift(store: groundRelief,
                                              tile: tile,
-                                             targetZoom: targetZoomBySource[tile] ?? tile.z)
+                                             terrain: displacementBySource[tile])
                 reliefByTile[tile] = entry
             }
             return entry?.worldUnits(atTileUV: uv) ?? 0

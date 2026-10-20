@@ -269,6 +269,8 @@ fragment half4 surfaceLabelFragment(SurfaceLabelFragmentIn in [[stage_in]],
 
     half coverage;
     half3 color;
+    // The style's opacity rides in the colours' alpha.
+    half opacity;
     if (draw.haloPass > 0.5) {
         // The halo reaches past the glyph by its width, bounded by the
         // distance field's support.
@@ -278,14 +280,16 @@ fragment half4 surfaceLabelFragment(SurfaceLabelFragmentIn in [[stage_in]],
         }
         coverage = half(smoothstep(-haloPx - 0.5, -haloPx + 0.5, sdfDistance * screenPxRange));
         color = half3(draw.strokeColor.rgb);
+        opacity = half(draw.strokeColor.a);
     } else {
         // The point labels' weight bias (textFragment), so a name reads
         // the same on the map as on the screen.
         const float boldBiasPx = 0.75;
         coverage = half(smoothstep(-0.5, 0.5, msdfDistance * screenPxRange + boldBiasPx));
         color = half3(draw.fillColor.rgb);
+        opacity = half(draw.fillColor.a);
     }
-    half alpha = coverage;
+    half alpha = coverage * opacity;
     if (alpha <= 0.0h) {
         discard_fragment();
     }

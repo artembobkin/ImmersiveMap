@@ -17,6 +17,10 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
     // nil when nothing is checked: no network transport, or a caller that
     // wires none.
     private let archiveVersion: TileArchiveVersion?
+    // The overview of the globe laid into the tiles of the zooms it covers
+    // (`OverviewTileSource`), nil when the setting is off or the package
+    // lacks the archive.
+    private let overviewTileSource: OverviewTileSource?
     private weak var tileRenderStore: TileRenderStore?
 
     convenience init(tileRenderStore: TileRenderStore,
@@ -36,7 +40,8 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
                   archiveVersion: offlineMode == .offlineOnly
                       ? nil
                       : TileArchiveVersion(sourceRevision: preparedTileCacheIdentity.tileSourceRevision,
-                                           clearsRemembered: config.tiles.cache.clearDiskCachesOnLaunch))
+                                           clearsRemembered: config.tiles.cache.clearDiskCachesOnLaunch),
+                  overviewTileSource: config.tiles.overview.isEnabled ? OverviewTileSource.bundled() : nil)
     }
 
     init(tileRenderStore: TileRenderStore?,
@@ -44,8 +49,10 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
          tileDownloader: TileDownloader?,
          offlineTileStore: OfflineTileStore?,
          offlineMode: ImmersiveMapSettings.TileSettings.OfflineSettings.Mode,
-         archiveVersion: TileArchiveVersion? = nil) {
+         archiveVersion: TileArchiveVersion? = nil,
+         overviewTileSource: OverviewTileSource? = nil) {
         self.archiveVersion = archiveVersion
+        self.overviewTileSource = overviewTileSource
         self.preparedTileDiskCaching = preparedTileDiskCaching
         self.tileDownloader = tileDownloader
         self.offlineTileStore = offlineTileStore
@@ -88,7 +95,19 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
         }
     }
 
+    /// The tile's bytes from the source the offline mode names, with the
+    /// overview's layers laid in where the overview covers the tile.
     func download(tile: Tile) async -> TileDownloader.DownloadResult {
+        let result = await sourceResult(tile: tile)
+        guard let overviewTileSource,
+              case let .success(data, etag) = result,
+              let overview = await overviewTileSource.tileBytes(tile) else {
+            return result
+        }
+        return .success(OverviewTileSource.merge(mapTile: data, overview: overview), etag: etag)
+    }
+
+    private func sourceResult(tile: Tile) async -> TileDownloader.DownloadResult {
         switch offlineMode {
         case .disabled:
             return await networkResult(tile: tile)

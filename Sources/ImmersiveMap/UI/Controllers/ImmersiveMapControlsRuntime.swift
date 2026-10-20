@@ -91,6 +91,13 @@ final class ImmersiveMapControlsRuntime {
         attributionBadge.apply(attribution, settings: settings)
     }
 
+    /// The camera's zoom, for the credits that show at some zooms only
+    /// (`ImmersiveMapAttribution.Credit.zoomRange`). Nil before the camera
+    /// is placed shows every credit.
+    func syncAttribution(zoom: Double?) {
+        attributionBadge.apply(zoom: zoom)
+    }
+
     /// The zones as configured, or none while the map's controls are
     /// hidden (`ControlsSettings.isHidden`).
     func applyControlZones(_ controlZones: ImmersiveMapSettings.CameraSettings.ControlZoneSettings,

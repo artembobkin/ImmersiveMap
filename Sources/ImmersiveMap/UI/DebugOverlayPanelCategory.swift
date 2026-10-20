@@ -11,10 +11,14 @@ enum DebugOverlayPanelCategory: Int, CaseIterable {
     case all
     case stats
     case labels
-    /// The sun and the hillshade of the slopes.
+    /// The sun: its direction in the sky.
     case light
-    /// The shadow map's settings.
+    /// The shadow map's settings, and the hillshade with the mountains'
+    /// shadows as a group of its own.
     case shadows
+    /// The occlusion of the sky by the terrain
+    /// (`ImmersiveMapTerrainOcclusion`).
+    case occlusion
     case sky
     /// The sun on the globe (`GlobeLightSettings`).
     case globe
@@ -33,6 +37,7 @@ enum DebugOverlayPanelCategory: Int, CaseIterable {
         case .labels: "Labels"
         case .light: "Light"
         case .shadows: "Shadows"
+        case .occlusion: "AO"
         case .sky: "Sky"
         case .globe: "Globe"
         case .air: "Air"

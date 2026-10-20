@@ -25,10 +25,10 @@ extension ProtomapsBasemapDefaultMapStyle {
         guard theme.features.buildingExtrusion else {
             // The same fill an extrusion draws under itself, and nothing
             // rises: how buildings draw on the globe, now on the plane too.
-            return .fill(FillStyle(key: 30, color: theme.features.buildingFillColor))
+            return .fill(FillStyle(key: 40, color: theme.features.buildingFillColor))
         }
         return .extrusion(ExtrusionStyle(
-            key: 30,
+            key: 40,
             color: theme.features.buildingFillColor,
             heightScale: 8.0,
             anchorZoom: 16,

@@ -74,6 +74,19 @@ final class FlatRingRuleCoverageTests: XCTestCase {
         XCTAssertEqual(same.vertices.count, plane.vertices.count, "A slab of no height is the plane")
     }
 
+    /// Each band carries the terrain zoom its rule gives it: the band's
+    /// zoom less the rule's drop (`FlatRingRule.terrainZoomDrop`).
+    func testEachBandCarriesItsRulesTerrainZoom() throws {
+        let fixture = try Self.makeFixture(zoom: 13.4, pitchDegrees: 60)
+        let rules = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1),
+                                          FlatRingRule(zoomDrop: 2, distance: 3, terrainZoomDrop: 5)])
+        let resolved = Self.resolve(fixture, targetZoom: 13, rules: rules)
+        XCTAssertEqual(resolved.bands.map(\.zoom), [13, 11])
+        XCTAssertEqual(resolved.bands.map(\.terrainZoom), [13, 6])
+        XCTAssertEqual(Self.resolve(fixture, targetZoom: 13).bands.map(\.terrainZoom), [13, 10, 10, 6],
+                       "The defaults: the near ring's own, three under it past the near ring, seven for the far band")
+    }
+
     private static func resolve(_ fixture: Fixture,
                                 targetZoom: Int,
                                 rules: FlatRingRules = .default,

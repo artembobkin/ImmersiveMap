@@ -113,6 +113,7 @@ final class ImmersiveMapHostRuntime {
                 avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
                 sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)? = nil,
                 frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)? = nil,
+                terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)? = nil,
                 markerContent: MarkerViewContent?,
                 cameraPosition: ImmersiveMapCameraPosition?,
                 tourVideoRecorder: ImmersiveMapTourVideoRecorder? = nil) {
@@ -123,7 +124,8 @@ final class ImmersiveMapHostRuntime {
                         selectionController: selectionController,
                         avatarTapAction: avatarTapAction,
                         sceneModelTapAction: sceneModelTapAction,
-                        frameRenderedAction: frameRenderedAction)
+                        frameRenderedAction: frameRenderedAction,
+                        terrainSurroundingsAction: terrainSurroundingsAction)
         syncTourVideoRecorder(tourVideoRecorder)
         updateMarkerContent(markerContent)
         runtimeGraph.cameraCommandHandler.applyCameraPosition(cameraPosition)
@@ -145,7 +147,8 @@ final class ImmersiveMapHostRuntime {
                         selectionController: nil,
                         avatarTapAction: nil,
                         sceneModelTapAction: nil,
-                        frameRenderedAction: nil)
+                        frameRenderedAction: nil,
+                        terrainSurroundingsAction: nil)
         syncTourVideoRecorder(nil)
         updateMarkerContent(nil)
     }
@@ -195,10 +198,12 @@ final class ImmersiveMapHostRuntime {
                          selectionController newSelectionController: ImmersiveMapSelectionController?,
                          avatarTapAction newAvatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
                          sceneModelTapAction newSceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)? = nil,
-                         frameRenderedAction newFrameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)? = nil) {
+                         frameRenderedAction newFrameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)? = nil,
+                         terrainSurroundingsAction newTerrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)? = nil) {
         runtimeGraph.selectionHandler.setAvatarTapAction(newAvatarTapAction)
         runtimeGraph.selectionHandler.setSceneModelTapAction(newSceneModelTapAction)
         runtimeGraph.renderRuntime.setFrameRenderedAction(newFrameRenderedAction)
+        runtimeGraph.renderRuntime.setTerrainSurroundingsAction(newTerrainSurroundingsAction)
         let shouldUpdateAvatarsController = runtimeGraph.avatarRuntime.isAttachedController(newAvatarsController) == false
         let shouldUpdateSceneModelsController = runtimeGraph.sceneModelRuntime.isAttachedController(newSceneModelsController) == false
         let shouldUpdateCameraController = runtimeGraph.cameraRuntime.isAttachedController(newCameraController) == false

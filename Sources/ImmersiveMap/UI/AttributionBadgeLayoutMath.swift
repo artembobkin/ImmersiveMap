@@ -8,40 +8,31 @@ import Foundation
 /// All coordinates are top-left origin: valid as-is on iOS, and on macOS
 /// because the badge view is flipped.
 enum AttributionBadgeLayoutMath {
-    /// Concrete metrics of one badge size preset. `regular` matches the
-    /// historical constants exactly, so the default rendering is unchanged.
+    /// Concrete metrics of one badge size preset.
     struct Metrics: Equatable {
-        let titleFontSize: CGFloat
-        let copyrightFontSize: CGFloat
+        /// The text's size. Every credit on the line shares it.
+        let fontSize: CGFloat
         let horizontalInset: CGFloat
         let verticalInset: CGFloat
-        let interLabelSpacing: CGFloat
-        let maximumWidth: CGFloat
     }
+
+    /// The words between two credits on the line.
+    static let creditSeparator = " · "
 
     static func metrics(for size: ImmersiveMapSettings.AttributionSettings.Size) -> Metrics {
         switch size {
         case .small:
-            return Metrics(titleFontSize: 10,
-                           copyrightFontSize: 8,
+            return Metrics(fontSize: 10,
                            horizontalInset: 8,
-                           verticalInset: 5,
-                           interLabelSpacing: 2,
-                           maximumWidth: 200)
+                           verticalInset: 5)
         case .regular:
-            return Metrics(titleFontSize: 12,
-                           copyrightFontSize: 10,
+            return Metrics(fontSize: 12,
                            horizontalInset: 10,
-                           verticalInset: 7,
-                           interLabelSpacing: 2,
-                           maximumWidth: 240)
+                           verticalInset: 7)
         case .large:
-            return Metrics(titleFontSize: 14,
-                           copyrightFontSize: 12,
+            return Metrics(fontSize: 14,
                            horizontalInset: 12,
-                           verticalInset: 9,
-                           interLabelSpacing: 3,
-                           maximumWidth: 300)
+                           verticalInset: 9)
         }
     }
 
@@ -55,21 +46,13 @@ enum AttributionBadgeLayoutMath {
         max(0, bounds.width - safeAreaInsets.left - safeAreaInsets.right - margin * 2)
     }
 
-    /// Badge size from measured label sizes. A zero copyright size means a
-    /// one-line badge: neither the second row nor the inter-label spacing
-    /// contributes.
-    static func badgeSize(titleSize: CGSize,
-                          copyrightSize: CGSize,
+    /// Badge size from the measured size of the line: the line and its
+    /// insets, no wider than the width it is given, where the line is cut.
+    static func badgeSize(textSize: CGSize,
                           metrics: Metrics,
                           boundingWidth: CGFloat) -> CGSize {
-        let maximumTextWidth = max(0, min(metrics.maximumWidth, boundingWidth) - metrics.horizontalInset * 2)
-        let textWidth = max(min(titleSize.width, maximumTextWidth),
-                            min(copyrightSize.width, maximumTextWidth))
-        let width = min(boundingWidth, ceil(textWidth + metrics.horizontalInset * 2))
-        let copyrightHeight = copyrightSize.height > 0
-            ? copyrightSize.height + metrics.interLabelSpacing
-            : 0
-        let height = ceil(titleSize.height + copyrightHeight + metrics.verticalInset * 2)
+        let width = min(boundingWidth, ceil(textSize.width + metrics.horizontalInset * 2))
+        let height = ceil(textSize.height + metrics.verticalInset * 2)
 
         return CGSize(width: width, height: height)
     }
@@ -132,25 +115,8 @@ enum AttributionBadgeLayoutMath {
         return CGRect(x: x, y: y, width: badgeSize.width, height: badgeSize.height)
     }
 
-    /// Title/copyright frames inside the badge; a zero copyright height
-    /// yields a zero copyright frame and no spacing.
-    static func labelFrames(badgeBounds: CGRect,
-                            titleHeight: CGFloat,
-                            copyrightHeight: CGFloat,
-                            metrics: Metrics) -> (title: CGRect, copyright: CGRect) {
-        let textFrame = badgeBounds.insetBy(dx: metrics.horizontalInset, dy: metrics.verticalInset)
-        let title = CGRect(x: textFrame.minX,
-                           y: textFrame.minY,
-                           width: textFrame.width,
-                           height: titleHeight)
-        guard copyrightHeight > 0 else {
-            return (title, CGRect(x: textFrame.minX, y: title.maxY, width: textFrame.width, height: 0))
-        }
-
-        let copyright = CGRect(x: textFrame.minX,
-                               y: title.maxY + metrics.interLabelSpacing,
-                               width: textFrame.width,
-                               height: copyrightHeight)
-        return (title, copyright)
+    /// The line's frame inside the badge: the badge less its insets.
+    static func labelFrame(badgeBounds: CGRect, metrics: Metrics) -> CGRect {
+        badgeBounds.insetBy(dx: metrics.horizontalInset, dy: metrics.verticalInset)
     }
 }

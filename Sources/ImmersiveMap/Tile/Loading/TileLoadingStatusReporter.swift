@@ -82,20 +82,34 @@ struct TileLoadingStatusSnapshot: Equatable {
             return []
         }
 
+        // One value a line, so a reader finds the one they watch.
         var output = [
-            "tiles req:\(requested) dedup:\(deduplicated) active:\(activeLoads) scheduled:\(scheduled)",
-            "disk in:\(disk.inFlight) hit:\(disk.completed) miss:\(disk.failed)",
-            "network in:\(network.inFlight) done:\(network.completed) fail:\(network.failed) bytes:\(networkBytes)",
-            "parse in:\(parsing.inFlight) done:\(parsing.completed) fail:\(parsing.failed)",
-            "total done:\(totalCompleted) fail:\(totalFailed)"
+            "requested:\(requested)",
+            "deduplicated:\(deduplicated)",
+            "active:\(activeLoads)",
+            "scheduled:\(scheduled)",
+            "disk in:\(disk.inFlight)",
+            "disk hit:\(disk.completed)",
+            "disk miss:\(disk.failed)",
+            "network in:\(network.inFlight)",
+            "network done:\(network.completed)",
+            "network fail:\(network.failed)",
+            "network bytes:\(networkBytes)",
+            "parse in:\(parsing.inFlight)",
+            "parse done:\(parsing.completed)",
+            "parse fail:\(parsing.failed)",
+            "total done:\(totalCompleted)",
+            "total fail:\(totalFailed)"
         ]
 
-        let currentDisk = latestDiskTile.map { "disk:\(Self.tileDescription($0))" }
-        let currentNetwork = latestNetworkTile.map { "net:\(Self.tileDescription($0))" }
-        let currentParsing = latestParsingTile.map { "parse:\(Self.tileDescription($0))" }
-        let current = [currentDisk, currentNetwork, currentParsing].compactMap { $0 }.joined(separator: " ")
-        if current.isEmpty == false {
-            output.append("current \(current)")
+        if let latestDiskTile {
+            output.append("current disk:\(Self.tileDescription(latestDiskTile))")
+        }
+        if let latestNetworkTile {
+            output.append("current net:\(Self.tileDescription(latestNetworkTile))")
+        }
+        if let latestParsingTile {
+            output.append("current parse:\(Self.tileDescription(latestParsingTile))")
         }
         if let latestFailure {
             output.append("last failure: \(latestFailure)")

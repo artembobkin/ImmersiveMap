@@ -18,16 +18,24 @@ final class ImmersiveMapSettingsDefaultsTests: XCTestCase {
         XCTAssertEqual(ImmersiveMapSettings.default.scene.light.direction, SIMD3<Float>(-0.4, -0.6, 1.0))
     }
 
+    /// The air over the mountains is on by default: the mountain air made
+    /// of the default plain air, so a pan into a range fades into it
+    /// without an app setting it.
+    func testDefaultMountainAirIsOn() {
+        let scene = ImmersiveMapSettings.default.scene
+        XCTAssertEqual(scene.mountainGroundFog, ImmersiveMapSettings.GroundFogSettings.mountainAir(from: scene.groundFog))
+        XCTAssertEqual(scene.mountainGroundFog?.isEnabled, true)
+        XCTAssertEqual(scene.mountainGroundFog?.baseAltitudeMeters, 1500)
+        XCTAssertNil(ImmersiveMapSettings.default.mountainGroundFog(nil).scene.mountainGroundFog, "One air everywhere on request")
+    }
+
     func testDefaultShadowsAreEnabled() {
         let shadows = ImmersiveMapSettings.default.scene.shadows
         XCTAssertTrue(shadows.isEnabled)
-        XCTAssertEqual(shadows.strength, 0.22)
-        XCTAssertEqual(shadows.minimumZoom, 14)
-        XCTAssertEqual(shadows.fadeInZooms, 1)
+        XCTAssertEqual(shadows.strength, [14: 0, 15: 0.22])
         XCTAssertEqual(shadows.mapResolution, 4096)
-        XCTAssertEqual(shadows.coverageCameraDistances, 3.0)
-        XCTAssertEqual(shadows.farCoverageCameraDistances, 12.0)
-        XCTAssertEqual(shadows.minimumCoverageMeters, 500)
+        XCTAssertEqual(shadows.nearCoverageMeters, [12: 24_000, 14: 6000, 16: 1500, 18: 500])
+        XCTAssertEqual(shadows.farCoverageMeters, [12: 96_000, 14: 24_000, 16: 6000, 18: 1500])
         XCTAssertEqual(shadows.normalOffsetTexels, 2.5)
         XCTAssertEqual(shadows.maxCasterHeightMeters, 500)
         XCTAssertEqual(shadows.softness, 1.5)

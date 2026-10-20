@@ -147,12 +147,11 @@ final class GroundReliefTests: XCTestCase {
     func testTheCentreOfTheScreenMeetsTheTerrainNotThePlane() throws {
         let device = try Self.device()
         let image = try Self.png(size: 2, pixels: Array(repeating: (128, 100, 0), count: 4))
-        // Every height: the ring of zoom 16 reads its own terrain, and the
-        // zoom 15 tile in stands in for it.
+        // Outside a frame the ring of zoom 16 reads its own terrain, and
+        // the zoom 15 tile in stands in for it.
         let settings = ImmersiveMapSettings.TileSettings.GroundReliefSettings(isEnabled: true,
                                                                               exaggeration: 2,
-                                                                              minimumSourceZoom: 15,
-                                                                              detail: .maximum)
+                                                                              minimumSourceZoom: 15)
         let store = GroundReliefStore(device: device, settings: settings, fetch: { _ in .image(image) })
         let tile = Tile(x: 9647, y: 12321, z: 15)
         _ = try XCTUnwrap(waitForRelief(of: tile, in: store))
@@ -251,8 +250,8 @@ final class GroundReliefTests: XCTestCase {
         XCTAssertEqual(options.groundFlatteningGrid(forTileZoom: 15), 32)
         XCTAssertEqual(options.groundFlatteningGridByTileZoomKey, "12=128,13=96")
         XCTAssertEqual(TileParseOptions(settings: .default).groundFlatteningGridByTileZoomKey,
-                       "0=64,1=64,2=32,3=32,9=256,10=256,11=256,12=128,13=64,14=32",
-                       "The default gives the relief's zooms a cell of about the same ground, and the globe's the sphere's split")
+                       "0=64,1=64,2=32,3=32,9=128,10=128,11=128,12=128,13=64,14=32",
+                       "128 cells on the relief's zooms, a vertex per height of the zoom 10 map from zoom 12 on, and the globe's the sphere's split")
         XCTAssertEqual(TileParseOptions(settings: .default).groundFlatteningGrid(forTileZoom: 15), 16)
         XCTAssertEqual(TileParseOptions(settings: .default).groundFlatteningGrid(forTileZoom: 8), 16, "Beyond the named zooms, the grid")
         for zoom in 0 ... 3 {
@@ -534,111 +533,273 @@ final class GroundReliefTests: XCTestCase {
     /// drawn with the coarser terrain already in meanwhile, the far rings'
     /// terrain below the floor: without it the tile lay flat for the
     /// frames its own terrain took, a piece of a mountain gone and back.
-    /// The floor still ends the search of a tile the source lacks, and an
-    /// exact lookup takes nothing coarser.
-    func testATileAtTheFloorStandsOnCoarserTerrainWhileItsOwnLoads() throws {
+    /// The floor ends the search of a tile the source lacks: a missing
+    /// tile above it binds the finest ancestor the source has, a missing
+    /// tile at the floor counts as in and flat, and no load goes below it.
+    func testTheFloorEndsTheSearchForAMissingTile() throws {
         let device = try Self.device()
         let image = try Self.png(size: 2, pixels: Array(repeating: (128, 100, 0), count: 4))
         let settings = ImmersiveMapSettings.TileSettings.GroundReliefSettings(isEnabled: true,
                                                                               minimumSourceZoom: 12)
-        // The zoom 12 terrain never arrives, the coarser ones do.
+        // The source has nothing at zooms 12 and 13.
         let store = GroundReliefStore(device: device, settings: settings, fetch: { url in
-            if url.path.contains("/12/") { throw URLError(.timedOut) }
-            return .image(image)
+            url.path.contains("/13/") || url.path.contains("/12/") ? .missing : .image(image)
         })
         let deep = Tile(x: 4823, y: 6160, z: 13)
-        let coarse = try XCTUnwrap(deep.findParentTile(atZoom: 11))
-        _ = try XCTUnwrap(waitForRelief(of: coarse, in: store), "The far ring's terrain is in")
-        let standIn = try XCTUnwrap(waitForRelief(of: deep, in: store), "The deep tile stands on it meanwhile")
-        XCTAssertEqual(standIn.scale, 0.25, "Placed in the zoom 11 terrain, a quarter of its side")
-        XCTAssertNil(store.relief(for: deep, terrainZoom: 12, orCoarser: false), "Its own terrain is not in")
+        let floor = try XCTUnwrap(deep.findParentTile(atZoom: 12))
+        store.setBands([FlatRingBand(zoom: 13, distance: 1, tileCount: 9, terrainZoom: 13)])
+        XCTAssertTrue(waitUntil { store.request(tiles: [deep]); return store.statusSnapshot().missingCount == 2 },
+                      "Zoom 13 is missing, then its parent at the floor")
+        XCTAssertEqual(store.terrainSource(for: deep, targetZoom: 13), floor, "The search ends at the floor")
+        store.request(tiles: [deep])
+        XCTAssertEqual(store.statusSnapshot().wantedCount, 0, "Nothing to load: no load goes below the floor")
+        XCTAssertTrue(store.isResident(floor), "The source has nothing here: the tile is placed, flat")
+        XCTAssertNil(store.relief(for: deep, terrain: floor), "Bound to a tile that cannot come: drawn flat")
     }
 
-    // MARK: - The detail
+    /// A terrain source out of reach: a tile whose load has failed
+    /// `unavailableAfterAttempts` times counts as in and flat, so the map
+    /// tiles over it are placed on the plane instead of waiting, and the
+    /// store's version moves so the frame plans over it. The retries go
+    /// on, and the tile rises when one succeeds.
+    func testATileTheSourceDoesNotAnswerForCountsAsInAndFlat() throws {
+        let device = try Self.device()
+        let image = try Self.png(size: 2, pixels: Array(repeating: (128, 100, 0), count: 4))
+        let settings = ImmersiveMapSettings.TileSettings.GroundReliefSettings(isEnabled: true, minimumSourceZoom: 12)
+        struct Unreachable: Error {}
+        nonisolated(unsafe) var answers = false
+        nonisolated(unsafe) var clock: TimeInterval = 1000
+        let store = GroundReliefStore(device: device, settings: settings,
+                                      fetch: { _ in
+                                          if answers { return .image(image) }
+                                          throw Unreachable()
+                                      },
+                                      now: { clock })
+        let tile = Tile(x: 4823, y: 6160, z: 13)
+        store.setBands([FlatRingBand(zoom: 13, distance: 1, tileCount: 9, terrainZoom: 13)])
+        store.request(tiles: [tile])
+        XCTAssertTrue(waitUntil { store.statusSnapshot().loadingCount == 0 }, "The first attempt fails")
+        XCTAssertFalse(store.isResident(tile), "One failure may be a dropped connection")
+        let versionBefore = store.version
+        clock += GroundReliefStore.retryBaseDelay + 1
+        XCTAssertTrue(waitUntil { store.request(tiles: [tile]); return store.isResident(tile) },
+                      "The second failure says the source is out of reach: in, and flat")
+        XCTAssertNil(store.relief(for: tile, terrain: tile), "Drawn flat")
+        XCTAssertNotEqual(store.version, versionBefore, "The frame plans over it")
+        answers = true
+        clock += GroundReliefStore.retryMaximumDelay + 1
+        XCTAssertTrue(waitUntil { store.request(tiles: [tile]); return store.relief(for: tile, terrain: tile) != nil },
+                      "The retries go on: the tile rises when the source answers")
+    }
 
-    /// The cinematic two maps are the default.
-    func testTheCinematicDetailIsTheDefault() {
+    /// Past the relief's zooms the demand asks for the terrain of the
+    /// collapse zoom's tiles over the targets, the ones the relief reads
+    /// when it rises back, not the street tiles' own. And the terrain the
+    /// planner wanted and found out comes last.
+    func testTheDemandIsCappedAtTheCollapseZoomAndAsksWhatThePlannerWanted() {
+        let zooms = GroundReliefTerrainZooms(cameraZoom: 10, bands: [FlatRingBand(zoom: 17, distance: 1, tileCount: 9, terrainZoom: 17)])
+        let point = SIMD2<Double>((300 + 0.8) / 1024, (400 + 0.3) / 1024)
+        let streets = (0 ..< 4).map { VisibleTile(tile: Tile(x: 38500 + $0 % 2, y: 51240 + $0 / 2, z: 17)) }
+        let wanted = Tile(x: 2406, y: 3202, z: 13)
+        let tiles = GroundReliefDemand.tiles(targets: streets, shown: [], also: [wanted], centerWorldMercator: point, zooms: zooms,
+                                             maximumTargetZoom: 13,
+                                             terrainSource: { tile, _ in (tile, tile) })
+        XCTAssertFalse(tiles.contains { $0.z == 17 }, "No street tile's own terrain")
+        XCTAssertEqual(Set(tiles.filter { $0.z == 13 }), Set([streets[0].tile.findParentTile(atZoom: 13)!, wanted]),
+                       "The four street tiles' one zoom 13 ancestor, and what the planner wanted")
+        XCTAssertEqual(tiles.last, wanted, "What the planner wanted, last")
+    }
+
+    /// A placement is bound to one terrain tile, the ring's over it, and
+    /// drawn out of that tile alone: a source the frame has no such tile
+    /// for (`minimumSourceZoom`) binds the finest ancestor it has.
+    func testAPlacementIsBoundToItsRingsTerrain() throws {
+        let device = try Self.device()
+        let image = try Self.png(size: 2, pixels: Array(repeating: (128, 100, 0), count: 4))
+        let settings = ImmersiveMapSettings.TileSettings.GroundReliefSettings(isEnabled: true, minimumSourceZoom: 12)
+        // The source has no zoom 13 tiles.
+        let store = GroundReliefStore(device: device, settings: settings, fetch: { url in
+            url.path.contains("/13/") ? .missing : .image(image)
+        })
+        let tile = Tile(x: 4823, y: 6160, z: 13)
+        let parent = try XCTUnwrap(tile.findParentTile(atZoom: 12))
+        store.setBands([FlatRingBand(zoom: 13, distance: 1, tileCount: 9, terrainZoom: 13)])
+        XCTAssertEqual(store.terrainSource(for: tile, targetZoom: 13), tile, "The ring's own, until the source says it has none")
+        XCTAssertFalse(store.isResident(tile))
+        XCTAssertNil(store.relief(for: tile, terrain: tile), "Not in: no relief, and no stand-in for it")
+        store.request(tiles: [tile])
+        XCTAssertTrue(waitUntil { store.request(tiles: [tile]); return store.isResident(parent) })
+        XCTAssertEqual(store.terrainSource(for: tile, targetZoom: 13), parent, "The finest the source has")
+        let relief = try XCTUnwrap(store.relief(for: tile, terrain: parent))
+        XCTAssertEqual(relief.scale, 0.5, "Placed in the zoom 12 terrain, half its side")
+        XCTAssertNil(store.relief(for: parent, terrain: tile), "A terrain finer than the tile cannot raise it")
+        store.setActive(false)
+        XCTAssertEqual(store.terrainSource(for: tile, targetZoom: 13), parent,
+                       "Collapsed, the rings' terrain is still named and kept: the rise back binds it at once")
+        XCTAssertNil(store.relief(for: tile, terrain: parent), "And off the terrain nothing rises")
+    }
+
+    /// The terrain lives while a frame asks for it, for a target or for a
+    /// placement shown, and goes with the next demand that does not: no
+    /// budget, the tiles' own lifetime (`TileRenderStore`). A load the
+    /// frame stopped wanting lands into nothing. Without the released
+    /// cache a tile asked for again is loaded again.
+    func testTheTerrainLivesWhileAFrameWantsIt() throws {
+        let device = try Self.device()
+        let image = try Self.png(size: 2, pixels: Array(repeating: (128, 0, 0), count: 4))
+        let settings = ImmersiveMapSettings.TileSettings.GroundReliefSettings(isEnabled: true, minimumSourceZoom: 12,
+                                                                              releasedCacheBytes: 0)
+        let store = GroundReliefStore(device: device, settings: settings, fetch: { _ in .image(image) })
+        let tiles = [Tile(x: 2412, y: 3080, z: 13), Tile(x: 2413, y: 3080, z: 13), Tile(x: 2412, y: 3081, z: 13)]
+        store.request(tiles: tiles)
+        XCTAssertTrue(waitUntil { store.statusSnapshot().wantedResidentCount == 3 })
+        let next = Tile(x: 2413, y: 3081, z: 13)
+        store.request(tiles: [next])
+        XCTAssertEqual(store.statusSnapshot().residentCount, 0, "The three no frame wants any more went at once")
+        XCTAssertTrue(waitUntil { store.isResident(next) })
+        XCTAssertEqual(store.statusSnapshot().residentCount, 1)
+        store.request(tiles: [tiles[0], next])
+        XCTAssertTrue(waitUntil { store.isResident(tiles[0]) })
+        XCTAssertEqual(store.statusSnapshot().residentCount, 2, "Asked for again, it is loaded again")
+    }
+
+    /// The released cache: a tile the frame stopped reading waits in it,
+    /// up to the cache's bytes with the oldest released let go first, and
+    /// comes back without a load when a frame reads it again. The store's
+    /// version moves either way.
+    func testAReleasedTileComesBackFromTheCacheWithoutALoad() throws {
+        let device = try Self.device()
+        let image = try Self.png(size: 2, pixels: Array(repeating: (128, 0, 0), count: 4))
+        let loads = Locked(0)
+        func makeStore(cacheBytes: Int) -> GroundReliefStore {
+            let settings = ImmersiveMapSettings.TileSettings.GroundReliefSettings(isEnabled: true, minimumSourceZoom: 12,
+                                                                                  releasedCacheBytes: cacheBytes)
+            return GroundReliefStore(device: device, settings: settings, fetch: { _ in
+                loads.withLock { $0 += 1 }
+                return .image(image)
+            })
+        }
+        let tiles = [Tile(x: 2412, y: 3080, z: 13), Tile(x: 2413, y: 3080, z: 13), Tile(x: 2412, y: 3081, z: 13)]
+        let next = Tile(x: 2413, y: 3081, z: 13)
+
+        let store = makeStore(cacheBytes: 50 << 20)
+        store.request(tiles: tiles)
+        XCTAssertTrue(waitUntil { store.statusSnapshot().wantedResidentCount == 3 })
+        let costPerTile = store.statusSnapshot().residentBytes / 3
+        XCTAssertGreaterThan(costPerTile, 0)
+        let loadsBefore = loads.withLock { $0 }
+        let versionBefore = store.version
+        store.request(tiles: [next])
+        var status = store.statusSnapshot()
+        XCTAssertEqual(status.residentCount, 0, "The three no frame wants any more are not the frame's")
+        XCTAssertEqual(status.releasedCount, 3, "They wait in the cache")
+        XCTAssertEqual(status.releasedBytes, costPerTile * 3)
+        XCTAssertNotEqual(store.version, versionBefore)
+        XCTAssertTrue(waitUntil { store.isResident(next) })
+        store.request(tiles: [tiles[0], next])
+        XCTAssertTrue(store.isResident(tiles[0]), "Back from the cache at once")
+        XCTAssertEqual(loads.withLock { $0 }, loadsBefore + 1, "One load for the new tile, none for the tile back")
+        status = store.statusSnapshot()
+        XCTAssertEqual(status.residentCount, 2)
+        XCTAssertEqual(status.releasedCount, 2)
+        XCTAssertNotNil(store.relief(for: tiles[0], terrain: tiles[0]), "Read as a loaded tile is")
+
+        // Room for two tiles: the oldest released goes first.
+        let small = makeStore(cacheBytes: costPerTile * 2)
+        small.request(tiles: tiles)
+        XCTAssertTrue(waitUntil { small.statusSnapshot().wantedResidentCount == 3 })
+        small.request(tiles: [])
+        status = small.statusSnapshot()
+        XCTAssertEqual(status.releasedCount, 2, "Two fit")
+        XCTAssertLessThanOrEqual(status.releasedBytes, costPerTile * 2)
+        small.request(tiles: [tiles[0]])
+        XCTAssertFalse(small.isResident(tiles[0]) && small.statusSnapshot().releasedCount == 2,
+                       "The first released was let go when the third came: it loads again")
+        small.removeAll()
+        XCTAssertEqual(small.statusSnapshot().releasedCount, 0, "A memory warning empties the cache too")
+    }
+
+    /// The demand: the camera's nine tiles first, then the targets' terrain
+    /// by the target's distance, then what the placements shown rise by.
+    func testTheDemandAsksForTheCamerasMapThenTheTargetsThenTheShown() throws {
+        let zooms = GroundReliefTerrainZooms(cameraZoom: 10, bands: [FlatRingBand(zoom: 13, distance: 1, tileCount: 9, terrainZoom: 13),
+                                                                      FlatRingBand(zoom: 12, distance: 3, tileCount: 9, terrainZoom: 10)])
+        // A point in the north-east quarter of its zoom 10 tile.
+        let point = SIMD2<Double>((300 + 0.8) / 1024, (400 + 0.3) / 1024)
+        let near = VisibleTile(tile: Tile(x: 2406, y: 3202, z: 13))
+        let far = VisibleTile(tile: Tile(x: 1300, y: 1700, z: 12))
+        let shownTerrain = Tile(x: 2405, y: 3202, z: 13)
+        let metalTile = MetalTile(tile: Tile(x: 2405, y: 3202, z: 13), tileBuffers: try TileBuffersFixtures.makeEmptyTileBuffers())
+        let shown = PlaceTile(metalTile: metalTile, placeIn: VisibleTile(tile: metalTile.tile), terrain: shownTerrain)
+        let tiles = GroundReliefDemand.tiles(targets: [far, near], shown: [shown], centerWorldMercator: point, zooms: zooms,
+                                             terrainSource: { tile, targetZoom in
+                                                 (zooms.terrainTile(for: tile, targetZoom: targetZoom),
+                                                  zooms.displacementTile(for: tile, targetZoom: targetZoom))
+                                             })
+        XCTAssertEqual(tiles.count, 9 + 2 + 1)
+        XCTAssertEqual(tiles.first, Tile(x: 300, y: 400, z: 10), "The tile under the point first")
+        XCTAssertTrue(tiles.prefix(9).allSatisfy { $0.z == 10 })
+        XCTAssertEqual(tiles[9], near.tile, "The near target's own terrain before the far target's, its zoom 10 map the camera's")
+        XCTAssertEqual(tiles[10], far.tile.findParentTile(atZoom: 10), "The far target's ring reads zoom 10")
+        XCTAssertEqual(tiles[11], shownTerrain, "What the placement shown rises by, last")
+        XCTAssertEqual(GroundReliefDemand.ring(around: SIMD2(0.5, 0.5), zoom: 0), [Tile(x: 0, y: 0, z: 0)])
+    }
+
+    // MARK: - The terrain by ring
+
+    /// The camera's map and the cache are settings of their own, the
+    /// terrain each ring reads is its rule's.
+    func testTheCameraMapAndTheCacheAreTheSettings() {
         let relief = ImmersiveMapSettings.TileSettings.GroundReliefSettings()
-        XCTAssertEqual(relief.detail, .cinematic)
-        XCTAssertNil(relief.cameraTerrainZoom, "The camera's map is the detail's own")
-        XCTAssertNil(relief.memoryBudgetInBytes, "The cache is the detail's own")
+        XCTAssertEqual(relief.cameraTerrainZoom, 10)
+        XCTAssertEqual(ImmersiveMapSettings.default.groundRelief(cameraTerrainZoom: -3).tiles.groundRelief.cameraTerrainZoom, 0)
+        XCTAssertEqual(relief.displacementMaximumZoom, 10)
+        XCTAssertEqual(ImmersiveMapSettings.default.groundRelief(displacementMaximumZoom: 13).tiles.groundRelief.displacementMaximumZoom, 13)
+        XCTAssertEqual(relief.releasedCacheBytes, 50 << 20)
+        XCTAssertEqual(ImmersiveMapSettings.default.groundRelief(releasedCacheBytes: -1).tiles.groundRelief.releasedCacheBytes, 0)
     }
 
-    /// Each detail sizes its terrain cache to what its frames want.
-    func testEachDetailHasACacheOfItsOwn() {
-        typealias Detail = ImmersiveMapSettings.TileSettings.GroundReliefDetail
-        XCTAssertEqual(Detail.cinematic.defaultMemoryBudgetInBytes, 20 * 1_024 * 1_024)
-        XCTAssertEqual(Detail.matchingGrid.defaultMemoryBudgetInBytes, 48 * 1_024 * 1_024)
-        XCTAssertEqual(Detail.maximum.defaultMemoryBudgetInBytes, 192 * 1_024 * 1_024)
+    /// The default rules: the near ring on the terrain of its own zoom,
+    /// the bands past it three zooms under the near tiles and the far
+    /// band seven under. A drop outside the range is clamped.
+    func testTheDefaultRulesReadTheNearRingsOwnTerrain() {
+        XCTAssertEqual(FlatRingRules.default.rules.map(\.terrainZoomDrop), [0, 2, 1, 3])
+        XCTAssertEqual(FlatRingRules.default.rules.map { $0.zoomDrop + $0.terrainZoomDrop }, [0, 3, 3, 7],
+                       "Under the near tiles' zoom")
+        let wild = FlatRingRules(rules: [FlatRingRule(zoomDrop: 0, distance: 1, terrainZoomDrop: 99),
+                                         FlatRingRule(zoomDrop: 1, distance: 2, terrainZoomDrop: -4)])
+        XCTAssertEqual(wild.normalized().rules.map(\.terrainZoomDrop), [8, 0])
+        XCTAssertEqual(FlatRingRule(zoomDrop: 2, distance: 3).terrainZoomDrop, 0, "Own terrain unless said otherwise")
     }
 
-    /// Every height: a ring reads the terrain of its own zoom, every
-    /// flattened tile takes the grid's ceiling, which is prepared-cache
-    /// identity, and the camera flies over zoom 12.
-    func testEveryHeightReadsTheRingsOwnTerrainOnTheFinestGrid() {
-        let settings = ImmersiveMapSettings.default.groundRelief(isEnabled: true, detail: .maximum)
-        let zooms = GroundReliefTerrainZooms(relief: settings.tiles.groundRelief,
-                                             flattening: settings.tiles.resolvedGroundFlattening,
-                                             deepestTileZoom: 15)
-        XCTAssertEqual((9 ... 15).map(zooms.terrainZoom(forTargetZoom:)), Array(9 ... 15))
-        XCTAssertEqual(zooms.cameraZoom, 12)
-        let options = TileParseOptions(settings: settings)
-        XCTAssertEqual((6 ... 15).map(options.groundFlatteningGrid(forTileZoom:)), Array(repeating: 256, count: 10))
-        let byGrid = TileParseOptions(settings: ImmersiveMapSettings.default.groundRelief(isEnabled: true, detail: .matchingGrid))
-        XCTAssertEqual(byGrid.groundFlatteningGrid(forTileZoom: 13), 64, "The flattening's own grids")
-        XCTAssertNotEqual(options.groundFlatteningGridByTileZoomKey + "\(options.groundFlatteningGrid)",
-                          byGrid.groundFlatteningGridByTileZoomKey + "\(byGrid.groundFlatteningGrid)",
-                          "The grids are prepared-cache identity")
-    }
-
-    /// The grid's detail reads the coarsest terrain that still gives each
-    /// vertex of a ground tile a height of its own: with the default
-    /// grids, a vertex every 75 m or so from zoom 11 to 14, zoom 10.
-    func testTheGridsDetailReadsTheTerrainItsGridCanShow() {
-        let settings = ImmersiveMapSettings.default.groundRelief(isEnabled: true, detail: .matchingGrid)
-        let zooms = GroundReliefTerrainZooms(relief: settings.tiles.groundRelief,
-                                             flattening: settings.tiles.resolvedGroundFlattening,
-                                             deepestTileZoom: 15)
-        // 256 cells at 9 to 11, 128 at 12, 64 at 13, 32 at 14, 16 past it.
-        XCTAssertEqual((9 ... 15).map(zooms.terrainZoom(forTargetZoom:)), [8, 9, 10, 10, 10, 10, 10])
-        XCTAssertEqual(zooms.cameraZoom, 10, "The terrain of the deepest tile under the collapse, zoom 13")
+    /// The frame's bands give each ring its terrain zoom: the band's zoom
+    /// less its rule's drop, the nearer band's where two share a zoom, and
+    /// a zoom without a band reads its own.
+    func testEachRingReadsTheTerrainItsBandGivesIt() {
+        let bands = [FlatRingBand(zoom: 13, distance: 1, tileCount: 9, terrainZoom: 13),
+                     FlatRingBand(zoom: 12, distance: 2, tileCount: 7, terrainZoom: 10),
+                     FlatRingBand(zoom: 12, distance: 3, tileCount: 7, terrainZoom: 8),
+                     FlatRingBand(zoom: 9, distance: 9, tileCount: 20, terrainZoom: 6)]
+        let zooms = GroundReliefTerrainZooms(cameraZoom: 10, bands: bands)
+        XCTAssertEqual(zooms.cameraZoom, 10)
+        XCTAssertEqual((9 ... 14).map(zooms.terrainZoom(forTargetZoom:)), [6, 10, 11, 10, 13, 14])
+        XCTAssertEqual((9 ... 14).map(zooms.displacementZoom(forTargetZoom:)), [6, 10, 10, 10, 10, 10],
+                       "The grid rises by terrain no finer than zoom 10")
+        let near = Tile(x: 4823, y: 6160, z: 13)
+        XCTAssertEqual(zooms.displacementTile(for: near, targetZoom: 13), near.findParentTile(atZoom: 10))
+        XCTAssertEqual(zooms.terrainTile(for: near, targetZoom: 13), near, "Shaded by its own")
+        XCTAssertEqual(GroundReliefTerrainZooms(cameraZoom: 10, displacementMaximumZoom: 13, bands: bands)
+                           .displacementTile(for: near, targetZoom: 13), near, "Raised, the grid rises by its own")
+        XCTAssertEqual(zooms.statusText, "z13→z13 z12→z10 z9→z6")
         let deep = Tile(x: 9647, y: 12321, z: 15)
-        XCTAssertEqual(zooms.terrainTile(for: deep, targetZoom: 13), deep.findParentTile(atZoom: 10))
+        XCTAssertEqual(zooms.terrainTile(for: deep, targetZoom: 12), deep.findParentTile(atZoom: 10))
+        XCTAssertEqual(zooms.terrainTile(for: deep, targetZoom: 13), deep.findParentTile(atZoom: 13))
         let coarse = Tile(x: 37, y: 48, z: 7)
         XCTAssertEqual(zooms.terrainTile(for: coarse, targetZoom: 13), coarse,
                        "A stand-in coarser than the ring's terrain reads its own address")
-    }
-
-    /// The cinematic two maps: every ring reads the near map, and the
-    /// frame asks for the near map's two by two tiles around the point
-    /// looked at, then the far map's, whatever it places.
-    func testTheCinematicDetailAsksForTwoMapsOfTwoByTwo() {
-        let settings = ImmersiveMapSettings.default.groundRelief(isEnabled: true, cinematicNearZoom: 10, cinematicFarZoom: 6)
-        let zooms = GroundReliefTerrainZooms(relief: settings.tiles.groundRelief,
-                                             flattening: settings.tiles.resolvedGroundFlattening,
-                                             deepestTileZoom: 15)
-        XCTAssertEqual((9 ... 15).map(zooms.terrainZoom(forTargetZoom:)), Array(repeating: 10, count: 7))
-        XCTAssertEqual(zooms.cameraZoom, 10, "The camera flies over the near map")
-        // A point in the north-east quarter of its zoom 10 tile.
-        let point = SIMD2<Double>((300 + 0.8) / 1024, (400 + 0.3) / 1024)
-        let tiles = GroundReliefDemand.tiles(groundPlacements: [], buildingPlacements: [],
-                                             centerWorldMercator: point, zooms: zooms)
-        XCTAssertEqual(Array(tiles.prefix(4)), [Tile(x: 300, y: 400, z: 10), Tile(x: 301, y: 400, z: 10),
-                                                Tile(x: 300, y: 399, z: 10), Tile(x: 301, y: 399, z: 10)])
-        XCTAssertEqual(tiles.count, 8)
-        XCTAssertTrue(tiles.dropFirst(4).allSatisfy { $0.z == 6 })
-        XCTAssertTrue(tiles.dropFirst(4).contains(Tile(x: 18, y: 25, z: 6)), "The point's own far tile")
-    }
-
-    /// A far map finer than the near one is the near one: the reads fall
-    /// from the near map to the far, never the other way.
-    func testTheFarMapIsNeverFinerThanTheNearOne() {
-        let relief = ImmersiveMapSettings.TileSettings.GroundReliefSettings(isEnabled: true,
-                                                                            cinematicNearZoom: 8,
-                                                                            cinematicFarZoom: 11)
-        let zooms = GroundReliefTerrainZooms(relief: relief, flattening: .init(), deepestTileZoom: 15)
-        XCTAssertEqual(zooms.cinematicFarZoom, 8)
-        XCTAssertEqual(GroundReliefDemand.block(around: SIMD2(0.5, 0.5), zoom: 0), [Tile(x: 0, y: 0, z: 0)])
+        XCTAssertEqual(FlatRingBand(zoom: 11, distance: 2, tileCount: 1).terrainZoom, 11, "Nil is the band's own")
+        XCTAssertEqual(GroundReliefTerrainZooms(cameraZoom: 12).terrainZoom(forTargetZoom: 15), 15,
+                       "No bands: a store outside a frame reads each tile's own terrain")
     }
 
     // MARK: - The hillshade
@@ -649,38 +810,46 @@ final class GroundReliefTests: XCTestCase {
     func testTheSlopesAreShadedByTheScenesLightAsTheReliefRises() {
         let style = ImmersiveMapHillshade(intensity: 0.8)
         let eye = SIMD3<Float>(0, -30, 40)
-        let risen = GroundReliefHillshade.resolve(style: style, lightDirection: SIMD3(0, 3, 4), risenShare: 1, cameraEye: eye)
+        let risen = GroundReliefHillshade.resolve(style: style, lightDirection: SIMD3(0, 3, 4), risenShare: 1, cameraEye: eye,
+                                                  zoom: 14, unitsPerMetre: 0.01)
         XCTAssertEqual(risen.light.x, 0, accuracy: 1e-6)
         XCTAssertEqual(risen.light.y, 0.6, accuracy: 1e-6)
         XCTAssertEqual(risen.light.z, 0.8, accuracy: 1e-6)
         XCTAssertEqual(risen.light.w, 0.8, accuracy: 1e-6, "The style's intensity")
         XCTAssertEqual(risen.shadowColor, style.shadowColor)
         XCTAssertEqual(GroundReliefHillshade.resolve(style: style, lightDirection: SIMD3(0, 3, 4), risenShare: 0.5,
-                                                     cameraEye: eye).light.w,
+                                                     cameraEye: eye, zoom: 14, unitsPerMetre: 0.01).light.w,
                        0.4, accuracy: 1e-6, "Half risen, half shaded")
         XCTAssertEqual(GroundReliefHillshade.resolve(style: style, lightDirection: SIMD3(1, 0, -0.1), risenShare: 1,
-                                                     cameraEye: eye), .none)
+                                                     cameraEye: eye, zoom: 14, unitsPerMetre: 0.01), .none)
         XCTAssertEqual(GroundReliefHillshade.resolve(style: .none, lightDirection: SIMD3(0, 3, 4), risenShare: 1,
-                                                     cameraEye: eye), .none)
+                                                     cameraEye: eye, zoom: 14, unitsPerMetre: 0.01), .none)
         XCTAssertEqual(ProtomapsBasemapTheme.default.apply { $0.hillshade = .none }.cacheFingerprint,
                        ProtomapsBasemapTheme.default.cacheFingerprint,
                        "Drawn at frame time, so no tile is prepared again")
     }
 
-    /// The shading fades with the distance from the eye, in the eye's
-    /// distances to the point it looks at: 2 to 4 by default, the panel's
-    /// in place of the style's once dragged.
-    func testTheShadingFadesInTheEyesDistances() {
+    /// The shading fades with the distance from the eye, in metres by the
+    /// zoom: from 4 km out to 8 km at zoom 14 by default, halving a zoom
+    /// up, the panel's curves in place of the style's once dragged.
+    func testTheShadingFadesInMetresByTheZoom() {
         let eye = SIMD3<Float>(0, -30, 40)
         let shading = GroundReliefHillshade.resolve(style: ImmersiveMapHillshade(), lightDirection: SIMD3(0, 0, 1),
-                                                    risenShare: 1, cameraEye: eye)
+                                                    risenShare: 1, cameraEye: eye, zoom: 14, unitsPerMetre: 0.01)
         XCTAssertEqual(SIMD3(shading.eye.x, shading.eye.y, shading.eye.z), eye)
-        XCTAssertEqual(shading.fade.x, 100, accuracy: 1e-3, "From twice the eye's 50")
-        XCTAssertEqual(shading.fade.y, 1 / 100, accuracy: 1e-6, "Out over 100 more")
+        XCTAssertEqual(shading.fade.x, 40, accuracy: 1e-3, "From 4 km, a hundredth of a unit a metre")
+        XCTAssertEqual(shading.fade.y, 1 / 40, accuracy: 1e-6, "Out over 4 km more")
+        let zoomedIn = GroundReliefHillshade.resolve(style: ImmersiveMapHillshade(), lightDirection: SIMD3(0, 0, 1),
+                                                     risenShare: 1, cameraEye: eye, zoom: 15, unitsPerMetre: 0.01)
+        XCTAssertEqual(zoomedIn.fade.x, 20, accuracy: 1e-2, "Geometric between the stops: half a zoom up")
         let dragged = GroundReliefHillshade.resolve(style: ImmersiveMapHillshade(), lightDirection: SIMD3(0, 0, 1),
-                                                    risenShare: 1, cameraEye: eye, fadeCameraDistances: 1 ... 1.5)
-        XCTAssertEqual(dragged.fade.x, 50, accuracy: 1e-3)
-        XCTAssertEqual(dragged.fade.y, 1 / 25, accuracy: 1e-6)
+                                                    risenShare: 1, cameraEye: eye, zoom: 14, unitsPerMetre: 0.01,
+                                                    fade: GroundReliefHillshade.Fade(startMeters: 1000, endMeters: 1500))
+        XCTAssertEqual(dragged.fade.x, 10, accuracy: 1e-3)
+        XCTAssertEqual(dragged.fade.y, 1 / 5, accuracy: 1e-6)
+        XCTAssertEqual(GroundReliefHillshade.resolve(style: ImmersiveMapHillshade(), lightDirection: SIMD3(0, 0, 1),
+                                                     risenShare: 1, cameraEye: eye, zoom: 14, unitsPerMetre: 0),
+                       .none, "No rise known, no shading")
     }
 
     /// A terrain texture spans its tile's side over the tile's share of it:
@@ -772,8 +941,8 @@ final class GroundReliefTests: XCTestCase {
         store.applyPendingWelds(commandQueue: commandQueue)?.waitUntilCompleted()
         store.setWorldScale(centerWorldMercator: SIMD2(0.39, 0.39), renderMapSize: 1_000_000)
         XCTAssertGreaterThan(store.worldUnitsPerMetre, 0)
-        let northLift = try XCTUnwrap(GroundReliefTileLift(store: store, tile: north, targetZoom: 8))
-        let southLift = try XCTUnwrap(GroundReliefTileLift(store: store, tile: south, targetZoom: 8))
+        let northLift = try XCTUnwrap(GroundReliefTileLift(store: store, tile: north, terrain: north))
+        let southLift = try XCTUnwrap(GroundReliefTileLift(store: store, tile: south, terrain: south))
         XCTAssertEqual(northLift.unitsPerMetre, southLift.unitsPerMetre)
         XCTAssertEqual(northLift.worldUnits(atTileUV: SIMD2(0.5, 1)), southLift.worldUnits(atTileUV: SIMD2(0.5, 0)),
                        "The shared edge rises as one")
@@ -847,25 +1016,6 @@ final class GroundReliefTests: XCTestCase {
         XCTAssertEqual(store.statusSnapshot().missingCount, 1)
     }
 
-    /// The wanted tiles stay whatever the budget: the budget releases only
-    /// what the frame no longer wants, the longest unused first.
-    func testTheWantedTilesAreNeverReleasedForTheBudget() throws {
-        let device = try Self.device()
-        let image = try Self.png(size: 2, pixels: Array(repeating: (128, 0, 0), count: 4))
-        let settings = ImmersiveMapSettings.TileSettings.GroundReliefSettings(isEnabled: true,
-                                                                              minimumSourceZoom: 12,
-                                                                              memoryBudgetInBytes: 1)
-        let store = GroundReliefStore(device: device, settings: settings, fetch: { _ in .image(image) })
-        let tiles = [Tile(x: 2412, y: 3080, z: 13), Tile(x: 2413, y: 3080, z: 13), Tile(x: 2412, y: 3081, z: 13)]
-        store.request(tiles: tiles)
-        XCTAssertTrue(waitUntil { store.statusSnapshot().wantedResidentCount == 3 })
-        XCTAssertEqual(store.statusSnapshot().residentCount, 3, "Over the budget, every one wanted")
-        let next = Tile(x: 2413, y: 3081, z: 13)
-        store.request(tiles: [next])
-        XCTAssertTrue(waitUntil { store.statusSnapshot().wantedResidentCount == 1 })
-        XCTAssertEqual(store.statusSnapshot().residentCount, 1, "The ones no longer wanted go for the budget")
-    }
-
     /// The relief tab's cards say what each terrain tile is doing.
     func testTheReliefCardsTellEachTilesState() {
         let snapshot = GroundReliefStatusSnapshot(
@@ -877,15 +1027,23 @@ final class GroundReliefTests: XCTestCase {
                           heightRange: nil, seconds: 8, attempts: 2),
                     .init(tile: Tile(x: 4, y: 2, z: 11), state: .resident, priority: nil, bytes: 1_048_576,
                           heightRange: 0 ... 10, seconds: 0, attempts: 0)],
-            isActive: true, standingShare: 1, datumMetres: 0, cameraTerrainZoom: 12, detail: .cinematic,
+            isActive: true, standingShare: 1, datumMetres: 0, cameraTerrainZoom: 12, terrainByRing: "z12→z12",
             wantedCount: 3, wantedResidentCount: 1, residentCount: 2, residentBytes: 2_097_152,
-            budgetBytes: 192 * 1_048_576, loadingCount: 1, maximumConcurrentLoads: 4, failedCount: 1, missingCount: 0)
+            releasedCount: 1, releasedBytes: 1_048_576, releasedCacheBytes: 50 << 20,
+            occlusionComputedCount: 2, occlusionMillisecondsLast: 3.25,
+            loadingCount: 1, maximumConcurrentLoads: 4, failedCount: 1, missingCount: 0)
         let cards = DebugOverlayTileCard.reliefCards(for: snapshot)
         XCTAssertEqual(cards.map(\.headline), ["z12/1/2 in 1.0 MB", "z12/2/2 loading 3s",
                                                "z12/3/2 failed ×2 retry 8s", "z11/4/2 in 1.0 MB"])
         XCTAssertEqual(cards.map(\.stagesText), ["wanted #1", "wanted #2", "wanted #3", "kept"])
         XCTAssertEqual(cards.map(\.status), [.ready, .loading, .failed, .ready])
-        XCTAssertEqual(snapshot.lines.count, 3)
+        XCTAssertEqual(snapshot.stateLines.count, 3)
+        XCTAssertEqual(snapshot.loadingLines.count, 5)
+        XCTAssertEqual(snapshot.memoryLines.count, 4)
+        XCTAssertEqual(snapshot.memoryLines[1], "released 1 tiles, 1.0 of 50.0 MB")
+        XCTAssertEqual(snapshot.occlusionLines, ["computed 2 of 2 tiles", "last tile 3.2 ms"])
+        XCTAssertEqual(snapshot.surroundingsLines, ["around: waiting for terrain"])
+        XCTAssertEqual(snapshot.lines.count, 13)
     }
 
     private func waitUntil(_ condition: () -> Bool) -> Bool {
@@ -900,11 +1058,17 @@ final class GroundReliefTests: XCTestCase {
     // MARK: - Helpers
 
     /// Asks for the tile's terrain, as a frame does, until some terrain
-    /// over the tile is in.
+    /// over the tile is in. The store keeps what a frame asks for and no
+    /// more, so every tile asked of a store so far is asked again: a test's
+    /// frames want all of them.
+    private var requestedTiles: [ObjectIdentifier: [Tile]] = [:]
     private func waitForRelief(of tile: Tile, in store: GroundReliefStore) -> GroundRelief? {
+        var tiles = requestedTiles[ObjectIdentifier(store)] ?? []
+        if tiles.contains(tile) == false { tiles.append(tile) }
+        requestedTiles[ObjectIdentifier(store)] = tiles
         let deadline = Date().addingTimeInterval(5)
         while Date() < deadline {
-            store.request(tiles: [tile])
+            store.request(tiles: tiles)
             if let relief = store.relief(for: tile, terrainZoom: tile.z) {
                 return relief
             }

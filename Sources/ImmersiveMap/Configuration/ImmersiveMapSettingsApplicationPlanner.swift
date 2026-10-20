@@ -79,6 +79,7 @@ public enum ImmersiveMapSettingsApplicationPlanner {
             || oldValue.scene.atmosphere != newValue.scene.atmosphere
             || oldValue.scene.fog != newValue.scene.fog
             || oldValue.scene.groundFog != newValue.scene.groundFog
+            || oldValue.scene.mountainGroundFog != newValue.scene.mountainGroundFog
         if sceneLiveChanged {
             mark(.scene, actions: [.liveApply])
         }
@@ -109,6 +110,12 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         if oldValue.tiles.offline != newValue.tiles.offline {
             mark(.tiles, actions: [.recreateRenderer])
         }
+        // The overview is laid into the tiles by the load pipeline, built
+        // with the renderer, and baked into the prepared tiles, whose
+        // identity it is part of.
+        if oldValue.tiles.overview.isEnabled != newValue.tiles.overview.isEnabled {
+            mark(.tiles, actions: [.invalidateCaches, .rebuildPreparedData, .recreateRenderer])
+        }
 
         // Every label field, the on/off switch included, changes what a
         // prepared tile carries: with labels off the parser bakes no text.
@@ -118,7 +125,10 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         if oldValue.avatars != newValue.avatars {
             mark(.avatars, actions: [.rebuildGPUResources, .recreateRenderer])
         }
-        if oldValue.attribution != newValue.attribution {
+        // The badge shows the resolved attribution, which the overview's
+        // credit is part of: its zoom is badge text, applied in place.
+        if oldValue.attribution != newValue.attribution
+            || oldValue.tiles.overview != newValue.tiles.overview {
             mark(.attribution, actions: [.liveApply])
         }
         // The controls are views over the map: hidden and shown in place.

@@ -40,15 +40,18 @@ enum RenderDebugOverlayPolicy {
 }
 
 /// The world pass's clear colour: space for as long as the surface is the
-/// sphere, the unroll included, so the starfield stays through the morph and
-/// the flat map's sky fades in over it; the style's map colour from the
-/// surface switch on, where it is what shows under a tile that has not
-/// arrived.
+/// sphere, most of the unroll included, so the starfield stays through the
+/// morph; the style's map colour from the surface switch on, where it is
+/// what shows under a tile that has not arrived. Over the air handover
+/// (`PresentationSettings.airHandoverStart` to `airHandoverEnd`) space
+/// brightens into the map's colour behind the stars at the pace the flat
+/// map's sky fades in over them, so the switch changes nothing on screen
+/// where the sky is off or space is transparent either.
 enum RenderFrameClearColor {
     static func make(transition: Float,
                      settings: ImmersiveMapSettings,
                      mapColor: SIMD4<Float>) -> MTLClearColor {
-        let transitionMix: Double = transition >= 1 ? 1 : 0
+        let transitionMix = Double(settings.presentation.airHandover(atTransition: transition))
         let mapColor = SIMD4<Double>(Double(mapColor.x), Double(mapColor.y), Double(mapColor.z), Double(mapColor.w))
         // Transparent space clears to a fully transparent pixel and reaches the
         // map color through premultiplied values: the drawable is composited by

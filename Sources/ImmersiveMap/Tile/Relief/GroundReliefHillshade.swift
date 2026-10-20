@@ -59,32 +59,63 @@ struct GroundReliefHillshade: Equatable {
         }
     }
 
+    /// Where the shading fades, the two curves of a style
+    /// (`ImmersiveMapHillshade.fadeStartMeters`, `fadeEndMeters`) the debug
+    /// panel drags live: metres from the eye by the camera zoom.
+    struct Fade: Equatable {
+        var startMeters: ImmersiveMapZoomCurve
+        var endMeters: ImmersiveMapZoomCurve
+
+        init(startMeters: ImmersiveMapZoomCurve, endMeters: ImmersiveMapZoomCurve) {
+            self.startMeters = startMeters
+            self.endMeters = endMeters
+        }
+
+        /// The fade a style shades with.
+        init(style: ImmersiveMapHillshade) {
+            self.init(startMeters: style.fadeStartMeters, endMeters: style.fadeEndMeters)
+        }
+
+        /// The style with this fade in place of its own.
+        func applied(to style: ImmersiveMapHillshade) -> ImmersiveMapHillshade {
+            var adjusted = style
+            adjusted.fadeStartMeters = startMeters
+            adjusted.fadeEndMeters = endMeters
+            return adjusted
+        }
+    }
+
     /// The shading of a style under a light (`SceneLightSettings.direction`,
     /// toward the light) with the relief risen by `risenShare`, 0 to 1,
     /// seen from `cameraEye`, the world's origin being the point it looks
-    /// at. `fadeCameraDistances` replaces the style's fade and `amounts`
-    /// its amounts (the debug panel's). A light at or under the horizon
-    /// shades nothing: the level ground would be lit as edgewise as the
-    /// steepest slope.
+    /// at, at the camera `zoom` the fade's curves are read at and
+    /// `unitsPerMetre` world units a metre. `fade` replaces the style's
+    /// fade and `amounts` its amounts (the debug panel's). A light at or
+    /// under the horizon shades nothing: the level ground would be lit as
+    /// edgewise as the steepest slope.
     static func resolve(style: ImmersiveMapHillshade,
                         lightDirection: SIMD3<Float>,
                         risenShare: Float,
                         cameraEye: SIMD3<Float>,
-                        fadeCameraDistances: ClosedRange<Float>? = nil,
+                        zoom: Double,
+                        unitsPerMetre: Float,
+                        fade: Fade? = nil,
                         amounts: Amounts? = nil) -> GroundReliefHillshade {
         guard simd_length_squared(lightDirection) > 1e-12 else { return .none }
-        let style = amounts?.applied(to: style) ?? style
+        var style = amounts?.applied(to: style) ?? style
+        style = fade?.applied(to: style) ?? style
         let light = simd_normalize(lightDirection)
         let amount = max(0, style.intensity) * min(max(risenShare, 0), 1)
-        let cameraDistance = simd_length(cameraEye)
         guard light.z > minimumLightZ, amount > 0, light.x.isFinite, light.y.isFinite, light.z.isFinite,
-              cameraDistance.isFinite, cameraDistance > 0 else {
+              unitsPerMetre.isFinite, unitsPerMetre > 0 else {
             return .none
         }
-        let start = max(0, fadeCameraDistances?.lowerBound ?? style.fadeStartCameraDistances)
-        let end = max(start, fadeCameraDistances?.upperBound ?? style.fadeEndCameraDistances)
-        let startWorld = start * cameraDistance
-        let spanWorld = max((end - start) * cameraDistance, cameraDistance * 1e-3)
+        // The fade in metres at this zoom, geometric between the stops as
+        // a length on the ground runs, then in the world.
+        let startMetres = max(0, style.fadeStartMeters.value(atZoom: zoom, interpolation: .geometric))
+        let endMetres = max(startMetres, style.fadeEndMeters.value(atZoom: zoom, interpolation: .geometric))
+        let startWorld = startMetres * unitsPerMetre
+        let spanWorld = max((endMetres - startMetres) * unitsPerMetre, max(startWorld, unitsPerMetre) * 1e-3)
         return GroundReliefHillshade(light: SIMD4<Float>(light, amount),
                                      shadowColor: style.shadowColor,
                                      highlightColor: style.highlightColor,

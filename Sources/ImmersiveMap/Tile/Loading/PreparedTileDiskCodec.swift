@@ -530,6 +530,8 @@ enum PreparedTileDiskCodec {
         let weightRawValue: UInt8
         let uppercased: Bool
         let emboldenPoints: Float
+        let letterSpacingEm: Float
+        let opacity: Float
 
         init(_ style: LabelTextStyle) throws {
             self.key = try encodeInt32(style.key, field: "LabelTextStyle.key")
@@ -540,6 +542,8 @@ enum PreparedTileDiskCodec {
             self.weightRawValue = style.weight.rawValue
             self.uppercased = style.uppercased
             self.emboldenPoints = style.emboldenPoints
+            self.letterSpacingEm = style.letterSpacingEm
+            self.opacity = style.opacity
         }
 
         func runtimeValue() throws -> LabelTextStyle {
@@ -556,7 +560,9 @@ enum PreparedTileDiskCodec {
                                   sizePoints: sizePoints,
                                   weight: weight,
                                   uppercased: uppercased,
-                                  emboldenPoints: emboldenPoints)
+                                  emboldenPoints: emboldenPoints,
+                                  letterSpacingEm: letterSpacingEm,
+                                  opacity: opacity)
         }
     }
 
@@ -575,6 +581,7 @@ enum PreparedTileDiskCodec {
         let labelWidthPoints: Float
         let labelHeightPoints: Float
         let minCameraZoom: Float
+        let maxCameraZoom: Float
         let isLocal: Bool
 
         init(_ input: TextLabelPlacementInput) throws {
@@ -592,6 +599,7 @@ enum PreparedTileDiskCodec {
             labelWidthPoints = input.placementMeta.labelSizePoints.x
             labelHeightPoints = input.placementMeta.labelSizePoints.y
             minCameraZoom = input.placementMeta.minCameraZoom
+            maxCameraZoom = input.placementMeta.maxCameraZoom
             isLocal = input.placementMeta.isLocal
         }
 
@@ -607,6 +615,7 @@ enum PreparedTileDiskCodec {
                                                   collisionPriority: Int(collisionPriority),
                                                   labelSizePoints: SIMD2<Float>(labelWidthPoints, labelHeightPoints),
                                                   minCameraZoom: minCameraZoom,
+                                                  maxCameraZoom: maxCameraZoom,
                                                   isLocal: isLocal)
             )
         }

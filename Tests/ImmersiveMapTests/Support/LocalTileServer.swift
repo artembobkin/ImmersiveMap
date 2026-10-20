@@ -34,10 +34,20 @@ final class LocalTileServer: @unchecked Sendable {
         /// with 200. The client has to cope, so the server can be told to be
         /// one.
         var ignoresRanges = false
+        /// A host that is there but cannot answer: the bodiless status it
+        /// sends instead of the resource, nil for the resource itself.
+        var failingStatus: String?
 
         static func archive(_ body: Data, etag: String = "\"immersive-map-test-fixture\"") -> Resource {
             Resource(body: body, etag: etag, contentType: "application/octet-stream")
         }
+
+        /// A host that answers every request for the resource with
+        /// "503 Service Unavailable", as one does when it is down behind
+        /// its front: a load that fails, where a 404 is a resource that is
+        /// not there.
+        static let unavailable = Resource(body: Data(), etag: "\"\"", contentType: "application/octet-stream",
+                                          failingStatus: "503 Service Unavailable")
     }
 
     /// One parsed request, as the router sees it.
@@ -214,6 +224,9 @@ final class LocalTileServer: @unchecked Sendable {
     private static func httpResponse(for resource: Resource?, request: Request) -> Data {
         guard let resource else {
             return httpResponse(status: "404 Not Found")
+        }
+        if let failingStatus = resource.failingStatus {
+            return httpResponse(status: failingStatus)
         }
         let total = resource.body.count
         if let ifMatch = request.header("If-Match"), ifMatch != resource.etag {

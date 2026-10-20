@@ -188,10 +188,13 @@ final class GlobeVectorSurfaceOffscreenRenderTests: XCTestCase {
         let configuration = ProtomapsBasemapTheme.default
             .layers {
                 $0.water = Self.fixtureWater
-                // The overview biomes blend forest toward grass by zoom: both
+                // The land cover blends forest toward grass by zoom: both
                 // cyan, so the far side is cyan at every zoom of the morph.
                 $0.wood = Self.fixtureForest
                 $0.grass = Self.fixtureForest
+                // The fixture tiles carry no biomes, so the land cover must
+                // paint the overview zooms, as it does with the overview off.
+                $0.biomes.maximumTileZoom = -1
             }
         var settings = ImmersiveMapSettings.default
             .mapStyle(ProtomapsBasemapMapStyle(theme: configuration))

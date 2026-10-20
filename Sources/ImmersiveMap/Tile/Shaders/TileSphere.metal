@@ -62,6 +62,31 @@ constant bool kTileSphereLineFields [[function_constant(1)]];
 /// third.
 constant bool kTileSphereFillClass = !kTileSphereLineFields;
 
+/// Which part of a ribbon the ribbons-class pass draws (TilePipeline
+/// .SphereRibbonPhase): 0 the whole ribbon in one blended draw, 1 the core
+/// (the fragments the line covers by half or more), 2 the feather (the
+/// rest). The core writes the rank depth, highest rank first, so a pixel
+/// several strokes cover blends once, by the highest of them, and a veiled
+/// stroke never darkens where two pieces of it overlap. The feather
+/// blends after, tested against what the cores wrote, so an edge still
+/// softens over the ground and over a lower stroke. A fragment outside
+/// its phase is discarded, so the core's depth never lands where the
+/// ribbon's extruded margin is clear.
+constant int kTileSphereRibbonPhase [[function_constant(2)]];
+constant int kTileSphereRibbonPhaseWhole = 0;
+constant int kTileSphereRibbonPhaseCore = 1;
+constant half kTileSphereRibbonCoreCoverage = 0.5h;
+
+/// What the ribbons' fragment knows of the unroll: how far the globe's
+/// look has been handed over to the plane's, 0 through the globe's view
+/// and most of the unroll, 1 by the end of the air handover
+/// (PresentationSettings.airHandover), the window the atmosphere leaves
+/// in. A stroke's sphere colour and veil (LineStyle) go with it, so the
+/// switch of surfaces at the end changes nothing on screen.
+struct SphereRibbonUniform {
+    float handover;
+};
+
 struct SphereVertexOut {
     float4 position [[position]];
     // The sphere's normal at the vertex in world space, the sun's side
@@ -263,16 +288,33 @@ fragment half4 tileSphereFragmentShader(SphereFragmentIn in [[stage_in]],
                                         constant Style* styles [[buffer(5), function_constant(kTileSphereLineFields)]],
                                         constant float2* styleZoomFades [[buffer(6), function_constant(kTileSphereLineFields)]],
                                         constant LineStyle* lineStyles [[buffer(7), function_constant(kTileSphereLineFields)]],
+                                        constant SphereRibbonUniform& ribbon [[buffer(8), function_constant(kTileSphereLineFields)]],
                                         constant GlobeLight& globeLight [[buffer(kGlobeLightBufferIndex)]]) {
     // The fills class arrives with its final colour (fade folded in the
     // vertex stage); the ribbons class resolves colour, fade and coverage
     // from the flat style index right here.
     half4 color;
     if (kTileSphereLineFields) {
+        if (kTileSphereRibbonPhase != kTileSphereRibbonPhaseWhole) {
+            // The phase's share of the ribbon: the coverage decides, read
+            // once more here, in uniform control flow, before the colour.
+            half coverage = tileLineFragmentCoverage(in.styleIndex, in.lineDistance, in.lineParameterRaw,
+                                                     lineStyles, overviewFade, lineDash, 0.0);
+            bool isCore = coverage >= kTileSphereRibbonCoreCoverage;
+            if (isCore != (kTileSphereRibbonPhase == kTileSphereRibbonPhaseCore)) {
+                discard_fragment();
+            }
+        }
         // No deferred ribbons on the sphere: every rim is baked.
         color = tileLineFragmentColor(in.styleIndex, in.lineDistance, in.lineParameterRaw,
                                       styles, styleZoomFades, lineStyles,
                                       overviewFade, lineDash, 0.0);
+        // The globe's look of the stroke (LineStyle.sphereColor and
+        // sphereAlpha): whole through the globe's view and the unroll,
+        // handed over to the plane's with the air.
+        LineStyle lineStyle = lineStyles[in.styleIndex];
+        color.rgb = mix(half3(float3(lineStyle.sphereColor)), color.rgb, half(ribbon.handover));
+        color.a *= half(mix(lineStyle.sphereAlpha, 1.0, ribbon.handover));
     } else {
         color = in.color;
     }

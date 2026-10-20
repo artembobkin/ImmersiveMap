@@ -61,10 +61,10 @@ struct ShadowCascadeUniform {
 /// RenderUniforms.h (pinned by `ShadowUniformLayoutTests`).
 struct ShadowUniform {
     /// The near window (`ShadowCascadeSlot.near`): a disc around the point
-    /// the camera looks at, sized by `ShadowSettings.coverageCameraDistances`.
+    /// the camera looks at, sized by `ShadowSettings.nearCoverageMeters`.
     var near: ShadowCascadeUniform
     /// The far window (`ShadowCascadeSlot.far`), sized by
-    /// `farCoverageCameraDistances`, `.disabled` when the frame has none.
+    /// `farCoverageMeters`, `.disabled` when the frame has none.
     /// A receiver outside both is lit, and the far window's fade (the near
     /// one's without it) hides that edge.
     var far: ShadowCascadeUniform

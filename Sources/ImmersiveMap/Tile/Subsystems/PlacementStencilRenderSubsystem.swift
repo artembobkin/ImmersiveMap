@@ -159,24 +159,24 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
         encoder.popDebugGroup()
     }
 
-    /// A source's ground as the ground draws it: its relief at the deepest
-    /// ring it is placed in, and its grid's cells a side. A raster
-    /// source's grid is the raster ground's (`RasterTileGrid.reliefCells`),
-    /// at its raster size; a vector source's the flattening's, as the
-    /// vector ground has, and so has a raster source drawn as geometry
-    /// elsewhere (`RasterTileRenderSubsystem`). No relief while the
-    /// source's terrain is not in: it lies on the plane, as its ground does.
+    /// A source's ground as the ground draws it: its relief out of the
+    /// terrain its placements are bound to, and its grid's cells a side. A
+    /// raster source's grid is the raster ground's
+    /// (`RasterTileGrid.reliefCells`), at its raster size; a vector
+    /// source's the flattening's, as the vector ground has, and so has a
+    /// raster source drawn as geometry elsewhere
+    /// (`RasterTileRenderSubsystem`). No relief on the plane.
     private struct SourceGround {
         let relief: GroundRelief?
         let cells: Int
     }
 
     private func sourceGround(tile: Tile,
-                              targetZoom: Int,
+                              displacement: Tile?,
                               rasterSizeByTile: [Tile: Int],
                               store: GroundReliefStore?) -> SourceGround {
         let gridCells = groundFlattening.grid(forTileZoom: tile.z)
-        guard let relief = store?.relief(for: tile, targetZoom: targetZoom) else {
+        guard let displacement, let relief = store?.relief(for: tile, terrain: displacement) else {
             return SourceGround(relief: nil, cells: 0)
         }
         let cells = rasterSizeByTile[tile].map {
@@ -203,7 +203,7 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
             if let known = grounds[source] {
                 ground = known
             } else {
-                ground = sourceGround(tile: source.tile, targetZoom: source.targetZoom, rasterSizeByTile: rasterSizeByTile, store: store)
+                ground = sourceGround(tile: source.tile, displacement: source.displacement, rasterSizeByTile: rasterSizeByTile, store: store)
                 grounds[source] = ground
             }
             let tile = square.square.tile
@@ -242,9 +242,9 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
                                  flatRenderState: FlatRenderState,
                                  store: GroundReliefStore?) {
         let rasterSizeByTile = RasterTileGrid.rasterSizesBySource(placements)
-        // A source's relief is its deepest ring's wherever it draws, so a
-        // mark meets the depth the first pass drew from the same heights.
-        let targetZooms = PlacementGroundSquare.targetZooms(of: placements)
+        // A source's relief is one terrain wherever it draws, so a mark
+        // meets the depth the first pass drew from the same heights.
+        let displacements = PlacementGroundSquare.displacements(of: placements)
         var grounds: [PlacementGroundSquare.Source: SourceGround] = [:]
         var selectedRelief: Bool?
         for placement in placements {
@@ -253,12 +253,12 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
             let sourceKey = PlacementGroundSquare.Source(
                 tile: source,
                 worldWrap: placement.placeIn.worldWrap,
-                targetZoom: targetZooms[VisibleTile(tile: source, worldWrap: placement.placeIn.worldWrap)] ?? placement.slot.z)
+                displacement: displacements[VisibleTile(tile: source, worldWrap: placement.placeIn.worldWrap)] ?? placement.displacement)
             let ground: SourceGround
             if let known = grounds[sourceKey] {
                 ground = known
             } else {
-                ground = sourceGround(tile: source, targetZoom: sourceKey.targetZoom, rasterSizeByTile: rasterSizeByTile, store: store)
+                ground = sourceGround(tile: source, displacement: sourceKey.displacement, rasterSizeByTile: rasterSizeByTile, store: store)
                 grounds[sourceKey] = ground
             }
             let squareCells = PlacementGroundSquare.cells(ofSource: ground.cells, sourceZoom: source.z, squareZoom: tile.z)

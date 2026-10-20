@@ -4,7 +4,16 @@
 /// The frame's placements, a function of the targets, of what is resident
 /// right now, and of what the last frame showed. A target that is
 /// resident draws itself. A target that is not yet resident draws its
-/// stand-ins:
+/// stand-ins. On the relief a tile is resident with its terrain: the
+/// terrain tiles its ground shades by and rises by in a slot (`terrain`,
+/// the ring's terrain over it and the displacement's,
+/// `GroundReliefStore.terrainSource`, `displacementSource`) have to be in
+/// too (`terrainResident`), or the tile is not placed there and what stood
+/// on the ground stands on, by the terrain it was placed with
+/// (`PlaceTile.terrain`, `displacement`). A tile and its heights thus land together and
+/// leave together, and the ground never changes shape under a tile that
+/// stays. Off the relief `terrain` gives nil and a resident tile is ready
+/// as it is. The stand-ins:
 ///
 /// - first, what the last frame showed on its ground (`previous`), while
 ///   it is still resident: the ground keeps the tiles it has until the
@@ -62,13 +71,24 @@ struct TilePlacementPlanner {
                                 backdropZoomLevel: Int? = nil,
                                 descendantSearchDepth: Int = descendantSearchDepth,
                                 previous: [PlaceTile] = [],
-                                slotRules: (VisibleTile) -> TileDrawRules = { _ in .all }) -> PlaceTilesContext {
+                                slotRules: (VisibleTile) -> TileDrawRules = { _ in .all },
+                                terrain: (Tile, Int) -> (terrain: Tile, displacement: Tile)? = { _, _ in nil },
+                                terrainResident: (Tile) -> Bool = { _ in true }) -> PlaceTilesContext {
         // The targets by their tile and world copy: a stand-in that is a
         // target itself draws by its own slot's rules.
         let targetSlots = Set(targets)
         func rules(of source: Tile, in slot: VisibleTile) -> TileDrawRules {
             let own = VisibleTile(tile: source, worldWrap: slot.worldWrap)
             return slotRules(targetSlots.contains(own) ? own : slot)
+        }
+        /// A resident tile ready to be placed in a slot of `slotZoom`: in,
+        /// with the terrain it shades by and rises by there in too, or none
+        /// to rise by.
+        func ready(_ tile: Tile, slotZoom: Int) -> (metalTile: MetalTile, terrain: Tile?, displacement: Tile?)? {
+            guard let metalTile = resident[tile] else { return nil }
+            guard let key = terrain(tile, slotZoom) else { return (metalTile, nil, nil) }
+            guard terrainResident(key.terrain), terrainResident(key.displacement) else { return nil }
+            return (metalTile, key.terrain, key.displacement)
         }
         // The ancestors of every resident tile, so the descendant search
         // only descends into branches that hold something.
@@ -86,9 +106,10 @@ struct TilePlacementPlanner {
         /// whether they cover it whole. Each is placed at its own extent,
         /// for the target's slot.
         func descendants(of tile: Tile, slot: VisibleTile, depth: Int) -> (placements: [PlaceTile], complete: Bool) {
-            if let metalTile = resident[tile] {
+            if let ready = ready(tile, slotZoom: slot.z) {
                 let placeIn = VisibleTile(tile: tile, worldWrap: slot.worldWrap)
-                return ([PlaceTile(metalTile: metalTile, placeIn: placeIn, slot: slot, rules: rules(of: tile, in: slot))], true)
+                return ([PlaceTile(metalTile: ready.metalTile, placeIn: placeIn, slot: slot, rules: rules(of: tile, in: slot),
+                                   terrain: ready.terrain, displacement: ready.displacement)], true)
             }
             guard depth > 0, branches.contains(tile) else {
                 return ([], false)
@@ -126,7 +147,9 @@ struct TilePlacementPlanner {
         var shownInsideByAncestor: [VisibleTile: [PlaceTile]] = [:]
         for shown in previous {
             let tile = shown.metalTile.tile
-            guard resident[tile] != nil, isUsefulSubstitute(tile) else { continue }
+            // Still in, with the terrain it was placed with.
+            guard resident[tile] != nil, isUsefulSubstitute(tile),
+                  shown.terrain.map(terrainResident) ?? true, shown.displacement.map(terrainResident) ?? true else { continue }
             let ground = shown.placeIn
             shownByGround[ground, default: []].append(shown)
             var ancestorZoom = ground.z - 1
@@ -138,10 +161,12 @@ struct TilePlacementPlanner {
 
         for target in targets {
             let sourceTile = target.tile
-            if let metalTile = resident[sourceTile] {
-                append(PlaceTile(metalTile: metalTile,
+            if let ready = ready(sourceTile, slotZoom: target.z) {
+                append(PlaceTile(metalTile: ready.metalTile,
                                  placeIn: target,
-                                 rules: slotRules(target)))
+                                 rules: slotRules(target),
+                                 terrain: ready.terrain,
+                                 displacement: ready.displacement))
                 continue
             }
 
@@ -172,13 +197,17 @@ struct TilePlacementPlanner {
                 append(PlaceTile(metalTile: resident[tile]!,
                                  placeIn: shown.placeIn,
                                  slot: target,
-                                 rules: shown.rules.finer(than: rules(of: tile, in: target))))
+                                 rules: shown.rules.finer(than: rules(of: tile, in: target)),
+                                 terrain: shown.terrain,
+                                 displacement: shown.displacement))
             }
             if let shownOver {
                 let tile = shownOver.metalTile.tile
                 append(PlaceTile(metalTile: resident[tile]!,
                                  placeIn: target,
-                                 rules: shownOver.rules.finer(than: rules(of: tile, in: target))))
+                                 rules: shownOver.rules.finer(than: rules(of: tile, in: target)),
+                                 terrain: shownOver.terrain,
+                                 displacement: shownOver.displacement))
                 continue
             }
 
@@ -203,8 +232,9 @@ struct TilePlacementPlanner {
                     guard let ancestor = sourceTile.findParentTile(atZoom: ancestorZoom), isUsefulSubstitute(ancestor) else {
                         break
                     }
-                    if let metalTile = resident[ancestor] {
-                        append(PlaceTile(metalTile: metalTile, placeIn: target, rules: rules(of: ancestor, in: target)))
+                    if let ready = ready(ancestor, slotZoom: target.z) {
+                        append(PlaceTile(metalTile: ready.metalTile, placeIn: target, rules: rules(of: ancestor, in: target),
+                                         terrain: ready.terrain, displacement: ready.displacement))
                         break
                     }
                 }

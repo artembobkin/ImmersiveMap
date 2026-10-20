@@ -48,7 +48,7 @@ final class RasterTileGrid {
     /// under the tile has heights a side, as a vertex between two heights
     /// shows nothing new, nor than a cell to two texels of the tile's
     /// raster of `rasterSize`, the detail the ring was given. A far ring
-    /// that reads a coarse terrain map (the cinematic far map) takes a grid
+    /// that reads a coarse terrain map (`FlatRingRule.terrainZoomDrop`) takes a grid
     /// of a few dozen cells instead of the flattening's hundreds. The
     /// raster tile's draw and its placement's stencil mark take the same,
     /// so the mark lies where the ground does.

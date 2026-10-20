@@ -16,6 +16,8 @@ struct TextStyle {
     float fillBiasPx;
     float3 strokeColor;
     float strokeWidthPx;
+    // The opacity of the fill and the halo, 1 solid.
+    float opacity;
 };
 
 struct TextDistance {
@@ -91,7 +93,7 @@ static TextFragmentOut shadeGlyph(TextDistance distance,
     half stroke = strokeWidthPx > 0.0 ? clamp(outer - fill, 0.0h, 1.0h) : 0.0h;
 
     half coverage = clamp(fill + stroke, 0.0h, 1.0h);
-    half alpha = coverage * half(vertexAlpha);
+    half alpha = coverage * half(vertexAlpha) * half(style.opacity);
     half3 color = (fill * half3(style.textColor) + stroke * half3(style.strokeColor))
         / max(coverage, 1.0e-4h);
     TextFragmentOut out;

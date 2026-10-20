@@ -52,14 +52,30 @@ class TilePipeline {
     /// layers draw with, front-to-back under the depth test.
     let sphereOpaqueFillsPipelineState: MTLRenderPipelineState?
     /// The resting-sphere ribbons class: the line ribbons of the ground
-    /// bucket through the line-field coverage, blended.
+    /// bucket through the line-field coverage, blended, in the phases of
+    /// `SphereRibbonPhase` (TileSphere.metal, kTileSphereRibbonPhase).
     let sphereRibbonsPipelineState: MTLRenderPipelineState?
+    let sphereRibbonCorePipelineState: MTLRenderPipelineState?
+    let sphereRibbonFeatherPipelineState: MTLRenderPipelineState?
     /// The morph's class variants: the same layered passes as the resting
     /// sphere (the unroll never self-intersects toward the camera, so the
     /// rank depth band applies unchanged), with the unroll and the fog.
     let sphereMorphFillsPipelineState: MTLRenderPipelineState?
     let sphereMorphOpaqueFillsPipelineState: MTLRenderPipelineState?
     let sphereMorphRibbonsPipelineState: MTLRenderPipelineState?
+    let sphereMorphRibbonCorePipelineState: MTLRenderPipelineState?
+    let sphereMorphRibbonFeatherPipelineState: MTLRenderPipelineState?
+
+    /// Which part of a ribbon a sphere ribbons draw paints
+    /// (kTileSphereRibbonPhase in TileSphere.metal): the whole ribbon in
+    /// one blended draw, the core alone (the fragments the line covers by
+    /// half or more, which write the rank depth) or the feather alone (the
+    /// rest, blended after the cores).
+    enum SphereRibbonPhase: Int32 {
+        case whole = 0
+        case core = 1
+        case feather = 2
+    }
 
     /// - Parameter readsGroundShadowMask: the flat world pass reads the
     ///   per-pixel ground shadow mask at fragment texture 1; the globe atlas
@@ -75,8 +91,10 @@ class TilePipeline {
         let fragmentFunction: MTLFunction?
         var spherePureVertexFunctions: [Bool: MTLFunction] = [:]
         var spherePureFragmentFunctions: [Bool: MTLFunction] = [:]
+        var spherePureRibbonPhaseFragmentFunctions: [SphereRibbonPhase: MTLFunction] = [:]
         var sphereMorphVertexFunctions: [Bool: MTLFunction] = [:]
         var sphereMorphFragmentFunctions: [Bool: MTLFunction] = [:]
+        var sphereMorphRibbonPhaseFragmentFunctions: [SphereRibbonPhase: MTLFunction] = [:]
         var flatFillsVertexFunction: MTLFunction?
         var flatFillsFragmentFunction: MTLFunction?
         // The relief variants' vertex functions: the lines class, the fills
@@ -141,12 +159,15 @@ class TilePipeline {
                 blendedFragment: roadFunction("tileRoadFragmentShader", blended: true)
             )
         case .sphere:
-            func sphereFunction(_ name: String, fog: Bool, lineFields: Bool) -> MTLFunction {
+            func sphereFunction(_ name: String, fog: Bool, lineFields: Bool,
+                                ribbonPhase: SphereRibbonPhase = .whole) -> MTLFunction {
                 let values = MTLFunctionConstantValues()
                 var fogValue = fog
                 var lineFieldsValue = lineFields
+                var ribbonPhaseValue = ribbonPhase.rawValue
                 values.setConstantValue(&fogValue, type: .bool, index: 0)
                 values.setConstantValue(&lineFieldsValue, type: .bool, index: 1)
+                values.setConstantValue(&ribbonPhaseValue, type: .int, index: 2)
                 return try! library.makeFunction(name: name, constantValues: values)
             }
             // The morph: the sphere variants with the unroll and the fog.
@@ -171,6 +192,14 @@ class TilePipeline {
                 false: sphereFunction("tileSphereFragmentShader", fog: true, lineFields: false),
                 true: fragmentFunction!
             ]
+            // The ribbons class in its phases: the core and the feather,
+            // on the resting sphere and through the morph.
+            for phase in [SphereRibbonPhase.core, .feather] {
+                spherePureRibbonPhaseFragmentFunctions[phase] =
+                    sphereFunction("tileSphereFragmentShader", fog: false, lineFields: true, ribbonPhase: phase)
+                sphereMorphRibbonPhaseFragmentFunctions[phase] =
+                    sphereFunction("tileSphereFragmentShader", fog: true, lineFields: true, ribbonPhase: phase)
+            }
         }
 
         let vertexDescriptor = Self.makeVertexDescriptor()
@@ -199,9 +228,13 @@ class TilePipeline {
 
         if spherePureVertexFunctions.isEmpty == false {
             func makeClassStates(vertexFns: [Bool: MTLFunction],
-                                 fragmentFns: [Bool: MTLFunction]) -> (fills: MTLRenderPipelineState,
-                                                                       opaqueFills: MTLRenderPipelineState,
-                                                                       ribbons: MTLRenderPipelineState) {
+                                 fragmentFns: [Bool: MTLFunction],
+                                 ribbonPhaseFragmentFns: [SphereRibbonPhase: MTLFunction])
+                -> (fills: MTLRenderPipelineState,
+                    opaqueFills: MTLRenderPipelineState,
+                    ribbons: MTLRenderPipelineState,
+                    ribbonCore: MTLRenderPipelineState,
+                    ribbonFeather: MTLRenderPipelineState) {
                 pipelineDescriptor.vertexFunction = vertexFns[false]
                 pipelineDescriptor.fragmentFunction = fragmentFns[false]
                 let fills = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
@@ -212,27 +245,43 @@ class TilePipeline {
                 pipelineDescriptor.vertexFunction = vertexFns[true]
                 pipelineDescriptor.fragmentFunction = fragmentFns[true]
                 let ribbons = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
-                return (fills, opaqueFills, ribbons)
+                // The phases: the same vertex stage, the fragment keeps
+                // its share of the ribbon.
+                pipelineDescriptor.fragmentFunction = ribbonPhaseFragmentFns[.core]
+                let ribbonCore = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+                pipelineDescriptor.fragmentFunction = ribbonPhaseFragmentFns[.feather]
+                let ribbonFeather = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
+                return (fills, opaqueFills, ribbons, ribbonCore, ribbonFeather)
             }
             let pure = makeClassStates(vertexFns: spherePureVertexFunctions,
-                                       fragmentFns: spherePureFragmentFunctions)
+                                       fragmentFns: spherePureFragmentFunctions,
+                                       ribbonPhaseFragmentFns: spherePureRibbonPhaseFragmentFunctions)
             self.sphereFillsPipelineState = pure.fills
             self.sphereOpaqueFillsPipelineState = pure.opaqueFills
             self.sphereRibbonsPipelineState = pure.ribbons
+            self.sphereRibbonCorePipelineState = pure.ribbonCore
+            self.sphereRibbonFeatherPipelineState = pure.ribbonFeather
             let morph = makeClassStates(vertexFns: sphereMorphVertexFunctions,
-                                        fragmentFns: sphereMorphFragmentFunctions)
+                                        fragmentFns: sphereMorphFragmentFunctions,
+                                        ribbonPhaseFragmentFns: sphereMorphRibbonPhaseFragmentFunctions)
             self.sphereMorphFillsPipelineState = morph.fills
             self.sphereMorphOpaqueFillsPipelineState = morph.opaqueFills
             self.sphereMorphRibbonsPipelineState = morph.ribbons
+            self.sphereMorphRibbonCorePipelineState = morph.ribbonCore
+            self.sphereMorphRibbonFeatherPipelineState = morph.ribbonFeather
             pipelineDescriptor.vertexFunction = vertexFunction
             pipelineDescriptor.fragmentFunction = fragmentFunction
         } else {
             self.sphereFillsPipelineState = nil
             self.sphereOpaqueFillsPipelineState = nil
             self.sphereRibbonsPipelineState = nil
+            self.sphereRibbonCorePipelineState = nil
+            self.sphereRibbonFeatherPipelineState = nil
             self.sphereMorphFillsPipelineState = nil
             self.sphereMorphOpaqueFillsPipelineState = nil
             self.sphereMorphRibbonsPipelineState = nil
+            self.sphereMorphRibbonCorePipelineState = nil
+            self.sphereMorphRibbonFeatherPipelineState = nil
         }
 
         if surface == .flat, let flatFillsVertexFunction, let flatFillsFragmentFunction {
@@ -383,12 +432,23 @@ class TilePipeline {
     /// that has no variants.
     func selectSphereClassPipeline(renderEncoder: MTLRenderCommandEncoder,
                                    linesClass: Bool,
-                                   morph: Bool) {
+                                   morph: Bool,
+                                   ribbonPhase: SphereRibbonPhase = .whole) {
         let state: MTLRenderPipelineState?
         if morph {
-            state = linesClass ? sphereMorphRibbonsPipelineState : sphereMorphFillsPipelineState
+            switch (linesClass, ribbonPhase) {
+            case (false, _): state = sphereMorphFillsPipelineState
+            case (true, .whole): state = sphereMorphRibbonsPipelineState
+            case (true, .core): state = sphereMorphRibbonCorePipelineState
+            case (true, .feather): state = sphereMorphRibbonFeatherPipelineState
+            }
         } else {
-            state = linesClass ? sphereRibbonsPipelineState : sphereFillsPipelineState
+            switch (linesClass, ribbonPhase) {
+            case (false, _): state = sphereFillsPipelineState
+            case (true, .whole): state = sphereRibbonsPipelineState
+            case (true, .core): state = sphereRibbonCorePipelineState
+            case (true, .feather): state = sphereRibbonFeatherPipelineState
+            }
         }
         if let state {
             renderEncoder.setRenderPipelineState(state)

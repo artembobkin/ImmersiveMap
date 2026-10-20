@@ -35,6 +35,14 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// How far the letters are grown past the font's outline, in layout
         /// points (`LabelTextStyle.emboldenPoints`).
         public var emboldenPoints: Float
+        /// Extra room after every letter, in ems
+        /// (`LabelTextStyle.letterSpacingEm`): the tracking of a name spaced
+        /// out over the land it names.
+        public var letterSpacingEm: Float
+        /// The opacity of the label, fill and halo alike
+        /// (`LabelTextStyle.opacity`): 1 solid, less lets the map show
+        /// through a name laid over it.
+        public var opacity: Float
 
         public init(fillColor: SIMD3<Float>,
                     strokeColor: SIMD3<Float>,
@@ -42,7 +50,9 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
                     sizePoints: Float,
                     weight: LabelFontWeight,
                     uppercased: Bool = false,
-                    emboldenPoints: Float = LabelTextStyle.defaultEmboldenPoints) {
+                    emboldenPoints: Float = LabelTextStyle.defaultEmboldenPoints,
+                    letterSpacingEm: Float = 0,
+                    opacity: Float = 1) {
             self.fillColor = fillColor
             self.strokeColor = strokeColor
             self.haloEm = haloEm
@@ -50,6 +60,8 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
             self.weight = weight
             self.uppercased = uppercased
             self.emboldenPoints = emboldenPoints
+            self.letterSpacingEm = letterSpacingEm
+            self.opacity = opacity
         }
     }
 
@@ -60,7 +72,13 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// quarters they make up, and the places smaller than a town (a
         /// village, a hamlet, a named square).
         public var district: LabelAppearance
+        /// A country's name: the name of a land, not of a point, so by
+        /// default it is set apart from the places in it, in spaced
+        /// capitals above every city's size.
         public var country: LabelAppearance
+        /// A region's name (a state, a province, a land): under the
+        /// country's, in the same manner, above a city's.
+        public var region: LabelAppearance
         public var poi: LabelAppearance
         public var water: LabelAppearance
         public var road: LabelAppearance
@@ -69,6 +87,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
                     town: LabelAppearance,
                     district: LabelAppearance = LabelStyles.default.district,
                     country: LabelAppearance,
+                    region: LabelAppearance = LabelStyles.default.region,
                     poi: LabelAppearance,
                     water: LabelAppearance,
                     road: LabelAppearance) {
@@ -76,6 +95,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
             self.town = town
             self.district = district
             self.country = country
+            self.region = region
             self.poi = poi
             self.water = water
             self.road = road
@@ -167,6 +187,17 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// Minimum camera zoom of the house numbers.
         public var addressMinimumZoom: Int
 
+        /// The camera zoom a country's name goes away at: shown below it,
+        /// hidden from it on. The basemap ships the names of the countries
+        /// into the street zooms, where a name that stands for the whole
+        /// land reads as one more town among the towns. The default keeps
+        /// it to the views that hold a country, up to zoom 7.
+        public var countryMaximumZoom: Int
+        /// The camera zoom a region's name goes away at, as
+        /// `countryMaximumZoom`: a state or a province is read a couple of
+        /// zooms deeper than its country.
+        public var regionMaximumZoom: Int
+
         /// Whether the local detail, the icon-less POIs (a memorial, an
         /// office, a ticket window) and the house numbers, shows only near
         /// the camera (`PointLabelStyle.isLocal`): in the three by three
@@ -187,6 +218,8 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
                     poiLongNameMinimumZoom: Int = 17,
                     poiLongNameCharacterCount: Int = 32,
                     addressMinimumZoom: Int = 17,
+                    countryMaximumZoom: Int = 8,
+                    regionMaximumZoom: Int = 10,
                     localDetailInLookAtTileOnly: Bool = true) {
             self.poiIconlessMinimumZoom = poiIconlessMinimumZoom
             self.poiMinimumZoom = poiMinimumZoom
@@ -196,6 +229,8 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
             self.poiLongNameMinimumZoom = poiLongNameMinimumZoom
             self.poiLongNameCharacterCount = poiLongNameCharacterCount
             self.addressMinimumZoom = addressMinimumZoom
+            self.countryMaximumZoom = countryMaximumZoom
+            self.regionMaximumZoom = regionMaximumZoom
             self.localDetailInLookAtTileOnly = localDetailInLookAtTileOnly
         }
     }
@@ -346,6 +381,18 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// view, and the roads blend until `symbolZoom`.
         public var overviewOpacity: Float
 
+        /// The opacity of the overview stroke on the globe, `0...1`: a veil
+        /// the globe's view lays over the roads, so the painted ground
+        /// stays the picture of a continent and the roads a net over it.
+        /// 0.6 by default. One is the same stroke as on the plane. It holds
+        /// through the globe's view and its unroll into the plane, is handed
+        /// over with the globe's air at the end of the unroll
+        /// (`PresentationSettings.airHandoverStart` to `airHandoverEnd`),
+        /// and the plane never has it, whatever `overviewOpacity` says
+        /// there. The engine blends each stroke once on the globe, so
+        /// the veil never darkens where two strokes cross.
+        public var globeOpacity: Float
+
         /// The camera zoom from which a road's width is fixed on the ground
         /// instead of on screen. Up to it a road is a symbol of
         /// `symbolWidthPoints`. Past it the road keeps the ground width the
@@ -375,6 +422,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
                     overviewZoom: Float = 6,
                     symbolZoom: Float = 14,
                     overviewOpacity: Float = 1,
+                    globeOpacity: Float = 0.6,
                     worldLockZoom: Float = 15,
                     drawsCasing: Bool = false,
                     minimumTileZoom: RoadClassValues<Int> = RoadMetrics.defaultMinimumTileZoom) {
@@ -383,6 +431,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
             self.overviewZoom = overviewZoom
             self.symbolZoom = symbolZoom
             self.overviewOpacity = overviewOpacity
+            self.globeOpacity = globeOpacity
             self.worldLockZoom = worldLockZoom
             self.drawsCasing = drawsCasing
             self.minimumTileZoom = minimumTileZoom
@@ -431,6 +480,178 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         )
     }
 
+    /// The biomes of the globe's overview (`OverviewTileSource`): the
+    /// colour of each of the fourteen biomes of RESOLVE Ecoregions 2017 the
+    /// engine lays into the tiles of the overview zooms, the tones the
+    /// tiles' own land cover draws over them in, and the zooms of both. A
+    /// biome is a region of one climate and vegetation, so the palette is a
+    /// physical atlas's: the forests in the greens, deepest in the tropics
+    /// and bluest in the taiga, the grasslands and the savannas in the pale
+    /// yellow-greens, the deserts alone in the sand, the tundra in a
+    /// grey-green a step off the ice. Everything that grows is a green, so
+    /// a cream on the map is dry ground and nothing else. Every value is
+    /// baked into the prepared tiles, so a change re-parses them.
+    public struct BiomeStyles: Equatable, Sendable {
+        /// `tropical_moist_forest`: the Amazon, the Congo, Southeast Asia.
+        public var tropicalMoistForest: SIMD4<Float>
+        /// `tropical_dry_forest`: the deciduous forests of India, Mexico, the Chaco.
+        public var tropicalDryForest: SIMD4<Float>
+        /// `tropical_conifer_forest`: the pine forests of Mexico and the Caribbean.
+        public var tropicalConiferForest: SIMD4<Float>
+        /// `temperate_broadleaf_forest`: Europe, the eastern United States, East Asia.
+        public var temperateBroadleafForest: SIMD4<Float>
+        /// `temperate_conifer_forest`: the Rockies, the Cascades, the Alps, Siberia's south.
+        public var temperateConiferForest: SIMD4<Float>
+        /// `boreal_forest`: the taiga of Canada, Scandinavia and Siberia.
+        public var borealForest: SIMD4<Float>
+        /// `tropical_grassland`: the savannas of Africa, the Cerrado, northern Australia.
+        public var tropicalGrassland: SIMD4<Float>
+        /// `temperate_grassland`: the prairies, the pampas, the steppes.
+        public var temperateGrassland: SIMD4<Float>
+        /// `flooded_grassland`: the Pantanal, the Sudd, the Okavango.
+        public var floodedGrassland: SIMD4<Float>
+        /// `montane_grassland`: the Tibetan plateau, the Andean puna, the Ethiopian highlands.
+        public var montaneGrassland: SIMD4<Float>
+        /// `tundra`: the Arctic coasts, the Antarctic shore, the high north.
+        public var tundra: SIMD4<Float>
+        /// `mediterranean_scrub`: the Mediterranean, California, the Cape, southwest Australia.
+        public var mediterraneanScrub: SIMD4<Float>
+        /// `desert`: the Sahara, Arabia, Central Asia, the Australian outback.
+        public var desert: SIMD4<Float>
+        /// `mangrove`: the tropical tidal forests.
+        public var mangrove: SIMD4<Float>
+        /// The forests of the tiles' own land cover and land use drawn over
+        /// the biomes, from `coverMinimumTileZoom`: a step darker than the
+        /// forest biomes, so a wood reads on them.
+        public var forestCover: SIMD4<Float>
+        /// The fields drawn over the biomes: the hue of the temperate
+        /// forest biomes they mostly lie on, a shade lighter (the same hue
+        /// and chroma, the lightness up by a twentieth), so a plain reads
+        /// as open land on a wooded biome and the greens layer in one tone,
+        /// the biome, the fields on it, the woods on both. Not a
+        /// wheat, which stood in one row with the deserts and made France
+        /// read as the Sahara, and not a yellower green, which cut the
+        /// fields out of the map instead of laying them on it.
+        public var farmlandCover: SIMD4<Float>
+        /// The bare ground (the basemap's `barren`, the sand and the rock
+        /// of the land use) drawn over the biomes: the sand.
+        public var barrenCover: SIMD4<Float>
+        /// The deepest tile zoom the biomes draw at, 7 by default, the last
+        /// zoom the basemap ships its land cover for. Through it the biomes
+        /// paint the land in place of the tiles' own land cover and land
+        /// use, which draw over them from `coverMinimumTileZoom`, and the
+        /// biomes fade out with the land cover over camera zoom 7 to 8,
+        /// where the street map's land tone and land use take over. The
+        /// overview archive goes to tile zoom 7, so a deeper zoom draws no
+        /// biomes. A lower zoom hands the land to the source's land cover
+        /// earlier, and a negative zoom never draws the biomes.
+        public var maximumTileZoom: Int
+        /// The tile zoom from which the tiles' own forests, fields, bare
+        /// ground, wetlands and ice draw over the biomes, in the cover tones
+        /// above, 2 by default. Under it the globe is the biomes alone, with
+        /// the ice and the cities: a region of one climate in one tone. From
+        /// it the cover gives the ground its structure, the fields against
+        /// the woods, and the holes between the land cover's raster-derived
+        /// blobs show the biome instead of bare land.
+        public var coverMinimumTileZoom: Int
+
+        public init(tropicalMoistForest: SIMD4<Float> = SIMD4<Float>(0.624, 0.812, 0.541, 1.0),
+                    tropicalDryForest: SIMD4<Float> = SIMD4<Float>(0.706, 0.847, 0.580, 1.0),
+                    tropicalConiferForest: SIMD4<Float> = SIMD4<Float>(0.651, 0.820, 0.561, 1.0),
+                    temperateBroadleafForest: SIMD4<Float> = SIMD4<Float>(0.667, 0.835, 0.576, 1.0),
+                    temperateConiferForest: SIMD4<Float> = SIMD4<Float>(0.639, 0.812, 0.576, 1.0),
+                    borealForest: SIMD4<Float> = SIMD4<Float>(0.686, 0.827, 0.643, 1.0),
+                    tropicalGrassland: SIMD4<Float> = SIMD4<Float>(0.812, 0.886, 0.643, 1.0),
+                    temperateGrassland: SIMD4<Float> = SIMD4<Float>(0.788, 0.865, 0.654, 1.0),
+                    floodedGrassland: SIMD4<Float> = SIMD4<Float>(0.741, 0.855, 0.698, 1.0),
+                    montaneGrassland: SIMD4<Float> = SIMD4<Float>(0.804, 0.863, 0.690, 1.0),
+                    tundra: SIMD4<Float> = SIMD4<Float>(0.867, 0.894, 0.839, 1.0),
+                    mediterraneanScrub: SIMD4<Float> = SIMD4<Float>(0.788, 0.851, 0.604, 1.0),
+                    desert: SIMD4<Float> = SIMD4<Float>(0.949, 0.922, 0.808, 1.0),
+                    mangrove: SIMD4<Float> = SIMD4<Float>(0.741, 0.855, 0.698, 1.0),
+                    forestCover: SIMD4<Float> = SIMD4<Float>(0.580, 0.770, 0.490, 1.0),
+                    farmlandCover: SIMD4<Float> = SIMD4<Float>(0.728, 0.865, 0.654, 1.0),
+                    barrenCover: SIMD4<Float> = SIMD4<Float>(0.950, 0.910, 0.780, 1.0),
+                    maximumTileZoom: Int = 7,
+                    coverMinimumTileZoom: Int = 2) {
+            self.tropicalMoistForest = tropicalMoistForest
+            self.tropicalDryForest = tropicalDryForest
+            self.tropicalConiferForest = tropicalConiferForest
+            self.temperateBroadleafForest = temperateBroadleafForest
+            self.temperateConiferForest = temperateConiferForest
+            self.borealForest = borealForest
+            self.tropicalGrassland = tropicalGrassland
+            self.temperateGrassland = temperateGrassland
+            self.floodedGrassland = floodedGrassland
+            self.montaneGrassland = montaneGrassland
+            self.tundra = tundra
+            self.mediterraneanScrub = mediterraneanScrub
+            self.desert = desert
+            self.mangrove = mangrove
+            self.forestCover = forestCover
+            self.farmlandCover = farmlandCover
+            self.barrenCover = barrenCover
+            self.maximumTileZoom = maximumTileZoom
+            self.coverMinimumTileZoom = coverMinimumTileZoom
+        }
+
+        /// The atlas palette above.
+        public static let `default` = BiomeStyles()
+
+        /// The colours in a fixed order, for the fingerprint.
+        var colors: [SIMD4<Float>] {
+            [tropicalMoistForest, tropicalDryForest, tropicalConiferForest, temperateBroadleafForest,
+             temperateConiferForest, borealForest, tropicalGrassland, temperateGrassland,
+             floodedGrassland, montaneGrassland, tundra, mediterraneanScrub, desert, mangrove,
+             forestCover, farmlandCover, barrenCover]
+        }
+    }
+
+    /// The road network of the globe's overview: the Natural Earth 1:10m
+    /// roads the engine lays into the tiles of the overview zooms
+    /// (`OverviewTileSource`, layer `road`) in place of the basemap's own
+    /// roads, which at those zooms are the motorways alone, a few pieces
+    /// in most of the world, since the trunks arrive at tile zoom 6. The
+    /// network is one continuous line per road, ranked 3 (continental) to
+    /// 7 (regional), and draws through `maximumTileZoom`, where the
+    /// basemap's trunks take over. The roads of the map's own tiles are
+    /// hidden through that zoom. The same tones are what the basemap's own
+    /// overview strokes wear on the globe past the network's zoom, through
+    /// the unroll into the plane, where the asphalt arrives. Every value is
+    /// baked into the prepared tiles, so a change re-parses them.
+    public struct OverviewRoadStyles: Equatable, Sendable {
+        /// The main roads, rank up to `majorMaximumRank`: the yellow of an
+        /// atlas's highways over the painted land.
+        public var major: SIMD4<Float>
+        /// The rest of the network, thinner and paler.
+        public var minor: SIMD4<Float>
+        public var majorWidthPoints: Float
+        public var minorWidthPoints: Float
+        /// The last rank that draws as a main road, 4 by default: the
+        /// continental routes and the first regional ones.
+        public var majorMaximumRank: Int
+        /// The last tile zoom the network draws at, 5 by default, the zoom
+        /// before the basemap ships its trunks. The archive carries the
+        /// roads through tile zoom 5, so a higher value shows nothing more.
+        public var maximumTileZoom: Int
+
+        public init(major: SIMD4<Float> = SIMD4<Float>(0.961, 0.780, 0.302, 1.0),
+                    minor: SIMD4<Float> = SIMD4<Float>(0.945, 0.863, 0.600, 1.0),
+                    majorWidthPoints: Float = 1.6,
+                    minorWidthPoints: Float = 1.0,
+                    majorMaximumRank: Int = 4,
+                    maximumTileZoom: Int = 5) {
+            self.major = major
+            self.minor = minor
+            self.majorWidthPoints = majorWidthPoints
+            self.minorWidthPoints = minorWidthPoints
+            self.majorMaximumRank = majorMaximumRank
+            self.maximumTileZoom = maximumTileZoom
+        }
+
+        public static let `default` = OverviewRoadStyles()
+    }
+
     public struct LayerStyles: Equatable, Sendable {
         public var land: SIMD4<Float>
         public var water: SIMD4<Float>
@@ -446,6 +667,11 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         public var boundary: SIMD4<Float>
         public var aeroway: SIMD4<Float>
         public var roads: RoadLayerStyles
+        /// The biomes of the globe's overview, over the land of the
+        /// overview zooms in place of the land cover (`BiomeStyles`).
+        public var biomes: BiomeStyles
+        /// The road network of the globe's overview (`OverviewRoadStyles`).
+        public var overviewRoads: OverviewRoadStyles
 
         public init(land: SIMD4<Float>,
                     water: SIMD4<Float>,
@@ -460,7 +686,9 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
                     industrial: SIMD4<Float>,
                     boundary: SIMD4<Float>,
                     aeroway: SIMD4<Float>,
-                    roads: RoadLayerStyles) {
+                    roads: RoadLayerStyles,
+                    biomes: BiomeStyles = .default,
+                    overviewRoads: OverviewRoadStyles = .default) {
             self.land = land
             self.water = water
             self.wood = wood
@@ -475,6 +703,8 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
             self.boundary = boundary
             self.aeroway = aeroway
             self.roads = roads
+            self.biomes = biomes
+            self.overviewRoads = overviewRoads
         }
     }
 
@@ -521,6 +751,9 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
     /// How the slopes are shaded where the ground relief stands
     /// (`ImmersiveMapHillshade`).
     public var hillshade: ImmersiveMapHillshade
+    /// How the ground is darkened where the terrain hides the sky, where
+    /// the ground relief stands (`ImmersiveMapTerrainOcclusion`).
+    public var terrainOcclusion: ImmersiveMapTerrainOcclusion
 
     public init(labels: LabelStyles = .default,
                 labelVisibility: LabelVisibility = LabelVisibility(),
@@ -528,7 +761,8 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
                 features: FeatureStyles = .default,
                 roadMetrics: RoadMetrics = RoadMetrics(),
                 routeShields: RouteShields = RouteShields(),
-                hillshade: ImmersiveMapHillshade = ImmersiveMapHillshade()) {
+                hillshade: ImmersiveMapHillshade = ImmersiveMapHillshade(),
+                terrainOcclusion: ImmersiveMapTerrainOcclusion = ImmersiveMapTerrainOcclusion()) {
         self.labels = labels
         self.labelVisibility = labelVisibility
         self.layers = layers
@@ -536,6 +770,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         self.roadMetrics = roadMetrics
         self.routeShields = routeShields
         self.hillshade = hillshade
+        self.terrainOcclusion = terrainOcclusion
     }
 
     public static let `default` = ProtomapsBasemapTheme()
@@ -615,7 +850,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         func add(_ a: LabelAppearance) {
             add(a.fillColor); add(a.strokeColor)
             out.append(contentsOf: [a.haloEm, a.sizePoints, Float(a.weight.rawValue), a.uppercased ? 1 : 0,
-                                    a.emboldenPoints])
+                                    a.emboldenPoints, a.letterSpacingEm, a.opacity])
         }
         add(layers.land); add(layers.water); add(layers.wood); add(layers.grass)
         add(layers.farmland); add(layers.ice); add(layers.sand); add(layers.wetland)
@@ -625,11 +860,20 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         add(layers.roads.secondary); add(layers.roads.tertiary); add(layers.roads.minor)
         add(layers.roads.service); add(layers.roads.path); add(layers.roads.rail)
         add(layers.roads.casing); add(layers.roads.marking)
+        // The biomes are baked into the overview zooms' tiles, and the zoom
+        // they stop at decides which tiles carry them at all.
+        for color in layers.biomes.colors { add(color) }
+        out.append(Float(layers.biomes.maximumTileZoom))
+        out.append(Float(layers.biomes.coverMinimumTileZoom))
+        // The overview's road network, baked into the same tiles.
+        add(layers.overviewRoads.major); add(layers.overviewRoads.minor)
+        out.append(contentsOf: [layers.overviewRoads.majorWidthPoints, layers.overviewRoads.minorWidthPoints,
+                                Float(layers.overviewRoads.majorMaximumRank), Float(layers.overviewRoads.maximumTileZoom)])
         add(features.buildingFillColor)
         out.append(features.buildingExtrusion ? 1 : 0)
         out.append(features.labelsStandOnRoofs ? 1 : 0)
         out.append(features.buildingEdgeRadius)
-        add(labels.city); add(labels.town); add(labels.district); add(labels.country)
+        add(labels.city); add(labels.town); add(labels.district); add(labels.country); add(labels.region)
         add(labels.poi); add(labels.water); add(labels.road)
         // Not palette values, but they change which labels are drawn, so they
         // must participate in the disk-cache identity.
@@ -643,13 +887,16 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
                                 labelVisibility.poiCategoryMinimumZoom.transitDetail,
                                 labelVisibility.poiLongNameMinimumZoom,
                                 labelVisibility.poiLongNameCharacterCount,
-                                labelVisibility.addressMinimumZoom].map(Float.init))
+                                labelVisibility.addressMinimumZoom,
+                                labelVisibility.countryMaximumZoom,
+                                labelVisibility.regionMaximumZoom].map(Float.init))
         out.append(labelVisibility.localDetailInLookAtTileOnly ? 1 : 0)
         // The road metrics are baked into the tiles' line styles and decide
         // which classes a tile carries at all.
         out.append(contentsOf: roadMetrics.symbolWidthPoints.all)
         out.append(contentsOf: roadMetrics.overviewWidthPoints.all)
         out.append(contentsOf: [roadMetrics.overviewZoom, roadMetrics.symbolZoom, roadMetrics.overviewOpacity])
+        out.append(roadMetrics.globeOpacity)
         out.append(roadMetrics.worldLockZoom)
         out.append(roadMetrics.drawsCasing ? 1 : 0)
         out.append(contentsOf: roadMetrics.minimumTileZoom.all.map(Float.init))
@@ -759,9 +1006,22 @@ public extension ProtomapsBasemapTheme.LabelStyles {
         district: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.45, 0.45, 0.46), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.1, sizePoints: 10, weight: .thin, uppercased: true, emboldenPoints: 0.2),
+        // A country's name is the name of a land: spaced capitals in the
+        // thin face with a little added weight, a shade above a capital's
+        // size (16.5), in a lighter grey of its own with a narrow halo, so
+        // it reads as lettering over the country and not as one more
+        // town, and a globe full of them stays quiet. Both are lettering
+        // laid over the land, so they let the map show through them. A
+        // region's name is the same manner, a city's size and lighter
+        // still.
         country: ProtomapsBasemapTheme.LabelAppearance(
-            fillColor: SIMD3<Float>(0.28, 0.27, 0.33), strokeColor: SIMD3<Float>(1, 1, 1),
-            haloEm: 0.162, sizePoints: 13, weight: .bold),
+            fillColor: SIMD3<Float>(0.38, 0.37, 0.44), strokeColor: SIMD3<Float>(1, 1, 1),
+            haloEm: 0.1, sizePoints: 17, weight: .thin, uppercased: true, emboldenPoints: 0.3,
+            letterSpacingEm: 0.12, opacity: 0.65),
+        region: ProtomapsBasemapTheme.LabelAppearance(
+            fillColor: SIMD3<Float>(0.46, 0.45, 0.51), strokeColor: SIMD3<Float>(1, 1, 1),
+            haloEm: 0.1, sizePoints: 15, weight: .thin, uppercased: true, emboldenPoints: 0.3,
+            letterSpacingEm: 0.1, opacity: 0.7),
         poi: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.40, 0.42, 0.40), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.225, sizePoints: 8, weight: .thin),

@@ -73,6 +73,9 @@ let package = Package(
                 .process("Text/Resources"),
                 .process("Text/Shaders"),
                 .process("Tile/Shaders"),
+                // The overview of the globe laid into the tiles of zooms 0 to 5
+                // (`OverviewTileSource`): copied whole, a PMTiles archive.
+                .copy("Tile/Overview/Resources/overview.pmtiles"),
             ]
         ),
         .testTarget(

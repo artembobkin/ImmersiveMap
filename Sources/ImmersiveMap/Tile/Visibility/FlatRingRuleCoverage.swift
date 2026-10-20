@@ -33,17 +33,28 @@ struct FlatRingRule: Hashable {
     /// `FlatRingRules.rasterSizes`, and a cost of every frame, so a far
     /// band wants a small one.
     var rasterSize: Int?
+    /// How many zooms coarser than the band's own tiles the ground reads
+    /// its terrain, on the relief: 0 reads the terrain tile of each
+    /// tile's own zoom, every height the source has that a grid can show,
+    /// and n the terrain n zooms coarser, one terrain tile under 4^n
+    /// ground tiles. The near ring at 0 is the mountain the camera stands
+    /// at in full detail, and a far ring at 3 or 4 rises from a handful of
+    /// coarse tiles, which is all the texels it has for them. One of
+    /// `FlatRingRules.terrainZoomDropRange`. Nothing on the plane.
+    var terrainZoomDrop: Int = 0
 
     init(zoomDrop: Int,
          distance: Int,
          drawsLines: Bool = true,
          drawsLabels: Bool = true,
-         rasterSize: Int? = nil) {
+         rasterSize: Int? = nil,
+         terrainZoomDrop: Int = 0) {
         self.zoomDrop = zoomDrop
         self.distance = distance
         self.drawsLines = drawsLines
         self.drawsLabels = drawsLabels
         self.rasterSize = rasterSize
+        self.terrainZoomDrop = terrainZoomDrop
     }
 }
 
@@ -64,6 +75,9 @@ struct FlatRingRules: Hashable {
 
     static let zoomDropRange = 0 ... 8
     static let distanceRange = 0 ... 256
+    /// How many zooms coarser than its tiles a band's terrain may be
+    /// (`FlatRingRule.terrainZoomDrop`).
+    static let terrainZoomDropRange = 0 ... 8
     /// The texture edges a rule may draw its ground from
     /// (`FlatRingRule.rasterSize`): powers of two, so every mip level
     /// halves the one above it down to a single texel.
@@ -76,18 +90,21 @@ struct FlatRingRules: Hashable {
     }
 
     /// The exact tiles to one ring around the look-at tile, as geometry
-    /// with their lines and labels. Past it the ground is textures, without
-    /// lines or labels: one level coarser to ring 2 and two levels coarser
-    /// to ring 3 at 128 texels, four levels coarser to ring 9 at 64. The
-    /// ground beyond is the horizon backdrop
-    /// (`TileWorkingSetSubsystem.horizonBackdrops`). The map recedes toward
-    /// the horizon soft and quiet, and the textures, drawn every frame,
-    /// stay small.
+    /// with their lines and labels, on the terrain of their own zoom. Past
+    /// it the ground is textures, without lines or labels: one level
+    /// coarser to ring 2 and two levels coarser to ring 3 at 128 texels,
+    /// four levels coarser to ring 9 at 64. The terrain past the near ring
+    /// is three zooms under the near tiles' (zoom 10 at a zoom 13 frame),
+    /// and the far band's seven under (zoom 6), a few coarse tiles for
+    /// the ridges toward the horizon. The ground beyond is the horizon
+    /// backdrop (`TileWorkingSetSubsystem.horizonBackdrops`). The map
+    /// recedes toward the horizon soft and quiet, and the textures, drawn
+    /// every frame, stay small.
     static let `default` = FlatRingRules(rules: [
         FlatRingRule(zoomDrop: 0, distance: 1),
-        FlatRingRule(zoomDrop: 1, distance: 2, drawsLines: false, drawsLabels: false, rasterSize: 128),
-        FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false, drawsLabels: false, rasterSize: 128),
-        FlatRingRule(zoomDrop: 4, distance: 9, drawsLines: false, drawsLabels: false, rasterSize: 64)
+        FlatRingRule(zoomDrop: 1, distance: 2, drawsLines: false, drawsLabels: false, rasterSize: 128, terrainZoomDrop: 2),
+        FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false, drawsLabels: false, rasterSize: 128, terrainZoomDrop: 1),
+        FlatRingRule(zoomDrop: 4, distance: 9, drawsLines: false, drawsLabels: false, rasterSize: 64, terrainZoomDrop: 3)
     ])
 
     /// The rules as the coverage reads them: every value inside its range,
@@ -97,11 +114,14 @@ struct FlatRingRules: Hashable {
         for rule in rules {
             let distance = min(max(rule.distance, Self.distanceRange.lowerBound), Self.distanceRange.upperBound)
             let drop = min(max(rule.zoomDrop, Self.zoomDropRange.lowerBound), Self.zoomDropRange.upperBound)
+            let terrainDrop = min(max(rule.terrainZoomDrop, Self.terrainZoomDropRange.lowerBound),
+                                  Self.terrainZoomDropRange.upperBound)
             cleaned.append(FlatRingRule(zoomDrop: drop,
                                         distance: distance,
                                         drawsLines: rule.drawsLines,
                                         drawsLabels: rule.drawsLabels,
-                                        rasterSize: Self.normalizedRasterSize(rule.rasterSize)))
+                                        rasterSize: Self.normalizedRasterSize(rule.rasterSize),
+                                        terrainZoomDrop: terrainDrop))
         }
         cleaned.sort { $0.distance < $1.distance }
         var unique: [FlatRingRule] = []
@@ -115,12 +135,22 @@ struct FlatRingRules: Hashable {
     }
 }
 
-/// One rule's band as the frame resolved it: its zoom, its last ring and
-/// how many tiles it placed.
+/// One rule's band as the frame resolved it: its zoom, its last ring,
+/// how many tiles it placed, and the zoom its ground reads its terrain at
+/// on the relief (`FlatRingRule.terrainZoomDrop`, `GroundReliefTerrainZooms`).
 struct FlatRingBand: Hashable {
     let zoom: Int
     let distance: Int
     let tileCount: Int
+    let terrainZoom: Int
+
+    /// `terrainZoom` nil reads the band's own zoom.
+    init(zoom: Int, distance: Int, tileCount: Int, terrainZoom: Int? = nil) {
+        self.zoom = zoom
+        self.distance = distance
+        self.tileCount = tileCount
+        self.terrainZoom = terrainZoom ?? zoom
+    }
 }
 
 struct FlatRingRuleCoverageResolution {
@@ -229,7 +259,8 @@ enum FlatRingRuleCoverage {
             placed.formUnion(tiles)
             bands.append(FlatRingBand(zoom: zoom,
                                       distance: rule.distance,
-                                      tileCount: tiles.count))
+                                      tileCount: tiles.count,
+                                      terrainZoom: max(0, zoom - rule.terrainZoomDrop)))
             innerSquare = square
         }
         return FlatRingRuleCoverageResolution(targets: FlatTileCoverage.sorted(Array(placed)),

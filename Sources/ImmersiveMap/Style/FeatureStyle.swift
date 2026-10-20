@@ -74,6 +74,14 @@ public struct LabelTextStyle: Sendable {
     /// Zero draws the face as the font designs it, and a negative value
     /// thins it.
     public var emboldenPoints: Float
+    /// Extra room after every letter, in ems: the tracking a name spaced
+    /// out over the land it names is set with, the way an atlas letters a
+    /// country. Zero sets the letters as the font spaces them.
+    public var letterSpacingEm: Float
+    /// The opacity of the label, fill and halo alike, 0 to 1: a name laid
+    /// over the land as lettering rather than a sign, letting the map
+    /// show through. 1 is solid.
+    public var opacity: Float
 
     /// The growth every label had before it was a style value: three
     /// quarters of a pixel on the 2x display the palette was authored on.
@@ -86,7 +94,9 @@ public struct LabelTextStyle: Sendable {
                 sizePoints: Float,
                 weight: LabelFontWeight,
                 uppercased: Bool = false,
-                emboldenPoints: Float = LabelTextStyle.defaultEmboldenPoints) {
+                emboldenPoints: Float = LabelTextStyle.defaultEmboldenPoints,
+                letterSpacingEm: Float = 0,
+                opacity: Float = 1) {
         self.key = key
         self.fillColor = fillColor
         self.strokeColor = strokeColor
@@ -95,6 +105,8 @@ public struct LabelTextStyle: Sendable {
         self.weight = weight
         self.uppercased = uppercased
         self.emboldenPoints = emboldenPoints
+        self.letterSpacingEm = letterSpacingEm
+        self.opacity = opacity
     }
 
     /// Halo width in device pixels for this style at a given screen scale.
@@ -180,6 +192,21 @@ public struct LinePass: Sendable {
     /// The zoom ramp `lineWidthPoints` comes in over; nil holds the width at
     /// every zoom up to the world lock.
     public var pointWidthRamp: WidthRamp?
+    /// The share of the colour's alpha the stroke keeps on the globe, in
+    /// `0...1`: one, the default, is the same stroke on both surfaces, and
+    /// less is a veil the globe's view lays over it, so the ground stays
+    /// the picture of a continent and the roads a net over it. The veil
+    /// holds through the globe's view, the unroll into the plane included,
+    /// is handed over to the plane's with the globe's air at the end of
+    /// the unroll (`PresentationSettings.airHandoverStart` to
+    /// `airHandoverEnd`), and the plane never has it. Only the sphere's
+    /// ribbons read it: a road of the street zooms is never on the sphere.
+    public var sphereAlpha: Float
+    /// The colour the stroke wears on the globe, nil for its own: an
+    /// atlas's highway yellow over the painted globe where the plane draws
+    /// asphalt. Handed over with `sphereAlpha`. Only the sphere's ribbons
+    /// read it.
+    public var sphereColor: SIMD3<Float>?
     public var lineGeometry: LineGeometryStyle
 
     public init(key: UInt8,
@@ -192,6 +219,8 @@ public struct LinePass: Sendable {
                 minimumWidthPoints: Float = 0.0,
                 pointWidthWorldLockZoom: Float = 0.0,
                 pointWidthRamp: WidthRamp? = nil,
+                sphereAlpha: Float = 1,
+                sphereColor: SIMD3<Float>? = nil,
                 lineGeometry: LineGeometryStyle) {
         self.key = key
         self.color = color
@@ -203,6 +232,8 @@ public struct LinePass: Sendable {
         self.minimumWidthPoints = minimumWidthPoints
         self.pointWidthWorldLockZoom = pointWidthWorldLockZoom
         self.pointWidthRamp = pointWidthRamp
+        self.sphereAlpha = sphereAlpha
+        self.sphereColor = sphereColor
         self.lineGeometry = lineGeometry
     }
 }
@@ -386,6 +417,11 @@ public struct PointLabelStyle: Sendable {
     /// Minimum CAMERA zoom for the label (0 = always visible). Travels with
     /// the label to runtime, where it is compared against the camera zoom.
     public var minCameraZoom: Float
+    /// The camera zoom the label goes away at: shown while the camera zoom
+    /// is below it, hidden from it on. Infinity shows the label at every
+    /// zoom past its minimum. A country's name is read over the country
+    /// and says nothing among the streets of one of its towns.
+    public var maxCameraZoom: Float
     /// The sprite drawn beside the text, nil for text alone.
     public var icon: PoiSpriteIcon?
     /// Upright on the screen, or painted on the map. A label painted on the
@@ -415,6 +451,7 @@ public struct PointLabelStyle: Sendable {
                 rank: Int = 0,
                 collisionRank: Int? = nil,
                 minCameraZoom: Float = 0,
+                maxCameraZoom: Float = .infinity,
                 icon: PoiSpriteIcon? = nil,
                 placement: LabelPlacement = .screen,
                 standsOnRoof: Bool = false,
@@ -424,6 +461,7 @@ public struct PointLabelStyle: Sendable {
         self.rank = rank
         self.collisionRank = collisionRank ?? rank
         self.minCameraZoom = minCameraZoom
+        self.maxCameraZoom = maxCameraZoom
         self.icon = icon
         self.placement = placement
         self.standsOnRoof = standsOnRoof
@@ -574,6 +612,7 @@ public extension FeatureStyle {
                            rank: Int = 0,
                            collisionRank: Int? = nil,
                            minCameraZoom: Float = 0,
+                           maxCameraZoom: Float = .infinity,
                            icon: PoiSpriteIcon? = nil,
                            placement: LabelPlacement = .screen,
                            standsOnRoof: Bool = false,
@@ -583,6 +622,7 @@ public extension FeatureStyle {
                                     rank: rank,
                                     collisionRank: collisionRank,
                                     minCameraZoom: minCameraZoom,
+                                    maxCameraZoom: maxCameraZoom,
                                     icon: icon,
                                     placement: placement,
                                     standsOnRoof: standsOnRoof,

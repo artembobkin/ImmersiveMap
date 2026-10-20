@@ -21,6 +21,7 @@ final class TileNoticeThrottle: @unchecked Sendable {
     static let authorization = TileNoticeThrottle()
     static let archiveDepth = TileNoticeThrottle()
     static let archiveUnreadable = TileNoticeThrottle()
+    static let overviewUnreadable = TileNoticeThrottle()
     static let interval: TimeInterval = 60
 
     private let lock = NSLock()

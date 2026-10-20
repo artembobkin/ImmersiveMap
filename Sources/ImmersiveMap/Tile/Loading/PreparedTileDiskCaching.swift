@@ -40,8 +40,14 @@ struct PreparedTileCacheIdentity {
     /// (`TileParseOptions.buildingDeepestSourceZoom`): the parts rules
     /// read them otherwise there.
     var buildingDeepestSourceZoom: Int?
+    /// Whether the overview of the globe is laid into the tiles of the
+    /// zooms it covers (`OverviewTileSource`,
+    /// `TileSettings.OverviewSettings`): a tile prepared with its biomes
+    /// must not answer a map that wants the source's land cover, and vice
+    /// versa.
+    var overviewTilesEnabled: Bool = true
     var namespaceComponent: String {
-        return "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)-g\(groundFlatteningFromTileZoom ?? -1)x\(groundFlatteningGrid)\(groundFlatteningGridByTileZoomKey.isEmpty ? "" : "[" + groundFlatteningGridByTileZoomKey + "]")\(groundReliefEnabled ? "r" : "")-e\(buildingMinimumSourceZoom)\(buildingDeepestSourceZoom.map { "m\($0)" } ?? "")"
+        return "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)-g\(groundFlatteningFromTileZoom ?? -1)x\(groundFlatteningGrid)\(groundFlatteningGridByTileZoomKey.isEmpty ? "" : "[" + groundFlatteningGridByTileZoomKey + "]")\(groundReliefEnabled ? "r" : "")-e\(buildingMinimumSourceZoom)\(buildingDeepestSourceZoom.map { "m\($0)" } ?? "")-o\(overviewTilesEnabled ? 1 : 0)"
     }
 
     static func tileSourceRevision(for network: ImmersiveMapSettings.TileSettings.NetworkSettings) -> UInt64 {
@@ -928,7 +934,51 @@ final class PreparedTileDiskCaching {
     // (`ProtomapsBasemapDefaultMapStyle.boundaryStyle`): 1 point wide,
     // lightened over a country view, at 0.65 of the colour's alpha nearer.
     // A v145 entry holds the 1.6 point near-opaque stroke.
-    static let preparedFormatVersion: UInt32 = 146
+    // 147: the peaks collide ahead of the towns and the smaller places
+    // (`ProtomapsBasemapDefaultMapStyle.LabelBand`): the label collision
+    // ranks of the places under a city and of the peaks are baked into the
+    // prepared labels. A v146 entry has every place ahead of every peak.
+    // 148: on the relief a line ribbon takes a row at every crossing of a
+    // grid cell's diagonal too (`ParseLine.subdividedRows`), so each piece
+    // of it lies inside one triangle of the ground. A v147 ribbon crosses
+    // the cells' creases on chords.
+    // 149: the overview of the globe is laid into the tiles of zooms 0 to 7
+    // (`OverviewTileSource`): the biomes of its `biome` layer and the
+    // lakes of its `lake` layer are baked as fills, the tiles' own land
+    // cover and land use draw over them from tile zoom 2 in the cover
+    // tones and give way to them before (`ProtomapsBasemapDefaultMapStyle
+    // .biomeStyle`), the land cover fading out with the biomes and the
+    // land use staying, and the fills above the ground, the water first,
+    // take the keys from 30 up. A v148 entry holds the raster-derived land
+    // cover alone. The overview archive is part of this number: a new
+    // archive bumps it.
+    // 150: a screen label carries the camera zoom it goes away at
+    // (`LabelPlacementMeta.maxCameraZoom`) and its text style the tracking
+    // of its letters (`LabelTextStyle.letterSpacingEm`), which the baked
+    // glyphs are laid out with, and its opacity (`LabelTextStyle.opacity`):
+    // the names of the countries and the regions are spaced, translucent
+    // capitals that leave the street zooms
+    // (`ProtomapsBasemapTheme.LabelVisibility.countryMaximumZoom`). A v149
+    // entry has no maximum, no tracking and no opacity.
+    // 151: a line style carries the share of its alpha it keeps on the
+    // globe (`TileLineStyle.sphereAlpha`, a thirteenth float at the end of
+    // the struct, stride 52): the overview road strokes are a veil over
+    // the painted globe (`ProtomapsBasemapTheme.RoadMetrics.globeOpacity`)
+    // and the same stroke on the plane, and a ribbons run of such a style
+    // carries `GroundStyleRun.sphereVeiledFlag`. A v150 line style is 48
+    // bytes and no run has the flag.
+    // 152: the overview archive carries the Natural Earth road network as
+    // the layer `road` at tile zooms 2 to 5 (`OverviewTileSource`), baked
+    // as ground lines in the highway tones of the theme
+    // (`ProtomapsBasemapTheme.OverviewRoadStyles`) in place of the
+    // basemap's own roads, which are hidden through those zooms. A v151
+    // entry has the motorways alone there.
+    // 153: a line style carries the colour it wears on the globe
+    // (`TileLineStyle.sphereColor`, three floats after the sphere alpha,
+    // stride 64): the basemap's overview strokes are the highway yellow
+    // through the globe's view and the unroll, asphalt on the plane. A
+    // v152 line style is 52 bytes.
+    static let preparedFormatVersion: UInt32 = 153
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

@@ -30,6 +30,9 @@ struct MapStyleRuntime {
     /// How the slopes are shaded where the relief stands, as the style
     /// states it.
     let hillshade: ImmersiveMapHillshade
+    /// How the ground is darkened where the terrain hides the sky, as the
+    /// style states it.
+    let terrainOcclusion: ImmersiveMapTerrainOcclusion
     /// The style's identity, the namespace its label identities are minted
     /// in.
     let styleID: String
@@ -50,6 +53,7 @@ struct MapStyleRuntime {
         self.styleID = style.styleID
         self.baseColors = style.baseColors
         self.hillshade = style.hillshade
+        self.terrainOcclusion = style.terrainOcclusion
     }
 
     /// The style's part of the prepared-tile cache identity: the reading's

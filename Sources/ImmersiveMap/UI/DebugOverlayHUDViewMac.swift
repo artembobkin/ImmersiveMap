@@ -34,6 +34,14 @@ final class DebugOverlayHUDView: NSView {
         static let sunPickerSide: CGFloat = 200.0
         static let controlSpacing: CGFloat = 6.0
         static let groupSpacing: CGFloat = 16.0
+        /// A ring rule's card: the rows of one rule on a lighter plate with
+        /// the rule's name over them, so the rules read as separate
+        /// things in the column rather than one run of rows.
+        static let ruleCardInset: CGFloat = 8.0
+        static let ruleCardCornerRadius: CGFloat = 8.0
+        static let ruleCardSpacing: CGFloat = 8.0
+        static let ruleCardTitleHeight: CGFloat = 20.0
+        static let ruleCardAlpha: CGFloat = 0.06
         static let traceStatusHeight: CGFloat = 24.0
         /// A zoom curve's graph and the title over it: tall enough that a
         /// value is aimed at in hundredths of its range.
@@ -96,12 +104,34 @@ final class DebugOverlayHUDView: NSView {
     private let tilesStatusListView = DebugOverlayTilesStatusListView()
     private let tileCoverageView = DebugOverlayTileCoverageView()
 
-    /// The relief tab: the terrain store's summary, its tiles from above
+    /// The relief tab, a group per matter (`GroundReliefStatusSnapshot`):
+    /// the frame on the terrain, the terrain loads, the terrain in memory,
+    /// the country around the camera, and the terrain tiles from above
     /// and as cards, as the tiles' tab shows the map tiles.
     private let reliefGroupLabel = NSTextField(labelWithString: "Relief")
     private let reliefStatusLabel = NSTextField(wrappingLabelWithString: "")
+    private let reliefLoadingGroupLabel = NSTextField(labelWithString: "Terrain loading")
+    private let reliefLoadingLabel = NSTextField(wrappingLabelWithString: "")
+    private let reliefMemoryGroupLabel = NSTextField(labelWithString: "Terrain memory")
+    private let reliefMemoryLabel = NSTextField(wrappingLabelWithString: "")
+    private let reliefTilesGroupLabel = NSTextField(labelWithString: "Terrain tiles")
+    private let reliefTilesCountLabel = NSTextField(wrappingLabelWithString: "")
     private let reliefCoverageView = DebugOverlayReliefCoverageView()
     private let reliefListView = DebugOverlayTilesStatusListView()
+    /// The Relief tab's Surroundings group: the reading of the country
+    /// around the camera as mountains or a plain
+    /// (`GroundReliefStatusSnapshot.surroundings`) over the sliders of how
+    /// it is read (`TerrainSurroundingsSettings`).
+    private let surroundingsGroupLabel = NSTextField(labelWithString: "Surroundings")
+    private let surroundingsStatusLabel = NSTextField(wrappingLabelWithString: "")
+    private let surroundingsRadiusLabel = NSTextField(labelWithString: "")
+    private let surroundingsRadiusSlider = NSSlider()
+    private let surroundingsPlainLabel = NSTextField(labelWithString: "")
+    private let surroundingsPlainSlider = NSSlider()
+    private let surroundingsMountainsLabel = NSTextField(labelWithString: "")
+    private let surroundingsMountainsSlider = NSSlider()
+    private let surroundingsSmoothingLabel = NSTextField(labelWithString: "")
+    private let surroundingsSmoothingSlider = NSSlider()
 
     private let baseLabelsGroupLabel = NSTextField(labelWithString: "Base labels")
     private let baseLabelTraceButton = NSButton()
@@ -124,12 +154,15 @@ final class DebugOverlayHUDView: NSView {
 
     private let lightGroupLabel = NSTextField(labelWithString: "Light")
     private let shadowsGroupLabel = NSTextField(labelWithString: "Shadows")
+    private let hillshadeGroupLabel = NSTextField(labelWithString: "Hillshade")
     private let shadowsEnabledLabel = NSTextField(labelWithString: "")
     private let shadowsEnabledSwitch = NSSwitch()
+    /// The strength and the two coverages over the zoom, on graphs
+    /// (`DebugOverlayZoomCurveView`), the titles carrying the value at the
+    /// camera's zoom.
+    private let shadowGraphHint = NSTextField(labelWithString: "")
     private let shadowStrengthLabel = NSTextField(labelWithString: "")
-    private let shadowStrengthSlider = NSSlider()
-    private let shadowMinimumZoomLabel = NSTextField(labelWithString: "")
-    private let shadowMinimumZoomSlider = NSSlider()
+    private let shadowStrengthGraph = DebugOverlayZoomCurveView()
     private let shadowMapResolutionLabel = NSTextField(labelWithString: "")
     private let shadowMapResolutionControl = NSSegmentedControl(
         labels: DebugOverlayShadowSettingsPlanner.mapResolutionTitles,
@@ -137,11 +170,9 @@ final class DebugOverlayHUDView: NSView {
         target: nil,
         action: nil)
     private let shadowCoverageLabel = NSTextField(labelWithString: "")
-    private let shadowCoverageSlider = NSSlider()
+    private let shadowCoverageGraph = DebugOverlayZoomCurveView()
     private let shadowFarCoverageLabel = NSTextField(labelWithString: "")
-    private let shadowFarCoverageSlider = NSSlider()
-    private let shadowMinimumCoverageLabel = NSTextField(labelWithString: "")
-    private let shadowMinimumCoverageSlider = NSSlider()
+    private let shadowFarCoverageGraph = DebugOverlayZoomCurveView()
     private let shadowNormalOffsetLabel = NSTextField(labelWithString: "")
     private let shadowNormalOffsetSlider = NSSlider()
     private let shadowCasterHeightLabel = NSTextField(labelWithString: "")
@@ -154,14 +185,43 @@ final class DebugOverlayHUDView: NSView {
     /// its quarter circle from the side (`DebugOverlaySunDial`).
     private let sunDialView = DebugOverlaySunDialView()
     private let sunElevationView = DebugOverlaySunElevationView()
-    private let hillshadeFadeLabel = NSTextField(labelWithString: "")
     /// The mountains' shadows (`GroundReliefSettings.castsShadows`).
     private let reliefShadowsLabel = NSTextField(labelWithString: "")
     private let reliefShadowsSwitch = NSSwitch()
-    private let hillshadeFadeSlider = DebugOverlayRangeSliderView()
-    /// The hillshade's fade, in the eye's distances to the point it looks
-    /// at (`ImmersiveMapHillshade.fadeStartCameraDistances`).
-    private static let hillshadeFadeRange: ClosedRange<Double> = 0...12
+    /// The occlusion of the sky by the terrain (`ImmersiveMapTerrainOcclusion`):
+    /// on or off, its strength and radius, the directions and the
+    /// resolution it is computed with, the view of it alone, and how the
+    /// computing goes.
+    private let occlusionGroupLabel = NSTextField(labelWithString: "Ambient occlusion")
+    private let occlusionEnabledLabel = NSTextField(labelWithString: "")
+    private let occlusionEnabledSwitch = NSSwitch()
+    private let occlusionStrengthLabel = NSTextField(labelWithString: "")
+    private let occlusionStrengthSlider = NSSlider()
+    private let occlusionRadiusLabel = NSTextField(labelWithString: "")
+    private let occlusionRadiusSlider = NSSlider()
+    private let occlusionDirectionsLabel = NSTextField(labelWithString: "")
+    private let occlusionDirectionsControl = NSSegmentedControl(
+        labels: DebugOverlayOcclusionPlanner.directionsOptions.map(String.init),
+        trackingMode: .selectOne,
+        target: nil,
+        action: nil)
+    private let occlusionResolutionLabel = NSTextField(labelWithString: "")
+    private let occlusionResolutionControl = NSSegmentedControl(
+        labels: DebugOverlayOcclusionPlanner.resolutionOptions.map(String.init),
+        trackingMode: .selectOne,
+        target: nil,
+        action: nil)
+    private let occlusionDebugViewLabel = NSTextField(labelWithString: "")
+    private let occlusionDebugViewSwitch = NSSwitch()
+    private let occlusionStatusLabel = NSTextField(wrappingLabelWithString: "")
+    private var terrainOcclusion = ImmersiveMapTerrainOcclusion()
+    /// The hillshade's fade, metres from the eye by the zoom, on two graphs
+    /// (`GroundReliefHillshade.Fade`): where it starts and where it is out.
+    private let hillshadeFadeStartLabel = NSTextField(labelWithString: "")
+    private let hillshadeFadeStartGraph = DebugOverlayZoomCurveView()
+    private let hillshadeFadeEndLabel = NSTextField(labelWithString: "")
+    private let hillshadeFadeEndGraph = DebugOverlayZoomCurveView()
+    private var hillshadeFade = GroundReliefHillshade.Fade(style: ImmersiveMapHillshade())
     /// The hillshade's amounts (`GroundReliefHillshade.Amounts`): the
     /// intensity, and how far a slope goes toward the shadow colour and
     /// toward the highlight colour, each 0 to 1.
@@ -177,13 +237,20 @@ final class DebugOverlayHUDView: NSView {
     private let fogEnabledLabel = NSTextField(labelWithString: "")
     private let fogEnabledSwitch = NSSwitch()
     private let fogSkyColorLabel = NSTextField(labelWithString: "")
-    private let fogSkyColorWell = NSColorWell(style: .minimal)
+    private let fogSkyColorWell = NSColorWell(style: .default)
     private let fogHorizonColorLabel = NSTextField(labelWithString: "")
-    private let fogHorizonColorWell = NSColorWell(style: .minimal)
+    private let fogHorizonColorWell = NSColorWell(style: .default)
 
     private let groundFogGroupLabel = NSTextField(labelWithString: "Air")
     private let groundFogEnabledLabel = NSTextField(labelWithString: "")
     private let groundFogEnabledSwitch = NSSwitch()
+    /// The air over the mountains (`SceneSettings.mountainGroundFog`): on,
+    /// drawn by how mountainous the country reads, or off, and which of the
+    /// two airs the group's controls edit.
+    private let groundFogMountainLabel = NSTextField(labelWithString: "")
+    private let groundFogMountainSwitch = NSSwitch()
+    private let groundFogAirControl = NSSegmentedControl(labels: ["Plain air", "Mountain air"],
+                                                         trackingMode: .selectOne, target: nil, action: nil)
     private let groundFogBuildingsLabel = NSTextField(labelWithString: "")
     private let groundFogBuildingsSwitch = NSSwitch()
     private let groundFogSkyColorLabel = NSTextField(labelWithString: "")
@@ -208,7 +275,7 @@ final class DebugOverlayHUDView: NSView {
     private let groundFogOpacityGraph = DebugOverlayZoomCurveView()
     private let groundFogGraphHint = NSTextField(labelWithString: "")
     private let groundFogColorLabel = NSTextField(labelWithString: "")
-    private let groundFogColorWell = NSColorWell(style: .minimal)
+    private let groundFogColorWell = NSColorWell(style: .default)
     private let groundFogResetButton = NSButton()
     /// The mountain air preset (`DebugOverlayGroundFogSettingsPlanner.mountainAirPreset(from:)`).
     private let groundFogMountainPresetButton = NSButton()
@@ -232,13 +299,13 @@ final class DebugOverlayHUDView: NSView {
     private let globeLightSoftnessLabel = NSTextField(labelWithString: "")
     private let globeLightSoftnessSlider = NSSlider()
     private let globeLightNightColorLabel = NSTextField(labelWithString: "")
-    private let globeLightNightColorWell = NSColorWell(style: .minimal)
+    private let globeLightNightColorWell = NSColorWell(style: .default)
 
     private let atmosphereGroupLabel = NSTextField(labelWithString: "Atmosphere")
     private let atmosphereEnabledLabel = NSTextField(labelWithString: "")
     private let atmosphereEnabledSwitch = NSSwitch()
     private let atmosphereColorLabel = NSTextField(labelWithString: "")
-    private let atmosphereColorWell = NSColorWell(style: .minimal)
+    private let atmosphereColorWell = NSColorWell(style: .default)
     private let atmosphereIntensityLabel = NSTextField(labelWithString: "")
     private let atmosphereIntensitySlider = NSSlider()
     private let atmosphereThicknessLabel = NSTextField(labelWithString: "")
@@ -260,10 +327,14 @@ final class DebugOverlayHUDView: NSView {
                                                             action: nil)
     private let wireframeLabel = NSTextField(labelWithString: "")
     private let wireframeSwitch = NSSwitch()
-    /// One ring rule's editor: the drop picker, the distance slider, the
-    /// line switch, the label switch and the raster picker, each with its
-    /// named row. Rebuilt when the number of rules changes.
+    private let ringRulesGroupLabel = NSTextField(labelWithString: "Ring rules")
+    /// One ring rule's editor: a card with the rule's name, and on it the
+    /// drop picker, the distance slider, the line switch, the label switch,
+    /// the raster picker and the terrain picker, each with its named row.
+    /// Rebuilt when the number of rules changes.
     private struct RingRuleRow {
+        let card: NSView
+        let titleLabel: NSTextField
         let dropLabel: NSTextField
         let dropControl: NSSegmentedControl
         let distanceLabel: NSTextField
@@ -274,9 +345,14 @@ final class DebugOverlayHUDView: NSView {
         let labelsSwitch: NSSwitch
         let rasterLabel: NSTextField
         let rasterControl: NSSegmentedControl
+        /// The terrain the band's ground reads on the relief, so many
+        /// zooms under its tiles (`FlatRingRule.terrainZoomDrop`).
+        let terrainLabel: NSTextField
+        let terrainControl: NSSegmentedControl
+        /// The card first, so it is added under the rows.
         var views: [NSView] {
-            [dropLabel, dropControl, distanceLabel, distanceSlider, linesLabel, linesSwitch, labelsLabel, labelsSwitch,
-             rasterLabel, rasterControl]
+            [card, titleLabel, dropLabel, dropControl, distanceLabel, distanceSlider, linesLabel, linesSwitch, labelsLabel, labelsSwitch,
+             rasterLabel, rasterControl, terrainLabel, terrainControl]
         }
     }
     private var ringRuleRows: [RingRuleRow] = []
@@ -327,8 +403,27 @@ final class DebugOverlayHUDView: NSView {
     private var fogSettings = ImmersiveMapSettings.FogSettings()
     private var atmosphereSettings = ImmersiveMapSettings.AtmosphereSettings()
     private var globeLightSettings = ImmersiveMapSettings.GlobeLightSettings()
-    private var groundFogSettings = ImmersiveMapSettings.GroundFogSettings()
+    private var plainGroundFogSettings = ImmersiveMapSettings.GroundFogSettings()
+    private var mountainGroundFogSettings: ImmersiveMapSettings.GroundFogSettings?
+    /// Which air the Air group's controls show and edit: the mountains'
+    /// while it is on and chosen, else the plain's.
+    private var editsMountainAir = false
+    /// The air the group edits (`editsMountainAir`), read and written by
+    /// every control of the group.
+    private var groundFogSettings: ImmersiveMapSettings.GroundFogSettings {
+        get {
+            editsMountainAir ? (mountainGroundFogSettings ?? plainGroundFogSettings) : plainGroundFogSettings
+        }
+        set {
+            if editsMountainAir, mountainGroundFogSettings != nil {
+                mountainGroundFogSettings = newValue
+            } else {
+                plainGroundFogSettings = newValue
+            }
+        }
+    }
     private var groundFogHorizonColor = ImmersiveMapSettings.FogSettings().horizonColor
+    private var terrainSurroundingsSettings = ImmersiveMapSettings.TileSettings.TerrainSurroundingsSettings()
     /// The camera zoom the fog's curves are read and edited at, from the
     /// frame snapshot.
     private var groundFogCameraZoom: Double = 0
@@ -358,7 +453,7 @@ final class DebugOverlayHUDView: NSView {
         case .all: .all
         case .stats: .stats
         case .tiles: .tiles
-        case .relief: .relief
+        case .relief, .occlusion: .relief
         case .labels, .light, .shadows, .sky, .globe, .air, .map, .export: []
         }
     }
@@ -372,12 +467,16 @@ final class DebugOverlayHUDView: NSView {
     var onLocalLabelDistanceChanged: ((Float) -> Void)?
     /// The labels' shrink floor, on every drag.
     var onLabelMinimumScaleChanged: ((Float) -> Void)?
-    /// The hillshade's fade dragged to, in the eye's distances.
-    var onHillshadeFadeChanged: ((ClosedRange<Float>) -> Void)?
+    /// The hillshade's fade dragged to, metres from the eye by the zoom.
+    var onHillshadeFadeChanged: ((GroundReliefHillshade.Fade) -> Void)?
     /// The hillshade's amounts dragged to.
     var onHillshadeAmountsChanged: ((GroundReliefHillshade.Amounts) -> Void)?
     /// The mountains' shadows switched on or off.
     var onReliefShadowsChanged: ((Bool) -> Void)?
+    /// The occlusion of the sky as dragged, whole, on every edit.
+    var onTerrainOcclusionChanged: ((ImmersiveMapTerrainOcclusion) -> Void)?
+    /// Whether the map shows the occlusion alone.
+    var onTerrainOcclusionDebugViewChanged: ((Bool) -> Void)?
 
     var onSurfaceModeSwitchRequested: (() -> Void)?
     var onTileTraceRecordingToggle: (() -> Void)?
@@ -388,6 +487,10 @@ final class DebugOverlayHUDView: NSView {
     var onAtmosphereSettingsChanged: ((ImmersiveMapSettings.AtmosphereSettings) -> Void)?
     var onGlobeLightSettingsChanged: ((ImmersiveMapSettings.GlobeLightSettings) -> Void)?
     var onGroundFogSettingsChanged: ((ImmersiveMapSettings.GroundFogSettings) -> Void)?
+    /// The air over the mountains dragged to, nil when switched off.
+    var onMountainGroundFogSettingsChanged: ((ImmersiveMapSettings.GroundFogSettings?) -> Void)?
+    /// The Surroundings group dragged to.
+    var onTerrainSurroundingsSettingsChanged: ((ImmersiveMapSettings.TileSettings.TerrainSurroundingsSettings) -> Void)?
     /// The ground fog group's reset: back to the values the app gave.
     var onGroundFogResetRequested: (() -> Void)?
     /// The Export tab's button: write the settings to a file.
@@ -436,9 +539,11 @@ final class DebugOverlayHUDView: NSView {
         }
         updateTabButtons()
 
-        [statsGroupLabel, tilesGroupLabel, reliefGroupLabel, baseLabelsGroupLabel, labelDistanceGroupLabel,
-         lightGroupLabel, shadowsGroupLabel, fogGroupLabel, groundFogGroupLabel, atmosphereGroupLabel, globeLightGroupLabel,
-         controlsGroupLabel,
+        [statsGroupLabel, tilesGroupLabel, reliefGroupLabel, reliefLoadingGroupLabel, reliefMemoryGroupLabel, reliefTilesGroupLabel,
+         surroundingsGroupLabel, baseLabelsGroupLabel, labelDistanceGroupLabel,
+         lightGroupLabel, shadowsGroupLabel, hillshadeGroupLabel, occlusionGroupLabel, fogGroupLabel, groundFogGroupLabel,
+         atmosphereGroupLabel, globeLightGroupLabel,
+         controlsGroupLabel, ringRulesGroupLabel,
          exportGroupLabel].forEach(configureGroupLabel)
 
         configureControlLabel(axesLabel, text: "Axes")
@@ -459,23 +564,41 @@ final class DebugOverlayHUDView: NSView {
                         action: #selector(localLabelDistanceSliderChanged))
         configureControlLabel(shadowsEnabledLabel, text: "Enabled")
         configureControlLabel(shadowStrengthLabel, text: "")
-        configureControlLabel(shadowMinimumZoomLabel, text: "")
+        configureControlLabel(shadowGraphHint,
+                              text: "Click to add a point, drag to move it, double-click to remove it")
+        shadowGraphHint.font = NSFont.systemFont(ofSize: 10, weight: .regular)
+        shadowGraphHint.textColor = NSColor.white.withAlphaComponent(0.55)
         configureControlLabel(shadowMapResolutionLabel, text: "Map px")
         configureControlLabel(shadowCoverageLabel, text: "")
         configureControlLabel(shadowFarCoverageLabel, text: "")
-        configureControlLabel(shadowMinimumCoverageLabel, text: "")
         configureControlLabel(shadowNormalOffsetLabel, text: "")
         configureControlLabel(shadowCasterHeightLabel, text: "")
         configureControlLabel(shadowSoftnessLabel, text: "")
         configureControlLabel(sunAzimuthLabel, text: "")
         configureControlLabel(sunElevationLabel, text: "")
-        configureControlLabel(hillshadeFadeLabel, text: "")
+        configureControlLabel(hillshadeFadeStartLabel, text: "")
+        configureControlLabel(hillshadeFadeEndLabel, text: "")
+        configureHillshadeFadeGraph(hillshadeFadeStartGraph, keyPath: \.startMeters)
+        configureHillshadeFadeGraph(hillshadeFadeEndGraph, keyPath: \.endMeters)
         configureControlLabel(reliefShadowsLabel, text: "Mountain shadows")
         configureSwitch(reliefShadowsSwitch, action: #selector(reliefShadowsSwitchChanged))
-        hillshadeFadeSlider.range = Self.hillshadeFadeRange
-        hillshadeFadeSlider.onChange = { [weak self] fade in
-            self?.hillshadeFadeChanged(Float(fade.lowerBound) ... Float(fade.upperBound))
+        configureControlLabel(occlusionEnabledLabel, text: "Enabled")
+        configureSwitch(occlusionEnabledSwitch, action: #selector(occlusionControlChanged))
+        configureControlLabel(occlusionStrengthLabel, text: "")
+        configureSlider(occlusionStrengthSlider, range: 0...1, action: #selector(occlusionControlChanged))
+        configureControlLabel(occlusionRadiusLabel, text: "")
+        configureSlider(occlusionRadiusSlider, range: 0...1, action: #selector(occlusionControlChanged))
+        configureControlLabel(occlusionDirectionsLabel, text: "Directions")
+        configureControlLabel(occlusionResolutionLabel, text: "Resolution")
+        for control in [occlusionDirectionsControl, occlusionResolutionControl] {
+            control.controlSize = .small
+            control.target = self
+            control.action = #selector(occlusionControlChanged)
+            refuseFocus(control)
         }
+        configureControlLabel(occlusionDebugViewLabel, text: "Show AO only")
+        configureSwitch(occlusionDebugViewSwitch, action: #selector(occlusionDebugViewSwitchChanged))
+        updateOcclusionControls()
         configureControlLabel(hillshadeIntensityLabel, text: "")
         configureControlLabel(hillshadeShadowLabel, text: "")
         configureControlLabel(hillshadeHighlightLabel, text: "")
@@ -536,6 +659,22 @@ final class DebugOverlayHUDView: NSView {
         configureControlLabel(atmosphereIntensityLabel, text: "")
         configureControlLabel(atmosphereThicknessLabel, text: "")
         configureControlLabel(atmosphereSunInfluenceLabel, text: "")
+        configureControlLabel(surroundingsRadiusLabel, text: "")
+        configureControlLabel(surroundingsPlainLabel, text: "")
+        configureControlLabel(surroundingsMountainsLabel, text: "")
+        configureControlLabel(surroundingsSmoothingLabel, text: "")
+        configureSlider(surroundingsRadiusSlider,
+                        range: DebugOverlayTerrainSurroundingsSettingsPlanner.sampleRadiusRange,
+                        action: #selector(surroundingsSliderChanged))
+        configureSlider(surroundingsPlainSlider,
+                        range: DebugOverlayTerrainSurroundingsSettingsPlanner.plainBelowRange,
+                        action: #selector(surroundingsSliderChanged))
+        configureSlider(surroundingsMountainsSlider,
+                        range: DebugOverlayTerrainSurroundingsSettingsPlanner.mountainsAboveRange,
+                        action: #selector(surroundingsSliderChanged))
+        configureSlider(surroundingsSmoothingSlider,
+                        range: DebugOverlayTerrainSurroundingsSettingsPlanner.smoothingHalfLifeRange,
+                        action: #selector(surroundingsSliderChanged))
 
         configureSwitch(axesSwitch, action: #selector(axesSwitchChanged))
         configureSwitch(tileLayersSwitch, action: #selector(tileLayersSwitchChanged))
@@ -548,6 +687,11 @@ final class DebugOverlayHUDView: NSView {
         configureSwitch(fogEnabledSwitch, action: #selector(fogEnabledSwitchChanged))
         configureSwitch(atmosphereEnabledSwitch, action: #selector(atmosphereEnabledSwitchChanged))
         configureSwitch(groundFogEnabledSwitch, action: #selector(groundFogEnabledSwitchChanged))
+        configureControlLabel(groundFogMountainLabel, text: "Mountain air by terrain")
+        configureSwitch(groundFogMountainSwitch, action: #selector(groundFogMountainSwitchChanged))
+        refuseFocus(groundFogAirControl)
+        groundFogAirControl.target = self
+        groundFogAirControl.action = #selector(groundFogAirControlChanged)
         configureSwitch(groundFogBuildingsSwitch, action: #selector(groundFogBuildingsSwitchChanged))
         configureSwitch(groundFogSkyColorSwitch, action: #selector(groundFogSkyColorSwitchChanged))
         configureSwitch(groundFogSeaLevelSwitch, action: #selector(groundFogSeaLevelSwitchChanged))
@@ -599,21 +743,19 @@ final class DebugOverlayHUDView: NSView {
         exportStatusLabel.textColor = NSColor.white.withAlphaComponent(0.7)
         exportStatusLabel.lineBreakMode = .byCharWrapping
 
-        configureSlider(shadowStrengthSlider,
-                        range: DebugOverlayShadowSettingsPlanner.strengthRange,
-                        action: #selector(shadowStrengthSliderChanged))
-        configureSlider(shadowMinimumZoomSlider,
-                        range: DebugOverlayShadowSettingsPlanner.minimumZoomRange,
-                        action: #selector(shadowMinimumZoomSliderChanged))
-        configureSlider(shadowCoverageSlider,
-                        range: DebugOverlayShadowSettingsPlanner.coverageRange,
-                        action: #selector(shadowCoverageSliderChanged))
-        configureSlider(shadowFarCoverageSlider,
-                        range: DebugOverlayShadowSettingsPlanner.farCoverageRange,
-                        action: #selector(shadowFarCoverageSliderChanged))
-        configureSlider(shadowMinimumCoverageSlider,
-                        range: DebugOverlayShadowSettingsPlanner.minimumCoverageRange,
-                        action: #selector(shadowMinimumCoverageSliderChanged))
+        typealias ShadowPlanner = DebugOverlayShadowSettingsPlanner
+        configureShadowGraph(shadowStrengthGraph,
+                             axes: ShadowPlanner.strengthAxes,
+                             valueText: { String(format: "%.2f", $0) },
+                             keyPath: \.strength)
+        configureShadowGraph(shadowCoverageGraph,
+                             axes: ShadowPlanner.coverageAxes,
+                             valueText: DebugOverlayValueText.meters,
+                             keyPath: \.nearCoverageMeters)
+        configureShadowGraph(shadowFarCoverageGraph,
+                             axes: ShadowPlanner.coverageAxes,
+                             valueText: DebugOverlayValueText.meters,
+                             keyPath: \.farCoverageMeters)
         configureSlider(shadowNormalOffsetSlider,
                         range: DebugOverlayShadowSettingsPlanner.normalOffsetRange,
                         action: #selector(shadowNormalOffsetSliderChanged))
@@ -710,7 +852,9 @@ final class DebugOverlayHUDView: NSView {
                               action: #selector(baseLabelTraceButtonTapped))
         configureStatusLabel(baseLabelTraceStatusLabel)
 
-        [zoomLabel, latLonLabel, diagnosticsLabel, tilesStatusLabel, reliefStatusLabel].forEach { label in
+        [zoomLabel, latLonLabel, diagnosticsLabel, tilesStatusLabel, reliefStatusLabel,
+         reliefLoadingLabel, reliefMemoryLabel, reliefTilesCountLabel, surroundingsStatusLabel,
+         occlusionStatusLabel].forEach { label in
             label.textColor = .white
         }
 
@@ -724,6 +868,7 @@ final class DebugOverlayHUDView: NSView {
         updateFogControls()
         updateGroundFogControls()
         updateAtmosphereControls()
+        updateTerrainSurroundingsControls()
         updateVisibility()
     }
 
@@ -741,27 +886,35 @@ final class DebugOverlayHUDView: NSView {
          localLabelDistanceLabel, localLabelDistanceSlider,
          labelMinimumScaleLabel, labelMinimumScaleSlider,
          shadowsGroupLabel, shadowsEnabledLabel, shadowsEnabledSwitch,
-         shadowStrengthLabel, shadowStrengthSlider,
-         shadowMinimumZoomLabel, shadowMinimumZoomSlider,
+         shadowGraphHint,
+         shadowStrengthLabel, shadowStrengthGraph,
          shadowMapResolutionLabel, shadowMapResolutionControl,
-         shadowCoverageLabel, shadowCoverageSlider,
-         shadowFarCoverageLabel, shadowFarCoverageSlider,
-         shadowMinimumCoverageLabel, shadowMinimumCoverageSlider,
+         shadowCoverageLabel, shadowCoverageGraph,
+         shadowFarCoverageLabel, shadowFarCoverageGraph,
          shadowNormalOffsetLabel, shadowNormalOffsetSlider,
          shadowCasterHeightLabel, shadowCasterHeightSlider,
          shadowSoftnessLabel, shadowSoftnessSlider,
+         hillshadeGroupLabel,
          lightGroupLabel,
          sunDialView, sunElevationView,
          sunAzimuthLabel, sunElevationLabel,
-         hillshadeFadeLabel, hillshadeFadeSlider,
+         hillshadeFadeStartLabel, hillshadeFadeStartGraph,
+         hillshadeFadeEndLabel, hillshadeFadeEndGraph,
          hillshadeIntensityLabel, hillshadeIntensitySlider,
          hillshadeShadowLabel, hillshadeShadowSlider,
          hillshadeHighlightLabel, hillshadeHighlightSlider,
          reliefShadowsLabel, reliefShadowsSwitch,
+         occlusionGroupLabel, occlusionEnabledLabel, occlusionEnabledSwitch,
+         occlusionStrengthLabel, occlusionStrengthSlider,
+         occlusionRadiusLabel, occlusionRadiusSlider,
+         occlusionDirectionsLabel, occlusionDirectionsControl,
+         occlusionResolutionLabel, occlusionResolutionControl,
+         occlusionDebugViewLabel, occlusionDebugViewSwitch, occlusionStatusLabel,
          fogGroupLabel, fogEnabledLabel, fogEnabledSwitch,
          fogSkyColorLabel, fogSkyColorWell,
          fogHorizonColorLabel, fogHorizonColorWell,
          groundFogGroupLabel, groundFogEnabledLabel, groundFogEnabledSwitch,
+         groundFogMountainLabel, groundFogMountainSwitch, groundFogAirControl,
          groundFogBuildingsLabel, groundFogBuildingsSwitch,
          groundFogSkyColorLabel, groundFogSkyColorSwitch,
          groundFogSeaLevelLabel, groundFogSeaLevelSwitch,
@@ -790,7 +943,7 @@ final class DebugOverlayHUDView: NSView {
          controlsGroupLabel, axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch,
          tileGridLabel, tileGridSwitch, tileGridDensityControl,
          wireframeLabel, wireframeSwitch,
-         ringRuleSetControl, ringRuleSetFirstZoomLabel, ringRuleSetFirstZoomSlider,
+         ringRulesGroupLabel, ringRuleSetControl, ringRuleSetFirstZoomLabel, ringRuleSetFirstZoomSlider,
          labelDistanceGroupLabel, labelDistanceRuleControl,
          labelDistanceRuleFirstZoomLabel, labelDistanceRuleFirstZoomSlider,
          labelDistanceRuleScaleLabel, labelDistanceRuleScaleSlider,
@@ -798,7 +951,14 @@ final class DebugOverlayHUDView: NSView {
          ringRuleSetsAddButton, ringRuleSetsRemoveButton,
          ringRulesAddButton, ringRulesRemoveButton,
          surfaceModeButton,
-         reliefGroupLabel, reliefStatusLabel, reliefCoverageView, reliefListView,
+         reliefGroupLabel, reliefStatusLabel,
+         reliefLoadingGroupLabel, reliefLoadingLabel,
+         reliefMemoryGroupLabel, reliefMemoryLabel,
+         reliefTilesGroupLabel, reliefTilesCountLabel, reliefCoverageView, reliefListView,
+         surroundingsGroupLabel, surroundingsStatusLabel, surroundingsRadiusLabel, surroundingsRadiusSlider,
+         surroundingsPlainLabel, surroundingsPlainSlider,
+         surroundingsMountainsLabel, surroundingsMountainsSlider,
+         surroundingsSmoothingLabel, surroundingsSmoothingSlider,
          tilesGroupLabel, tileTraceButton, tileTraceCopyButton, tileTraceStatusLabel, tilesStatusLabel, tileCoverageView,
          tilesStatusListView]
     }
@@ -816,13 +976,15 @@ final class DebugOverlayHUDView: NSView {
             sunDialView.viewAzimuthDegrees = viewAzimuth
         }
         if let zoom = snapshot?.cameraZoom, zoom != groundFogCameraZoom {
-            // The air's, the atmosphere's and the globe light's graphs mark
-            // the camera's zoom.
-            // The fog's sliders read their curves at the camera's zoom.
+            // The graphs mark the camera's zoom and their titles read the
+            // curves there: the air's, the atmosphere's, the globe light's,
+            // the shadows' and the hillshade's.
             groundFogCameraZoom = zoom
             updateGroundFogControls()
             updateAtmosphereControls()
             updateGlobeLightControls()
+            updateShadowControls()
+            updateHillshadeFadeControls()
         }
         updateText()
         updateVisibility()
@@ -864,6 +1026,12 @@ final class DebugOverlayHUDView: NSView {
             row.views.forEach { $0.removeFromSuperview() }
         }
         ringRuleRows = flatRingRules.rules.indices.map { _ in
+            let card = NSView()
+            card.wantsLayer = true
+            card.layer?.backgroundColor = NSColor.white.withAlphaComponent(Layout.ruleCardAlpha).cgColor
+            card.layer?.cornerRadius = Layout.ruleCardCornerRadius
+            let titleLabel = NSTextField(labelWithString: "")
+            configureRuleCardTitle(titleLabel)
             let dropLabel = NSTextField(labelWithString: "")
             configureControlLabel(dropLabel, text: "")
             let dropControl = NSSegmentedControl(labels: FlatRingRules.zoomDropRange.map(String.init),
@@ -894,11 +1062,20 @@ final class DebugOverlayHUDView: NSView {
                                                    target: self,
                                                    action: #selector(ringRuleRasterControlChanged(_:)))
             refuseFocus(rasterControl)
-            return RingRuleRow(dropLabel: dropLabel, dropControl: dropControl,
+            let terrainLabel = NSTextField(labelWithString: "")
+            configureControlLabel(terrainLabel, text: "")
+            let terrainControl = NSSegmentedControl(labels: FlatRingRules.terrainZoomDropRange.map(String.init),
+                                                    trackingMode: .selectOne,
+                                                    target: self,
+                                                    action: #selector(ringRuleTerrainControlChanged(_:)))
+            refuseFocus(terrainControl)
+            return RingRuleRow(card: card, titleLabel: titleLabel,
+                                dropLabel: dropLabel, dropControl: dropControl,
                                 distanceLabel: distanceLabel, distanceSlider: distanceSlider,
                                 linesLabel: linesLabel, linesSwitch: linesSwitch,
                                 labelsLabel: labelsLabel, labelsSwitch: labelsSwitch,
-                                rasterLabel: rasterLabel, rasterControl: rasterControl)
+                                rasterLabel: rasterLabel, rasterControl: rasterControl,
+                                terrainLabel: terrainLabel, terrainControl: terrainControl)
         }
         for row in ringRuleRows {
             row.views.forEach(contentView.addSubview)
@@ -908,26 +1085,32 @@ final class DebugOverlayHUDView: NSView {
 
     private func updateRingRuleRows() {
         for (index, (row, rule)) in zip(ringRuleRows, flatRingRules.rules).enumerated() {
-            row.dropLabel.stringValue = Self.ringRuleDropTitle(index: index)
+            row.titleLabel.stringValue = Self.ringRuleCardTitle(index: index)
+            row.dropLabel.stringValue = Self.ringRuleDropTitle
             row.dropControl.selectedSegment = rule.zoomDrop - FlatRingRules.zoomDropRange.lowerBound
             row.distanceSlider.doubleValue = Self.ringRuleSliderValue(distance: rule.distance)
-            row.distanceLabel.stringValue = Self.ringRuleDistanceTitle(index: index, distance: rule.distance)
-            row.linesLabel.stringValue = Self.ringRuleLinesTitle(index: index)
+            row.distanceLabel.stringValue = Self.ringRuleDistanceTitle(distance: rule.distance)
+            row.linesLabel.stringValue = Self.ringRuleLinesTitle
             row.linesSwitch.state = rule.drawsLines ? .on : .off
-            row.labelsLabel.stringValue = Self.ringRuleLabelsTitle(index: index)
+            row.labelsLabel.stringValue = Self.ringRuleLabelsTitle
             row.labelsSwitch.state = rule.drawsLabels ? .on : .off
-            row.rasterLabel.stringValue = Self.ringRuleRasterTitle(index: index)
+            row.rasterLabel.stringValue = Self.ringRuleRasterTitle
             row.rasterControl.selectedSegment = Self.ringRuleRasterChoiceIndex(rasterSize: rule.rasterSize)
+            row.terrainLabel.stringValue = Self.ringRuleTerrainTitle(drop: rule.terrainZoomDrop)
+            row.terrainControl.selectedSegment = rule.terrainZoomDrop - FlatRingRules.terrainZoomDropRange.lowerBound
         }
         ringRulesRemoveButton.isEnabled = flatRingRules.rules.count > 1
     }
 
-    static func ringRuleDropTitle(index: Int) -> String {
-        "Rule \(index + 1): zoom drop"
+    /// The card's name: the rule's number, the rows under it name no rule.
+    static func ringRuleCardTitle(index: Int) -> String {
+        "Rule \(index + 1)"
     }
 
-    static func ringRuleDistanceTitle(index: Int, distance: Int) -> String {
-        "Rule \(index + 1): to ring \(distance) from the look-at tile"
+    static let ringRuleDropTitle = "Zoom drop"
+
+    static func ringRuleDistanceTitle(distance: Int) -> String {
+        "To ring \(distance) from the look-at tile"
     }
 
     /// The distance slider runs on the square root of the ring number, so
@@ -943,9 +1126,7 @@ final class DebugOverlayHUDView: NSView {
         return min(max(distance, FlatRingRules.distanceRange.lowerBound), FlatRingRules.distanceRange.upperBound)
     }
 
-    static func ringRuleLinesTitle(index: Int) -> String {
-        "Rule \(index + 1): draw lines"
-    }
+    static let ringRuleLinesTitle = "Draw lines"
 
     @objc private func ringRuleLinesSwitchChanged(_ sender: NSSwitch) {
         guard let index = ringRuleRows.firstIndex(where: { $0.linesSwitch === sender }),
@@ -954,9 +1135,7 @@ final class DebugOverlayHUDView: NSView {
         onRingRuleSetsChanged?(ringRuleSets)
     }
 
-    static func ringRuleLabelsTitle(index: Int) -> String {
-        "Rule \(index + 1): draw labels"
-    }
+    static let ringRuleLabelsTitle = "Draw labels"
 
     @objc private func ringRuleLabelsSwitchChanged(_ sender: NSSwitch) {
         guard let index = ringRuleRows.firstIndex(where: { $0.labelsSwitch === sender }),
@@ -965,9 +1144,7 @@ final class DebugOverlayHUDView: NSView {
         onRingRuleSetsChanged?(ringRuleSets)
     }
 
-    static func ringRuleRasterTitle(index: Int) -> String {
-        "Rule \(index + 1): ground from a texture"
-    }
+    static let ringRuleRasterTitle = "Ground from a texture"
 
     /// The raster picker's choices: geometry, then every texture edge
     /// (`FlatRingRules.rasterSizes`).
@@ -989,6 +1166,20 @@ final class DebugOverlayHUDView: NSView {
         onRingRuleSetsChanged?(ringRuleSets)
     }
 
+    /// The terrain's title names the zooms under the band's tiles: 0 is
+    /// the tiles' own terrain, the finest the source has.
+    static func ringRuleTerrainTitle(drop: Int) -> String {
+        drop == 0 ? "Terrain of the tiles' own zoom" : "Terrain \(drop) zooms coarser"
+    }
+
+    @objc private func ringRuleTerrainControlChanged(_ sender: NSSegmentedControl) {
+        guard let index = ringRuleRows.firstIndex(where: { $0.terrainControl === sender }),
+              index < flatRingRules.rules.count else { return }
+        flatRingRules.rules[index].terrainZoomDrop = sender.selectedSegment + FlatRingRules.terrainZoomDropRange.lowerBound
+        ringRuleRows[index].terrainLabel.stringValue = Self.ringRuleTerrainTitle(drop: flatRingRules.rules[index].terrainZoomDrop)
+        onRingRuleSetsChanged?(ringRuleSets)
+    }
+
     @objc private func ringRuleDropControlChanged(_ sender: NSSegmentedControl) {
         guard let index = ringRuleRows.firstIndex(where: { $0.dropControl === sender }),
               index < flatRingRules.rules.count else { return }
@@ -1002,7 +1193,7 @@ final class DebugOverlayHUDView: NSView {
         let distance = Self.ringRuleDistance(sliderValue: sender.doubleValue)
         guard flatRingRules.rules[index].distance != distance else { return }
         flatRingRules.rules[index].distance = distance
-        ringRuleRows[index].distanceLabel.stringValue = Self.ringRuleDistanceTitle(index: index, distance: distance)
+        ringRuleRows[index].distanceLabel.stringValue = Self.ringRuleDistanceTitle(distance: distance)
         onRingRuleSetsChanged?(ringRuleSets)
     }
 
@@ -1201,11 +1392,13 @@ final class DebugOverlayHUDView: NSView {
     }
 
     /// A new last rule: two levels coarser than the last and reaching
-    /// twice as many rings (at least one more), inside the ranges.
+    /// twice as many rings (at least one more), its terrain a zoom
+    /// coarser again, inside the ranges.
     @objc private func ringRulesAddButtonTapped() {
         let last = flatRingRules.rules.last ?? FlatRingRules.default.rules[0]
         let rule = FlatRingRule(zoomDrop: min(last.zoomDrop + 2, FlatRingRules.zoomDropRange.upperBound),
-                                 distance: min(max(last.distance * 2, last.distance + 1), FlatRingRules.distanceRange.upperBound))
+                                 distance: min(max(last.distance * 2, last.distance + 1), FlatRingRules.distanceRange.upperBound),
+                                 terrainZoomDrop: min(last.terrainZoomDrop + 1, FlatRingRules.terrainZoomDropRange.upperBound))
         guard rule.distance > last.distance else { return }
         flatRingRules.rules.append(rule)
         rebuildRingRuleRows()
@@ -1265,11 +1458,26 @@ final class DebugOverlayHUDView: NSView {
     /// The ground fog group reflects the live settings, like the others.
     /// The colour well shows the horizon's colour while the fog takes it.
     func apply(groundFogSettings: ImmersiveMapSettings.GroundFogSettings, horizonColor: SIMD3<Float>) {
-        guard self.groundFogSettings != groundFogSettings || groundFogHorizonColor != horizonColor else {
+        guard plainGroundFogSettings != groundFogSettings || groundFogHorizonColor != horizonColor else {
             return
         }
-        self.groundFogSettings = groundFogSettings
+        plainGroundFogSettings = groundFogSettings
         groundFogHorizonColor = horizonColor
+        updateGroundFogControls()
+        needsLayout = true
+    }
+
+    /// The air over the mountains as the map runs with it, nil for none.
+    /// Switched off while it was being edited, the group goes back to the
+    /// plain's air.
+    func apply(mountainGroundFogSettings: ImmersiveMapSettings.GroundFogSettings?) {
+        guard self.mountainGroundFogSettings != mountainGroundFogSettings else {
+            return
+        }
+        self.mountainGroundFogSettings = mountainGroundFogSettings
+        if mountainGroundFogSettings == nil {
+            editsMountainAir = false
+        }
         updateGroundFogControls()
         needsLayout = true
     }
@@ -1292,6 +1500,16 @@ final class DebugOverlayHUDView: NSView {
         self.atmosphereSettings = atmosphereSettings
         updateAtmosphereControls()
         needsLayout = true
+    }
+
+    /// How the country around the camera is read, as the map runs with it:
+    /// the panel's own once dragged, the app's before.
+    func apply(terrainSurroundingsSettings settings: ImmersiveMapSettings.TileSettings.TerrainSurroundingsSettings) {
+        guard terrainSurroundingsSettings != settings else {
+            return
+        }
+        terrainSurroundingsSettings = settings
+        updateTerrainSurroundingsControls()
     }
 
     func apply(tileTraceSnapshot: TileTraceRecorderSnapshot) {
@@ -1413,6 +1631,9 @@ final class DebugOverlayHUDView: NSView {
         if tab.shows(.shadows) {
             cursor = layoutShadowsGroup(at: cursor, contentWidth: contentWidth)
         }
+        if tab.shows(.occlusion) {
+            cursor = layoutOcclusionGroup(at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+        }
         if tab.shows(.sky) {
             cursor = layoutSkyGroups(at: cursor, contentWidth: contentWidth)
         }
@@ -1429,7 +1650,9 @@ final class DebugOverlayHUDView: NSView {
             cursor = layoutExportGroup(at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
         }
         if tab.shows(.relief) {
-            cursor = layoutReliefGroup(at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+            cursor = layoutReliefGroups(at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+            cursor = layoutSurroundingsGroup(at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+            cursor = layoutReliefTilesGroup(at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
         }
         if tab.shows(.tiles) {
             cursor = layoutTilesGroup(at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
@@ -1472,21 +1695,54 @@ final class DebugOverlayHUDView: NSView {
     private func layoutShadowsGroup(at top: CGFloat, contentWidth: CGFloat) -> CGFloat {
         var cursor = layoutGroupHeader(shadowsGroupLabel, at: top, contentWidth: contentWidth)
         cursor = layoutSwitchRow(shadowsEnabledLabel, shadowsEnabledSwitch, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(shadowStrengthLabel, shadowStrengthSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(shadowMinimumZoomLabel, shadowMinimumZoomSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutFullWidthRow(shadowGraphHint, at: cursor, contentWidth: contentWidth, height: Layout.hintRowHeight)
+        cursor = layoutFullWidthRow(shadowStrengthLabel, at: cursor, contentWidth: contentWidth, height: Layout.graphTitleHeight)
+        cursor = layoutFullWidthRow(shadowStrengthGraph, at: cursor, contentWidth: contentWidth, height: Layout.graphHeight)
         cursor = layoutControlRow(shadowMapResolutionLabel, shadowMapResolutionControl, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(shadowCoverageLabel, shadowCoverageSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(shadowFarCoverageLabel, shadowFarCoverageSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(shadowMinimumCoverageLabel, shadowMinimumCoverageSlider, at: cursor, contentWidth: contentWidth)
+        for (label, graph) in [(shadowCoverageLabel, shadowCoverageGraph),
+                               (shadowFarCoverageLabel, shadowFarCoverageGraph)] {
+            cursor = layoutFullWidthRow(label, at: cursor, contentWidth: contentWidth, height: Layout.graphTitleHeight)
+            cursor = layoutFullWidthRow(graph, at: cursor, contentWidth: contentWidth, height: Layout.graphHeight)
+        }
         cursor = layoutControlRow(shadowNormalOffsetLabel, shadowNormalOffsetSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowCasterHeightLabel, shadowCasterHeightSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(shadowSoftnessLabel, shadowSoftnessSlider, at: cursor, contentWidth: contentWidth)
+        cursor += Layout.groupSpacing
+
+        // The relief's shading, a group of its own: the slopes' hillshade,
+        // its fade and its amounts, and the mountains' cast shadows in the
+        // map.
+        cursor = layoutGroupHeader(hillshadeGroupLabel, at: cursor, contentWidth: contentWidth)
+        for (label, graph) in [(hillshadeFadeStartLabel, hillshadeFadeStartGraph),
+                               (hillshadeFadeEndLabel, hillshadeFadeEndGraph)] {
+            cursor = layoutFullWidthRow(label, at: cursor, contentWidth: contentWidth, height: Layout.graphTitleHeight)
+            cursor = layoutFullWidthRow(graph, at: cursor, contentWidth: contentWidth, height: Layout.graphHeight)
+        }
+        cursor = layoutControlRow(hillshadeIntensityLabel, hillshadeIntensitySlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(hillshadeShadowLabel, hillshadeShadowSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(hillshadeHighlightLabel, hillshadeHighlightSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(reliefShadowsLabel, reliefShadowsSwitch, at: cursor, contentWidth: contentWidth)
+        return cursor + Layout.groupSpacing
+    }
+
+    /// The occlusion of the sky by the terrain: its switches, its sliders
+    /// and how the computing goes.
+    private func layoutOcclusionGroup(at top: CGFloat, contentWidth: CGFloat, constrainedSize: CGSize) -> CGFloat {
+        var cursor = layoutGroupHeader(occlusionGroupLabel, at: top, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(occlusionEnabledLabel, occlusionEnabledSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(occlusionStrengthLabel, occlusionStrengthSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(occlusionRadiusLabel, occlusionRadiusSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(occlusionDirectionsLabel, occlusionDirectionsControl, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(occlusionResolutionLabel, occlusionResolutionControl, at: cursor, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(occlusionDebugViewLabel, occlusionDebugViewSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutTextRow(occlusionStatusLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
         return cursor + Layout.groupSpacing
     }
 
     /// The scene's one light, the sun the buildings cast their shadows by
     /// and the relief's slopes are shaded by: live with the shadows off,
-    /// since the slopes still take it.
+    /// since the slopes still take it. The shading itself is on the
+    /// Shadows tab, in its Hillshade group (`layoutShadowsGroup`).
     private func layoutLightGroup(at top: CGFloat, contentWidth: CGFloat) -> CGFloat {
         var cursor = layoutGroupHeader(lightGroupLabel, at: top, contentWidth: contentWidth)
         // The sky from above and from the side, side by side, the angles
@@ -1504,11 +1760,6 @@ final class DebugOverlayHUDView: NSView {
         sunElevationLabel.frame = CGRect(x: Layout.contentInset + half + Layout.controlSpacing, y: cursor,
                                          width: half, height: Layout.controlRowHeight)
         cursor += Layout.controlRowHeight + Layout.controlSpacing
-        cursor = layoutControlRow(hillshadeFadeLabel, hillshadeFadeSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(hillshadeIntensityLabel, hillshadeIntensitySlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(hillshadeShadowLabel, hillshadeShadowSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutControlRow(hillshadeHighlightLabel, hillshadeHighlightSlider, at: cursor, contentWidth: contentWidth)
-        cursor = layoutSwitchRow(reliefShadowsLabel, reliefShadowsSwitch, at: cursor, contentWidth: contentWidth)
         return cursor + Layout.groupSpacing
     }
 
@@ -1548,6 +1799,8 @@ final class DebugOverlayHUDView: NSView {
     /// the relief, and a graph per zoom curve.
     private func layoutAirGroup(at top: CGFloat, contentWidth: CGFloat) -> CGFloat {
         var cursor = layoutGroupHeader(groundFogGroupLabel, at: top, contentWidth: contentWidth)
+        cursor = layoutSwitchRow(groundFogMountainLabel, groundFogMountainSwitch, at: cursor, contentWidth: contentWidth)
+        cursor = layoutFullWidthRow(groundFogAirControl, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutSwitchRow(groundFogEnabledLabel, groundFogEnabledSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(groundFogBuildingsLabel, groundFogBuildingsSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutSwitchRow(groundFogSkyColorLabel, groundFogSkyColorSwitch, at: cursor, contentWidth: contentWidth)
@@ -1575,18 +1828,17 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutSwitchRow(tileGridLabel, tileGridSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutFullWidthRow(tileGridDensityControl, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutSwitchRow(wireframeLabel, wireframeSwitch, at: cursor, contentWidth: contentWidth)
-        // The rule set picker first: everything from here to the rule rows
+        cursor += Layout.groupSpacing
+
+        // The rule set picker first: everything from here to the rule cards
         // edits the chosen set.
+        cursor = layoutGroupHeader(ringRulesGroupLabel, at: cursor, contentWidth: contentWidth)
         cursor = layoutFullWidthRow(ringRuleSetControl, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutControlRow(ringRuleSetFirstZoomLabel, ringRuleSetFirstZoomSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutFullWidthRow(ringRuleSetsAddButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutFullWidthRow(ringRuleSetsRemoveButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         for row in ringRuleRows {
-            cursor = layoutControlRow(row.dropLabel, row.dropControl, at: cursor, contentWidth: contentWidth)
-            cursor = layoutControlRow(row.distanceLabel, row.distanceSlider, at: cursor, contentWidth: contentWidth)
-            cursor = layoutSwitchRow(row.linesLabel, row.linesSwitch, at: cursor, contentWidth: contentWidth)
-            cursor = layoutSwitchRow(row.labelsLabel, row.labelsSwitch, at: cursor, contentWidth: contentWidth)
-            cursor = layoutControlRow(row.rasterLabel, row.rasterControl, at: cursor, contentWidth: contentWidth)
+            cursor = layoutRingRuleCard(row, at: cursor, contentWidth: contentWidth)
         }
         cursor = layoutFullWidthRow(ringRulesAddButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutFullWidthRow(ringRulesRemoveButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
@@ -1631,11 +1883,25 @@ final class DebugOverlayHUDView: NSView {
                                   height: tilesStatusListView.preferredHeight(forWidth: contentWidth))
     }
 
-    /// The relief tab, laid out as the tiles' tab: the summary, the map,
-    /// the cards.
-    private func layoutReliefGroup(at top: CGFloat, contentWidth: CGFloat, constrainedSize: CGSize) -> CGFloat {
-        var cursor = layoutGroupHeader(reliefGroupLabel, at: top, contentWidth: contentWidth)
-        cursor = layoutTextRow(reliefStatusLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+    /// The relief tab's first three groups, a text each: the frame on the
+    /// terrain, the terrain loads, the terrain in memory.
+    private func layoutReliefGroups(at top: CGFloat, contentWidth: CGFloat, constrainedSize: CGSize) -> CGFloat {
+        var cursor = top
+        for (header, label) in [(reliefGroupLabel, reliefStatusLabel),
+                                (reliefLoadingGroupLabel, reliefLoadingLabel),
+                                (reliefMemoryGroupLabel, reliefMemoryLabel)] {
+            cursor = layoutGroupHeader(header, at: cursor, contentWidth: contentWidth)
+            cursor = layoutTextRow(label, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+            cursor += Layout.controlSpacing
+        }
+        return cursor
+    }
+
+    /// The relief tab's last group, laid out as the tiles' tab: the count,
+    /// the map, the cards.
+    private func layoutReliefTilesGroup(at top: CGFloat, contentWidth: CGFloat, constrainedSize: CGSize) -> CGFloat {
+        var cursor = layoutGroupHeader(reliefTilesGroupLabel, at: top, contentWidth: contentWidth)
+        cursor = layoutTextRow(reliefTilesCountLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
         cursor += Layout.controlSpacing
         cursor = layoutFullWidthRow(reliefCoverageView,
                                     at: cursor,
@@ -1647,6 +1913,39 @@ final class DebugOverlayHUDView: NSView {
                                     contentWidth: contentWidth,
                                     height: reliefListView.preferredHeight(forWidth: contentWidth))
         return cursor + Layout.controlSpacing
+    }
+
+    /// The Surroundings group: the reading, then the four sliders of
+    /// `TerrainSurroundingsSettings`.
+    private func layoutSurroundingsGroup(at top: CGFloat, contentWidth: CGFloat, constrainedSize: CGSize) -> CGFloat {
+        var cursor = layoutGroupHeader(surroundingsGroupLabel, at: top, contentWidth: contentWidth)
+        cursor = layoutTextRow(surroundingsStatusLabel, at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
+        cursor += Layout.controlSpacing
+        cursor = layoutControlRow(surroundingsRadiusLabel, surroundingsRadiusSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(surroundingsPlainLabel, surroundingsPlainSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(surroundingsMountainsLabel, surroundingsMountainsSlider, at: cursor, contentWidth: contentWidth)
+        cursor = layoutControlRow(surroundingsSmoothingLabel, surroundingsSmoothingSlider, at: cursor, contentWidth: contentWidth)
+        return cursor + Layout.controlSpacing
+    }
+
+    /// One rule's card: the name, then the rows inset from the card's edge,
+    /// and the plate sized to what they took. Returns the cursor under the
+    /// card and its spacing.
+    private func layoutRingRuleCard(_ row: RingRuleRow, at top: CGFloat, contentWidth: CGFloat) -> CGFloat {
+        let x = Layout.contentInset + Layout.ruleCardInset
+        let width = max(0, contentWidth - Layout.ruleCardInset * 2)
+        var cursor = layoutFullWidthRow(row.titleLabel, at: top + Layout.ruleCardInset, contentWidth: width, height: Layout.ruleCardTitleHeight, x: x)
+        cursor = layoutControlRow(row.dropLabel, row.dropControl, at: cursor, contentWidth: width, x: x)
+        cursor = layoutControlRow(row.distanceLabel, row.distanceSlider, at: cursor, contentWidth: width, x: x)
+        cursor = layoutSwitchRow(row.linesLabel, row.linesSwitch, at: cursor, contentWidth: width, x: x)
+        cursor = layoutSwitchRow(row.labelsLabel, row.labelsSwitch, at: cursor, contentWidth: width, x: x)
+        cursor = layoutControlRow(row.rasterLabel, row.rasterControl, at: cursor, contentWidth: width, x: x)
+        cursor = layoutControlRow(row.terrainLabel, row.terrainControl, at: cursor, contentWidth: width, x: x)
+        // The last row's spacing is swapped for the card's inset.
+        let bottom = cursor - Layout.controlSpacing + Layout.ruleCardInset
+        row.card.isHidden = false
+        row.card.frame = CGRect(x: Layout.contentInset, y: top, width: contentWidth, height: bottom - top)
+        return bottom + Layout.ruleCardSpacing
     }
 
     private func layoutGroupHeader(_ label: NSTextField, at top: CGFloat, contentWidth: CGFloat) -> CGFloat {
@@ -1671,24 +1970,26 @@ final class DebugOverlayHUDView: NSView {
     private func layoutFullWidthRow(_ view: NSView,
                                     at top: CGFloat,
                                     contentWidth: CGFloat,
-                                    height: CGFloat) -> CGFloat {
+                                    height: CGFloat,
+                                    x: CGFloat = Layout.contentInset) -> CGFloat {
         view.isHidden = false
-        view.frame = CGRect(x: Layout.contentInset, y: top, width: contentWidth, height: height)
+        view.frame = CGRect(x: x, y: top, width: contentWidth, height: height)
         return top + height + Layout.controlSpacing
     }
 
     private func layoutSwitchRow(_ label: NSTextField,
                                  _ control: NSSwitch,
                                  at top: CGFloat,
-                                 contentWidth: CGFloat) -> CGFloat {
+                                 contentWidth: CGFloat,
+                                 x: CGFloat = Layout.contentInset) -> CGFloat {
         let switchSize = control.intrinsicContentSize
         label.isHidden = false
         control.isHidden = false
-        label.frame = CGRect(x: Layout.contentInset,
+        label.frame = CGRect(x: x,
                              y: top,
                              width: max(0, contentWidth - switchSize.width - Layout.controlSpacing),
                              height: Layout.controlRowHeight)
-        control.frame = CGRect(x: Layout.contentInset + contentWidth - switchSize.width,
+        control.frame = CGRect(x: x + contentWidth - switchSize.width,
                                y: top + (Layout.controlRowHeight - switchSize.height) / 2,
                                width: switchSize.width,
                                height: switchSize.height)
@@ -1697,20 +1998,22 @@ final class DebugOverlayHUDView: NSView {
 
     /// A named row whose control (a slider, a segmented picker) takes the
     /// right-hand side. The name carries the current value, so no third column
-    /// of numbers is needed and the row stays one line tall.
+    /// of numbers is needed and the row stays one line tall. `x` is the
+    /// row's left edge, the column's inset unless the row sits on a card.
     private func layoutControlRow(_ label: NSTextField,
                                   _ control: NSView,
                                   at top: CGFloat,
-                                  contentWidth: CGFloat) -> CGFloat {
+                                  contentWidth: CGFloat,
+                                  x: CGFloat = Layout.contentInset) -> CGFloat {
         let labelWidth = (contentWidth * Layout.controlLabelFraction).rounded()
         let controlWidth = max(0, contentWidth - labelWidth - Layout.controlSpacing)
         label.isHidden = false
         control.isHidden = false
-        label.frame = CGRect(x: Layout.contentInset,
+        label.frame = CGRect(x: x,
                              y: top,
                              width: labelWidth,
                              height: Layout.controlRowHeight)
-        control.frame = CGRect(x: Layout.contentInset + labelWidth + Layout.controlSpacing,
+        control.frame = CGRect(x: x + labelWidth + Layout.controlSpacing,
                                y: top,
                                width: controlWidth,
                                height: Layout.controlRowHeight)
@@ -1743,7 +2046,10 @@ final class DebugOverlayHUDView: NSView {
             tilesStatusLabel.attributedStringValue = NSAttributedString(string: "")
             tileCoverageView.apply(coverage: nil)
             applyTiles([])
-            reliefStatusLabel.attributedStringValue = NSAttributedString(string: "")
+            [reliefStatusLabel, reliefLoadingLabel, reliefMemoryLabel, reliefTilesCountLabel, surroundingsStatusLabel,
+             occlusionStatusLabel].forEach {
+                $0.attributedStringValue = NSAttributedString(string: "")
+            }
             reliefCoverageView.apply(coverage: nil)
             applyRelief(nil)
             return
@@ -1775,19 +2081,22 @@ final class DebugOverlayHUDView: NSView {
         tileCoverageView.apply(coverage: snapshot.tileCoverage)
         applyTiles(snapshot.tileLoadingStatusTiles)
 
-        let reliefText = NSMutableAttributedString(
-            attributedString: attributedText(snapshot.reliefStatus?.lines.joined(separator: "\n") ?? "relief: off",
-                                             fontSize: diagnosticsFontSize,
-                                             color: color)
-        )
-        if let status = snapshot.reliefStatus {
-            reliefText.append(attributedText("\nterrain tiles: \(status.tiles.count)",
-                                             fontSize: diagnosticsFontSize,
-                                             color: .systemYellow))
+        // A group a text. Without a relief the first group says so and the
+        // rest stay empty.
+        let status = snapshot.reliefStatus
+        let groupText = { (lines: [String]) in
+            self.attributedText(lines.joined(separator: "\n"), fontSize: diagnosticsFontSize, color: color)
         }
-        reliefStatusLabel.attributedStringValue = reliefText
+        reliefStatusLabel.attributedStringValue = groupText(status?.stateLines ?? ["relief: off"])
+        reliefLoadingLabel.attributedStringValue = groupText(status?.loadingLines ?? [])
+        reliefMemoryLabel.attributedStringValue = groupText(status?.memoryLines ?? [])
+        occlusionStatusLabel.attributedStringValue = groupText(status?.occlusionLines ?? ["relief: off"])
+        surroundingsStatusLabel.attributedStringValue = groupText(status?.surroundingsLines ?? ["around: off the terrain"])
+        reliefTilesCountLabel.attributedStringValue = attributedText("terrain tiles: \(status?.tiles.count ?? 0)",
+                                                                     fontSize: diagnosticsFontSize,
+                                                                     color: .systemYellow)
         reliefCoverageView.apply(coverage: snapshot.reliefCoverage)
-        applyRelief(snapshot.reliefStatus)
+        applyRelief(status)
     }
 
     /// The terrain cards, laid out again when their count changes.
@@ -1817,19 +2126,22 @@ final class DebugOverlayHUDView: NSView {
 
     private func updateShadowControls() {
         shadowsEnabledSwitch.state = shadowSettings.isEnabled ? .on : .off
-        shadowStrengthSlider.doubleValue = Double(shadowSettings.strength)
-        shadowStrengthLabel.stringValue = DebugOverlayShadowSettingsPlanner.strengthTitle(shadowSettings.strength)
-        shadowMinimumZoomSlider.doubleValue = shadowSettings.minimumZoom
-        shadowMinimumZoomLabel.stringValue = DebugOverlayShadowSettingsPlanner.minimumZoomTitle(shadowSettings.minimumZoom)
+        let zoom = groundFogCameraZoom
+        shadowStrengthLabel.stringValue = DebugOverlayShadowSettingsPlanner.strengthTitle(shadowSettings.strength, cameraZoom: zoom)
         shadowMapResolutionControl.selectedSegment =
             DebugOverlayShadowSettingsPlanner.mapResolutionIndex(for: shadowSettings.mapResolution)
-        shadowCoverageSlider.doubleValue = Double(shadowSettings.coverageCameraDistances)
-        shadowCoverageLabel.stringValue = DebugOverlayShadowSettingsPlanner.coverageTitle(shadowSettings.coverageCameraDistances)
-        shadowFarCoverageSlider.doubleValue = Double(shadowSettings.farCoverageCameraDistances)
-        shadowFarCoverageLabel.stringValue = DebugOverlayShadowSettingsPlanner.farCoverageTitle(
-            shadowSettings.farCoverageCameraDistances, nearCoverage: shadowSettings.coverageCameraDistances)
-        shadowMinimumCoverageSlider.doubleValue = Double(shadowSettings.minimumCoverageMeters)
-        shadowMinimumCoverageLabel.stringValue = DebugOverlayShadowSettingsPlanner.minimumCoverageTitle(shadowSettings.minimumCoverageMeters)
+        shadowCoverageLabel.stringValue = DebugOverlayShadowSettingsPlanner.nearCoverageTitle(shadowSettings.nearCoverageMeters,
+                                                                                            cameraZoom: zoom)
+        shadowFarCoverageLabel.stringValue = DebugOverlayShadowSettingsPlanner.farCoverageTitle(shadowSettings.farCoverageMeters,
+                                                                                              nearCoverage: shadowSettings.nearCoverageMeters,
+                                                                                              cameraZoom: zoom)
+        for (graph, curve) in [(shadowStrengthGraph, shadowSettings.strength),
+                               (shadowCoverageGraph, shadowSettings.nearCoverageMeters),
+                               (shadowFarCoverageGraph, shadowSettings.farCoverageMeters)] {
+            graph.curve = curve
+            graph.cameraZoom = zoom
+            graph.isEnabled = shadowSettings.isEnabled
+        }
         shadowNormalOffsetSlider.doubleValue = Double(shadowSettings.normalOffsetTexels)
         shadowNormalOffsetLabel.stringValue = DebugOverlayShadowSettingsPlanner.normalOffsetTitle(shadowSettings.normalOffsetTexels)
         shadowCasterHeightSlider.doubleValue = Double(shadowSettings.maxCasterHeightMeters)
@@ -1846,10 +2158,49 @@ final class DebugOverlayHUDView: NSView {
 
         // Everything below the switch only means something with shadows
         // on. The light is the slopes' too, so it stays live.
-        [shadowStrengthSlider, shadowMinimumZoomSlider, shadowMapResolutionControl, shadowCoverageSlider, shadowFarCoverageSlider,
-         shadowMinimumCoverageSlider,
-         shadowNormalOffsetSlider, shadowCasterHeightSlider,
+        [shadowMapResolutionControl, shadowNormalOffsetSlider, shadowCasterHeightSlider,
          shadowSoftnessSlider].forEach { $0.isEnabled = shadowSettings.isEnabled }
+    }
+
+    private func configureShadowGraph(_ graph: DebugOverlayZoomCurveView,
+                                      axes: DebugOverlayZoomCurveAxes,
+                                      valueText: @escaping (Double) -> String,
+                                      keyPath: WritableKeyPath<ImmersiveMapSettings.ShadowSettings, ImmersiveMapZoomCurve>) {
+        graph.axes = axes
+        graph.valueText = valueText
+        graph.onChange = { [weak self] curve in
+            guard let self else { return }
+            var settings = shadowSettings
+            settings[keyPath: keyPath] = curve
+            publish(shadowSettings: settings)
+        }
+    }
+
+    private func configureHillshadeFadeGraph(_ graph: DebugOverlayZoomCurveView,
+                                             keyPath: WritableKeyPath<GroundReliefHillshade.Fade, ImmersiveMapZoomCurve>) {
+        graph.axes = DebugOverlayShadowSettingsPlanner.hillshadeFadeAxes
+        graph.valueText = DebugOverlayValueText.meters
+        graph.onChange = { [weak self] curve in
+            guard let self else { return }
+            var fade = hillshadeFade
+            fade[keyPath: keyPath] = curve
+            hillshadeFade = fade
+            updateHillshadeFadeControls()
+            onHillshadeFadeChanged?(fade)
+        }
+    }
+
+    private func updateHillshadeFadeControls() {
+        let zoom = groundFogCameraZoom
+        hillshadeFadeStartLabel.stringValue = DebugOverlayShadowSettingsPlanner.hillshadeFadeStartTitle(hillshadeFade.startMeters,
+                                                                                                        cameraZoom: zoom)
+        hillshadeFadeEndLabel.stringValue = DebugOverlayShadowSettingsPlanner.hillshadeFadeEndTitle(hillshadeFade.endMeters,
+                                                                                                    cameraZoom: zoom)
+        for (graph, curve) in [(hillshadeFadeStartGraph, hillshadeFade.startMeters),
+                               (hillshadeFadeEndGraph, hillshadeFade.endMeters)] {
+            graph.curve = curve
+            graph.cameraZoom = zoom
+        }
     }
 
     // MARK: - Configuration
@@ -1865,6 +2216,10 @@ final class DebugOverlayHUDView: NSView {
     }
 
     private func updateGroundFogControls() {
+        let hasMountainAir = mountainGroundFogSettings != nil
+        groundFogMountainSwitch.state = hasMountainAir ? .on : .off
+        groundFogAirControl.isEnabled = hasMountainAir
+        groundFogAirControl.selectedSegment = editsMountainAir && hasMountainAir ? 1 : 0
         let fog = groundFogSettings
         let zoom = groundFogCameraZoom
         typealias Planner = DebugOverlayGroundFogSettingsPlanner
@@ -1931,6 +2286,18 @@ final class DebugOverlayHUDView: NSView {
         globeLightNightColorWell.isEnabled = light.isEnabled
     }
 
+    private func updateTerrainSurroundingsControls() {
+        let settings = terrainSurroundingsSettings
+        surroundingsRadiusSlider.doubleValue = Double(settings.sampleRadiusMetres)
+        surroundingsRadiusLabel.stringValue = DebugOverlayTerrainSurroundingsSettingsPlanner.sampleRadiusTitle(settings.sampleRadiusMetres)
+        surroundingsPlainSlider.doubleValue = Double(settings.plainBelowMetres)
+        surroundingsPlainLabel.stringValue = DebugOverlayTerrainSurroundingsSettingsPlanner.plainBelowTitle(settings.plainBelowMetres)
+        surroundingsMountainsSlider.doubleValue = Double(settings.mountainsAboveMetres)
+        surroundingsMountainsLabel.stringValue = DebugOverlayTerrainSurroundingsSettingsPlanner.mountainsAboveTitle(settings.mountainsAboveMetres)
+        surroundingsSmoothingSlider.doubleValue = settings.smoothingHalfLife
+        surroundingsSmoothingLabel.stringValue = DebugOverlayTerrainSurroundingsSettingsPlanner.smoothingHalfLifeTitle(settings.smoothingHalfLife)
+    }
+
     private func updateAtmosphereControls() {
         atmosphereEnabledSwitch.state = atmosphereSettings.isEnabled ? .on : .off
         atmosphereColorWell.color = Self.color(atmosphereSettings.color)
@@ -1960,9 +2327,14 @@ final class DebugOverlayHUDView: NSView {
         return SIMD3<Float>(Float(srgb.redComponent), Float(srgb.greenComponent), Float(srgb.blueComponent))
     }
 
+    /// A colour well in the default style: a click opens the shared
+    /// colour panel, the wheel, the sliders and the hex field, so any
+    /// colour can be picked, not one of a palette's swatches, and every
+    /// change in the panel reaches the map as it is made.
     private func configureColorWell(_ well: NSColorWell, action: Selector) {
         well.target = self
         well.action = action
+        well.isContinuous = true
         refuseFocus(well)
     }
 
@@ -1970,6 +2342,12 @@ final class DebugOverlayHUDView: NSView {
         label.textColor = NSColor.white.withAlphaComponent(0.62)
         label.font = NSFont.systemFont(ofSize: 11, weight: .heavy)
         label.stringValue = label.stringValue.uppercased()
+    }
+
+    /// A rule card's name: brighter than a group header, bolder than a row.
+    private func configureRuleCardTitle(_ label: NSTextField) {
+        label.textColor = NSColor.white.withAlphaComponent(0.85)
+        label.font = NSFont.systemFont(ofSize: 12, weight: .bold)
     }
 
     private func configureControlLabel(_ label: NSTextField, text: String) {
@@ -2150,9 +2528,10 @@ final class DebugOverlayHUDView: NSView {
 
     /// The hillshade's fade, as the map runs with it: the panel's own once
     /// dragged, the style's before.
-    func apply(hillshadeFade fade: ClosedRange<Float>) {
-        hillshadeFadeSlider.value = Double(fade.lowerBound) ... Double(fade.upperBound)
-        updateHillshadeFadeLabel(fade)
+    func apply(hillshadeFade fade: GroundReliefHillshade.Fade) {
+        guard fade != hillshadeFade else { return }
+        hillshadeFade = fade
+        updateHillshadeFadeControls()
     }
 
     /// The mountains' shadows as the map runs with them: the panel's own
@@ -2165,13 +2544,47 @@ final class DebugOverlayHUDView: NSView {
         onReliefShadowsChanged?(reliefShadowsSwitch.state == .on)
     }
 
-    private func hillshadeFadeChanged(_ fade: ClosedRange<Float>) {
-        updateHillshadeFadeLabel(fade)
-        onHillshadeFadeChanged?(fade)
+    /// The occlusion of the sky, as the map runs with it: the panel's own
+    /// once dragged, the style's before.
+    func apply(terrainOcclusion occlusion: ImmersiveMapTerrainOcclusion) {
+        terrainOcclusion = occlusion
+        updateOcclusionControls()
     }
 
-    private func updateHillshadeFadeLabel(_ fade: ClosedRange<Float>) {
-        hillshadeFadeLabel.stringValue = "Hillshade \(String(format: "%.1f", fade.lowerBound))–\(String(format: "%.1f", fade.upperBound))× eye"
+    func apply(terrainOcclusionDebugView isEnabled: Bool) {
+        occlusionDebugViewSwitch.state = isEnabled ? .on : .off
+    }
+
+    private func updateOcclusionControls() {
+        occlusionEnabledSwitch.state = terrainOcclusion.isEnabled ? .on : .off
+        occlusionStrengthSlider.doubleValue = Double(terrainOcclusion.strength)
+        occlusionStrengthLabel.stringValue = DebugOverlayOcclusionPlanner.strengthTitle(terrainOcclusion.strength)
+        occlusionRadiusSlider.doubleValue = DebugOverlayOcclusionPlanner.sliderValue(radiusMetres: terrainOcclusion.radiusMeters)
+        occlusionRadiusLabel.stringValue = DebugOverlayOcclusionPlanner.radiusTitle(terrainOcclusion.radiusMeters)
+        occlusionDirectionsControl.selectedSegment = DebugOverlayOcclusionPlanner.directionsIndex(for: terrainOcclusion.directions)
+        occlusionResolutionControl.selectedSegment = DebugOverlayOcclusionPlanner.resolutionIndex(for: terrainOcclusion.resolution)
+        for control in [occlusionStrengthSlider, occlusionRadiusSlider, occlusionDirectionsControl, occlusionResolutionControl] {
+            control.isEnabled = terrainOcclusion.isEnabled
+        }
+    }
+
+    /// The controls as one: an edit of any of them sends the whole.
+    @objc private func occlusionControlChanged() {
+        var occlusion = terrainOcclusion
+        occlusion.isEnabled = occlusionEnabledSwitch.state == .on
+        occlusion.strength = Float((occlusionStrengthSlider.doubleValue * 100).rounded() / 100)
+        occlusion.radiusMeters = DebugOverlayOcclusionPlanner.radiusMetres(sliderValue: occlusionRadiusSlider.doubleValue)
+        let directions = DebugOverlayOcclusionPlanner.directionsOptions
+        let resolutions = DebugOverlayOcclusionPlanner.resolutionOptions
+        occlusion.directions = directions[min(max(occlusionDirectionsControl.selectedSegment, 0), directions.count - 1)]
+        occlusion.resolution = resolutions[min(max(occlusionResolutionControl.selectedSegment, 0), resolutions.count - 1)]
+        terrainOcclusion = occlusion
+        updateOcclusionControls()
+        onTerrainOcclusionChanged?(occlusion)
+    }
+
+    @objc private func occlusionDebugViewSwitchChanged() {
+        onTerrainOcclusionDebugViewChanged?(occlusionDebugViewSwitch.state == .on)
     }
 
     /// The hillshade's amounts, as the map runs with them: the panel's own
@@ -2240,39 +2653,9 @@ final class DebugOverlayHUDView: NSView {
         publish(shadowSettings: settings)
     }
 
-    @objc private func shadowStrengthSliderChanged() {
-        var settings = shadowSettings
-        settings.strength = Float(shadowStrengthSlider.doubleValue)
-        publish(shadowSettings: settings)
-    }
-
-    @objc private func shadowMinimumZoomSliderChanged() {
-        var settings = shadowSettings
-        settings.minimumZoom = (shadowMinimumZoomSlider.doubleValue * 2).rounded() / 2
-        publish(shadowSettings: settings)
-    }
-
     @objc private func shadowMapResolutionControlChanged() {
         var settings = shadowSettings
         settings.mapResolution = DebugOverlayShadowSettingsPlanner.mapResolution(atIndex: shadowMapResolutionControl.selectedSegment)
-        publish(shadowSettings: settings)
-    }
-
-    @objc private func shadowCoverageSliderChanged() {
-        var settings = shadowSettings
-        settings.coverageCameraDistances = Float(shadowCoverageSlider.doubleValue)
-        publish(shadowSettings: settings)
-    }
-
-    @objc private func shadowFarCoverageSliderChanged() {
-        var settings = shadowSettings
-        settings.farCoverageCameraDistances = Float((shadowFarCoverageSlider.doubleValue * 2).rounded() / 2)
-        publish(shadowSettings: settings)
-    }
-
-    @objc private func shadowMinimumCoverageSliderChanged() {
-        var settings = shadowSettings
-        settings.minimumCoverageMeters = Float((shadowMinimumCoverageSlider.doubleValue / 25).rounded() * 25)
         publish(shadowSettings: settings)
     }
 
@@ -2343,8 +2726,31 @@ final class DebugOverlayHUDView: NSView {
         onGroundFogResetRequested?()
     }
 
+    /// The preset goes to the air being edited: the mountains' once it is
+    /// on and chosen, else the plain's.
     @objc private func groundFogMountainPresetButtonTapped() {
         publish(groundFogSettings: DebugOverlayGroundFogSettingsPlanner.mountainAirPreset(from: groundFogSettings))
+    }
+
+    /// On, the mountains' air starts as the preset from the plain's and the
+    /// group turns to editing it. Off, there is one air again.
+    @objc private func groundFogMountainSwitchChanged() {
+        if groundFogMountainSwitch.state == .on {
+            mountainGroundFogSettings = DebugOverlayGroundFogSettingsPlanner.mountainAirPreset(from: plainGroundFogSettings)
+            editsMountainAir = true
+        } else {
+            mountainGroundFogSettings = nil
+            editsMountainAir = false
+        }
+        updateGroundFogControls()
+        needsLayout = true
+        onMountainGroundFogSettingsChanged?(mountainGroundFogSettings)
+    }
+
+    @objc private func groundFogAirControlChanged() {
+        editsMountainAir = groundFogAirControl.selectedSegment == 1 && mountainGroundFogSettings != nil
+        updateGroundFogControls()
+        needsLayout = true
     }
 
     @objc private func groundFogSeaLevelSwitchChanged() {
@@ -2400,11 +2806,16 @@ final class DebugOverlayHUDView: NSView {
         publish(groundFogSettings: settings)
     }
 
+    /// The edited air, to whichever of the two it is.
     private func publish(groundFogSettings settings: ImmersiveMapSettings.GroundFogSettings) {
         groundFogSettings = settings
         updateGroundFogControls()
         needsLayout = true
-        onGroundFogSettingsChanged?(settings)
+        if editsMountainAir, mountainGroundFogSettings != nil {
+            onMountainGroundFogSettingsChanged?(settings)
+        } else {
+            onGroundFogSettingsChanged?(settings)
+        }
     }
 
     @objc private func atmosphereEnabledSwitchChanged() {
@@ -2430,6 +2841,19 @@ final class DebugOverlayHUDView: NSView {
         var settings = atmosphereSettings
         settings.sunInfluence = Float(atmosphereSunInfluenceSlider.doubleValue)
         publish(atmosphereSettings: settings)
+    }
+
+    /// One action for the four sliders: the group is read as a whole, in
+    /// round metres and hundredths of a second.
+    @objc private func surroundingsSliderChanged() {
+        let settings = ImmersiveMapSettings.TileSettings.TerrainSurroundingsSettings(
+            sampleRadiusMetres: Float(surroundingsRadiusSlider.doubleValue.rounded()),
+            plainBelowMetres: Float(surroundingsPlainSlider.doubleValue.rounded()),
+            mountainsAboveMetres: Float(surroundingsMountainsSlider.doubleValue.rounded()),
+            smoothingHalfLife: (surroundingsSmoothingSlider.doubleValue * 100).rounded() / 100)
+        terrainSurroundingsSettings = settings
+        updateTerrainSurroundingsControls()
+        onTerrainSurroundingsSettingsChanged?(settings)
     }
 
     @objc private func globeLightEnabledSwitchChanged() {

@@ -29,6 +29,7 @@ public struct ImmersiveMapView: View {
     private var avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
     private var sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)?
     private var frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)?
+    private var terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)?
     private var markerContent: MarkerViewContent?
     private var tourVideoRecorder: ImmersiveMapTourVideoRecorder?
 
@@ -58,6 +59,7 @@ public struct ImmersiveMapView: View {
                                         avatarTapAction: avatarTapAction,
                                         sceneModelTapAction: sceneModelTapAction,
                                         frameRenderedAction: frameRenderedAction,
+                                        terrainSurroundingsAction: terrainSurroundingsAction,
                                         markerContent: markerContent,
                                         tourVideoRecorder: tourVideoRecorder)
             .immersiveMapCameraControlsOverlay(
@@ -82,6 +84,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
     let avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
     let sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)?
     let frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)?
+    let terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)?
     let markerContent: MarkerViewContent?
     let tourVideoRecorder: ImmersiveMapTourVideoRecorder?
 
@@ -99,6 +102,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                                        avatarTapAction: avatarTapAction,
                                        sceneModelTapAction: sceneModelTapAction,
                                        frameRenderedAction: frameRenderedAction,
+                                       terrainSurroundingsAction: terrainSurroundingsAction,
                                        markerContent: markerContent)
             return adopted
         }
@@ -112,6 +116,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                                         avatarTapAction: avatarTapAction,
                                         sceneModelTapAction: sceneModelTapAction,
                                         frameRenderedAction: frameRenderedAction,
+                                        terrainSurroundingsAction: terrainSurroundingsAction,
                                         markerContent: markerContent)
         return uiView
     }
@@ -125,6 +130,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                       avatarTapAction: avatarTapAction,
                       sceneModelTapAction: sceneModelTapAction,
                       frameRenderedAction: frameRenderedAction,
+                      terrainSurroundingsAction: terrainSurroundingsAction,
                       markerContent: markerContent,
                       cameraPosition: cameraPosition,
                       tourVideoRecorder: tourVideoRecorder)
@@ -145,6 +151,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
     let avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
     let sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)?
     let frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)?
+    let terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)?
     let markerContent: MarkerViewContent?
     let tourVideoRecorder: ImmersiveMapTourVideoRecorder?
 
@@ -162,6 +169,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                                        avatarTapAction: avatarTapAction,
                                        sceneModelTapAction: sceneModelTapAction,
                                        frameRenderedAction: frameRenderedAction,
+                                       terrainSurroundingsAction: terrainSurroundingsAction,
                                        markerContent: markerContent)
             return adopted
         }
@@ -175,6 +183,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                                         avatarTapAction: avatarTapAction,
                                         sceneModelTapAction: sceneModelTapAction,
                                         frameRenderedAction: frameRenderedAction,
+                                        terrainSurroundingsAction: terrainSurroundingsAction,
                                         markerContent: markerContent)
         return nsView
     }
@@ -188,6 +197,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                       avatarTapAction: avatarTapAction,
                       sceneModelTapAction: sceneModelTapAction,
                       frameRenderedAction: frameRenderedAction,
+                      terrainSurroundingsAction: terrainSurroundingsAction,
                       markerContent: markerContent,
                       cameraPosition: cameraPosition,
                       tourVideoRecorder: tourVideoRecorder)
@@ -563,6 +573,30 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Calls `action` on the main thread when the country around the point
+    /// the camera looks at changes between mountains and a plain, or in
+    /// how mountainous it reads (``ImmersiveMapTerrainSurroundings``): with
+    /// the first frame, then with every change, and with nil when the map
+    /// leaves the terrain (the relief disabled, collapsed by the zoom, or
+    /// the globe on screen). For the effects an app turns on in the
+    /// mountains, a mountain atmosphere for one:
+    ///
+    ///     ImmersiveMapView()
+    ///         .onTerrainSurroundingsChange { surroundings in
+    ///             inMountains = surroundings?.kind == .mountains
+    ///         }
+    ///         .atmosphereSettings(inMountains ? mountainAir : plainAir)
+    ///
+    /// The reading is tuned with `terrainSurroundings(...)` and shown live on
+    /// the debug panel's Relief tab. The action runs inside the frame's
+    /// display-link callback, after the frame committed: setting SwiftUI
+    /// state there is fine, heavier work goes to a later turn of the run loop.
+    func onTerrainSurroundingsChange(_ action: @escaping (ImmersiveMapTerrainSurroundings?) -> Void) -> ImmersiveMapView {
+        var view = self
+        view.terrainSurroundingsAction = action
+        return view
+    }
+
     /// Declarative SwiftUI markers bound to geo coordinates.
     /// The content is repositioned on every rendered frame (flat, globe and
     /// the morph between them); beyond the globe's horizon the marker fades
@@ -612,9 +646,25 @@ public extension ImmersiveMapView {
     /// no morph and no stars, and the flat map's sky and haze from zoom 0
     /// up. Applies live; stills and video exports of the same settings come
     /// out flat too.
-    public func globe(isEnabled: Bool = true) -> ImmersiveMapView {
+    ///
+    /// `airHandoverStart` and `airHandoverEnd` are where in the unroll, as
+    /// fractions `0...1` of the transition window, the globe's air (the
+    /// atmosphere over space and the stars) gives way to the plane's (the
+    /// sky over the map's colour, the world tile under the far ground):
+    /// 0.7 to 0.9 by default, the end where the unroll's geometry is a
+    /// finished plane. An omitted value is left as configured:
+    ///
+    ///     ImmersiveMapView()
+    ///         .globe(airHandoverStart: 0.6, airHandoverEnd: 0.85)
+    ///
+    /// See `ImmersiveMapSettings.PresentationSettings`.
+    public func globe(isEnabled: Bool = true,
+                      airHandoverStart: Float? = nil,
+                      airHandoverEnd: Float? = nil) -> ImmersiveMapView {
         var view = self
-        view.settings = view.settings.globe(isEnabled: isEnabled)
+        view.settings = view.settings.globe(isEnabled: isEnabled,
+                                            airHandoverStart: airHandoverStart,
+                                            airHandoverEnd: airHandoverEnd)
         return view
     }
 
@@ -810,7 +860,7 @@ public extension ImmersiveMapView {
     /// with the ground relief on from a coarse zoom, a coarse tile's cell
     /// covers far more ground, and more cells keep its relief as fine. By
     /// default the relief's zooms take a cell of about the same ground,
-    /// 256 cells at zooms 9 to 11, 128 at 12, 64 at 13 and 32 at 14, and
+    /// 128 cells at zooms 9 to 12, 64 at 13 and 32 at 14, and
     /// the globe's zooms the grid the sphere was split by, 64 at 0 and 1
     /// and 32 at 2 and 3 (`GroundFlatteningSettings.defaultGridByTileZoom`).
     /// An omitted value is left as configured:
@@ -837,16 +887,16 @@ public extension ImmersiveMapView {
     /// `transitionSeconds` (0.3), everywhere alike, and never a scaling
     /// with the zoom, which would breathe with every drag over the
     /// slopes. An `appearZoom` of 0, or a `collapseZoom` past the deepest
-    /// zoom, keeps the relief at every zoom. `detail` picks the terrain
-    /// tiles the ground reads (`GroundReliefDetail`): the cinematic two
-    /// maps around the point the camera looks at by default, of
-    /// `cinematicNearZoom` (10) near and `cinematicFarZoom` (6) past it,
-    /// the heights the flattening's grid can show (`.matchingGrid`), or
-    /// every height the source has (`.maximum`). The camera flies
-    /// over one map at every zoom, the terrain tiles of
-    /// `cameraTerrainZoom`, the detail's own when unset. The roads,
-    /// the buildings and the labels rise with
-    /// it. The tiles of `appearZoom`'s tile zoom and deeper are flattened
+    /// zoom, keeps the relief at every zoom. Which terrain tiles the
+    /// ground reads is the ring rules' (`FlatRingRule.terrainZoomDrop`,
+    /// edited in the debug panel's Tiles tab): each ring reads the
+    /// terrain so many zooms coarser than its own tiles, the near ring its
+    /// own zoom's by default. The camera flies over one map at every zoom,
+    /// the terrain tiles of `cameraTerrainZoom` (10), and the ground's
+    /// vertices rise by terrain no finer than `displacementMaximumZoom`
+    /// (10), the finer terrain of a near ring shading its slopes pixel by
+    /// pixel. The roads, the
+    /// buildings and the labels rise with it. The tiles of `appearZoom`'s tile zoom and deeper are flattened
     /// for it whatever the flattening's own zoom says, since only a
     /// flattened tile rises as geometry, and a coarser one, which the
     /// relief shows only from a texture on a raised grid, is spared the
@@ -855,15 +905,14 @@ public extension ImmersiveMapView {
     /// point it looks at, or stays `cameraClearanceMetres` over one when
     /// that is set. The mountains cast their shadows into the shadow map
     /// unless `castsShadows` is false. The decoded terrain tiles
-    /// keep to `memoryBudgetInBytes`, the detail's own when unset (20 MB
-    /// for the cinematic two maps), and `maximumConcurrentLoads` of them
+    /// live with the tiles they raise, and `maximumConcurrentLoads` of them
     /// load at once, the frame's nearest first. On by default, on
     /// Mapterhorn's open terrain: `isEnabled: false` lays the map flat. An
     /// omitted value is left as configured:
     ///
     ///     ImmersiveMapView()
     ///         .groundFlattening(grid: 64)
-    ///         .groundRelief(isEnabled: true, exaggeration: 2, appearZoom: 11, detail: .matchingGrid)
+    ///         .groundRelief(isEnabled: true, exaggeration: 2, appearZoom: 11, cameraTerrainZoom: 12)
     ///
     /// The relief is as fine as the flattening's grid. See
     /// `ImmersiveMapSettings.TileSettings.GroundReliefSettings`.
@@ -874,11 +923,8 @@ public extension ImmersiveMapView {
                              appearZoom: Double? = nil,
                              collapseZoom: Double? = nil,
                              transitionSeconds: TimeInterval? = nil,
-                             detail: ImmersiveMapSettings.TileSettings.GroundReliefDetail? = nil,
-                             cinematicNearZoom: Int? = nil,
-                             cinematicFarZoom: Int? = nil,
                              cameraTerrainZoom: Int? = nil,
-                             memoryBudgetInBytes: Int? = nil,
+                             displacementMaximumZoom: Int? = nil,
                              maximumConcurrentLoads: Int? = nil,
                              cameraClearanceMetres: Float? = nil,
                              castsShadows: Bool? = nil) -> ImmersiveMapView {
@@ -890,14 +936,36 @@ public extension ImmersiveMapView {
                                                    appearZoom: appearZoom,
                                                    collapseZoom: collapseZoom,
                                                    transitionSeconds: transitionSeconds,
-                                                   detail: detail,
-                                                   cinematicNearZoom: cinematicNearZoom,
-                                                   cinematicFarZoom: cinematicFarZoom,
                                                    cameraTerrainZoom: cameraTerrainZoom,
-                                                   memoryBudgetInBytes: memoryBudgetInBytes,
+                                                   displacementMaximumZoom: displacementMaximumZoom,
                                                    maximumConcurrentLoads: maximumConcurrentLoads,
                                                    cameraClearanceMetres: cameraClearanceMetres,
                                                    castsShadows: castsShadows)
+        return view
+    }
+
+    /// How the country around the point the camera looks at is read as
+    /// mountains or a plain, the reading `onTerrainSurroundingsChange`
+    /// reports: the radius of the disc of terrain read around the point,
+    /// the spans of its heights under which it is a plain and from which it
+    /// is mountains (the band between them the kind's hysteresis), and how
+    /// long the reading takes to follow a move. An omitted value is left
+    /// as configured:
+    ///
+    ///     ImmersiveMapView()
+    ///         .terrainSurroundings(sampleRadiusMetres: 6000, mountainsAboveMetres: 800)
+    ///
+    /// The debug panel's Relief tab drags the same values and shows the
+    /// reading. See `ImmersiveMapSettings.TileSettings.TerrainSurroundingsSettings`.
+    public func terrainSurroundings(sampleRadiusMetres: Float? = nil,
+                                    plainBelowMetres: Float? = nil,
+                                    mountainsAboveMetres: Float? = nil,
+                                    smoothingHalfLife: TimeInterval? = nil) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.terrainSurroundings(sampleRadiusMetres: sampleRadiusMetres,
+                                                          plainBelowMetres: plainBelowMetres,
+                                                          mountainsAboveMetres: mountainsAboveMetres,
+                                                          smoothingHalfLife: smoothingHalfLife)
         return view
     }
 
@@ -925,6 +993,31 @@ public extension ImmersiveMapView {
     public func groundFlattening(isEnabled: Bool) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.groundFlattening(isEnabled: isEnabled)
+        return view
+    }
+
+    /// The overview of the globe the engine ships, on or off: hand-drawn
+    /// biomes laid into the tiles of zooms 0 to 7 under the tile source's
+    /// raster-derived land cover, which the built-in style paints and draws
+    /// the land cover over (`ProtomapsBasemapTheme.BiomeStyles`, with the
+    /// zooms of both).
+    /// On by default. Off, the overview zooms draw the tile source's own
+    /// land cover: for a source in another schema whose style has no use
+    /// for the layers. Part of the prepared tiles' identity, so a change
+    /// re-parses them. `creditMaximumZoom` is the camera zoom the
+    /// overview's credit stays on the attribution line up to, 8 by default,
+    /// where the built-in style has faded the biomes out. An omitted value
+    /// is left as configured:
+    ///
+    ///     ImmersiveMapView()
+    ///         .overviewTiles(isEnabled: false)
+    ///
+    /// See `ImmersiveMapSettings.TileSettings.OverviewSettings`.
+    public func overviewTiles(isEnabled: Bool? = nil,
+                              creditMaximumZoom: Double? = nil) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.overviewTiles(isEnabled: isEnabled,
+                                                    creditMaximumZoom: creditMaximumZoom)
         return view
     }
 
@@ -1189,6 +1282,56 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// The air over the mountains, the same values as `groundFog(...)`: the
+    /// frame draws the air between the plain's (`groundFog`) and this one by
+    /// how mountainous the country around the camera reads
+    /// (`onTerrainSurroundingsChange`, tuned with `terrainSurroundings(...)`),
+    /// so a pan from a plain into a range fades one air into the other. The
+    /// values start from the mountain air set so far, or from a copy of the
+    /// plain's, and an omitted value is left as it is:
+    ///
+    ///     ImmersiveMapView()
+    ///         .mountainGroundFog(densityPerKilometer: [7: 0.02, 12: 0.02, 16: 17, 22: 6],
+    ///                            heightMeters: [7: 2500, 12: 2500, 16: 150, 22: 60],
+    ///                            baseAltitudeMeters: 1500)
+    ///
+    /// Without it the air is one everywhere. The debug panel's Air tab
+    /// switches it on with a preset and edits either air. See
+    /// `ImmersiveMapSettings.SceneSettings.mountainGroundFog`. Applies live.
+    public func mountainGroundFog(isEnabled: Bool = true,
+                                  densityPerKilometer: ImmersiveMapZoomCurve? = nil,
+                                  heightMeters: ImmersiveMapZoomCurve? = nil,
+                                  startDistanceMeters: ImmersiveMapZoomCurve? = nil,
+                                  startSoftnessMeters: ImmersiveMapZoomCurve? = nil,
+                                  color: SIMD3<Float>? = nil,
+                                  maximumOpacity: ImmersiveMapZoomCurve? = nil,
+                                  veilsBuildings: Bool? = nil,
+                                  takesSkyColor: Bool? = nil,
+                                  heightsFromSeaLevel: Bool? = nil,
+                                  baseAltitudeMeters: Float? = nil) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.mountainGroundFog(isEnabled: isEnabled,
+                                                        densityPerKilometer: densityPerKilometer,
+                                                        heightMeters: heightMeters,
+                                                        startDistanceMeters: startDistanceMeters,
+                                                        startSoftnessMeters: startSoftnessMeters,
+                                                        color: color,
+                                                        maximumOpacity: maximumOpacity,
+                                                        veilsBuildings: veilsBuildings,
+                                                        takesSkyColor: takesSkyColor,
+                                                        heightsFromSeaLevel: heightsFromSeaLevel,
+                                                        baseAltitudeMeters: baseAltitudeMeters)
+        return view
+    }
+
+    /// The air over the mountains as a whole (`SceneSettings.mountainGroundFog`),
+    /// nil for one air everywhere.
+    public func mountainGroundFog(_ fog: ImmersiveMapSettings.GroundFogSettings?) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.mountainGroundFog(fog)
+        return view
+    }
+
     /// The sky of the flat presentation: a sky gradient above the horizon
     /// line and a thin band whitening the ground into the horizon colour at
     /// the line. The far ground is the ground fog's
@@ -1216,22 +1359,19 @@ public extension ImmersiveMapView {
     /// resets the others:
     ///
     ///     ImmersiveMapView()
-    ///         .shadows(minimumCoverageMeters: 500)
+    ///         .shadows(nearCoverageMeters: [14: 4000, 18: 300])
     ///
     /// The values are `ImmersiveMapSettings.ShadowSettings`'s, where each is
-    /// described. `coverageCameraDistances` and `minimumCoverageMeters`
-    /// together size the ground the sharp near window reaches: high over
-    /// the map the first, close to the ground the second, and
-    /// `farCoverageCameraDistances` the coarse far window beyond it.
-    /// Applies live.
+    /// described. `strength`, `nearCoverageMeters` and `farCoverageMeters`
+    /// are curves over the camera zoom (`ImmersiveMapZoomCurve`, a single
+    /// value being the same at every zoom): the strength from the zoom the
+    /// shadows come in at, the coverages the ground the sharp near window
+    /// and the coarse far window reach, in metres. Applies live.
     public func shadows(isEnabled: Bool = true,
-                        strength: Float? = nil,
-                        minimumZoom: Double? = nil,
-                        fadeInZooms: Double? = nil,
+                        strength: ImmersiveMapZoomCurve? = nil,
                         mapResolution: Int? = nil,
-                        coverageCameraDistances: Float? = nil,
-                        farCoverageCameraDistances: Float? = nil,
-                        minimumCoverageMeters: Float? = nil,
+                        nearCoverageMeters: ImmersiveMapZoomCurve? = nil,
+                        farCoverageMeters: ImmersiveMapZoomCurve? = nil,
                         maxCasterHeightMeters: Float? = nil,
                         normalOffsetTexels: Float? = nil,
                         softness: Float? = nil,
@@ -1240,12 +1380,9 @@ public extension ImmersiveMapView {
         var shadows = view.settings.scene.shadows
         shadows.isEnabled = isEnabled
         if let strength { shadows.strength = strength }
-        if let minimumZoom { shadows.minimumZoom = minimumZoom }
-        if let fadeInZooms { shadows.fadeInZooms = fadeInZooms }
         if let mapResolution { shadows.mapResolution = mapResolution }
-        if let coverageCameraDistances { shadows.coverageCameraDistances = coverageCameraDistances }
-        if let farCoverageCameraDistances { shadows.farCoverageCameraDistances = farCoverageCameraDistances }
-        if let minimumCoverageMeters { shadows.minimumCoverageMeters = minimumCoverageMeters }
+        if let nearCoverageMeters { shadows.nearCoverageMeters = nearCoverageMeters }
+        if let farCoverageMeters { shadows.farCoverageMeters = farCoverageMeters }
         if let maxCasterHeightMeters { shadows.maxCasterHeightMeters = maxCasterHeightMeters }
         if let normalOffsetTexels { shadows.normalOffsetTexels = normalOffsetTexels }
         if let softness { shadows.softness = softness }
@@ -1312,6 +1449,7 @@ public extension ImmersiveMapView {
                                     position: ImmersiveMapSettings.AttributionSettings.Position? = nil,
                                     margin: Double? = nil,
                                     textColor: SIMD4<Float>? = nil,
+                                    emphasizesLeadingCredit: Bool? = nil,
                                     isProvidedExternally: Bool? = nil) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.attributionSettings(isVisible: isVisible,
@@ -1319,6 +1457,7 @@ public extension ImmersiveMapView {
                                                           position: position,
                                                           margin: margin,
                                                           textColor: textColor,
+                                                          emphasizesLeadingCredit: emphasizesLeadingCredit,
                                                           isProvidedExternally: isProvidedExternally)
         return view
     }

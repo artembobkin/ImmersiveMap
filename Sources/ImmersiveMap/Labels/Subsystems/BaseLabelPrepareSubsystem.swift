@@ -481,9 +481,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         // the camera's depth of the point it looks at, the world origin.
         let maximumDepth = (cameraMatrix * SIMD4<Float>(0, 0, 0, 1)).w * max(distanceScale, 0)
         let groundRelief = frameContext.services.groundRelief
-        // The ring each source is raised by: its finest target's.
-        let targetZoomBySource = groundRelief == nil
-            ? [:] : frameContext.sharedState.tilePlacementState.placeTilesContext.targetZoomBySource()
+        // The terrain each source's ground rises by: its placements'.
+        let displacementBySource = groundRelief == nil
+            ? [:] : frameContext.sharedState.tilePlacementState.placeTilesContext.displacementBySource()
         var culledPathCount = 0
 
         for (recordIndex, record) in records.enumerated() {
@@ -512,7 +512,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             if let groundRelief,
                let tileLift = GroundReliefTileLift(store: groundRelief,
                                                    tile: record.ownerKey.tile,
-                                                   targetZoom: targetZoomBySource[record.ownerKey.tile] ?? record.ownerKey.z) {
+                                                   terrain: displacementBySource[record.ownerKey.tile]) {
                 lifts = RoadLabelPlacer.PointLifts(metres: record.reliefMetres(for: tileLift.relief),
                                                    datumMetres: tileLift.datumMetres,
                                                    unitsPerMetre: tileLift.relief.strength * tileLift.unitsPerMetre)
@@ -798,9 +798,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
     /// screen positions. Hidden ones (by collision, label horizon, fade)
     /// are included alongside visible ones: the overlay's point is to show
     /// everything participating in the frame. Beyond the projection horizon the
-    /// point is invalid and there is no frame. Labels below their minCameraZoom
-    /// are skipped: collision doesn't consider them, and red must mean "lost
-    /// the collision", not "hasn't grown to the zoom yet". Base and road frames
+    /// point is invalid and there is no frame. Labels outside their camera
+    /// zooms are skipped: collision doesn't consider them, and red must mean
+    /// "lost the collision", not "hasn't grown to the zoom yet". Base and road frames
     /// are enabled by separate toggles.
     private func makeDebugBoxesState(cameraZoom: Float,
                                      screenScale: ScreenScale) -> BaseLabelDebugBoxesState {
@@ -823,7 +823,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                     continue
                 }
                 if index < presentationInputs.count,
-                   presentationInputs[index].minCameraZoom > cameraZoom {
+                   presentationInputs[index].shows(atZoom: cameraZoom) == false {
                     continue
                 }
                 let alpha = index < alphas.count ? alphas[index] : 0.0

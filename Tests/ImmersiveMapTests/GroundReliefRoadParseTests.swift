@@ -68,14 +68,40 @@ final class GroundReliefRoadParseTests: XCTestCase {
 
     func testARowIsAddedAtEveryCrossingBetweenTwoRows() {
         let rows = ParseLine.subdividedRows([(SIMD2<Float>(10, 20), 0), (SIMD2<Float>(550, 300), 1)], step: 256)
-        XCTAssertEqual(rows.count, 5, "Crossings at x = 256, x = 512 and y = 256")
-        XCTAssertEqual(rows[1].position.x, 256, accuracy: 0.001)
-        XCTAssertEqual(rows[2].position.y, 256, accuracy: 0.001)
-        XCTAssertEqual(rows[3].position.x, 512, accuracy: 0.001)
+        XCTAssertEqual(rows.count, 6, "Crossings of the diagonal x - y = 0, then x = 256, y = 256 and x = 512")
+        XCTAssertEqual(rows[1].position.x - rows[1].position.y, 0, accuracy: 0.001, "On the cell's diagonal")
+        XCTAssertEqual(rows[2].position.x, 256, accuracy: 0.001)
+        XCTAssertEqual(rows[3].position.y, 256, accuracy: 0.001)
+        XCTAssertEqual(rows[4].position.x, 512, accuracy: 0.001)
         for index in 1..<rows.count {
             XCTAssertGreaterThan(rows[index].parameter, rows[index - 1].parameter, "The parameter grows along the strip")
         }
-        XCTAssertEqual(rows[1].parameter, (256 - 10) / 540, accuracy: 0.001)
+        XCTAssertEqual(rows[2].parameter, (256 - 10) / 540, accuracy: 0.001)
+    }
+
+    /// Every piece of a strip between two rows lies inside one triangle of
+    /// the ground: no piece crosses a grid line or a cell's diagonal.
+    func testNoPieceCrossesATriangleOfTheGround() {
+        let step: Float = 256
+        let rows = ParseLine.subdividedRows([(SIMD2<Float>(37, 900), 0), (SIMD2<Float>(1800, 110), 1)], step: step)
+        for index in 1..<rows.count {
+            let a = rows[index - 1].position
+            let b = rows[index].position
+            let middle = (a + b) * 0.5
+            let cell = (middle / step).rounded(.down)
+            for point in [a, b] {
+                XCTAssertGreaterThanOrEqual(point.x, cell.x * step - 0.01)
+                XCTAssertLessThanOrEqual(point.x, (cell.x + 1) * step + 0.01)
+                XCTAssertGreaterThanOrEqual(point.y, cell.y * step - 0.01)
+                XCTAssertLessThanOrEqual(point.y, (cell.y + 1) * step + 0.01)
+            }
+            // Both ends on the same side of the cell's diagonal, or on it.
+            let diagonal = (cell.x - cell.y) * step
+            let sideA = a.x - a.y - diagonal
+            let sideB = b.x - b.y - diagonal
+            XCTAssertTrue(abs(sideA) < 0.05 || abs(sideB) < 0.05 || sideA * sideB > 0,
+                          "A piece across the diagonal at rows \(index - 1), \(index)")
+        }
     }
 
     func testARowOnAGridLineIsNotDoubled() {
@@ -111,9 +137,9 @@ final class GroundReliefRoadParseTests: XCTestCase {
         settings.tiles.groundRelief.isEnabled = true
         settings.tiles.groundFlattening.grid = 32
         XCTAssertEqual(TileParseOptions(settings: settings).reliefSubdivisionStep(tileZoom: 15), 128)
-        XCTAssertEqual(TileParseOptions(settings: settings).reliefSubdivisionStep(tileZoom: 8), 128,
+        XCTAssertEqual(TileParseOptions(settings: settings).reliefSubdivisionStep(tileZoom: 16), 128,
                        "With the relief on every tile from its zoom is flattened, and its roads follow the grid")
-        XCTAssertEqual(TileParseOptions(settings: settings).reliefSubdivisionStep(tileZoom: 11), 16,
+        XCTAssertEqual(TileParseOptions(settings: settings).reliefSubdivisionStep(tileZoom: 11), 32,
                        "A zoom with a grid of its own follows that grid")
         XCTAssertNil(TileParseOptions(settings: settings).reliefSubdivisionStep(tileZoom: 5),
                      "A tile coarser than the relief's zoom is not flattened and keeps its roads")

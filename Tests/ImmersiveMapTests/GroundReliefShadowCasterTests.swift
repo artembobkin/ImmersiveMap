@@ -38,15 +38,17 @@ final class GroundReliefShadowCasterTests: XCTestCase {
                        "The last mark of a square is the one the stencil keeps")
     }
 
-    func testASourceRisesByTheDeepestRingItIsPlacedIn() throws {
+    func testASourceRisesByTheFinestTerrainItIsPlacedWith() throws {
         let source = Tile(x: 4, y: 6, z: 9)
-        let near = try placement(source: source, placeIn: Tile(x: 8, y: 12, z: 10), slot: 10)
-        let far = try placement(source: source, placeIn: Tile(x: 9, y: 12, z: 10), slot: 9)
+        let fine = Tile(x: 4, y: 6, z: 9)
+        let coarse = Tile(x: 2, y: 3, z: 8)
+        let near = try placement(source: source, placeIn: Tile(x: 8, y: 12, z: 10), slot: 10, terrain: fine)
+        let far = try placement(source: source, placeIn: Tile(x: 9, y: 12, z: 10), slot: 9, terrain: coarse)
 
         let casters = PlacementGroundSquare.squares(of: [near, far])
 
-        XCTAssertEqual(Set(casters.map(\.source.targetZoom)), [10],
-                       "As the ground draws it, the source takes its deepest ring's terrain")
+        XCTAssertEqual(Set(casters.map(\.source.displacement)), [fine],
+                       "As the ground draws it, the source takes the finest terrain of its placements")
     }
 
     func testANarrowedReliefReadsTheSameHeights() throws {
@@ -85,10 +87,10 @@ final class GroundReliefShadowCasterTests: XCTestCase {
         XCTAssertEqual(PlacementGroundSquare.cells(ofSource: 2, sourceZoom: 8, squareZoom: 12), 1)
     }
 
-    private func placement(source: Tile, placeIn: Tile, slot: Int) throws -> PlaceTile {
+    private func placement(source: Tile, placeIn: Tile, slot: Int, terrain: Tile? = nil) throws -> PlaceTile {
         let metalTile = MetalTile(tile: source, tileBuffers: try TileBuffersFixtures.makeEmptyTileBuffers())
         let square = VisibleTile(tile: placeIn)
         let slotTile = placeIn.findParentTile(atZoom: min(slot, placeIn.z)) ?? placeIn
-        return PlaceTile(metalTile: metalTile, placeIn: square, slot: VisibleTile(tile: slotTile))
+        return PlaceTile(metalTile: metalTile, placeIn: square, slot: VisibleTile(tile: slotTile), terrain: terrain)
     }
 }

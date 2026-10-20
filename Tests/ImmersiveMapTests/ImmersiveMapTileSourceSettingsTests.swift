@@ -324,7 +324,7 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
             position: .topLeading,
             textColor: SIMD4<Float>(1, 0, 0, 1),
             isProvidedExternally: true,
-            attributionOverride: ImmersiveMapAttribution(title: "Tiles", copyright: "Copyright")
+            attributionOverride: ImmersiveMapAttribution(credits: [.init("Tiles"), .init("Copyright")])
         )
         let postProcessing = ImmersiveMapSettings.PostProcessingSettings(fxaaEnabled: true)
         let debug = ImmersiveMapSettings.DebugSettings(enableDebugPanel: true,

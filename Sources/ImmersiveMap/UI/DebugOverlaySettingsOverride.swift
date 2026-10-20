@@ -22,9 +22,14 @@ struct DebugOverlaySettingsOverride: Equatable {
     var atmosphere: ImmersiveMapSettings.AtmosphereSettings?
     var globeLight: ImmersiveMapSettings.GlobeLightSettings?
     var groundFog: ImmersiveMapSettings.GroundFogSettings?
+    /// The air over the mountains, itself optional: `.some(nil)` is the
+    /// panel having switched it off, nil no drag.
+    var mountainGroundFog: ImmersiveMapSettings.GroundFogSettings??
+    var terrainSurroundings: ImmersiveMapSettings.TileSettings.TerrainSurroundingsSettings?
 
     var isEmpty: Bool {
         shadows == nil && sunDirection == nil && fog == nil && atmosphere == nil && globeLight == nil && groundFog == nil
+            && mountainGroundFog == nil && terrainSurroundings == nil
     }
 
     mutating func clear() {
@@ -34,6 +39,8 @@ struct DebugOverlaySettingsOverride: Equatable {
         atmosphere = nil
         globeLight = nil
         groundFog = nil
+        mountainGroundFog = nil
+        terrainSurroundings = nil
     }
 
     func applied(to settings: ImmersiveMapSettings) -> ImmersiveMapSettings {
@@ -59,6 +66,12 @@ struct DebugOverlaySettingsOverride: Equatable {
         }
         if let groundFog {
             overridden.scene.groundFog = groundFog
+        }
+        if let mountainGroundFog {
+            overridden.scene.mountainGroundFog = mountainGroundFog
+        }
+        if let terrainSurroundings {
+            overridden.tiles.groundRelief.surroundings = terrainSurroundings
         }
         return overridden
     }

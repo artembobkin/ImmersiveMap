@@ -42,11 +42,12 @@ public enum ImmersiveMapTilesService {
         return hasher.finalize()
     }
 
-    /// The credit the hosted data requires: OpenStreetMap, per ODbL, and the
-    /// link carries the full story.
+    /// The credit the data requires: OpenStreetMap, per ODbL, for the
+    /// hosted archive, with the link carrying the full story. The overview
+    /// the engine ships adds its own credit to the line
+    /// (`ImmersiveMapSettings.resolvedAttribution`, `OverviewTileSource`).
     public static let attribution = ImmersiveMapAttribution(
-        title: "© OpenStreetMap",
-        copyright: "",
+        "© OpenStreetMap",
         linkURL: URL(string: "https://www.openstreetmap.org/copyright")
     )
 }

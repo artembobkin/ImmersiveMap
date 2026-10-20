@@ -54,6 +54,9 @@ struct StylePanel: View {
                     }
                 }
                 .frame(width: 190)
+
+                Toggle("First credit leads", isOn: $settings.attribution.emphasizesLeadingCredit)
+                    .toggleStyle(.switch)
             }
 
             PanelRow {

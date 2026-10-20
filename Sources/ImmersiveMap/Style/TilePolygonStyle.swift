@@ -57,6 +57,17 @@ struct TileLineStyle {
     var rampStartZoom: Float
     var rampEndZoom: Float
     var rampStartAlpha: Float
+    /// The share of the colour's alpha the stroke keeps on the globe, one
+    /// on the plane, handed over with the globe's air at the end of the
+    /// unroll: a veil the globe's view lays over a stroke and the plane
+    /// does not. One is the same stroke on both. See `LinePass.sphereAlpha`.
+    var sphereAlpha: Float
+    /// The colour the stroke wears on the globe, the style's own on the
+    /// plane, handed over with the alpha. Three floats, no padding: the
+    /// shader's `packed_float3`. See `LinePass.sphereColor`.
+    var sphereColorRed: Float
+    var sphereColorGreen: Float
+    var sphereColorBlue: Float
 
     init(widthPoints: Float,
          dashLengthPoints: Float,
@@ -66,11 +77,17 @@ struct TileLineStyle {
          dashInTileUnits: Bool = false,
          halfWidthUnits: Float = 0,
          worldLockZoom: Float = 0,
-         widthRamp: LinePass.WidthRamp? = nil) {
+         widthRamp: LinePass.WidthRamp? = nil,
+         sphereAlpha: Float = 1,
+         sphereColor: SIMD3<Float> = SIMD3<Float>(repeating: 0)) {
         self.rampStartWidthPoints = widthRamp?.startWidthPoints ?? 0
         self.rampStartZoom = widthRamp?.startZoom ?? 0
         self.rampEndZoom = widthRamp?.endZoom ?? 0
         self.rampStartAlpha = widthRamp?.startAlpha ?? 1
+        self.sphereAlpha = sphereAlpha
+        self.sphereColorRed = sphereColor.x
+        self.sphereColorGreen = sphereColor.y
+        self.sphereColorBlue = sphereColor.z
         self.halfWidthUnits = halfWidthUnits
         self.worldLockZoom = worldLockZoom
         self.widthPoints = widthPoints

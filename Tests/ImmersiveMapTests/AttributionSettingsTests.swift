@@ -6,37 +6,95 @@ import XCTest
 
 final class AttributionSettingsTests: XCTestCase {
     /// The built-in tiles are OpenStreetMap data under ODbL, built by the
-    /// ImmersiveMap tile pipeline. The one-line badge names the data, and
-    /// only the data: not the engine, and no second party whose schema the
-    /// tiles no longer follow.
+    /// ImmersiveMap tile pipeline. The badge names the data, and only the
+    /// data: not the engine, and no second party whose schema the tiles no
+    /// longer follow. The overview the engine ships adds its own credit
+    /// after it.
     func testDefaultAttributionCreditsOpenStreetMapAndNotTheEngine() {
         let attribution = ImmersiveMapSettings.default.resolvedAttribution
 
-        XCTAssertEqual(attribution.title, "© OpenStreetMap")
-        XCTAssertTrue(attribution.copyright.isEmpty)
+        XCTAssertEqual(attribution.credits.first?.text, "© OpenStreetMap")
+        XCTAssertNil(attribution.credits.first?.zoomRange, "The tiles are on screen at every zoom")
         XCTAssertEqual(attribution.linkURL, URL(string: "https://www.openstreetmap.org/copyright"))
-        XCTAssertFalse(attribution.title.contains("ImmersiveMap"))
+        XCTAssertFalse(attribution.credits.contains { $0.text.contains("ImmersiveMap") })
+        XCTAssertEqual(ImmersiveMapTilesService.attribution.credits.count, 1,
+                       "The service credits its own data alone")
     }
 
-    /// An app pointing the map at its own data owns the credit: the override
-    /// is shown verbatim, nothing added by the engine.
-    func testApplicationOverrideWinsOverTheDefaultAttribution() {
-        let override = ImmersiveMapAttribution(title: "Custom source",
-                                               copyright: "© Custom data",
+    /// The biomes of the overview are CC BY 4.0 and credited while they
+    /// are on screen: the camera zooms up to the one the built-in style has
+    /// faded them out by, and not past it, where the map draws none of
+    /// them.
+    func testTheOverviewIsCreditedAtTheZoomsItIsDrawnAt() {
+        let attribution = ImmersiveMapSettings.default.resolvedAttribution
+
+        XCTAssertEqual(attribution.credits.count, 2)
+        let overview = attribution.credits[1]
+        XCTAssertEqual(overview.text, "Biomes © RESOLVE, CC BY 4.0")
+        XCTAssertEqual(overview.zoomRange, 0..<8)
+        XCTAssertEqual(attribution.credits(atZoom: 0).count, 2)
+        XCTAssertEqual(attribution.credits(atZoom: 7.9).count, 2)
+        XCTAssertEqual(attribution.credits(atZoom: 8).map(\.text), ["© OpenStreetMap"])
+        XCTAssertEqual(attribution.credits(atZoom: 12.2).map(\.text), ["© OpenStreetMap"])
+        XCTAssertEqual(attribution.credits(atZoom: nil).count, 2, "Before the camera is placed every credit shows")
+    }
+
+    /// The credit's zoom follows the setting, for a theme that keeps the
+    /// biomes to another zoom, and goes with the overview when the
+    /// overview is off.
+    func testTheOverviewCreditFollowsItsSetting() {
+        let raised = ImmersiveMapSettings.default.overviewTiles(creditMaximumZoom: 10).resolvedAttribution
+        XCTAssertEqual(raised.credits[1].zoomRange, 0..<10)
+        XCTAssertTrue(raised.credits(atZoom: 9).contains { $0.text.hasPrefix("Biomes") })
+
+        let off = ImmersiveMapSettings.default.overviewTiles(isEnabled: false).resolvedAttribution
+        XCTAssertEqual(off.credits.map(\.text), ["© OpenStreetMap"])
+    }
+
+    /// An app pointing the map at its own data owns the credit of that
+    /// data: the override leads the line. The overview is still laid into
+    /// its tiles, so the overview's credit follows it.
+    func testApplicationOverrideLeadsTheLineAndTheOverviewFollows() {
+        let override = ImmersiveMapAttribution(credits: [.init("Custom source"), .init("© Custom data")],
                                                linkURL: URL(string: "https://example.com/licence"))
         let settings = ImmersiveMapSettings.default
             .attributionSettings(ImmersiveMapSettings.AttributionSettings(attributionOverride: override))
 
-        XCTAssertEqual(settings.resolvedAttribution, override)
+        let resolved = settings.resolvedAttribution
+        XCTAssertEqual(resolved.linkURL, override.linkURL)
+        XCTAssertEqual(resolved.credits.map(\.text), ["Custom source", "© Custom data", "Biomes © RESOLVE, CC BY 4.0"])
+
+        let withoutOverview = settings.overviewTiles(isEnabled: false).resolvedAttribution
+        XCTAssertEqual(withoutOverview, override)
     }
 
-    /// An explicit empty override empties the badge: more honest than a
-    /// made-up copyright for data the engine knows nothing about.
+    /// An explicit empty override empties the badge: the app took the whole
+    /// credit over, the overview's with it. More honest than a made-up
+    /// credit for data the engine knows nothing about.
     func testEmptyOverrideResolvesToEmpty() {
         let settings = ImmersiveMapSettings.default
             .attributionSettings(ImmersiveMapSettings.AttributionSettings(attributionOverride: ImmersiveMapAttribution.none))
 
         XCTAssertTrue(settings.resolvedAttribution.isEmpty)
+        XCTAssertTrue(settings.resolvedAttribution.credits.isEmpty)
+    }
+
+    /// A credit with no words is no credit, and a credit's zoom range is a
+    /// half-open range of camera zoom.
+    func testCreditsAtAZoomDropTheEmptyAndTheOutOfRange() {
+        let attribution = ImmersiveMapAttribution(credits: [
+            .init("Always"),
+            .init(""),
+            .init("Low", zoomRange: 0..<5),
+            .init("High", zoomRange: 5..<20)
+        ])
+
+        XCTAssertTrue(ImmersiveMapAttribution(credits: [.init(""), .init("")]).isEmpty)
+        XCTAssertFalse(attribution.isEmpty)
+        XCTAssertEqual(attribution.credits(atZoom: 4.99).map(\.text), ["Always", "Low"])
+        XCTAssertEqual(attribution.credits(atZoom: 5).map(\.text), ["Always", "High"])
+        XCTAssertEqual(attribution.credits(atZoom: 20).map(\.text), ["Always"])
+        XCTAssertEqual(attribution.credits(atZoom: nil).map(\.text), ["Always", "Low", "High"])
     }
 
     /// The badge text changes with the override, so the planner must mark the
@@ -45,13 +103,23 @@ final class AttributionSettingsTests: XCTestCase {
         let oldSettings = ImmersiveMapSettings.default
         let newSettings = oldSettings
             .attributionSettings(ImmersiveMapSettings.AttributionSettings(
-                attributionOverride: ImmersiveMapAttribution(title: "© Example Data",
-                                                             copyright: "",
-                                                             linkURL: nil)))
+                attributionOverride: ImmersiveMapAttribution("© Example Data")))
 
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
 
         XCTAssertTrue(plan.changedDomains.contains(.attribution))
+    }
+
+    /// The overview credit's zoom is badge text: applied in place, no
+    /// re-parse, the tiles do not change.
+    func testOverviewCreditZoomChangeIsLiveApplyOnly() {
+        let oldSettings = ImmersiveMapSettings.default
+        let newSettings = oldSettings.overviewTiles(creditMaximumZoom: 9)
+
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
+
+        XCTAssertEqual(plan.changedDomains, [.attribution])
+        XCTAssertEqual(plan.actions, [.liveApply])
     }
 
     /// Badge restyling is host-view chrome: it must apply live, never through
@@ -68,7 +136,7 @@ final class AttributionSettingsTests: XCTestCase {
 
     /// The partial builder only touches what it is given.
     func testPartialBuilderLeavesOmittedFieldsUnchanged() {
-        let override = ImmersiveMapAttribution(title: "Custom", copyright: "")
+        let override = ImmersiveMapAttribution("Custom")
         let base = ImmersiveMapSettings.default
             .attributionSettings(ImmersiveMapSettings.AttributionSettings(isVisible: false,
                                                                           textColor: SIMD4<Float>(1, 0, 0, 1),
@@ -80,6 +148,9 @@ final class AttributionSettingsTests: XCTestCase {
         XCTAssertFalse(updated.attribution.isVisible)
         XCTAssertEqual(updated.attribution.textColor, SIMD4<Float>(1, 0, 0, 1))
         XCTAssertEqual(updated.attribution.attributionOverride, override)
+        XCTAssertFalse(updated.attribution.emphasizesLeadingCredit, "Off by default: one list")
+        XCTAssertTrue(updated.attributionSettings(emphasizesLeadingCredit: true).attribution.emphasizesLeadingCredit)
+        XCTAssertEqual(updated.attributionSettings(emphasizesLeadingCredit: true).attribution.size, .small)
     }
 
     func testAttributionProvidedExternallySetsOnlyTheFlag() {

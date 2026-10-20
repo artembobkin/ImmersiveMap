@@ -4,8 +4,9 @@
 import Metal
 
 /// The air around the surface's edge, drawn last in the world pass on both
-/// surfaces: the globe's atmosphere and limb feather, the flat map's sky,
-/// with the morph between them bare (`HorizonFrameResolver`). The flat
+/// surfaces: the globe's atmosphere and limb feather, on the unrolling
+/// surface too, handing over to the flat map's sky at the end of the morph
+/// (`HorizonFrameResolver`). The flat
 /// map's far ground is veiled by the ground fog (`GroundFogUniform`), not
 /// here: on the plane nothing is painted on the ground.
 ///

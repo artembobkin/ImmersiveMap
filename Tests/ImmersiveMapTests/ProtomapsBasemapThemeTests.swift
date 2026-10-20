@@ -28,6 +28,25 @@ final class ProtomapsBasemapThemeTests: XCTestCase {
             labels.district.fillColor = SIMD3<Float>(0.6, 0.6, 0.6)
         }
         XCTAssertNotEqual(base.cacheFingerprint, redistricted.cacheFingerprint)
+
+        // The biomes of the overview are baked into the overview zooms'
+        // tiles, and the zoom they stop at decides which tiles carry them.
+        let repainted = base.layers { layers in
+            layers.biomes.desert = SIMD4<Float>(0.9, 0.8, 0.6, 1)
+        }
+        XCTAssertNotEqual(base.cacheFingerprint, repainted.cacheFingerprint)
+        let shorter = base.layers { layers in
+            layers.biomes.maximumTileZoom = 5
+        }
+        XCTAssertNotEqual(base.cacheFingerprint, shorter.cacheFingerprint)
+        let recovered = base.layers { layers in
+            layers.biomes.forestCover = SIMD4<Float>(0.5, 0.7, 0.4, 1)
+        }
+        XCTAssertNotEqual(base.cacheFingerprint, recovered.cacheFingerprint)
+        let later = base.layers { layers in
+            layers.biomes.coverMinimumTileZoom = 5
+        }
+        XCTAssertNotEqual(base.cacheFingerprint, later.cacheFingerprint)
     }
 
     /// `apply` is a copy with the changes: the original is untouched, the

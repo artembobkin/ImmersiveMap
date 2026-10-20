@@ -162,13 +162,17 @@ final class GroundReliefOffscreenRenderTests: XCTestCase {
         settings.labels.isEnabled = false
         if let terrain {
             // The relief at every zoom: the collapse would draw the street
-            // zooms on the plane. Every height, so each ring reads the
-            // terrain of its own zoom, which the fixture serves.
+            // zooms on the plane. The near ring reads the terrain of its
+            // own zoom by the default rules, and the grid rises by the
+            // terrain of the displacement's zoom, which the fixture serves.
             settings = settings.groundRelief(isEnabled: true,
                                              tileURLTemplate: terrain.absoluteString + "{z}/{x}/{y}.png",
                                              exaggeration: exaggeration,
-                                             collapseZoom: 30,
-                                             detail: .maximum)
+                                             collapseZoom: 30)
+        } else {
+            // The plane: with the relief on, a tile is placed only with its
+            // terrain, and the harness serves none.
+            settings = settings.groundRelief(isEnabled: false)
         }
         let harness = try OffscreenFrameHarness.makeOrSkip(settings: settings, size: 768)
         var layers: [(layerName: String, features: [VectorTileFixture.Feature])] = [
@@ -267,7 +271,9 @@ final class GroundReliefOffscreenRenderTests: XCTestCase {
     /// hill is continuous with its neighbours at sea level and has slopes
     /// to see it by.
     /// The terrain over the fixture tiles at every zoom a ring may read
-    /// it at, 12 to 15 (`GroundReliefStore.terrainZoom(forTargetZoom:)`):
+    /// it at or the grid may rise by, 10 to 15
+    /// (`GroundReliefStore.terrainZoom(forTargetZoom:)`,
+    /// `GroundReliefSettings.displacementMaximumZoom`):
     /// the park's tile a plateau of `raisedMetres`, its outermost
     /// eighth at the plain's height so it meets its neighbours, the rest
     /// at 0. A coarser zoom's tile is drawn larger, 8 pixels to a zoom
@@ -275,7 +281,7 @@ final class GroundReliefOffscreenRenderTests: XCTestCase {
     private func makeTerrainDirectory(raisedMetres: Int) throws -> URL {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("GroundReliefOffscreenRenderTests-\(UUID().uuidString)", isDirectory: true)
-        for zoom in 12 ... Self.tile.z {
+        for zoom in 10 ... Self.tile.z {
             let span = 1 << (Self.tile.z - zoom)
             let size = 8 * span
             var written = Set<Tile>()

@@ -42,17 +42,40 @@ final class ProtomapsBasemapLabelRulesTests: XCTestCase {
         XCTAssertLessThan(region, city)
     }
 
+    /// The bands: a city before a peak before a town before a lake before
+    /// an airport before a restaurant, whatever their own ranks.
     func testCollisionRankOrdersTheLayersPlacesFirst() {
-        let placeStyle = style.makeStyle(data: place(populationRank: 5, tileZoom: 10))
+        let cityStyle = style.makeStyle(data: place(populationRank: 5, tileZoom: 10))
+        let townStyle = style.makeStyle(data: place(kindDetail: "town", populationRank: 17, tileZoom: 10))
         let waterStyle = style.makeStyle(data: feature(layer: "water", ["kind": .string("lake"), "name": .string("Lake"),
                                                                         "min_zoom": .int(4)], tileZoom: 10))
         let peakStyle = style.makeStyle(data: poi(kind: "peak", minZoom: 9, tileZoom: 10))
+        let airportStyle = style.makeStyle(data: poi(kind: "aerodrome", minZoom: 9, tileZoom: 10))
         let poiStyle = style.makeStyle(data: poi(kind: "restaurant", minZoom: 13))
 
-        XCTAssertEqual(placeStyle.labelCollisionRank, placeStyle.labelRank, "a place collides at its own rank")
-        XCTAssertLessThan(placeStyle.labelCollisionRank, waterStyle.labelCollisionRank)
-        XCTAssertLessThan(waterStyle.labelCollisionRank, peakStyle.labelCollisionRank)
-        XCTAssertLessThan(peakStyle.labelCollisionRank, poiStyle.labelCollisionRank)
+        XCTAssertEqual(cityStyle.labelCollisionRank, cityStyle.labelRank, "a city collides at its own rank")
+        XCTAssertLessThan(cityStyle.labelCollisionRank, peakStyle.labelCollisionRank)
+        XCTAssertLessThan(peakStyle.labelCollisionRank, townStyle.labelCollisionRank,
+                          "The Matterhorn's name over the villages on its slopes")
+        XCTAssertLessThan(townStyle.labelCollisionRank, waterStyle.labelCollisionRank)
+        XCTAssertLessThan(waterStyle.labelCollisionRank, airportStyle.labelCollisionRank)
+        XCTAssertLessThan(airportStyle.labelCollisionRank, poiStyle.labelCollisionRank)
+    }
+
+    /// Which places keep their band ahead of the peaks: a country, a
+    /// region, a city. A town, a village, a hamlet and a neighbourhood
+    /// yield to a peak whatever their population rank.
+    func testAPeakBeatsEveryPlaceUnderACity() {
+        let peak = style.makeStyle(data: poi(kind: "peak", minZoom: 9, tileZoom: 10)).labelCollisionRank
+        for (kind, detail) in [("locality", "town"), ("locality", "village"), ("locality", "hamlet"),
+                               ("locality", "locality"), ("neighbourhood", "neighbourhood"), ("macrohood", "macrohood")] {
+            let settlement = style.makeStyle(data: place(kind: kind, kindDetail: detail, populationRank: 17, tileZoom: 10))
+            XCTAssertGreaterThan(settlement.labelCollisionRank, peak, "\(kind) \(detail)")
+        }
+        for (kind, detail) in [("country", "country"), ("region", "state"), ("locality", "city")] {
+            let major = style.makeStyle(data: place(kind: kind, kindDetail: detail, populationRank: 0, tileZoom: 10))
+            XCTAssertLessThan(major.labelCollisionRank, peak, "\(kind) \(detail)")
+        }
     }
 
     // MARK: Placement
@@ -88,6 +111,53 @@ final class ProtomapsBasemapLabelRulesTests: XCTestCase {
             return XCTFail("an ocean's name is a label painted on the map")
         }
         XCTAssertTrue(placement.isVisible(atZoom: 0))
+    }
+
+    // MARK: The names of the lands
+
+    /// A country's name is the name of a land, above every city's size, a
+    /// capital's included, and set apart from them: spaced capitals in the
+    /// thin face. A region's name is the same manner, under the country's
+    /// and still above a city's.
+    func testACountrysNameStandsAboveEveryCitys() throws {
+        let country = try XCTUnwrap(style.makeStyle(data: place(kind: "country", kindDetail: "country", populationRank: 10)).labelTextStyle)
+        let region = try XCTUnwrap(style.makeStyle(data: place(kind: "region", kindDetail: "state", populationRank: 10)).labelTextStyle)
+        let capital = try XCTUnwrap(style.makeStyle(data: place(populationRank: 10, extra: ["capital": .string("yes")])).labelTextStyle)
+        let city = try XCTUnwrap(style.makeStyle(data: place(populationRank: 10)).labelTextStyle)
+        XCTAssertGreaterThan(country.sizePoints, capital.sizePoints)
+        XCTAssertGreaterThan(capital.sizePoints, city.sizePoints)
+        XCTAssertGreaterThanOrEqual(region.sizePoints, city.sizePoints,
+                                    "A region's name is no smaller than a city's, and its spaced capitals read larger")
+        XCTAssertLessThan(region.sizePoints, country.sizePoints, "and under its country's")
+        for land in [country, region] {
+            XCTAssertTrue(land.uppercased)
+            XCTAssertGreaterThan(land.letterSpacingEm, 0, "Spaced out over the land it names")
+            XCTAssertEqual(land.weight, .thin)
+            XCTAssertLessThan(land.opacity, 1, "Lettering the land shows through")
+            XCTAssertGreaterThan(land.opacity, 0.5)
+        }
+        XCTAssertFalse(city.uppercased)
+        XCTAssertEqual(city.letterSpacingEm, 0)
+        XCTAssertEqual(city.opacity, 1)
+        XCTAssertEqual(capital.weight, .bold)
+    }
+
+    /// The name of a land goes away where the land no longer fits the
+    /// view, at the theme's zoom, and a city's name never does.
+    func testTheNameOfALandLeavesTheStreetZooms() throws {
+        let country = try XCTUnwrap(style.makeStyle(data: place(kind: "country", kindDetail: "country")).pointLabelStyle)
+        let region = try XCTUnwrap(style.makeStyle(data: place(kind: "region", kindDetail: "state")).pointLabelStyle)
+        let city = try XCTUnwrap(style.makeStyle(data: place()).pointLabelStyle)
+        XCTAssertEqual(country.maxCameraZoom, 8)
+        XCTAssertEqual(region.maxCameraZoom, 10)
+        XCTAssertEqual(city.maxCameraZoom, .infinity)
+
+        let deeper = ProtomapsBasemapDefaultMapStyle(theme: .default.labelVisibility { visibility in
+            visibility.countryMaximumZoom = 6
+            visibility.regionMaximumZoom = 12
+        })
+        XCTAssertEqual(try XCTUnwrap(deeper.makeStyle(data: place(kind: "country", kindDetail: "country")).pointLabelStyle).maxCameraZoom, 6)
+        XCTAssertEqual(try XCTUnwrap(deeper.makeStyle(data: place(kind: "region", kindDetail: "state")).pointLabelStyle).maxCameraZoom, 12)
     }
 
     // MARK: Every label the tile ships

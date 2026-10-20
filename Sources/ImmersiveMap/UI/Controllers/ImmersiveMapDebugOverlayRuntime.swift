@@ -37,6 +37,8 @@ final class ImmersiveMapDebugOverlayRuntime {
     /// The ground fog the app gave, for the ground fog group's reset: the
     /// value of any settings that did not come from the panel's own drag.
     private var appGroundFog: ImmersiveMapSettings.GroundFogSettings?
+    /// The app's air over the mountains, taken with `appGroundFog`.
+    private var appMountainGroundFog: ImmersiveMapSettings.GroundFogSettings?
 
     /// Settings the debug panel asks for. The host runtime applies them the
     /// way it applies any others, so a change here goes through the same
@@ -149,7 +151,7 @@ final class ImmersiveMapDebugOverlayRuntime {
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
         hudView.onHillshadeFadeChanged = { [weak controls, weak renderRuntime] fade in
-            controls?.setHillshadeFadeCameraDistances(fade)
+            controls?.setHillshadeFade(fade)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
         hudView.onHillshadeAmountsChanged = { [weak controls, weak renderRuntime] amounts in
@@ -158,6 +160,14 @@ final class ImmersiveMapDebugOverlayRuntime {
         }
         hudView.onReliefShadowsChanged = { [weak controls, weak renderRuntime] isEnabled in
             controls?.setReliefCastsShadows(isEnabled)
+            renderRuntime?.requestFrame(reason: .externalStateChanged)
+        }
+        hudView.onTerrainOcclusionChanged = { [weak controls, weak renderRuntime] occlusion in
+            controls?.setTerrainOcclusion(occlusion)
+            renderRuntime?.requestFrame(reason: .externalStateChanged)
+        }
+        hudView.onTerrainOcclusionDebugViewChanged = { [weak controls, weak renderRuntime] isEnabled in
+            controls?.setTerrainOcclusionDebugView(isEnabled)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
         hudView.onShadowSettingsChanged = { [weak self] shadows in
@@ -196,10 +206,26 @@ final class ImmersiveMapDebugOverlayRuntime {
             settings.scene.groundFog = groundFog
             onSettingsChangeRequested?(settings)
         }
+        hudView.onTerrainSurroundingsSettingsChanged = { [weak self] surroundings in
+            guard let self, var settings = currentSettings else { return }
+            settingsOverride.terrainSurroundings = surroundings
+            settings.tiles.groundRelief.surroundings = surroundings
+            onSettingsChangeRequested?(settings)
+        }
+        hudView.onMountainGroundFogSettingsChanged = { [weak self] mountainGroundFog in
+            guard let self, var settings = currentSettings else { return }
+            settingsOverride.mountainGroundFog = .some(mountainGroundFog)
+            settings.scene.mountainGroundFog = mountainGroundFog
+            onSettingsChangeRequested?(settings)
+        }
         hudView.onGroundFogResetRequested = { [weak self] in
             guard let self, var settings = currentSettings else { return }
             settingsOverride.groundFog = nil
-            settings.scene.groundFog = appGroundFog ?? settings.scene.groundFog
+            settingsOverride.mountainGroundFog = nil
+            if let appGroundFog {
+                settings.scene.groundFog = appGroundFog
+                settings.scene.mountainGroundFog = appMountainGroundFog
+            }
             onSettingsChangeRequested?(settings)
         }
         hudView.onExportSettingsRequested = { [weak self] in
@@ -257,6 +283,7 @@ final class ImmersiveMapDebugOverlayRuntime {
         // carries the app's.
         if settingsOverride.groundFog != settings.scene.groundFog {
             appGroundFog = settings.scene.groundFog
+            appMountainGroundFog = settings.scene.mountainGroundFog
         }
         return settingsOverride.applied(to: settings)
     }
@@ -292,6 +319,7 @@ final class ImmersiveMapDebugOverlayRuntime {
         // app, before any drag.
         if appGroundFog == nil, settingsOverride.groundFog == nil {
             appGroundFog = settings.scene.groundFog
+            appMountainGroundFog = settings.scene.mountainGroundFog
         }
         // Hidden with the map's controls (`ControlsSettings.isHidden`), the
         // panel keeps what was dragged in it and only stops showing and
@@ -308,19 +336,24 @@ final class ImmersiveMapDebugOverlayRuntime {
         hudView.apply(atmosphereSettings: settings.scene.atmosphere)
         hudView.apply(globeLightSettings: settings.scene.globeLight)
         hudView.apply(groundFogSettings: settings.scene.groundFog, horizonColor: settings.scene.fog.horizonColor)
+        hudView.apply(mountainGroundFogSettings: settings.scene.mountainGroundFog)
+        hudView.apply(terrainSurroundingsSettings: settings.tiles.groundRelief.surroundings)
         if settings.debug.enableDebugPanel == false {
             // The panel's reach goes with the panel, like its other values.
             controls.setLocalLabelMaximumDistanceMeters(nil)
             controls.setLabelPerspectiveMinimumScale(nil)
-            controls.setHillshadeFadeCameraDistances(nil)
+            controls.setHillshadeFade(nil)
             controls.setHillshadeAmounts(nil)
             controls.setReliefCastsShadows(nil)
+            controls.setTerrainOcclusion(nil)
+            controls.setTerrainOcclusionDebugView(false)
         }
         hudView.apply(reliefCastsShadows: controls.reliefCastsShadows() ?? settings.tiles.groundRelief.castsShadows)
         let hillshade = settings.mapStyle.vectorTileStyle.hillshade
-        hudView.apply(hillshadeFade: controls.hillshadeFadeCameraDistances()
-            ?? hillshade.fadeStartCameraDistances ... max(hillshade.fadeStartCameraDistances, hillshade.fadeEndCameraDistances))
+        hudView.apply(hillshadeFade: controls.hillshadeFade() ?? GroundReliefHillshade.Fade(style: hillshade))
         hudView.apply(hillshadeAmounts: controls.hillshadeAmounts() ?? GroundReliefHillshade.Amounts(style: hillshade))
+        hudView.apply(terrainOcclusion: controls.terrainOcclusion() ?? settings.mapStyle.vectorTileStyle.terrainOcclusion)
+        hudView.apply(terrainOcclusionDebugView: controls.terrainOcclusionDebugView())
         hudView.apply(labelMinimumScale: controls.labelPerspectiveMinimum()
             ?? settings.labels.base.perspectiveMinimumScale)
         hudView.apply(localLabelDistanceMeters: controls.localLabelMaximumDistance()

@@ -9,12 +9,12 @@ import simd
 ///
 /// There are two shadow windows (`ShadowCascadeSlot`), each fitted the same
 /// way to the ground the camera sees inside a disc around it: the near one
-/// to `coverageCameraDistances` camera distances, sharp, and the far one to
-/// `farCoverageCameraDistances`, coarse, for the mountains casting across a
-/// valley from beyond the near window. A disc's radius is a multiple of the
-/// camera distance `|eye|`, which does not depend on pitch or bearing, so
-/// tilting or rotating the camera changes nothing about a window's texel
-/// world size, and therefore edge sharpness. Shadows end at the far
+/// to `nearCoverageMeters` at the camera zoom, sharp, and the far one to
+/// `farCoverageMeters`, coarse, for the mountains casting across a valley
+/// from beyond the near window. A disc's radius is metres on the ground by
+/// the zoom, which does not depend on pitch or bearing, so tilting or
+/// rotating the camera changes nothing about a window's texel world size,
+/// and therefore edge sharpness. Shadows end at the far
 /// window's radius (the near one's without a far window) and the
 /// eye-distance fade hides that edge. The far window is fitted only when
 /// its fade band starts where the near window ends or beyond
@@ -139,34 +139,30 @@ enum ShadowFrameStateResolver {
     /// adds half a texel. Pinned by `ShadowFrameStateResolverTests`.
     static let uvInsetTexels: Float = 4.0
     static let mapResolutionRange: ClosedRange<Int> = 256...4096
-    /// Range `ShadowSettings.coverageCameraDistances` is clamped to. The floor
-    /// is far below anything worth shipping on purpose: it is what lets the
-    /// debug panel wind the window right down and look at the texel grid
-    /// itself. See `fadeDistances` for what happens under a coverage of 1.
-    static let coverageRange: ClosedRange<Float> = 0.25...48
-    /// Range `ShadowSettings.minimumCoverageMeters` is clamped to.
-    static let minimumCoverageMetersRange: ClosedRange<Float> = 0...5000
+    /// Range a coverage (`ShadowSettings.nearCoverageMeters`,
+    /// `farCoverageMeters`) is clamped to, in metres. The floor is far below
+    /// anything worth shipping on purpose: it is what lets the debug panel
+    /// wind the window right down and look at the texel grid itself. See
+    /// `fadeDistances` for what happens under a window of one camera
+    /// distance.
+    static let coverageMetersRange: ClosedRange<Float> = 5...1_000_000
 
     struct CascadeSpec {
         let radius: Float
         let maxCasterHeight: Float
     }
 
-    /// The window this frame asks for: one disc, sized by
-    /// `coverageCameraDistances` and never under `minimumCoverageMeters`,
-    /// with the caster-height cap in world units. Both depend on the zoom
-    /// alone, not on the pitch or the bearing.
-    static func windowSpec(cameraDistance: Float,
+    /// The window this frame asks for: one disc of `radiusMeters` on the
+    /// ground (a coverage curve read at the camera zoom, clamped to
+    /// `coverageMetersRange`), with the caster-height cap in world units.
+    /// Both depend on the zoom alone, not on the pitch or the bearing.
+    static func windowSpec(radiusMeters: Float,
                            unitsPerMeter: Double,
-                           coverageCameraDistances: Float,
-                           minimumCoverageMeters: Float = 0,
                            maxCasterHeightMeters: Float) -> CascadeSpec {
-        let coverage = min(max(coverageCameraDistances, coverageRange.lowerBound),
-                           coverageRange.upperBound)
-        let floorMeters = minimumCoverageMeters.isFinite
-            ? min(max(minimumCoverageMeters, minimumCoverageMetersRange.lowerBound), minimumCoverageMetersRange.upperBound)
-            : 0
-        let radius = max(coverage * cameraDistance, Float(Double(floorMeters) * unitsPerMeter))
+        let meters = radiusMeters.isFinite
+            ? min(max(radiusMeters, coverageMetersRange.lowerBound), coverageMetersRange.upperBound)
+            : coverageMetersRange.lowerBound
+        let radius = Float(Double(meters) * unitsPerMeter)
         let limit = min(max(maxCasterHeightMeters, maxCasterHeightRange.lowerBound),
                         maxCasterHeightRange.upperBound)
         return CascadeSpec(radius: radius,
@@ -252,20 +248,8 @@ enum ShadowFrameStateResolver {
         }
     }
 
-    /// The share of `ShadowSettings.strength` the shadows have at a camera
-    /// zoom: nothing below `minimumZoom` less `fadeInZooms`, all of it from
-    /// `minimumZoom` on, a smooth rise between. Nil for a zoom not known,
-    /// which is all of it.
-    static func strengthShare(atZoom zoom: Double?, shadows: ImmersiveMapSettings.ShadowSettings) -> Float {
-        guard let zoom else { return 1 }
-        let fade = max(shadows.fadeInZooms, 0)
-        let start = shadows.minimumZoom - fade
-        guard zoom < shadows.minimumZoom else { return 1 }
-        guard fade > 0, zoom > start else { return 0 }
-        let t = Float((zoom - start) / fade)
-        return t * t * (3 - 2 * t)
-    }
-
+    /// The frame's inputs at a camera `zoom`, the one the strength and the
+    /// coverages are read at (`ShadowSettings.strength(atZoom:)`).
     static func resolveInputs(renderSurfaceMode: ViewMode,
                               projectionView: matrix_float4x4,
                               cameraEye: SIMD3<Float>,
@@ -273,11 +257,11 @@ enum ShadowFrameStateResolver {
                               flatRenderPan: SIMD2<Double>,
                               renderMapSize: Double,
                               groundHeights: ClosedRange<Float>? = nil,
-                              zoom: Double? = nil,
+                              zoom: Double,
                               scene: ImmersiveMapSettings.SceneSettings) -> FitInputs? {
-        // The strength at this zoom: below the shadows' zoom there is
-        // none, and no shadow pass runs.
-        let strength = min(max(scene.shadows.strength, 0), 1) * strengthShare(atZoom: zoom, shadows: scene.shadows)
+        // The strength at this zoom: where the curve is at nothing no
+        // shadow pass runs.
+        let strength = scene.shadows.strength(atZoom: zoom)
         guard renderSurfaceMode == .flat,
               scene.shadows.isEnabled,
               strength > 0 else {
@@ -311,16 +295,11 @@ enum ShadowFrameStateResolver {
             : SIMD3<Float>(0, 0, 1)
         let lightView = Matrix.lookAt(eye: lightDirection, center: .zero, up: up)
 
-        let nearSpec = windowSpec(cameraDistance: cameraDistance,
+        let nearSpec = windowSpec(radiusMeters: scene.shadows.nearCoverageMeters(atZoom: zoom),
                                   unitsPerMeter: unitsPerMeter,
-                                  coverageCameraDistances: scene.shadows.coverageCameraDistances,
-                                  minimumCoverageMeters: scene.shadows.minimumCoverageMeters,
                                   maxCasterHeightMeters: scene.shadows.maxCasterHeightMeters)
-        // The far window takes no floor in meters: the floor keeps the
-        // shadows down a street, which is the near window's business.
-        let farSpec = windowSpec(cameraDistance: cameraDistance,
+        let farSpec = windowSpec(radiusMeters: scene.shadows.farCoverageMeters(atZoom: zoom),
                                  unitsPerMeter: unitsPerMeter,
-                                 coverageCameraDistances: scene.shadows.farCoverageCameraDistances,
                                  maxCasterHeightMeters: scene.shadows.maxCasterHeightMeters)
 
         let halfMapSize = renderMapSize * 0.5
@@ -372,6 +351,7 @@ enum ShadowFrameStateResolver {
                         centerWorldMercator: SIMD2<Double>,
                         flatRenderPan: SIMD2<Double>,
                         renderMapSize: Double,
+                        zoom: Double,
                         scene: ImmersiveMapSettings.SceneSettings) -> ShadowFrameState? {
         guard let inputs = resolveInputs(renderSurfaceMode: renderSurfaceMode,
                                          projectionView: projectionView,
@@ -379,6 +359,7 @@ enum ShadowFrameStateResolver {
                                          centerWorldMercator: centerWorldMercator,
                                          flatRenderPan: flatRenderPan,
                                          renderMapSize: renderMapSize,
+                                         zoom: zoom,
                                          scene: scene) else {
             return nil
         }
@@ -577,10 +558,23 @@ enum ShadowFrameStateResolver {
         guard let extremes = cascadeExtremes(footprint: fitFootprint,
                                              maxCasterHeight: cascade.spec.maxCasterHeight,
                                              groundHeights: inputs.groundHeights,
-                                             lightView: inputs.lightView) else {
+                                             lightView: inputs.lightView),
+              let exact = cascadeExtremes(footprint: cascade.footprint,
+                                          maxCasterHeight: cascade.spec.maxCasterHeight,
+                                          groundHeights: inputs.groundHeights,
+                                          lightView: inputs.lightView) else {
             return nil
         }
         let spec = cascade.spec
+        // The margin inflates the footprint about the camera. With the
+        // camera on the light's side of the ground that moves the point
+        // nearest the light away from it, so the inflated footprint alone
+        // would put the near plane past the frame's own and the fit would
+        // not cover the frame it was made for (`fitCovers`), refitting and
+        // re-rendering every frame: the depth planes take the exact
+        // footprint in too.
+        let minDepth = min(extremes.minDepth, exact.minDepth)
+        let maxDepth = max(extremes.maxDepth, exact.maxDepth)
 
         // Square quantized window: the raw extent varies smoothly with the
         // zoom fraction, and letting the texel size follow it makes shadow
@@ -612,10 +606,10 @@ enum ShadowFrameStateResolver {
         let anchoredCenterY = snapToTexelGrid(center: (extremes.minY + extremes.maxY) * 0.5,
                                               panShiftLight: pan.y)
 
-        let near = extremes.minDepth - spec.maxCasterHeight / inputs.lightDirection.z
+        let near = minDepth - spec.maxCasterHeight / inputs.lightDirection.z
         // Scale-proportional slack (the old absolute 0.01 vanished next to
         // world sizes that grow 2^zoom).
-        let far = extremes.maxDepth + max(0.01, 2.0 * texelWorldSize)
+        let far = maxDepth + max(0.01, 2.0 * texelWorldSize)
         let window = ShadowCascadeAnchoredFit(anchoredCenterX: anchoredCenterX,
                                               anchoredCenterY: anchoredCenterY,
                                               extent: extent,

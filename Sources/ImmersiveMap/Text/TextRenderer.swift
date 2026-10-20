@@ -89,15 +89,20 @@ struct TextStyleUniform: Equatable {
     var fillBiasPx: Float
     var strokeColor: SIMD3<Float>
     var strokeWidthPx: Float
+    /// The opacity of the fill and the halo, 1 solid
+    /// (`LabelTextStyle.opacity`).
+    var opacity: Float
 
     init(textColor: SIMD3<Float>,
          strokeColor: SIMD3<Float> = SIMD3<Float>(1.0, 1.0, 1.0),
          strokeWidthPx: Float = 2.0,
-         fillBiasPx: Float = 0.75) {
+         fillBiasPx: Float = 0.75,
+         opacity: Float = 1) {
         self.textColor = textColor
         self.fillBiasPx = fillBiasPx
         self.strokeColor = strokeColor
         self.strokeWidthPx = strokeWidthPx
+        self.opacity = opacity
     }
 }
 

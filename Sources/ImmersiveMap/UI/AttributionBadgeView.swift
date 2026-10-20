@@ -5,10 +5,14 @@
 
 import UIKit
 
-/// Renders the compact attribution overlay: plain bold text over the map,
-/// no plate, each glyph in a dark halo that fades out around it so the
-/// words read on any map colour underneath.
-/// Owns only the badge labels, styling, and layout; map state stays in the
+/// Renders the compact attribution overlay: one line of plain bold text
+/// along the map's edge, no plate, each glyph in a dark halo that fades
+/// out around it so the words read on any map colour underneath. The line
+/// holds the credits shown at the camera's zoom
+/// (`ImmersiveMapAttribution.credits(atZoom:)`), set the same way in the
+/// settings' colour with a dot between them, or the first one bold and
+/// the rest a shade dimmer (`AttributionSettings.emphasizesLeadingCredit`).
+/// Owns only the badge label, styling, and layout; map state stays in the
 /// surrounding runtimes. Size, position and text color come from
 /// `AttributionSettings`; the geometry lives in `AttributionBadgeLayoutMath`.
 final class AttributionBadgeView: UIView {
@@ -19,12 +23,20 @@ final class AttributionBadgeView: UIView {
     static let haloBlurRadius: CGFloat = 3.5
     static let haloColor = UIColor.black.withAlphaComponent(0.95)
 
-    private let titleLabel = UILabel()
-    private let copyrightLabel = UILabel()
+    private let label = UILabel()
+    private var attribution = ImmersiveMapAttribution.none
+    private var settings = ImmersiveMapSettings.AttributionSettings()
+    private var zoom: Double?
+    /// The credits on the line, to tell a camera move that changes the
+    /// line from the many that do not.
+    private var shownCredits: [ImmersiveMapAttribution.Credit] = []
     private var linkURL: URL?
     private var metrics = AttributionBadgeLayoutMath.metrics(for: .regular)
     private var position = ImmersiveMapSettings.AttributionSettings.Position.bottomTrailing
     private var margin: CGFloat = 0
+    /// The last layout the runtime asked for, so a zoom that changes the
+    /// line can lay the badge out again without waiting for the next pass.
+    private var lastLayout: (bounds: CGRect, safeAreaInsets: UIEdgeInsets)?
 
     convenience init(attribution: ImmersiveMapAttribution,
                      settings: ImmersiveMapSettings.AttributionSettings) {
@@ -38,16 +50,10 @@ final class AttributionBadgeView: UIView {
         isOpaque = false
         backgroundColor = .clear
 
-        titleLabel.lineBreakMode = .byTruncatingTail
-        titleLabel.adjustsFontSizeToFitWidth = true
-        titleLabel.minimumScaleFactor = 0.82
-
-        copyrightLabel.lineBreakMode = .byTruncatingTail
-        copyrightLabel.adjustsFontSizeToFitWidth = true
-        copyrightLabel.minimumScaleFactor = 0.82
-
-        addSubview(titleLabel)
-        addSubview(copyrightLabel)
+        label.lineBreakMode = .byTruncatingTail
+        label.adjustsFontSizeToFitWidth = true
+        label.minimumScaleFactor = 0.82
+        addSubview(label)
 
         addGestureRecognizer(UITapGestureRecognizer(target: self,
                                                     action: #selector(handleTap)))
@@ -57,29 +63,74 @@ final class AttributionBadgeView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// Empty attribution hides the badge entirely: no point drawing an empty badge.
-    /// An empty copyright collapses the second line: a one-line badge, no gap.
+    /// The credits and the look. Empty attribution hides the badge
+    /// entirely: no point drawing an empty badge.
     func apply(_ attribution: ImmersiveMapAttribution,
                settings: ImmersiveMapSettings.AttributionSettings) {
+        self.attribution = attribution
+        self.settings = settings
         metrics = AttributionBadgeLayoutMath.metrics(for: settings.size)
         position = settings.position
         margin = CGFloat(settings.margin)
-        isHidden = settings.isVisible == false || attribution.isEmpty
         linkURL = attribution.linkURL
         isUserInteractionEnabled = attribution.linkURL != nil
         accessibilityTraits = attribution.linkURL == nil ? [] : [.link]
-        copyrightLabel.isHidden = attribution.copyright.isEmpty
-        let color = settings.textColor ?? SIMD4<Float>(1, 1, 1, 1)
-        titleLabel.attributedText = Self.haloText(attribution.title,
-                                                  font: .systemFont(ofSize: metrics.titleFontSize, weight: .bold),
-                                                      color: color,
-                                                      alpha: 1)
-        copyrightLabel.attributedText = Self.haloText(attribution.copyright,
-                                                      font: .systemFont(ofSize: metrics.copyrightFontSize, weight: .semibold),
-                                                          color: color,
-                                                          alpha: 0.76)
+        render()
+    }
+
+    /// The camera's zoom, on every move. The line changes only when a
+    /// credit's zoom range is crossed, and then the badge is laid out again
+    /// at once.
+    func apply(zoom: Double?) {
+        self.zoom = zoom
+        guard attribution.credits(atZoom: zoom) != shownCredits else {
+            return
+        }
+        render()
+        if let lastLayout {
+            layout(in: lastLayout.bounds, safeAreaInsets: lastLayout.safeAreaInsets)
+        }
+    }
+
+    private func render() {
+        shownCredits = attribution.credits(atZoom: zoom)
+        isHidden = settings.isVisible == false || shownCredits.isEmpty
+        label.attributedText = Self.lineText(credits: shownCredits,
+                                             fontSize: metrics.fontSize,
+                                             color: settings.textColor ?? SIMD4<Float>(1, 1, 1, 1),
+                                             emphasizesLeading: settings.emphasizesLeadingCredit)
         setNeedsLayout()
     }
+
+    /// The line: every credit and the dots between them in the semibold
+    /// face at the colour's own alpha, one list. With `emphasizesLeading`
+    /// the first credit is bold and the rest of the line a shade dimmer
+    /// (`dimmedCreditAlpha`), so the tile source's credit leads the rest.
+    static func lineText(credits: [ImmersiveMapAttribution.Credit],
+                         fontSize: CGFloat,
+                         color: SIMD4<Float>,
+                         emphasizesLeading: Bool = false) -> NSAttributedString {
+        let line = NSMutableAttributedString()
+        let restAlpha = emphasizesLeading ? dimmedCreditAlpha : 1
+        for (index, credit) in credits.enumerated() {
+            if index > 0 {
+                line.append(haloText(AttributionBadgeLayoutMath.creditSeparator,
+                                     font: .systemFont(ofSize: fontSize, weight: .semibold),
+                                     color: color,
+                                     alpha: restAlpha))
+            }
+            let leads = emphasizesLeading && index == 0
+            line.append(haloText(credit.text,
+                                 font: .systemFont(ofSize: fontSize, weight: leads ? .bold : .semibold),
+                                 color: color,
+                                 alpha: leads ? 1 : restAlpha))
+        }
+        return line
+    }
+
+    /// The share of the colour's alpha the credits behind a leading one
+    /// are drawn at.
+    static let dimmedCreditAlpha: CGFloat = 0.76
 
     /// The text filled in the settings' colour in a dark halo that fades
     /// out around every glyph, which is what keeps it legible over water,
@@ -109,6 +160,7 @@ final class AttributionBadgeView: UIView {
     }
 
     func layout(in bounds: CGRect, safeAreaInsets: UIEdgeInsets) {
+        lastLayout = (bounds, safeAreaInsets)
         let availableWidth = AttributionBadgeLayoutMath.availableWidth(bounds: bounds,
                                                                        safeAreaInsets: safeAreaInsets,
                                                                        margin: margin)
@@ -129,33 +181,17 @@ final class AttributionBadgeView: UIView {
             return .zero
         }
 
-        let maximumTextWidth = min(metrics.maximumWidth, size.width) - metrics.horizontalInset * 2
-        let constrainedSize = CGSize(width: max(0, maximumTextWidth), height: .greatestFiniteMagnitude)
-        let titleSize = titleLabel.sizeThatFits(constrainedSize)
-        let copyrightSize = copyrightLabel.isHidden ? .zero : copyrightLabel.sizeThatFits(constrainedSize)
+        let maximumTextWidth = max(0, size.width - metrics.horizontalInset * 2)
+        let textSize = label.sizeThatFits(CGSize(width: maximumTextWidth, height: .greatestFiniteMagnitude))
 
-        return AttributionBadgeLayoutMath.badgeSize(titleSize: titleSize,
-                                                    copyrightSize: copyrightSize,
+        return AttributionBadgeLayoutMath.badgeSize(textSize: textSize,
                                                     metrics: metrics,
                                                     boundingWidth: size.width)
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-
-        let textWidth = bounds.insetBy(dx: metrics.horizontalInset, dy: metrics.verticalInset).width
-        let constrainedSize = CGSize(width: textWidth, height: .greatestFiniteMagnitude)
-        let titleHeight = titleLabel.sizeThatFits(constrainedSize).height
-        let copyrightHeight = copyrightLabel.isHidden
-            ? 0
-            : copyrightLabel.sizeThatFits(constrainedSize).height
-
-        let frames = AttributionBadgeLayoutMath.labelFrames(badgeBounds: bounds,
-                                                            titleHeight: titleHeight,
-                                                            copyrightHeight: copyrightHeight,
-                                                            metrics: metrics)
-        titleLabel.frame = frames.title
-        copyrightLabel.frame = frames.copyright
+        label.frame = AttributionBadgeLayoutMath.labelFrame(badgeBounds: bounds, metrics: metrics)
     }
 }
 

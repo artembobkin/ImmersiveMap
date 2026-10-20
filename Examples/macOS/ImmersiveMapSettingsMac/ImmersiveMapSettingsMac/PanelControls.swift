@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import ImmersiveMap
 import SwiftUI
 
 /// A slider for settings that reach the GPU as a uniform. Every intermediate
@@ -130,6 +131,27 @@ extension Binding where Value == Int {
     var asDouble: Binding<Double> {
         Binding<Double>(get: { Double(wrappedValue) },
                         set: { wrappedValue = Int($0) })
+    }
+}
+
+/// A curve over the zoom as one value: the slider shows the curve's value
+/// at its deepest stop and scales the whole curve to put that value there,
+/// so the curve keeps its shape over the zoom (a fade-in, a halving with
+/// every zoom). A curve whose deepest value is zero takes the value at
+/// every zoom.
+extension Binding where Value == ImmersiveMapZoomCurve {
+    var scaledAtDeepestStop: Binding<Double> {
+        Binding<Double>(get: { Double(wrappedValue.stops.last?.value ?? 0) },
+                        set: { newValue in
+                            guard let last = wrappedValue.stops.last?.value, last > 0 else {
+                                wrappedValue = ImmersiveMapZoomCurve(Float(newValue))
+                                return
+                            }
+                            let factor = Float(newValue) / last
+                            wrappedValue = ImmersiveMapZoomCurve(stops: wrappedValue.stops.map {
+                                ImmersiveMapZoomCurve.Stop(zoom: $0.zoom, value: $0.value * factor)
+                            })
+                        })
     }
 }
 

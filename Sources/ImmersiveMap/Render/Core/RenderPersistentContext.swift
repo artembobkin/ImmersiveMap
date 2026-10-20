@@ -49,6 +49,7 @@ final class RenderPersistentContext {
     /// The sphere's tile-priority stencil states and the flat ground's
     /// slot states; see SharedRenderResources.
     let sphereOpaqueOwnerState: MTLDepthStencilState
+    let sphereRibbonOwnerState: MTLDepthStencilState
     let tileStencilTestState: MTLDepthStencilState
     let groundOwnerState: MTLDepthStencilState
     let roadRankState: MTLDepthStencilState
@@ -131,6 +132,7 @@ final class RenderPersistentContext {
         self.depthDisabledState = shared.depthDisabledState
         self.groundDepthState = shared.groundDepthState
         self.sphereOpaqueOwnerState = shared.sphereOpaqueOwnerState
+        self.sphereRibbonOwnerState = shared.sphereRibbonOwnerState
         self.groundOwnerState = shared.groundOwnerState
         self.extrudedStencilTestState = shared.extrudedStencilTestState
         self.placementStencilWriteState = shared.placementStencilWriteState
@@ -197,6 +199,7 @@ final class RenderPersistentContext {
         self.modelTileStore?.eventSink = eventSink
         self.groundReliefStore = GroundReliefStore.make(settings: config,
                                                         hillshade: styleRuntime.hillshade,
+                                                        occlusion: styleRuntime.terrainOcclusion,
                                                         device: metal.device)
         self.groundReliefStore?.eventSink = eventSink
 

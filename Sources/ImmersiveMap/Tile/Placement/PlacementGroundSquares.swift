@@ -14,32 +14,36 @@
 /// last mark of a square is the one the stencil keeps.
 struct PlacementGroundSquare: Hashable {
     /// A ground source as the ground draws it: the tile, the world copy,
-    /// and the deepest ring it is placed in, whose terrain lifts it.
+    /// and the terrain its grid rises by (`PlaceTile.displacement`), nil on
+    /// the plane.
     struct Source: Hashable {
         let tile: Tile
         let worldWrap: Int8
-        let targetZoom: Int
+        let displacement: Tile?
     }
 
     let source: Source
     /// The source's tile itself or a square inside it.
     let square: VisibleTile
 
-    /// The deepest ring each source (by tile and world copy) is placed in,
-    /// whose terrain lifts it wherever it draws (`GroundReliefStore.relief(for:targetZoom:)`).
-    static func targetZooms(of placements: [PlaceTile]) -> [VisibleTile: Int] {
-        var targetZooms: [VisibleTile: Int] = [:]
+    /// The terrain each source (by tile and world copy) rises by wherever
+    /// it draws: the finest of its placements' (`PlaceTile.displacement`).
+    static func displacements(of placements: [PlaceTile]) -> [VisibleTile: Tile] {
+        var terrains: [VisibleTile: Tile] = [:]
         for placement in placements {
+            guard let terrain = placement.displacement else { continue }
             let source = VisibleTile(tile: placement.metalTile.tile, worldWrap: placement.placeIn.worldWrap)
-            targetZooms[source] = max(targetZooms[source] ?? placement.slot.z, placement.slot.z)
+            if terrain.z > (terrains[source]?.z ?? -1) {
+                terrains[source] = terrain
+            }
         }
-        return targetZooms
+        return terrains
     }
 
     /// The squares of a frame's placements, each point of the ground in
     /// exactly one.
     static func squares(of placements: [PlaceTile]) -> [PlacementGroundSquare] {
-        let targetZooms = targetZooms(of: placements)
+        let displacements = displacements(of: placements)
         var owners: [VisibleTile: PlaceTile] = [:]
         for placement in placements {
             owners[placement.placeIn] = placement
@@ -61,7 +65,7 @@ struct PlacementGroundSquare: Hashable {
             let wrap = square.worldWrap
             let source = Source(tile: tile,
                                 worldWrap: wrap,
-                                targetZoom: targetZooms[VisibleTile(tile: tile, worldWrap: wrap)] ?? placement.slot.z)
+                                displacement: displacements[VisibleTile(tile: tile, worldWrap: wrap)] ?? placement.displacement)
             var pending = [square]
             while let next = pending.popLast() {
                 guard holdsFiner.contains(next) else {

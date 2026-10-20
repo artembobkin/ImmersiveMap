@@ -37,8 +37,9 @@ final class StarfieldRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
     /// exists, and the stars (drawn first, painted over by the opaque
     /// ground) would be pure waste. Valid on the resting sphere only;
     /// mid-morph the décor draws at full strength: space stays the clear
-    /// colour until the surface switch, and the flat map's sky fades in over
-    /// the stars at the end of the unroll.
+    /// colour until the air handover, over which it brightens into the
+    /// map's colour while the flat map's sky fades in over the stars
+    /// (`RenderFrameClearColor`, `HorizonFrameResolver`).
     static func frameShowsSky(frameContext: FrameContext) -> Bool {
         let globe = frameContext.globeRenderUniform
         guard globe.transition <= 0 else { return true }

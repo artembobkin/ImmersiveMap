@@ -18,12 +18,23 @@ final class ShadowMapReuseControllerTests: XCTestCase {
     private static let renderMapSize = 2.0 * Double.pi * 0.14 * pow(2.0, 16)
     private static let basePan = SIMD2<Double>(0.312, -0.144)
     private static let baseEye = SIMD3<Float>(0.2, -0.35, 0.7)
-    /// The default scene with the coverage floor in meters off: the
-    /// window's travel budget here is pinned in camera distances.
+    /// The zoom the curves are read at: past the strength's rise.
+    private static let zoom = 16.0
+    /// The default scene with the coverages pinned in metres to three and
+    /// twelve camera distances of the base eye at the equator, the same at
+    /// every zoom: the window's travel budgets here are stated in camera
+    /// distances.
     private static var scene: ImmersiveMapSettings.SceneSettings {
         var scene = ImmersiveMapSettings.default.scene
-        scene.shadows.minimumCoverageMeters = 0
+        scene.shadows.nearCoverageMeters = coverage(cameraDistances: 3)
+        scene.shadows.farCoverageMeters = coverage(cameraDistances: 12)
         return scene
+    }
+
+    /// A coverage of so many base-eye camera distances, in metres.
+    private static func coverage(cameraDistances: Float) -> ImmersiveMapZoomCurve {
+        let unitsPerMeter = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: 0, renderMapSize: renderMapSize)
+        return ImmersiveMapZoomCurve(Float(Double(cameraDistances * simd_length(baseEye)) / unitsPerMeter))
     }
 
     private final class DummyCaster {}
@@ -38,6 +49,7 @@ final class ShadowMapReuseControllerTests: XCTestCase {
                                      centerWorldMercator: Self.equatorCenter,
                                      flatRenderPan: pan,
                                      renderMapSize: Self.renderMapSize,
+                                     zoom: Self.zoom,
                                      scene: scene)
     }
 
@@ -269,34 +281,44 @@ final class ShadowMapReuseControllerTests: XCTestCase {
                                                   staticModelCasters: two, texture: texture))
     }
 
-    /// The windows are rendered on their own: a refit of the near window,
-    /// which follows the camera, does not redraw the far one, and the far
-    /// window is not rendered at all while the frame has not got it.
+    /// The windows are rendered on their own: a refit of the near window
+    /// does not redraw the far one, and the far window is not rendered at
+    /// all while the frame has not got it.
     func testTheWindowsRenderOnTheirOwn() throws {
         let controller = ShadowMapReuseController()
         let texture = try makeTexture()
         let keys = makeKeys([DummyCaster()])
+        // A camera pitched well down the ground, so the visible ground runs
+        // far: the near window a disc well inside it, the far one the
+        // whole of it to four camera distances, many times as wide, so its
+        // margin takes a travel the near one's cannot.
+        let eye = SIMD3<Float>(0, -0.7, 0.4)
+        var scene = Self.scene
+        scene.shadows.nearCoverageMeters = Self.coverage(cameraDistances: 0.5)
+        scene.shadows.farCoverageMeters = Self.coverage(cameraDistances: 4)
 
-        let both = try XCTUnwrap(resolve(controller, eye: Self.baseEye))
+        let both = try XCTUnwrap(resolve(controller, eye: eye, scene: scene))
         XCTAssertEqual(both.slots, [.near, .far])
         XCTAssertTrue(controller.planShadowRender(casterKeys: keys, hasModelCasters: false, texture: texture, slot: .near))
         XCTAssertTrue(controller.planShadowRender(casterKeys: keys, hasModelCasters: false, texture: texture, slot: .far))
-        // Halving the camera distance refits the near window for sharpness.
-        // The far window's √2 quantum is as wide as the near one's, so it
-        // refits too, but a travel the near window's margin cannot absorb
-        // and the far one's can is reuse for the far window alone.
-        XCTAssertNotNil(resolve(controller, pan: Self.basePan + SIMD2<Double>(2e-5, 0)))
+        // The near coverage wound down to half (the panel's slider): the
+        // near window's texels would be twice too coarse, so it refits for
+        // sharpness, and the far window, asked for the same ground, is the
+        // same fit and renders nothing.
+        var tighter = scene
+        tighter.shadows.nearCoverageMeters = Self.coverage(cameraDistances: 0.25)
+        XCTAssertNotNil(resolve(controller, eye: eye, scene: tighter))
         XCTAssertTrue(controller.planShadowRender(casterKeys: keys, hasModelCasters: false, texture: texture, slot: .near),
-                      "Travel beyond the near window's margin refits it")
+                      "A window twice too coarse refits")
         XCTAssertFalse(controller.planShadowRender(casterKeys: keys, hasModelCasters: false, texture: texture, slot: .far),
-                       "The far window is four times as wide and still covers the frame")
+                       "The far window is unchanged and still covers the frame")
 
         // Without a far window its slice is never planned, and when the far
         // coverage is back the window is fitted afresh and rendered.
-        var nearOnly = Self.scene
-        nearOnly.shadows.farCoverageCameraDistances = 1
-        XCTAssertEqual(try XCTUnwrap(resolve(controller, scene: nearOnly)).slots, [.near])
-        XCTAssertEqual(try XCTUnwrap(resolve(controller)).slots, [.near, .far])
+        var nearOnly = scene
+        nearOnly.shadows.farCoverageMeters = Self.coverage(cameraDistances: 0.5)
+        XCTAssertEqual(try XCTUnwrap(resolve(controller, eye: eye, scene: nearOnly)).slots, [.near])
+        XCTAssertEqual(try XCTUnwrap(resolve(controller, eye: eye, scene: scene)).slots, [.near, .far])
         XCTAssertTrue(controller.planShadowRender(casterKeys: keys, hasModelCasters: false, texture: texture, slot: .far))
     }
 

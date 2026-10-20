@@ -66,6 +66,8 @@ enum BuildingCoveragePlanner {
                      minimumZoom: Int = minimumSourceZoom) -> PlaceTilesContext {
         guard let eyeGroundCell else { return .empty }
         let floorZoom = max(minimumZoom, minimumSourceZoom)
+        // The buildings rise by the terrain their ground's grid does.
+        let displacementBySource = PlaceTilesContext(tilePlacements: groundPlacements).displacementBySource()
         // The tiles the ground shows, by the world copy they show in.
         var sources: [VisibleTile: MetalTile] = [:]
         for placement in groundPlacements where placement.metalTile.tile.z >= floorZoom {
@@ -92,7 +94,7 @@ enum BuildingCoveragePlanner {
             guard simd_length(center - eyeGroundCell) <= fieldRadiusInCells else {
                 continue
             }
-            result.append(PlaceTile(metalTile: metalTile, placeIn: square))
+            result.append(PlaceTile(metalTile: metalTile, placeIn: square, displacement: displacementBySource[metalTile.tile]))
         }
         result.sort { lhs, rhs in
             if lhs.placeIn.worldWrap != rhs.placeIn.worldWrap {

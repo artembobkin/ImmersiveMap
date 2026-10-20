@@ -6,7 +6,8 @@ import simd
 import XCTest
 
 /// The per-frame schedule of the horizon layer: the atmosphere on the
-/// resting globe, the fog on the plane, and the two fades around the morph.
+/// globe and along the unroll, the fog on the plane, and the air handover
+/// between them at the end of the morph.
 final class HorizonFrameResolverTests: XCTestCase {
     private let radius: Float = 0.28
 
@@ -144,59 +145,88 @@ final class HorizonFrameResolverTests: XCTestCase {
 
     // MARK: - The morph
 
-    /// The atmosphere fades out over the first stretch of the transition
-    /// and is gone well before the surface has unrolled far; nothing of the
-    /// flat map's sky comes in with it.
-    func testTheAtmosphereFadesOutAsTheMorphStarts() {
-        let end = HorizonFrameResolver.atmosphereFadeOutEnd
+    /// The atmosphere rides the unrolling surface's edge: up to the air
+    /// handover the halo, the rim, the sun's side and the feather are at
+    /// the resting globe's strength, in the halo's own colour, with no sky
+    /// from the flat map under them, and the widths are the growing
+    /// sphere's, thinner every frame as its limb recedes.
+    func testTheAtmosphereRidesTheUnroll() {
+        let start = ImmersiveMapSettings.default.presentation.airHandoverStart
         let resting = resolve(settings: .default, transition: 0, geometryTransition: 0, mode: .spherical, pitch: 1.25)
-        let halfway = resolve(settings: .default, transition: end / 2, geometryTransition: end / 2 / 0.9, mode: .spherical, pitch: 1.25)
-        XCTAssertGreaterThan(halfway.skyStrength, 0)
-        XCTAssertLessThan(halfway.skyStrength, resting.skyStrength)
-        XCTAssertLessThan(halfway.featherStrength, resting.featherStrength)
-        XCTAssertLessThan(halfway.groundGain, resting.groundGain)
-        XCTAssertEqual(halfway.tint, resting.tint, "The halo keeps its colour while it fades")
-        XCTAssertEqual(halfway.skyOpacity, 0, "No sky from the flat map on the sphere")
-
-        let gone = resolve(settings: .default, transition: end, geometryTransition: end / 0.9, mode: .spherical, pitch: 1.25)
-        XCTAssertEqual(gone.skyStrength, 0)
-        XCTAssertEqual(gone.featherStrength, 0)
-        XCTAssertEqual(gone.groundGain, 0)
-        XCTAssertFalse(gone.drawsSky)
-        XCTAssertFalse(gone.drawsGround)
-    }
-
-    /// Between the two fades the unroll runs bare: the layer draws nothing.
-    func testTheMorphRunsWithoutAir() {
-        for transition in [Float(0.2), 0.5, 0.85] {
-            let haze = resolve(settings: .default, transition: transition, geometryTransition: min(1, transition / 0.9), mode: .spherical, pitch: 1.0)
-            XCTAssertFalse(haze.drawsSky, "sky at \(transition)")
-            XCTAssertFalse(haze.drawsGround, "ground at \(transition)")
-            XCTAssertEqual(haze.skyOpacity, 0, "sky opacity at \(transition)")
+        var previousBand = resting.bandRadians
+        for transition in [Float(0.2), 0.5, start] {
+            let haze = resolve(settings: .default, transition: transition, geometryTransition: transition / 0.9, mode: .spherical, pitch: 1.25)
+            XCTAssertEqual(haze.skyStrength, resting.skyStrength, "halo at \(transition)")
+            XCTAssertEqual(haze.featherStrength, resting.featherStrength, "feather at \(transition)")
+            XCTAssertEqual(haze.groundGain, resting.groundGain, "rim at \(transition)")
+            XCTAssertEqual(haze.sunInfluence, resting.sunInfluence, "sun at \(transition)")
+            XCTAssertEqual(haze.whitenWeight, resting.whitenWeight, "whitening at \(transition)")
+            XCTAssertEqual(haze.tint, resting.tint, "The halo keeps its colour until the handover")
+            XCTAssertEqual(haze.skyOpacity, 0, "No sky from the flat map before the handover")
+            XCTAssertTrue(haze.drawsSky, "sky draw at \(transition)")
+            XCTAssertTrue(haze.drawsGround, "ground draw at \(transition)")
+            XCTAssertLessThan(haze.bandRadians, previousBand, "The halo thins as the limb recedes, at \(transition)")
+            previousBand = haze.bandRadians
         }
     }
 
-    /// The sky fades in over the last stretch, where the geometry is
-    /// already a finished plane, and at 1 the sphere path renders exactly
-    /// the plane's values, so the surface switch happens between identical
-    /// frames. With the fog off nothing fades in.
-    func testTheSkyFadesInAtTheEndOfTheMorph() {
+    /// Midway through the handover one frame carries both airs at their
+    /// shares: the halo, the rim, the sun's side and the feather at half,
+    /// the sky at half, the colour at the edge halfway from the halo's to
+    /// the sky's at the line, and the band reaching the top of the frame
+    /// for the sky.
+    func testTheAirHandsOverAtTheEndOfTheMorph() {
+        let settings = ImmersiveMapSettings.default
+        let presentation = settings.presentation
+        let atmosphere = settings.scene.atmosphere
+        let fog = settings.scene.fog
+        let midway = (presentation.airHandoverStart + presentation.airHandoverEnd) / 2
+        let haze = resolve(settings: settings, transition: midway, geometryTransition: midway / 0.9, mode: .spherical, pitch: 1.25)
+        XCTAssertEqual(haze.skyStrength, atmosphere.intensity / 2, accuracy: 1e-5)
+        XCTAssertEqual(haze.groundGain, atmosphere.intensity / 2, accuracy: 1e-5)
+        XCTAssertEqual(haze.featherStrength, HorizonFrameResolver.featherPeakStrength / 2, accuracy: 1e-5)
+        XCTAssertEqual(haze.sunInfluence, atmosphere.sunInfluence / 2, accuracy: 1e-5)
+        XCTAssertEqual(haze.whitenWeight, HorizonFrameResolver.haloWhitenWeight / 2, accuracy: 1e-5)
+        XCTAssertEqual(haze.skyOpacity, 0.5, accuracy: 1e-5)
+        XCTAssertEqual(simd_distance(haze.tint, (atmosphere.color + fog.horizonColor) / 2), 0, accuracy: 1e-5)
+        XCTAssertEqual(haze.skyColor, fog.skyColor)
+        XCTAssertTrue(haze.drawsSky)
+        XCTAssertTrue(haze.drawsGround)
+        XCTAssertGreaterThan(haze.bandTopRadians, HorizonFrameResolver.bandTopMarginRadians,
+                             "The band reaches past the top of the frame once the sky is in")
+
+        // Transparent space withholds the halo under the arriving sky, and
+        // keeps the feather.
+        let transparent = resolve(settings: settings.transparentSpace(), transition: midway, geometryTransition: midway / 0.9, mode: .spherical, pitch: 1.25)
+        XCTAssertEqual(transparent.skyStrength, 0)
+        XCTAssertEqual(transparent.sunInfluence, 0)
+        XCTAssertEqual(transparent.skyOpacity, 0.5, accuracy: 1e-5)
+        XCTAssertEqual(transparent.featherStrength, haze.featherStrength)
+        XCTAssertTrue(transparent.drawsSky, "The plane's sky arrives with the fade")
+    }
+
+    /// From the handover's end to the switch the sphere's path draws
+    /// exactly the plane's values, and at 1 the surface switch happens
+    /// between identical frames. With the fog off nothing fades in.
+    func testTheHandedOverAirIsThePlanes() {
+        let end = ImmersiveMapSettings.default.presentation.airHandoverEnd
         let fog = ImmersiveMapSettings.default.scene.fog
-        let midway = resolve(settings: .default, transition: 0.95, geometryTransition: 1, mode: .spherical, pitch: 1.25)
-        XCTAssertGreaterThan(midway.skyOpacity, 0)
-        XCTAssertLessThan(midway.skyOpacity, 1)
-        XCTAssertEqual(midway.groundGain, 0, "Nothing on the ground")
-        XCTAssertEqual(midway.tint, fog.horizonColor)
-        XCTAssertEqual(midway.skyStrength, 0, "The halo is long gone")
-        XCTAssertEqual(midway.featherStrength, 0)
-        XCTAssertTrue(midway.drawsSky)
+        let handedOver = resolve(settings: .default, transition: end, geometryTransition: 1, mode: .spherical, pitch: 1.25)
+        XCTAssertEqual(handedOver.skyStrength, 0, "The halo is gone")
+        XCTAssertEqual(handedOver.featherStrength, 0)
+        XCTAssertEqual(handedOver.groundGain, 0, "Nothing on the ground")
+        XCTAssertEqual(handedOver.skyOpacity, 1)
+        XCTAssertEqual(handedOver.tint, fog.horizonColor)
+        XCTAssertTrue(handedOver.drawsSky)
+        XCTAssertFalse(handedOver.drawsGround)
 
         let finished = resolve(settings: .default, transition: 1, geometryTransition: 1, mode: .spherical, pitch: 1.25)
         let switched = resolve(settings: .default, transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25)
+        XCTAssertEqual(handedOver, finished, "Nothing changes from the handover's end to the switch")
         assertGroundSideEqual(finished, switched)
-        XCTAssertEqual(finished.skyOpacity, 1)
         XCTAssertEqual(finished.skyOpacity, switched.skyOpacity)
         XCTAssertEqual(finished.drawsSky, switched.drawsSky)
+        XCTAssertEqual(finished.bandTopRadians, switched.bandTopRadians, accuracy: 1e-5)
 
         let bareFinished = resolve(settings: .default.fog(isEnabled: false), transition: 1, geometryTransition: 1, mode: .spherical, pitch: 1.25)
         let bareSwitched = resolve(settings: .default.fog(isEnabled: false), transition: 1, geometryTransition: 1, mode: .flat, pitch: 1.25)
@@ -206,7 +236,20 @@ final class HorizonFrameResolverTests: XCTestCase {
         XCTAssertFalse(bareFinished.drawsGround)
     }
 
-    /// Both fades are smooth: no frame of the transition jumps.
+    /// The handover's bounds are the map's to set: an earlier, wider window
+    /// hands over earlier.
+    func testTheHandoverFollowsTheSettings() {
+        let settings = ImmersiveMapSettings.default.globe(airHandoverStart: 0.3, airHandoverEnd: 0.5)
+        let before = resolve(settings: settings, transition: 0.3, geometryTransition: 0.3 / 0.9, mode: .spherical, pitch: 1.25)
+        let midway = resolve(settings: settings, transition: 0.4, geometryTransition: 0.4 / 0.9, mode: .spherical, pitch: 1.25)
+        let after = resolve(settings: settings, transition: 0.5, geometryTransition: 0.5 / 0.9, mode: .spherical, pitch: 1.25)
+        XCTAssertEqual(before.skyOpacity, 0)
+        XCTAssertEqual(midway.skyOpacity, 0.5, accuracy: 1e-5)
+        XCTAssertEqual(after.skyOpacity, 1)
+        XCTAssertEqual(after.skyStrength, 0)
+    }
+
+    /// The handover is smooth: no frame of the transition jumps.
     func testTheFadesAreContinuous() {
         var previous = resolve(settings: .default, transition: 0, geometryTransition: 0, mode: .spherical, pitch: 1.25)
         for step in 1...1000 {
@@ -220,6 +263,7 @@ final class HorizonFrameResolverTests: XCTestCase {
             XCTAssertLessThan(abs(haze.groundGain - previous.groundGain), 0.05, "gain at \(transition)")
             XCTAssertLessThan(abs(haze.featherStrength - previous.featherStrength), 0.05, "feather at \(transition)")
             XCTAssertLessThan(abs(haze.skyOpacity - previous.skyOpacity), 0.05, "sky opacity at \(transition)")
+            XCTAssertLessThan(simd_distance(haze.tint, previous.tint), 0.05, "tint at \(transition)")
             previous = haze
         }
     }
@@ -293,6 +337,42 @@ final class HorizonFrameResolverTests: XCTestCase {
                                             projectionView: projection * view,
                                             verticalFovRadians: .pi / 4,
                                             drawableHeightPx: heightPx)
+    }
+}
+
+/// The air handover's clock (`PresentationSettings.airHandover`): the
+/// share of the plane's air at a point of the transition.
+final class AirHandoverTests: XCTestCase {
+    func testTheHandoverIsASmoothstepOverItsWindow() {
+        let presentation = ImmersiveMapSettings.PresentationSettings(automaticTransitionStartZoom: 6,
+                                                                     automaticTransitionSpan: 1,
+                                                                     globeRadiusScale: 1,
+                                                                     airHandoverStart: 0.6,
+                                                                     airHandoverEnd: 0.8)
+        XCTAssertEqual(presentation.airHandover(atTransition: 0), 0)
+        XCTAssertEqual(presentation.airHandover(atTransition: 0.6), 0)
+        XCTAssertEqual(presentation.airHandover(atTransition: 0.65), 0.15625, accuracy: 1e-6)
+        XCTAssertEqual(presentation.airHandover(atTransition: 0.7), 0.5, accuracy: 1e-6)
+        XCTAssertEqual(presentation.airHandover(atTransition: 0.8), 1)
+        XCTAssertEqual(presentation.airHandover(atTransition: 1), 1, "The plane's air at the switch")
+    }
+
+    func testTheDefaultsHandOverBeforeTheGeometryFinishes() {
+        let presentation = ImmersiveMapSettings.default.presentation
+        XCTAssertEqual(presentation.airHandoverStart, 0.7)
+        XCTAssertEqual(presentation.airHandoverEnd, PresentationStateResolver.geometryCompletionPhase)
+    }
+
+    /// An end before the start is a step at the start, never a division
+    /// by zero or a window running backwards.
+    func testAnEmptyWindowIsAStep() {
+        let presentation = ImmersiveMapSettings.PresentationSettings(automaticTransitionStartZoom: 6,
+                                                                     automaticTransitionSpan: 1,
+                                                                     globeRadiusScale: 1,
+                                                                     airHandoverStart: 0.5,
+                                                                     airHandoverEnd: 0.2)
+        XCTAssertEqual(presentation.airHandover(atTransition: 0.49), 0)
+        XCTAssertEqual(presentation.airHandover(atTransition: 0.51), 1)
     }
 }
 

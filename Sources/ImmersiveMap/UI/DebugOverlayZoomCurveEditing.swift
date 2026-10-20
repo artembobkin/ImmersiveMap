@@ -89,6 +89,20 @@ struct DebugOverlayZoomCurveAxes: Equatable {
 }
 
 /// The edits a pointer makes to a curve on the graph.
+/// How a graph's value reads in a title or on a stop's label, shared by
+/// the planners whose curves are lengths.
+enum DebugOverlayValueText {
+    /// A length as it reads best: whole meters under a kilometer,
+    /// kilometers with one decimal from there.
+    static func meters(_ meters: Double) -> String {
+        if meters < 1000 {
+            return String(format: "%.0f m", meters)
+        }
+        let kilometers = String(format: "%.1f", meters / 1000)
+        return "\(kilometers.hasSuffix(".0") ? String(kilometers.dropLast(2)) : kilometers) km"
+    }
+}
+
 enum DebugOverlayZoomCurveEditing {
     /// The stop under a point, if one lies within `radius` of it: the
     /// nearest, so two close stops are still told apart.

@@ -63,6 +63,13 @@ struct LineStyle {
     float rampStartZoom;
     float rampEndZoom;
     float rampStartAlpha;
+    // The share of the colour's alpha the stroke keeps on the globe and
+    // the colour it wears there, the style's own on the plane, handed over
+    // with the globe's air at the end of the unroll (TileSphere.metal). An
+    // alpha of one and the style's own colour: the same stroke on both
+    // surfaces. See the Swift TileLineStyle.sphereAlpha and sphereColor.
+    float sphereAlpha;
+    packed_float3 sphereColor;
 };
 
 /// How far a style's zoom ramp has come, 0...1; one for a style without.

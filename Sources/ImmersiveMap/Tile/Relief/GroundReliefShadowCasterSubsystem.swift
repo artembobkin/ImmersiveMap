@@ -103,7 +103,7 @@ final class GroundReliefShadowCasterSubsystem: RenderSubsystem {
             if let cached = sourceReliefs[source] {
                 resolved = cached
             } else {
-                resolved = store.relief(for: source.tile, targetZoom: source.targetZoom).map { relief in
+                resolved = source.displacement.flatMap { store.relief(for: source.tile, terrain: $0) }.map { relief in
                     let gridCells = groundFlattening.grid(forTileZoom: source.tile.z)
                     let cells = rasterSizeByTile[source.tile].map {
                         RasterTileGrid.reliefCells(gridCells: gridCells, relief: relief, rasterSize: $0)

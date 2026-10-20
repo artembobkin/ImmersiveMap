@@ -11,10 +11,121 @@ import simd
 /// (residential, industrial) are lowered to key 9 while all greenery goes
 /// above them (11-18), otherwise a park lying inside a residential polygon
 /// would be covered and look like bare ground. Greenery stays below water
-/// (key 20) and roads. Each colour gets its own key (the first-wins
+/// (key 30) and roads. Each colour gets its own key (the first-wins
 /// `styles[key]` would otherwise collapse every fill of a tile into the
 /// first polygon's colour, producing seams at tile borders).
+///
+/// At the overview zooms (through `BiomeStyles.maximumTileZoom`) the
+/// engine's overview lays its biomes into the tiles (`OverviewTileSource`)
+/// and the biomes paint the land in place of the land cover and the land
+/// use, which take the keys the hidden fills leave free, 3 to 7, 9, 11 to
+/// 16, 18 and 19, one per biome as above: a tile carries either the biomes
+/// or the land cover, never both, and the rules read the one zoom
+/// (`overviewPaintsLand`). Over the biomes, from
+/// `BiomeStyles.coverMinimumTileZoom`, the tiles' own land cover draws its
+/// forests, fields, bare ground, ice and cities in the block 20 to 24 and
+/// the land use its woods, fields, bare ground, wetlands and ice in the
+/// block 25 to 29, both under the water: what the biomes say of the
+/// climate, the cover says of the ground, and the holes between the
+/// raster-derived blobs show the biome instead of bare land. The two
+/// blocks part at the end of the overview: the biomes and the land cover
+/// fade out over camera zoom 7 to 8, the land use, the same OSM polygons
+/// the z8 tiles carry, stays.
 extension ProtomapsBasemapDefaultMapStyle {
+    /// The water fill's key: over every painted ground, under the
+    /// waterway lines, the ferries and the bridge decks.
+    static let waterKey: UInt8 = 30
+
+    /// Whether the tile's land cover and land use give way to the
+    /// overview's biomes: the tile zooms through
+    /// `BiomeStyles.maximumTileZoom`, where the overview lays its biomes
+    /// into the tiles (`OverviewTileSource`). The overview is laid in by a
+    /// setting (`TileSettings.OverviewSettings`), and a map that has it off
+    /// shows the land cover at these zooms the way it did before: the
+    /// style cannot see the setting, so the land cover rules take the same
+    /// turn whether the biomes arrived or not, and with the overview off
+    /// the land under the hidden cover is the earth polygon's land tone.
+    func overviewPaintsLand(tileZoom: Int) -> Bool {
+        tileZoom <= theme.layers.biomes.maximumTileZoom
+    }
+
+    /// Whether the overview's road network stands in for the tiles' own
+    /// roads at a tile zoom (`OverviewRoadStyles.maximumTileZoom`): through
+    /// it the Natural Earth network draws and the basemap's roads, the
+    /// motorways alone at those zooms, are hidden.
+    func overviewRoadNetworkDraws(tileZoom: Int) -> Bool {
+        overviewPaintsLand(tileZoom: tileZoom) && tileZoom <= theme.layers.overviewRoads.maximumTileZoom
+    }
+
+    /// The overview's `road` layer: the Natural Earth network, one stroke
+    /// per road in points, the main roads by rank in the theme's highway
+    /// yellow and the rest thinner and paler, round-joined like the
+    /// basemap's overview strokes and under the same veil on the globe
+    /// (`RoadMetrics.globeOpacity`). A ground line among the ground lines,
+    /// the main roads over the minor ones, both under the borders.
+    func overviewRoadNetworkStyle(rank: Int?, tileZoom: Int) -> FeatureStyle {
+        guard overviewRoadNetworkDraws(tileZoom: tileZoom) else {
+            return hiddenStyle
+        }
+        let network = theme.layers.overviewRoads
+        let isMajor = (rank ?? Int.max) <= network.majorMaximumRank
+        let widthPoints = isMajor ? network.majorWidthPoints : network.minorWidthPoints
+        let pass = LinePass(key: isMajor ? 45 : 44,
+                            color: isMajor ? network.major : network.minor,
+                            zoomFade: Self.roadZoomFade,
+                            lineWidthPoints: widthPoints,
+                            sphereAlpha: theme.roadMetrics.globeOpacity,
+                            lineGeometry: LineGeometryStyle(
+                                lineWidth: Double(widthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint,
+                                lineCapRound: true,
+                                lineJoinRound: true))
+        return .line(LineStyle(pass: pass, fillsAreas: false))
+    }
+
+    /// The overview's `biome`: one fill per biome, each in the atlas tone
+    /// the theme gives it (`BiomeStyles`), on the tiles of the overview
+    /// zooms and hidden past them, where the land is the earth polygon
+    /// under the land use. The biomes tile the land without overlapping,
+    /// so their order among themselves is nothing. A kind the style does
+    /// not name draws in the temperate grassland tone rather than not at
+    /// all. The biomes fade out with the land cover over camera zoom 7 to
+    /// 8 (`landcoverZoomFade`), so the z7 tiles, the last to carry them,
+    /// hand the land tone to the z8 tiles with the camera.
+    func biomeStyle(kind: String?, tileZoom: Int) -> FeatureStyle {
+        guard overviewPaintsLand(tileZoom: tileZoom) else {
+            return hiddenStyle
+        }
+        let biomes = theme.layers.biomes
+        let key: UInt8
+        let color: SIMD4<Float>
+        switch kind {
+        case "tundra": (key, color) = (3, biomes.tundra)
+        case "desert": (key, color) = (4, biomes.desert)
+        case "montane_grassland": (key, color) = (6, biomes.montaneGrassland)
+        case "tropical_grassland": (key, color) = (7, biomes.tropicalGrassland)
+        case "mediterranean_scrub": (key, color) = (9, biomes.mediterraneanScrub)
+        case "flooded_grassland": (key, color) = (11, biomes.floodedGrassland)
+        case "mangrove": (key, color) = (12, biomes.mangrove)
+        case "boreal_forest": (key, color) = (13, biomes.borealForest)
+        case "temperate_conifer_forest": (key, color) = (14, biomes.temperateConiferForest)
+        case "temperate_broadleaf_forest": (key, color) = (15, biomes.temperateBroadleafForest)
+        case "tropical_conifer_forest": (key, color) = (16, biomes.tropicalConiferForest)
+        case "tropical_dry_forest": (key, color) = (18, biomes.tropicalDryForest)
+        case "tropical_moist_forest": (key, color) = (19, biomes.tropicalMoistForest)
+        default: (key, color) = (5, biomes.temperateGrassland)
+        }
+        return polygon(key: key, color: color, zoomFade: Self.landcoverZoomFade)
+    }
+
+    /// The overview's `lake`, the lakes of tile zoom 0, where the basemap
+    /// ships none: the water fill, under the same key as the basemap's.
+    func overviewLakeStyle(tileZoom: Int) -> FeatureStyle {
+        guard overviewPaintsLand(tileZoom: tileZoom) else {
+            return hiddenStyle
+        }
+        return polygon(key: Self.waterKey, color: theme.layers.water)
+    }
+
     /// The basemap's `landcover`: the continuous Daylight land cover it
     /// ships through z7, raster-derived blobs whose classes blend toward
     /// one shared tone over the globe and release to the unmixed palette
@@ -36,6 +147,39 @@ extension ProtomapsBasemapDefaultMapStyle {
     func landcoverStyle(kind: String?, tileZoom: Int) -> FeatureStyle {
         let colors = theme.layers
         let fade = Self.landcoverZoomFade
+        if overviewPaintsLand(tileZoom: tileZoom) {
+            // The biomes paint the land. On the globe (under
+            // `coverMinimumTileZoom`) the raster-derived classes give way
+            // to them whole, but the ice, which the biomes do not paint,
+            // stays over every biome, and the cities stay, the one thing a
+            // region view exists to show. From the cover zoom the forests,
+            // the fields and the bare ground draw over the biomes in the
+            // cover tones, a step off the biomes', and their holes show
+            // the biome. Grassland and scrub never draw: the biome is
+            // their tone. (Painted in the fields' tone the grassland filled
+            // the holes between the fields and took the biome's tone out of
+            // the temperate zone, two tones where three read better, and
+            // the woods got no finer for it.) One key per cover tone, the
+            // land use of the same ground in its own block over this one
+            // (`landuseStyle`): the land cover leaves with the biomes, the
+            // land use does not, so they cannot share a fill.
+            let biomes = colors.biomes
+            let coverDrawn = tileZoom >= biomes.coverMinimumTileZoom
+            switch kind {
+            case "forest" where coverDrawn:
+                return polygon(key: 20, color: biomes.forestCover, zoomFade: fade)
+            case "farmland" where coverDrawn:
+                return polygon(key: 21, color: biomes.farmlandCover, zoomFade: fade)
+            case "barren" where coverDrawn:
+                return polygon(key: 22, color: biomes.barrenCover, zoomFade: fade)
+            case "glacier":
+                return polygon(key: 23, color: colors.ice, zoomFade: fade)
+            case "urban_area":
+                return polygon(key: 24, color: colors.residential, zoomFade: fade)
+            default:
+                return hiddenStyle
+            }
+        }
         let vegetationBase = colors.grass
         let amount = Self.vegetationBlendAmount(tileZoom: tileZoom)
         switch kind {
@@ -96,9 +240,41 @@ extension ProtomapsBasemapDefaultMapStyle {
     /// one kind per feature, on every tile that ships it. It lies over the
     /// land cover of the coarse tiles that carry both. A kind the style
     /// does not name draws in the muted built tone rather than not at all.
-    func landuseStyle(kind: String?) -> FeatureStyle {
+    func landuseStyle(kind: String?, tileZoom: Int) -> FeatureStyle {
         let colors = theme.layers
         let fade = ImmersiveMapZoomFade.none
+        if overviewPaintsLand(tileZoom: tileZoom) {
+            // The biomes paint the land, and the land use draws over them
+            // what the land cover does, in the cover tones, in its own
+            // block of keys over the land cover's: the woods, the fields,
+            // the bare ground, the wetlands and the ice, from the cover
+            // zoom, the ice alone before it. The parks, the reserves and
+            // the built ground of the coarse tiles are hidden: they would
+            // lie as blotches on the painting. The land use does not fade:
+            // it is the same OSM polygons the z8 tiles carry, so while the
+            // biomes and the raster-derived land cover fade out under it
+            // over camera zoom 7 to 8, the woods and the fields stand
+            // through to the street map and the z8 tiles take them over in
+            // place, with no cover to appear from nowhere.
+            let biomes = colors.biomes
+            guard tileZoom >= biomes.coverMinimumTileZoom else {
+                return kind == "glacier" ? polygon(key: 29, color: colors.ice) : hiddenStyle
+            }
+            switch kind {
+            case "forest", "wood":
+                return polygon(key: 25, color: biomes.forestCover)
+            case "farmland", "orchard", "allotments", "vineyard", "plant_nursery":
+                return polygon(key: 26, color: biomes.farmlandCover)
+            case "sand", "beach", "bare_rock", "quarry", "scree", "shingle":
+                return polygon(key: 27, color: biomes.barrenCover)
+            case "wetland":
+                return polygon(key: 28, color: colors.wetland)
+            case "glacier":
+                return polygon(key: 29, color: colors.ice)
+            default:
+                return hiddenStyle
+            }
+        }
         switch kind {
         case "residential", "neighbourhood", "farmyard":
             return polygon(key: 9, color: colors.residential, zoomFade: fade)
@@ -151,9 +327,9 @@ extension ProtomapsBasemapDefaultMapStyle {
     }
 
     /// The deck's place among the ground lines: above the waterway lines
-    /// (22) and the ferry routes (23), below the aeroway lines and the
-    /// borders.
-    static let bridgeDeckKey: UInt8 = 24
+    /// (31 and 32) and the ferry routes (33), below the aeroway lines and
+    /// the borders.
+    static let bridgeDeckKey: UInt8 = 34
 
     /// A river, a canal or a stream: the lines of the `water` layer. The
     /// basemap spells the waterway kind on `kind` for a line and on
@@ -184,18 +360,19 @@ extension ProtomapsBasemapDefaultMapStyle {
             width = 1.0
             minimumWidthPoints = 0.5
         }
-        return line(key: isCulvert ? 21 : 22,
+        return line(key: isCulvert ? 31 : 32,
                     color: isCulvert ? Self.tunnelTone(theme.layers.water) : theme.layers.water,
                     width: width,
                     minimumWidthPoints: minimumWidthPoints)
     }
 
-    /// The `boundaries` layer: every level the tile ships. The countries
-    /// and the regions keep their weights; the finer levels (a county, a
-    /// municipality, a map unit) draw thinner and lighter, and a line the
-    /// basemap marks as no recognised border (a disputed claim, an
-    /// unrecognised country, the limit of a sea overlay) takes the short
-    /// dash of a disputed border.
+    /// The `boundaries` layer: every level the tile ships. A national
+    /// border is the one solid line, the convention of the atlas: the
+    /// regions and the finer levels (a county, a municipality, a map unit)
+    /// draw dashed, thinner and lighter, and a line the basemap marks as
+    /// no recognised border (a disputed claim, an unrecognised country,
+    /// the limit of a sea overlay) takes the short dash of a disputed
+    /// border.
     func boundaryStyle(kind: String?, props: [String: MvtValue], tileZoom: Int) -> FeatureStyle {
         enum Level { case country, region, local }
         let level: Level
@@ -226,23 +403,24 @@ extension ProtomapsBasemapDefaultMapStyle {
             key = 103
             widthPoints = 1.0
             // A national border is a reference line, not the subject of
-            // the map: it draws through the fills, and over a country or
-            // the globe, where the lines are the one cold hue in the
-            // frame, it lightens as the regional ones do.
+            // the map: it draws through the fills, half transparent, and
+            // over a country or the globe it lightens a little. Still the
+            // strongest line of the family at every zoom, so it stands
+            // apart from the regional borders by colour as well as by
+            // being the one solid line among them.
             color = tileZoom <= 6
-                ? Self.softenedBoundaryColor(color, towardWhite: 0.3, alpha: 0.5)
+                ? Self.softenedBoundaryColor(color, towardWhite: 0.15, alpha: 0.55)
                 : Self.softenedBoundaryColor(color, towardWhite: 0, alpha: 0.65)
         case .region:
             key = 100
             widthPoints = 1.1
-            // Regional borders at country overview zooms: the saturated
-            // purple that separates districts at street zooms is the one
-            // cold hue in a whole-region frame and reads as scribble
-            // there. Until the region zooms the line lightens and turns
-            // half transparent.
-            if tileZoom <= 6 {
-                color = Self.softenedBoundaryColor(color, towardWhite: 0.35, alpha: 0.6)
-            }
+            // Regional borders are a step lighter and more transparent
+            // than the national ones at every zoom, and over a country or
+            // the globe, where the lines are the one cold hue in the frame
+            // and a full purple reads as scribble, they lighten further.
+            color = tileZoom <= 6
+                ? Self.softenedBoundaryColor(color, towardWhite: 0.45, alpha: 0.45)
+                : Self.softenedBoundaryColor(color, towardWhite: 0.2, alpha: 0.6)
         case .local:
             key = 98
             widthPoints = 0.7
@@ -251,13 +429,23 @@ extension ProtomapsBasemapDefaultMapStyle {
         // Borders are drawn as lines only: the point-locked mode fills no
         // areas, so a boundary that arrives as a polygon is never a blob.
         // The dash is part of the baked style, so a disputed line takes
-        // the key under its level's.
+        // the key under its level's. A recognised national border is
+        // solid, the regions and below dash.
+        let dashLengthPoints: Float
+        let dashGapPoints: Float
+        if disputed {
+            (dashLengthPoints, dashGapPoints) = (3.0, 3.0)
+        } else if level == .country {
+            (dashLengthPoints, dashGapPoints) = (0, 0)
+        } else {
+            (dashLengthPoints, dashGapPoints) = (7.0, 3.5)
+        }
         return FeatureStyle.pointLockedLine(
             key: disputed ? key - 1 : key,
             color: color,
             widthPoints: widthPoints,
-            dashLengthPoints: disputed ? 3.0 : 7.0,
-            dashGapPoints: disputed ? 3.0 : 3.5
+            dashLengthPoints: dashLengthPoints,
+            dashGapPoints: dashGapPoints
         )
     }
 

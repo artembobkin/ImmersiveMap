@@ -55,6 +55,7 @@ struct LabelFeatureReader {
                                                      textStyle: decision.style,
                                                      poiIcon: decision.poiIcon,
                                                      minCameraZoom: style.minCameraZoom,
+                                                     maxCameraZoom: style.maxCameraZoom,
                                                      placement: style.placement,
                                                      standsOnRoof: style.standsOnRoof && style.placement == .screen,
                                                      featureId: featureID,
@@ -100,6 +101,7 @@ struct LabelFeatureReader {
                                                      textStyle: style.text,
                                                      poiIcon: nil,
                                                      minCameraZoom: style.minCameraZoom,
+                                                     maxCameraZoom: style.maxCameraZoom,
                                                      placement: style.placement))
         }
     }

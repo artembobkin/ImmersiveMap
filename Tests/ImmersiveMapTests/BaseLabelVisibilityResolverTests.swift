@@ -7,8 +7,37 @@ import XCTest
 /// The per-label rules of the frame path: which labels reserve collision
 /// space and which want to be shown, written in place.
 final class BaseLabelVisibilityResolverTests: XCTestCase {
-    private func input(key: UInt64 = 1, minZoom: Float = 0) -> BaseLabelPresentationInput {
-        BaseLabelPresentationInput(labelKey: key, minCameraZoom: minZoom)
+    private func input(key: UInt64 = 1, minZoom: Float = 0, maxZoom: Float = .infinity) -> BaseLabelPresentationInput {
+        BaseLabelPresentationInput(labelKey: key, minCameraZoom: minZoom, maxCameraZoom: maxZoom)
+    }
+
+    /// A label past its maximum camera zoom (a country's name among the
+    /// streets) hides as one below its minimum does: it wants to be hidden
+    /// and, once faded, reserves nothing.
+    func testALabelPastItsMaximumZoomHides() {
+        let inputs = [input(key: 1, maxZoom: 8), input(key: 2, minZoom: 3, maxZoom: 8), input(key: 3)]
+        var target: [Bool] = []
+        BaseLabelVisibilityResolver.targetVisibility(inputs: inputs,
+                                                     collisionVisible: [true, true, true],
+                                                     horizonVisibility: [true, true, true],
+                                                     cameraZoom: 7.9,
+                                                     into: &target)
+        XCTAssertEqual(target, [true, true, true], "Below the maximum every label shows")
+        BaseLabelVisibilityResolver.targetVisibility(inputs: inputs,
+                                                     collisionVisible: [true, true, true],
+                                                     horizonVisibility: [true, true, true],
+                                                     cameraZoom: 8,
+                                                     into: &target)
+        XCTAssertEqual(target, [false, false, true], "At the maximum the land's names go, the city's stays")
+
+        XCTAssertFalse(BaseLabelVisibilityResolver.reservesSpace(screenVisible: true, horizonVisible: true,
+                                                                 currentAlpha: 0, minCameraZoom: 0, maxCameraZoom: 8, cameraZoom: 9),
+                       "Past its zooms and faded: reserves nothing")
+        XCTAssertTrue(BaseLabelVisibilityResolver.reservesSpace(screenVisible: true, horizonVisible: true,
+                                                                currentAlpha: 0.5, minCameraZoom: 0, maxCameraZoom: 8, cameraZoom: 9),
+                      "but keeps its spot while it fades out")
+        XCTAssertTrue(input(maxZoom: 8).shows(atZoom: 7.99))
+        XCTAssertFalse(input(maxZoom: 8).shows(atZoom: 8))
     }
 
     func testTargetVisibilityRequiresHorizonAndCollisionAndZoom() {

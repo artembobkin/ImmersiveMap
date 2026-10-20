@@ -58,17 +58,37 @@ struct PlaceTile: Hashable {
     /// partition (`PlacementGroundSquare`), casts no shadow, asks for no
     /// terrain, and its mark lies under every other's.
     let isHorizonBackdrop: Bool
+    /// The terrain tile the placement's ground shades its slopes by on the
+    /// relief, nil on the plane: the ring's terrain, bound when the
+    /// placement is made (`TilePlacementPlanner`,
+    /// `GroundReliefStore.terrainSource`) and resident for as long as the
+    /// placement stands, so a tile and its heights come and go together
+    /// and the ground never changes shape under a tile that stays. Every
+    /// draw of the placement reads this terrain
+    /// (`GroundReliefStore.relief(for:terrain:)`), never a stand-in for it.
+    let terrain: Tile?
+    /// The terrain tile the placement's grid rises by, nil on the plane:
+    /// `terrain` or its ancestor at the displacement's zoom
+    /// (`GroundReliefSettings.displacementMaximumZoom`,
+    /// `GroundReliefStore.displacementSource`), bound and kept with it.
+    /// What stands on the ground (the labels, the buildings) stands at
+    /// this terrain's heights, the ground's as drawn.
+    let displacement: Tile?
 
     init(metalTile: MetalTile,
          placeIn: VisibleTile,
          slot: VisibleTile? = nil,
          rules: TileDrawRules = .all,
-         isHorizonBackdrop: Bool = false) {
+         isHorizonBackdrop: Bool = false,
+         terrain: Tile? = nil,
+         displacement: Tile? = nil) {
         self.metalTile = metalTile
         self.placeIn = placeIn
         self.slot = slot ?? placeIn
         self.rules = rules
         self.isHorizonBackdrop = isHorizonBackdrop
+        self.terrain = terrain
+        self.displacement = displacement ?? terrain
     }
 
     /// The tile is drawn in its own slot, at its own extent.

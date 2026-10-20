@@ -121,6 +121,7 @@ final class RenderLayerPlannerTests: XCTestCase {
         )
 
         XCTAssertEqual(enabledLayers(in: plan), [
+            .placementStencil,
             .globeVectorSurface,
             .surfaceLabels,
             .globeCap,

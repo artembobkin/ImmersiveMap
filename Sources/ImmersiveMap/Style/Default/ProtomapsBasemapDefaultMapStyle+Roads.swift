@@ -54,7 +54,7 @@ extension ProtomapsBasemapDefaultMapStyle {
             // A ferry route is a symbolic line like a border: a thin dashed
             // stroke in the water's colour, stated in points and held there
             // at every zoom. It crosses the river under the bridges' decks.
-            return FeatureStyle.pointLockedLine(key: 23,
+            return FeatureStyle.pointLockedLine(key: 33,
                                                 color: theme.layers.water,
                                                 widthPoints: Self.ferryWidthPoints,
                                                 dashLengthPoints: Self.ferryDashPoints,
@@ -63,9 +63,9 @@ extension ProtomapsBasemapDefaultMapStyle {
             // One key per width: the width is part of the baked style.
             switch kindDetail {
             case "runway":
-                return line(key: 28, color: theme.layers.aeroway, width: 8)
+                return line(key: 38, color: theme.layers.aeroway, width: 8)
             default:
-                return line(key: 27, color: theme.layers.aeroway, width: 3)
+                return line(key: 37, color: theme.layers.aeroway, width: 3)
             }
         case "rail":
             return railStyle(tunnel: isTunnel)
@@ -74,8 +74,11 @@ extension ProtomapsBasemapDefaultMapStyle {
         }
         let roadClass = Self.roadClass(kind: kind, kindDetail: kindDetail)
         // The theme may hold a class back to a tile zoom. By default it
-        // does not: every road the tile ships draws.
-        guard tileZoom >= theme.roadMetrics.minimumTileZoom.value(for: roadClass) else {
+        // does not: every road the tile ships draws, except at the zooms
+        // where the overview's road network stands in for them
+        // (`overviewRoadNetworkStyle`).
+        guard tileZoom >= theme.roadMetrics.minimumTileZoom.value(for: roadClass),
+              overviewRoadNetworkDraws(tileZoom: tileZoom) == false else {
             return hiddenStyle
         }
         // The name laid along the road is the road's own name: a road known
@@ -352,7 +355,12 @@ extension ProtomapsBasemapDefaultMapStyle {
     /// through the point-locked line factory the borders use (see
     /// `FeatureStyle.pointLockedLine`) but with round joins and caps, so a
     /// corridor the tiles ship in pieces reads as one continuous line.
-    /// Tunnels are the same stroke at the tunnel opacity.
+    /// Tunnels are the same stroke at the tunnel opacity. On the globe the
+    /// stroke wears the theme's veil (`RoadMetrics.globeOpacity`) and the
+    /// highway tones of the overview's road network
+    /// (`OverviewRoadStyles`, the main tone for the motorways and the
+    /// trunks, the minor one below), so the globe's view is one yellow net
+    /// through the unroll, and the asphalt arrives with the plane.
     func overviewRoadStyle(_ stroke: OverviewRoadStroke,
                            roadClass: RoadClass,
                            name: String,
@@ -366,6 +374,8 @@ extension ProtomapsBasemapDefaultMapStyle {
         let widthPoints = theme.roadMetrics.symbolWidthPoints.value(for: roadClass)
         let ramp = roadWidthRamp(roadClass)
         let fillColor = tunnel ? Self.tunnelTone(color) : color
+        let network = theme.layers.overviewRoads
+        let globeColor = roadClass == .motorway || roadClass == .trunk ? network.major : network.minor
         let geometry = LineGeometryStyle(
             lineWidth: Self.rampedRibbonWidth(ramp, widthPoints: widthPoints, tileZoom: tileZoom),
             lineCapRound: true,
@@ -379,6 +389,8 @@ extension ProtomapsBasemapDefaultMapStyle {
             lineWidthPoints: widthPoints,
             pointWidthWorldLockZoom: theme.roadMetrics.worldLockZoom,
             pointWidthRamp: ramp,
+            sphereAlpha: theme.roadMetrics.globeOpacity,
+            sphereColor: SIMD3<Float>(globeColor.x, globeColor.y, globeColor.z),
             lineGeometry: geometry
         )
         // A ground line at the coarse zooms, a road from

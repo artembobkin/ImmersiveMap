@@ -45,4 +45,20 @@ final class TileSourceAndStyleSettingsTests: XCTestCase {
         XCTAssertEqual(plan.actions, [.invalidateCaches, .rebuildPreparedData, .rebuildGPUResources, .recreateRenderer])
         XCTAssertTrue(plan.requiresRendererRecreation)
     }
+
+    /// The overview is laid into the tiles by the load pipeline, built with
+    /// the renderer, and baked into the prepared tiles: switching it
+    /// rebuilds both.
+    func testOverviewTilesChangeRebuildsThePipelineAndThePreparedData() {
+        let oldSettings = ImmersiveMapSettings.default
+        XCTAssertTrue(oldSettings.tiles.overview.isEnabled, "The overview is on by default")
+        let newSettings = oldSettings.overviewTiles(isEnabled: false)
+
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
+
+        XCTAssertEqual(plan.changedDomains, [.tiles, .attribution],
+                       "The overview's credit leaves the badge with the overview")
+        XCTAssertEqual(plan.actions, [.invalidateCaches, .rebuildPreparedData, .recreateRenderer, .liveApply])
+        XCTAssertTrue(plan.requiresRendererRecreation)
+    }
 }

@@ -39,12 +39,14 @@ enum GlobeVectorSurfaceDrawer {
                      placeTilesContext: PlaceTilesContext,
                      pipeline: TilePipeline,
                      opaqueDepthState: MTLDepthStencilState,
+                     ribbonOwnerDepthState: MTLDepthStencilState,
                      translucentDepthState: MTLDepthStencilState,
                      depthDisabledState: MTLDepthStencilState,
                      isWireframeEnabled: Bool,
                      pureSphere: Bool,
                      globeFrame: GlobeFrameConstantsUniform,
-                     globeLight: GlobeLightUniform = .disabled) {
+                     globeLight: GlobeLightUniform = .disabled,
+                     ribbonUniform: TileSphereRibbonUniform = TileSphereRibbonUniform(handover: 0)) {
         guard placeTilesContext.tilePlacements.isEmpty == false else {
             return
         }
@@ -72,6 +74,10 @@ enum GlobeVectorSurfaceDrawer {
         var overviewFadeValue = overviewFadeUniform
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setVertexBytes(&globeValue, length: MemoryLayout<GlobeUniform>.stride, index: 8)
+        // The ribbons' fragment reads the handover for the globe's look of
+        // a stroke (TileSphere.metal, buffer 8).
+        var ribbonValue = ribbonUniform
+        renderEncoder.setFragmentBytes(&ribbonValue, length: MemoryLayout<TileSphereRibbonUniform>.stride, index: 8)
         var globeFrameValue = globeFrame
         renderEncoder.setVertexBytes(&globeFrameValue,
                                      length: MemoryLayout<GlobeFrameConstantsUniform>.stride,
@@ -166,21 +172,61 @@ enum GlobeVectorSurfaceDrawer {
             // The line ribbons (boundaries, overview strokes) last, through
             // the line-field coverage, at their rank z above every fill;
             // fully faded ribbons (road strokes below their start zoom) are
-            // skipped the same way.
+            // skipped the same way. With a veiled stroke among them, two
+            // phases (TilePipeline.SphereRibbonPhase): the cores first, writing the rank depth
+            // under a strict test, one draw per run from the highest rank
+            // down, so a pixel several strokes cover blends once, by the
+            // highest, and a veiled stroke never darkens where two pieces
+            // of it overlap. Then the feathers, blended and tested against
+            // the cores, so an edge softens over the ground and over a
+            // lower stroke and never over a higher one.
             let isVisibleRibbonRun: (GroundStyleRun) -> Bool = { run in
                 run.isLinesClass
                     && TileStyleFadeMath.fadeIsZero(zoomFade: run.zoomFade, overviewFade: overviewFadeUniform) == false
             }
-            renderEncoder.pushDebugGroup("ground.lineRibbons")
-            pipeline.selectSphereClassPipeline(renderEncoder: renderEncoder, linesClass: true, morph: morph)
+            let hasVisibleRibbons: (TileBuffers.GeometryLayer) -> Bool = { buffers in
+                buffers.styleRuns.isEmpty || buffers.styleRuns.contains(where: isVisibleRibbonRun)
+            }
+            // The second draw is paid only where a veiled stroke is on
+            // screen (`GroundStyleRun.isSphereVeiled`): a frame whose
+            // ribbons are all whole on the sphere draws them once, as it
+            // always did. The phases are per frame, not per tile, since
+            // the cores' depth must be in before any feather is tested.
+            let drawsVeiledRibbons = linedSources.contains { source in
+                source.tileBuffers.ground.styleRuns.contains { run in
+                    run.isSphereVeiled && isVisibleRibbonRun(run)
+                }
+            }
+            if drawsVeiledRibbons {
+                renderEncoder.pushDebugGroup("ground.lineRibbons.cores")
+                renderEncoder.setDepthStencilState(ribbonOwnerDepthState)
+                pipeline.selectSphereClassPipeline(renderEncoder: renderEncoder, linesClass: true, morph: morph,
+                                                   ribbonPhase: .core)
+                forEachSource(renderEncoder: renderEncoder,
+                              sources: linedSources,
+                              renderMapSize: renderMapSize,
+                              pixelsPerPoint: pixelsPerPoint,
+                              drawableHeightPx: drawableHeightPx,
+                              worthBinding: hasVisibleRibbons) { buffers, indices in
+                    drawRuns(renderEncoder: renderEncoder,
+                             buffers: buffers,
+                             indices: indices,
+                             drawsAllWithoutRuns: true,
+                             order: .highestRankFirst,
+                             predicate: isVisibleRibbonRun)
+                }
+                renderEncoder.popDebugGroup()
+            }
+            renderEncoder.pushDebugGroup(drawsVeiledRibbons ? "ground.lineRibbons.feathers" : "ground.lineRibbons")
+            renderEncoder.setDepthStencilState(translucentDepthState)
+            pipeline.selectSphereClassPipeline(renderEncoder: renderEncoder, linesClass: true, morph: morph,
+                                               ribbonPhase: drawsVeiledRibbons ? .feather : .whole)
             forEachSource(renderEncoder: renderEncoder,
                           sources: linedSources,
                           renderMapSize: renderMapSize,
                           pixelsPerPoint: pixelsPerPoint,
                           drawableHeightPx: drawableHeightPx,
-                          worthBinding: { buffers in
-                              buffers.styleRuns.isEmpty || buffers.styleRuns.contains(where: isVisibleRibbonRun)
-                          }) { buffers, indices in
+                          worthBinding: hasVisibleRibbons) { buffers, indices in
                 drawRuns(renderEncoder: renderEncoder,
                          buffers: buffers,
                          indices: indices,
@@ -268,10 +314,20 @@ enum GlobeVectorSurfaceDrawer {
     /// layers correctly. When the run table is absent, only the ribbons pass
     /// (`drawsAllWithoutRuns`) falls back to one full draw, whose line-field
     /// pipeline paints exactly like the unsplit combined path.
+    /// The order the runs of a layer go out in: as baked, the lowest rank
+    /// first and adjacent runs merged into one draw, or one draw per run
+    /// from the highest rank down, for a pass whose depth writes must land
+    /// before the next rank is tested against them.
+    enum RunOrder {
+        case baked
+        case highestRankFirst
+    }
+
     private static func drawRuns(renderEncoder: MTLRenderCommandEncoder,
                                  buffers: TileBuffers.GeometryLayer,
                                  indices: TileBufferView,
                                  drawsAllWithoutRuns: Bool = false,
+                                 order: RunOrder = .baked,
                                  predicate: (GroundStyleRun) -> Bool) {
         let runs = buffers.styleRuns
         guard runs.isEmpty == false else {
@@ -284,6 +340,16 @@ enum GlobeVectorSurfaceDrawer {
             return
         }
         let indexByteWidth = buffers.indexType == .uint16 ? 2 : 4
+        if order == .highestRankFirst {
+            for run in runs.reversed() where run.indexCount > 0 && predicate(run) {
+                renderEncoder.drawIndexedPrimitives(type: .triangle,
+                                                    indexCount: Int(run.indexCount),
+                                                    indexType: buffers.indexType,
+                                                    indexBuffer: indices.buffer,
+                                                    indexBufferOffset: indices.offset + Int(run.indexStart) * indexByteWidth)
+            }
+            return
+        }
         var spanStart = 0
         var spanCount = 0
         func flush() {

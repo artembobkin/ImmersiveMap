@@ -13,6 +13,12 @@ final class ImmersiveMapRenderRuntime {
     /// The app's `onFrameRendered` action, if any. Called on the main thread
     /// from the display-link callback, after the frame committed.
     private var frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)?
+    /// The app's `onTerrainSurroundingsChange` action, if any, called on the
+    /// main thread after a frame whose reading differs from the last one
+    /// delivered, and after the first frame.
+    private var terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)?
+    private var deliveredTerrainSurroundings: ImmersiveMapTerrainSurroundings?
+    private var hasDeliveredTerrainSurroundings = false
 
     init(configuration: ImmersiveMapSettings.RenderLoopSettings) {
         self.driver = ImmersiveMapRenderDriver(configuration: configuration)
@@ -49,6 +55,16 @@ final class ImmersiveMapRenderRuntime {
 
     func setFrameRenderedAction(_ action: ((ImmersiveMapRenderedFrame) -> Void)?) {
         frameRenderedAction = action
+    }
+
+    /// An action set where there was none hears the current reading with
+    /// the next frame. SwiftUI hands the same action again on every update
+    /// of the hierarchy, which changes nothing here.
+    func setTerrainSurroundingsAction(_ action: ((ImmersiveMapTerrainSurroundings?) -> Void)?) {
+        if terrainSurroundingsAction == nil, action != nil {
+            hasDeliveredTerrainSurroundings = false
+        }
+        terrainSurroundingsAction = action
     }
 
     func updateRenderLoopSettings(_ settings: ImmersiveMapSettings.RenderLoopSettings) {
@@ -132,6 +148,7 @@ final class ImmersiveMapRenderRuntime {
         let didSchedule = driver.renderFrame(layer: layer,
                                              drawable: drawable,
                                              isRenderable: viewportRuntime.isRenderable)
+        reportTerrainSurroundings()
         guard didSchedule, let frameRenderedAction else {
             return didSchedule
         }
@@ -140,5 +157,22 @@ final class ImmersiveMapRenderRuntime {
                                               targetPresentationTimestamp: targetPresentationTimestamp)
         frameRenderedAction(frame)
         return didSchedule
+    }
+
+    /// The engine's reading of the country around the camera
+    /// (`RenderFrameEngine.currentTerrainSurroundings`), handed to the app
+    /// when it differs from the last one it heard. Whether or not the frame
+    /// reached a drawable: the reading is the frame's input, not its output.
+    private func reportTerrainSurroundings() {
+        guard let terrainSurroundingsAction, let renderer else {
+            return
+        }
+        let surroundings = renderer.currentTerrainSurroundings
+        guard hasDeliveredTerrainSurroundings == false || surroundings != deliveredTerrainSurroundings else {
+            return
+        }
+        deliveredTerrainSurroundings = surroundings
+        hasDeliveredTerrainSurroundings = true
+        terrainSurroundingsAction(surroundings)
     }
 }

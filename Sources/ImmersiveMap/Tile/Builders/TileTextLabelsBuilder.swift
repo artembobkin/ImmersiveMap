@@ -36,18 +36,25 @@ final class TileTextLabelsBuilder {
     private static let extendedLabelWrapWidthFactor: Float = 1.5
     /// Label box width in ems at the base wrap.
     private static let baseLabelWrapWidthEms: Float = 10.0
+    /// A letter's advance for a widening of the wrap box by the tracking:
+    /// about what a lowercase letter in the atlas advances.
+    private static let averageAdvanceEms: Float = 0.55
 
     /// Wraps a label at the base box; when the text does not fit the base
     /// lines (the wrapper then runs the remainder onto its last line, so the
     /// laid-out width exceeds the box) the label is wrapped again at the
     /// extended box. Two passes cost a second layout only for the long names,
     /// which are rare.
+    /// A spaced-out name (`letterSpacingEm`) wraps at a box widened by
+    /// the spacing, so it keeps the lines its letters alone would make.
     static func wrappedLabelMetrics(for text: String,
                                     labelIndex: simd_int1,
                                     textScale: Float,
                                     weight: LabelFontWeight,
+                                    letterSpacingEm: Float = 0,
                                     textRenderer: TextRenderer) -> TextMetrics {
-        let baseWidth = textScale * baseLabelWrapWidthEms
+        let spacingWidening = 1 + max(letterSpacingEm, 0) / averageAdvanceEms
+        let baseWidth = textScale * baseLabelWrapWidthEms * spacingWidening
         let baseWrap = LabelWrapOptions(maxWidth: baseWidth,
                                         maxLines: baseLabelWrapLineCount,
                                         alignment: .left)
@@ -55,7 +62,8 @@ final class TileTextLabelsBuilder {
                                                             labelIndex: labelIndex,
                                                             scale: textScale,
                                                             wrap: baseWrap,
-                                                            weight: weight)
+                                                            weight: weight,
+                                                            letterSpacing: letterSpacingEm)
         // A small tolerance: a line that measures a hair over the box is the
         // wrapper's own rounding, not an overflow worth a second pass.
         guard baseMetrics.size.width > baseWidth * 1.02 else {
@@ -68,7 +76,8 @@ final class TileTextLabelsBuilder {
                                                  labelIndex: labelIndex,
                                                  scale: textScale,
                                                  wrap: extendedWrap,
-                                                 weight: weight)
+                                                 weight: weight,
+                                                 letterSpacing: letterSpacingEm)
     }
     /// How large a POI label draws next to the plain text labels around it.
     ///
@@ -129,6 +138,7 @@ final class TileTextLabelsBuilder {
                                                           collisionPriority: label.collisionPriority,
                                                           labelSizePoints: geometry.size,
                                                           minCameraZoom: label.minCameraZoom,
+                                                          maxCameraZoom: label.maxCameraZoom,
                                                           isLocal: label.isLocal)
                     ),
                     style: label.textStyle,
@@ -151,6 +161,7 @@ final class TileTextLabelsBuilder {
                                                        labelIndex: labelIndex,
                                                        textScale: textScale,
                                                        weight: weight,
+                                                       letterSpacingEm: style.letterSpacingEm,
                                                        textRenderer: textRenderer)
             let geometry = makeCombinedLabelGeometry(textMetrics: textMetrics,
                                                      poiIcon: label.poiIcon,
@@ -165,6 +176,7 @@ final class TileTextLabelsBuilder {
                                                   collisionPriority: label.collisionPriority,
                                                   labelSizePoints: geometry.size,
                                                   minCameraZoom: label.minCameraZoom,
+                                                  maxCameraZoom: label.maxCameraZoom,
                                                   isLocal: label.isLocal)
             )
             builtLabels.append(BuiltBaseLabel(placementInput: placementInput,
@@ -262,6 +274,7 @@ final class TileTextLabelsBuilder {
         /// no longer share a run.
         let haloWidthPoints: Float
         let emboldenPoints: Float
+        let opacity: Float
 
         init(_ style: LabelTextStyle) {
             self.key = style.key
@@ -270,6 +283,7 @@ final class TileTextLabelsBuilder {
             self.strokeColor = style.strokeColor
             self.haloWidthPoints = style.haloEm * style.sizePoints
             self.emboldenPoints = style.emboldenPoints
+            self.opacity = style.opacity
         }
 
         /// Deterministic draw order: first by `key` (matches the previous
@@ -280,6 +294,7 @@ final class TileTextLabelsBuilder {
             if lhs.weight.rawValue != rhs.weight.rawValue { return lhs.weight.rawValue < rhs.weight.rawValue }
             if lhs.haloWidthPoints != rhs.haloWidthPoints { return lhs.haloWidthPoints < rhs.haloWidthPoints }
             if lhs.emboldenPoints != rhs.emboldenPoints { return lhs.emboldenPoints < rhs.emboldenPoints }
+            if lhs.opacity != rhs.opacity { return lhs.opacity < rhs.opacity }
             for index in 0..<3 where lhs.fillColor[index] != rhs.fillColor[index] {
                 return lhs.fillColor[index] < rhs.fillColor[index]
             }

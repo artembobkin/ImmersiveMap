@@ -56,52 +56,28 @@ enum DebugOverlayGroundFogSettingsPlanner {
         "Max opacity \(String(format: "%.2f", value(opacity, maximumOpacityAxes, cameraZoom)))"
     }
 
-    /// A starting point for the air over mountains, to drag from: the haze
-    /// from the camera on with no clear stretch, thin (half the light gone
-    /// in some 35 km), a 2.5 km layer that is thickest up to the valleys'
-    /// floor at 1500 m and thins over the summits, in a cool grey-blue.
-    /// The stops at zooms 7 and 12 are replaced, the street zooms' (16 and
-    /// 22) kept, so the city's fog stays as the app has it.
+    /// A starting point for the air over mountains, to drag from: the
+    /// settings' own (`GroundFogSettings.mountainAir(from:)`), the default
+    /// air over the mountains made of the plain's.
     static func mountainAirPreset(from fog: ImmersiveMapSettings.GroundFogSettings) -> ImmersiveMapSettings.GroundFogSettings {
-        var preset = fog
-        preset.isEnabled = true
-        preset.heightsFromSeaLevel = true
-        preset.baseAltitudeMeters = 1500
-        preset.color = SIMD3<Float>(0.72, 0.79, 0.88)
-        preset.densityPerKilometer = replacingOverviewStops(of: fog.densityPerKilometer, with: 0.02)
-        preset.heightMeters = replacingOverviewStops(of: fog.heightMeters, with: 2500)
-        // Geometric curves cannot hold a zero: ten meters is no clear
-        // stretch to speak of.
-        preset.startDistanceMeters = replacingOverviewStops(of: fog.startDistanceMeters, with: 10)
-        preset.startSoftnessMeters = replacingOverviewStops(of: fog.startSoftnessMeters, with: 3000)
-        return preset
+        ImmersiveMapSettings.GroundFogSettings.mountainAir(from: fog)
     }
 
     /// The zooms the overview's stops of the shipping curves sit at, the
-    /// relief's zooms and below.
-    static let overviewStopZooms: ClosedRange<Double> = 0...13
+    /// relief's zooms and below (`GroundFogSettings.overviewStopZooms`).
+    static let overviewStopZooms = ImmersiveMapSettings.GroundFogSettings.overviewStopZooms
 
-    /// `curve` with every stop up to zoom 13 dropped and one value put at
-    /// zooms 7 and 12 in their place: the overview reads it, and the stops
-    /// past it are the curve's own.
     static func replacingOverviewStops(of curve: ImmersiveMapZoomCurve, with value: Float) -> ImmersiveMapZoomCurve {
-        let kept = curve.stops.filter { overviewStopZooms.contains($0.zoom) == false }
-        return ImmersiveMapZoomCurve(stops: kept + [ImmersiveMapZoomCurve.Stop(zoom: 7, value: value),
-                                                    ImmersiveMapZoomCurve.Stop(zoom: 12, value: value)])
+        ImmersiveMapSettings.GroundFogSettings.replacingOverviewStops(of: curve, with: value)
     }
 
     static func baseAltitudeTitle(_ meters: Float) -> String {
         "Full density up to \(metersText(Double(meters)))"
     }
 
-    /// A length as it reads best: whole meters under a kilometer,
-    /// kilometers with one decimal from there.
+    /// A length as it reads best (`DebugOverlayValueText.meters`).
     static func metersText(_ meters: Double) -> String {
-        if meters < 1000 {
-            return String(format: "%.0f m", meters)
-        }
-        let kilometers = String(format: "%.1f", meters / 1000)
-        return "\(kilometers.hasSuffix(".0") ? String(kilometers.dropLast(2)) : kilometers) km"
+        DebugOverlayValueText.meters(meters)
     }
 
     static func densityText(_ density: Double) -> String {

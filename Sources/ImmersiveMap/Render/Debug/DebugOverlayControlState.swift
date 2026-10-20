@@ -64,9 +64,11 @@ final class DebugOverlayControlState {
     private var labelDistanceRules = LabelDistanceRules.default
     private var localLabelMaximumDistanceMeters: Float?
     private var labelPerspectiveMinimumScale: Float?
-    private var hillshadeFade: ClosedRange<Float>?
+    private var draggedHillshadeFade: GroundReliefHillshade.Fade?
     private var draggedHillshadeAmounts: GroundReliefHillshade.Amounts?
     private var reliefShadows: Bool?
+    private var draggedTerrainOcclusion: ImmersiveMapTerrainOcclusion?
+    private var occlusionDebugView = false
 
     /// The controls as a frame reads them.
     func snapshot() -> DebugOverlayControlSnapshot {
@@ -108,14 +110,13 @@ final class DebugOverlayControlState {
         return labelDistanceRules.scale(forCameraZoom: cameraZoom)
     }
 
-    /// The hillshade's fade the panel has been dragged to, in the eye's
-    /// distances to the point it looks at, nil for the style's
-    /// (`ImmersiveMapHillshade.fadeStartCameraDistances`,
-    /// `fadeEndCameraDistances`).
-    func hillshadeFadeCameraDistances() -> ClosedRange<Float>? {
+    /// The hillshade's fade the panel has been dragged to, metres from
+    /// the eye by the zoom, nil for the style's
+    /// (`ImmersiveMapHillshade.fadeStartMeters`, `fadeEndMeters`).
+    func hillshadeFade() -> GroundReliefHillshade.Fade? {
         lock.lock()
         defer { lock.unlock() }
-        return hillshadeFade
+        return draggedHillshadeFade
     }
 
     /// The hillshade's amounts the panel has been dragged to, nil for
@@ -133,6 +134,34 @@ final class DebugOverlayControlState {
         lock.unlock()
     }
 
+    /// The occlusion of the sky the panel has been dragged to, nil for
+    /// the style's (`ImmersiveMapTerrainOcclusion`).
+    func terrainOcclusion() -> ImmersiveMapTerrainOcclusion? {
+        lock.lock()
+        defer { lock.unlock() }
+        return draggedTerrainOcclusion
+    }
+
+    func setTerrainOcclusion(_ occlusion: ImmersiveMapTerrainOcclusion?) {
+        lock.lock()
+        draggedTerrainOcclusion = occlusion
+        lock.unlock()
+    }
+
+    /// Whether the frame draws the occlusion of the sky alone, in grey,
+    /// the panel's view of it.
+    func terrainOcclusionDebugView() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return occlusionDebugView
+    }
+
+    func setTerrainOcclusionDebugView(_ isEnabled: Bool) {
+        lock.lock()
+        occlusionDebugView = isEnabled
+        lock.unlock()
+    }
+
     /// Whether the mountains cast their shadows as the panel set it, nil
     /// for the setting's (`GroundReliefSettings.castsShadows`).
     func reliefCastsShadows() -> Bool? {
@@ -147,9 +176,9 @@ final class DebugOverlayControlState {
         lock.unlock()
     }
 
-    func setHillshadeFadeCameraDistances(_ fade: ClosedRange<Float>?) {
+    func setHillshadeFade(_ fade: GroundReliefHillshade.Fade?) {
         lock.lock()
-        hillshadeFade = fade.map { max(0, $0.lowerBound) ... max(0, $0.lowerBound, $0.upperBound) }
+        draggedHillshadeFade = fade
         lock.unlock()
     }
 

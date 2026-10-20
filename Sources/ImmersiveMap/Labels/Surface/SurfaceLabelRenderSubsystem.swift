@@ -178,8 +178,8 @@ final class SurfaceLabelRenderSubsystem: RenderSubsystem {
             encoder.setVertexBytes(&surfaceTile, length: MemoryLayout<GlobeSurfaceTileUniform>.stride, index: 9)
         }
 
-        var drawUniform = SurfaceLabelDrawUniform(fillColor: SIMD4<Float>(style.fillColor, 1),
-                                                  strokeColor: SIMD4<Float>(style.strokeColor, 1),
+        var drawUniform = SurfaceLabelDrawUniform(fillColor: SIMD4<Float>(style.fillColor, style.opacity),
+                                                  strokeColor: SIMD4<Float>(style.strokeColor, style.opacity),
                                                   haloAtlasTexels: haloAtlasTexels,
                                                   depth: SurfaceLabelDepth.depth,
                                                   haloPass: haloPass ? 1 : 0,

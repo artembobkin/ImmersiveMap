@@ -73,6 +73,11 @@ final class RenderFrameEngine {
     private let inFlightFramePool = InFlightFramePool(slotsCount: InFlightFramePool.inFlightFramesCount)
     /// Keeps the rendered shadow map alive across frames; see the type.
     private let shadowMapReuse = ShadowMapReuseController()
+    /// The country around the camera read off the terrain, smoothed over
+    /// the frames (`GroundReliefSurroundings`), and the last frame's
+    /// reading, which the render runtime hands to the app.
+    private var groundReliefSurroundings = GroundReliefSurroundings()
+    private(set) var currentTerrainSurroundings: ImmersiveMapTerrainSurroundings?
     private let clock: RenderFrameClock
     /// The loader's status last written to the tile trace: the trace takes
     /// a status once per change, not once per frame.
@@ -327,6 +332,7 @@ final class RenderFrameEngine {
         publishDebugOverlayHUDSnapshot(frameContext: frameContext)
 
         currentDiagnostics = frameContext.diagnostics
+        currentTerrainSurroundings = frameContext.terrainSurroundings
         return didSchedule
     }
 
@@ -391,12 +397,17 @@ final class RenderFrameEngine {
         persistentContext.groundReliefStore?.setWorldScale(centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
                                                            renderMapSize: resolvedPresentation.flatRenderState.renderMapSize)
         // The slopes are shaded by the scene's light, which the settings
-        // change live, and fade with the distance from the eye. The debug
-        // panel drags the fade and the amounts over the style's.
+        // change live, and fade with the distance from the eye, in metres
+        // at the frame's zoom. The debug panel drags the fade's curves and
+        // the amounts over the style's.
         persistentContext.groundReliefStore?.setLight(direction: settings.scene.light.direction,
                                                       cameraEye: cameraFrameState.cameraEye,
-                                                      fadeCameraDistances: debugOverlayControls.hillshadeFadeCameraDistances(),
+                                                      fade: debugOverlayControls.hillshadeFade(),
                                                       amounts: debugOverlayControls.hillshadeAmounts())
+        // The darkening where the terrain hides the sky, the style's or the
+        // debug panel's over it, and the panel's view of it alone.
+        persistentContext.groundReliefStore?.setOcclusion(debugOverlayControls.terrainOcclusion(),
+                                                          debugView: debugOverlayControls.terrainOcclusionDebugView())
         // The mountains' shadows, as the settings and the debug panel say.
         persistentContext.groundReliefStore?.setCastsShadows(settings.tiles.groundRelief.castsShadows
             && debugOverlayControls.reliefCastsShadows() != false)
@@ -423,6 +434,9 @@ final class RenderFrameEngine {
         let cameraMatrices = cameraFrameState.cameraMatrices
         let cameraEye = cameraFrameState.cameraEye
         if let groundReliefStore = persistentContext.groundReliefStore {
+            // The terrain each ring reads is its rule's, resolved with the
+            // coverage (`FlatRingBand.terrainZoom`).
+            groundReliefStore.setBands(resolvedPresentation.renderSurfaceMode == .flat ? visibleContent.flatRingBands : [])
             if resolvedPresentation.renderSurfaceMode == .flat {
                 groundReliefStore.setActive(visibleContent.tileZoomLevel >= groundReliefStore.fromTileZoom
                                             && groundReliefStore.isVisible(atZoom: cameraFrameState.planningZoom))
@@ -436,6 +450,19 @@ final class RenderFrameEngine {
                 groundReliefStore.setDatum(metres: 0)
             }
         }
+        // Mountains or a plain around the point the camera looks at, read
+        // off the terrain now that the frame knows whether it is on it. A
+        // few dozen height lookups on the CPU, nil off the terrain.
+        let terrainSurroundings: ImmersiveMapTerrainSurroundings?
+        if let groundReliefStore = persistentContext.groundReliefStore {
+            terrainSurroundings = groundReliefSurroundings.update(store: groundReliefStore,
+                                                                  centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
+                                                                  settings: settings.tiles.groundRelief.surroundings,
+                                                                  deltaTime: frameTick.deltaTime)
+        } else {
+            groundReliefSurroundings.reset()
+            terrainSurroundings = nil
+        }
         // Resolved once here, so the pass injection and every receiver bind
         // site take the same answer from `ShadowPassGateResolver`.
         let shadowFrameState = shadowMapReuse.resolveFrameState(
@@ -448,7 +475,8 @@ final class RenderFrameEngine {
             // The relief's heights as the coverage reads them: the window
             // reaches the valleys and the summits.
             groundHeights: reliefHeights,
-            // The shadows come in with the zoom the eye sees, as the air does.
+            // The strength and the coverages read the zoom the eye sees,
+            // so a zoom gesture plays them.
             zoom: animatedZoomValue,
             scene: settings.scene
         )
@@ -468,6 +496,7 @@ final class RenderFrameEngine {
                             animatedZoom: animatedZoomValue,
                             planningZoom: cameraFrameState.planningZoom,
                             terrainFollowReport: renderCamera.lastTerrainFollowReport,
+                            terrainSurroundings: terrainSurroundings,
                             resolvedPresentation: resolvedPresentation,
                             visibleContent: visibleContent,
                             shadowFrameState: shadowFrameState,

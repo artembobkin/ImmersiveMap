@@ -31,6 +31,44 @@ final class TilePlacementPlannerTests: XCTestCase {
                                              backdropZoomLevel: backdropZoomLevel).tilePlacements
     }
 
+    /// On the relief a target is placed with its terrain or not at all:
+    /// while the terrain its slot's ring reads is not in, what stood on
+    /// the ground stands on, by the terrain each was placed with, and the
+    /// descendants in stand in only with theirs. A previous placement
+    /// whose terrain went is not kept.
+    func testATargetWaitsForItsTerrainAndThePreviousGroundStands() throws {
+        let resident = try resident([parent] + children)
+        let shownBefore = children.map {
+            PlaceTile(metalTile: resident[$0]!, placeIn: VisibleTile(tile: $0), terrain: $0)
+        }
+        var terrainIn = Set(children)
+        func plan(previous: [PlaceTile]) -> [PlaceTile] {
+            TilePlacementPlanner.buildPlacements(targets: [VisibleTile(tile: parent)],
+                                                 resident: resident,
+                                                 zoom: 5,
+                                                 previous: previous,
+                                                 terrain: { tile, _ in (tile, tile) },
+                                                 terrainResident: { terrainIn.contains($0) }).tilePlacements
+        }
+        let waiting = plan(previous: shownBefore)
+        XCTAssertEqual(Set(waiting.map(\.metalTile.tile)), Set(children), "The parent is in, its terrain is not: the children stand")
+        XCTAssertTrue(waiting.allSatisfy { $0.terrain == $0.metalTile.tile && $0.displacement == $0.metalTile.tile },
+                      "Each by the terrain it was placed with")
+        XCTAssertEqual(Set(plan(previous: []).map(\.metalTile.tile)), Set(children), "The descendants in, with their terrain")
+
+        terrainIn.insert(parent)
+        let own = plan(previous: shownBefore)
+        XCTAssertEqual(own.map(\.metalTile.tile), [parent], "Both in: the target takes its ground")
+        XCTAssertEqual(own.first?.terrain, parent)
+
+        terrainIn = [parent]
+        XCTAssertEqual(plan(previous: shownBefore).map(\.metalTile.tile), [parent])
+        terrainIn = []
+        XCTAssertTrue(plan(previous: shownBefore).isEmpty, "Nothing in with its terrain: nothing is placed")
+        XCTAssertEqual(TilePlacementPlanner.buildPlacements(targets: [VisibleTile(tile: parent)], resident: resident, zoom: 5)
+                           .tilePlacements.map(\.terrain), [nil], "Off the relief a resident tile is ready as it is")
+    }
+
     func testAResidentTargetDrawsItself() throws {
         let resident = try resident([parent, grandparent])
         let placed = placements(targets: [parent], resident: resident, zoom: 5)

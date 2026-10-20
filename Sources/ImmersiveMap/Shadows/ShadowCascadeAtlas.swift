@@ -10,9 +10,9 @@ import Metal
 /// never disagree.
 ///
 /// Two windows, not a cascade set and not one: the near window is fitted to
-/// a disc of `ShadowSettings.coverageCameraDistances` camera distances for
+/// a disc of `ShadowSettings.nearCoverageMeters` at the camera zoom for
 /// the shadows the camera looks at, sharp, and the far window to a disc of
-/// `farCoverageCameraDistances` for the ground beyond it, the mountains
+/// `farCoverageMeters` for the ground beyond it, the mountains
 /// casting across a valley from kilometres away, at the same map size and
 /// so coarser. A receiver reads the near window where it reaches and the far
 /// one past it, blended over the near window's fade band
@@ -44,7 +44,7 @@ enum ShadowCascadeSlot: Int, CaseIterable {
     /// The sharp window around the ground the camera looks at.
     case near = 0
     /// The coarse window reaching the ground beyond it. Fitted only when
-    /// `ShadowSettings.farCoverageCameraDistances` reaches past the near
+    /// `ShadowSettings.farCoverageMeters` reaches past the near
     /// window (`ShadowFrameStateResolver.resolveInputs`).
     case far = 1
 

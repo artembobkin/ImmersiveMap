@@ -81,6 +81,35 @@ final class GroundStyleRunTests: XCTestCase {
         XCTAssertTrue(runs[2].isLinesClass)
     }
 
+    /// A ribbons run whose style keeps less than its whole alpha on the
+    /// sphere is flagged, and only a ribbons run: the sphere drawer pays
+    /// the two-phase draw for a tile with such a run alone.
+    func testScannerFlagsTheRibbonsVeiledOnTheSphere() {
+        let opaque = TilePolygonStyle(color: SIMD4<Float>(1, 0, 0, 1))
+        var vertices: [TileVertexIn] = []
+        var indices: [UInt32] = []
+        // One fill (style 0), then two ribbons (styles 1 and 2).
+        for style: UInt8 in [0, 1, 2] {
+            let base = UInt32(vertices.count)
+            vertices.append(contentsOf: [vertex(style), vertex(style), vertex(style)])
+            indices.append(contentsOf: [base, base + 1, base + 2])
+        }
+        let whole = TileLineStyle(widthPoints: 1, dashLengthPoints: 0, dashGapPoints: 0, edgeThreshold: 0.5)
+        let veiled = TileLineStyle(widthPoints: 1, dashLengthPoints: 0, dashGapPoints: 0, edgeThreshold: 0.5,
+                                   sphereAlpha: 0.6)
+        let ground = PreparedTileCPU.GeometryLayer(vertices: vertices,
+                                                   indices: indices,
+                                                   styles: [opaque, opaque, opaque],
+                                                   styleZoomFades: [none, none, none],
+                                                   lineStyles: [veiled, whole, veiled],
+                                                   fillsIndexCount: 3)
+        let runs = GroundStyleRunScanner.scan(ground: ground)
+        XCTAssertEqual(runs.map(\.flags), [1, 3, 11])
+        XCTAssertFalse(runs[0].isSphereVeiled, "A fill is never veiled, whatever its line style says")
+        XCTAssertFalse(runs[1].isSphereVeiled)
+        XCTAssertTrue(runs[2].isSphereVeiled)
+    }
+
     func testScannerHandlesEmptyGround() {
         let ground = makeGround(styleOfTriangle: [], styles: [], masks: [])
         XCTAssertEqual(GroundStyleRunScanner.scan(ground: ground), [])

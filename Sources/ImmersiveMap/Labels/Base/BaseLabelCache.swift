@@ -298,6 +298,7 @@ final class BaseLabelCache {
                         keys[index] = placementMeta.key
                         presentation[index] = BaseLabelPresentationInput(labelKey: placementMeta.key,
                                                                          minCameraZoom: placementMeta.minCameraZoom,
+                                                                         maxCameraZoom: placementMeta.maxCameraZoom,
                                                                          isLocal: placementMeta.isLocal)
                         meta[index] = LabelRuntimeMeta(fadeAlpha: 0,
                                                        perspectiveScale: 1,

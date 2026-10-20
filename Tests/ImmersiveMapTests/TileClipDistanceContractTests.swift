@@ -82,7 +82,8 @@ final class TileClipDistanceContractTests: XCTestCase {
         let source = try shaderSource("Tile/Shaders/Tile.metal")
         XCTAssertTrue(source.contains("constant bool kGroundShadowMaskEnabled [[function_constant(0)]];"))
         XCTAssertTrue(source.contains("texture2d<half> groundShadowMask [[texture(1), function_constant(kGroundShadowMaskEnabled)]]"))
-        XCTAssertTrue(source.contains("depth2d<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]]"))
+        XCTAssertTrue(source.contains("depth2d_array<float> shadowMap [[texture(0), function_constant(kSamplesShadowCascades)]]"),
+                      "The two shadow windows are the slices of one array")
         XCTAssertTrue(source.contains("groundShadowMask.sample(maskSampler, in.position.xy * kGroundShadowMaskScale).r"))
         XCTAssertTrue(source.contains("constant float kGroundShadowMaskScale = \(GroundShadowMaskPipeline.resolutionScale);"),
                       "The shader's mask scale must mirror GroundShadowMaskPipeline.resolutionScale")
@@ -94,11 +95,11 @@ final class TileClipDistanceContractTests: XCTestCase {
         XCTAssertNil(mask.range(of: "sampleShadowFactor("),
                      "The mask uses the specialized ground-plane path, not the generic receiver sampling")
         XCTAssertNil(mask.range(of: "dfdx"), "No screen derivatives: control flow may diverge")
-        XCTAssertTrue(mask.contains("if (distanceToCenter >= shadow.fadeEndDistance) {"),
+        XCTAssertTrue(mask.contains("if (blend.fade <= 0.0) {"),
                       "Pixels beyond the shadow fade exit before sampling")
-        XCTAssertTrue(mask.contains("length(worldPosition.xy - shadow.fadeCenter)"),
-                      "The fade is radial from the window's centre, not from the eye")
-        XCTAssertTrue(mask.contains("shadowWindowVisibility(shadow.cascade, shadowMap, uvz)"),
+        XCTAssertTrue(mask.contains("shadowCascadeBlend(shadow, worldPosition.xy)"),
+                      "The fade is radial from the windows' centre, not from the eye, the blend every receiver takes")
+        XCTAssertTrue(mask.contains("shadowMapVisibility(shadow, shadowMap, worldPosition, float3(0.0), blend)"),
                       "The mask reads the shared sampler, the same one every receiver reads")
         // One kernel for the whole frame. A tent on the ground next to a
         // single tap on a wall reads as two different shadow systems in one

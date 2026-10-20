@@ -156,14 +156,21 @@ enum FlatMapSurfaceDrawer {
             let drawsLines = placeTile.rules.drawsLines
             let drawsGround = placeTile.rules.raster == nil
             if let index = sourceIndices[key] {
-                sources[index].targetZoom = max(sources[index].targetZoom, placeTile.slot.z)
+                // One terrain wherever the source draws: the finest of its placements'.
+                if let terrain = placeTile.terrain, terrain.z > (sources[index].terrain?.z ?? -1) {
+                    sources[index].terrain = terrain
+                }
+                if let displacement = placeTile.displacement, displacement.z > (sources[index].displacement?.z ?? -1) {
+                    sources[index].displacement = displacement
+                }
                 sources[index].drawsLines = sources[index].drawsLines || drawsLines
                 sources[index].drawsGround = sources[index].drawsGround || drawsGround
             } else {
                 sourceIndices[key] = sources.count
                 sources.append(Source(metalTile: placeTile.metalTile,
                                       worldWrap: key.worldWrap,
-                                      targetZoom: placeTile.slot.z,
+                                      terrain: placeTile.terrain,
+                                      displacement: placeTile.displacement,
                                       drawsLines: drawsLines,
                                       drawsGround: drawsGround))
             }
@@ -176,7 +183,8 @@ enum FlatMapSurfaceDrawer {
         sources.sort { $0.stencilReference > $1.stencilReference }
         for index in sources.indices where sources[index].metalTile.tileBuffers.ground.isFlattened {
             let tile = sources[index].metalTile.tile
-            sources[index].relief = reliefStore?.relief(for: tile, targetZoom: sources[index].targetZoom)
+            sources[index].relief = sources[index].displacement.flatMap { reliefStore?.relief(for: tile, terrain: $0) }
+            sources[index].shading = sources[index].terrain.flatMap { reliefStore?.relief(for: tile, terrain: $0) }
         }
         let linedSources = sources.filter(\.drawsLines)
         let groundSources = sources.filter(\.drawsGround)
@@ -230,6 +238,7 @@ enum FlatMapSurfaceDrawer {
             }
             selectPipeline(pipeline, relief: true)
             GroundReliefUniform.bind(relief,
+                                     shading: source.shading,
                                      over: source.metalTile.tile,
                                      store: groundRelief,
                                      renderMapSize: flatRenderState.renderMapSize,
@@ -543,9 +552,14 @@ enum FlatMapSurfaceDrawer {
     struct Source {
         let metalTile: MetalTile
         let worldWrap: Int8
-        var targetZoom: Int
+        /// The terrain the source shades by and the one its grid rises by
+        /// (`PlaceTile.terrain`, `displacement`), nil on the plane.
+        var terrain: Tile?
+        var displacement: Tile?
         var stencilReference: UInt32 = 0
+        /// The relief of `displacement` and of `terrain`, nil on the plane.
         var relief: GroundRelief?
+        var shading: GroundRelief?
         var drawsLines: Bool
         var drawsGround: Bool
     }

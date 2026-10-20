@@ -112,29 +112,54 @@ final class DebugOverlayShadowGroupTests: XCTestCase {
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.mapResolution(atIndex: index), defaultResolution)
     }
 
-    func testCoverageSliderCoversTheShippingDefault() {
-        let defaultCoverage = Double(ImmersiveMapSettings.ShadowSettings().coverageCameraDistances)
-
-        XCTAssertTrue(DebugOverlayShadowSettingsPlanner.coverageRange.contains(defaultCoverage))
+    /// The coverage graphs span the resolver's whole clamp in metres, in
+    /// decades and geometric between the stops as the resolver reads the
+    /// curves, and every stop of the shipping curves is on them. The
+    /// floor is the resolver's, which is what makes winding the window
+    /// right down possible from the panel.
+    func testTheCoverageGraphsSpanTheResolversClampAndTheDefaults() {
+        let axes = DebugOverlayShadowSettingsPlanner.coverageAxes
+        let range = ShadowFrameStateResolver.coverageMetersRange
+        XCTAssertEqual(axes.valueRange.lowerBound, Double(range.lowerBound))
+        XCTAssertEqual(axes.valueRange.upperBound, Double(range.upperBound))
+        XCTAssertTrue(axes.isLogarithmic)
+        XCTAssertEqual(axes.interpolation, .geometric)
+        let shadows = ImmersiveMapSettings.ShadowSettings()
+        for stop in shadows.nearCoverageMeters.stops + shadows.farCoverageMeters.stops {
+            XCTAssertTrue(axes.valueRange.contains(Double(stop.value)), "\(stop.value) m")
+            XCTAssertTrue(axes.zoomRange.contains(stop.zoom), "zoom \(stop.zoom)")
+        }
+        for stop in shadows.strength.stops {
+            XCTAssertTrue(DebugOverlayShadowSettingsPlanner.strengthAxes.valueRange.contains(Double(stop.value)))
+        }
+        let hillshade = ImmersiveMapHillshade()
+        for stop in hillshade.fadeStartMeters.stops + hillshade.fadeEndMeters.stops {
+            XCTAssertTrue(DebugOverlayShadowSettingsPlanner.hillshadeFadeAxes.valueRange.contains(Double(stop.value)))
+        }
     }
 
-    /// The slider reaches the resolver's floor, which is what makes winding
-    /// the window right down possible from the panel.
-    /// The far slider runs the setting's whole range: coarse is what the
-    /// far window is for, and the default has to be on it.
-    func testFarCoverageSliderCoversTheRangeAndTheDefault() {
-        let range = DebugOverlayShadowSettingsPlanner.farCoverageRange
-        XCTAssertEqual(range.lowerBound, Double(ShadowFrameStateResolver.coverageRange.lowerBound))
-        XCTAssertEqual(range.upperBound, Double(ShadowFrameStateResolver.coverageRange.upperBound))
-        XCTAssertTrue(range.contains(Double(ImmersiveMapSettings.ShadowSettings().farCoverageCameraDistances)))
-    }
-
-    func testCoverageSliderReachesTheResolverFloor() {
-        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.coverageRange.lowerBound,
-                       Double(ShadowFrameStateResolver.coverageRange.lowerBound))
-        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.coverageRange.lowerBound, 0.25)
-        XCTAssertLessThanOrEqual(DebugOverlayShadowSettingsPlanner.coverageRange.upperBound,
-                                 Double(ShadowFrameStateResolver.coverageRange.upperBound))
+    /// The titles read the curves at the camera's zoom, as the resolver
+    /// does: the defaults at zoom 14, and between the stops geometrically.
+    func testTheGraphTitlesReadTheCurvesAtTheCamerasZoom() {
+        let shadows = ImmersiveMapSettings.ShadowSettings()
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.strengthTitle(shadows.strength, cameraZoom: 15), "Strength 0.22")
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.strengthTitle(shadows.strength, cameraZoom: 12),
+                       "Strength 0 (off at this zoom)")
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.nearCoverageTitle(shadows.nearCoverageMeters, cameraZoom: 14),
+                       "Near coverage 6 km")
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.nearCoverageTitle(shadows.nearCoverageMeters, cameraZoom: 15),
+                       "Near coverage 3 km", "Halving with the zoom between the stops")
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.farCoverageTitle(shadows.farCoverageMeters,
+                                                                          nearCoverage: shadows.nearCoverageMeters,
+                                                                          cameraZoom: 18),
+                       "Far coverage 1.5 km")
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.farCoverageTitle(3500, nearCoverage: 3000, cameraZoom: 16),
+                       "Far coverage 3.5 km (off, under the near)")
+        let hillshade = ImmersiveMapHillshade()
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.hillshadeFadeStartTitle(hillshade.fadeStartMeters, cameraZoom: 14),
+                       "Hillshade from 4 km")
+        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.hillshadeFadeEndTitle(hillshade.fadeEndMeters, cameraZoom: 18),
+                       "Hillshade to 500 m")
     }
 
     /// The elevation slider must not reach the angle at which the resolver
@@ -184,11 +209,6 @@ final class DebugOverlayShadowGroupTests: XCTestCase {
     }
 
     func testTitlesCarryTheValue() {
-        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.strengthTitle(0.22), "Strength 0.22")
-        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.coverageTitle(3), "Near coverage 3.0x")
-        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.farCoverageTitle(12, nearCoverage: 3), "Far coverage 12.0x")
-        XCTAssertEqual(DebugOverlayShadowSettingsPlanner.farCoverageTitle(3.5, nearCoverage: 3),
-                       "Far coverage 3.5x (off, under the near)")
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.normalOffsetTitle(2.5), "Normal offset 2.5tx")
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.casterHeightTitle(50), "Caster height 50 m")
         XCTAssertEqual(DebugOverlayShadowSettingsPlanner.softnessTitle(1.75), "Softness 1.75x")
@@ -217,7 +237,7 @@ final class DebugOverlaySettingsOverrideTests: XCTestCase {
         var override = DebugOverlaySettingsOverride()
         var dragged = ImmersiveMapSettings.ShadowSettings()
         dragged.strength = 0.71
-        dragged.coverageCameraDistances = 8
+        dragged.nearCoverageMeters = 800
         override.shadows = dragged
         override.sunDirection = DebugOverlaySunAngles.direction(azimuthDegrees: 30, elevationDegrees: 20)
 
@@ -226,7 +246,7 @@ final class DebugOverlaySettingsOverrideTests: XCTestCase {
         let applied = override.applied(to: resent)
 
         XCTAssertEqual(applied.scene.shadows.strength, 0.71)
-        XCTAssertEqual(applied.scene.shadows.coverageCameraDistances, 8)
+        XCTAssertEqual(applied.scene.shadows.nearCoverageMeters, 800)
         XCTAssertEqual(DebugOverlaySunAngles.angles(direction: applied.scene.light.direction).azimuthDegrees,
                        30,
                        accuracy: 1e-3)

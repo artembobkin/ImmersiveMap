@@ -32,15 +32,24 @@ struct GroundStyleRun: Equatable, Sendable {
     /// whenever its fade is 1. Bit 1: the run is line ribbons and draws
     /// through the line-field pipeline. Bit 2: the run is a fill of a
     /// flattened ground (`GroundFlattening`): it overlaps no other fill
-    /// and draws at one depth with them, opaque, in one pass.
+    /// and draws at one depth with them, opaque, in one pass. Bit 3: the
+    /// run is ribbons whose style keeps less than its whole alpha on the
+    /// sphere (`TileLineStyle.sphereAlpha`), so the sphere drawer paints
+    /// the tile's ribbons in the two phases that blend a stroke once; a
+    /// tile without such a run draws its ribbons in one pass, as before.
     var flags: UInt32
 
     static let alphaOpaqueFlag: UInt32 = 1
     static let linesClassFlag: UInt32 = 2
     static let flattenedFlag: UInt32 = 4
+    static let sphereVeiledFlag: UInt32 = 8
 
     var isFlattened: Bool {
         flags & Self.flattenedFlag != 0
+    }
+
+    var isSphereVeiled: Bool {
+        flags & Self.sphereVeiledFlag != 0
     }
 
     var isAlphaOpaque: Bool {
@@ -136,6 +145,11 @@ enum GroundStyleRunScanner {
             if style.color.w >= 1.0 {
                 flags |= GroundStyleRun.alphaOpaqueFlag
             }
+        }
+        if classFlags & GroundStyleRun.linesClassFlag != 0,
+           styleIndex < ground.lineStyles.count,
+           ground.lineStyles[styleIndex].sphereAlpha < 1.0 {
+            flags |= GroundStyleRun.sphereVeiledFlag
         }
         let zoomFade = styleIndex < ground.styleZoomFades.count
             ? ground.styleZoomFades[styleIndex] : ImmersiveMapZoomFade.none.shaderPair

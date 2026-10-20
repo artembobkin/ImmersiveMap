@@ -45,7 +45,7 @@ final class ParseLineAnalyticAntialiasingTests: XCTestCase {
         XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.lineParameter), 10)
         XCTAssertEqual(MemoryLayout<TileVertexIn>.offset(of: \.normal), 12)
         // The per-style line parameters are an arena span and a shader struct.
-        XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 48)
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 64)
         // The per-style colour is one float4, in the arena span and in the
         // Style struct of both shaders that read the style buffer.
         XCTAssertEqual(MemoryLayout<TilePolygonStyle>.stride, 16)

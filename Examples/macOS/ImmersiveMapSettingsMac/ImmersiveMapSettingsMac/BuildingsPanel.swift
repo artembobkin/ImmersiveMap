@@ -40,15 +40,15 @@ struct BuildingsPanel: View {
                 ValueSlider("Sun azimuth", value: sunAzimuth, range: 0...360, format: "%.0f")
                 ValueSlider("Sun elevation", value: sunElevation, range: 5...85, format: "%.0f")
                 ValueSlider("Strength",
-                            value: $settings.scene.shadows.strength.asDouble,
+                            value: $settings.scene.shadows.strength.scaledAtDeepestStop,
                             range: 0...1)
                 ValueSlider("Map px",
                             value: $settings.scene.shadows.mapResolution.asDouble,
                             range: 256...4096,
                             format: "%.0f")
-                ValueSlider("Coverage",
-                            value: $settings.scene.shadows.coverageCameraDistances.asDouble,
-                            range: 2...48,
+                ValueSlider("Coverage m",
+                            value: $settings.scene.shadows.nearCoverageMeters.scaledAtDeepestStop,
+                            range: 100...5000,
                             format: "%.0f")
                 ValueSlider("Caster height",
                             value: $settings.scene.shadows.maxCasterHeightMeters.asDouble,

@@ -18,6 +18,9 @@ struct ParsedTextLabel {
     let poiIcon: PoiSpriteIcon?
     /// Minimum camera zoom at which the label is visible (0 = always).
     let minCameraZoom: Float
+    /// The camera zoom the label goes away at, infinity for never
+    /// (`PointLabelStyle.maxCameraZoom`).
+    let maxCameraZoom: Float
     let placement: LabelPlacement
     /// The route signs the label draws instead of its text, nil for a
     /// plain label.
@@ -52,6 +55,7 @@ struct ParsedTextLabel {
          textStyle: LabelTextStyle,
          poiIcon: PoiSpriteIcon? = nil,
          minCameraZoom: Float = 0,
+         maxCameraZoom: Float = .infinity,
          placement: LabelPlacement = .screen) {
         self.text = text
         self.position = position
@@ -65,6 +69,7 @@ struct ParsedTextLabel {
         self.textStyle = textStyle
         self.poiIcon = poiIcon
         self.minCameraZoom = minCameraZoom
+        self.maxCameraZoom = maxCameraZoom
         self.placement = placement
         self.routeShields = nil
         self.standsOnRoof = false
@@ -80,6 +85,7 @@ struct ParsedTextLabel {
          textStyle: LabelTextStyle,
          poiIcon: PoiSpriteIcon? = nil,
          minCameraZoom: Float = 0,
+         maxCameraZoom: Float = .infinity,
          placement: LabelPlacement = .screen,
          routeShields: RouteShieldStyle? = nil,
          standsOnRoof: Bool = false,
@@ -93,6 +99,7 @@ struct ParsedTextLabel {
         self.textStyle = textStyle
         self.poiIcon = poiIcon
         self.minCameraZoom = minCameraZoom
+        self.maxCameraZoom = maxCameraZoom
         self.placement = placement
         self.routeShields = routeShields
         self.standsOnRoof = standsOnRoof

@@ -62,11 +62,13 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
         let texture: MTLTexture
     }
 
-    /// A wrap copy a source is drawn at, and the finest raster target it
-    /// stands in there: the ring whose terrain it rises by.
+    /// A wrap copy a source is drawn at, and the terrain it shades by and
+    /// rises by there: the finest of its placements' (`PlaceTile.terrain`,
+    /// `displacement`), nil on the plane.
     private struct Placement {
         let worldWrap: Int8
-        var targetZoom: Int
+        var terrain: Tile?
+        var displacement: Tile?
     }
 
     private let device: MTLDevice
@@ -192,10 +194,17 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
             }
             let worldWrap = placeTile.placeIn.worldWrap
             if let placement = sources[index].placements.firstIndex(where: { $0.worldWrap == worldWrap }) {
-                sources[index].placements[placement].targetZoom = max(sources[index].placements[placement].targetZoom,
-                                                                      placeTile.slot.z)
+                if let terrain = placeTile.terrain, terrain.z > (sources[index].placements[placement].terrain?.z ?? -1) {
+                    sources[index].placements[placement].terrain = terrain
+                }
+                if let displacement = placeTile.displacement,
+                   displacement.z > (sources[index].placements[placement].displacement?.z ?? -1) {
+                    sources[index].placements[placement].displacement = displacement
+                }
             } else {
-                sources[index].placements.append(Placement(worldWrap: worldWrap, targetZoom: placeTile.slot.z))
+                sources[index].placements.append(Placement(worldWrap: worldWrap,
+                                                           terrain: placeTile.terrain,
+                                                           displacement: placeTile.displacement))
             }
         }
         if frameContext.renderSurfaceMode == .flat {
@@ -487,8 +496,9 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
                 // (`TileWorkingSetSubsystem.horizonBackdrops`): no band
                 // places a tile that coarse.
                 let relief = tile.z > TileCulling.flatBackdropZoomLevel
-                    ? groundReliefStore?.relief(for: tile, targetZoom: placement.targetZoom)
+                    ? placement.displacement.flatMap { groundReliefStore?.relief(for: tile, terrain: $0) }
                     : nil
+                let shading = relief == nil ? nil : placement.terrain.flatMap { groundReliefStore?.relief(for: tile, terrain: $0) }
                 // As fine as the terrain and the raster can show, no finer.
                 let cells = relief.map {
                     RasterTileGrid.reliefCells(gridCells: groundFlattening.grid(forTileZoom: tile.z), relief: $0, rasterSize: source.size)
@@ -500,6 +510,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
                 }
                 if let relief, let groundReliefStore {
                     GroundReliefUniform.bind(relief,
+                                             shading: shading,
                                              over: tile,
                                              store: groundReliefStore,
                                              renderMapSize: flatRenderState.renderMapSize,

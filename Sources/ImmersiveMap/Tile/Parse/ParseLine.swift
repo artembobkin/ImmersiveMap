@@ -600,8 +600,9 @@ class ParseLine {
     /// the next piece, and the cut of a free end stays hard.
     ///
     /// With `subdivisionStep`, a row more wherever the centreline crosses
-    /// a grid line between two rows, its parameter interpolated: a row of
-    /// the strip is a row of the strip whatever brought it.
+    /// a grid line or a cell's diagonal between two rows, its parameter
+    /// interpolated (`subdividedRows`): a row of the strip is a row of the
+    /// strip whatever brought it.
     private func appendSegments(precomputed: PrecomputedLine,
                                 extrudedHalfWidth: Float,
                                 featherStart: Bool,
@@ -686,10 +687,16 @@ class ParseLine {
         }
     }
 
-    /// The rows with one more at every crossing of a grid line between two
-    /// neighbouring rows, in order along the strip. A crossing is found
-    /// from the pair's endpoints as they are (both pieces that share a row
-    /// are rows of one strip, so no two need agree on it).
+    /// The rows with one more at every crossing of a grid line, and of a
+    /// grid cell's diagonal, between two neighbouring rows, in order along
+    /// the strip. On the relief the ground is two triangles a cell, cut
+    /// from the cell's south-west corner to its north-east one
+    /// (`GroundFlattening`, `RasterTileGrid`), and a row at every edge of
+    /// those triangles puts each piece of the strip inside one of them,
+    /// where the ground is a plane: the strip lies on the ground as drawn,
+    /// not on a chord across the cell's crease. A crossing is found from
+    /// the pair's endpoints as they are (both pieces that share a row are
+    /// rows of one strip, so no two need agree on it).
     static func subdividedRows(_ rows: [(position: SIMD2<Float>, parameter: Float)],
                                step: Float) -> [(position: SIMD2<Float>, parameter: Float)] {
         guard step > 0, rows.count >= 2 else { return rows }
@@ -701,16 +708,22 @@ class ParseLine {
             let to = rows[index]
             let delta = to.position - from.position
             // The parameters along the pair at which it crosses a grid line
-            // of either axis, strictly inside the pair.
+            // of either axis, or a diagonal x - y = k * step, strictly
+            // inside the pair.
             var crossings: [Float] = []
-            for axis in 0..<2 where abs(delta[axis]) > Self.epsilon {
-                let lower = min(from.position[axis], to.position[axis])
-                let upper = max(from.position[axis], to.position[axis])
+            let fromDiagonal = from.position.x - from.position.y
+            let toDiagonal = to.position.x - to.position.y
+            let coordinates: [(from: Float, to: Float)] = [(from.position.x, to.position.x),
+                                                           (from.position.y, to.position.y),
+                                                           (fromDiagonal, toDiagonal)]
+            for coordinate in coordinates where abs(coordinate.to - coordinate.from) > Self.epsilon {
+                let lower = min(coordinate.from, coordinate.to)
+                let upper = max(coordinate.from, coordinate.to)
                 var line = (lower / step).rounded(.down) + 1
                 while line * step < upper {
                     let value = line * step
                     if value > lower {
-                        crossings.append((value - from.position[axis]) / delta[axis])
+                        crossings.append((value - coordinate.from) / (coordinate.to - coordinate.from))
                     }
                     line += 1
                 }

@@ -41,12 +41,23 @@ extension ProtomapsBasemapDefaultMapStyle {
         return minZoom * 100 + (parseIntValue(props["sort_rank"]) ?? 0)
     }
 
-    /// The collision bands: places beat water names beat peaks and airports
-    /// beat the route signs beat the other POIs beat the house numbers
-    /// whatever their ranks.
+    /// The collision bands: the countries, the regions and the cities beat
+    /// the peaks beat the towns and every smaller place beat the water
+    /// names beat the airports beat the route signs beat the other POIs
+    /// beat the house numbers, whatever their ranks. A peak stands ahead
+    /// of the settlements because it is what a mountain view is of: the
+    /// Matterhorn's name over the hamlets on its slopes, not under them,
+    /// while a city's name still wins the frame it is in.
     enum LabelBand {
+        /// A country, a region, a city.
         case place
+        /// A peak or a volcano.
+        case peak
+        /// A town, a village, a hamlet, a neighbourhood: every place under
+        /// a city.
+        case settlement
         case water
+        /// An airport.
         case landmark
         case routeShield
         case poi
@@ -55,12 +66,24 @@ extension ProtomapsBasemapDefaultMapStyle {
         var base: Int {
             switch self {
             case .place: return 0
+            case .peak: return 10_000
+            case .settlement: return 15_000
             case .water: return 20_000
             case .landmark: return 40_000
             case .routeShield: return 45_000
             case .poi: return 50_000
             case .address: return 70_000
             }
+        }
+    }
+
+    /// Whether a place is a city or bigger: the places that keep their
+    /// band ahead of the peaks (`LabelBand.place`).
+    static func isMajorPlace(kind: String?, kindDetail: String?) -> Bool {
+        switch kind {
+        case "country", "region": return true
+        case "locality": return kindDetail == "city"
+        default: return false
         }
     }
 
@@ -79,13 +102,16 @@ extension ProtomapsBasemapDefaultMapStyle {
 
     func placeLabelStyle(kind: String?, kindDetail: String?, props: [String: MvtValue]) -> FeatureStyle {
         var appearance: ProtomapsBasemapTheme.LabelAppearance
+        // The name of a land goes away where the land no longer fits the
+        // view (`LabelVisibility.countryMaximumZoom`, `regionMaximumZoom`).
+        var maxCameraZoom = Float.infinity
         switch kind {
         case "country":
             appearance = theme.labels.country
+            maxCameraZoom = Float(theme.labelVisibility.countryMaximumZoom)
         case "region":
-            var a = theme.labels.country
-            a.sizePoints -= 2
-            appearance = a
+            appearance = theme.labels.region
+            maxCameraZoom = Float(theme.labelVisibility.regionMaximumZoom)
         case "locality":
             switch kindDetail {
             case "city":
@@ -107,7 +133,11 @@ extension ProtomapsBasemapDefaultMapStyle {
             appearance.weight = .bold
         }
         let rank = placeRank(kind: kind, props: props)
-        return pointLabel(key: 70, band: .place, rank: rank, appearance: appearance)
+        return pointLabel(key: 70,
+                          band: Self.isMajorPlace(kind: kind, kindDetail: kindDetail) ? .place : .settlement,
+                          rank: rank,
+                          appearance: appearance,
+                          maxCameraZoom: maxCameraZoom)
     }
 
     /// A water body's name lies on the water: it turns and tilts with the
@@ -144,13 +174,23 @@ extension ProtomapsBasemapDefaultMapStyle {
     static let waterLabelLetterSpacingEm: Float = 0.15
 
     /// The landmarks among the POIs: the peaks and the airports, which take
-    /// their own keys and collision band.
+    /// their own keys and collision bands (`LabelBand.peak`, `.landmark`).
     static func isLandmarkPoi(kind: String?) -> Bool {
         switch kind {
         case "peak", "volcano", "aerodrome":
             return true
         default:
             return false
+        }
+    }
+
+    /// The band a POI collides in: the peaks ahead of the settlements, the
+    /// airports behind the water names, the rest behind the route signs.
+    static func poiBand(kind: String?) -> LabelBand {
+        switch kind {
+        case "peak", "volcano": return .peak
+        case "aerodrome": return .landmark
+        default: return .poi
         }
     }
 
@@ -204,7 +244,7 @@ extension ProtomapsBasemapDefaultMapStyle {
         // An icon-less POI is local detail: a plaque, an office, a ticket
         // window, read standing next to it and left to the look-at tile.
         return pointLabel(key: key,
-                          band: isLandmark ? .landmark : .poi,
+                          band: Self.poiBand(kind: kind),
                           rank: minZoomRank(props: props),
                           appearance: appearance,
                           minCameraZoom: minCameraZoom,
@@ -373,6 +413,7 @@ extension ProtomapsBasemapDefaultMapStyle {
                     rank: Int,
                     appearance: ProtomapsBasemapTheme.LabelAppearance,
                     minCameraZoom: Float = 0,
+                    maxCameraZoom: Float = .infinity,
                     icon: PoiSpriteIcon? = nil,
                     placement: LabelPlacement = .screen,
                     standsOnRoof: Bool = false,
@@ -382,6 +423,7 @@ extension ProtomapsBasemapDefaultMapStyle {
                                 rank: rank,
                                 collisionRank: Self.labelCollisionRank(band: band, rank: rank),
                                 minCameraZoom: minCameraZoom,
+                                maxCameraZoom: maxCameraZoom,
                                 icon: icon,
                                 placement: placement,
                                 standsOnRoof: standsOnRoof,
@@ -397,7 +439,9 @@ extension ProtomapsBasemapDefaultMapStyle {
                        sizePoints: LabelTypeScale.clamped(appearance.sizePoints),
                        weight: appearance.weight,
                        uppercased: appearance.uppercased,
-                       emboldenPoints: appearance.emboldenPoints)
+                       emboldenPoints: appearance.emboldenPoints,
+                       letterSpacingEm: appearance.letterSpacingEm,
+                       opacity: appearance.opacity)
     }
 }
 

@@ -15,15 +15,12 @@ final class AttributionBadgeLayoutMathTests: XCTestCase {
         AttributionBadgeLayoutMath.metrics(for: .regular)
     }
 
-    /// `.regular` must equal the historical constants exactly: the default
-    /// badge renders pixel-identical to the pre-customization one.
+    /// `.regular` keeps the historical text size and insets, so the
+    /// default badge renders as it did.
     func testRegularMetricsMatchLegacyConstants() {
-        XCTAssertEqual(metrics.titleFontSize, 12)
-        XCTAssertEqual(metrics.copyrightFontSize, 10)
+        XCTAssertEqual(metrics.fontSize, 12)
         XCTAssertEqual(metrics.horizontalInset, 10)
         XCTAssertEqual(metrics.verticalInset, 7)
-        XCTAssertEqual(metrics.interLabelSpacing, 2)
-        XCTAssertEqual(metrics.maximumWidth, 240)
     }
 
     func testMetricsScaleMonotonically() {
@@ -32,11 +29,9 @@ final class AttributionBadgeLayoutMathTests: XCTestCase {
         let large = AttributionBadgeLayoutMath.metrics(for: .large)
 
         for (smaller, larger) in [(small, regular), (regular, large)] {
-            XCTAssertLessThan(smaller.titleFontSize, larger.titleFontSize)
-            XCTAssertLessThan(smaller.copyrightFontSize, larger.copyrightFontSize)
+            XCTAssertLessThan(smaller.fontSize, larger.fontSize)
             XCTAssertLessThan(smaller.horizontalInset, larger.horizontalInset)
             XCTAssertLessThan(smaller.verticalInset, larger.verticalInset)
-            XCTAssertLessThan(smaller.maximumWidth, larger.maximumWidth)
         }
     }
 
@@ -89,52 +84,36 @@ final class AttributionBadgeLayoutMathTests: XCTestCase {
         XCTAssertEqual(width, 800 - 10 - 5 - 12 * 2)
     }
 
-    /// A zero copyright size adds neither the second row nor the spacing.
-    func testBadgeSizeCollapsesEmptyCopyright() {
-        let titleSize = CGSize(width: 120, height: 15)
-        let copyrightSize = CGSize(width: 100, height: 12)
-
-        let twoLine = AttributionBadgeLayoutMath.badgeSize(titleSize: titleSize,
-                                                           copyrightSize: copyrightSize,
-                                                           metrics: metrics,
-                                                           boundingWidth: 400)
-        let oneLine = AttributionBadgeLayoutMath.badgeSize(titleSize: titleSize,
-                                                           copyrightSize: .zero,
-                                                           metrics: metrics,
-                                                           boundingWidth: 400)
-
-        XCTAssertEqual(oneLine.height, ceil(15 + metrics.verticalInset * 2))
-        XCTAssertEqual(twoLine.height, ceil(15 + 12 + metrics.interLabelSpacing + metrics.verticalInset * 2))
-        XCTAssertEqual(oneLine.width, ceil(120 + metrics.horizontalInset * 2))
-    }
-
-    func testBadgeSizeClampsToMaximumWidth() {
-        let size = AttributionBadgeLayoutMath.badgeSize(titleSize: CGSize(width: 1000, height: 15),
-                                                        copyrightSize: .zero,
+    /// The badge is the line and its insets.
+    func testBadgeSizeIsTheLineAndItsInsets() {
+        let size = AttributionBadgeLayoutMath.badgeSize(textSize: CGSize(width: 120, height: 15),
                                                         metrics: metrics,
                                                         boundingWidth: 400)
 
-        XCTAssertEqual(size.width, metrics.maximumWidth)
+        XCTAssertEqual(size.height, ceil(15 + metrics.verticalInset * 2))
+        XCTAssertEqual(size.width, ceil(120 + metrics.horizontalInset * 2))
     }
 
-    /// Label stacking mirrors the plate math: spacing exists only when the
-    /// copyright line does.
-    func testLabelFramesStackWithSpacingOnlyWhenCopyrightPresent() {
+    /// A line longer than the width it is given fills that width, and the
+    /// label cuts it: the line may run along the whole edge of the map and
+    /// no further.
+    func testBadgeSizeClampsToTheBoundingWidth() {
+        let size = AttributionBadgeLayoutMath.badgeSize(textSize: CGSize(width: 1000, height: 15),
+                                                        metrics: metrics,
+                                                        boundingWidth: 400)
+
+        XCTAssertEqual(size.width, 400)
+    }
+
+    /// The line sits inside the insets.
+    func testLabelFrameIsTheBadgeLessItsInsets() {
         let badgeBounds = CGRect(x: 0, y: 0, width: 150, height: 40)
 
-        let twoLine = AttributionBadgeLayoutMath.labelFrames(badgeBounds: badgeBounds,
-                                                             titleHeight: 15,
-                                                             copyrightHeight: 12,
-                                                             metrics: metrics)
-        XCTAssertEqual(twoLine.title.minY, metrics.verticalInset)
-        XCTAssertEqual(twoLine.copyright.minY, metrics.verticalInset + 15 + metrics.interLabelSpacing)
-        XCTAssertEqual(twoLine.copyright.height, 12)
+        let frame = AttributionBadgeLayoutMath.labelFrame(badgeBounds: badgeBounds, metrics: metrics)
 
-        let oneLine = AttributionBadgeLayoutMath.labelFrames(badgeBounds: badgeBounds,
-                                                             titleHeight: 15,
-                                                             copyrightHeight: 0,
-                                                             metrics: metrics)
-        XCTAssertEqual(oneLine.copyright.height, 0)
-        XCTAssertEqual(oneLine.copyright.minY, oneLine.title.maxY)
+        XCTAssertEqual(frame.minX, metrics.horizontalInset)
+        XCTAssertEqual(frame.minY, metrics.verticalInset)
+        XCTAssertEqual(frame.width, 150 - metrics.horizontalInset * 2)
+        XCTAssertEqual(frame.height, 40 - metrics.verticalInset * 2)
     }
 }

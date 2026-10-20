@@ -12,8 +12,18 @@ struct BaseLabelPresentationInput {
     let labelKey: UInt64
     /// Minimum camera zoom at which the label is visible (0 = always).
     let minCameraZoom: Float
+    /// The camera zoom the label goes away at, infinity for never
+    /// (`LabelPlacementMeta.maxCameraZoom`).
+    var maxCameraZoom: Float = .infinity
     /// Local detail, shown only near the camera (`LabelPlacementMeta.isLocal`).
     var isLocal: Bool = false
+
+    /// Whether the camera's zoom is one the label shows at: from its
+    /// minimum up to, not including, its maximum.
+    @inline(__always)
+    func shows(atZoom cameraZoom: Float) -> Bool {
+        minCameraZoom <= cameraZoom && cameraZoom < maxCameraZoom
+    }
     /// Another tile's copy of a feature the set keeps (`BaseLabelCache`):
     /// it never reserves space and never shows.
     var isCopy: Bool = false
@@ -28,22 +38,25 @@ enum BaseLabelVisibilityResolver {
     /// Whether a label reserves collision space this frame: it must have a
     /// drawable screen point and be either in view (in front of the
     /// horizon) or still fading out of view (so
-    /// neighbours do not jump mid-fade), and a label below its minimum
-    /// camera zoom, or local detail outside the look-at tile
-    /// (`localSuppressed`), reserves nothing while it is fully invisible,
-    /// otherwise a hidden POI would displace visible ones.
+    /// neighbours do not jump mid-fade), and a label outside its camera
+    /// zooms (below its minimum, or at its maximum and past it), or local
+    /// detail outside the look-at tile (`localSuppressed`), reserves
+    /// nothing while it is fully invisible, otherwise a hidden POI would
+    /// displace visible ones.
     @inline(__always)
     static func reservesSpace(screenVisible: Bool,
                               horizonVisible: Bool,
                               localSuppressed: Bool = false,
                               currentAlpha: Float,
                               minCameraZoom: Float,
+                              maxCameraZoom: Float = .infinity,
                               cameraZoom: Float) -> Bool {
         guard screenVisible else {
             return false
         }
         let active = horizonVisible || currentAlpha > activeAlphaThreshold
-        let suppressed = (minCameraZoom > cameraZoom || localSuppressed) && currentAlpha <= activeAlphaThreshold
+        let outsideZooms = minCameraZoom > cameraZoom || cameraZoom >= maxCameraZoom
+        let suppressed = (outsideZooms || localSuppressed) && currentAlpha <= activeAlphaThreshold
         return active && suppressed == false
     }
 
@@ -86,6 +99,7 @@ enum BaseLabelVisibilityResolver {
                                                     localSuppressed: index < localCount && local[index],
                                                     currentAlpha: alphas[index],
                                                     minCameraZoom: inputs[index].minCameraZoom,
+                                                    maxCameraZoom: inputs[index].maxCameraZoom,
                                                     cameraZoom: cameraZoom)
                     index += 1
                 }
@@ -96,8 +110,8 @@ enum BaseLabelVisibilityResolver {
     /// Whether a label wants to be shown: accepted by the collision solve
     /// (which never offers a copy a place), in front of the
     /// horizon, not local detail outside the look-at tile
-    /// (`localSuppressed`, likewise) and at or above its minimum camera
-    /// zoom. A missing collision or horizon entry counts as hidden. Only
+    /// (`localSuppressed`, likewise) and within its camera zooms. A
+    /// missing collision or horizon entry counts as hidden. Only
     /// the labels of `spans` are decided (`LabelActiveSpans`), the rest
     /// want to be hidden. Nil decides every label.
     static func targetVisibility(inputs: [BaseLabelPresentationInput],
@@ -133,7 +147,7 @@ enum BaseLabelVisibilityResolver {
                     target[index] = accepted
                         && horizonVisible
                         && outsideLookAt == false
-                        && inputs[index].minCameraZoom <= cameraZoom
+                        && inputs[index].shows(atZoom: cameraZoom)
                     index += 1
                 }
             }

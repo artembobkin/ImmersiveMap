@@ -43,7 +43,7 @@ struct SkyPanel: View {
                             format: "%.2f")
                     .disabled(settings.scene.atmosphere.isEnabled == false)
                 ValueSlider("Thickness",
-                            value: $settings.scene.atmosphere.thickness.asDouble,
+                            value: $settings.scene.atmosphere.thickness.scaledAtDeepestStop,
                             range: 0.25...3,
                             format: "%.2f")
                     .disabled(settings.scene.atmosphere.isEnabled == false)

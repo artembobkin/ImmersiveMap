@@ -8,7 +8,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
     private static let testBlobURL = URL(fileURLWithPath: "/nonexistent/test.ptgeo")
 
     func testPreparedTileCacheFormatVersionIncludesArenaImageRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 146)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 153)
     }
 
     /// Each building's place in the extruded indices travels with the
@@ -587,7 +587,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         // The vertex layout is a binding contract (vertex descriptor, arena
         // strides); pin the ABI before trusting stride-derived expectations.
         XCTAssertEqual(MemoryLayout<TileVertexIn>.stride, 16)
-        XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 48)
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 64)
 
         // Slot sequence: 5 ground + 20 road phases x 5 (four structures:
         // tunnel, ground, automobile ground, bridge) + 5 bridge overlay
@@ -831,7 +831,8 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                                               sortKey: Int(seed + 200),
                                               collisionPriority: Int(seed + 300),
                                               labelSizePoints: SIMD2<Float>(Float(seed) + 10.1, Float(seed) + 20.2),
-                                              minCameraZoom: Float(seed) + 0.5)
+                                              minCameraZoom: Float(seed) + 0.5,
+                                              maxCameraZoom: Float(seed) + 9.5)
         )
         let glyphVertex = makeLabelVertex(seed: seed, labelIndex: seed + 400, spriteSeed: 0)
         let poiIconVertex = makeLabelVertex(seed: seed + 10, labelIndex: seed + 500, spriteSeed: seed + 20)
@@ -866,7 +867,9 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                        strokeColor: SIMD3<Float>(Float(seed) + 0.04, Float(seed) + 0.05, Float(seed) + 0.06),
                        haloEm: Float(seed) + 1.5,
                        sizePoints: Float(seed) + 12.5,
-                       weight: seed.isMultiple(of: 2) ? .thin : .bold)
+                       weight: seed.isMultiple(of: 2) ? .thin : .bold,
+                       letterSpacingEm: Float(seed) * 0.01,
+                       opacity: 1 - Float(seed) * 0.01)
     }
 
     private func makeLabelVertex(seed: Int32, labelIndex: Int32, spriteSeed: Int32) -> LabelVertex {
@@ -913,6 +916,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                        line: line)
         XCTAssertEqual(actual.placementMeta.labelSizePoints, expected.placementMeta.labelSizePoints, file: file, line: line)
         XCTAssertEqual(actual.placementMeta.minCameraZoom, expected.placementMeta.minCameraZoom, file: file, line: line)
+        XCTAssertEqual(actual.placementMeta.maxCameraZoom, expected.placementMeta.maxCameraZoom, file: file, line: line)
     }
 
     private func assertLabelTextStyle(_ actual: LabelTextStyle,
@@ -925,5 +929,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         XCTAssertEqual(actual.haloEm, expected.haloEm, file: file, line: line)
         XCTAssertEqual(actual.sizePoints, expected.sizePoints, file: file, line: line)
         XCTAssertEqual(actual.weight, expected.weight, file: file, line: line)
+        XCTAssertEqual(actual.letterSpacingEm, expected.letterSpacingEm, file: file, line: line)
+        XCTAssertEqual(actual.opacity, expected.opacity, file: file, line: line)
     }
 }

@@ -166,16 +166,15 @@ fragment half4 tileRasterFlatFragmentShader(TileRasterFragmentIn in [[stage_in]]
                                             depth2d_array<float> shadowMap [[texture(2), function_constant(kTileRasterRelief)]],
                                             constant GroundReliefUniform& relief [[buffer(9), function_constant(kTileRasterRelief)]],
                                             texture2d<float> reliefHeights [[texture(3), function_constant(kTileRasterRelief)]],
+                                            texture2d<float> reliefOcclusion [[texture(4), function_constant(kTileRasterRelief)]],
                                             sampler rasterSampler [[sampler(0)]]) {
     half4 color = tileRasterColor(in.uv, raster, rasterSampler, sampling);
     // The slopes shaded as the vector ground's fills shade them: the
     // texture's uv is the tile's (tileRasterTextureUv, groundReliefTileUV).
     if (kTileRasterRelief) {
-        color.rgb = groundReliefHillshade(color.rgb,
-                                          relief.placement.xy + saturate(in.uv) * relief.placement.z,
-                                          in.worldPosition,
-                                          reliefHeights,
-                                          relief);
+        float2 shadingUV = relief.shading.xy + saturate(in.uv) * relief.shading.z;
+        color.rgb = groundReliefHillshade(color.rgb, shadingUV, in.worldPosition, reliefHeights, relief);
+        color.rgb = groundReliefOcclude(color.rgb, shadingUV, reliefOcclusion, relief);
     }
     // The ground shadow mask, read as the vector ground reads it
     // (tileGroundShadowFactor in Tile.metal). The mask is the plane's

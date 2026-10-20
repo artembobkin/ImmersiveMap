@@ -63,7 +63,7 @@ final class RasterTileTests: XCTestCase {
 
     /// A raster tile on the relief takes the flattening's grid, no finer
     /// than its terrain has heights over it nor than a cell to two texels
-    /// of its raster: a far tile under the cinematic far map, an eighth of
+    /// of its raster: a far tile under a far ring's coarse terrain, an eighth of
     /// a 512 terrain tile, takes 64 cells, not the flattening's 256.
     func testTheReliefGridIsNoFinerThanItsTerrainAndRaster() throws {
         guard let device = MTLCreateSystemDefaultDevice() else {

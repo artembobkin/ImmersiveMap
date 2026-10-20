@@ -41,6 +41,16 @@ using namespace metal;
 // - hillshadeEye: the eye in the world, which the fade is measured from.
 // - hillshadeFade: the world distance from the eye the shading starts to
 //   fade at, and one over the distance it takes to fade out.
+// - shading: the tile's north-west corner and side in the terrain texture
+//   its slopes are shaded by (fragment texture 3), the ring's terrain,
+//   finer than the one the grid rises by (placement, vertex texture 0)
+//   where the ring reads finer terrain than the displacement's zoom
+//   (GroundReliefSettings.displacementMaximumZoom); frame.z spans it.
+// - occlusion: how dark a point the terrain hides the sky from entirely
+//   is drawn (x, 0 for none), and whether the occlusion is drawn alone in
+//   grey (y, the debug panel's view). The occlusion itself is the shading
+//   terrain's texture at fragment texture 4 (GroundReliefOcclusion), one
+//   texel of none while it is not computed.
 struct GroundReliefUniform {
     float4 placement;
     float4 frame;
@@ -49,6 +59,8 @@ struct GroundReliefUniform {
     float4 hillshadeHighlightColor;
     float4 hillshadeEye;
     float4 hillshadeFade;
+    float4 shading;
+    float4 occlusion;
 };
 
 constexpr sampler groundReliefSampler(filter::linear, address::clamp_to_edge, coord::normalized);
@@ -59,9 +71,16 @@ static inline float2 groundReliefTileUV(float2 localPosition) {
     return saturate(float2(localPosition.x, 4096.0 - localPosition.y) / 4096.0);
 }
 
-// Where a tile-local point lies in the terrain texture, in its 0...1.
+// Where a tile-local point lies in the terrain texture the grid rises by,
+// in its 0...1.
 static inline float2 groundReliefTextureUV(float2 localPosition, GroundReliefUniform relief) {
     return relief.placement.xy + groundReliefTileUV(localPosition) * relief.placement.z;
+}
+
+// Where a tile-local point lies in the terrain texture the slopes are
+// shaded by (groundReliefHillshade), in its 0...1.
+static inline float2 groundReliefShadingUV(float2 localPosition, GroundReliefUniform relief) {
+    return relief.shading.xy + groundReliefTileUV(localPosition) * relief.shading.z;
 }
 
 // The terrain's height in metres under a tile-local point: one bilinear
@@ -81,10 +100,11 @@ static inline float groundReliefLift(float2 localPosition,
     return metres * relief.frame.y * relief.placement.w;
 }
 
-// A colour of the ground with its slope shaded at a point of the terrain
-// texture (textureUV, groundReliefTextureUV): the slope is the terrain's
-// own, the heights a texel to each side, so it is as fine as the terrain
-// and not as coarse as the grid the ground rises on. Level ground keeps
+// A colour of the ground with its slope shaded at a point of the shading's
+// terrain texture (textureUV, groundReliefShadingUV): the slope is the
+// terrain's own, the heights a texel to each side, so it is as fine as the
+// ring's terrain and not as coarse as the grid the ground rises on, nor as
+// the terrain it rises by. Level ground keeps
 // its colour. A slope is lit by how much more or less it faces the light
 // than level ground does: turned toward it, the colour is drawn toward the
 // highlight, up to all the way for a slope that faces the light square on,
@@ -121,6 +141,26 @@ static inline half3 groundReliefHillshade(half3 color,
     float4 tint = lit >= 0.0 ? relief.hillshadeHighlightColor : relief.hillshadeShadowColor;
     float share = saturate(abs(lit) * amount) * tint.a;
     return half3(mix(float3(color), tint.rgb, share));
+}
+
+// A colour of the ground darkened by how much the terrain around the
+// point hides the sky (GroundReliefOcclusion): the occlusion sampled at a
+// point of the shading's terrain texture (textureUV, groundReliefShadingUV)
+// takes the colour toward black by the frame's strength. The debug view
+// draws the occlusion alone: white for the open sky, black for none.
+static inline half3 groundReliefOcclude(half3 color,
+                                        float2 textureUV,
+                                        texture2d<float> occlusion,
+                                        GroundReliefUniform relief) {
+    if (relief.occlusion.x <= 0.0 && relief.occlusion.y <= 0.0) {
+        return color;
+    }
+    float occluded = occlusion.sample(groundReliefSampler, textureUV, level(0.0)).r;
+    if (relief.occlusion.y > 0.0) {
+        half lit = half(1.0 - occluded);
+        return half3(lit, lit, lit);
+    }
+    return color * half(1.0 - relief.occlusion.x * occluded);
 }
 
 #endif

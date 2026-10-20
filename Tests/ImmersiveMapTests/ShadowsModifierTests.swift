@@ -10,17 +10,17 @@ final class ShadowsModifierTests: XCTestCase {
     @MainActor
     func testAValueSetInPlaceLeavesTheOthers() {
         let settings = ImmersiveMapView()
-            .shadows(strength: 0.4, coverageCameraDistances: 5)
-            .shadows(farCoverageCameraDistances: 20, minimumCoverageMeters: 500)
+            .shadows(strength: 0.4, nearCoverageMeters: [14: 5000, 18: 400])
+            .shadows(farCoverageMeters: 20_000, maxCasterHeightMeters: 120)
             .settings
         let shadows = settings.scene.shadows
         let defaults = ImmersiveMapSettings.default.scene.shadows
 
         XCTAssertTrue(shadows.isEnabled)
-        XCTAssertEqual(shadows.minimumCoverageMeters, 500)
+        XCTAssertEqual(shadows.maxCasterHeightMeters, 120)
         XCTAssertEqual(shadows.strength, 0.4, "Set by the first modifier, kept by the second")
-        XCTAssertEqual(shadows.coverageCameraDistances, 5)
-        XCTAssertEqual(shadows.farCoverageCameraDistances, 20)
+        XCTAssertEqual(shadows.nearCoverageMeters, [14: 5000, 18: 400])
+        XCTAssertEqual(shadows.farCoverageMeters, 20_000)
         XCTAssertEqual(shadows.mapResolution, defaults.mapResolution)
         XCTAssertEqual(shadows.softness, defaults.softness)
     }
@@ -29,6 +29,6 @@ final class ShadowsModifierTests: XCTestCase {
     func testTheSwitchAloneStillTurnsThemOff() {
         let shadows = ImmersiveMapView().shadows(isEnabled: false).settings.scene.shadows
         XCTAssertFalse(shadows.isEnabled)
-        XCTAssertEqual(shadows.minimumCoverageMeters, ImmersiveMapSettings.default.scene.shadows.minimumCoverageMeters)
+        XCTAssertEqual(shadows.nearCoverageMeters, ImmersiveMapSettings.default.scene.shadows.nearCoverageMeters)
     }
 }

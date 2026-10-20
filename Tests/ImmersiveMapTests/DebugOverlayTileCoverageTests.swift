@@ -64,6 +64,24 @@ final class DebugOverlayTileCoverageTests: XCTestCase {
         XCTAssertEqual(DebugOverlayTileCoverageLayout.window(for: coverage), CGRect(x: 0, y: 0, width: 1, height: 1))
     }
 
+    /// The horizon backdrop, the world tile under everything, is left off
+    /// the map: its square is the whole world, and a window round it
+    /// shrank the frame's tiles to a few pixels.
+    func testTheHorizonBackdropIsLeftOffTheMap() throws {
+        func placeTile(_ tile: Tile, isHorizonBackdrop: Bool = false) throws -> PlaceTile {
+            PlaceTile(metalTile: MetalTile(tile: tile, tileBuffers: try TileBuffersFixtures.makeEmptyTileBuffers()),
+                      placeIn: VisibleTile(tile: tile),
+                      isHorizonBackdrop: isHorizonBackdrop)
+        }
+        let placements = DebugOverlayTileCoverage.placements(of: [
+            try placeTile(TileWorkingSetSubsystem.horizonBackdropTile, isHorizonBackdrop: true),
+            try placeTile(Tile(x: 2134, y: 1456, z: 12)),
+        ])
+        XCTAssertEqual(placements.map(\.slot), [Tile(x: 2134, y: 1456, z: 12)])
+        let coverage = DebugOverlayTileCoverage(placements: placements, footprint: [], center: SIMD2<Double>(0.52, 0.36), eye: nil)
+        XCTAssertLessThan(DebugOverlayTileCoverageLayout.window(for: coverage).width, 0.01, "A window round the frame's tile, not the world")
+    }
+
     func testTheCoarseSlotsDrawFirst() {
         let fine = Placement(slot: Tile(x: 4, y: 4, z: 3), source: Tile(x: 4, y: 4, z: 3), worldWrap: 0)
         let coarse = Placement(slot: Tile(x: 1, y: 1, z: 1), source: Tile(x: 1, y: 1, z: 1), worldWrap: 0)

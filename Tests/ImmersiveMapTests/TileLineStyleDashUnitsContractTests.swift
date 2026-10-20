@@ -12,7 +12,7 @@ import XCTest
 /// position as well as by name.
 final class TileLineStyleDashUnitsContractTests: XCTestCase {
     func testSwiftAndMetalStructsAgreeOnTheFlagSlot() throws {
-        XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 48)
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 64)
         XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.dashInTileUnits), 20,
                        "The flag is the sixth float, the slot that was reserved0")
 
@@ -39,9 +39,14 @@ final class TileLineStyleDashUnitsContractTests: XCTestCase {
         // The zoom ramp follows, four floats in the mirror's order.
         XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.rampStartWidthPoints), 32)
         XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.rampStartAlpha), 44)
+        // The sphere's veil and colour close the struct: the thirteenth
+        // float and three packed floats, no padding on either side.
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.sphereAlpha), 48)
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.sphereColorRed), 52)
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.offset(of: \.sphereColorBlue), 60)
         var cursor = worldLock.upperBound
         for field in ["float rampStartWidthPoints;", "float rampStartZoom;", "float rampEndZoom;",
-                      "float rampStartAlpha;"] {
+                      "float rampStartAlpha;", "float sphereAlpha;", "packed_float3 sphereColor;"] {
             let range = try XCTUnwrap(body.range(of: field, range: cursor ..< body.endIndex), field)
             cursor = range.upperBound
         }

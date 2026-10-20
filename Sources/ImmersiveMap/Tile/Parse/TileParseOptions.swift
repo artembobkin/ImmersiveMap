@@ -109,8 +109,8 @@ struct TileParseOptions: Equatable {
                   buildingMinimumSourceZoom: BuildingCoveragePlanner.minimumDrawZoom(settings: settings),
                   buildingDeepestSourceZoom: settings.tiles.coverage.maximumZoomLevel,
                   groundFlatteningFromTileZoom: settings.tiles.resolvedGroundFlatteningFromTileZoom,
-                  groundFlatteningGrid: settings.tiles.resolvedGroundFlattening.grid,
-                  groundFlatteningGridByTileZoom: settings.tiles.resolvedGroundFlattening.gridByTileZoom,
+                  groundFlatteningGrid: settings.tiles.groundFlattening.grid,
+                  groundFlatteningGridByTileZoom: settings.tiles.groundFlattening.gridByTileZoom,
                   groundReliefEnabled: settings.tiles.groundRelief.isEnabled)
     }
 }

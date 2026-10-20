@@ -50,17 +50,29 @@ struct GlobeLightUniform {
         return simd_normalize(SIMD3<Float>(world.x, world.y, world.z))
     }
 
+    /// The light fades out over the first stretch of the transition and is
+    /// gone by here: the terminator is the sphere's, and the unrolling
+    /// surface is no sphere.
+    static let morphFadeOutEnd: Float = 0.12
+
+    /// How much of the light is left: 1 on the resting globe, 0 from
+    /// `morphFadeOutEnd` of the transition on and on the plane.
+    static func morphFade(transition: Float, renderSurfaceMode: ViewMode) -> Float {
+        guard renderSurfaceMode == .spherical else { return 0 }
+        let t = simd_clamp(transition / morphFadeOutEnd, 0, 1)
+        return 1 - t * t * (3 - 2 * t)
+    }
+
     /// The light a frame shades the globe with: `sunWorldDirection` for
     /// the frame's globe, the strength's curve read at the camera zoom,
-    /// faded out through the morph into the plane the way the atmosphere
-    /// is (`HorizonFrameResolver.atmosphereFade`), so the unrolled map is
-    /// unshaded whatever the curve says.
+    /// faded out as the morph into the plane starts (`morphFade`), so the
+    /// unrolling map is unshaded whatever the curve says.
     static func resolve(settings: ImmersiveMapSettings.GlobeLightSettings,
                         lightDirection: SIMD3<Float>,
                         renderSurfaceMode: ViewMode,
                         transition: Float,
                         zoom: Double) -> GlobeLightUniform {
-        let morphFade = HorizonFrameResolver.atmosphereFade(transition: transition, renderSurfaceMode: renderSurfaceMode)
+        let morphFade = morphFade(transition: transition, renderSurfaceMode: renderSurfaceMode)
         let strength = min(max(settings.strength.value(atZoom: zoom), 0), 1) * morphFade
         guard settings.isEnabled,
               strength > 0,

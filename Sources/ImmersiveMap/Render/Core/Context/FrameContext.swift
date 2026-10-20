@@ -116,6 +116,10 @@ struct FrameContext {
     /// How the camera's last move over the terrain was settled, for the
     /// debug panel (`TerrainFollowReport`), nil off the terrain.
     let terrainFollowReport: TerrainFollowReport?
+    /// The country around the point the camera looks at, mountains or a
+    /// plain (`GroundReliefSurroundings`), nil off the terrain or while the
+    /// terrain under the point is on its way.
+    let terrainSurroundings: ImmersiveMapTerrainSurroundings?
 
     var zoomLevel: Int {
         Int(mapCameraState.zoom)
@@ -136,6 +140,7 @@ struct FrameContext {
          animatedZoom: Double? = nil,
          planningZoom: Double? = nil,
          terrainFollowReport: TerrainFollowReport? = nil,
+         terrainSurroundings: ImmersiveMapTerrainSurroundings? = nil,
          resolvedPresentation: ResolvedPresentationState? = nil,
          visibleContent: VisibleContentState = .empty,
          sharedState: FrameContextSharedState = FrameContextSharedState(),
@@ -158,6 +163,7 @@ struct FrameContext {
         self.animatedZoom = animatedZoom ?? fallbackResolvedPresentation.semanticWorldState.cameraState.zoom
         self.planningZoom = planningZoom ?? fallbackResolvedPresentation.semanticWorldState.cameraState.zoom
         self.terrainFollowReport = terrainFollowReport
+        self.terrainSurroundings = terrainSurroundings
         self.resolvedPresentation = fallbackResolvedPresentation
         self.visibleContent = visibleContent
         self.commandBuffer = commandBuffer

@@ -67,8 +67,7 @@ private struct CustomTilesScreen: View {
             // string becomes yours to get right, see the README.
             .attributionSettings(ImmersiveMapSettings.AttributionSettings(
                 attributionOverride: ImmersiveMapAttribution(
-                    title: "© OpenStreetMap",
-                    copyright: "",
+                    "© OpenStreetMap",
                     linkURL: URL(string: "https://www.openstreetmap.org/copyright"))))
         guard usesCustomStyle else {
             // The built-in style, stated so the two sides of the toggle read

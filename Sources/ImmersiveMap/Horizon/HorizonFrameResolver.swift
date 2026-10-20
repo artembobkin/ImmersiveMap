@@ -6,7 +6,7 @@ import simd
 /// What the horizon layer paints this frame, resolved once on the CPU from
 /// the settings, the transition and the camera. Three things share the edge:
 ///
-/// - **The atmosphere**, the globe's only: a dense band hugging the limb, a
+/// - **The atmosphere**, the globe's: a dense band hugging the limb, a
 ///   wide faint glow into space, a whitening at the edge, and a narrow rim
 ///   decaying inward over the surface. Optional (`AtmosphereSettings`).
 /// - **The limb feather**, always on the sphere: a glow a couple of pixels
@@ -24,13 +24,17 @@ import simd
 ///   is not the plane's line, a near slope lying under it and a peak over
 ///   it. With the fog off nothing is painted above the line either.
 ///
-/// The three never share a frame. The resting globe wears the first two.
-/// As the morph starts the atmosphere fades out, gone by
-/// `atmosphereFadeOutEnd` of the semantic transition, and the unroll then
-/// runs bare: no halo, no feather, no sky. Over the last stretch, from
-/// `fogFadeInStart`, where the geometry is already a finished plane, the
-/// flat map's sky fades in, complete at 1, so the surface switch happens
-/// between identical frames.
+/// The resting globe wears the first two, and so does the unrolling
+/// surface: its edge is the limb of the growing sphere the unroll keeps
+/// the surface on (`HorizonEdgeMath`), and the halo rides it, thinning on
+/// its own as that limb recedes (its widths are angles at the limb). Over
+/// the air handover (`PresentationSettings.airHandoverStart` to
+/// `airHandoverEnd`) the atmosphere and the feather fade out while the
+/// flat map's sky fades in under them, the halo's colour turning into the
+/// sky's colour at the line, so one frame carries both at their shares. The
+/// handover ends by default where the geometry is a finished plane, and
+/// from there to the surface switch at 1 the sphere's path draws exactly
+/// the plane's values, so the switch happens between identical frames.
 struct HorizonHaze: Equatable {
     var edge: HorizonEdgeMath.Edge
     /// The current sphere's centre, for the sun's side of the limb.
@@ -75,15 +79,6 @@ struct HorizonHaze: Equatable {
 /// and the band mesh, the pipeline, the uniform and the shader that draw
 /// it. No tile or style logic, no camera controllers or UI.
 enum HorizonFrameResolver {
-    /// The atmosphere fades out over the first stretch of the semantic
-    /// transition and is gone by here.
-    static let atmosphereFadeOutEnd: Float = 0.12
-    /// The fog fades in from here to 1. The unroll finishes at 0.9
-    /// (`PresentationStateResolver.geometryCompletionPhase`), so the fade
-    /// plays over a finished plane and the plane's own values are reached
-    /// exactly at the surface switch.
-    static let fogFadeInStart: Float = 0.9
-
     /// The atmosphere's widths, in radii of the resting planet, seen from
     /// the eye as angle at the limb: the shell is a fixed fraction of the
     /// planet, thin from far away, wide when the eye is low over it.
@@ -117,24 +112,27 @@ enum HorizonFrameResolver {
     /// Widths are e-fold denominators in the shader; a zero would divide.
     static let minimumRadians: Float = 1e-4
 
-    /// How much of the atmosphere is left: 1 on the resting globe, 0 from
-    /// `atmosphereFadeOutEnd` on and on the plane.
-    static func atmosphereFade(transition: Float, renderSurfaceMode: ViewMode) -> Float {
+    /// How much of the atmosphere is left: 1 on the resting globe and up
+    /// to the air handover, 0 from its end on and on the plane.
+    static func atmosphereFade(transition: Float,
+                               presentation: ImmersiveMapSettings.PresentationSettings,
+                               renderSurfaceMode: ViewMode) -> Float {
         guard renderSurfaceMode == .spherical else { return 0 }
-        let t = simd_clamp(transition / atmosphereFadeOutEnd, 0, 1)
-        return 1 - t * t * (3 - 2 * t)
+        return 1 - presentation.airHandover(atTransition: transition)
     }
 
-    /// How much of the flat map's sky is in: 0 before `fogFadeInStart`,
-    /// 1 at the end of the transition and on the plane.
-    static func fogFade(transition: Float, renderSurfaceMode: ViewMode) -> Float {
+    /// How much of the flat map's sky is in: 0 up to the air handover, 1
+    /// from its end on and on the plane. The two fades sum to one, so a
+    /// frame of the handover carries both at their shares.
+    static func fogFade(transition: Float,
+                        presentation: ImmersiveMapSettings.PresentationSettings,
+                        renderSurfaceMode: ViewMode) -> Float {
         guard renderSurfaceMode == .spherical else { return 1 }
-        let t = simd_clamp((transition - fogFadeInStart) / (1 - fogFadeInStart), 0, 1)
-        return t * t * (3 - 2 * t)
+        return presentation.airHandover(atTransition: transition)
     }
 
     /// - Parameters:
-    ///   - transition: the semantic transition (the fades' clock).
+    ///   - transition: the semantic transition (the handover's clock).
     ///   - zoom: the camera zoom, the band zoom fade's clock.
     ///   - globe: the geometry transition and the resting radius.
     ///   - verticalFovRadians: the render camera's vertical field of view,
@@ -157,18 +155,23 @@ enum HorizonFrameResolver {
             ? max(1 - min(max(globe.transition, 0), 1), 0) / radius
             : 0
         let edge = HorizonEdgeMath.edge(eye: cameraEye, curvature: curvature)
-        let atmosphereFade = atmosphereFade(transition: transition, renderSurfaceMode: renderSurfaceMode)
-        let fogFade = fogFade(transition: transition, renderSurfaceMode: renderSurfaceMode)
-        // The two fades never overlap, so a frame is either the globe's
-        // (its atmosphere at some strength, or nothing) or the plane's.
-        let showsFog = fogFade > 0
+        let presentation = settings.presentation
+        let atmosphereFade = atmosphereFade(transition: transition,
+                                            presentation: presentation,
+                                            renderSurfaceMode: renderSurfaceMode)
+        let fogFade = fogFade(transition: transition,
+                              presentation: presentation,
+                              renderSurfaceMode: renderSurfaceMode)
         // The halo's width at the camera zoom, floored: a shell of nothing
         // would put the feather and the rim at the same angle.
         let thickness = max(atmosphere.thickness.value(atZoom: zoom), 0.05)
         let intensity = max(atmosphere.intensity, 0)
 
         // A shell of `radii` planet radii subtends `radii * R / limbDistance`
-        // at the limb; infinite limb distance (the plane) gives zero.
+        // at the limb; infinite limb distance (the plane) gives zero. On
+        // the unrolling surface the limb is the growing sphere's, farther
+        // every frame, so the halo thins on its own as the planet
+        // flattens.
         func haloRadians(_ radii: Float) -> Float {
             max(min(radii * radius * thickness / edge.limbDistance, maximumHaloRadians), minimumRadians)
         }
@@ -176,19 +179,23 @@ enum HorizonFrameResolver {
         let clearColor = SIMD3<Float>(mapColor.x, mapColor.y, mapColor.z)
         let planeTint = fog.isEnabled ? fog.horizonColor : clearColor
         let globeTint = isOn ? atmosphere.color : clearColor
-        let tint = showsFog ? planeTint : globeTint
+        // The colour at the edge, the halo's turning into the sky's at the
+        // line through the handover, so the two meet in one colour.
+        let tint = globeTint + (planeTint - globeTint) * fogFade
 
         let inverseProjectionView = simd_inverse(projectionView)
         // The ground side is the globe's alone: the rim of the atmosphere
-        // decaying inward over the surface, and the limb feather. The plane
-        // paints nothing on the ground.
+        // decaying inward over the surface, and the limb feather, both
+        // fading out through the handover. The plane paints nothing on
+        // the ground, and its rim's widths are the floor: an infinite
+        // limb distance.
         let rimRadians = haloRadians(haloRimRadii)
         let featherRadians = max(featherPixels * verticalFovRadians / max(drawableHeightPx, 1), minimumRadians)
         let featherStrength = featherPeakStrength * atmosphereFade
-        let groundGain = showsFog ? 0 : (isOn ? intensity : 0) * atmosphereFade
-        let groundBandRadians = max(showsFog ? 0 : rimRadians, minimumRadians)
-        let cutoffStartRadians = max(showsFog ? 0 : rimRadians * rimCutoffStartWidths, minimumRadians)
-        let cutoffEndRadians = max(showsFog ? 0 : rimRadians * rimCutoffEndWidths, minimumRadians)
+        let groundGain = (isOn ? intensity : 0) * atmosphereFade
+        let groundBandRadians = max(rimRadians, minimumRadians)
+        let cutoffStartRadians = max(rimRadians * rimCutoffStartWidths, minimumRadians)
+        let cutoffEndRadians = max(rimRadians * rimCutoffEndWidths, minimumRadians)
         let skyOpacity = fog.isEnabled ? fogFade : 0
 
         // The sun the halo brightens toward: the globe's, fixed over its
@@ -209,24 +216,28 @@ enum HorizonFrameResolver {
             .map { HorizonEdgeMath.angleAboveEdge(direction: $0, edge: edge) }
         let edgeWithinReach = cornerAngles.contains { $0 >= -reach }
         // The band's top: the plane's sky is opaque to the top of the frame,
-        // the globe's halo is done a few glow widths up.
+        // the globe's halo is done a few glow widths up, and a frame of the
+        // handover carries both.
         let frameTop = (cornerAngles.max() ?? 0) + bandTopMarginRadians
-        let bandTopRadians = showsFog
-            ? max(frameTop, skyGradientRadians * bandTopGlowWidths)
-            : haloRadians(haloGlowRadii) * bandTopGlowWidths
+        let haloTop = haloRadians(haloGlowRadii) * bandTopGlowWidths
+        let bandTopRadians = skyOpacity > 0
+            ? max(frameTop, skyGradientRadians * bandTopGlowWidths, haloTop)
+            : haloTop
         // Transparent space keeps the sphere unpainted around the planet:
-        // no halo there, and the plane's sky arrives with the fade only.
+        // no halo there, and the plane's sky arrives with the fade only,
+        // the sky draw it brings carrying no halo under it.
         let drawsHalo = renderSurfaceMode == .spherical
             && settings.scene.space.isTransparent == false
             && atmosphereFade > 0
+        let haloShare = settings.scene.space.isTransparent ? 0 : atmosphereFade
         let drawsSky = edgeWithinReach && (drawsHalo || skyOpacity > 0)
         let drawsGround = edgeWithinReach && (groundGain > 0 || featherStrength > 0)
 
         return HorizonHaze(edge: edge,
                            center: curvature > 0 ? SIMD3<Float>(0, 0, -1 / curvature) : SIMD3<Float>(0, 0, -1e6),
                            light: light,
-                           sunInfluence: isOn ? min(max(atmosphere.sunInfluence, 0), 1) * atmosphereFade : 0,
-                           skyStrength: isOn ? intensity * atmosphereFade : 0,
+                           sunInfluence: isOn ? min(max(atmosphere.sunInfluence, 0), 1) * haloShare : 0,
+                           skyStrength: isOn ? intensity * haloShare : 0,
                            tint: tint,
                            whitenWeight: isOn ? haloWhitenWeight * atmosphereFade : 0,
                            featherStrength: featherStrength,

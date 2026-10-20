@@ -71,7 +71,7 @@ final class ShadowMapReuseController {
                            flatRenderPan: SIMD2<Double>,
                            renderMapSize: Double,
                            groundHeights: ClosedRange<Float>? = nil,
-                           zoom: Double? = nil,
+                           zoom: Double,
                            scene: ImmersiveMapSettings.SceneSettings) -> ShadowFrameState? {
         guard let inputs = ShadowFrameStateResolver.resolveInputs(renderSurfaceMode: renderSurfaceMode,
                                                                   projectionView: projectionView,

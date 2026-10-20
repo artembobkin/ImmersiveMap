@@ -6,7 +6,9 @@ import Foundation
 /// What the debug panel's Export tab writes: the values the panel tunes,
 /// as the `ImmersiveMapView` modifiers that set them, so a look found by
 /// hand is pasted into an app as it is. The sky, the ground fog with its
-/// zoom curves, the light and the shadows, and the globe's atmosphere.
+/// zoom curves and the air over the mountains, the light and the shadows,
+/// the globe's atmosphere, and how the country around the camera is read
+/// as mountains or a plain.
 ///
 /// Only those. The rest of `ImmersiveMapSettings` holds the tile archive's
 /// address and request headers, where an access token lives, and a file
@@ -20,7 +22,7 @@ enum DebugOverlaySettingsExport {
                      "// \(ISO8601DateFormatter().string(from: date))"]
         lines += cameraLines.map { "// \($0)" }
         lines += ["", "ImmersiveMapView()"]
-        lines += modifiers(scene).map { "    \($0)" }
+        lines += modifiers(scene, surroundings: settings.tiles.groundRelief.surroundings).map { "    \($0)" }
         return lines.joined(separator: "\n") + "\n"
     }
 
@@ -32,39 +34,28 @@ enum DebugOverlaySettingsExport {
         return "ImmersiveMapSettings-\(formatter.string(from: date)).swift"
     }
 
-    static func modifiers(_ scene: ImmersiveMapSettings.SceneSettings) -> [String] {
+    static func modifiers(_ scene: ImmersiveMapSettings.SceneSettings,
+                          surroundings: ImmersiveMapSettings.TileSettings.TerrainSurroundingsSettings) -> [String] {
         let fog = scene.fog
-        let groundFog = scene.groundFog
         let shadows = scene.shadows
         let atmosphere = scene.atmosphere
         let globeLight = scene.globeLight
-        var groundFogArguments = ["isEnabled: \(groundFog.isEnabled)",
-                                  "densityPerKilometer: \(curve(groundFog.densityPerKilometer))",
-                                  "heightMeters: \(curve(groundFog.heightMeters))",
-                                  "startDistanceMeters: \(curve(groundFog.startDistanceMeters))",
-                                  "startSoftnessMeters: \(curve(groundFog.startSoftnessMeters))"]
-        if let color = groundFog.color {
-            groundFogArguments.append("color: \(vector(color))")
-        }
-        groundFogArguments.append("maximumOpacity: \(curve(groundFog.maximumOpacity))")
-        groundFogArguments.append("veilsBuildings: \(groundFog.veilsBuildings)")
-        groundFogArguments.append("takesSkyColor: \(groundFog.takesSkyColor)")
-        groundFogArguments.append("heightsFromSeaLevel: \(groundFog.heightsFromSeaLevel)")
-        groundFogArguments.append("baseAltitudeMeters: \(number(groundFog.baseAltitudeMeters))")
-        return [
+        var lines = [
             ".fogSettings(ImmersiveMapSettings.FogSettings(isEnabled: \(fog.isEnabled), "
                 + "skyColor: \(vector(fog.skyColor)), "
                 + "horizonColor: \(vector(fog.horizonColor))))",
-            ".groundFog(\(groundFogArguments.joined(separator: ", ")))",
+            ".groundFog(\(groundFogArguments(scene.groundFog).joined(separator: ", ")))"
+        ]
+        if let mountainGroundFog = scene.mountainGroundFog {
+            lines.append(".mountainGroundFog(\(groundFogArguments(mountainGroundFog).joined(separator: ", ")))")
+        }
+        return lines + [
             ".sceneLight(direction: \(vector(scene.light.direction)))",
             ".shadows(isEnabled: \(shadows.isEnabled), "
-                + "strength: \(number(shadows.strength)), "
-                + "minimumZoom: \(number(Float(shadows.minimumZoom))), "
-                + "fadeInZooms: \(number(Float(shadows.fadeInZooms))), "
+                + "strength: \(curve(shadows.strength)), "
                 + "mapResolution: \(shadows.mapResolution), "
-                + "coverageCameraDistances: \(number(shadows.coverageCameraDistances)), "
-                + "farCoverageCameraDistances: \(number(shadows.farCoverageCameraDistances)), "
-                + "minimumCoverageMeters: \(number(shadows.minimumCoverageMeters)), "
+                + "nearCoverageMeters: \(curve(shadows.nearCoverageMeters)), "
+                + "farCoverageMeters: \(curve(shadows.farCoverageMeters)), "
                 + "maxCasterHeightMeters: \(number(shadows.maxCasterHeightMeters)), "
                 + "normalOffsetTexels: \(number(shadows.normalOffsetTexels)), "
                 + "softness: \(number(shadows.softness)), "
@@ -79,8 +70,31 @@ enum DebugOverlaySettingsExport {
                 + "subsolarLongitudeDegrees: \(number(globeLight.subsolarLongitudeDegrees)), "
                 + "strength: \(curve(globeLight.strength)), "
                 + "terminatorSoftness: \(number(globeLight.terminatorSoftness)), "
-                + "nightColor: \(vector(globeLight.nightColor)))"
+                + "nightColor: \(vector(globeLight.nightColor)))",
+            ".terrainSurroundings(sampleRadiusMetres: \(number(surroundings.sampleRadiusMetres)), "
+                + "plainBelowMetres: \(number(surroundings.plainBelowMetres)), "
+                + "mountainsAboveMetres: \(number(surroundings.mountainsAboveMetres)), "
+                + "smoothingHalfLife: \(number(Float(surroundings.smoothingHalfLife))))"
         ]
+    }
+
+    /// An air's values as the arguments of `groundFog(...)` and
+    /// `mountainGroundFog(...)`, which take the same.
+    static func groundFogArguments(_ groundFog: ImmersiveMapSettings.GroundFogSettings) -> [String] {
+        var arguments = ["isEnabled: \(groundFog.isEnabled)",
+                         "densityPerKilometer: \(curve(groundFog.densityPerKilometer))",
+                         "heightMeters: \(curve(groundFog.heightMeters))",
+                         "startDistanceMeters: \(curve(groundFog.startDistanceMeters))",
+                         "startSoftnessMeters: \(curve(groundFog.startSoftnessMeters))"]
+        if let color = groundFog.color {
+            arguments.append("color: \(vector(color))")
+        }
+        arguments.append("maximumOpacity: \(curve(groundFog.maximumOpacity))")
+        arguments.append("veilsBuildings: \(groundFog.veilsBuildings)")
+        arguments.append("takesSkyColor: \(groundFog.takesSkyColor)")
+        arguments.append("heightsFromSeaLevel: \(groundFog.heightsFromSeaLevel)")
+        arguments.append("baseAltitudeMeters: \(number(groundFog.baseAltitudeMeters))")
+        return arguments
     }
 
     /// A curve as the literal that writes it: one value, or its stops.

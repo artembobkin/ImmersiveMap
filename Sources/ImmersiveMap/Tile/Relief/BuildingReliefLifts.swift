@@ -45,8 +45,8 @@ final class BuildingReliefLifts {
         for (placement, key) in zip(placements, drawnKeys) {
             let metalTile = placement.metalTile
             let anchors = metalTile.tileBuffers.extruded.buildingAnchors
-            guard key != nil, anchors.isEmpty == false,
-                  let relief = store.relief(for: metalTile.tile, targetZoom: placement.placeIn.z) else {
+            guard key != nil, anchors.isEmpty == false, let displacement = placement.displacement,
+                  let relief = store.relief(for: metalTile.tile, terrain: displacement) else {
                 lifts.append(nil)
                 continue
             }
