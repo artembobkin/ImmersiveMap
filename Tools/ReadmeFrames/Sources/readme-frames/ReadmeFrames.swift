@@ -35,10 +35,14 @@ import UniformTypeIdentifiers
 /// Retina screen) and the scene's date (a fixed summer noon by default, so
 /// the sun and the night side are the same on every run). A frame without
 /// a camera is placed as the PNG already in `Assets/`: a picture taken by
-/// hand, until it gets a camera. The map is the Develop app's: the hosted
-/// tiles (or the local copy at `LocalTiles/`, or
-/// `IMMERSIVEMAP_DEV_TILE_ARCHIVE`), the ground relief, the extruded
-/// buildings from zoom 14 and the model archive.
+/// hand, until it gets a camera. A frame may name a `theme` (`night`,
+/// the dark palette of the settings example), carry `avatars` (markers
+/// with a portrait from a URL or a file, a battery or a speed badge) and
+/// `sceneModels` (a USDZ file of the repository placed on the map), all
+/// drawn into the capture. The map is the Develop app's: the hosted tiles
+/// (or the local copy at `LocalTiles/`, or `IMMERSIVEMAP_DEV_TILE_ARCHIVE`),
+/// the ground relief, the extruded buildings from zoom 14 and the model
+/// archive.
 ///
 /// Every frame starts from the network when there is no local archive, so
 /// a frame takes as long as its tiles take to arrive, up to `settleTimeout`.
@@ -58,13 +62,14 @@ struct ReadmeFrames {
                 }
                 try FileManager.default.createDirectory(at: options.outputDirectory, withIntermediateDirectories: true)
                 let recorder = ImmersiveMapStillRecorder()
-                let settings = Self.mapSettings()
                 for frame in rendered {
                     guard let camera = frame.camera else { continue }
                     let started = Date()
                     print("\(frame.name): \(frame.width ?? Frame.defaultWidth)x\(frame.height ?? Frame.defaultHeight) at z\(frame.zoom ?? 0) \(frame.latitude ?? 0), \(frame.longitude ?? 0)")
-                    let image = try await recorder.capture(settings: settings,
+                    let image = try await recorder.capture(settings: Self.mapSettings(theme: frame.theme),
                                                            camera: camera,
+                                                           avatars: try frame.avatarMarkers(),
+                                                           sceneModels: try frame.sceneModelValues(),
                                                            configuration: frame.configuration(settleTimeout: options.settleTimeout))
                     let url = options.outputDirectory.appendingPathComponent("\(frame.name).png")
                     try Self.writePNG(image, to: url)
@@ -84,10 +89,11 @@ struct ReadmeFrames {
     /// The map the frames are taken of: the Develop app's configuration, so
     /// a frame shows what the person at the screen sees there, without the
     /// controls and the debug panel, which the capture never draws anyway.
-    static func mapSettings() -> ImmersiveMapSettings {
+    /// The theme is the frame's (`Palette`), the default's by default.
+    static func mapSettings(theme: Palette?) -> ImmersiveMapSettings {
         ImmersiveMapSettings.default
             .tileArchive(tileArchive)
-            .mapStyle(ProtomapsBasemapMapStyle.default.apply { theme in
+            .mapStyle(ProtomapsBasemapMapStyle(theme: (theme ?? .day).theme).apply { theme in
                 theme.features.buildingExtrusion = true
             })
             .buildingExtrusion(buildingsMinimumZoom: 14, risesFromTheGround: false)
@@ -176,6 +182,74 @@ struct Frame: Decodable {
     /// The scene's wall date, ISO 8601, for the sun and the night side. A
     /// fixed summer noon over Europe by default.
     let sceneDate: Date?
+    /// The palette the frame is drawn in: `day` by default, `night` for the
+    /// dark one.
+    let theme: Palette?
+    /// Avatar markers drawn into the frame.
+    let avatars: [Avatar]?
+    /// 3D models placed on the map and drawn into the frame.
+    let sceneModels: [SceneModel]?
+
+    /// An avatar marker: a portrait from a URL (fetched before the capture,
+    /// so the frame never shows the placeholder) or a file, and the badges.
+    struct Avatar: Decodable {
+        let id: UInt64
+        let latitude: Double
+        let longitude: Double
+        /// A URL or a path, relative to the repository's root.
+        let image: String
+        let battery: Int?
+        let speed: Int?
+
+        func marker() throws -> AvatarMarker {
+            let url = image.contains("://") ? URL(string: image) : ReadmeFrames.repositoryRoot.appendingPathComponent(image)
+            guard let url, let data = try? Data(contentsOf: url),
+                  let source = CGImageSourceCreateWithData(data as CFData, nil),
+                  let portrait = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+                throw ToolError("Cannot load the portrait \(image) of avatar \(id)")
+            }
+            return AvatarMarker(id: id,
+                                coordinate: GeoCoordinate(latitude: latitude, longitude: longitude),
+                                image: portrait,
+                                batteryBadge: battery.map { AvatarBatteryBadge(levelPct: $0) },
+                                speedBadge: speed.map { AvatarSpeedBadge(kilometersPerHour: $0) })
+        }
+    }
+
+    /// A scene model: a USDZ file of the repository, by its path from the
+    /// root, placed and sized on the map.
+    struct SceneModel: Decodable {
+        let id: UInt64
+        let model: String
+        let latitude: Double
+        let longitude: Double
+        let altitudeMeters: Double?
+        let headingDegrees: Double?
+        let pitchDegrees: Double?
+        let fitDiameterMeters: Double?
+
+        func value() throws -> ImmersiveMapSceneModel {
+            let url = ReadmeFrames.repositoryRoot.appendingPathComponent(model)
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                throw ToolError("No model file at \(url.path) for scene model \(id)")
+            }
+            return ImmersiveMapSceneModel(id: id,
+                                          source: ImmersiveMapSceneModel.Source(url: url),
+                                          coordinate: GeoCoordinate(latitude: latitude, longitude: longitude),
+                                          altitudeMeters: altitudeMeters ?? 0,
+                                          headingDegrees: headingDegrees ?? 0,
+                                          pitchDegrees: pitchDegrees ?? 0,
+                                          fitDiameterMeters: fitDiameterMeters)
+        }
+    }
+
+    func avatarMarkers() throws -> [AvatarMarker] {
+        try (avatars ?? []).map { try $0.marker() }
+    }
+
+    func sceneModelValues() throws -> [ImmersiveMapSceneModel] {
+        try (sceneModels ?? []).map { try $0.value() }
+    }
 
     static let defaultSceneDate = ISO8601DateFormatter().date(from: "2026-06-21T12:00:00Z")!
 
@@ -200,6 +274,58 @@ struct Frame: Decodable {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try decoder.decode([Frame].self, from: Data(contentsOf: url))
+    }
+}
+
+/// The palettes a frame may be drawn in: the engine's default, and the
+/// night palette of the settings example (`Examples/macOS/ImmersiveMapSettingsMac`),
+/// copied here so the frame of the dark map is made from the same colours
+/// the example shows.
+enum Palette: String, Decodable {
+    case day
+    case night
+
+    var theme: ProtomapsBasemapTheme {
+        switch self {
+        case .day:
+            return .default
+        case .night:
+            return ProtomapsBasemapTheme.default
+                .layers { layers in
+                    layers.land = SIMD4<Float>(0.09, 0.10, 0.13, 1)
+                    layers.water = SIMD4<Float>(0.04, 0.09, 0.20, 1)
+                    layers.wood = SIMD4<Float>(0.06, 0.14, 0.11, 1)
+                    layers.grass = SIMD4<Float>(0.08, 0.16, 0.12, 1)
+                    layers.farmland = SIMD4<Float>(0.10, 0.14, 0.10, 1)
+                    layers.wetland = SIMD4<Float>(0.07, 0.14, 0.13, 1)
+                    layers.sand = SIMD4<Float>(0.16, 0.15, 0.13, 1)
+                    layers.ice = SIMD4<Float>(0.30, 0.32, 0.36, 1)
+                    layers.park = SIMD4<Float>(0.08, 0.17, 0.13, 1)
+                    layers.residential = SIMD4<Float>(0.12, 0.12, 0.15, 1)
+                    layers.industrial = SIMD4<Float>(0.14, 0.13, 0.15, 1)
+                    layers.aeroway = SIMD4<Float>(0.16, 0.16, 0.19, 1)
+                    layers.boundary = SIMD4<Float>(0.58, 0.36, 0.78, 0.9)
+                    let base = SIMD4<Float>(0.42, 0.40, 0.36, 1)
+                    let minor = SIMD4<Float>(0.24, 0.24, 0.28, 1)
+                    layers.roads = ProtomapsBasemapTheme.RoadLayerStyles(motorway: base, trunk: base, primary: base,
+                                                                         secondary: minor, tertiary: minor, minor: minor,
+                                                                         service: minor, path: minor, rail: minor,
+                                                                         casing: SIMD4<Float>(0.06, 0.06, 0.08, 0.95))
+                }
+                .features { features in
+                    features.buildingFillColor = SIMD4<Float>(0.18, 0.19, 0.23, 1)
+                }
+                .labels { labels in
+                    let fill = SIMD3<Float>(0.92, 0.94, 1.0)
+                    let stroke = SIMD3<Float>(0.02, 0.03, 0.06)
+                    labels.city.fillColor = fill; labels.city.strokeColor = stroke
+                    labels.town.fillColor = fill; labels.town.strokeColor = stroke
+                    labels.country.fillColor = fill; labels.country.strokeColor = stroke
+                    labels.poi.fillColor = fill; labels.poi.strokeColor = stroke
+                    labels.water.fillColor = SIMD3<Float>(0.55, 0.72, 0.96); labels.water.strokeColor = stroke
+                    labels.road.fillColor = fill; labels.road.strokeColor = stroke
+                }
+        }
     }
 }
 

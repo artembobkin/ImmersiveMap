@@ -55,8 +55,47 @@
     "alt": "Downtown San Francisco from above, with the points of interest",
     "latitude": 37.786, "longitude": -122.406, "zoom": 14.65, "pitch": 0, "bearing": 70.36
   },
-  { "name": "readme-berlin-night", "alt": "Berlin Mitte in the dark palette" },
-  { "name": "readme-avatars-shibuya", "alt": "Avatar markers with badges over Shibuya" },
-  { "name": "readme-scene-models-paris", "alt": "A 3D scene model by the Eiffel Tower" },
-  { "name": "readme-avatars-globe", "alt": "Avatar markers on the globe" }
+  {
+    "name": "readme-berlin-night",
+    "alt": "Berlin Mitte in the dark palette",
+    "theme": "night",
+    "latitude": 52.5195, "longitude": 13.4010, "zoom": 15.8, "pitch": 58, "bearing": 25
+  },
+  {
+    "name": "readme-avatars-shibuya",
+    "alt": "Avatar markers with badges over Shibuya",
+    "latitude": 35.6595, "longitude": 139.7005, "zoom": 16.2, "pitch": 50, "bearing": -20,
+    "avatars": [
+      { "id": 1, "latitude": 35.6607, "longitude": 139.7023, "image": "https://i.pravatar.cc/256?img=11", "battery": 84 },
+      { "id": 2, "latitude": 35.6579, "longitude": 139.7014, "image": "https://i.pravatar.cc/256?img=12", "speed": 14 },
+      { "id": 3, "latitude": 35.6602, "longitude": 139.6984, "image": "https://i.pravatar.cc/256?img=13", "battery": 47 },
+      { "id": 4, "latitude": 35.6584, "longitude": 139.6992, "image": "https://i.pravatar.cc/256?img=14" },
+      { "id": 5, "latitude": 35.6619, "longitude": 139.7001, "image": "https://i.pravatar.cc/256?img=15", "battery": 92, "speed": 5 },
+      { "id": 6, "latitude": 35.6570, "longitude": 139.7027, "image": "https://i.pravatar.cc/256?img=16" },
+      { "id": 7, "latitude": 35.6598, "longitude": 139.7037, "image": "https://i.pravatar.cc/256?img=17", "battery": 61 },
+      { "id": 8, "latitude": 35.6590, "longitude": 139.6971, "image": "https://i.pravatar.cc/256?img=18", "speed": 32 }
+    ]
+  },
+  {
+    "name": "readme-scene-models-paris",
+    "alt": "A 3D scene model by the Eiffel Tower",
+    "latitude": 48.8570, "longitude": 2.2952, "zoom": 15.6, "pitch": 55, "bearing": 30,
+    "sceneModels": [
+      { "id": 9001, "model": "Examples/macOS/ImmersiveMapSceneModelsMac/ImmersiveMapSceneModelsMac/Resources/spot.usdz",
+        "latitude": 48.8570, "longitude": 2.2952, "headingDegrees": -35, "fitDiameterMeters": 160 }
+    ]
+  },
+  {
+    "name": "readme-avatars-globe",
+    "alt": "Avatar markers on the globe",
+    "latitude": 30.0, "longitude": -45.0, "zoom": 2.4,
+    "avatars": [
+      { "id": 17, "latitude": 55.7558, "longitude": 37.6173, "image": "https://i.pravatar.cc/256?img=31", "battery": 66 },
+      { "id": 18, "latitude": -22.9068, "longitude": -43.1729, "image": "https://i.pravatar.cc/256?img=34", "speed": 17 },
+      { "id": 19, "latitude": 37.7749, "longitude": -122.4194, "image": "https://i.pravatar.cc/256?img=35", "battery": 39 },
+      { "id": 20, "latitude": 19.4326, "longitude": -99.1332, "image": "https://i.pravatar.cc/256?img=36" },
+      { "id": 21, "latitude": 40.7128, "longitude": -74.0060, "image": "https://i.pravatar.cc/256?img=32", "speed": 9 },
+      { "id": 22, "latitude": 51.5074, "longitude": -0.1278, "image": "https://i.pravatar.cc/256?img=33", "battery": 81 }
+    ]
+  }
 ]
