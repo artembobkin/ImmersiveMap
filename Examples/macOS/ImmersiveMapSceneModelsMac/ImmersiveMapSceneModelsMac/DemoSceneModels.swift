@@ -23,11 +23,13 @@ enum DemoSceneModels {
             return []
         }
         return [
-            // A landmark-sized cow by the Eiffel Tower.
+            // A landmark-sized cow by the Eiffel Tower, facing the camera
+            // the app starts with (its bearing plus a half turn: the
+            // model faces north at heading 0).
             ImmersiveMapSceneModel(id: spotByTheEiffelTower,
                                    source: spot,
                                    coordinate: paris,
-                                   headingDegrees: -35,
+                                   headingDegrees: 203,
                                    fitDiameterMeters: 160),
             // Her sister flying over Paris: exercises altitude and pitch.
             ImmersiveMapSceneModel(id: spotOverParis,
@@ -43,7 +45,7 @@ enum DemoSceneModels {
             ImmersiveMapSceneModel(id: spotInSeoul,
                                    source: spot,
                                    coordinate: seoul,
-                                   headingDegrees: 30,
+                                   headingDegrees: 191,
                                    fitDiameterMeters: 220),
         ]
     }
