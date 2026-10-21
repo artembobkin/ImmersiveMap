@@ -712,6 +712,25 @@ public extension ImmersiveMapView {
         self.mapStyle(AnyImmersiveMapMapStyle(mapStyle))
     }
 
+    /// The map of a night: the night palette (`ProtomapsBasemapTheme.night`,
+    /// the land a deep blue-grey, the water a navy, the labels near-white)
+    /// with the night's air (`ImmersiveMapSettings.FogSettings.night`, a
+    /// navy sky and horizon the ground fog follows). `night(false)` is the
+    /// day again: the built-in style and the day's air. Both are live
+    /// switches, and the change of palette re-prepares the tiles as any
+    /// change of style does:
+    ///
+    ///     ImmersiveMapView()
+    ///         .night()
+    ///
+    /// For a night of your own, `.mapStyle(.night.apply { theme in ... })`
+    /// and `.fogSettings(...)` set the two apart.
+    public func night(_ isEnabled: Bool = true) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.night(isEnabled)
+        return view
+    }
+
     /// The built-in style, spelled without its type name:
     /// `.mapStyle(.default)` or `.mapStyle(.default.apply { theme in ... })`.
     /// A concrete overload, so the leading dot resolves on the built-in style

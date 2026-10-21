@@ -1606,6 +1606,15 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.skyColor = skyColor
             self.horizonColor = horizonColor
         }
+
+        /// The air of a night, for the night palette
+        /// (`ProtomapsBasemapTheme.night`): the sky a deep navy, the
+        /// horizon a shade lighter in the hue of the palette's water, so
+        /// the far city sinks into the night and the ground fog, which
+        /// takes the horizon's colour unless it states its own, meets the
+        /// sky at the line.
+        public static let night = FogSettings(skyColor: SIMD3<Float>(0.03, 0.05, 0.11),
+                                              horizonColor: SIMD3<Float>(0.09, 0.12, 0.22))
     }
 
     /// When the extruded buildings and the models of a model archive
@@ -2766,6 +2775,19 @@ public extension ImmersiveMapSettings {
     func fogSettings(_ fog: FogSettings) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.fog = fog
+        return settings
+    }
+
+    /// The map of a night, or of a day again: the night palette
+    /// (`ProtomapsBasemapMapStyle.night`) with the night's air
+    /// (`FogSettings.night`), the ground fog following the horizon, or the
+    /// built-in style with the day's air. A change of style re-prepares
+    /// the tiles, the air applies live.
+    func night(_ isEnabled: Bool = true) -> ImmersiveMapSettings {
+        var settings = self
+        settings.mapStyle = AnyImmersiveMapMapStyle(isEnabled ? ProtomapsBasemapMapStyle.night : .default)
+        settings.scene.fog = isEnabled ? .night : FogSettings()
+        settings.scene.groundFog.color = nil
         return settings
     }
 

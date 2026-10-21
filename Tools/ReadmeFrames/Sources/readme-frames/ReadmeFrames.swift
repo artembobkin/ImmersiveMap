@@ -91,9 +91,9 @@ struct ReadmeFrames {
     /// controls and the debug panel, which the capture never draws anyway.
     /// The theme is the frame's (`Palette`), the default's by default.
     static func mapSettings(theme: Palette?) -> ImmersiveMapSettings {
-        (theme ?? .day).air(ImmersiveMapSettings.default)
+        (theme ?? .day).apply(ImmersiveMapSettings.default)
             .tileArchive(tileArchive)
-            .mapStyle(ProtomapsBasemapMapStyle(theme: (theme ?? .day).theme).apply { theme in
+            .mapStyle(ProtomapsBasemapMapStyle(theme: (theme ?? .day) == .night ? .night : .default).apply { theme in
                 theme.features.buildingExtrusion = true
             })
             .buildingExtrusion(buildingsMinimumZoom: 14, risesFromTheGround: false)
@@ -277,72 +277,18 @@ struct Frame: Decodable {
     }
 }
 
-/// The palettes a frame may be drawn in: the engine's default, and the
-/// night palette of the settings example (`Examples/macOS/ImmersiveMapSettingsMac`),
-/// copied here so the frame of the dark map is made from the same colours
-/// the example shows.
+/// The palettes a frame may be drawn in: the engine's day and its night
+/// (`ImmersiveMapSettings.night`), which brings its own air.
 enum Palette: String, Decodable {
     case day
     case night
 
-    /// The air of the palette: the sky, the horizon and the ground fog.
-    /// The day keeps the engine's defaults. The night's air is a deep
-    /// navy, the water's hue of its palette a shade lighter, so the far
-    /// city sinks into the night instead of a white haze: the sky at the
-    /// horizon and the fog meet in one colour, the sky above it darker.
-    func air(_ settings: ImmersiveMapSettings) -> ImmersiveMapSettings {
+    /// The settings of the palette: the night's style and air, or the
+    /// settings as they are.
+    func apply(_ settings: ImmersiveMapSettings) -> ImmersiveMapSettings {
         switch self {
-        case .day:
-            return settings
-        case .night:
-            let horizon = SIMD3<Float>(0.09, 0.12, 0.22)
-            return settings
-                .fogSettings(ImmersiveMapSettings.FogSettings(skyColor: SIMD3<Float>(0.03, 0.05, 0.11),
-                                                              horizonColor: horizon))
-                .groundFog(color: horizon)
-        }
-    }
-
-    var theme: ProtomapsBasemapTheme {
-        switch self {
-        case .day:
-            return .default
-        case .night:
-            return ProtomapsBasemapTheme.default
-                .layers { layers in
-                    layers.land = SIMD4<Float>(0.09, 0.10, 0.13, 1)
-                    layers.water = SIMD4<Float>(0.04, 0.09, 0.20, 1)
-                    layers.wood = SIMD4<Float>(0.06, 0.14, 0.11, 1)
-                    layers.grass = SIMD4<Float>(0.08, 0.16, 0.12, 1)
-                    layers.farmland = SIMD4<Float>(0.10, 0.14, 0.10, 1)
-                    layers.wetland = SIMD4<Float>(0.07, 0.14, 0.13, 1)
-                    layers.sand = SIMD4<Float>(0.16, 0.15, 0.13, 1)
-                    layers.ice = SIMD4<Float>(0.30, 0.32, 0.36, 1)
-                    layers.park = SIMD4<Float>(0.08, 0.17, 0.13, 1)
-                    layers.residential = SIMD4<Float>(0.12, 0.12, 0.15, 1)
-                    layers.industrial = SIMD4<Float>(0.14, 0.13, 0.15, 1)
-                    layers.aeroway = SIMD4<Float>(0.16, 0.16, 0.19, 1)
-                    layers.boundary = SIMD4<Float>(0.58, 0.36, 0.78, 0.9)
-                    let base = SIMD4<Float>(0.42, 0.40, 0.36, 1)
-                    let minor = SIMD4<Float>(0.24, 0.24, 0.28, 1)
-                    layers.roads = ProtomapsBasemapTheme.RoadLayerStyles(motorway: base, trunk: base, primary: base,
-                                                                         secondary: minor, tertiary: minor, minor: minor,
-                                                                         service: minor, path: minor, rail: minor,
-                                                                         casing: SIMD4<Float>(0.06, 0.06, 0.08, 0.95))
-                }
-                .features { features in
-                    features.buildingFillColor = SIMD4<Float>(0.18, 0.19, 0.23, 1)
-                }
-                .labels { labels in
-                    let fill = SIMD3<Float>(0.92, 0.94, 1.0)
-                    let stroke = SIMD3<Float>(0.02, 0.03, 0.06)
-                    labels.city.fillColor = fill; labels.city.strokeColor = stroke
-                    labels.town.fillColor = fill; labels.town.strokeColor = stroke
-                    labels.country.fillColor = fill; labels.country.strokeColor = stroke
-                    labels.poi.fillColor = fill; labels.poi.strokeColor = stroke
-                    labels.water.fillColor = SIMD3<Float>(0.55, 0.72, 0.96); labels.water.strokeColor = stroke
-                    labels.road.fillColor = fill; labels.road.strokeColor = stroke
-                }
+        case .day: return settings
+        case .night: return settings.night()
         }
     }
 }

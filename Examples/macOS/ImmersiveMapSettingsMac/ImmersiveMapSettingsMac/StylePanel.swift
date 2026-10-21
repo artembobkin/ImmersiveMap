@@ -143,34 +143,9 @@ enum StylePalette: String, CaseIterable, Identifiable {
         case .day:
             return .default
         case .night:
-            return ProtomapsBasemapTheme.default
-                .layers { layers in
-                    layers.land = SIMD4<Float>(0.09, 0.10, 0.13, 1)
-                    layers.water = SIMD4<Float>(0.04, 0.09, 0.20, 1)
-                    layers.wood = SIMD4<Float>(0.06, 0.14, 0.11, 1)
-                    layers.grass = SIMD4<Float>(0.08, 0.16, 0.12, 1)
-                    layers.farmland = SIMD4<Float>(0.10, 0.14, 0.10, 1)
-                    layers.wetland = SIMD4<Float>(0.07, 0.14, 0.13, 1)
-                    layers.sand = SIMD4<Float>(0.16, 0.15, 0.13, 1)
-                    layers.ice = SIMD4<Float>(0.30, 0.32, 0.36, 1)
-                    layers.park = SIMD4<Float>(0.08, 0.17, 0.13, 1)
-                    layers.residential = SIMD4<Float>(0.12, 0.12, 0.15, 1)
-                    layers.industrial = SIMD4<Float>(0.14, 0.13, 0.15, 1)
-                    layers.aeroway = SIMD4<Float>(0.16, 0.16, 0.19, 1)
-                    layers.boundary = SIMD4<Float>(0.58, 0.36, 0.78, 0.9)
-                    layers.roads = roadsTinted(base: SIMD4<Float>(0.42, 0.40, 0.36, 1),
-                                               minor: SIMD4<Float>(0.24, 0.24, 0.28, 1),
-                                               casing: SIMD4<Float>(0.06, 0.06, 0.08, 0.95))
-                }
-                .features { features in
-                    features.buildingFillColor = SIMD4<Float>(0.18, 0.19, 0.23, 1)
-                }
-                .labels { labels in
-                    tint(&labels,
-                         fill: SIMD3<Float>(0.92, 0.94, 1.0),
-                         stroke: SIMD3<Float>(0.02, 0.03, 0.06))
-                    labels.water.fillColor = SIMD3<Float>(0.55, 0.72, 0.96)
-                }
+            // The engine's own night (`ImmersiveMapView.night()` sets it
+            // with the night's air; here the air panel keeps its say).
+            return .night
         case .blueprint:
             return ProtomapsBasemapTheme.default
                 .layers { layers in

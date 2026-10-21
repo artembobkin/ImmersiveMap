@@ -1,0 +1,103 @@
+// Copyright (c) 2025-2026 ImmersiveMap contributors.
+// SPDX-License-Identifier: MIT
+
+import simd
+
+public extension ProtomapsBasemapTheme {
+    /// The night palette: the same map in the dark, the land a deep
+    /// blue-grey, the water a deep navy, the greens and the fields of the
+    /// day's palette and the biomes of the globe sunk into the night at a
+    /// fifth of their light with a blue cast, the roads a warm grey over
+    /// the dark land and the overview's highways an amber net, the
+    /// buildings a shade above the land, and every label a near-white on a
+    /// black halo. The slopes shade by the moon: a deeper shadow and a cool,
+    /// faint highlight. The road metrics, the route shields and the label
+    /// visibility are the day's.
+    ///
+    /// The map's air, the sky, the horizon and the ground fog, is a setting
+    /// rather than a theme (`ImmersiveMapSettings.FogSettings.night`), so
+    /// the map of a night goes on with `ImmersiveMapView.night()`, which
+    /// sets both, or with `.mapStyle(.night)` and `.fogSettings(.night)`
+    /// one by one.
+    static let night: ProtomapsBasemapTheme = {
+        /// The day's tone sunk into the night: a fifth of its light with a
+        /// blue cast, so a forest stays a greener dark than a field.
+        func sunk(_ color: SIMD4<Float>) -> SIMD4<Float> {
+            SIMD4<Float>(color.x * 0.22 + 0.03, color.y * 0.22 + 0.04, color.z * 0.22 + 0.07, color.w)
+        }
+        return ProtomapsBasemapTheme.default
+            .layers { layers in
+                layers.land = SIMD4<Float>(0.09, 0.10, 0.13, 1)
+                layers.water = SIMD4<Float>(0.04, 0.09, 0.20, 1)
+                layers.wood = SIMD4<Float>(0.06, 0.14, 0.11, 1)
+                layers.grass = SIMD4<Float>(0.08, 0.16, 0.12, 1)
+                layers.farmland = SIMD4<Float>(0.10, 0.14, 0.10, 1)
+                layers.wetland = SIMD4<Float>(0.07, 0.14, 0.13, 1)
+                layers.sand = SIMD4<Float>(0.16, 0.15, 0.13, 1)
+                layers.ice = SIMD4<Float>(0.30, 0.32, 0.36, 1)
+                layers.park = SIMD4<Float>(0.08, 0.17, 0.13, 1)
+                layers.residential = SIMD4<Float>(0.12, 0.12, 0.15, 1)
+                layers.industrial = SIMD4<Float>(0.14, 0.13, 0.15, 1)
+                layers.aeroway = SIMD4<Float>(0.16, 0.16, 0.19, 1)
+                layers.boundary = SIMD4<Float>(0.58, 0.36, 0.78, 0.9)
+                let base = SIMD4<Float>(0.42, 0.40, 0.36, 1)
+                let minor = SIMD4<Float>(0.24, 0.24, 0.28, 1)
+                layers.roads = RoadLayerStyles(motorway: base, trunk: base, primary: base,
+                                               secondary: minor, tertiary: minor, minor: minor,
+                                               service: minor, path: minor, rail: minor,
+                                               casing: SIMD4<Float>(0.06, 0.06, 0.08, 0.95),
+                                               marking: SIMD4<Float>(0.55, 0.53, 0.48, 1))
+                // The globe's overview in the dark: every biome and cover
+                // tone sunk from the day's, so the continents keep their
+                // climates in the night, and the highways an amber net.
+                let day = BiomeStyles.default
+                layers.biomes = BiomeStyles(tropicalMoistForest: sunk(day.tropicalMoistForest),
+                                            tropicalDryForest: sunk(day.tropicalDryForest),
+                                            tropicalConiferForest: sunk(day.tropicalConiferForest),
+                                            temperateBroadleafForest: sunk(day.temperateBroadleafForest),
+                                            temperateConiferForest: sunk(day.temperateConiferForest),
+                                            borealForest: sunk(day.borealForest),
+                                            tropicalGrassland: sunk(day.tropicalGrassland),
+                                            temperateGrassland: sunk(day.temperateGrassland),
+                                            floodedGrassland: sunk(day.floodedGrassland),
+                                            montaneGrassland: sunk(day.montaneGrassland),
+                                            tundra: sunk(day.tundra),
+                                            mediterraneanScrub: sunk(day.mediterraneanScrub),
+                                            desert: sunk(day.desert),
+                                            mangrove: sunk(day.mangrove),
+                                            forestCover: sunk(day.forestCover),
+                                            farmlandCover: sunk(day.farmlandCover),
+                                            barrenCover: sunk(day.barrenCover),
+                                            maximumTileZoom: day.maximumTileZoom,
+                                            coverMinimumTileZoom: day.coverMinimumTileZoom)
+                layers.overviewRoads.major = SIMD4<Float>(0.72, 0.58, 0.26, 1)
+                layers.overviewRoads.minor = SIMD4<Float>(0.42, 0.39, 0.30, 1)
+            }
+            .features { features in
+                features.buildingFillColor = SIMD4<Float>(0.18, 0.19, 0.23, 1)
+            }
+            .labels { labels in
+                let fill = SIMD3<Float>(0.92, 0.94, 1.0)
+                let stroke = SIMD3<Float>(0.02, 0.03, 0.06)
+                for keyPath in [\LabelStyles.city, \.town, \.district, \.country, \.region, \.poi, \.water, \.road] {
+                    labels[keyPath: keyPath].fillColor = fill
+                    labels[keyPath: keyPath].strokeColor = stroke
+                }
+                labels.water.fillColor = SIMD3<Float>(0.55, 0.72, 0.96)
+            }
+            .apply { theme in
+                theme.hillshade.shadowColor = SIMD4<Float>(0.0, 0.01, 0.04, 0.45)
+                theme.hillshade.highlightColor = SIMD4<Float>(0.55, 0.65, 0.95, 0.12)
+            }
+    }()
+}
+
+public extension ProtomapsBasemapMapStyle {
+    /// The built-in style in the night palette (`ProtomapsBasemapTheme.night`).
+    static let night = ProtomapsBasemapMapStyle(theme: .night)
+}
+
+extension ImmersiveMapMapStyle where Self == ProtomapsBasemapMapStyle {
+    /// The night palette, so `.mapStyle(.night)` reads without the type name.
+    public static var night: ProtomapsBasemapMapStyle { ProtomapsBasemapMapStyle.night }
+}
