@@ -6,6 +6,9 @@
 # playwright-mcp browser-automation artifacts (console logs, screenshots)
 /.playwright-mcp/
 /.build/
+# The README frames tool is a package of its own with its own build folder.
+/Tools/ReadmeFrames/.build/
+/Tools/ReadmeFrames/.swiftpm/
 # The model tile baker is a package of its own with its own build folder.
 /.swiftpm/
 /.worktrees/

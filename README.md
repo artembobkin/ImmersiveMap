@@ -4,6 +4,11 @@
 
 ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps** on Apple platforms.
 
+<!-- gallery:start -->
+<!-- Written by Tools/ReadmeFrames from frames.json: edit the frames, not these rows. -->
+<p align="center">
+  <img src="Assets/readme-globe-europe.png" width="100%" alt="The globe over Europe: biomes, the road network and the atmosphere">
+</p>
 <p align="center">
   <img src="Assets/readme-manhattan.png" width="49%" alt="Manhattan with 3D buildings and shadows">
   <img src="Assets/readme-chicago.png" width="49%" alt="The Chicago Loop under a tilted camera">
@@ -24,6 +29,7 @@ ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps
   <img src="Assets/readme-san-francisco.png" width="49%" alt="San Francisco coastline with labels">
   <img src="Assets/readme-alps.png" width="49%" alt="The Alps around Zermatt with land cover and peak names">
 </p>
+<!-- gallery:end -->
 
 ## Features
 

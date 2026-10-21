@@ -1,0 +1,22 @@
+[
+  {
+    "name": "readme-globe-europe",
+    "alt": "The globe over Europe: biomes, the road network and the atmosphere",
+    "layout": "full",
+    "latitude": 48.099,
+    "longitude": 18.102,
+    "zoom": 2.03,
+    "width": 2400,
+    "height": 1720
+  },
+  { "name": "readme-manhattan", "alt": "Manhattan with 3D buildings and shadows" },
+  { "name": "readme-chicago", "alt": "The Chicago Loop under a tilted camera" },
+  { "name": "readme-berlin-night", "alt": "Berlin Mitte in the dark palette" },
+  { "name": "readme-berlin", "alt": "Berlin Mitte from a tilted camera" },
+  { "name": "readme-avatars-shibuya", "alt": "Avatar markers with badges over Shibuya" },
+  { "name": "readme-scene-models-paris", "alt": "A 3D scene model by the Eiffel Tower" },
+  { "name": "readme-globe", "alt": "The globe with the atmosphere and stars" },
+  { "name": "readme-avatars-globe", "alt": "Avatar markers on the globe" },
+  { "name": "readme-san-francisco", "alt": "San Francisco coastline with labels" },
+  { "name": "readme-alps", "alt": "The Alps around Zermatt with land cover and peak names" }
+]
