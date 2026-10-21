@@ -91,7 +91,7 @@ struct ReadmeFrames {
     /// controls and the debug panel, which the capture never draws anyway.
     /// The theme is the frame's (`Palette`), the default's by default.
     static func mapSettings(theme: Palette?) -> ImmersiveMapSettings {
-        ImmersiveMapSettings.default
+        (theme ?? .day).air(ImmersiveMapSettings.default)
             .tileArchive(tileArchive)
             .mapStyle(ProtomapsBasemapMapStyle(theme: (theme ?? .day).theme).apply { theme in
                 theme.features.buildingExtrusion = true
@@ -284,6 +284,24 @@ struct Frame: Decodable {
 enum Palette: String, Decodable {
     case day
     case night
+
+    /// The air of the palette: the sky, the horizon and the ground fog.
+    /// The day keeps the engine's defaults. The night's air is a deep
+    /// navy, the water's hue of its palette a shade lighter, so the far
+    /// city sinks into the night instead of a white haze: the sky at the
+    /// horizon and the fog meet in one colour, the sky above it darker.
+    func air(_ settings: ImmersiveMapSettings) -> ImmersiveMapSettings {
+        switch self {
+        case .day:
+            return settings
+        case .night:
+            let horizon = SIMD3<Float>(0.09, 0.12, 0.22)
+            return settings
+                .fogSettings(ImmersiveMapSettings.FogSettings(skyColor: SIMD3<Float>(0.03, 0.05, 0.11),
+                                                              horizonColor: horizon))
+                .groundFog(color: horizon)
+        }
+    }
 
     var theme: ProtomapsBasemapTheme {
         switch self {
