@@ -74,6 +74,33 @@ final class GroundReliefTests: XCTestCase {
         XCTAssertEqual(store.url(for: Tile(x: 3, y: 5, z: 4))?.absoluteString, "https://terrain.example/4/3/5.png")
     }
 
+    /// The wanted tiles still on their way are what a still capture waits
+    /// for: a tile counts until its terrain is in, and a tile the source
+    /// has none for never counts.
+    func testTheWantedTilesOnTheirWayAreCounted() throws {
+        let device = try Self.device()
+        let image = try Self.png(size: 2, pixels: Array(repeating: (128, 10, 0), count: 4))
+        let settings = ImmersiveMapSettings.TileSettings.GroundReliefSettings(isEnabled: true, minimumSourceZoom: 14)
+        let present = Tile(x: 4823, y: 6160, z: 14)
+        let absent = Tile(x: 4824, y: 6160, z: 14)
+        let store = GroundReliefStore(device: device, settings: settings, fetch: { url in
+            url.absoluteString.contains("/14/\(absent.x)/") ? .missing : .image(image)
+        })
+        XCTAssertEqual(store.pendingWantedCount, 0, "Nothing wanted, nothing on its way")
+
+        _ = try XCTUnwrap(waitForRelief(of: present, in: store))
+        store.request(tiles: [present])
+        XCTAssertEqual(store.pendingWantedCount, 0, "A resident terrain is in")
+
+        store.request(tiles: [present, absent])
+        let deadline = Date().addingTimeInterval(5)
+        while store.pendingWantedCount > 0, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.01)
+            store.request(tiles: [present, absent])
+        }
+        XCTAssertEqual(store.pendingWantedCount, 0, "A tile the source has no terrain for is not on its way")
+    }
+
     /// The source has no terrain at zoom 15: the tile is flat until its
     /// parent's terrain arrives, and then lies in its quarter of it.
     func testATileWithoutTerrainOfItsOwnRisesByItsParents() throws {

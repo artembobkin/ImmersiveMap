@@ -10,24 +10,32 @@ ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps
   <img src="Assets/readme-globe-europe.png" width="100%" alt="The globe over Europe: biomes, the road network and the atmosphere">
 </p>
 <p align="center">
-  <img src="Assets/readme-manhattan.png" width="49%" alt="Manhattan with 3D buildings and shadows">
-  <img src="Assets/readme-chicago.png" width="49%" alt="The Chicago Loop under a tilted camera">
+  <img src="Assets/readme-matterhorn.png" width="49%" alt="The Matterhorn's summit on the terrain relief, with the hillshade and the mountain shadows">
+  <img src="Assets/readme-zermatt-valley.png" width="49%" alt="The valley of Zermatt from above, the relief under the land cover and the mountain air">
+</p>
+<p align="center">
+  <img src="Assets/readme-manhattan.png" width="49%" alt="Lower Manhattan with extruded buildings, shadows and street names">
+  <img src="Assets/readme-rome.png" width="49%" alt="The Roman Forum from a tilted camera, with the points of interest">
+</p>
+<p align="center">
+  <img src="Assets/readme-moscow-city.png" width="49%" alt="The towers of Moscow City over the Third Ring Road">
+  <img src="Assets/readme-kremlin.png" width="49%" alt="The Kremlin wall and the Saviour Tower from the model archive">
+</p>
+<p align="center">
+  <img src="Assets/readme-bolshoi.png" width="49%" alt="The Bolshoi Theatre at street level, a 3D model standing in for the building">
+  <img src="Assets/readme-paris-region.png" width="49%" alt="Paris and its suburbs on the relief, with the route shields">
+</p>
+<p align="center">
+  <img src="Assets/readme-san-francisco.png" width="49%" alt="San Francisco's hills on the relief, toward the bay">
+  <img src="Assets/readme-san-francisco-downtown.png" width="49%" alt="Downtown San Francisco from above, with the points of interest">
 </p>
 <p align="center">
   <img src="Assets/readme-berlin-night.png" width="49%" alt="Berlin Mitte in the dark palette">
-  <img src="Assets/readme-berlin.png" width="49%" alt="Berlin Mitte from a tilted camera">
-</p>
-<p align="center">
   <img src="Assets/readme-avatars-shibuya.png" width="49%" alt="Avatar markers with badges over Shibuya">
+</p>
+<p align="center">
   <img src="Assets/readme-scene-models-paris.png" width="49%" alt="A 3D scene model by the Eiffel Tower">
-</p>
-<p align="center">
-  <img src="Assets/readme-globe.png" width="49%" alt="The globe with the atmosphere and stars">
   <img src="Assets/readme-avatars-globe.png" width="49%" alt="Avatar markers on the globe">
-</p>
-<p align="center">
-  <img src="Assets/readme-san-francisco.png" width="49%" alt="San Francisco coastline with labels">
-  <img src="Assets/readme-alps.png" width="49%" alt="The Alps around Zermatt with land cover and peak names">
 </p>
 <!-- gallery:end -->
 

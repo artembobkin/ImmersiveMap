@@ -307,6 +307,11 @@ final class RenderFrameEngine {
         frameContext.diagnostics.recordStage(.presentFrame, duration: CACurrentMediaTime() - presentStart)
         signposter.endInterval("stage", presentSignpostState)
 
+        // The terrain still on its way, for whoever waits for a settled
+        // scene (the still capture): the tiles the frame asked the relief
+        // for this frame, less the ones in.
+        frameContext.diagnostics.setCounter(.pendingTerrainTiles,
+                                            value: persistentContext.groundReliefStore?.pendingWantedCount ?? 0)
         let hasActiveLabelFadeAnimations = frameContext.sharedState.baseLabelState.hasActiveFadeAnimations
             || frameContext.sharedState.roadLabelState.hasActiveFadeAnimations
         let hasActiveAvatarAnimations = frameContext.sharedState.avatarState.hasActiveAnimations

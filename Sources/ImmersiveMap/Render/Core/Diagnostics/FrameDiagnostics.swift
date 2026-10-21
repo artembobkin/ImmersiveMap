@@ -20,6 +20,12 @@ final class FrameDiagnostics: FrameDiagnosticsService {
         /// activity, so without this counter nothing downstream can tell
         /// "there are no models" from "the models are not here yet".
         case pendingSceneModelMeshes
+        /// The terrain tiles the frame wants that are not in yet, on the
+        /// relief (`GroundReliefStore.pendingWantedCount`): a tile is
+        /// placed with its terrain or not at all, so a frame whose terrain
+        /// is on its way shows no ground where it waits, and nothing else
+        /// in the counters says so, since the map tiles may all be in.
+        case pendingTerrainTiles
         case baseLabelCount
         /// The base labels the frame worked on (`LabelActiveSpans`), out
         /// of `baseLabelCount`.

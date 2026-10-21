@@ -85,7 +85,7 @@ private struct MapScreen: View {
             // camera's zoom and the planning zoom, which part over the
             // relief through a drag. A development aid, off by default.
             .debugPanel()
-            .controlsHidden(true)
+            .controlsHidden(false)
             .ignoresSafeArea()
     }
 

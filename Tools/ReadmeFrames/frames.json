@@ -3,20 +3,60 @@
     "name": "readme-globe-europe",
     "alt": "The globe over Europe: biomes, the road network and the atmosphere",
     "layout": "full",
-    "latitude": 48.099,
-    "longitude": 18.102,
-    "zoom": 2.03,
-    "width": 2400,
-    "height": 1720
+    "latitude": 48.099, "longitude": 18.102, "zoom": 2.03
   },
-  { "name": "readme-manhattan", "alt": "Manhattan with 3D buildings and shadows" },
-  { "name": "readme-chicago", "alt": "The Chicago Loop under a tilted camera" },
+  {
+    "name": "readme-matterhorn",
+    "alt": "The Matterhorn's summit on the terrain relief, with the hillshade and the mountain shadows",
+    "latitude": 45.977, "longitude": 7.653, "zoom": 13.15, "pitch": 51.20, "bearing": -126.26
+  },
+  {
+    "name": "readme-zermatt-valley",
+    "alt": "The valley of Zermatt from above, the relief under the land cover and the mountain air",
+    "latitude": 45.979, "longitude": 7.647, "zoom": 10.70, "pitch": 56.98, "bearing": -93.11
+  },
+  {
+    "name": "readme-manhattan",
+    "alt": "Lower Manhattan with extruded buildings, shadows and street names",
+    "latitude": 40.715, "longitude": -74.011, "zoom": 15.01, "pitch": 50.48, "bearing": -60.79
+  },
+  {
+    "name": "readme-rome",
+    "alt": "The Roman Forum from a tilted camera, with the points of interest",
+    "latitude": 41.891, "longitude": 12.488, "zoom": 15.23, "pitch": 47.63, "bearing": -58.54
+  },
+  {
+    "name": "readme-moscow-city",
+    "alt": "The towers of Moscow City over the Third Ring Road",
+    "latitude": 55.749, "longitude": 37.538, "zoom": 14.02, "pitch": 38.08, "bearing": -10.75
+  },
+  {
+    "name": "readme-kremlin",
+    "alt": "The Kremlin wall and the Saviour Tower from the model archive",
+    "latitude": 55.753, "longitude": 37.620, "zoom": 16.65, "pitch": 70.01, "bearing": 141.38
+  },
+  {
+    "name": "readme-bolshoi",
+    "alt": "The Bolshoi Theatre at street level, a 3D model standing in for the building",
+    "latitude": 55.760, "longitude": 37.619, "zoom": 17.94, "pitch": 82.12, "bearing": -9.22
+  },
+  {
+    "name": "readme-paris-region",
+    "alt": "Paris and its suburbs on the relief, with the route shields",
+    "latitude": 48.823, "longitude": 2.330, "zoom": 10.05, "pitch": 25.88, "bearing": -19.82
+  },
+  {
+    "name": "readme-san-francisco",
+    "alt": "San Francisco's hills on the relief, toward the bay",
+    "latitude": 37.743, "longitude": -122.404, "zoom": 11.70, "pitch": 73.49, "bearing": 39.70
+  },
+  {
+    "name": "readme-san-francisco-downtown",
+    "alt": "Downtown San Francisco from above, with the points of interest",
+    "latitude": 37.786, "longitude": -122.406, "zoom": 14.65, "pitch": 0, "bearing": 70.36
+  },
   { "name": "readme-berlin-night", "alt": "Berlin Mitte in the dark palette" },
-  { "name": "readme-berlin", "alt": "Berlin Mitte from a tilted camera" },
   { "name": "readme-avatars-shibuya", "alt": "Avatar markers with badges over Shibuya" },
   { "name": "readme-scene-models-paris", "alt": "A 3D scene model by the Eiffel Tower" },
-  { "name": "readme-globe", "alt": "The globe with the atmosphere and stars" },
-  { "name": "readme-avatars-globe", "alt": "Avatar markers on the globe" },
-  { "name": "readme-san-francisco", "alt": "San Francisco coastline with labels" },
-  { "name": "readme-alps", "alt": "The Alps around Zermatt with land cover and peak names" }
+  { "name": "readme-avatars-globe", "alt": "Avatar markers on the globe" }
 ]

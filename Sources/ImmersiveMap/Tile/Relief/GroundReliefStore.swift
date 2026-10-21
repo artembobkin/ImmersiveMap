@@ -1071,6 +1071,29 @@ final class GroundReliefStore: @unchecked Sendable {
     }
 
     /// What the store holds and does now, for the debug panel's relief tab.
+    /// The wanted terrain tiles still on their way: queued or loading, and
+    /// a failed one whose retry is due. Not a resident one, not one the
+    /// source has no tile for, and not one waiting out its retry, which
+    /// nothing should wait for either. What a still capture settles on
+    /// (`FrameDiagnostics.Counter.pendingTerrainTiles`).
+    var pendingWantedCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        let time = now()
+        var pending = 0
+        for tile in wantedOrder where terrains[tile] == nil && missingTiles.contains(tile) == false {
+            switch statesByTile[tile] {
+            case .loading, nil:
+                pending += 1
+            case .failed(_, let retryAt):
+                if time >= retryAt { pending += 1 }
+            default:
+                break
+            }
+        }
+        return pending
+    }
+
     func statusSnapshot() -> GroundReliefStatusSnapshot {
         lock.lock()
         defer { lock.unlock() }

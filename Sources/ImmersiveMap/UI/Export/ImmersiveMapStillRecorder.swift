@@ -283,9 +283,10 @@ final class ImmersiveMapStillRuntime {
     /// entry at zero opacity and returns early unless time elapsed, so every
     /// label, POI sprite and road label would come out invisible.
     ///
-    /// Settled means no outstanding tiles and no running fade or visibility
-    /// cycle, which is the same condition the video export pre-roll uses
-    /// before it starts capturing.
+    /// Settled means no outstanding tiles, map tiles, terrain tiles and
+    /// model tiles alike, and no running fade, rise or visibility cycle,
+    /// the relief's own rise included, which is the same condition the
+    /// video export pre-roll uses before it starts capturing.
     private func renderSettledFrame(into texture: MTLTexture) async throws {
         let deadline = Date().addingTimeInterval(configuration.settleTimeout)
         var passes = 0
@@ -295,12 +296,15 @@ final class ImmersiveMapStillRuntime {
             try await renderOnce(into: texture)
             passes += 1
 
-            let hasPendingWork = requestedTilesCount > 0 || pendingSceneModelMeshCount > 0
+            let hasPendingWork = requestedTilesCount > 0
+                || pendingSceneModelMeshCount > 0
+                || pendingTerrainTileCount > 0
             let activity = eventSink.activityState
             let isSettled = hasPendingWork == false
                 && activity.labelFadeRenderingActive == false
                 && activity.avatarAnimationRenderingActive == false
                 && activity.extrusionRiseRenderingActive == false
+                && activity.animatedZoomRenderingActive == false
             if isSettled {
                 break
             }
@@ -387,6 +391,14 @@ final class ImmersiveMapStillRuntime {
     /// export sidesteps the same hazard by refusing scene models outright.
     private var pendingSceneModelMeshCount: Int {
         engine.currentDiagnostics?.counterValue(.pendingSceneModelMeshes) ?? 0
+    }
+
+    /// Terrain tiles the frame wants that have not arrived. On the relief
+    /// a map tile is placed with its terrain or not at all, so with the
+    /// terrain on its way the ground is empty where it waits, and the map
+    /// tiles alone, which may all be in, would say the scene is settled.
+    private var pendingTerrainTileCount: Int {
+        engine.currentDiagnostics?.counterValue(.pendingTerrainTiles) ?? 0
     }
 
     private func checkCancelled() throws {
