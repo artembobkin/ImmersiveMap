@@ -82,6 +82,9 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         public var poi: LabelAppearance
         public var water: LabelAppearance
         public var road: LabelAppearance
+        /// The plates of the POI icons, one colour per category of place
+        /// (`PoiCategoryColors`). A POI of no category wears `poi`'s fill.
+        public var poiCategories: PoiCategoryColors
 
         public init(city: LabelAppearance,
                     town: LabelAppearance,
@@ -90,7 +93,8 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
                     region: LabelAppearance = LabelStyles.default.region,
                     poi: LabelAppearance,
                     water: LabelAppearance,
-                    road: LabelAppearance) {
+                    road: LabelAppearance,
+                    poiCategories: PoiCategoryColors = .default) {
             self.city = city
             self.town = town
             self.district = district
@@ -99,6 +103,82 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
             self.poi = poi
             self.water = water
             self.road = road
+            self.poiCategories = poiCategories
+        }
+    }
+
+    /// The colours of the POI icons' plates, one per category of place,
+    /// RGB in `0...1`: the icon stands white on the plate, and the POI's
+    /// name is set in the same colour. The categories are the built-in
+    /// style's reading of the basemap's POI kinds
+    /// (`ProtomapsBasemapDefaultMapStyle.poiCategoryColor`).
+    public struct PoiCategoryColors: Equatable, Sendable {
+        /// Restaurants and fast food.
+        public var food: SIMD3<Float>
+        /// Cafés and bakeries.
+        public var coffee: SIMD3<Float>
+        /// Bars, pubs and clubs.
+        public var bar: SIMD3<Float>
+        /// Shops and markets.
+        public var shop: SIMD3<Float>
+        /// Hotels and hostels.
+        public var hotel: SIMD3<Float>
+        /// Hospitals, pharmacies and clinics.
+        public var health: SIMD3<Float>
+        /// Schools, universities and libraries.
+        public var education: SIMD3<Float>
+        /// Museums, theatres and attractions.
+        public var culture: SIMD3<Float>
+        /// Parks, gardens and sports grounds.
+        public var leisure: SIMD3<Float>
+        /// Stations, stops, fuel and parking.
+        public var transport: SIMD3<Float>
+        /// Offices and public services.
+        public var civic: SIMD3<Float>
+        /// Places of worship.
+        public var worship: SIMD3<Float>
+
+        public init(food: SIMD3<Float> = SIMD3<Float>(0.85, 0.40, 0.12),
+                    coffee: SIMD3<Float> = SIMD3<Float>(0.58, 0.37, 0.18),
+                    bar: SIMD3<Float> = SIMD3<Float>(0.62, 0.16, 0.34),
+                    shop: SIMD3<Float> = SIMD3<Float>(0.16, 0.44, 0.78),
+                    hotel: SIMD3<Float> = SIMD3<Float>(0.66, 0.26, 0.60),
+                    health: SIMD3<Float> = SIMD3<Float>(0.82, 0.22, 0.26),
+                    education: SIMD3<Float> = SIMD3<Float>(0.22, 0.46, 0.52),
+                    culture: SIMD3<Float> = SIMD3<Float>(0.46, 0.30, 0.66),
+                    leisure: SIMD3<Float> = SIMD3<Float>(0.22, 0.54, 0.30),
+                    transport: SIMD3<Float> = SIMD3<Float>(0.32, 0.42, 0.55),
+                    civic: SIMD3<Float> = SIMD3<Float>(0.40, 0.44, 0.52),
+                    worship: SIMD3<Float> = SIMD3<Float>(0.55, 0.45, 0.22)) {
+            self.food = food
+            self.coffee = coffee
+            self.bar = bar
+            self.shop = shop
+            self.hotel = hotel
+            self.health = health
+            self.education = education
+            self.culture = culture
+            self.leisure = leisure
+            self.transport = transport
+            self.civic = civic
+            self.worship = worship
+        }
+
+        /// The day's plates above.
+        public static let `default` = PoiCategoryColors()
+
+        /// Every plate, in the order declared.
+        public var colors: [SIMD3<Float>] {
+            [food, coffee, bar, shop, hotel, health, education, culture, leisure, transport, civic, worship]
+        }
+
+        /// The plates with `change` applied to each, the way a theme
+        /// sinks them into a night.
+        public func map(_ change: (SIMD3<Float>) -> SIMD3<Float>) -> PoiCategoryColors {
+            PoiCategoryColors(food: change(food), coffee: change(coffee), bar: change(bar), shop: change(shop),
+                              hotel: change(hotel), health: change(health), education: change(education),
+                              culture: change(culture), leisure: change(leisure), transport: change(transport),
+                              civic: change(civic), worship: change(worship))
         }
     }
 
@@ -663,6 +743,37 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         public static let `default` = OverviewRoadStyles()
     }
 
+    /// The trees the street zooms' greenery grows (`TreeFillStyle`): the
+    /// engine's tree model stood over the fills, each kind at its own
+    /// spacing and height, nil for a kind that grows none. When they draw
+    /// is the settings' (`ImmersiveMapSettings.TreeSettings`). Baked into
+    /// the prepared tiles, so a change re-parses them.
+    public struct TreeStyles: Equatable, Sendable {
+        /// The trees of a wood or a forest (`landuse` forest and wood): a
+        /// close stand, the crowns touching.
+        public var wood: TreeFillStyle?
+        /// The trees of the parks, the gardens, the cemeteries and the
+        /// reserves: scattered, with lawn between them.
+        public var park: TreeFillStyle?
+
+        public init(wood: TreeFillStyle? = TreeFillStyle(spacingMetres: 9, heightMetres: 7 ... 11),
+                    park: TreeFillStyle? = TreeFillStyle(spacingMetres: 22, heightMetres: 6 ... 10)) {
+            self.wood = wood
+            self.park = park
+        }
+
+        public static let `default` = TreeStyles()
+
+        /// Every value in a fixed order, for the fingerprint: a kind that
+        /// grows none contributes zeros.
+        var fingerprintComponents: [Float] {
+            [wood, park].flatMap { style -> [Float] in
+                guard let style else { return [0, 0, 0] }
+                return [style.spacingMetres, style.minimumHeightMetres, style.maximumHeightMetres]
+            }
+        }
+    }
+
     public struct LayerStyles: Equatable, Sendable {
         public var land: SIMD4<Float>
         public var water: SIMD4<Float>
@@ -683,6 +794,8 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         public var biomes: BiomeStyles
         /// The road network of the globe's overview (`OverviewRoadStyles`).
         public var overviewRoads: OverviewRoadStyles
+        /// The trees of the street zooms' woods and parks (`TreeStyles`).
+        public var trees: TreeStyles
 
         public init(land: SIMD4<Float>,
                     water: SIMD4<Float>,
@@ -699,7 +812,8 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
                     aeroway: SIMD4<Float>,
                     roads: RoadLayerStyles,
                     biomes: BiomeStyles = .default,
-                    overviewRoads: OverviewRoadStyles = .default) {
+                    overviewRoads: OverviewRoadStyles = .default,
+                    trees: TreeStyles = .default) {
             self.land = land
             self.water = water
             self.wood = wood
@@ -716,6 +830,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
             self.roads = roads
             self.biomes = biomes
             self.overviewRoads = overviewRoads
+            self.trees = trees
         }
     }
 
@@ -926,6 +1041,9 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
             add(layers.overviewRoads.major); add(layers.overviewRoads.minor)
             out.append(contentsOf: [layers.overviewRoads.majorWidthPoints, layers.overviewRoads.minorWidthPoints,
                                     Float(layers.overviewRoads.majorMaximumRank), Float(layers.overviewRoads.maximumTileZoom)])
+            // The trees are placed at parse time over the fills that grow
+            // them.
+            out.append(contentsOf: layers.trees.fingerprintComponents)
         }
         add(layers)
         // The globe's palette is baked into the same tiles as the colours
@@ -942,6 +1060,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         out.append(features.buildingEdgeRadius)
         add(labels.city); add(labels.town); add(labels.district); add(labels.country); add(labels.region)
         add(labels.poi); add(labels.water); add(labels.road)
+        for color in labels.poiCategories.colors { add(color) }
         // The globe's labels are baked into the tiles as the colours a name
         // wears on the sphere, none where the theme has none.
         if let globeLabels {

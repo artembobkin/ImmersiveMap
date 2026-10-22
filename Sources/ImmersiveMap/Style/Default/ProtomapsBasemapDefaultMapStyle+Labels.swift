@@ -374,43 +374,47 @@ extension ProtomapsBasemapDefaultMapStyle {
         }
     }
 
+    /// The plate of a POI's icon and the colour of its name, by the
+    /// category its kind falls in (`ProtomapsBasemapTheme.PoiCategoryColors`),
+    /// the POI appearance's own fill for a kind of no category.
     func poiCategoryColor(kind: String?) -> SIMD3<Float> {
+        let plates = theme.labels.poiCategories
         switch kind {
         case "restaurant", "fast_food", "food_court", "ice_cream":
-            return SIMD3<Float>(0.85, 0.40, 0.12)   // food: orange
+            return plates.food
         case "cafe", "bakery":
-            return SIMD3<Float>(0.58, 0.37, 0.18)   // coffee/bakery: brown
+            return plates.coffee
         case "bar", "pub", "biergarten", "nightclub", "wine":
-            return SIMD3<Float>(0.62, 0.16, 0.34)   // bar: wine red
+            return plates.bar
         case "supermarket", "mall", "convenience", "department_store", "marketplace",
              "gift", "hairdresser", "hardware", "laundry", "florist", "jewelry", "shoes", "clothes":
-            return SIMD3<Float>(0.16, 0.44, 0.78)   // shops: blue
+            return plates.shop
         case "hotel", "hostel", "guest_house", "motel":
-            return SIMD3<Float>(0.66, 0.26, 0.60)   // hotels: magenta
+            return plates.hotel
         case "hospital", "pharmacy", "chemist", "doctors", "dentist", "clinic":
-            return SIMD3<Float>(0.82, 0.22, 0.26)   // health: red
+            return plates.health
         case "school", "college", "university", "kindergarten", "library":
-            return SIMD3<Float>(0.22, 0.46, 0.52)   // education: teal
+            return plates.education
         case "museum", "gallery", "attraction", "artwork", "theatre", "cinema",
              "arts_centre", "music_venue", "events_venue", "conference_centre":
-            return SIMD3<Float>(0.46, 0.30, 0.66)   // culture: violet
+            return plates.culture
         case "park", "garden", "national_park", "nature_reserve", "dog_park",
              "stadium", "pitch", "sports_centre", "swimming_pool", "golf_course", "playground", "picnic_site":
-            return SIMD3<Float>(0.22, 0.54, 0.30)   // leisure/nature: green
+            return plates.leisure
         case "station", "aerodrome", "airfield", "heliport", "fuel", "charging_station",
              "car_rental", "ferry_terminal", "harbour", "halt", "tram_stop", "subway_entrance",
              "platform", "bus_stop", "bus_station", "stop", "taxi", "mobility_hub",
              "parking", "parking_entrance", "parking_space", "bicycle_parking",
              "motorcycle_parking", "kick-scooter_parking", "car_sharing", "bicycle_rental":
-            return SIMD3<Float>(0.32, 0.42, 0.55)   // transport: blue-gray
+            return plates.transport
         case "bank", "post_office", "townhall", "police", "fire_station", "government",
              "atm", "bureau_de_change", "money_transfer", "courthouse", "civic_admin",
              "administrative", "community_centre", "embassy", "social_facility", "toilets":
-            return SIMD3<Float>(0.40, 0.44, 0.52)   // offices/public services: gray-blue
+            return plates.civic
         case "place_of_worship", "religious", "religious_administration", "monastery":
-            return SIMD3<Float>(0.55, 0.45, 0.22)   // worship: muted gold
+            return plates.worship
         default:
-            return theme.labels.poi.fillColor  // everything else: default dark
+            return theme.labels.poi.fillColor
         }
     }
 

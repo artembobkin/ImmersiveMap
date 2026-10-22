@@ -29,8 +29,12 @@ final class NightThemeTests: XCTestCase {
         XCTAssertGreaterThan(forest.y - forest.x, desert.y - desert.x, "A forest stays a greener dark than a desert")
         XCTAssertEqual(night.roadMetrics, day.roadMetrics, "The night changes colours, not the road metrics")
         let plate = try XCTUnwrap(night.routeShields.fallback)
-        XCTAssertLessThan(plate.fillColor.x, 0.7, "A white plate is a grey one in the night")
+        XCTAssertLessThan(plate.fillColor.x, 0.6, "A white plate is a grey one in the night")
         XCTAssertGreaterThan(plate.fillColor.x, 0.4)
+        XCTAssertLessThan(plate.borderColor.x, plate.fillColor.x, "The edge does not ring the plate")
+        let food = night.labels.poiCategories.food
+        XCTAssertLessThan(food.x, day.labels.poiCategories.food.x * 0.6, "The POI plates are sunk too")
+        XCTAssertGreaterThan(food.x, food.z * 2, "and keep their hue")
         XCTAssertEqual(plate.textColor, day.routeShields.fallback?.textColor, "A dark number stays")
         let russia = try XCTUnwrap(night.routeShields.rules.first { $0.network == "ru:national" }?.appearance)
         let dayRussia = try XCTUnwrap(day.routeShields.rules.first { $0.network == "ru:national" }?.appearance)

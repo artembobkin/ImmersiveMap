@@ -12,10 +12,11 @@ public extension ProtomapsBasemapTheme {
     /// buildings a shade above the land, and every label a light grey on
     /// a black halo, graded as the day's greys are, never white: a white
     /// name on a dark map reads as a lamp. The slopes shade by the moon: a deeper shadow and a cool,
-    /// faint highlight. The route signs keep their countries' colours,
-    /// sunk to the night's light (`sunkSign`): a white plate is a lamp on
-    /// a dark road. The road metrics and the label visibility are the
-    /// day's.
+    /// faint highlight. Every plate keeps its colour, sunk to the night's
+    /// light (`sunkPlate`): the route signs their countries' colours and
+    /// the POI icons their categories', since a white or a bright plate is
+    /// a lamp on a dark map. The road metrics and the label visibility
+    /// are the day's.
     ///
     /// The globe is the day's: the night is the map's, not the planet's,
     /// so the ground of the globe's view wears the day's palette
@@ -35,21 +36,24 @@ public extension ProtomapsBasemapTheme {
         func sunk(_ color: SIMD4<Float>) -> SIMD4<Float> {
             SIMD4<Float>(color.x * 0.22 + 0.03, color.y * 0.22 + 0.04, color.z * 0.22 + 0.07, color.w)
         }
+        /// A plate in the night's light: half its day's light with a blue
+        /// cast, so a white plate is a grey one and a red plate a dark
+        /// red, its hue kept.
+        func sunkPlate(_ color: SIMD3<Float>) -> SIMD3<Float> {
+            SIMD3<Float>(color.x * 0.5 + 0.02, color.y * 0.5 + 0.03, color.z * 0.5 + 0.05)
+        }
         /// A route sign in the night's light: the plate, its edge and its
-        /// band at three fifths of their day's light with a blue cast,
-        /// so a white plate is a grey one and a red plate a dark red, and
-        /// a light number a shade under white, a dark one as it is.
+        /// band sunk (`sunkPlate`), the edge a step further so it does not
+        /// ring the plate, and a light number dimmed to a grey, a dark one
+        /// as it is.
         func sunkSign(_ sign: RouteShieldAppearance) -> RouteShieldAppearance {
-            func plate(_ color: SIMD3<Float>) -> SIMD3<Float> {
-                SIMD3<Float>(color.x * 0.58 + 0.02, color.y * 0.58 + 0.03, color.z * 0.58 + 0.06)
-            }
             func number(_ color: SIMD3<Float>) -> SIMD3<Float> {
-                (color.x + color.y + color.z) > 1.5 ? color * 0.86 : color
+                (color.x + color.y + color.z) > 1.5 ? color * 0.74 : color
             }
             var sign = sign
-            sign.fillColor = plate(sign.fillColor)
-            sign.borderColor = plate(sign.borderColor)
-            sign.headerColor = sign.headerColor.map(plate)
+            sign.fillColor = sunkPlate(sign.fillColor)
+            sign.borderColor = sunkPlate(sign.borderColor) * 0.85
+            sign.headerColor = sign.headerColor.map(sunkPlate)
             sign.textColor = number(sign.textColor)
             return sign
         }
@@ -136,6 +140,8 @@ public extension ProtomapsBasemapTheme {
                     labels[keyPath: keyPath].fillColor = fill
                     labels[keyPath: keyPath].strokeColor = stroke
                 }
+                // The POI plates in their categories' colours, sunk.
+                labels.poiCategories = labels.poiCategories.map(sunkPlate)
             }
             .apply { theme in
                 theme.hillshade.shadowColor = SIMD4<Float>(0.0, 0.01, 0.04, 0.45)
