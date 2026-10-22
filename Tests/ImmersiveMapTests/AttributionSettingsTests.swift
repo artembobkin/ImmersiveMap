@@ -6,18 +6,18 @@ import XCTest
 
 final class AttributionSettingsTests: XCTestCase {
     /// The built-in tiles are OpenStreetMap data under ODbL, built by the
-    /// ImmersiveMap tile pipeline. The badge names the data first, and no
-    /// second party whose schema the tiles no longer follow. The overview
-    /// the engine ships adds its own credit after it, and the engine's own
-    /// closes the line, a courtesy the app may drop.
-    func testDefaultAttributionCreditsOpenStreetMapFirstAndTheEngineLast() {
+    /// ImmersiveMap tile pipeline. The badge names the data, and no second
+    /// party whose schema the tiles no longer follow. The overview the
+    /// engine ships adds its own credit after it, and the engine's own
+    /// opens the line, a courtesy the app may drop.
+    func testDefaultAttributionCreditsTheEngineFirstAndOpenStreetMapNext() {
         let attribution = ImmersiveMapSettings.default.resolvedAttribution
 
-        XCTAssertEqual(attribution.credits.first?.text, "© OpenStreetMap")
-        XCTAssertNil(attribution.credits.first?.zoomRange, "The tiles are on screen at every zoom")
+        XCTAssertEqual(attribution.credits.first, ImmersiveMapAttribution.engineCredit)
+        XCTAssertNil(attribution.credits.first?.zoomRange, "The engine's credit stays at every zoom")
+        XCTAssertEqual(attribution.credits[1].text, "© OpenStreetMap")
+        XCTAssertNil(attribution.credits[1].zoomRange, "The tiles are on screen at every zoom")
         XCTAssertEqual(attribution.linkURL, URL(string: "https://www.openstreetmap.org/copyright"))
-        XCTAssertEqual(attribution.credits.last, ImmersiveMapAttribution.engineCredit)
-        XCTAssertNil(attribution.credits.last?.zoomRange, "The engine's credit stays at every zoom")
         XCTAssertEqual(ImmersiveMapTilesService.attribution.credits.count, 1,
                        "The service credits its own data alone")
 
@@ -34,13 +34,13 @@ final class AttributionSettingsTests: XCTestCase {
         let attribution = ImmersiveMapSettings.default.resolvedAttribution
 
         XCTAssertEqual(attribution.credits.count, 4)
-        let overview = attribution.credits[1]
+        let overview = attribution.credits[2]
         XCTAssertEqual(overview.text, "Biomes © RESOLVE, CC BY 4.0")
         XCTAssertEqual(overview.zoomRange, 0..<8)
         XCTAssertEqual(attribution.credits(atZoom: 0).count, 3)
         XCTAssertEqual(attribution.credits(atZoom: 7.9).count, 3)
-        XCTAssertEqual(attribution.credits(atZoom: 8).map(\.text), ["© OpenStreetMap", "Powered by ImmersiveMap"])
-        XCTAssertEqual(attribution.credits(atZoom: 9.9).map(\.text), ["© OpenStreetMap", "Powered by ImmersiveMap"])
+        XCTAssertEqual(attribution.credits(atZoom: 8).map(\.text), ["Powered by ImmersiveMap", "© OpenStreetMap"])
+        XCTAssertEqual(attribution.credits(atZoom: 9.9).map(\.text), ["Powered by ImmersiveMap", "© OpenStreetMap"])
         XCTAssertEqual(attribution.credits(atZoom: nil).count, 4, "Before the camera is placed every credit shows")
     }
 
@@ -49,11 +49,11 @@ final class AttributionSettingsTests: XCTestCase {
     /// overview is off.
     func testTheOverviewCreditFollowsItsSetting() {
         let raised = ImmersiveMapSettings.default.overviewTiles(creditMaximumZoom: 10).resolvedAttribution
-        XCTAssertEqual(raised.credits[1].zoomRange, 0..<10)
+        XCTAssertEqual(raised.credits[2].zoomRange, 0..<10)
         XCTAssertTrue(raised.credits(atZoom: 9).contains { $0.text.hasPrefix("Biomes") })
 
         let off = ImmersiveMapSettings.default.overviewTiles(isEnabled: false).resolvedAttribution
-        XCTAssertEqual(off.credits.map(\.text), ["© OpenStreetMap", "© Mapterhorn", "Powered by ImmersiveMap"])
+        XCTAssertEqual(off.credits.map(\.text), ["Powered by ImmersiveMap", "© OpenStreetMap", "© Mapterhorn"])
     }
 
     /// Mapterhorn's terrain asks for a credit, shown at the camera zooms
@@ -62,12 +62,12 @@ final class AttributionSettingsTests: XCTestCase {
     func testTheTerrainIsCreditedAtTheZoomsTheReliefRisesAt() {
         let attribution = ImmersiveMapSettings.default.resolvedAttribution
 
-        let terrain = attribution.credits[2]
+        let terrain = attribution.credits[3]
         XCTAssertEqual(terrain.text, "© Mapterhorn")
         XCTAssertEqual(terrain.zoomRange, 10..<13.7)
-        XCTAssertEqual(attribution.credits(atZoom: 9.9).map(\.text), ["© OpenStreetMap", "Powered by ImmersiveMap"])
-        XCTAssertEqual(attribution.credits(atZoom: 12.2).map(\.text), ["© OpenStreetMap", "© Mapterhorn", "Powered by ImmersiveMap"])
-        XCTAssertEqual(attribution.credits(atZoom: 13.7).map(\.text), ["© OpenStreetMap", "Powered by ImmersiveMap"])
+        XCTAssertEqual(attribution.credits(atZoom: 9.9).map(\.text), ["Powered by ImmersiveMap", "© OpenStreetMap"])
+        XCTAssertEqual(attribution.credits(atZoom: 12.2).map(\.text), ["Powered by ImmersiveMap", "© OpenStreetMap", "© Mapterhorn"])
+        XCTAssertEqual(attribution.credits(atZoom: 13.7).map(\.text), ["Powered by ImmersiveMap", "© OpenStreetMap"])
     }
 
     /// The terrain's credit follows the relief's zooms, and goes with the
@@ -104,10 +104,10 @@ final class AttributionSettingsTests: XCTestCase {
 
         let resolved = settings.resolvedAttribution
         XCTAssertEqual(resolved.linkURL, override.linkURL)
-        XCTAssertEqual(resolved.credits.map(\.text), ["Custom source", "© Custom data", "Biomes © RESOLVE, CC BY 4.0", "© Mapterhorn", "Powered by ImmersiveMap"])
+        XCTAssertEqual(resolved.credits.map(\.text), ["Powered by ImmersiveMap", "Custom source", "© Custom data", "Biomes © RESOLVE, CC BY 4.0", "© Mapterhorn"])
 
         let withoutOverview = settings.overviewTiles(isEnabled: false).resolvedAttribution
-        XCTAssertEqual(withoutOverview.credits.map(\.text), ["Custom source", "© Custom data", "© Mapterhorn", "Powered by ImmersiveMap"])
+        XCTAssertEqual(withoutOverview.credits.map(\.text), ["Powered by ImmersiveMap", "Custom source", "© Custom data", "© Mapterhorn"])
     }
 
     /// An explicit empty override empties the badge: the app took the whole

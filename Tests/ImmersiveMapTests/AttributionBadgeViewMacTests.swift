@@ -26,7 +26,7 @@ final class AttributionBadgeViewMacTests: XCTestCase {
 
         XCTAssertFalse(view.isHidden)
         XCTAssertEqual(view.subviews.compactMap { $0 as? NSTextField }.count, 1, "One line")
-        XCTAssertEqual(lineText(of: view), "© OpenStreetMap · Biomes © RESOLVE, CC BY 4.0 · © Mapterhorn · Powered by ImmersiveMap")
+        XCTAssertEqual(lineText(of: view), "Powered by ImmersiveMap · © OpenStreetMap · Biomes © RESOLVE, CC BY 4.0 · © Mapterhorn")
         let line = try XCTUnwrap(view.subviews.compactMap { $0 as? NSTextField }.first?.attributedStringValue)
         let halo = try XCTUnwrap(line.attributes(at: 0, effectiveRange: nil)[.shadow] as? NSShadow)
         XCTAssertEqual(halo.shadowBlurRadius, AttributionBadgeView.haloBlurRadius)
@@ -70,15 +70,15 @@ final class AttributionBadgeViewMacTests: XCTestCase {
                                         settings: settings.attribution)
 
         view.apply(zoom: 3)
-        XCTAssertEqual(lineText(of: view), "© OpenStreetMap · Biomes © RESOLVE, CC BY 4.0 · Powered by ImmersiveMap")
+        XCTAssertEqual(lineText(of: view), "Powered by ImmersiveMap · © OpenStreetMap · Biomes © RESOLVE, CC BY 4.0")
         let widthWithOverview = view.badgeSizeThatFits(boundingSize).width
 
         view.apply(zoom: 12.2)
-        XCTAssertEqual(lineText(of: view), "© OpenStreetMap · © Mapterhorn · Powered by ImmersiveMap")
+        XCTAssertEqual(lineText(of: view), "Powered by ImmersiveMap · © OpenStreetMap · © Mapterhorn")
         XCTAssertLessThan(view.badgeSizeThatFits(boundingSize).width, widthWithOverview)
 
         view.apply(zoom: 7.9)
-        XCTAssertEqual(lineText(of: view), "© OpenStreetMap · Biomes © RESOLVE, CC BY 4.0 · Powered by ImmersiveMap")
+        XCTAssertEqual(lineText(of: view), "Powered by ImmersiveMap · © OpenStreetMap · Biomes © RESOLVE, CC BY 4.0")
     }
 
     /// A zoom that changes the line lays the badge out again where the

@@ -34,7 +34,7 @@ final class AttributionBadgeViewTests: XCTestCase {
         XCTAssertEqual(view.backgroundColor, .clear, "Nothing is painted behind the text")
         XCTAssertEqual(view.subviews.compactMap { $0 as? UILabel }.count, 1, "One line")
         let line = try XCTUnwrap(lineText(of: view))
-        XCTAssertEqual(line.string, "© OpenStreetMap · Biomes © RESOLVE, CC BY 4.0 · © Mapterhorn · Powered by ImmersiveMap",
+        XCTAssertEqual(line.string, "Powered by ImmersiveMap · © OpenStreetMap · Biomes © RESOLVE, CC BY 4.0 · © Mapterhorn",
                        "Before the camera is placed every credit shows")
         let attributes = line.attributes(at: 0, effectiveRange: nil)
         let halo = try XCTUnwrap(attributes[.shadow] as? NSShadow)
@@ -50,15 +50,15 @@ final class AttributionBadgeViewTests: XCTestCase {
                                         settings: settings.attribution)
 
         view.apply(zoom: 3)
-        XCTAssertEqual(lineText(of: view)?.string, "© OpenStreetMap · Biomes © RESOLVE, CC BY 4.0 · Powered by ImmersiveMap")
+        XCTAssertEqual(lineText(of: view)?.string, "Powered by ImmersiveMap · © OpenStreetMap · Biomes © RESOLVE, CC BY 4.0")
         let widthWithOverview = view.sizeThatFits(boundingSize).width
 
         view.apply(zoom: 12.2)
-        XCTAssertEqual(lineText(of: view)?.string, "© OpenStreetMap · © Mapterhorn · Powered by ImmersiveMap", "The terrain's credit at the zooms the relief rises at")
+        XCTAssertEqual(lineText(of: view)?.string, "Powered by ImmersiveMap · © OpenStreetMap · © Mapterhorn", "The terrain's credit at the zooms the relief rises at")
         XCTAssertLessThan(view.sizeThatFits(boundingSize).width, widthWithOverview)
 
         view.apply(zoom: 7.9)
-        XCTAssertEqual(lineText(of: view)?.string, "© OpenStreetMap · Biomes © RESOLVE, CC BY 4.0 · Powered by ImmersiveMap")
+        XCTAssertEqual(lineText(of: view)?.string, "Powered by ImmersiveMap · © OpenStreetMap · Biomes © RESOLVE, CC BY 4.0")
     }
 
     func testEmptyAttributionHidesBadge() {

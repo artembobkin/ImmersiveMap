@@ -2026,18 +2026,18 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// The line renders at the given alpha, so a translucent badge is
         /// a colour with an alpha under 1.
         public var textColor: SIMD4<Float>?
-        /// Whether the first credit on the line, the tile source's, leads:
-        /// bold at the colour's alpha, the rest of the line at 76% of it.
-        /// Off, the default, every credit is set the same way, as one
-        /// list. Turn it on when the tile source's credit should stand out
-        /// from the data credited beside it.
+        /// Whether the first credit on the line leads: bold at the colour's
+        /// alpha, the rest of the line at 76% of it. The first is the
+        /// engine's own while `showsEngineCredit` holds, and the tile
+        /// source's otherwise. Off, the default, every credit is set the
+        /// same way, as one list.
         public var emphasizesLeadingCredit: Bool
         /// The app declares that it shows the data credit itself (its own
         /// overlay, an about screen). Suppresses the hidden-attribution
         /// warning; it does not change what the badge draws.
         public var isProvidedExternally: Bool
         /// Whether the engine's own credit, "Powered by ImmersiveMap",
-        /// closes the badge's line (`ImmersiveMapAttribution.engineCredit`).
+        /// opens the badge's line (`ImmersiveMapAttribution.engineCredit`).
         /// On by default. A courtesy, not a license term: off leaves the
         /// data's credits alone.
         public var showsEngineCredit: Bool
@@ -3120,7 +3120,7 @@ public extension ImmersiveMapSettings {
             resolved = resolved.appending(reliefCredit)
         }
         if attribution.showsEngineCredit {
-            resolved = resolved.appending(ImmersiveMapAttribution.engineCredit)
+            resolved.credits.insert(ImmersiveMapAttribution.engineCredit, at: 0)
         }
         return resolved
     }
