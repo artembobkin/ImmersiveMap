@@ -76,7 +76,8 @@ final class BaseLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
                                            poiSpriteAtlas: poiSpriteAtlas,
                                            screenPositionsBuffer: screenPositionsBuffer,
                                            labelRuntimeMetaBuffer: labelRuntimeMetaBuffer,
-                                           baseLabelsDrawBatches: baseLabelState.baseLabelsDrawBatches)
+                                           baseLabelsDrawBatches: baseLabelState.baseLabelsDrawBatches,
+                                           handover: frameContext.groundHandover)
         encoder.setDepthStencilState(depthDisabledState)
     }
 

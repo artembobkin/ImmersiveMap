@@ -16,9 +16,10 @@ public extension ProtomapsBasemapTheme {
     ///
     /// The globe is the day's: the night is the map's, not the planet's,
     /// so the ground of the globe's view wears the day's palette
-    /// (`globeLayers`) under the globe's own sun, and the night comes in
-    /// with the plane's air at the end of the unroll, with the sky, the
-    /// fog and the asphalt of the roads.
+    /// (`globeLayers`) and its names the day's lettering (`globeLabels`)
+    /// under the globe's own sun, and the night comes in with the plane's
+    /// air at the end of the unroll, with the sky, the fog and the asphalt
+    /// of the roads.
     ///
     /// The map's air, the sky, the horizon and the ground fog, is a setting
     /// rather than a theme (`ImmersiveMapSettings.FogSettings.night`), so
@@ -81,6 +82,7 @@ public extension ProtomapsBasemapTheme {
             }
             .apply { theme in
                 theme.globeLayers = ProtomapsBasemapTheme.default.layers
+                theme.globeLabels = ProtomapsBasemapTheme.default.labels
             }
             .features { features in
                 features.buildingFillColor = SIMD4<Float>(0.18, 0.19, 0.23, 1)

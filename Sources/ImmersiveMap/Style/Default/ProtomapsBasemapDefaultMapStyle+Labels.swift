@@ -101,32 +101,36 @@ extension ProtomapsBasemapDefaultMapStyle {
     }
 
     func placeLabelStyle(kind: String?, kindDetail: String?, props: [String: MvtValue]) -> FeatureStyle {
-        var appearance: ProtomapsBasemapTheme.LabelAppearance
+        // The slot of the theme's labels the place is set in, read from
+        // the plane's labels and, for the colours on the globe, from the
+        // globe's.
+        let slot: KeyPath<ProtomapsBasemapTheme.LabelStyles, ProtomapsBasemapTheme.LabelAppearance>
         // The name of a land goes away where the land no longer fits the
         // view (`LabelVisibility.countryMaximumZoom`, `regionMaximumZoom`).
         var maxCameraZoom = Float.infinity
         switch kind {
         case "country":
-            appearance = theme.labels.country
+            slot = \.country
             maxCameraZoom = Float(theme.labelVisibility.countryMaximumZoom)
         case "region":
-            appearance = theme.labels.region
+            slot = \.region
             maxCameraZoom = Float(theme.labelVisibility.regionMaximumZoom)
         case "locality":
             switch kindDetail {
             case "city":
-                appearance = theme.labels.city
+                slot = \.city
             case "town":
-                appearance = theme.labels.town
+                slot = \.town
             default:
                 // A village, a hamlet, and the rest: in a city, its named
                 // corners (a square, a quarter), which read as its
                 // districts do, never in a city's deep black.
-                appearance = theme.labels.district
+                slot = \.district
             }
         default: // macrohood, neighbourhood
-            appearance = theme.labels.district
+            slot = \.district
         }
+        var appearance = theme.labels[keyPath: slot]
         // A national capital is a city carrying the `capital` attribute.
         if kind == "locality", kindDetail == "city", isCapital(props) {
             appearance.sizePoints += 1.5
@@ -137,6 +141,7 @@ extension ProtomapsBasemapDefaultMapStyle {
                           band: Self.isMajorPlace(kind: kind, kindDetail: kindDetail) ? .place : .settlement,
                           rank: rank,
                           appearance: appearance,
+                          globeAppearance: theme.globeLabels?[keyPath: slot],
                           maxCameraZoom: maxCameraZoom)
     }
 
@@ -155,6 +160,7 @@ extension ProtomapsBasemapDefaultMapStyle {
                           band: .water,
                           rank: minZoomRank(props: props),
                           appearance: appearance,
+                          globeAppearance: theme.globeLabels?.water,
                           placement: .surface(Self.waterLabelSurfacePlacement(minimumZoom: minimumZoom)))
     }
 
@@ -408,10 +414,14 @@ extension ProtomapsBasemapDefaultMapStyle {
         }
     }
 
+    /// `globeAppearance` is the slot of the globe's labels the label's
+    /// colours on the globe come from, nil for a label never on the globe
+    /// (a POI, an address) or a theme whose globe wears the plane's labels.
     func pointLabel(key: UInt8,
                     band: LabelBand,
                     rank: Int,
                     appearance: ProtomapsBasemapTheme.LabelAppearance,
+                    globeAppearance: ProtomapsBasemapTheme.LabelAppearance? = nil,
                     minCameraZoom: Float = 0,
                     maxCameraZoom: Float = .infinity,
                     icon: PoiSpriteIcon? = nil,
@@ -419,7 +429,7 @@ extension ProtomapsBasemapDefaultMapStyle {
                     standsOnRoof: Bool = false,
                     isLocal: Bool = false) -> FeatureStyle {
         FeatureStyle.pointLabel(key: key,
-                                labelTextStyle(key: Int(key), appearance: appearance),
+                                labelTextStyle(key: Int(key), appearance: appearance, globeAppearance: globeAppearance),
                                 rank: rank,
                                 collisionRank: Self.labelCollisionRank(band: band, rank: rank),
                                 minCameraZoom: minCameraZoom,
@@ -430,8 +440,12 @@ extension ProtomapsBasemapDefaultMapStyle {
                                 isLocal: isLocal)
     }
 
+    /// The text style of an appearance, with the colours of
+    /// `globeAppearance` as what the label wears on the globe where one
+    /// is given.
     func labelTextStyle(key: Int,
-                        appearance: ProtomapsBasemapTheme.LabelAppearance) -> LabelTextStyle {
+                        appearance: ProtomapsBasemapTheme.LabelAppearance,
+                        globeAppearance: ProtomapsBasemapTheme.LabelAppearance? = nil) -> LabelTextStyle {
         LabelTextStyle(key: key,
                        fillColor: appearance.fillColor,
                        strokeColor: appearance.strokeColor,
@@ -441,7 +455,9 @@ extension ProtomapsBasemapDefaultMapStyle {
                        uppercased: appearance.uppercased,
                        emboldenPoints: appearance.emboldenPoints,
                        letterSpacingEm: appearance.letterSpacingEm,
-                       opacity: appearance.opacity)
+                       opacity: appearance.opacity,
+                       sphereFillColor: globeAppearance?.fillColor,
+                       sphereStrokeColor: globeAppearance?.strokeColor)
     }
 }
 

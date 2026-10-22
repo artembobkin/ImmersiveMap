@@ -532,6 +532,9 @@ enum PreparedTileDiskCodec {
         let emboldenPoints: Float
         let letterSpacingEm: Float
         let opacity: Float
+        /// The colours on the globe, absent where the style states none.
+        let sphereFillColor: [Float]?
+        let sphereStrokeColor: [Float]?
 
         init(_ style: LabelTextStyle) throws {
             self.key = try encodeInt32(style.key, field: "LabelTextStyle.key")
@@ -544,10 +547,14 @@ enum PreparedTileDiskCodec {
             self.emboldenPoints = style.emboldenPoints
             self.letterSpacingEm = style.letterSpacingEm
             self.opacity = style.opacity
+            self.sphereFillColor = style.sphereFillColor.map { [$0.x, $0.y, $0.z] }
+            self.sphereStrokeColor = style.sphereStrokeColor.map { [$0.x, $0.y, $0.z] }
         }
 
         func runtimeValue() throws -> LabelTextStyle {
-            guard fillColor.count == 3, strokeColor.count == 3 else {
+            guard fillColor.count == 3, strokeColor.count == 3,
+                  sphereFillColor.map({ $0.count == 3 }) ?? true,
+                  sphereStrokeColor.map({ $0.count == 3 }) ?? true else {
                 throw PreparedTileDiskCodecError.corruptedPayload("Invalid LabelTextStyle color component count.")
             }
             guard let weight = LabelFontWeight(rawValue: weightRawValue) else {
@@ -562,7 +569,9 @@ enum PreparedTileDiskCodec {
                                   uppercased: uppercased,
                                   emboldenPoints: emboldenPoints,
                                   letterSpacingEm: letterSpacingEm,
-                                  opacity: opacity)
+                                  opacity: opacity,
+                                  sphereFillColor: sphereFillColor.map { SIMD3<Float>($0[0], $0[1], $0[2]) },
+                                  sphereStrokeColor: sphereStrokeColor.map { SIMD3<Float>($0[0], $0[1], $0[2]) })
         }
     }
 

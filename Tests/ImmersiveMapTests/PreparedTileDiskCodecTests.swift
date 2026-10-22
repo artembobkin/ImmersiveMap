@@ -8,7 +8,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
     private static let testBlobURL = URL(fileURLWithPath: "/nonexistent/test.ptgeo")
 
     func testPreparedTileCacheFormatVersionIncludesArenaImageRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 154)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 155)
     }
 
     /// Each building's place in the extruded indices travels with the
@@ -874,7 +874,12 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                        sizePoints: Float(seed) + 12.5,
                        weight: seed.isMultiple(of: 2) ? .thin : .bold,
                        letterSpacingEm: Float(seed) * 0.01,
-                       opacity: 1 - Float(seed) * 0.01)
+                       opacity: 1 - Float(seed) * 0.01,
+                       // Every other style wears its own colours on the globe.
+                       sphereFillColor: seed.isMultiple(of: 2)
+                           ? nil : SIMD3<Float>(Float(seed) + 0.07, Float(seed) + 0.08, Float(seed) + 0.09),
+                       sphereStrokeColor: seed.isMultiple(of: 2)
+                           ? nil : SIMD3<Float>(Float(seed) + 0.10, Float(seed) + 0.11, Float(seed) + 0.12))
     }
 
     private func makeLabelVertex(seed: Int32, labelIndex: Int32, spriteSeed: Int32) -> LabelVertex {
@@ -936,5 +941,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         XCTAssertEqual(actual.weight, expected.weight, file: file, line: line)
         XCTAssertEqual(actual.letterSpacingEm, expected.letterSpacingEm, file: file, line: line)
         XCTAssertEqual(actual.opacity, expected.opacity, file: file, line: line)
+        XCTAssertEqual(actual.sphereFillColor, expected.sphereFillColor, file: file, line: line)
+        XCTAssertEqual(actual.sphereStrokeColor, expected.sphereStrokeColor, file: file, line: line)
     }
 }

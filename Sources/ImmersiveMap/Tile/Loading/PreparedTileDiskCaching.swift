@@ -985,7 +985,13 @@ final class PreparedTileDiskCaching {
     // theme with a globe palette (`ProtomapsBasemapTheme.globeLayers`)
     // paints the globe in it and the plane in its own. A v153 fill's slot
     // holds the fill's colour, which a globe palette's tiles must not read.
-    static let preparedFormatVersion: UInt32 = 154
+    // 155: a label's text style carries the fill and the halo it wears on
+    // the globe (`LabelTextStyle.sphereFillColor`, `sphereStrokeColor`,
+    // absent where the style states none), which the label drawers mix
+    // with the label's own by the air handover: a theme with globe labels
+    // (`ProtomapsBasemapTheme.globeLabels`) letters the globe in them. A
+    // v154 text style has no such colours.
+    static let preparedFormatVersion: UInt32 = 155
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

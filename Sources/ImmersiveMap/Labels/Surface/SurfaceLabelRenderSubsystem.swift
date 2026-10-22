@@ -112,7 +112,7 @@ final class SurfaceLabelRenderSubsystem: RenderSubsystem {
             var globeFrame = GlobeFrameConstantsUniform.make(globe: globe, cameraMatrix: cameraUniform.matrix)
             encoder.setVertexBytes(&globeValue, length: MemoryLayout<GlobeUniform>.stride, index: 8)
             encoder.setVertexBytes(&globeFrame, length: MemoryLayout<GlobeFrameConstantsUniform>.stride, index: 10)
-            surface = .sphere
+            surface = .sphere(handover: frameContext.groundHandover)
         }
 
         // Every halo first, then every fill: where two names cross, the
@@ -141,7 +141,9 @@ final class SurfaceLabelRenderSubsystem: RenderSubsystem {
 
     private enum Surface {
         case flat(FlatRenderState)
-        case sphere
+        /// The sphere, with how far the globe's look has been handed over
+        /// to the plane's (`FrameContext.groundHandover`).
+        case sphere(handover: Float)
     }
 
     private func draw(_ item: DrawItem,
@@ -178,8 +180,15 @@ final class SurfaceLabelRenderSubsystem: RenderSubsystem {
             encoder.setVertexBytes(&surfaceTile, length: MemoryLayout<GlobeSurfaceTileUniform>.stride, index: 9)
         }
 
-        var drawUniform = SurfaceLabelDrawUniform(fillColor: SIMD4<Float>(style.fillColor, style.opacity),
-                                                  strokeColor: SIMD4<Float>(style.strokeColor, style.opacity),
+        // The globe's look of the name handed over to the plane's with the
+        // air (LabelTextStyle.sphereFillColor), 1 on the plane.
+        let handover: Float
+        switch surface {
+        case .flat: handover = 1
+        case .sphere(let globeHandover): handover = globeHandover
+        }
+        var drawUniform = SurfaceLabelDrawUniform(fillColor: SIMD4<Float>(style.fillColor(atHandover: handover), style.opacity),
+                                                  strokeColor: SIMD4<Float>(style.strokeColor(atHandover: handover), style.opacity),
                                                   haloAtlasTexels: haloAtlasTexels,
                                                   depth: SurfaceLabelDepth.depth,
                                                   haloPass: haloPass ? 1 : 0,

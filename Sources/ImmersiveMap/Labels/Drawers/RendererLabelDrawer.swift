@@ -23,6 +23,9 @@ final class RendererLabelDrawer {
         var routeShieldStyle: RouteShieldStyleUniform?
     }
 
+    /// `handover` is how far the globe's look has been handed over to the
+    /// plane's (`FrameContext.groundHandover`): a label's colours on the
+    /// globe (`LabelTextStyle.sphereFillColor`) at 0, its own at 1.
     static func drawBaseLabels(renderEncoder: MTLRenderCommandEncoder,
                                screenMatrix: matrix_float4x4,
                                screenScale: ScreenScale,
@@ -30,7 +33,8 @@ final class RendererLabelDrawer {
                                poiSpriteAtlas: PoiSpriteAtlas,
                                screenPositionsBuffer: MTLBuffer,
                                labelRuntimeMetaBuffer: MTLBuffer,
-                               baseLabelsDrawBatches: [BaseLabelDrawBatch]) {
+                               baseLabelsDrawBatches: [BaseLabelDrawBatch],
+                               handover: Float = 1) {
         var screenMatrixValue = screenMatrix
         // Label geometry is authored in layout points; this is the one place the
         // base label pass converts it to the device pixels the screen matrix maps.
@@ -87,6 +91,7 @@ final class RendererLabelDrawer {
                           screenScale: screenScale,
                           textRenderer: textRenderer,
                           baseLabelsDrawBatches: baseLabelsDrawBatches,
+                          handover: handover,
                           bindings: &bindings)
     }
 
@@ -203,6 +208,7 @@ final class RendererLabelDrawer {
                                           screenScale: ScreenScale,
                                           textRenderer: TextRenderer,
                                           baseLabelsDrawBatches: [BaseLabelDrawBatch],
+                                          handover: Float,
                                           bindings: inout EncoderBindings) {
         for drawBatch in baseLabelsDrawBatches {
             for run in drawBatch.labelsByStyleRuns {
@@ -213,8 +219,10 @@ final class RendererLabelDrawer {
 
                 let style = run.style
                 let texture = style.weight == .bold ? textRenderer.texture : textRenderer.thinTexture
-                let textStyle = TextStyleUniform(textColor: style.fillColor,
-                                                 strokeColor: style.strokeColor,
+                // The colours are the globe's look of the label handed over
+                // to the plane's with the air.
+                let textStyle = TextStyleUniform(textColor: style.fillColor(atHandover: handover),
+                                                 strokeColor: style.strokeColor(atHandover: handover),
                                                  strokeWidthPx: style.haloWidthPixels(screenScale: screenScale),
                                                  fillBiasPx: style.emboldenPixels(screenScale: screenScale),
                                                  opacity: style.opacity)

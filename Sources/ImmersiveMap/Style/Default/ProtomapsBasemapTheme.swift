@@ -743,6 +743,15 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
     }
 
     public var labels: LabelStyles
+    /// The labels the globe wears, nil for `labels`: the fill and the halo
+    /// of a name on the globe's view, the unroll into the plane included,
+    /// come from here and the plane's from `labels`, handed over with the
+    /// globe's air at the end of the unroll (`LabelTextStyle.sphereFillColor`,
+    /// `sphereStrokeColor`). The size, the weight, the halo's width and
+    /// the opacity are always those of `labels`. The night palette sets
+    /// the day's here, with `globeLayers`. Baked into the prepared tiles,
+    /// so a change re-parses them.
+    public var globeLabels: LabelStyles?
     public var labelVisibility: LabelVisibility
     public var layers: LayerStyles
     /// The palette the globe wears, nil for `layers`: the ground of the
@@ -765,6 +774,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
     public var terrainOcclusion: ImmersiveMapTerrainOcclusion
 
     public init(labels: LabelStyles = .default,
+                globeLabels: LabelStyles? = nil,
                 labelVisibility: LabelVisibility = LabelVisibility(),
                 layers: LayerStyles = .default,
                 globeLayers: LayerStyles? = nil,
@@ -774,6 +784,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
                 hillshade: ImmersiveMapHillshade = ImmersiveMapHillshade(),
                 terrainOcclusion: ImmersiveMapTerrainOcclusion = ImmersiveMapTerrainOcclusion()) {
         self.labels = labels
+        self.globeLabels = globeLabels
         self.labelVisibility = labelVisibility
         self.layers = layers
         self.globeLayers = globeLayers
@@ -829,6 +840,16 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         var globe = globeLayers ?? layers
         update(&globe)
         copy.globeLayers = globe
+        return copy
+    }
+
+    /// A copy whose globe wears its own labels, the changes made to the
+    /// globe's labels so far or, where the theme has none, to `labels`.
+    public func globeLabels(_ update: (inout LabelStyles) -> Void) -> ProtomapsBasemapTheme {
+        var copy = self
+        var globe = globeLabels ?? labels
+        update(&globe)
+        copy.globeLabels = globe
         return copy
     }
 
@@ -909,6 +930,16 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         out.append(features.buildingEdgeRadius)
         add(labels.city); add(labels.town); add(labels.district); add(labels.country); add(labels.region)
         add(labels.poi); add(labels.water); add(labels.road)
+        // The globe's labels are baked into the tiles as the colours a name
+        // wears on the sphere, none where the theme has none.
+        if let globeLabels {
+            out.append(1)
+            add(globeLabels.city); add(globeLabels.town); add(globeLabels.district)
+            add(globeLabels.country); add(globeLabels.region)
+            add(globeLabels.poi); add(globeLabels.water); add(globeLabels.road)
+        } else {
+            out.append(0)
+        }
         // Not palette values, but they change which labels are drawn, so they
         // must participate in the disk-cache identity.
         out.append(Float(labelVisibility.poiIconlessMinimumZoom))

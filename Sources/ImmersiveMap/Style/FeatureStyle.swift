@@ -82,6 +82,17 @@ public struct LabelTextStyle: Sendable {
     /// over the land as lettering rather than a sign, letting the map
     /// show through. 1 is solid.
     public var opacity: Float
+    /// The fill and the halo the label wears on the globe, nil for its own:
+    /// the day's dark lettering under a night palette, so the planet keeps
+    /// its daylight while the plane is dark. They hold through the globe's
+    /// view, the unroll into the plane included, and are handed over to
+    /// the label's own colours with the globe's air at the end of the
+    /// unroll (`PresentationSettings.airHandoverStart` to
+    /// `airHandoverEnd`), the way a fill's `FillStyle.sphereColor` is. The
+    /// size, the weight, the halo's width and the opacity stay the label's
+    /// own. Only the labels of the globe's zooms read them.
+    public var sphereFillColor: SIMD3<Float>?
+    public var sphereStrokeColor: SIMD3<Float>?
 
     /// The growth every label had before it was a style value: three
     /// quarters of a pixel on the 2x display the palette was authored on.
@@ -96,7 +107,9 @@ public struct LabelTextStyle: Sendable {
                 uppercased: Bool = false,
                 emboldenPoints: Float = LabelTextStyle.defaultEmboldenPoints,
                 letterSpacingEm: Float = 0,
-                opacity: Float = 1) {
+                opacity: Float = 1,
+                sphereFillColor: SIMD3<Float>? = nil,
+                sphereStrokeColor: SIMD3<Float>? = nil) {
         self.key = key
         self.fillColor = fillColor
         self.strokeColor = strokeColor
@@ -107,6 +120,29 @@ public struct LabelTextStyle: Sendable {
         self.emboldenPoints = emboldenPoints
         self.letterSpacingEm = letterSpacingEm
         self.opacity = opacity
+        self.sphereFillColor = sphereFillColor
+        self.sphereStrokeColor = sphereStrokeColor
+    }
+
+    /// The fill at a point of the globe's handover to the plane: the
+    /// globe's at 0, the label's own at 1 and where it states no globe
+    /// colour, mixed between.
+    public func fillColor(atHandover handover: Float) -> SIMD3<Float> {
+        Self.mix(sphereFillColor, fillColor, handover: handover)
+    }
+
+    /// The halo at a point of the globe's handover to the plane, as
+    /// `fillColor(atHandover:)`.
+    public func strokeColor(atHandover handover: Float) -> SIMD3<Float> {
+        Self.mix(sphereStrokeColor, strokeColor, handover: handover)
+    }
+
+    private static func mix(_ sphere: SIMD3<Float>?, _ own: SIMD3<Float>, handover: Float) -> SIMD3<Float> {
+        guard let sphere else {
+            return own
+        }
+        let t = min(max(handover, 0), 1)
+        return sphere + (own - sphere) * t
     }
 
     /// Halo width in device pixels for this style at a given screen scale.

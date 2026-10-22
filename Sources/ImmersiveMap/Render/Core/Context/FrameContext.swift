@@ -89,6 +89,19 @@ struct FrameContext {
         resolvedPresentation.transition
     }
 
+    /// How far the globe's look of the ground and its names has been
+    /// handed over to the plane's: 0 through the globe's view and most of
+    /// the unroll, 1 by the end of the air handover
+    /// (`PresentationSettings.airHandover(atTransition:)`) and on the
+    /// plane. What a fill's or a stroke's sphere colour and a label's
+    /// globe colours are mixed with the plane's by.
+    var groundHandover: Float {
+        guard renderSurfaceMode == .spherical else {
+            return 1
+        }
+        return services.settings.presentation.airHandover(atTransition: transition)
+    }
+
     /// The camera's zoom, the fact of the frame: what the camera's pose is
     /// read from. The tiles and the rings are planned by `planningZoom`,
     /// and everything drawn from them reads it too (the styles' zoom fades
