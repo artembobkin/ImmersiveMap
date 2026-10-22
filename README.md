@@ -82,8 +82,10 @@ https://github.com/artembobkin/ImmersiveMap.git
 The default map is built from open data, and three of its sources ask to be credited:
 
 1. **OpenStreetMap**: the built-in vector tiles are OpenStreetMap data under ODbL, so "© OpenStreetMap" is required.
-2. **RESOLVE Ecoregions 2017**: the biomes the engine paints under the land of the globe at zooms 0 to 7 are under CC BY 4.0, so "Biomes © RESOLVE" is required while they are on screen. The attribution badge shows the credit up to zoom 8 and drops it past that, where no biome is drawn, and `.overviewTiles(isEnabled: false)` leaves the biomes out together with their credit.
-3. **Mapterhorn**: the terrain the ground relief rises by is Mapterhorn's open elevation data, so "© Mapterhorn" is required while the relief is on screen. The attribution badge shows the credit at the zooms the relief rises at, 10 up to 13.7 by default, and `.groundRelief(isEnabled: false)` lays the map flat together with its credit.
+2. **RESOLVE Ecoregions 2017**: the biomes the engine paints under the land of the globe are under CC BY 4.0, so "Biomes © RESOLVE" is required while they are on screen.
+3. **Mapterhorn**: the terrain the ground relief rises by is Mapterhorn's open elevation data, so "© Mapterhorn" is required while the relief is on screen.
+
+The attribution badge shows each credit at the zooms its data is on screen, and a source switched off takes its credit with it.
 
 The coast, the lakes and the roads of the overview are Natural Earth, public domain, and ask for nothing. Otherwise the license is MIT and nothing here changes that. It would just be cool if you mention ImmersiveMap somewhere:
 
