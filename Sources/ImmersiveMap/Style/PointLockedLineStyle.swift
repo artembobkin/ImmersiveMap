@@ -22,13 +22,15 @@ extension LinePass {
                                    widthPoints: Float,
                                    dashLengthPoints: Float = 0,
                                    dashGapPoints: Float = 0,
-                                   zoomFade: ImmersiveMapZoomFade = .fadeIn(from: 0, to: 1)) -> LinePass {
+                                   zoomFade: ImmersiveMapZoomFade = .fadeIn(from: 0, to: 1),
+                                   sphereColor: SIMD3<Float>? = nil) -> LinePass {
         LinePass(key: key,
                  color: color,
                  zoomFade: zoomFade,
                  lineWidthPoints: widthPoints,
                  dashLengthPoints: dashLengthPoints,
                  dashGapPoints: dashGapPoints,
+                 sphereColor: sphereColor,
                  lineGeometry: LineGeometryStyle(
                      lineWidth: Double(widthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint
                  ))

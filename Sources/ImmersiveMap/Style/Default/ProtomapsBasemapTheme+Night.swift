@@ -14,6 +14,12 @@ public extension ProtomapsBasemapTheme {
     /// faint highlight. The road metrics, the route shields and the label
     /// visibility are the day's.
     ///
+    /// The globe is the day's: the night is the map's, not the planet's,
+    /// so the ground of the globe's view wears the day's palette
+    /// (`globeLayers`) under the globe's own sun, and the night comes in
+    /// with the plane's air at the end of the unroll, with the sky, the
+    /// fog and the asphalt of the roads.
+    ///
     /// The map's air, the sky, the horizon and the ground fog, is a setting
     /// rather than a theme (`ImmersiveMapSettings.FogSettings.night`), so
     /// the map of a night goes on with `ImmersiveMapView.night()`, which
@@ -72,6 +78,9 @@ public extension ProtomapsBasemapTheme {
                                             coverMinimumTileZoom: day.coverMinimumTileZoom)
                 layers.overviewRoads.major = SIMD4<Float>(0.72, 0.58, 0.26, 1)
                 layers.overviewRoads.minor = SIMD4<Float>(0.42, 0.39, 0.30, 1)
+            }
+            .apply { theme in
+                theme.globeLayers = ProtomapsBasemapTheme.default.layers
             }
             .features { features in
                 features.buildingFillColor = SIMD4<Float>(0.18, 0.19, 0.23, 1)

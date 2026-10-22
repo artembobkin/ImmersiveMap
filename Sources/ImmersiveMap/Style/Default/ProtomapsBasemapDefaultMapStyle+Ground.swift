@@ -75,6 +75,7 @@ extension ProtomapsBasemapDefaultMapStyle {
                             zoomFade: Self.roadZoomFade,
                             lineWidthPoints: widthPoints,
                             sphereAlpha: theme.roadMetrics.globeOpacity,
+                            sphereColor: globeColor { isMajor ? $0.overviewRoads.major : $0.overviewRoads.minor },
                             lineGeometry: LineGeometryStyle(
                                 lineWidth: Double(widthPoints) * FeatureStyle.pointLockedRibbonUnitsPerPoint,
                                 lineCapRound: true,
@@ -95,26 +96,25 @@ extension ProtomapsBasemapDefaultMapStyle {
         guard overviewPaintsLand(tileZoom: tileZoom) else {
             return hiddenStyle
         }
-        let biomes = theme.layers.biomes
         let key: UInt8
-        let color: SIMD4<Float>
+        let tone: KeyPath<ProtomapsBasemapTheme.BiomeStyles, SIMD4<Float>>
         switch kind {
-        case "tundra": (key, color) = (3, biomes.tundra)
-        case "desert": (key, color) = (4, biomes.desert)
-        case "montane_grassland": (key, color) = (6, biomes.montaneGrassland)
-        case "tropical_grassland": (key, color) = (7, biomes.tropicalGrassland)
-        case "mediterranean_scrub": (key, color) = (9, biomes.mediterraneanScrub)
-        case "flooded_grassland": (key, color) = (11, biomes.floodedGrassland)
-        case "mangrove": (key, color) = (12, biomes.mangrove)
-        case "boreal_forest": (key, color) = (13, biomes.borealForest)
-        case "temperate_conifer_forest": (key, color) = (14, biomes.temperateConiferForest)
-        case "temperate_broadleaf_forest": (key, color) = (15, biomes.temperateBroadleafForest)
-        case "tropical_conifer_forest": (key, color) = (16, biomes.tropicalConiferForest)
-        case "tropical_dry_forest": (key, color) = (18, biomes.tropicalDryForest)
-        case "tropical_moist_forest": (key, color) = (19, biomes.tropicalMoistForest)
-        default: (key, color) = (5, biomes.temperateGrassland)
+        case "tundra": (key, tone) = (3, \.tundra)
+        case "desert": (key, tone) = (4, \.desert)
+        case "montane_grassland": (key, tone) = (6, \.montaneGrassland)
+        case "tropical_grassland": (key, tone) = (7, \.tropicalGrassland)
+        case "mediterranean_scrub": (key, tone) = (9, \.mediterraneanScrub)
+        case "flooded_grassland": (key, tone) = (11, \.floodedGrassland)
+        case "mangrove": (key, tone) = (12, \.mangrove)
+        case "boreal_forest": (key, tone) = (13, \.borealForest)
+        case "temperate_conifer_forest": (key, tone) = (14, \.temperateConiferForest)
+        case "temperate_broadleaf_forest": (key, tone) = (15, \.temperateBroadleafForest)
+        case "tropical_conifer_forest": (key, tone) = (16, \.tropicalConiferForest)
+        case "tropical_dry_forest": (key, tone) = (18, \.tropicalDryForest)
+        case "tropical_moist_forest": (key, tone) = (19, \.tropicalMoistForest)
+        default: (key, tone) = (5, \.temperateGrassland)
         }
-        return polygon(key: key, color: color, zoomFade: Self.landcoverZoomFade)
+        return polygon(key: key, colorOf: { $0.biomes[keyPath: tone] }, zoomFade: Self.landcoverZoomFade)
     }
 
     /// The overview's `lake`, the lakes of tile zoom 0, where the basemap
@@ -123,7 +123,7 @@ extension ProtomapsBasemapDefaultMapStyle {
         guard overviewPaintsLand(tileZoom: tileZoom) else {
             return hiddenStyle
         }
-        return polygon(key: Self.waterKey, color: theme.layers.water)
+        return polygon(key: Self.waterKey, colorOf: \.water)
     }
 
     /// The basemap's `landcover`: the continuous Daylight land cover it
@@ -167,43 +167,42 @@ extension ProtomapsBasemapDefaultMapStyle {
             let coverDrawn = tileZoom >= biomes.coverMinimumTileZoom
             switch kind {
             case "forest" where coverDrawn:
-                return polygon(key: 20, color: biomes.forestCover, zoomFade: fade)
+                return polygon(key: 20, colorOf: \.biomes.forestCover, zoomFade: fade)
             case "farmland" where coverDrawn:
-                return polygon(key: 21, color: biomes.farmlandCover, zoomFade: fade)
+                return polygon(key: 21, colorOf: \.biomes.farmlandCover, zoomFade: fade)
             case "barren" where coverDrawn:
-                return polygon(key: 22, color: biomes.barrenCover, zoomFade: fade)
+                return polygon(key: 22, colorOf: \.biomes.barrenCover, zoomFade: fade)
             case "glacier":
-                return polygon(key: 23, color: colors.ice, zoomFade: fade)
+                return polygon(key: 23, colorOf: \.ice, zoomFade: fade)
             case "urban_area":
-                return polygon(key: 24, color: colors.residential, zoomFade: fade)
+                return polygon(key: 24, colorOf: \.residential, zoomFade: fade)
             default:
                 return hiddenStyle
             }
         }
-        let vegetationBase = colors.grass
         let amount = Self.vegetationBlendAmount(tileZoom: tileZoom)
         switch kind {
         case "barren":
-            return polygon(key: 3, color: colors.sand, zoomFade: fade)
+            return polygon(key: 3, colorOf: \.sand, zoomFade: fade)
         case "grassland", "scrub", nil:
             return polygon(key: 4,
-                           color: blend(colors.land, toward: vegetationBase, amount: amount),
+                           colorOf: { self.blend($0.land, toward: $0.grass, amount: amount) },
                            zoomFade: fade)
         case "farmland":
             return polygon(key: 5,
-                           color: blend(colors.farmland, toward: vegetationBase, amount: amount),
+                           colorOf: { self.blend($0.farmland, toward: $0.grass, amount: amount) },
                            zoomFade: fade)
         case "forest":
             return polygon(key: 6,
-                           color: blend(colors.wood, toward: vegetationBase, amount: amount * 0.75),
+                           colorOf: { self.blend($0.wood, toward: $0.grass, amount: amount * 0.75) },
                            zoomFade: fade)
         case "glacier":
-            return polygon(key: 8, color: colors.ice, zoomFade: fade)
+            return polygon(key: 8, colorOf: \.ice, zoomFade: fade)
         case "urban_area":
             // Cities are the one thing a region view exists to show: the
             // residential tone, clearly apart from the greens, the same the
             // street map's residential land use wears from z8.
-            return polygon(key: 10, color: colors.residential, zoomFade: fade)
+            return polygon(key: 10, colorOf: \.residential, zoomFade: fade)
         default:
             return landcoverStyle(kind: nil, tileZoom: tileZoom)
         }
@@ -258,55 +257,55 @@ extension ProtomapsBasemapDefaultMapStyle {
             // place, with no cover to appear from nowhere.
             let biomes = colors.biomes
             guard tileZoom >= biomes.coverMinimumTileZoom else {
-                return kind == "glacier" ? polygon(key: 29, color: colors.ice) : hiddenStyle
+                return kind == "glacier" ? polygon(key: 29, colorOf: \.ice) : hiddenStyle
             }
             switch kind {
             case "forest", "wood":
-                return polygon(key: 25, color: biomes.forestCover)
+                return polygon(key: 25, colorOf: \.biomes.forestCover)
             case "farmland", "orchard", "allotments", "vineyard", "plant_nursery":
-                return polygon(key: 26, color: biomes.farmlandCover)
+                return polygon(key: 26, colorOf: \.biomes.farmlandCover)
             case "sand", "beach", "bare_rock", "quarry", "scree", "shingle":
-                return polygon(key: 27, color: biomes.barrenCover)
+                return polygon(key: 27, colorOf: \.biomes.barrenCover)
             case "wetland":
-                return polygon(key: 28, color: colors.wetland)
+                return polygon(key: 28, colorOf: \.wetland)
             case "glacier":
-                return polygon(key: 29, color: colors.ice)
+                return polygon(key: 29, colorOf: \.ice)
             default:
                 return hiddenStyle
             }
         }
         switch kind {
         case "residential", "neighbourhood", "farmyard":
-            return polygon(key: 9, color: colors.residential, zoomFade: fade)
+            return polygon(key: 9, colorOf: \.residential, zoomFade: fade)
         case "protected_area":
             // A protected area blankets whole regions and city centres: a
             // faint green over the land, under the built-up tints and every
             // other fill, so it shows only where nothing else is.
-            return polygon(key: 7, color: blend(colors.land, toward: colors.grass, amount: 0.25), zoomFade: fade)
+            return polygon(key: 7, colorOf: { self.blend($0.land, toward: $0.grass, amount: 0.25) }, zoomFade: fade)
         case "commercial", "industrial", "railway", "military",
              "hospital", "school", "university", "college":
             // Schools and hospitals are the muted built tone, not a green:
             // their grounds are courtyards and car parks, not parks.
-            return polygon(key: 9, color: colors.industrial, zoomFade: fade)
+            return polygon(key: 9, colorOf: \.industrial, zoomFade: fade)
         case "forest", "wood":
-            return polygon(key: 11, color: colors.wood, zoomFade: fade)
+            return polygon(key: 11, colorOf: \.wood, zoomFade: fade)
         case "park", "garden", "grass", "meadow", "recreation_ground", "cemetery",
              "golf_course", "pitch", "playground", "dog_park", "zoo",
              "national_park", "nature_reserve", "scrub", "grassland", "heath",
              "village_green", "camp_site", "picnic_site":
             // One green for all urban greenery, so no two-tone seam where a
             // park meets the pitch inside it.
-            return polygon(key: 12, color: colors.grass, zoomFade: fade)
+            return polygon(key: 12, colorOf: \.grass, zoomFade: fade)
         case "farmland", "orchard", "allotments", "vineyard", "plant_nursery":
-            return polygon(key: 13, color: colors.farmland, zoomFade: fade)
+            return polygon(key: 13, colorOf: \.farmland, zoomFade: fade)
         case "wetland":
-            return polygon(key: 14, color: colors.wetland, zoomFade: fade)
+            return polygon(key: 14, colorOf: \.wetland, zoomFade: fade)
         case "glacier":
-            return polygon(key: 17, color: colors.ice, zoomFade: fade)
+            return polygon(key: 17, colorOf: \.ice, zoomFade: fade)
         case "sand", "beach", "bare_rock", "quarry", "scree", "shingle":
-            return polygon(key: 18, color: colors.sand, zoomFade: fade)
+            return polygon(key: 18, colorOf: \.sand, zoomFade: fade)
         case "aerodrome", "airfield", "runway", "taxiway", "apron", "helipad":
-            return polygon(key: 19, color: colors.aeroway, zoomFade: fade)
+            return polygon(key: 19, colorOf: \.aeroway, zoomFade: fade)
         case "pedestrian", "pier":
             // The basemap ships a bridge's deck (`man_made=bridge`) as a
             // `pedestrian` area, the same kind as a paved square. The deck
@@ -316,13 +315,14 @@ extension ProtomapsBasemapDefaultMapStyle {
             // as the ground it is.
             return .fill(FillStyle(key: Self.bridgeDeckKey,
                                    color: colors.land,
-                                   drawsAmongGroundLines: true))
+                                   drawsAmongGroundLines: true,
+                                   sphereColor: globeColor(\.land)))
         default:
             // Everything else the basemap ships (retail, construction, a
             // platform, a kindergarten, a stadium, a marina, `other`) is
             // built or managed ground: the muted built tone marks where it
             // is without a colour of its own.
-            return polygon(key: 9, color: colors.industrial, zoomFade: fade)
+            return polygon(key: 9, colorOf: \.industrial, zoomFade: fade)
         }
     }
 
@@ -360,10 +360,12 @@ extension ProtomapsBasemapDefaultMapStyle {
             width = 1.0
             minimumWidthPoints = 0.5
         }
+        let tone: (ProtomapsBasemapTheme.LayerStyles) -> SIMD4<Float> = { isCulvert ? Self.tunnelTone($0.water) : $0.water }
         return line(key: isCulvert ? 31 : 32,
-                    color: isCulvert ? Self.tunnelTone(theme.layers.water) : theme.layers.water,
+                    color: tone(theme.layers),
                     width: width,
-                    minimumWidthPoints: minimumWidthPoints)
+                    minimumWidthPoints: minimumWidthPoints,
+                    sphereColor: globeColor(tone))
     }
 
     /// The `boundaries` layer: every level the tile ships. A national
@@ -397,7 +399,10 @@ extension ProtomapsBasemapDefaultMapStyle {
         // ends, ribbon provisioned to host the width. One key per colour.
         let key: UInt8
         let widthPoints: Float
-        var color = theme.layers.boundary
+        // The softening of the palette's boundary tone, the same over the
+        // plane's palette and the globe's.
+        let towardWhite: Float
+        let alpha: Float
         switch level {
         case .country:
             key = 103
@@ -408,9 +413,7 @@ extension ProtomapsBasemapDefaultMapStyle {
             // strongest line of the family at every zoom, so it stands
             // apart from the regional borders by colour as well as by
             // being the one solid line among them.
-            color = tileZoom <= 6
-                ? Self.softenedBoundaryColor(color, towardWhite: 0.15, alpha: 0.55)
-                : Self.softenedBoundaryColor(color, towardWhite: 0, alpha: 0.65)
+            (towardWhite, alpha) = tileZoom <= 6 ? (0.15, 0.55) : (0, 0.65)
         case .region:
             key = 100
             widthPoints = 1.1
@@ -418,13 +421,14 @@ extension ProtomapsBasemapDefaultMapStyle {
             // than the national ones at every zoom, and over a country or
             // the globe, where the lines are the one cold hue in the frame
             // and a full purple reads as scribble, they lighten further.
-            color = tileZoom <= 6
-                ? Self.softenedBoundaryColor(color, towardWhite: 0.45, alpha: 0.45)
-                : Self.softenedBoundaryColor(color, towardWhite: 0.2, alpha: 0.6)
+            (towardWhite, alpha) = tileZoom <= 6 ? (0.45, 0.45) : (0.2, 0.6)
         case .local:
             key = 98
             widthPoints = 0.7
-            color = Self.softenedBoundaryColor(color, towardWhite: 0.45, alpha: 0.55)
+            (towardWhite, alpha) = (0.45, 0.55)
+        }
+        let tone: (ProtomapsBasemapTheme.LayerStyles) -> SIMD4<Float> = {
+            Self.softenedBoundaryColor($0.boundary, towardWhite: towardWhite, alpha: alpha)
         }
         // Borders are drawn as lines only: the point-locked mode fills no
         // areas, so a boundary that arrives as a polygon is never a blob.
@@ -442,10 +446,11 @@ extension ProtomapsBasemapDefaultMapStyle {
         }
         return FeatureStyle.pointLockedLine(
             key: disputed ? key - 1 : key,
-            color: color,
+            color: tone(theme.layers),
             widthPoints: widthPoints,
             dashLengthPoints: dashLengthPoints,
-            dashGapPoints: dashGapPoints
+            dashGapPoints: dashGapPoints,
+            sphereColor: globeColor(tone)
         )
     }
 

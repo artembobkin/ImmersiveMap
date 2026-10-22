@@ -6,16 +6,18 @@ import simd
 /// The per-draw uniforms of the tile ground shaders, shared by the flat
 /// surface, the sphere surface and the atlas bake; the layouts mirror the
 /// structs of the same names in TileShading.h.
-/// Mirror of `SphereRibbonUniform` in TileSphere.metal: how far the globe's
-/// look of a stroke has been handed over to the plane's, 0 through the
-/// globe's view and most of the unroll, 1 by the end of the air handover.
-struct TileSphereRibbonUniform {
+/// Mirror of `SphereHandoverUniform` in TileSphere.metal: how far the
+/// globe's look of the ground, a fill's sphere colour and a stroke's
+/// sphere colour and veil, has been handed over to the plane's, 0 through
+/// the globe's view and most of the unroll, 1 by the end of the air
+/// handover.
+struct TileSphereHandoverUniform {
     var handover: Float
 
     /// The handover at a transition, the air's own curve
     /// (`PresentationSettings.airHandover(atTransition:)`).
-    static func make(transition: Float, presentation: ImmersiveMapSettings.PresentationSettings) -> TileSphereRibbonUniform {
-        TileSphereRibbonUniform(handover: presentation.airHandover(atTransition: transition))
+    static func make(transition: Float, presentation: ImmersiveMapSettings.PresentationSettings) -> TileSphereHandoverUniform {
+        TileSphereHandoverUniform(handover: presentation.airHandover(atTransition: transition))
     }
 }
 

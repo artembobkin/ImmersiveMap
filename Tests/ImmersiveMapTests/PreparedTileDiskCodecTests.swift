@@ -8,7 +8,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
     private static let testBlobURL = URL(fileURLWithPath: "/nonexistent/test.ptgeo")
 
     func testPreparedTileCacheFormatVersionIncludesArenaImageRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 153)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 154)
     }
 
     /// Each building's place in the extruded indices travels with the
@@ -638,7 +638,8 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         // zero but the ramp's start alpha, which is one without a ramp
         // (the twelfth Float32, 1.0 little-endian [0x00, 0x00, 0x80, 0x3F]),
         // and the sphere alpha after it, one too. The sphere colour that
-        // closes the 64 bytes stays zero: a fill never reads it.
+        // closes the 64 bytes, what the fill wears on the globe, is the
+        // zero the fixture states.
         XCTAssertEqual(spans[4], TileArenaSpan(byteOffset: 1024, byteCount: 64, elementCount: 1, indexWidth: nil))
         XCTAssertEqual(blob[1024..<1068], Data(count: 44))
         XCTAssertEqual(blob[1068..<1072], Data([0x00, 0x00, 0x80, 0x3F]))

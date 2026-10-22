@@ -374,7 +374,9 @@ extension ProtomapsBasemapDefaultMapStyle {
         let widthPoints = theme.roadMetrics.symbolWidthPoints.value(for: roadClass)
         let ramp = roadWidthRamp(roadClass)
         let fillColor = tunnel ? Self.tunnelTone(color) : color
-        let network = theme.layers.overviewRoads
+        // The highway tones of the globe's palette, where the theme has
+        // one, as the overview's own network wears them.
+        let network = (theme.globeLayers ?? theme.layers).overviewRoads
         let globeColor = roadClass == .motorway || roadClass == .trunk ? network.major : network.minor
         let geometry = LineGeometryStyle(
             lineWidth: Self.rampedRibbonWidth(ramp, widthPoints: widthPoints, tileZoom: tileZoom),

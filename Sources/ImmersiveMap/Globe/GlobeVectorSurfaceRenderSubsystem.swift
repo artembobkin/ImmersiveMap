@@ -70,7 +70,7 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
                                       pureSphere: pureSphere,
                                       globeFrame: globeFrame,
                                       globeLight: GlobeLightUniform.resolve(frameContext: frameContext),
-                                      ribbonUniform: TileSphereRibbonUniform.make(
+                                      handoverUniform: TileSphereHandoverUniform.make(
                                           transition: globe.transition,
                                           presentation: frameContext.services.settings.presentation))
     }

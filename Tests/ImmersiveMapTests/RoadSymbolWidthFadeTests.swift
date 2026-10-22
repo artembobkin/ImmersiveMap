@@ -74,6 +74,15 @@ final class RoadSymbolWidthFadeTests: XCTestCase {
                               lineGeometry: LineGeometryStyle(lineWidth: 8))
         let worn = TileUnificationStage.makeTileLineStyle(from: yellow)
         XCTAssertEqual([worn.sphereColorRed, worn.sphereColorGreen, worn.sphereColorBlue], [1, 0.8, 0.3])
+
+        // A fill's globe colour rides in the same slot of its line style:
+        // its own colour unless the fill states one.
+        let ownTone = BakedStyle(fill: FillStyle(key: 2, color: SIMD4<Float>(0.1, 0.2, 0.3, 1)))
+        let ownToneStyle = TileUnificationStage.makeTileLineStyle(from: ownTone.pass)
+        XCTAssertEqual([ownToneStyle.sphereColorRed, ownToneStyle.sphereColorGreen, ownToneStyle.sphereColorBlue], [0.1, 0.2, 0.3])
+        let daylit = BakedStyle(fill: FillStyle(key: 2, color: SIMD4<Float>(0.1, 0.2, 0.3, 1), sphereColor: SIMD3<Float>(0.6, 0.7, 0.9)))
+        let daylitStyle = TileUnificationStage.makeTileLineStyle(from: daylit.pass)
+        XCTAssertEqual([daylitStyle.sphereColorRed, daylitStyle.sphereColorGreen, daylitStyle.sphereColorBlue], [0.6, 0.7, 0.9])
     }
 
     /// The overview strokes wear the theme's globe veil, the street era's

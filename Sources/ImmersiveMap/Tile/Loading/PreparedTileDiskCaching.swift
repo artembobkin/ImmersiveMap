@@ -978,7 +978,14 @@ final class PreparedTileDiskCaching {
     // stride 64): the basemap's overview strokes are the highway yellow
     // through the globe's view and the unroll, asphalt on the plane. A
     // v152 line style is 52 bytes.
-    static let preparedFormatVersion: UInt32 = 153
+    // 154: a fill's line style slot carries the colour the fill wears on
+    // the globe (`FillStyle.sphereColor` in `TileLineStyle.sphereColor`,
+    // the fill's own colour where the style states none), which the
+    // sphere's fill vertex mixes with the plane's by the air handover: a
+    // theme with a globe palette (`ProtomapsBasemapTheme.globeLayers`)
+    // paints the globe in it and the plane in its own. A v153 fill's slot
+    // holds the fill's colour, which a globe palette's tiles must not read.
+    static let preparedFormatVersion: UInt32 = 154
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

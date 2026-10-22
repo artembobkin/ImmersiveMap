@@ -29,6 +29,67 @@ final class NightThemeTests: XCTestCase {
         XCTAssertEqual(night.baseColors.map, night.layers.land, "What no tile paints follows the night's land")
     }
 
+    /// The night is the map's, not the planet's: the globe wears the day's
+    /// palette, its caps included, and the palette is part of the tiles'
+    /// identity.
+    func testTheGlobeOfTheNightIsTheDays() {
+        let day = ProtomapsBasemapTheme.default
+        let night = ProtomapsBasemapTheme.night
+
+        XCTAssertEqual(night.globeLayers, day.layers)
+        XCTAssertNil(day.globeLayers, "The day's globe is the day's own palette")
+        XCTAssertEqual(night.baseColors.northCap, day.layers.water, "The caps are the globe's")
+        XCTAssertEqual(night.baseColors.southCap, day.layers.ice)
+        let planetOfTheNight = night.apply { $0.globeLayers = nil }
+        XCTAssertNotEqual(planetOfTheNight.cacheFingerprint, night.cacheFingerprint,
+                          "The globe's palette is baked into the tiles")
+        let ownGlobe = day.globeLayers { $0.water = SIMD4<Float>(1, 0, 1, 1) }
+        XCTAssertEqual(ownGlobe.globeLayers?.water, SIMD4<Float>(1, 0, 1, 1))
+        XCTAssertEqual(ownGlobe.globeLayers?.land, day.layers.land, "The builder starts from the plane's palette")
+    }
+
+    /// Every fill and stroke of the overview zooms states the day's colour
+    /// as what it wears on the globe, under the night's own for the plane,
+    /// and a theme without a globe palette states none.
+    func testTheNightsGroundWearsTheDaysColoursOnTheGlobe() throws {
+        let day = ProtomapsBasemapTheme.default
+        let night = ProtomapsBasemapDefaultMapStyle(theme: .night)
+        func fill(_ style: FeatureStyle) throws -> FillStyle {
+            guard case .fill(let fill) = style else { throw XCTSkip("not a fill") }
+            return fill
+        }
+        func line(_ style: FeatureStyle) throws -> LinePass {
+            guard case .line(let line) = style else { throw XCTSkip("not a line") }
+            return line.pass
+        }
+        func rgb(_ color: SIMD4<Float>) -> SIMD3<Float> { SIMD3<Float>(color.x, color.y, color.z) }
+
+        let forest = try fill(night.biomeStyle(kind: "temperate_broadleaf_forest", tileZoom: 3))
+        XCTAssertEqual(forest.color, ProtomapsBasemapTheme.night.layers.biomes.temperateBroadleafForest)
+        XCTAssertEqual(forest.sphereColor, rgb(day.layers.biomes.temperateBroadleafForest))
+        let lake = try fill(night.overviewLakeStyle(tileZoom: 0))
+        XCTAssertEqual(lake.sphereColor, rgb(day.layers.water))
+        let ocean = try fill(night.makeStyle(data: DetFeatureStyleData(layerName: "water", properties: [:],
+                                                                       tile: Tile(x: 0, y: 0, z: 2))))
+        XCTAssertEqual(ocean.color, ProtomapsBasemapTheme.night.layers.water)
+        XCTAssertEqual(ocean.sphereColor, rgb(day.layers.water))
+        let earth = try fill(night.makeStyle(data: DetFeatureStyleData(layerName: "earth", properties: [:],
+                                                                       tile: Tile(x: 0, y: 0, z: 2))))
+        XCTAssertEqual(earth.sphereColor, rgb(day.layers.land))
+        let cover = try fill(night.landcoverStyle(kind: "forest", tileZoom: 4))
+        XCTAssertEqual(cover.sphereColor, rgb(day.layers.biomes.forestCover))
+        let highway = try line(night.overviewRoadNetworkStyle(rank: 1, tileZoom: 3))
+        XCTAssertEqual(highway.sphereColor, rgb(day.layers.overviewRoads.major))
+        let border = try line(night.boundaryStyle(kind: "country", props: [:], tileZoom: 3))
+        XCTAssertEqual(border.sphereColor,
+                       rgb(ProtomapsBasemapDefaultMapStyle.softenedBoundaryColor(day.layers.boundary, towardWhite: 0.15, alpha: 0.55)))
+
+        let dayStyle = ProtomapsBasemapDefaultMapStyle(theme: day)
+        XCTAssertNil(try fill(dayStyle.biomeStyle(kind: "desert", tileZoom: 3)).sphereColor)
+        XCTAssertNil(try fill(dayStyle.overviewLakeStyle(tileZoom: 0)).sphereColor)
+        XCTAssertNil(try line(dayStyle.boundaryStyle(kind: "country", props: [:], tileZoom: 3)).sphereColor)
+    }
+
     /// One modifier sets the palette and the air, and takes both back.
     func testTheNightModifierSetsThePaletteAndTheAir() {
         let night = ImmersiveMapSettings.default.night()

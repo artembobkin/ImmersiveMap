@@ -256,17 +256,29 @@ public struct FillStyle: Sendable {
     /// draws with the lines instead, over those of a lower key and under
     /// those of a higher one, and over every plain fill.
     public var drawsAmongGroundLines: Bool
+    /// The colour the fill wears on the globe, nil for its own: the day's
+    /// ocean under a night palette, so the planet keeps its daylight while
+    /// the plane is dark. It holds through the globe's view, the unroll
+    /// into the plane included, and is handed over to the fill's own
+    /// colour with the globe's air at the end of the unroll
+    /// (`PresentationSettings.airHandoverStart` to `airHandoverEnd`), the
+    /// way a stroke's `LinePass.sphereColor` is. The alpha stays the
+    /// fill's own. Only the sphere's fills read it: a fill of the street
+    /// zooms is never on the sphere.
+    public var sphereColor: SIMD3<Float>?
 
     public init(key: UInt8,
                 color: SIMD4<Float>,
                 zoomFade: ImmersiveMapZoomFade = .none,
                 splitsComplexHoles: Bool = false,
-                drawsAmongGroundLines: Bool = false) {
+                drawsAmongGroundLines: Bool = false,
+                sphereColor: SIMD3<Float>? = nil) {
         self.key = key
         self.color = color
         self.zoomFade = zoomFade
         self.splitsComplexHoles = splitsComplexHoles
         self.drawsAmongGroundLines = drawsAmongGroundLines
+        self.sphereColor = sphereColor
     }
 }
 
@@ -571,13 +583,15 @@ public extension FeatureStyle {
                                 widthPoints: Float,
                                 dashLengthPoints: Float = 0,
                                 dashGapPoints: Float = 0,
-                                zoomFade: ImmersiveMapZoomFade = .fadeIn(from: 0, to: 1)) -> FeatureStyle {
+                                zoomFade: ImmersiveMapZoomFade = .fadeIn(from: 0, to: 1),
+                                sphereColor: SIMD3<Float>? = nil) -> FeatureStyle {
         .line(LineStyle(pass: LinePass.pointLocked(key: key,
                                                    color: color,
                                                    widthPoints: max(0, widthPoints),
                                                    dashLengthPoints: max(0, dashLengthPoints),
                                                    dashGapPoints: max(0, dashGapPoints),
-                                                   zoomFade: zoomFade),
+                                                   zoomFade: zoomFade,
+                                                   sphereColor: sphereColor),
                         fillsAreas: false))
     }
 

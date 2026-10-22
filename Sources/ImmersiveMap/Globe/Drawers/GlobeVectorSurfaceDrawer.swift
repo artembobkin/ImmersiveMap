@@ -46,7 +46,7 @@ enum GlobeVectorSurfaceDrawer {
                      pureSphere: Bool,
                      globeFrame: GlobeFrameConstantsUniform,
                      globeLight: GlobeLightUniform = .disabled,
-                     ribbonUniform: TileSphereRibbonUniform = TileSphereRibbonUniform(handover: 0)) {
+                     handoverUniform: TileSphereHandoverUniform = TileSphereHandoverUniform(handover: 0)) {
         guard placeTilesContext.tilePlacements.isEmpty == false else {
             return
         }
@@ -74,10 +74,13 @@ enum GlobeVectorSurfaceDrawer {
         var overviewFadeValue = overviewFadeUniform
         renderEncoder.setVertexBytes(&cameraUniformValue, length: MemoryLayout<CameraUniform>.stride, index: 1)
         renderEncoder.setVertexBytes(&globeValue, length: MemoryLayout<GlobeUniform>.stride, index: 8)
-        // The ribbons' fragment reads the handover for the globe's look of
-        // a stroke (TileSphere.metal, buffer 8).
-        var ribbonValue = ribbonUniform
-        renderEncoder.setFragmentBytes(&ribbonValue, length: MemoryLayout<TileSphereRibbonUniform>.stride, index: 8)
+        // The globe's look of the ground, handed over to the plane's with
+        // the air: the fills' vertex stages read it for a fill's sphere
+        // colour (TileSphere.metal, vertex buffer 12), the ribbons'
+        // fragment for a stroke's sphere colour and veil (buffer 8).
+        var handoverValue = handoverUniform
+        renderEncoder.setVertexBytes(&handoverValue, length: MemoryLayout<TileSphereHandoverUniform>.stride, index: 12)
+        renderEncoder.setFragmentBytes(&handoverValue, length: MemoryLayout<TileSphereHandoverUniform>.stride, index: 8)
         var globeFrameValue = globeFrame
         renderEncoder.setVertexBytes(&globeFrameValue,
                                      length: MemoryLayout<GlobeFrameConstantsUniform>.stride,

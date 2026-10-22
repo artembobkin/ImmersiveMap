@@ -745,6 +745,15 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
     public var labels: LabelStyles
     public var labelVisibility: LabelVisibility
     public var layers: LayerStyles
+    /// The palette the globe wears, nil for `layers`: the ground of the
+    /// globe's view, the unroll into the plane included, takes its colours
+    /// from here and the plane from `layers`, handed over with the globe's
+    /// air at the end of the unroll (`FillStyle.sphereColor`,
+    /// `LinePass.sphereColor`). The night palette sets the day's here, so
+    /// the planet keeps its daylight and its sun while the map in it is
+    /// dark. The caps past the poles follow it. Baked into the prepared
+    /// tiles, so a change re-parses them.
+    public var globeLayers: LayerStyles?
     public var features: FeatureStyles
     public var roadMetrics: RoadMetrics
     public var routeShields: RouteShields
@@ -758,6 +767,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
     public init(labels: LabelStyles = .default,
                 labelVisibility: LabelVisibility = LabelVisibility(),
                 layers: LayerStyles = .default,
+                globeLayers: LayerStyles? = nil,
                 features: FeatureStyles = .default,
                 roadMetrics: RoadMetrics = RoadMetrics(),
                 routeShields: RouteShields = RouteShields(),
@@ -766,6 +776,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         self.labels = labels
         self.labelVisibility = labelVisibility
         self.layers = layers
+        self.globeLayers = globeLayers
         self.features = features
         self.roadMetrics = roadMetrics
         self.routeShields = routeShields
@@ -777,9 +788,11 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
 
     /// What no tile paints, from the same palette: the land where no tile
     /// has arrived, the water past the northern rim, the ice past the
-    /// southern one.
+    /// southern one. The caps are the globe's, so they wear the globe's
+    /// palette where the theme has one.
     public var baseColors: ImmersiveMapBaseColors {
-        ImmersiveMapBaseColors(map: layers.land, northCap: layers.water, southCap: layers.ice)
+        let globe = globeLayers ?? layers
+        return ImmersiveMapBaseColors(map: layers.land, northCap: globe.water, southCap: globe.ice)
     }
 
     /// A copy with the changes the closure makes: the way to state a theme
@@ -806,6 +819,16 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
     public func layers(_ update: (inout LayerStyles) -> Void) -> ProtomapsBasemapTheme {
         var copy = self
         update(&copy.layers)
+        return copy
+    }
+
+    /// A copy whose globe wears its own palette, the changes made to the
+    /// globe's palette so far or, where the theme has none, to `layers`.
+    public func globeLayers(_ update: (inout LayerStyles) -> Void) -> ProtomapsBasemapTheme {
+        var copy = self
+        var globe = globeLayers ?? layers
+        update(&globe)
+        copy.globeLayers = globe
         return copy
     }
 
@@ -852,23 +875,34 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
             out.append(contentsOf: [a.haloEm, a.sizePoints, Float(a.weight.rawValue), a.uppercased ? 1 : 0,
                                     a.emboldenPoints, a.letterSpacingEm, a.opacity])
         }
-        add(layers.land); add(layers.water); add(layers.wood); add(layers.grass)
-        add(layers.farmland); add(layers.ice); add(layers.sand); add(layers.wetland)
-        add(layers.park); add(layers.residential); add(layers.industrial)
-        add(layers.boundary); add(layers.aeroway)
-        add(layers.roads.motorway); add(layers.roads.trunk); add(layers.roads.primary)
-        add(layers.roads.secondary); add(layers.roads.tertiary); add(layers.roads.minor)
-        add(layers.roads.service); add(layers.roads.path); add(layers.roads.rail)
-        add(layers.roads.casing); add(layers.roads.marking)
-        // The biomes are baked into the overview zooms' tiles, and the zoom
-        // they stop at decides which tiles carry them at all.
-        for color in layers.biomes.colors { add(color) }
-        out.append(Float(layers.biomes.maximumTileZoom))
-        out.append(Float(layers.biomes.coverMinimumTileZoom))
-        // The overview's road network, baked into the same tiles.
-        add(layers.overviewRoads.major); add(layers.overviewRoads.minor)
-        out.append(contentsOf: [layers.overviewRoads.majorWidthPoints, layers.overviewRoads.minorWidthPoints,
-                                Float(layers.overviewRoads.majorMaximumRank), Float(layers.overviewRoads.maximumTileZoom)])
+        func add(_ layers: LayerStyles) {
+            add(layers.land); add(layers.water); add(layers.wood); add(layers.grass)
+            add(layers.farmland); add(layers.ice); add(layers.sand); add(layers.wetland)
+            add(layers.park); add(layers.residential); add(layers.industrial)
+            add(layers.boundary); add(layers.aeroway)
+            add(layers.roads.motorway); add(layers.roads.trunk); add(layers.roads.primary)
+            add(layers.roads.secondary); add(layers.roads.tertiary); add(layers.roads.minor)
+            add(layers.roads.service); add(layers.roads.path); add(layers.roads.rail)
+            add(layers.roads.casing); add(layers.roads.marking)
+            // The biomes are baked into the overview zooms' tiles, and the
+            // zoom they stop at decides which tiles carry them at all.
+            for color in layers.biomes.colors { add(color) }
+            out.append(Float(layers.biomes.maximumTileZoom))
+            out.append(Float(layers.biomes.coverMinimumTileZoom))
+            // The overview's road network, baked into the same tiles.
+            add(layers.overviewRoads.major); add(layers.overviewRoads.minor)
+            out.append(contentsOf: [layers.overviewRoads.majorWidthPoints, layers.overviewRoads.minorWidthPoints,
+                                    Float(layers.overviewRoads.majorMaximumRank), Float(layers.overviewRoads.maximumTileZoom)])
+        }
+        add(layers)
+        // The globe's palette is baked into the same tiles as the colours
+        // the ground wears on the sphere, none where the theme has none.
+        if let globeLayers {
+            out.append(1)
+            add(globeLayers)
+        } else {
+            out.append(0)
+        }
         add(features.buildingFillColor)
         out.append(features.buildingExtrusion ? 1 : 0)
         out.append(features.labelsStandOnRoofs ? 1 : 0)

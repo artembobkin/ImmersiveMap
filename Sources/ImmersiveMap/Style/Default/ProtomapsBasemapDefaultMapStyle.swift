@@ -70,7 +70,7 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
     /// quad only guards a tile with no earth feature (open ocean, where it
     /// lies under the water fill) and the holes an ocean's islands cut.
     public func backgroundStyle(tileZoom: Int) -> FeatureStyle {
-        polygon(key: 1, color: theme.layers.land)
+        polygon(key: 1, colorOf: \.land)
     }
 
     /// The basemap ships the ocean names as points of `water` from z0, so
@@ -117,7 +117,7 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
 
         switch layer {
         case "earth":
-            return polygon(key: 2, color: theme.layers.land)
+            return polygon(key: 2, colorOf: \.land)
         case "landcover":
             return landcoverStyle(kind: kind, tileZoom: z)
         case "landuse":
@@ -135,7 +135,7 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
             case .line:
                 return waterwayStyle(kind: kind, kindDetail: kindDetail, props: props)
             case .polygon, .unknown:
-                return polygon(key: Self.waterKey, color: theme.layers.water)
+                return polygon(key: Self.waterKey, colorOf: \.water)
             }
         case "buildings":
             if data.geometry == .point {
@@ -168,8 +168,27 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
 
     func polygon(key: UInt8,
                  color: SIMD4<Float>,
+                 zoomFade: ImmersiveMapZoomFade = .none,
+                 sphereColor: SIMD3<Float>? = nil) -> FeatureStyle {
+        .fill(FillStyle(key: key, color: color, zoomFade: zoomFade, sphereColor: sphereColor))
+    }
+
+    /// A fill whose colour is one pick from the palette: the plane's from
+    /// `layers`, the globe's from `globeLayers` where the theme has one,
+    /// so one rule colours both surfaces.
+    func polygon(key: UInt8,
+                 colorOf pick: (ProtomapsBasemapTheme.LayerStyles) -> SIMD4<Float>,
                  zoomFade: ImmersiveMapZoomFade = .none) -> FeatureStyle {
-        .fill(FillStyle(key: key, color: color, zoomFade: zoomFade))
+        polygon(key: key, color: pick(theme.layers), zoomFade: zoomFade, sphereColor: globeColor(pick))
+    }
+
+    /// The colour a pick from the palette wears on the globe, nil where the
+    /// theme has no globe palette (the pick's own colour then).
+    func globeColor(_ pick: (ProtomapsBasemapTheme.LayerStyles) -> SIMD4<Float>) -> SIMD3<Float>? {
+        theme.globeLayers.map { globe in
+            let color = pick(globe)
+            return SIMD3<Float>(color.x, color.y, color.z)
+        }
     }
 
     func line(key: UInt8,
@@ -177,11 +196,13 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
               width: Double,
               dashLength: Double = 0,
               dashGap: Double = 0,
-              minimumWidthPoints: Float = 0) -> FeatureStyle {
+              minimumWidthPoints: Float = 0,
+              sphereColor: SIMD3<Float>? = nil) -> FeatureStyle {
         .line(LineStyle(pass: LinePass(
             key: key,
             color: color,
             minimumWidthPoints: minimumWidthPoints,
+            sphereColor: sphereColor,
             lineGeometry: LineGeometryStyle(lineWidth: width,
                                             lineCapRound: true,
                                             lineJoinRound: true,

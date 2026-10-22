@@ -18,10 +18,14 @@ struct BakedStyle {
         self.pass = pass
     }
 
+    /// A fill's colour on the globe rides in the line style's slot
+    /// (`TileLineStyle.sphereColor`): every style carries one, and the
+    /// sphere's fill vertex reads it the way the ribbons' fragment does.
     init(fill: FillStyle) {
         self.pass = LinePass(key: fill.key,
                              color: fill.color,
                              zoomFade: fill.zoomFade,
+                             sphereColor: fill.sphereColor,
                              lineGeometry: LineGeometryStyle(lineWidth: Self.fillRibbonWidth))
     }
 
