@@ -47,7 +47,7 @@ Built-in Protomaps vector tiles, native iOS (UIKit host), native macOS, SwiftUI 
 
 The map draws the Protomaps basemap, an OpenStreetMap planet in a single PMTiles archive that the engine reads with HTTP range requests, with no tile server in between. The archive hosted for this project is the default, and `.tileArchive(_:headers:)` points the map at any [Protomaps planet build](https://maps.protomaps.com/builds/) or a region cut from one.
 
-The 3D building models are a second PMTiles archive of the same kind, built for this project and hosted on Cloudflare's S3-compatible storage. `.modelArchive(_:headers:)` points the map at another.
+The 3D building models are a second PMTiles archive of the same kind, built for this project and hosted on Cloudflare's S3-compatible storage.
 
 The globe's overview (the biomes, the lakes and the road network of the low zooms) is baked from RESOLVE and Natural Earth data into the package resources, in this repository, so it ships with the engine and loads from no server.
 
@@ -91,7 +91,7 @@ The default map is built from open data, and three of its sources ask to be cred
 
 The attribution badge shows each credit at the zooms its data is on screen, and a source switched off takes its credit with it.
 
-Otherwise the license is MIT and nothing here changes that. The badge ends with "Powered by ImmersiveMap" by default, a courtesy the license does not ask for: `.attributionSettings(showsEngineCredit: false)` drops it. It would just be cool if you mention ImmersiveMap somewhere:
+Otherwise the license is MIT and nothing here changes that. The badge ends with "Powered by ImmersiveMap" by default, a courtesy the license does not ask for, and it can be switched off. It would just be cool if you mention ImmersiveMap somewhere:
 
 ```text
 Maps powered by ImmersiveMap (immersivemap.dev)
