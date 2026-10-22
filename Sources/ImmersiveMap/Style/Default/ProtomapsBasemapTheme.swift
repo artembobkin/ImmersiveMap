@@ -755,21 +755,28 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// The trees of the parks, the gardens, the cemeteries and the
         /// reserves: scattered, with lawn between them.
         public var park: TreeFillStyle?
+        /// The colours of every tree (`ImmersiveMapTreePalette`), drawn at
+        /// frame time: a change needs no re-parse.
+        public var palette: ImmersiveMapTreePalette
 
         public init(wood: TreeFillStyle? = TreeFillStyle(spacingMetres: 9, heightMetres: 7 ... 11),
-                    park: TreeFillStyle? = TreeFillStyle(spacingMetres: 22, heightMetres: 6 ... 10)) {
+                    park: TreeFillStyle? = TreeFillStyle(spacingMetres: 22, heightMetres: 6 ... 10),
+                    palette: ImmersiveMapTreePalette = .default) {
             self.wood = wood
             self.park = park
+            self.palette = palette
         }
 
         public static let `default` = TreeStyles()
 
-        /// Every value in a fixed order, for the fingerprint: a kind that
-        /// grows none contributes zeros.
+        /// Every baked value in a fixed order, for the fingerprint: a
+        /// kind that grows none contributes zeros. The palette is not
+        /// among them.
         var fingerprintComponents: [Float] {
             [wood, park].flatMap { style -> [Float] in
-                guard let style else { return [0, 0, 0] }
-                return [style.spacingMetres, style.minimumHeightMetres, style.maximumHeightMetres]
+                guard let style else { return [0, 0, 0, 0] }
+                return [style.spacingMetres, style.minimumHeightMetres, style.maximumHeightMetres,
+                        style.roadClearanceMetres]
             }
         }
     }
@@ -898,6 +905,11 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
     /// How the ground is darkened where the terrain hides the sky, where
     /// the ground relief stands (`ImmersiveMapTerrainOcclusion`).
     public var terrainOcclusion: ImmersiveMapTerrainOcclusion
+
+    /// The colours of the trees (`TreeStyles.palette`).
+    public var treePalette: ImmersiveMapTreePalette {
+        layers.trees.palette
+    }
 
     public init(labels: LabelStyles = .default,
                 globeLabels: LabelStyles? = nil,

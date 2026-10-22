@@ -8,7 +8,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
     private static let testBlobURL = URL(fileURLWithPath: "/nonexistent/test.ptgeo")
 
     func testPreparedTileCacheFormatVersionIncludesArenaImageRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 156)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 161)
     }
 
     /// Each building's place in the extruded indices travels with the
@@ -591,9 +591,9 @@ final class PreparedTileDiskCodecTests: XCTestCase {
 
         // Slot sequence: 5 ground + 20 road phases x 5 (four structures:
         // tunnel, ground, automobile ground, bridge) + 5 bridge overlay
-        // + 3 extruded + 0 label runs (all sets empty) + 1 road glyphs
-        // + 1 surface label glyphs.
-        XCTAssertEqual(spans.count, 115)
+        // + 3 extruded + 1 trees + 0 label runs (all sets empty) + 1 road
+        // glyphs + 1 surface label glyphs.
+        XCTAssertEqual(spans.count, 116)
 
         // Ground vertices: 3 elements at offset 0, 48 bytes. The three
         // vertices are (0,0), (4096,0), (0,4096) as float2 with styleIndex

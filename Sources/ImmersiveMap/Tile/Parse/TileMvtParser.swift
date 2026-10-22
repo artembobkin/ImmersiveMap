@@ -39,6 +39,7 @@ final class TileMvtParser {
     private let buildingReader: BuildingFeatureReader
     private let groundReader: GroundFeatureReader
     private let lineReader: LineFeatureReader
+    private let treeReader: TreeFeatureReader
     private let tileExtent = Float(TileCoordinateSpace.tileExtentDouble)
 
     init(mapStyle: MapStyleRuntime,
@@ -49,6 +50,7 @@ final class TileMvtParser {
         self.buildingReader = BuildingFeatureReader(options: options)
         self.groundReader = GroundFeatureReader(mapStyle: mapStyle)
         self.lineReader = LineFeatureReader(labelDecisions: labelDecisions, options: options)
+        self.treeReader = TreeFeatureReader(options: options)
         self.options = options
     }
 
@@ -91,7 +93,8 @@ final class TileMvtParser {
             textLabels: readingStageResult.textLabels,
             roadTextLabels: readingStageResult.roadTextLabels,
             parseLayerTimings: readingStageResult.layerTimings,
-            groundIsFlattened: readingStageResult.groundIsFlattened
+            groundIsFlattened: readingStageResult.groundIsFlattened,
+            trees: readingStageResult.trees
         )
     }
 
@@ -240,6 +243,9 @@ final class TileMvtParser {
                                  buildingOutlineIDs: &buildingOutlineIDs,
                                  into: &result)
                 } else if feature.type == .linestring {
+                    if case .road(let road) = style {
+                        treeReader.collect(lines: layerGeometry.lines(of: feature), road: road, tile: tile, into: &result)
+                    }
                     lineReader.read(feature: feature,
                                     featureIndex: featureIndex,
                                     attributes: attributes,
@@ -291,6 +297,13 @@ final class TileMvtParser {
                             buildingTops: buildingTops,
                             buildingOutlineIDs: buildingOutlineIDs,
                             into: &result)
+        // The trees keep off the footprints the tile raises, the roads and
+        // the fills that stand none.
+        treeReader.finish(tile: tile,
+                          footprints: extrudedVolumes.map {
+                              TreeScatter.Footprint(exterior: $0.clippedExterior, interiors: $0.clippedInteriors)
+                          },
+                          into: &result)
 
         result.removeEmptyBuckets()
         return result
@@ -381,6 +394,7 @@ final class TileMvtParser {
         switch style {
         case .fill(let fill):
             result.registerStyle(BakedStyle(fill: fill), key: fill.key, placement: .ground)
+            treeReader.collect(polygons: polygons, fill: fill, tile: tile, into: &result)
             // A fill the flattening will take stays an outline: the
             // flattener tessellates the ground as a whole. A fill drawn
             // among the ground lines is not flattened and is tessellated

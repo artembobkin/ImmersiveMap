@@ -46,7 +46,6 @@ enum RenderGraphFactory {
                                                             shadowMapTextureProvider: shadowMapTextureProvider,
                                                             shadowFallbackTexture: context.shadowFallbackTexture)
         let modelTileSubsystem = ModelTileRenderSubsystem(store: context.modelTileStore,
-                                                          depthBias: settings.modelArchive?.depthBias ?? 0,
                                                           pipeline: context.modelTilePipeline,
                                                           extrudedDepthState: context.extrudedDepthState,
                                                           surfaceMaskState: context.sceneModelSurfaceMaskState,
@@ -102,6 +101,14 @@ enum RenderGraphFactory {
                                                                           extrusion: settings.scene.extrusion,
                                                                           debugOverlayControls: debugOverlayControls,
                                                                           groundReliefStore: context.groundReliefStore)
+        let treeSubsystem = TreeRenderSubsystem(modelStore: context.treeModelStore,
+                                                pipeline: context.treePipeline,
+                                                palette: context.treePalette,
+                                                stencilTestState: context.extrudedStencilTestState,
+                                                groundDepthState: context.groundDepthState,
+                                                depthDisabledState: context.depthDisabledState,
+                                                settings: settings.scene.trees,
+                                                riseSeconds: settings.scene.extrusion.riseSeconds)
         let reliefShadowCasterSubsystem = GroundReliefShadowCasterSubsystem(device: context.metalContext.device,
                                                                             pipeline: context.rasterTilePipeline,
                                                                             depthState: context.extrudedDepthState,
@@ -161,6 +168,10 @@ enum RenderGraphFactory {
             // depth wants.
             flatMapSurfaceSubsystem,
             rasterTileSubsystem,
+            // The trees draw in the buildings' layer, from the buildings'
+            // coverage, and their shadow discs in the roads' layer after
+            // the ground's subsystems have drawn the roads.
+            treeSubsystem,
             // The mountains into the shadow map, beside the buildings.
             reliefShadowCasterSubsystem,
             starfieldSubsystem,

@@ -94,6 +94,12 @@ final class RenderPersistentContext {
     let groundReliefStore: GroundReliefStore?
     let modelTilePipeline: ModelTilePipeline
     let placementStencilPipeline: PlacementStencilPipeline
+    /// The trees of the woods and the parks: their model and their
+    /// pipeline (`TreeRenderSubsystem`).
+    let treeModelStore: TreeModelStore
+    let treePipeline: TreePipeline
+    /// The colours of the trees, as the style states them.
+    let treePalette: ImmersiveMapTreePalette
 
     // MARK: - Avatar and Debug Resources
 
@@ -202,6 +208,10 @@ final class RenderPersistentContext {
                                                         occlusion: styleRuntime.terrainOcclusion,
                                                         device: metal.device)
         self.groundReliefStore?.eventSink = eventSink
+        self.treePipeline = shared.treePipeline
+        self.treePalette = styleRuntime.treePalette
+        self.treeModelStore = TreeModelStore(device: metal.device)
+        self.treeModelStore.eventSink = eventSink
 
         self.avatarSource = avatarSource
         self.markerSource = markerSource

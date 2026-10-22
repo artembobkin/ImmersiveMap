@@ -141,6 +141,8 @@ final class SharedRenderResources {
     let sceneModelPipeline: SceneModelPipeline
     /// The models of the model tiles, see `ModelTilePipeline`.
     let modelTilePipeline: ModelTilePipeline
+    /// The trees of the woods and the parks, see `TreeRenderSubsystem`.
+    let treePipeline: TreePipeline
     /// The flat map's placement prepass, see `PlacementStencilRenderSubsystem`.
     let placementStencilPipeline: PlacementStencilPipeline
 
@@ -353,6 +355,7 @@ final class SharedRenderResources {
         self.horizonPipeline = compiled.horizonPipeline
         self.sceneModelPipeline = compiled.sceneModelPipeline
         self.modelTilePipeline = compiled.modelTilePipeline
+        self.treePipeline = compiled.treePipeline
         self.placementStencilPipeline = compiled.placementStencilPipeline
         self.globeCap = compiled.globeCap
         self.avatars = compiled.avatars
@@ -380,6 +383,7 @@ final class SharedRenderResources {
         let horizonPipeline: HorizonPipeline
         let sceneModelPipeline: SceneModelPipeline
         let modelTilePipeline: ModelTilePipeline
+        let treePipeline: TreePipeline
         let placementStencilPipeline: PlacementStencilPipeline
         let globeCap: GlobeCapRenderer.SharedResources
         let avatars: AvatarsRenderer.SharedResources
@@ -412,6 +416,7 @@ final class SharedRenderResources {
         var horizonPipeline: HorizonPipeline?
         var sceneModelPipeline: SceneModelPipeline?
         var modelTilePipeline: ModelTilePipeline?
+        var treePipeline: TreePipeline?
         var placementStencilPipeline: PlacementStencilPipeline?
         var globeCap: GlobeCapRenderer.SharedResources?
         var avatars: AvatarsRenderer.SharedResources?
@@ -479,7 +484,11 @@ final class SharedRenderResources {
             { placementStencilPipeline = PlacementStencilPipeline(metalDevice: device,
                                                                   pixelFormat: pixelFormat,
                                                                   library: library,
-                                                                  sampleCount: sampleCount) }
+                                                                  sampleCount: sampleCount) },
+            { treePipeline = TreePipeline(metalDevice: device,
+                                          pixelFormat: pixelFormat,
+                                          library: library,
+                                          sampleCount: sampleCount) }
         ]
         DispatchQueue.concurrentPerform(iterations: jobs.count) { jobs[$0]() }
 
@@ -496,6 +505,7 @@ final class SharedRenderResources {
             horizonPipeline: horizonPipeline!,
             sceneModelPipeline: sceneModelPipeline!,
             modelTilePipeline: modelTilePipeline!,
+            treePipeline: treePipeline!,
             placementStencilPipeline: placementStencilPipeline!,
             globeCap: globeCap!,
             avatars: avatars!,

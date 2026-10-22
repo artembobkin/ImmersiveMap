@@ -804,16 +804,17 @@ public extension ImmersiveMapView {
     /// wherever the map draws tiles of the archive's zoom or deeper.
     ///
     /// `depthBias` draws the models nearer in depth than they stand, by a
-    /// share of their distance from the camera, so a model covers the
-    /// map's own building it stands in for where the map could not leave
-    /// it out, and a building well in front of it still covers the model.
-    /// Nil keeps the value set, 0.05 by default. See
+    /// share of their distance from the camera, by the camera zoom, so a
+    /// model covers the map's own building it stands in for where the map
+    /// could not leave it out, and a building well in front of it still
+    /// covers the model. Nil keeps the curve set, by default 0.05 at zoom
+    /// 14 and 0.01 from zoom 15.5. Applies live. See
     /// ``ImmersiveMapSettings/ModelArchiveSettings/depthBias``.
     ///
     /// The budgets are set with `modelArchiveSettings(_:)`.
     public func modelArchive(_ archiveURL: URL,
                              headers: [String: String] = [:],
-                             depthBias: Float? = nil) -> ImmersiveMapView {
+                             depthBias: ImmersiveMapZoomCurve? = nil) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.modelArchive(archiveURL, headers: headers, depthBias: depthBias)
         return view
@@ -1179,6 +1180,33 @@ public extension ImmersiveMapView {
         view.settings = view.settings.buildingExtrusion(buildingsMinimumZoom: buildingsMinimumZoom,
                                                         riseSeconds: riseSeconds,
                                                         risesFromTheGround: risesFromTheGround)
+        return view
+    }
+
+    /// The trees that stand on the woods and the parks of the flat map
+    /// (`ImmersiveMapSettings.TreeSettings`): whether they draw, the
+    /// camera zoom they draw from, the zoom from which every tree of a
+    /// tile draws (thinned below it), the zoom from which they draw in
+    /// their near detail, and the most a tile keeps. An omitted value is
+    /// left as configured:
+    ///
+    ///     ImmersiveMapView()
+    ///         .trees(minimumZoom: 14, fullDensityZoom: 17)   // thinned until zoom 17
+    ///         .trees(isEnabled: false)
+    ///
+    /// `isEnabled` and `maximumPerTile` are baked into the prepared
+    /// tiles, the rest applies live.
+    public func trees(isEnabled: Bool? = nil,
+                      minimumZoom: Double? = nil,
+                      fullDensityZoom: Double? = nil,
+                      nearDetailZoom: Double? = nil,
+                      maximumPerTile: Int? = nil) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.trees(isEnabled: isEnabled,
+                                            minimumZoom: minimumZoom,
+                                            fullDensityZoom: fullDensityZoom,
+                                            nearDetailZoom: nearDetailZoom,
+                                            maximumPerTile: maximumPerTile)
         return view
     }
 

@@ -58,7 +58,8 @@ final class TilePreparedDataBuilder {
                                                buildingAnchors: parsedTile.drawingExtruded.buildingAnchors),
             textLabels: textLabels,
             roadLabels: roadLabels,
-            surfaceLabels: surfaceLabels
+            surfaceLabels: surfaceLabels,
+            trees: parsedTile.trees
         )
         return PreparedTileLoadResult(preparedTile: preparedTile,
                                       parseLayerTimings: parsedTile.parseLayerTimings)

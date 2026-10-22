@@ -146,6 +146,9 @@ struct PreparedTileCPU: Sendable {
     let textLabels: TextLabelSet
     let roadLabels: RoadLabels
     var surfaceLabels: SurfaceLabelSet = .empty
+    /// The tile's trees, sorted by priority (`TreeScatter`), the arena
+    /// slot `treeInstances`.
+    var trees: [TreeInstance] = []
 
     /// Where the edge lines start in each road layer's indices
     /// (`GeometryLayer.edgeLineIndexStart`), in the arena's layer order:

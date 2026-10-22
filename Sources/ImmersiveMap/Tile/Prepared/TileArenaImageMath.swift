@@ -52,6 +52,7 @@ struct TileArenaImagePlan: Sendable {
         case styleZoomFades([SIMD2<Float>])
         case lineStyles([TileLineStyle])
         case labelVertices([LabelVertex])
+        case treeInstances([TreeInstance])
     }
 
     /// Payloads and spans run in lockstep with the schema's slot sequence:
@@ -104,6 +105,8 @@ enum TileArenaImageMath {
                                       vertexCount: preparedTile.extruded.vertices.count)
             case .extrudedStyles:
                 builder.append(.styles(preparedTile.extruded.styles))
+            case .treeInstances:
+                builder.append(.treeInstances(preparedTile.trees))
             case .glyphRunVertices(let run):
                 builder.append(.labelVertices(preparedTile.textLabels.glyphRuns[run].localGlyphVertices))
             case .poiIconRunVertices(let run):
@@ -159,6 +162,8 @@ enum TileArenaImageMath {
         case .lineStyles(let values):
             values.withUnsafeBytes(body)
         case .labelVertices(let values):
+            values.withUnsafeBytes(body)
+        case .treeInstances(let values):
             values.withUnsafeBytes(body)
         }
     }
@@ -234,6 +239,8 @@ enum TileArenaImageMath {
                 return (values.count * MemoryLayout<TileLineStyle>.stride, values.count)
             case .labelVertices(let values):
                 return (values.count * MemoryLayout<LabelVertex>.stride, values.count)
+            case .treeInstances(let values):
+                return (values.count * MemoryLayout<TreeInstance>.stride, values.count)
             }
         }
     }

@@ -76,6 +76,10 @@ public protocol ImmersiveMapVectorTileStyle: Sendable {
     /// the ground relief stands. Drawn at frame time, not part of the
     /// cache fingerprint. The default is the built-in theme's.
     var terrainOcclusion: ImmersiveMapTerrainOcclusion { get }
+    /// The colours of the trees on the woods and the parks. Drawn at frame
+    /// time, not part of the cache fingerprint. The default is the
+    /// built-in theme's.
+    var treePalette: ImmersiveMapTreePalette { get }
     /// The style's identity: the namespace its label identities are minted
     /// in, so two styles never share a label across tiles. The default is
     /// one shared namespace for styles that state none.
@@ -110,6 +114,10 @@ public extension ImmersiveMapVectorTileStyle {
 
     var terrainOcclusion: ImmersiveMapTerrainOcclusion {
         ProtomapsBasemapTheme.default.terrainOcclusion
+    }
+
+    var treePalette: ImmersiveMapTreePalette {
+        ProtomapsBasemapTheme.default.treePalette
     }
 
     var styleID: String {

@@ -270,6 +270,7 @@ final class MetalTileFactory: @unchecked Sendable {
                                             indexType: extrudedIndices.indexType,
                                             buildingRanges: buildingRanges,
                                             buildingAnchors: buildingAnchors)
+        let trees = cursor.takeView(.treeInstances)
 
         let textLabelBuffers = takeTextLabelSet(textLabels, cursor: &cursor)
         let roadGlyphVertices = cursor.takeView(.roadLabelGlyphVertices)
@@ -305,7 +306,8 @@ final class MetalTileFactory: @unchecked Sendable {
                            textLabels: textLabelBuffers,
                            roadLabels: roadLabelBuffers,
                            surfaceLabels: SurfaceLabels(labels: surfaceLabels,
-                                                        vertices: surfaceLabelVertices))
+                                                        vertices: surfaceLabelVertices),
+                           trees: trees)
     }
 
     private static func takeGeometryLayer(_ layerID: TileArenaGeometryLayerID,

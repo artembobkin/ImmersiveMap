@@ -300,6 +300,13 @@ final class DebugOverlayHUDView: NSView {
     private let globeLightSoftnessSlider = NSSlider()
     private let globeLightNightColorLabel = NSTextField(labelWithString: "")
     private let globeLightNightColorWell = NSColorWell(style: .default)
+    /// The 3D buildings tab: the depth bias of the buildings' models from
+    /// the model archive, over the zoom (`ModelArchiveSettings.depthBias`),
+    /// a note in place of the graph on a map without an archive.
+    private let modelsGroupLabel = NSTextField(labelWithString: "3D building models")
+    private let modelDepthBiasLabel = NSTextField(labelWithString: "")
+    private let modelDepthBiasGraph = DebugOverlayZoomCurveView()
+    private let modelsAbsentLabel = NSTextField(labelWithString: "No model archive on this map")
 
     private let atmosphereGroupLabel = NSTextField(labelWithString: "Atmosphere")
     private let atmosphereEnabledLabel = NSTextField(labelWithString: "")
@@ -403,6 +410,8 @@ final class DebugOverlayHUDView: NSView {
     private var fogSettings = ImmersiveMapSettings.FogSettings()
     private var atmosphereSettings = ImmersiveMapSettings.AtmosphereSettings()
     private var globeLightSettings = ImmersiveMapSettings.GlobeLightSettings()
+    /// The models' depth bias, nil on a map without a model archive.
+    private var modelDepthBias: ImmersiveMapZoomCurve?
     private var plainGroundFogSettings = ImmersiveMapSettings.GroundFogSettings()
     private var mountainGroundFogSettings: ImmersiveMapSettings.GroundFogSettings?
     /// Which air the Air group's controls show and edit: the mountains'
@@ -454,7 +463,7 @@ final class DebugOverlayHUDView: NSView {
         case .stats: .stats
         case .tiles: .tiles
         case .relief, .occlusion: .relief
-        case .labels, .light, .shadows, .sky, .globe, .air, .map, .export: []
+        case .labels, .light, .shadows, .sky, .globe, .air, .map, .buildingModels, .export: []
         }
     }
     /// The labels' reach by camera zoom, on every edit.
@@ -486,6 +495,8 @@ final class DebugOverlayHUDView: NSView {
     var onFogSettingsChanged: ((ImmersiveMapSettings.FogSettings) -> Void)?
     var onAtmosphereSettingsChanged: ((ImmersiveMapSettings.AtmosphereSettings) -> Void)?
     var onGlobeLightSettingsChanged: ((ImmersiveMapSettings.GlobeLightSettings) -> Void)?
+    /// The models' depth bias dragged to.
+    var onModelDepthBiasChanged: ((ImmersiveMapZoomCurve) -> Void)?
     var onGroundFogSettingsChanged: ((ImmersiveMapSettings.GroundFogSettings) -> Void)?
     /// The air over the mountains dragged to, nil when switched off.
     var onMountainGroundFogSettingsChanged: ((ImmersiveMapSettings.GroundFogSettings?) -> Void)?
@@ -542,7 +553,7 @@ final class DebugOverlayHUDView: NSView {
         [statsGroupLabel, tilesGroupLabel, reliefGroupLabel, reliefLoadingGroupLabel, reliefMemoryGroupLabel, reliefTilesGroupLabel,
          surroundingsGroupLabel, baseLabelsGroupLabel, labelDistanceGroupLabel,
          lightGroupLabel, shadowsGroupLabel, hillshadeGroupLabel, occlusionGroupLabel, fogGroupLabel, groundFogGroupLabel,
-         atmosphereGroupLabel, globeLightGroupLabel,
+         atmosphereGroupLabel, globeLightGroupLabel, modelsGroupLabel,
          controlsGroupLabel, ringRulesGroupLabel,
          exportGroupLabel].forEach(configureGroupLabel)
 
@@ -654,6 +665,13 @@ final class DebugOverlayHUDView: NSView {
                         range: DebugOverlayGlobeLightSettingsPlanner.softnessRange,
                         action: #selector(globeLightSoftnessSliderChanged))
         configureColorWell(globeLightNightColorWell, action: #selector(globeLightNightColorWellChanged))
+        configureControlLabel(modelDepthBiasLabel, text: "")
+        configureControlLabel(modelsAbsentLabel, text: "No model archive on this map")
+        modelDepthBiasGraph.axes = DebugOverlayModelArchiveSettingsPlanner.depthBiasAxes
+        modelDepthBiasGraph.valueText = DebugOverlayModelArchiveSettingsPlanner.depthBiasText
+        modelDepthBiasGraph.onChange = { [weak self] curve in
+            self?.publish(modelDepthBias: curve)
+        }
         configureControlLabel(atmosphereEnabledLabel, text: "Enabled")
         configureControlLabel(atmosphereColorLabel, text: "Colour")
         configureControlLabel(atmosphereIntensityLabel, text: "")
@@ -935,6 +953,7 @@ final class DebugOverlayHUDView: NSView {
          globeLightStrengthLabel, globeLightStrengthGraph,
          globeLightSoftnessLabel, globeLightSoftnessSlider,
          globeLightNightColorLabel, globeLightNightColorWell,
+         modelsGroupLabel, modelDepthBiasLabel, modelDepthBiasGraph, modelsAbsentLabel,
          atmosphereGroupLabel, atmosphereEnabledLabel, atmosphereEnabledSwitch,
          atmosphereColorLabel, atmosphereColorWell,
          atmosphereIntensityLabel, atmosphereIntensitySlider,
@@ -983,6 +1002,7 @@ final class DebugOverlayHUDView: NSView {
             updateGroundFogControls()
             updateAtmosphereControls()
             updateGlobeLightControls()
+            updateModelControls()
             updateShadowControls()
             updateHillshadeFadeControls()
         }
@@ -1492,6 +1512,17 @@ final class DebugOverlayHUDView: NSView {
         needsLayout = true
     }
 
+    /// The models group reflects the live depth bias, nil on a map without
+    /// a model archive.
+    func apply(modelDepthBias: ImmersiveMapZoomCurve?) {
+        guard self.modelDepthBias != modelDepthBias else {
+            return
+        }
+        self.modelDepthBias = modelDepthBias
+        updateModelControls()
+        needsLayout = true
+    }
+
     func apply(atmosphereSettings: ImmersiveMapSettings.AtmosphereSettings) {
         guard self.atmosphereSettings != atmosphereSettings else {
             return
@@ -1646,6 +1677,9 @@ final class DebugOverlayHUDView: NSView {
         if tab.shows(.map) {
             cursor = layoutControlsGroup(at: cursor, contentWidth: contentWidth)
         }
+        if tab.shows(.buildingModels) {
+            cursor = layoutModelsGroup(at: cursor, contentWidth: contentWidth)
+        }
         if tab.shows(.export) {
             cursor = layoutExportGroup(at: cursor, contentWidth: contentWidth, constrainedSize: constrainedSize)
         }
@@ -1792,6 +1826,19 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutFullWidthRow(globeLightStrengthGraph, at: cursor, contentWidth: contentWidth, height: Layout.graphHeight)
         cursor = layoutControlRow(globeLightSoftnessLabel, globeLightSoftnessSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(globeLightNightColorLabel, globeLightNightColorWell, at: cursor, contentWidth: contentWidth)
+        return cursor + Layout.groupSpacing
+    }
+
+    /// The buildings' 3D models from the model archive: their depth bias
+    /// on a graph over the zoom, or a note on a map without an archive.
+    private func layoutModelsGroup(at top: CGFloat, contentWidth: CGFloat) -> CGFloat {
+        var cursor = layoutGroupHeader(modelsGroupLabel, at: top, contentWidth: contentWidth)
+        if modelDepthBias == nil {
+            cursor = layoutFullWidthRow(modelsAbsentLabel, at: cursor, contentWidth: contentWidth, height: Layout.graphTitleHeight)
+        } else {
+            cursor = layoutFullWidthRow(modelDepthBiasLabel, at: cursor, contentWidth: contentWidth, height: Layout.graphTitleHeight)
+            cursor = layoutFullWidthRow(modelDepthBiasGraph, at: cursor, contentWidth: contentWidth, height: Layout.graphHeight)
+        }
         return cursor + Layout.groupSpacing
     }
 
@@ -2284,6 +2331,15 @@ final class DebugOverlayHUDView: NSView {
         globeLightSoftnessLabel.stringValue = DebugOverlayGlobeLightSettingsPlanner.softnessTitle(light.terminatorSoftness)
         globeLightNightColorWell.color = Self.color(light.nightColor)
         globeLightNightColorWell.isEnabled = light.isEnabled
+    }
+
+    private func updateModelControls() {
+        let depthBias = modelDepthBias ?? ImmersiveMapSettings.ModelArchiveSettings.defaultDepthBias
+        modelDepthBiasGraph.curve = depthBias
+        modelDepthBiasGraph.cameraZoom = groundFogCameraZoom
+        modelDepthBiasGraph.isEnabled = modelDepthBias != nil
+        modelDepthBiasLabel.stringValue = DebugOverlayModelArchiveSettingsPlanner.depthBiasTitle(depthBias,
+                                                                                               cameraZoom: groundFogCameraZoom)
     }
 
     private func updateTerrainSurroundingsControls() {
@@ -2892,6 +2948,14 @@ final class DebugOverlayHUDView: NSView {
         updateGlobeLightControls()
         needsLayout = true
         onGlobeLightSettingsChanged?(settings)
+    }
+
+    private func publish(modelDepthBias curve: ImmersiveMapZoomCurve) {
+        guard modelDepthBias != nil else { return }
+        modelDepthBias = curve
+        updateModelControls()
+        needsLayout = true
+        onModelDepthBiasChanged?(curve)
     }
 
     private func publish(atmosphereSettings settings: ImmersiveMapSettings.AtmosphereSettings) {

@@ -62,19 +62,20 @@ private struct MapScreen: View {
             // 1, the area closes in on the city between zoom 1 and 2, and
             // from zoom 2 on a pull that grows with the distance draws the
             // camera back into it, while a drag is still under way too.
-//            .cameraBounds(southWest: GeoCoordinate(latitude: 55.57, longitude: 37.36),
-//                          northEast: GeoCoordinate(latitude: 55.92, longitude: 37.86),
-//                          pullZoomRange: 1...2,
-//                          pullCurve: .easeInOut,
-//                          edgeBehavior: .elastic(maximumStretch: 200, pullHalfLife: 0.35, pullProgression: 2))
+            //.cameraBounds(southWest: GeoCoordinate(latitude: 55.57, longitude: 37.36),
+            //              northEast: GeoCoordinate(latitude: 55.92, longitude: 37.86),
+            //              pullZoomRange: 1...2,
+            //              pullCurve: .easeInOut,
+            //              edgeBehavior: .elastic(maximumStretch: 200, pullHalfLife: 0.35, pullProgression: 2))
             // The landmarks of the centre of Moscow, from the model archive:
             // loaded by tile as the camera moves, each in place of the map's
             // own building once it is there.
-            // The depth bias is the share of a model's distance from the
-            // camera it is drawn nearer by, so it covers the map's own
-            // building under it in the tiles that could not leave it out.
-            // The value to tune by eye: 0 turns it off.
-            .modelArchive(devModelArchive, depthBias: 0.05)
+            // The depth bias, the share of a model's distance from the
+            // camera it is drawn nearer by so it covers the map's own
+            // building under it in the tiles that could not leave it out,
+            // is left at its default curve over the zoom and tuned by eye
+            // on the debug panel's 3D buildings tab.
+            .modelArchive(devModelArchive)
             // A tileset under development is rebuilt and re-served under the
             // same coordinates, so a warm disk cache would keep showing the
             // previous build. Every launch here starts from the network.
@@ -96,16 +97,15 @@ private struct MapScreen: View {
     /// for. Outside that box the server answers with no tile and the map
     /// is empty by construction, not by a fault in the engine, so a start
     /// position over an uncovered city reads as a bug that is not there.
-    /// The Matterhorn's summit from the north, the camera tilted to the
-    /// horizon over the ridges toward Italy: the ground relief's test
-    /// view, with Swiss lidar terrain, the far texture bands at the
-    /// horizon and the air over them. Bearing and pitch in radians.
+    /// The centre of Moscow from above, the Kremlin at the middle of the
+    /// screen at a street zoom: the city's buildings, roads and labels.
+    /// Bearing and pitch in radians.
     private static let start = ImmersiveMapCameraPosition(
-        latitudeDegrees: 45.978,
-        longitudeDegrees: 7.654,
-        zoom: 12.68,
-        bearing: -0.086,
-        pitch: 1.263
+        latitudeDegrees: 55.752,
+        longitudeDegrees: 37.618,
+        zoom: 14.5,
+        bearing: 0,
+        pitch: 0
     )
 }
 

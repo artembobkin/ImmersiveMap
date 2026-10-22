@@ -181,6 +181,13 @@ struct TileBuffers {
     let textLabels: TextLabelSet
     let roadLabels: RoadLabels
     var surfaceLabels: SurfaceLabels = .empty
+    /// The tile's trees (`TreeInstance`), sorted by priority, nil for
+    /// none.
+    var trees: TileBufferView? = nil
+
+    var treesCount: Int {
+        trees?.count ?? 0
+    }
 }
 
 /// The labels painted on the map: one record per label and its glyph quads

@@ -13,6 +13,8 @@ enum TileArenaSlot: Equatable, Sendable {
     case extrudedVertices
     case extrudedIndices
     case extrudedStyles
+    /// The tile's trees (`TreeInstance`), sorted by priority.
+    case treeInstances
     case glyphRunVertices(run: Int)
     case poiIconRunVertices(run: Int)
     case routeShieldRunVertices(run: Int)
@@ -54,9 +56,9 @@ struct TileArenaTextRunCounts: Equatable, Sendable {
 /// `PreparedTileDiskCaching.preparedFormatVersion`.
 enum TileArenaSchema {
     /// The canonical slot sequence: ground, road buckets x phases (in their
-    /// draw orders), bridge overlay, extruded, the text label set (glyph
-    /// runs, then POI icon runs, then route sign plates), road label glyphs,
-    /// the glyphs of the labels painted on the map.
+    /// draw orders), bridge overlay, extruded, the trees, the text label
+    /// set (glyph runs, then POI icon runs, then route sign plates), road
+    /// label glyphs, the glyphs of the labels painted on the map.
     static func slots(text: TileArenaTextRunCounts) -> [TileArenaSlot] {
         var slots: [TileArenaSlot] = []
         appendGeometryLayer(.ground, to: &slots)
@@ -70,6 +72,7 @@ enum TileArenaSchema {
         slots.append(.extrudedVertices)
         slots.append(.extrudedIndices)
         slots.append(.extrudedStyles)
+        slots.append(.treeInstances)
 
         for run in 0..<text.glyphRunCount {
             slots.append(.glyphRunVertices(run: run))
@@ -120,6 +123,8 @@ enum TileArenaSchema {
             return MemoryLayout<SIMD2<Float>>.stride
         case .geometryLineStyles:
             return MemoryLayout<TileLineStyle>.stride
+        case .treeInstances:
+            return MemoryLayout<TreeInstance>.stride
         case .glyphRunVertices, .poiIconRunVertices, .routeShieldRunVertices,
              .roadLabelGlyphVertices, .surfaceLabelVertices:
             return MemoryLayout<LabelVertex>.stride

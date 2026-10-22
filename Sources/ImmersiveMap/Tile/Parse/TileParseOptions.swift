@@ -47,6 +47,12 @@ struct TileParseOptions: Equatable {
     /// flattened tile then take a vertex at every crossing of the
     /// flattening's grid, so they follow the relief as the ground does.
     var groundReliefEnabled: Bool
+    /// The coarsest tile zoom that stands trees on its woods and parks,
+    /// the buildings' (`TreeCoveragePlanner.minimumSourceZoom(settings:)`),
+    /// nil with the trees off: a coarser tile places none.
+    var treeMinimumSourceZoom: Int?
+    /// The most trees a tile keeps (`TreeSettings.maximumPerTile`).
+    var treeMaximumPerTile: Int
 
     static let groundFlatteningGridRange = 1 ... 256
 
@@ -57,11 +63,15 @@ struct TileParseOptions: Equatable {
          groundFlatteningFromTileZoom: Int? = nil,
          groundFlatteningGrid: Int = 16,
          groundFlatteningGridByTileZoom: [Int: Int] = [:],
-         groundReliefEnabled: Bool = false) {
+         groundReliefEnabled: Bool = false,
+         treeMinimumSourceZoom: Int? = nil,
+         treeMaximumPerTile: Int = 0) {
         self.labelsEnabled = labelsEnabled
         self.addTestBorders = addTestBorders
         self.buildingMinimumSourceZoom = buildingMinimumSourceZoom
         self.buildingDeepestSourceZoom = buildingDeepestSourceZoom
+        self.treeMinimumSourceZoom = treeMinimumSourceZoom
+        self.treeMaximumPerTile = max(treeMaximumPerTile, 0)
         self.groundFlatteningFromTileZoom = groundFlatteningFromTileZoom
         self.groundFlatteningGrid = min(max(groundFlatteningGrid, Self.groundFlatteningGridRange.lowerBound),
                                         Self.groundFlatteningGridRange.upperBound)
@@ -111,6 +121,8 @@ struct TileParseOptions: Equatable {
                   groundFlatteningFromTileZoom: settings.tiles.resolvedGroundFlatteningFromTileZoom,
                   groundFlatteningGrid: settings.tiles.groundFlattening.grid,
                   groundFlatteningGridByTileZoom: settings.tiles.groundFlattening.gridByTileZoom,
-                  groundReliefEnabled: settings.tiles.groundRelief.isEnabled)
+                  groundReliefEnabled: settings.tiles.groundRelief.isEnabled,
+                  treeMinimumSourceZoom: TreeCoveragePlanner.minimumSourceZoom(settings: settings),
+                  treeMaximumPerTile: settings.scene.trees.maximumPerTile)
     }
 }

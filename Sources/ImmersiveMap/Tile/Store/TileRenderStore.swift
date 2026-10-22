@@ -50,7 +50,9 @@ final class TileRenderStore: @unchecked Sendable {
             groundReliefEnabled: parseOptions.groundReliefEnabled,
             buildingMinimumSourceZoom: parseOptions.buildingMinimumSourceZoom,
             buildingDeepestSourceZoom: parseOptions.buildingDeepestSourceZoom,
-            overviewTilesEnabled: config.tiles.overview.isEnabled
+            overviewTilesEnabled: config.tiles.overview.isEnabled,
+            treeMinimumSourceZoom: parseOptions.treeMinimumSourceZoom,
+            treeMaximumPerTile: parseOptions.treeMaximumPerTile
         )
         let labelDecisions = TileLabelDecisions(style: styleRuntime.style,
                                                 glyphCoverage: textRenderer.glyphCoverage,

@@ -104,6 +104,7 @@ public extension ProtomapsBasemapTheme {
                                             coverMinimumTileZoom: day.coverMinimumTileZoom)
                 layers.overviewRoads.major = SIMD4<Float>(0.72, 0.58, 0.26, 1)
                 layers.overviewRoads.minor = SIMD4<Float>(0.42, 0.39, 0.30, 1)
+                layers.trees.palette = .night
             }
             .apply { theme in
                 theme.globeLayers = ProtomapsBasemapTheme.default.layers

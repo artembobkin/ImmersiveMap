@@ -226,21 +226,47 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         XCTAssertTrue(plan.requiresRendererRecreation)
     }
 
-    /// The depth bias of the models is kept within its range, and a value
-    /// that is not a number draws the models where they stand.
+    /// The depth bias of the models is a curve over the zoom whose every
+    /// stop is kept within its range, and a stop that is not a number
+    /// draws the models where they stand.
     func testTheModelDepthBiasIsKeptWithinItsRange() {
         typealias Archive = ImmersiveMapSettings.ModelArchiveSettings
         let url = URL(string: "https://tiles.example.com/models.pmtiles")!
 
         XCTAssertEqual(Archive(archiveURL: url).depthBias, Archive.defaultDepthBias)
         XCTAssertEqual(Archive(archiveURL: url, depthBias: -1).depthBias, 0)
-        XCTAssertEqual(Archive(archiveURL: url, depthBias: 3).depthBias, Archive.maximumDepthBias)
-        XCTAssertEqual(Archive(archiveURL: url, depthBias: .nan).depthBias, 0)
+        XCTAssertEqual(Archive(archiveURL: url, depthBias: 3).depthBias, ImmersiveMapZoomCurve(Archive.maximumDepthBias))
+        XCTAssertEqual(Archive(archiveURL: url, depthBias: [12: .nan, 16: 9]).depthBias,
+                       [12: 0, 16: Archive.maximumDepthBias])
         var archive = Archive(archiveURL: url)
         archive.depthBias = 9
-        XCTAssertEqual(archive.depthBias, Archive.maximumDepthBias)
+        XCTAssertEqual(archive.depthBias, ImmersiveMapZoomCurve(Archive.maximumDepthBias))
 
         let kept = ImmersiveMapSettings.default.modelArchive(url, depthBias: 0.02).modelArchive(url)
         XCTAssertEqual(kept.modelArchive?.depthBias, 0.02, "pointing at an archive again keeps the bias set")
+    }
+
+    /// The default bias is there at the models' zoom and down to a trace
+    /// from zoom 15.5, read at the camera's zoom.
+    func testTheDefaultModelDepthBiasFallsByZoom15AndAHalf() {
+        let archive = ImmersiveMapSettings.ModelArchiveSettings(archiveURL: URL(string: "https://tiles.example.com/models.pmtiles")!)
+        XCTAssertEqual(archive.depthBias(atZoom: 13), 0.05)
+        XCTAssertEqual(archive.depthBias(atZoom: 14), 0.05)
+        XCTAssertEqual(archive.depthBias(atZoom: 15.5), 0.01)
+        XCTAssertEqual(archive.depthBias(atZoom: 18), 0.01)
+        XCTAssertGreaterThan(archive.depthBias(atZoom: 14.75), 0.01)
+        XCTAssertLessThan(archive.depthBias(atZoom: 14.75), 0.05)
+    }
+
+    /// A change of the bias alone applies live: the archive client and the
+    /// caches it would rebuild the renderer for are untouched.
+    func testAChangeOfTheModelDepthBiasAloneAppliesLive() {
+        let url = URL(string: "https://tiles.example.com/models.pmtiles")!
+        let oldSettings = ImmersiveMapSettings.default.modelArchive(url)
+        let newSettings = oldSettings.modelArchive(url, depthBias: [14: 0.1, 16: 0])
+        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
+        XCTAssertEqual(plan.changedDomains, [.modelArchive])
+        XCTAssertEqual(plan.actions, [.liveApply])
+        XCTAssertFalse(plan.requiresRendererRecreation)
     }
 }

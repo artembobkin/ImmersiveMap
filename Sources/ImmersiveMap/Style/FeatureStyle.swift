@@ -302,19 +302,68 @@ public struct FillStyle: Sendable {
     /// fill's own. Only the sphere's fills read it: a fill of the street
     /// zooms is never on the sphere.
     public var sphereColor: SIMD3<Float>?
+    /// The trees the fill grows on the flat map, nil for none: a wood or
+    /// a park stands the engine's tree over its polygons (`TreeFillStyle`).
+    public var trees: TreeFillStyle?
+    /// A fill no tree stands on, whatever fill it lies in: the water, a
+    /// pond in a park, a pitch or a lawn. The trees of the fills around
+    /// it keep off its polygons, an island in a lake excepted.
+    public var excludesTrees: Bool
 
     public init(key: UInt8,
                 color: SIMD4<Float>,
                 zoomFade: ImmersiveMapZoomFade = .none,
                 splitsComplexHoles: Bool = false,
                 drawsAmongGroundLines: Bool = false,
-                sphereColor: SIMD3<Float>? = nil) {
+                sphereColor: SIMD3<Float>? = nil,
+                trees: TreeFillStyle? = nil,
+                excludesTrees: Bool = false) {
         self.key = key
         self.color = color
         self.zoomFade = zoomFade
         self.splitsComplexHoles = splitsComplexHoles
         self.drawsAmongGroundLines = drawsAmongGroundLines
         self.sphereColor = sphereColor
+        self.trees = trees
+        self.excludesTrees = excludesTrees
+    }
+}
+
+/// The trees a fill grows: the engine stands its tree model on a lattice
+/// over the fill's polygons, one tree at most in every cell, each moved
+/// within its cell, turned and sized by a hash of the cell, so the same
+/// ground grows the same trees at every parse (`TreeScatter`). The trees
+/// draw on the flat map from the camera zoom the settings name
+/// (`ImmersiveMapSettings.TreeSettings`), thinned at the first zooms, and
+/// keep off the buildings' footprints and the roads. Baked into the
+/// prepared tiles with the rest of the style, so a change re-parses them.
+public struct TreeFillStyle: Sendable, Equatable {
+    /// The distance between neighbouring trees in metres, the lattice's
+    /// cell: 9 for a wood whose crowns touch, 20 and more for the
+    /// scattered trees of a park.
+    public var spacingMetres: Float
+    /// The height of the shortest and the tallest tree in metres: every
+    /// tree takes its own height between the two.
+    public var minimumHeightMetres: Float
+    public var maximumHeightMetres: Float
+    /// How far from a road's edge a tree keeps, in metres, beyond the
+    /// road's own width as the style draws it: the verge no trunk stands
+    /// on, whatever the fill says. Every road of the ground counts, a
+    /// park's paths among them, not the tunnels and the bridges. 3 by
+    /// default.
+    public var roadClearanceMetres: Float
+
+    public init(spacingMetres: Float, heightMetres: ClosedRange<Float>, roadClearanceMetres: Float = 3) {
+        self.spacingMetres = max(spacingMetres, 0.5)
+        self.minimumHeightMetres = max(heightMetres.lowerBound, 0)
+        self.maximumHeightMetres = max(heightMetres.upperBound, self.minimumHeightMetres)
+        self.roadClearanceMetres = max(roadClearanceMetres, 0)
+    }
+
+    /// The lattice's salt: fills of different spacing hash their cells
+    /// apart, so a park inside a wood grows its own trees.
+    var lattice: UInt32 {
+        spacingMetres.bitPattern
     }
 }
 

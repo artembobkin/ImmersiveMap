@@ -42,7 +42,6 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
     static let neighbourRing = 1
 
     private let store: ModelTileStore?
-    private let depthBias: Float
     private let pipeline: ModelTilePipeline
     private let extrudedDepthState: MTLDepthStencilState
     private let surfaceMaskState: MTLDepthStencilState
@@ -63,7 +62,6 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
     /// `store` is nil for a map without a model archive: the subsystem then
     /// does nothing.
     init(store: ModelTileStore?,
-         depthBias: Float,
          pipeline: ModelTilePipeline,
          extrudedDepthState: MTLDepthStencilState,
          surfaceMaskState: MTLDepthStencilState,
@@ -76,7 +74,6 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
         self.store = store
         self.minimumZoom = minimumZoom
         self.riseSeconds = riseSeconds
-        self.depthBias = depthBias
         self.pipeline = pipeline
         self.extrudedDepthState = extrudedDepthState
         self.surfaceMaskState = surfaceMaskState
@@ -247,6 +244,10 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
                                                               shadowMapTexture: shadowMapTextureProvider(),
                                                               fallbackTexture: shadowFallbackTexture)
             GroundFogUniform.bind(GroundFogUniform.resolveForBuildings(frameContext: frameContext), encoder: encoder)
+            // The bias is the frame's settings' at the camera's zoom
+            // (`ModelArchiveSettings.depthBias`), read here so the debug
+            // panel's drag applies live.
+            let depthBias = frameContext.services.settings.modelArchive?.depthBias(atZoom: frameContext.planningZoom) ?? 0
             ModelTileDrawer.draw(renderEncoder: encoder,
                                  cameraUniform: frameContext.cameraUniform,
                                  shadowBinding: shadowBinding,

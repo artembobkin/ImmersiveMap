@@ -26,10 +26,12 @@ struct DebugOverlaySettingsOverride: Equatable {
     /// panel having switched it off, nil no drag.
     var mountainGroundFog: ImmersiveMapSettings.GroundFogSettings??
     var terrainSurroundings: ImmersiveMapSettings.TileSettings.TerrainSurroundingsSettings?
+    /// The models' depth bias, for a map with a model archive.
+    var modelDepthBias: ImmersiveMapZoomCurve?
 
     var isEmpty: Bool {
         shadows == nil && sunDirection == nil && fog == nil && atmosphere == nil && globeLight == nil && groundFog == nil
-            && mountainGroundFog == nil && terrainSurroundings == nil
+            && mountainGroundFog == nil && terrainSurroundings == nil && modelDepthBias == nil
     }
 
     mutating func clear() {
@@ -41,6 +43,7 @@ struct DebugOverlaySettingsOverride: Equatable {
         groundFog = nil
         mountainGroundFog = nil
         terrainSurroundings = nil
+        modelDepthBias = nil
     }
 
     func applied(to settings: ImmersiveMapSettings) -> ImmersiveMapSettings {
@@ -72,6 +75,9 @@ struct DebugOverlaySettingsOverride: Equatable {
         }
         if let terrainSurroundings {
             overridden.tiles.groundRelief.surroundings = terrainSurroundings
+        }
+        if let modelDepthBias {
+            overridden.modelArchive?.depthBias = modelDepthBias
         }
         return overridden
     }

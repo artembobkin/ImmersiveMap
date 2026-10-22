@@ -46,8 +46,14 @@ struct PreparedTileCacheIdentity {
     /// must not answer a map that wants the source's land cover, and vice
     /// versa.
     var overviewTilesEnabled: Bool = true
+    /// The coarsest tile zoom that stands trees and the most a tile keeps
+    /// (`TileParseOptions.treeMinimumSourceZoom`, `treeMaximumPerTile`):
+    /// a tile prepared without its trees must not answer a map that draws
+    /// them, and vice versa.
+    var treeMinimumSourceZoom: Int?
+    var treeMaximumPerTile: Int = 0
     var namespaceComponent: String {
-        return "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)-g\(groundFlatteningFromTileZoom ?? -1)x\(groundFlatteningGrid)\(groundFlatteningGridByTileZoomKey.isEmpty ? "" : "[" + groundFlatteningGridByTileZoomKey + "]")\(groundReliefEnabled ? "r" : "")-e\(buildingMinimumSourceZoom)\(buildingDeepestSourceZoom.map { "m\($0)" } ?? "")-o\(overviewTilesEnabled ? 1 : 0)"
+        return "s\(styleRevision)-u\(String(tileSourceRevision, radix: 16))-t\(textRevision)-l\(labelLanguage.preparedTileCacheNamespaceKey)-f\(labelFallbackPolicy.rawValue)-c\(capitalMaximumZoom)-y\(cityMaximumZoom)-m\(smallSettlementMaximumZoom)-k\(landmarkMinimumZoom)-b\(addTestBorders ? 1 : 0)-n\(labelsEnabled ? 1 : 0)-g\(groundFlatteningFromTileZoom ?? -1)x\(groundFlatteningGrid)\(groundFlatteningGridByTileZoomKey.isEmpty ? "" : "[" + groundFlatteningGridByTileZoomKey + "]")\(groundReliefEnabled ? "r" : "")-e\(buildingMinimumSourceZoom)\(buildingDeepestSourceZoom.map { "m\($0)" } ?? "")-o\(overviewTilesEnabled ? 1 : 0)-w\(treeMinimumSourceZoom ?? -1)x\(treeMaximumPerTile)"
     }
 
     static func tileSourceRevision(for network: ImmersiveMapSettings.TileSettings.NetworkSettings) -> UInt64 {
@@ -995,7 +1001,25 @@ final class PreparedTileDiskCaching {
     // first cover zooms (`ProtomapsBasemapTheme.BiomeStyles.coverFadeInZooms`):
     // the cover fills of a tile at the cover zoom carry a fade in, the
     // land use's cover block included. A v155 tile shows them whole.
-    static let preparedFormatVersion: UInt32 = 156
+    // 157: the arena carries the tile's trees (`TileArenaSlot.treeInstances`,
+    // `TreeInstance`) after the extruded styles: the woods and the parks
+    // of the street zooms stand the engine's tree model. A v156 arena has
+    // no such slot.
+    // 158: the trees keep off the roads of the ground by the fill's
+    // clearance (`TreeFillStyle.roadClearanceMetres`, `TreeScatter`). A
+    // v157 tile stands them on the paths.
+    // 159: the trees keep off the fills that stand none
+    // (`FillStyle.excludesTrees`: the water, the pitches and the lawns),
+    // holes excepted, and off the buildings' courtyards no more. A v158
+    // tile stands them in the ponds.
+    // 160: the trees' lattice is sized by the latitude of the tile's z14
+    // ancestor (`TreeScatter.latitudeZoom`), so a tile and its children
+    // stand the same trees. A v159 tile's trees stand elsewhere than its
+    // children's.
+    // 161: a road's width keeps the trees off at one width on the ground
+    // whatever the tile's zoom (`TreeScatter.Road`). A v160 z14 tile
+    // keeps them off twice as far as its children.
+    static let preparedFormatVersion: UInt32 = 161
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

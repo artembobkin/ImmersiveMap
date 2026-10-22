@@ -308,14 +308,18 @@ extension ProtomapsBasemapDefaultMapStyle {
             // their grounds are courtyards and car parks, not parks.
             return polygon(key: 9, colorOf: \.industrial, zoomFade: fade)
         case "forest", "wood":
-            return polygon(key: 11, colorOf: \.wood, zoomFade: fade)
-        case "park", "garden", "grass", "meadow", "recreation_ground", "cemetery",
-             "golf_course", "pitch", "playground", "dog_park", "zoo",
-             "national_park", "nature_reserve", "scrub", "grassland", "heath",
+            return polygon(key: 11, colorOf: \.wood, zoomFade: fade, trees: colors.trees.wood)
+        case "park", "garden", "recreation_ground", "cemetery", "zoo",
+             "national_park", "nature_reserve", "scrub", "heath",
              "village_green", "camp_site", "picnic_site":
             // One green for all urban greenery, so no two-tone seam where a
-            // park meets the pitch inside it.
-            return polygon(key: 12, colorOf: \.grass, zoomFade: fade)
+            // park meets the pitch inside it. The parks grow the scattered
+            // trees of a park, the open grass of the next case none, and
+            // keeps the park's trees off itself: a pitch in a park is a
+            // pitch.
+            return polygon(key: 12, colorOf: \.grass, zoomFade: fade, trees: colors.trees.park)
+        case "grass", "meadow", "golf_course", "pitch", "playground", "dog_park", "grassland":
+            return polygon(key: 12, colorOf: \.grass, zoomFade: fade, excludesTrees: true)
         case "farmland", "orchard", "allotments", "vineyard", "plant_nursery":
             return polygon(key: 13, colorOf: \.farmland, zoomFade: fade)
         case "wetland":

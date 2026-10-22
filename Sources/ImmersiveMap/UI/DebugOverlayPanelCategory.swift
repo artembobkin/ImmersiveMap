@@ -26,6 +26,9 @@ enum DebugOverlayPanelCategory: Int, CaseIterable {
     /// on the relief (`GroundFogSettings`).
     case air
     case map
+    /// The 3D models of the buildings, from the model archive: their depth
+    /// bias (`ModelArchiveSettings.depthBias`). Nothing else has one.
+    case buildingModels
     case tiles
     case relief
     case export
@@ -42,6 +45,7 @@ enum DebugOverlayPanelCategory: Int, CaseIterable {
         case .globe: "Globe"
         case .air: "Air"
         case .map: "Map"
+        case .buildingModels: "3D buildings"
         case .tiles: "Tiles"
         case .relief: "Relief"
         case .export: "Export"

@@ -20,7 +20,7 @@ import simd
 /// Nothing in them is public: the members are
 /// internal only so that the extensions can share them across files.
 public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
-    static let implementationRevision: UInt32 = 22
+    static let implementationRevision: UInt32 = 24
     /// The style draws what the tile carries and adds no zoom gate of its
     /// own: the basemap already thins every layer per tile level, so a
     /// feature in a tile is a feature on the map. A road shows from the
@@ -47,6 +47,11 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
     /// The theme's darkening where the terrain hides the sky.
     public var terrainOcclusion: ImmersiveMapTerrainOcclusion {
         theme.terrainOcclusion
+    }
+
+    /// The theme's colours of the trees.
+    public var treePalette: ImmersiveMapTreePalette {
+        theme.treePalette
     }
 
     public init(theme: ProtomapsBasemapTheme = .default) {
@@ -135,7 +140,8 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
             case .line:
                 return waterwayStyle(kind: kind, kindDetail: kindDetail, props: props)
             case .polygon, .unknown:
-                return polygon(key: Self.waterKey, colorOf: \.water)
+                // No tree stands in a pond or a river.
+                return polygon(key: Self.waterKey, colorOf: \.water, excludesTrees: true)
             }
         case "buildings":
             if data.geometry == .point {
@@ -169,17 +175,25 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
     func polygon(key: UInt8,
                  color: SIMD4<Float>,
                  zoomFade: ImmersiveMapZoomFade = .none,
-                 sphereColor: SIMD3<Float>? = nil) -> FeatureStyle {
-        .fill(FillStyle(key: key, color: color, zoomFade: zoomFade, sphereColor: sphereColor))
+                 sphereColor: SIMD3<Float>? = nil,
+                 trees: TreeFillStyle? = nil,
+                 excludesTrees: Bool = false) -> FeatureStyle {
+        .fill(FillStyle(key: key, color: color, zoomFade: zoomFade, sphereColor: sphereColor,
+                        trees: trees, excludesTrees: excludesTrees))
     }
 
     /// A fill whose colour is one pick from the palette: the plane's from
     /// `layers`, the globe's from `globeLayers` where the theme has one,
-    /// so one rule colours both surfaces.
+    /// so one rule colours both surfaces. `trees` are the trees the fill
+    /// grows on the plane (`TreeFillStyle`), `excludesTrees` keeps every
+    /// tree off it (`FillStyle.excludesTrees`).
     func polygon(key: UInt8,
                  colorOf pick: (ProtomapsBasemapTheme.LayerStyles) -> SIMD4<Float>,
-                 zoomFade: ImmersiveMapZoomFade = .none) -> FeatureStyle {
-        polygon(key: key, color: pick(theme.layers), zoomFade: zoomFade, sphereColor: globeColor(pick))
+                 zoomFade: ImmersiveMapZoomFade = .none,
+                 trees: TreeFillStyle? = nil,
+                 excludesTrees: Bool = false) -> FeatureStyle {
+        polygon(key: key, color: pick(theme.layers), zoomFade: zoomFade, sphereColor: globeColor(pick),
+                trees: trees, excludesTrees: excludesTrees)
     }
 
     /// The colour a pick from the palette wears on the globe, nil where the

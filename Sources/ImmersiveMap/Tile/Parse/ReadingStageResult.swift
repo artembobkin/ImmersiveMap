@@ -29,6 +29,15 @@ struct ReadingStageResult {
     var bridgePolygonByStyle: [UInt8: [ParsedPolygon]] = [:]
     var bridgeStyles: [UInt8: BakedStyle] = [:]
     var extrudedByStyle: [UInt8: [ParsedExtrudedMesh]] = [:]
+    /// The fills that grow trees, gathered as the layers are read and
+    /// placed once every layer is in (`TreeFeatureReader`).
+    var treeAreas: [TreeScatter.Area] = []
+    /// The roads of the ground the trees keep off, gathered with them, and
+    /// the fills no tree stands on (`FillStyle.excludesTrees`).
+    var treeRoads: [TreeScatter.Road] = []
+    var treeExcludedFills: [TreeScatter.Footprint] = []
+    /// The tile's trees, sorted by priority (`TreeScatter`).
+    var trees: [TreeInstance] = []
     var textLabels: [ParsedTextLabel] = []
     /// The texts of the tile's own water-name labels, so the names the
     /// parser synthesizes at the coarse zooms skip what the tile already

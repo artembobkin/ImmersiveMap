@@ -1661,6 +1661,53 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
     }
 
+    /// The trees that stand on the woods and the parks of the flat map.
+    /// Which fills grow them, how far apart and how tall is the style's
+    /// (`TreeFillStyle`, `ProtomapsBasemapTheme.TreeStyles`): this is when
+    /// and how many. The trees draw from the tiles the buildings draw from
+    /// (`BuildingCoveragePlanner`) and rise out of the ground with them
+    /// (`ExtrusionSettings.riseSeconds`). They stand on the plane, since
+    /// at their zooms the ground relief is not drawn. Each lays a soft
+    /// disc of shadow on the ground under its crown, away from the sun,
+    /// with the darkening of `ShadowSettings` and none while the shadows
+    /// are off. On by default.
+    public struct TreeSettings: Equatable, Sendable {
+        public var isEnabled: Bool
+        /// The camera zoom the trees draw from. Below it there are none.
+        /// Read per frame: the tiles carry their trees from the buildings'
+        /// zoom whatever this says (`TreeCoveragePlanner`). 14 by default,
+        /// the buildings' zoom, so the trees stand up with them.
+        public var minimumZoom: Double
+        /// The camera zoom from which every tree of a tile draws. Below it
+        /// the trees thin out, halving with every zoom away from it, so a
+        /// wood at the first zoom is a scattering that fills in as the
+        /// camera comes closer, and the trees a far zoom shows are among
+        /// the ones a near zoom shows. 14 by default, the trees' own
+        /// zoom, so every tree draws from the first: raise it on a map
+        /// whose woods cost too much at the far zooms.
+        public var fullDensityZoom: Double
+        /// The camera zoom from which the trees draw in their near detail
+        /// (the model's first level), the far level below it. 16.5 by
+        /// default.
+        public var nearDetailZoom: Double
+        /// The most trees a tile keeps, the first by priority, so a dense
+        /// wood never costs more than this many per tile. Part of the
+        /// prepared tiles' identity. 4000 by default.
+        public var maximumPerTile: Int
+
+        public init(isEnabled: Bool = true,
+                    minimumZoom: Double = 14,
+                    fullDensityZoom: Double = 14,
+                    nearDetailZoom: Double = 16.5,
+                    maximumPerTile: Int = 4000) {
+            self.isEnabled = isEnabled
+            self.minimumZoom = minimumZoom
+            self.fullDensityZoom = fullDensityZoom
+            self.nearDetailZoom = nearDetailZoom
+            self.maximumPerTile = max(maximumPerTile, 0)
+        }
+    }
+
     /// The fog that lies on the ground of the flat map and thins upward:
     /// thickest at the ground, its density falling by a factor of e every
     /// `heightMeters`, gathered along each view ray past
@@ -1906,6 +1953,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// the air is `groundFog`.
         public var mountainGroundFog: GroundFogSettings?
         public var extrusion: ExtrusionSettings
+        /// The trees of the woods and the parks (`TreeSettings`).
+        public var trees: TreeSettings
 
         public init(space: SpaceSettings,
                     starfield: StarfieldSettings,
@@ -1916,7 +1965,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     fog: FogSettings = FogSettings(),
                     groundFog: GroundFogSettings = GroundFogSettings(),
                     mountainGroundFog: GroundFogSettings? = GroundFogSettings.mountainAir(from: GroundFogSettings()),
-                    extrusion: ExtrusionSettings = ExtrusionSettings()) {
+                    extrusion: ExtrusionSettings = ExtrusionSettings(),
+                    trees: TreeSettings = TreeSettings()) {
             self.space = space
             self.starfield = starfield
             self.light = light
@@ -1927,6 +1977,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.groundFog = groundFog
             self.mountainGroundFog = mountainGroundFog
             self.extrusion = extrusion
+            self.trees = trees
         }
     }
 
@@ -2134,7 +2185,12 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     public struct ModelArchiveSettings: Equatable, Sendable {
         public static let defaultMemoryBudgetInBytes: Int = 128 * 1_024 * 1_024
         public static let defaultDiskCacheSizeInBytes: Int = 512 * 1_024 * 1_024
-        public static let defaultDepthBias: Float = 0.05
+        /// The bias at the models' zoom, where the map's merged buildings
+        /// reach out of them, and a trace of it from zoom 15.5 on, where
+        /// every building is its own and left out under its model: more
+        /// there would put a model over a tree or a building standing
+        /// right before it.
+        public static let defaultDepthBias: ImmersiveMapZoomCurve = [14: 0.05, 15.5: 0.01]
         public static let maximumDepthBias: Float = 0.25
 
         /// The archive, over HTTP(S) range requests or from disk for a file
@@ -2152,10 +2208,10 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// seen before comes back from without the network.
         public var diskCacheSizeInBytes: Int
         /// How much nearer in depth than it stands a model is drawn, as a
-        /// share of its distance from the camera: 0.05 draws a model two
-        /// kilometres away as if it were a hundred metres closer. Its place on
-        /// the screen does not change, only what it covers and is covered
-        /// by.
+        /// share of its distance from the camera, by the camera zoom
+        /// (`ImmersiveMapZoomCurve`): 0.05 draws a model two kilometres
+        /// away as if it were a hundred metres closer. Its place on the
+        /// screen does not change, only what it covers and is covered by.
         ///
         /// It puts a model over the map's own building it stands in for
         /// where the map could not leave that building out, as in the map
@@ -2164,9 +2220,13 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// the model forward. A building standing well in front of the
         /// model is nearer than that and still covers it. The cost of a
         /// larger share is a model showing over a neighbour that stands
-        /// right before it. Zero draws a model where it stands. Kept
-        /// within 0...`maximumDepthBias`.
-        public var depthBias: Float {
+        /// right before it, a tree in front of a wall among them. Zero
+        /// draws a model where it stands. The default is 0.05 at zoom 14,
+        /// the models' zoom, falling to 0.01 by zoom 15.5, where the tiles
+        /// carry every building apart and the map leaves the ones the
+        /// models stand in for out (`defaultDepthBias`). Every stop is
+        /// kept within 0...`maximumDepthBias`. Applies live.
+        public var depthBias: ImmersiveMapZoomCurve {
             didSet { depthBias = Self.clampedDepthBias(depthBias) }
         }
         /// The camera zoom the models draw from. Below it they are not
@@ -2180,7 +2240,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     requestHeaders: [String: String] = [:],
                     memoryBudgetInBytes: Int = ModelArchiveSettings.defaultMemoryBudgetInBytes,
                     diskCacheSizeInBytes: Int = ModelArchiveSettings.defaultDiskCacheSizeInBytes,
-                    depthBias: Float = ModelArchiveSettings.defaultDepthBias,
+                    depthBias: ImmersiveMapZoomCurve = ModelArchiveSettings.defaultDepthBias,
                     minimumZoom: Double = 14) {
             self.archiveURL = archiveURL
             self.requestHeaders = requestHeaders
@@ -2190,8 +2250,28 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.minimumZoom = minimumZoom
         }
 
+        /// The bias at a camera zoom, within its range.
+        public func depthBias(atZoom zoom: Double) -> Float {
+            Self.clampedDepthBias(depthBias.value(atZoom: zoom))
+        }
+
         private static func clampedDepthBias(_ value: Float) -> Float {
             value.isFinite ? min(max(value, 0), maximumDepthBias) : 0
+        }
+
+        private static func clampedDepthBias(_ curve: ImmersiveMapZoomCurve) -> ImmersiveMapZoomCurve {
+            ImmersiveMapZoomCurve(stops: curve.stops.map {
+                ImmersiveMapZoomCurve.Stop(zoom: $0.zoom, value: clampedDepthBias($0.value))
+            })
+        }
+
+        /// The settings with another bias: what tells a change of the bias
+        /// alone, applied live, from a change of the archive, which
+        /// rebuilds the renderer (`ImmersiveMapSettingsApplicationPlanner`).
+        func withDepthBias(_ depthBias: ImmersiveMapZoomCurve) -> ModelArchiveSettings {
+            var settings = self
+            settings.depthBias = depthBias
+            return settings
         }
     }
 
@@ -2434,7 +2514,7 @@ public extension ImmersiveMapSettings {
     /// `ModelArchiveSettings`.
     func modelArchive(_ archiveURL: URL,
                       headers: [String: String] = [:],
-                      depthBias: Float? = nil) -> ImmersiveMapSettings {
+                      depthBias: ImmersiveMapZoomCurve? = nil) -> ImmersiveMapSettings {
         var settings = self
         var archive = settings.modelArchive ?? ModelArchiveSettings(archiveURL: archiveURL)
         archive.archiveURL = archiveURL
@@ -2967,6 +3047,22 @@ public extension ImmersiveMapSettings {
                 settings.scene.extrusion.riseSeconds = 0
             }
         }
+        return settings
+    }
+
+    /// The trees of the woods and the parks (`TreeSettings`), a nil
+    /// leaving a value as configured.
+    func trees(isEnabled: Bool? = nil,
+               minimumZoom: Double? = nil,
+               fullDensityZoom: Double? = nil,
+               nearDetailZoom: Double? = nil,
+               maximumPerTile: Int? = nil) -> ImmersiveMapSettings {
+        var settings = self
+        if let isEnabled { settings.scene.trees.isEnabled = isEnabled }
+        if let minimumZoom { settings.scene.trees.minimumZoom = minimumZoom }
+        if let fullDensityZoom { settings.scene.trees.fullDensityZoom = fullDensityZoom }
+        if let nearDetailZoom { settings.scene.trees.nearDetailZoom = nearDetailZoom }
+        if let maximumPerTile { settings.scene.trees.maximumPerTile = max(maximumPerTile, 0) }
         return settings
     }
 

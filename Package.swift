@@ -76,6 +76,9 @@ let package = Package(
                 // The overview of the globe laid into the tiles of zooms 0 to 5
                 // (`OverviewTileSource`): copied whole, a PMTiles archive.
                 .copy("Tile/Overview/Resources/overview.pmtiles"),
+                // The tree model the woods and the parks stand
+                // (`TreeModelContents`): copied whole, as the GPU reads it.
+                .copy("Tile/Trees/Resources/tree_broadleaf.immtree"),
             ]
         ),
         .testTarget(
