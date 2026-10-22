@@ -308,9 +308,13 @@ class CameraStateController {
         // not by the zoom: a step that grew with the reach found a ridge
         // at one zoom and stepped over it at the next, and the camera
         // shook between the two answers. A far reach caps the samples and
-        // coarsens the step instead.
-        let farthest = max(reach, 1) * 8
-        let step = max(follow.sampleStepWorld * metresPerWorld, farthest / Double(Self.marchSampleLimit), 0.5)
+        // coarsens the step instead. The march always takes its first
+        // sample: a camera looking straight down has no reach, and a
+        // march that went nowhere fell back to the plain pan, so the eye
+        // rode the hills it looked down on.
+        let texelStep = max(follow.sampleStepWorld * metresPerWorld, 0.5)
+        let farthest = max(reach * 8, texelStep)
+        let step = max(texelStep, farthest / Double(Self.marchSampleLimit))
         var lowReach = 0.0
         var highReach: Double?
         var r = step

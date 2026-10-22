@@ -110,6 +110,39 @@ final class CameraTerrainFollowTests: XCTestCase {
                        "The eye moved over the map by the pan")
     }
 
+    /// Looking straight down the eye has no reach, and the march along
+    /// its ray must still take a sample, one terrain texel long though
+    /// the ray meets the ground under the eye: a pan over a slope keeps
+    /// the eye's altitude, with the slope's rise in the zoom, and never
+    /// falls back to the plain pan that rode the slope.
+    func testAPanLookingStraightDownKeepsTheEyesAltitude() {
+        var settings = ImmersiveMapSettings.default
+        settings.camera.maximumZoom = 22
+        let controller = CameraStateController(settings: settings.camera)
+        controller.setCameraState(ImmersiveMapCameraState(centerWorldMercator: centre, zoom: 13, bearing: 0, pitch: 0))
+        let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: centre.y)
+        let metresPerWorld = ImmersiveMapProjection.earthCircumferenceMeters * cos(latitude)
+        // A slope rising north at a metre in ten.
+        let terrain: (SIMD2<Double>) -> Float? = { [centre] point in Float((centre.y - point.y) * metresPerWorld * 0.1) }
+        var follow = follow(terrainMetres: terrain)
+        // A texel of thirty metres, longer than the march's reach of
+        // nothing.
+        follow.sampleStepWorld = 30 / metresPerWorld
+        controller.terrainFollow = follow
+        let altitudeBefore = follow.eyeHeightMetres(zoom: 13, pitch: 0, latitude: latitude)
+
+        let target = centre + SIMD2<Double>(0, -2000 / metresPerWorld)
+        let followed = controller.followTerrain(from: centre, to: target, follow: follow)
+        XCTAssertEqual(followed.center.y, target.y, accuracy: 0.2 / metresPerWorld, "The point is where the pan put it")
+        XCTAssertGreaterThan(followed.zoom, 13, "The slope's rise is in the zoom")
+        // The height by the zoom is read at the point's own latitude, as
+        // the settle reads it.
+        let latitudeAfter = ImmersiveMapProjection.latitude(fromNormalizedWorldY: followed.center.y)
+        let altitudeAfter = Double(terrain(followed.center) ?? 0)
+            + follow.eyeHeightMetres(zoom: followed.zoom, pitch: 0, latitude: latitudeAfter)
+        XCTAssertEqual(altitudeAfter, altitudeBefore, accuracy: 0.5, "The eye keeps its altitude over the slope")
+    }
+
     /// Onto a mountain higher than the eye, the eye rises: the point looked
     /// at keeps the clearance under the eye.
     func testAPanOntoAMountainLiftsTheEyeToTheClearance() {
