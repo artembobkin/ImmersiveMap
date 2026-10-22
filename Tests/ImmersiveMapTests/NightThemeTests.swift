@@ -21,8 +21,9 @@ final class NightThemeTests: XCTestCase {
         XCTAssertLessThan(night.labels.city.strokeColor.x, 0.1)
         XCTAssertLessThan(night.layers.biomes.temperateBroadleafForest.y, day.layers.biomes.temperateBroadleafForest.y * 0.5,
                           "The biomes sink into the night")
-        XCTAssertGreaterThan(night.layers.biomes.temperateBroadleafForest.y, night.layers.biomes.desert.y,
-                             "A forest stays a greener dark than a desert")
+        let forest = night.layers.biomes.temperateBroadleafForest
+        let desert = night.layers.biomes.desert
+        XCTAssertGreaterThan(forest.y - forest.x, desert.y - desert.x, "A forest stays a greener dark than a desert")
         XCTAssertEqual(night.roadMetrics, day.roadMetrics, "The night changes colours, not the road metrics")
         XCTAssertEqual(night.labelVisibility, day.labelVisibility)
         XCTAssertEqual(night.baseColors.map, night.layers.land, "What no tile paints follows the night's land")
@@ -53,6 +54,7 @@ final class NightThemeTests: XCTestCase {
     }
 
     /// The style reads as `.night` without its type name, like `.default`.
+    @MainActor
     func testTheNightStyleSpellsWithoutItsTypeName() {
         let view = ImmersiveMapView().mapStyle(.night)
         XCTAssertEqual(view.settings.mapStyle, AnyImmersiveMapMapStyle(ProtomapsBasemapMapStyle.night))

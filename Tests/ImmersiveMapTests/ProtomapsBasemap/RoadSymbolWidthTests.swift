@@ -115,13 +115,17 @@ final class RoadSymbolWidthTests: XCTestCase {
     }
 
     func testBordersKeepTheirScreenDashes() {
-        // A border's dash is a screen pattern in points, which is right for
-        // a symbolic line.
+        // A regional border's dash is a screen pattern in points, which is
+        // right for a symbolic line. A national border is the solid one.
         let boundary = style.makeStyle(data: DetFeatureStyleData(layerName: "boundaries",
-                                                                 properties: ["kind": stringValue("country")],
+                                                                 properties: ["kind": stringValue("region")],
                                                                  tile: moscowTile(z: 15)))
         XCTAssertFalse(boundary.dashInTileUnits)
         XCTAssertEqual(boundary.dashLengthPoints, 7.0)
+        let country = style.makeStyle(data: DetFeatureStyleData(layerName: "boundaries",
+                                                                properties: ["kind": stringValue("country")],
+                                                                tile: moscowTile(z: 15)))
+        XCTAssertEqual(country.dashLengthPoints, 0)
     }
 
     func testAFerryIsAPointLockedDashedStroke() {

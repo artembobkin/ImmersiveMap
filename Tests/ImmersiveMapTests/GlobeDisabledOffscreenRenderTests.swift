@@ -15,6 +15,9 @@ final class GlobeDisabledOffscreenRenderTests: XCTestCase {
     func testTheGlobeDisabledMapIsThePlaneAtLowZoom() async throws {
         var settings = ImmersiveMapSettings.default
         settings.scene.starfield.starCount = 0
+        // The atmosphere's halo reaches the corners of a frame at zoom 1:
+        // the corners are read as space, so the air is off.
+        settings.scene.atmosphere.isEnabled = false
         let space = Self.pixel(of: settings.scene.space.clearColor)
         let mapColor = ProtomapsBasemapTheme.default.baseColors.map
         let map = Self.pixel(of: SIMD4<Double>(Double(mapColor.x), Double(mapColor.y), Double(mapColor.z), Double(mapColor.w)))

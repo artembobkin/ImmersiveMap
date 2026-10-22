@@ -348,16 +348,22 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
 
         // The style holds no class back: the basemap's tile levels decide
         // where a road first appears. Sidewalks, crossings, the subway and
-        // an aerialway draw too.
+        // an aerialway draw too. Through the overview's road network zoom
+        // (`OverviewRoadStyles.maximumTileZoom`) the basemap's roads give
+        // way to the network, so the coarse zoom is read without the
+        // overview, where the roads draw as the tiles ship them.
+        let plain = ProtomapsBasemapDefaultMapStyle(theme: Self.themeWithoutTheOverview)
         for (kind, kindDetail) in [("highway", "motorway"), ("major_road", "trunk"), ("major_road", "primary"),
                                    ("ferry", nil), ("major_road", "secondary"), ("major_road", "tertiary"),
                                    ("aeroway", "runway"), ("aeroway", "apron"), ("minor_road", "residential"),
                                    ("minor_road", "service"), ("path", "footway"), ("path", "sidewalk"),
                                    ("path", "crossing"), ("rail", "subway"), ("rail", "rail"),
                                    ("aerialway", "cable_car")] as [(String, String?)] {
-            for zoom in [2, 6, 10, 12, 14, 15] {
+            for zoom in [6, 10, 12, 14, 15] {
                 XCTAssertNotEqual(key(kind, kindDetail, zoom: zoom), 0, "\(kind)/\(kindDetail ?? "") z\(zoom)")
             }
+            XCTAssertNotEqual(makeStyle(plain, layerName: "roads", kind: kind, kindDetail: kindDetail, zoom: 2).key, 0,
+                              "\(kind)/\(kindDetail ?? "") z2 without the overview")
         }
         // A subway in its tunnel draws at the tunnel opacity.
         let subway = makeStyle(style, layerName: "roads", kind: "rail", kindDetail: "subway", zoom: 14,

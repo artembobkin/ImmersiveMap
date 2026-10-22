@@ -103,6 +103,10 @@ final class GlobeCapOffscreenRenderTests: XCTestCase {
         // magenta too, so the disc checks cover cap and tiles alike.
         // The stars twinkle with scene time; a settle loop needs a still sky.
         settings.scene.starfield.starCount = 0
+        // The sun shades the globe and its caps by the subsolar point, which
+        // puts one pole on the night side: the disc checks read the colour
+        // the caps paint, so the light is off.
+        settings.scene.globeLight.isEnabled = false
         return try OffscreenFrameHarness.makeOrSkip(settings: settings)
     }
 

@@ -18,7 +18,12 @@ import XCTest
 final class SceneModelPendingMeshDiagnosticsTests: XCTestCase {
     @MainActor
     func testAFrameReportsTheMeshesItIsStillWaitingFor() async throws {
-        let harness = try OffscreenFrameHarness.makeOrSkip(size: 96)
+        // The counter also reports the model tiles of a model archive on
+        // their way, and the default has one: this scene is the app's own
+        // models alone.
+        var settings = ImmersiveMapSettings.default
+        settings.modelArchive = nil
+        let harness = try OffscreenFrameHarness.makeOrSkip(settings: settings, size: 96)
         harness.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: 0,
                                                              longitudeDegrees: 0,
                                                              zoom: 16))

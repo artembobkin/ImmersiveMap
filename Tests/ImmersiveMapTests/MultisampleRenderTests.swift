@@ -89,6 +89,9 @@ final class MultisampleRenderTests: XCTestCase {
     func testAMultisampledFrameRenders() async throws {
         var settings = ImmersiveMapSettings.default.msaa()
         settings.scene.starfield.starCount = 0
+        // The atmosphere's halo reaches the corners of a frame at zoom 1:
+        // the corners are read as space, so the air is off.
+        settings.scene.atmosphere.isEnabled = false
         let harness = try OffscreenFrameHarness.makeOrSkip(settings: settings)
         harness.setZoom(1.0)
         let frame = try await harness.renderFrame()

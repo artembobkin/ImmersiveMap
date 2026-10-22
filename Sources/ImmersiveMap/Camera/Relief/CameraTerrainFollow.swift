@@ -74,7 +74,9 @@ struct CameraTerrainFollow {
 
     /// The zoom at which the eye stands `metres` over the point it looks
     /// at, within `range`: the height falls with the zoom without a step,
-    /// so the zoom is found by bisection.
+    /// so the zoom is found by bisection. The answer is the side of the
+    /// last halving whose height is not under `metres`: a zoom read for a
+    /// clearance clears it, instead of missing it by the float.
     func zoom(forEyeHeightMetres metres: Double, pitch: Float, latitude: Double, range: ClosedRange<Double>) -> Double {
         var low = range.lowerBound
         var high = range.upperBound
@@ -88,7 +90,7 @@ struct CameraTerrainFollow {
                 high = middle
             }
         }
-        return (low + high) * 0.5
+        return low
     }
 
     /// Whether the eye of the pose keeps its margin over the terrain

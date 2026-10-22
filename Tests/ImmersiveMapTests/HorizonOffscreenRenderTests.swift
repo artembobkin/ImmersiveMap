@@ -165,6 +165,9 @@ final class HorizonOffscreenRenderTests: XCTestCase {
             .mapStyle(ProtomapsBasemapMapStyle(theme: configuration))
         settings.scene.starfield.starCount = 0
         settings.scene.shadows.isEnabled = false
+        // The plane's horizon, not the relief's: on the relief a tile waits
+        // for its terrain, which this frame never serves.
+        settings.tiles.groundRelief.isEnabled = false
         settings.scene.fog = ImmersiveMapSettings.FogSettings()
         settings.scene.groundFog = Self.thickGroundFog(zoom: 14, latitudeDegrees: 48)
         // The tower stands in a z14 tile under a camera at zoom 14: the
@@ -220,15 +223,14 @@ final class HorizonOffscreenRenderTests: XCTestCase {
             return XCTFail("The horizon colour never appeared on the ground column")
         }
         XCTAssertTrue((5 ... 60).contains(lineRow), "The horizon sits near the top of a frame pitched this far: row \(lineRow)")
-        // The far ground begins a few rows under the line, past the far
-        // range's edge, veiled in full by the fog.
-        guard let gapRow = (lineRow ..< min(lineRow + 12, size)).first(where: {
-            Self.distance(frame.pixel(x: groundColumn, y: $0), horizonPixel) > 6
-        }), (gapRow ..< min(gapRow + 12, size)).contains(where: {
+        // The far ground under the line is veiled in full by the fog: the
+        // horizon's colour holds over most of the rows under it, whether the
+        // far range meets the line (the world tile placed under the plan as
+        // the backdrop) or a sliver of the sky shows between the two.
+        let veiledRows = (lineRow + 1 ..< min(lineRow + 24, size)).filter {
             Self.distance(frame.pixel(x: groundColumn, y: $0), horizonPixel) <= 6
-        }) else {
-            return XCTFail("Beside the tower the far ground is veiled")
         }
+        XCTAssertGreaterThanOrEqual(veiledRows.count, 8, "Beside the tower the far ground is veiled")
 
         // The tower's wall on the centre column, across the same rows: its
         // own colour, no fog on it, above and below the line alike.

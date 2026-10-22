@@ -364,7 +364,10 @@ final class DebugOverlayRendererTests: XCTestCase {
             diagnostics: diagnostics
         )
 
-        XCTAssertTrue(lines.contains("frame:42 dt:16.70ms fps:59.9 gpu:5.25ms"))
+        // One value a line, so a reader finds the one they watch.
+        for line in ["frame:42", "dt:16.70ms", "fps:59.9", "gpu:5.25ms"] {
+            XCTAssertTrue(lines.contains(line), line)
+        }
     }
 
     func testOverlayDiagnosticsGroupsStatsAndAddsFPS() {
@@ -405,20 +408,35 @@ final class DebugOverlayRendererTests: XCTestCase {
             "surface:globe transition:0.00 viewport:3298x1996",
             "",
             "[Frame]",
-            "frame:909 dt:67.44ms fps:14.8",
+            "frame:909",
+            "dt:67.44ms",
+            "fps:14.8",
             "memory ram:128.0MB",
             "",
             "[Tiles]",
-            "vis:16 ready:25 req:0 draw:16",
+            "vis:16",
+            "ready:25",
+            "req:0",
+            "draw:16",
             "",
             "[Labels]",
-            "base:181 roadG:0 roadI:0 roadCull:12/34",
+            "base:181",
+            "roadG:0",
+            "roadI:0",
+            "roadCull:12/34",
             "",
             "[Resources]",
-            "buffers:1 textures:3 pipelines:5",
+            "buffers:1",
+            "textures:3",
+            "pipelines:5",
             "",
             "[Globe culling]",
-            "ms:0.07 nodes:85 frustum:15 horizon:33 placed:16 subtree:0",
+            "ms:0.07",
+            "nodes:85",
+            "frustum:15",
+            "horizon:33",
+            "placed:16",
+            "subtree:0",
             "",
             "[Skip]",
             "debugOverlayDisabled,noAvatarContent"

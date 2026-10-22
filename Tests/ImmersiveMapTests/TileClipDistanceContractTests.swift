@@ -120,11 +120,17 @@ final class TileClipDistanceContractTests: XCTestCase {
     }
 
     /// The sphere tile shader: the same clip, one more distance for the
-    /// horizon, no textures and no discard, lit through the shared globe
-    /// surface shading.
+    /// horizon, no textures, lit through the shared globe surface shading.
+    /// The one discard is the ribbons' phases keeping their share of a
+    /// ribbon (kTileSphereRibbonPhase): the fills never discard.
     func testSphereShaderClipsWithSlotDistancesAndNeverDiscards() throws {
         let source = try shaderSource("Tile/Shaders/TileSphere.metal")
-        XCTAssertNil(source.range(of: "discard_fragment"))
+        XCTAssertEqual(source.components(separatedBy: "discard_fragment(").count - 1, 1,
+                       "The ribbon phases discard the other phase's fragments, and nothing else discards")
+        let fragment = try XCTUnwrap(source.range(of: "fragment half4 tileSphereFragmentShader"))
+        let discard = try XCTUnwrap(source.range(of: "discard_fragment("))
+        let lineFields = try XCTUnwrap(source.range(of: "if (kTileSphereLineFields) {", range: fragment.lowerBound ..< source.endIndex))
+        XCTAssertLessThan(lineFields.lowerBound, discard.lowerBound, "The discard sits under the ribbons' branch")
         // The resting sphere carries the four slot clips; the morph adds the
         // unroll's cut as a fifth.
         // The sphere carries NO slot clip distances at all: unique sources

@@ -56,14 +56,14 @@ final class DebugOverlayHUDLiveTileRowsTests: XCTestCase {
         let materializeStarted = await pipeline.waitUntilMaterialized(tile)
         XCTAssertTrue(materializeStarted)
         frame.pacing.requestOneFrame(reason: .tileAvailable)
-        pipeline.completeMaterialize(tile, result: true)
         frame.render()
         panel.tick()
         XCTAssertTrue(frame.pacing.shouldPauseDisplayLink, "the request is consumed, the loop sleeps")
         let changesBeforeLanding = changes.count
 
-        // The loader finishes on its own task; nothing requests a frame,
-        // but the reporter says it moved.
+        // The materialization ends and the loader finishes on its own
+        // task; nothing requests a frame, but the reporter says it moved.
+        pipeline.completeMaterialize(tile, result: true)
         let saved = await pipeline.waitUntilSaved(tile)
         XCTAssertTrue(saved)
         let ready = await reporter.waitUntilRow(for: tile, hasDetail: "ready")

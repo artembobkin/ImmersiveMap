@@ -17,8 +17,8 @@ final class AttributionBadgeViewMacTests: XCTestCase {
         view.subviews.compactMap { $0 as? NSTextField }.first?.attributedStringValue.string
     }
 
-    /// One line, every credit on it before the camera is placed, each
-    /// glyph in a dark halo.
+    /// One line, every credit on it before the camera is placed, the
+    /// terrain's included, each glyph in a dark halo.
     func testTheBadgeIsOneLineOfCredits() throws {
         let settings = ImmersiveMapSettings.default
         let view = AttributionBadgeView(attribution: settings.resolvedAttribution,
@@ -26,7 +26,7 @@ final class AttributionBadgeViewMacTests: XCTestCase {
 
         XCTAssertFalse(view.isHidden)
         XCTAssertEqual(view.subviews.compactMap { $0 as? NSTextField }.count, 1, "One line")
-        XCTAssertEqual(lineText(of: view), "© OpenStreetMap · Biomes © RESOLVE, CC BY 4.0")
+        XCTAssertEqual(lineText(of: view), "© OpenStreetMap · Biomes © RESOLVE, CC BY 4.0 · © Mapterhorn")
         let line = try XCTUnwrap(view.subviews.compactMap { $0 as? NSTextField }.first?.attributedStringValue)
         let halo = try XCTUnwrap(line.attributes(at: 0, effectiveRange: nil)[.shadow] as? NSShadow)
         XCTAssertEqual(halo.shadowBlurRadius, AttributionBadgeView.haloBlurRadius)
@@ -61,7 +61,9 @@ final class AttributionBadgeViewMacTests: XCTestCase {
     }
 
     /// The overview's credit is on the line at the zooms the overview is
-    /// drawn at and off it past them, and the badge narrows with the line.
+    /// drawn at and off it past them, where the terrain's takes its place
+    /// at the zooms the relief rises at, and the badge narrows with the
+    /// line.
     func testACreditLeavesTheLineWithTheZoom() {
         let settings = ImmersiveMapSettings.default
         let view = AttributionBadgeView(attribution: settings.resolvedAttribution,
@@ -72,7 +74,7 @@ final class AttributionBadgeViewMacTests: XCTestCase {
         let widthWithOverview = view.badgeSizeThatFits(boundingSize).width
 
         view.apply(zoom: 12.2)
-        XCTAssertEqual(lineText(of: view), "© OpenStreetMap")
+        XCTAssertEqual(lineText(of: view), "© OpenStreetMap · © Mapterhorn")
         XCTAssertLessThan(view.badgeSizeThatFits(boundingSize).width, widthWithOverview)
 
         view.apply(zoom: 7.9)

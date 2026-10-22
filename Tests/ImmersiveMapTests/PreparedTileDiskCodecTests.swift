@@ -636,10 +636,14 @@ final class PreparedTileDiskCodecTests: XCTestCase {
 
         // Ground line styles: one TileLineStyle for the plain polygon, all
         // zero but the ramp's start alpha, which is one without a ramp
-        // (the twelfth Float32, 1.0 little-endian [0x00, 0x00, 0x80, 0x3F]).
-        XCTAssertEqual(spans[4], TileArenaSpan(byteOffset: 1024, byteCount: 48, elementCount: 1, indexWidth: nil))
+        // (the twelfth Float32, 1.0 little-endian [0x00, 0x00, 0x80, 0x3F]),
+        // and the sphere alpha after it, one too. The sphere colour that
+        // closes the 64 bytes stays zero: a fill never reads it.
+        XCTAssertEqual(spans[4], TileArenaSpan(byteOffset: 1024, byteCount: 64, elementCount: 1, indexWidth: nil))
         XCTAssertEqual(blob[1024..<1068], Data(count: 44))
         XCTAssertEqual(blob[1068..<1072], Data([0x00, 0x00, 0x80, 0x3F]))
+        XCTAssertEqual(blob[1072..<1076], Data([0x00, 0x00, 0x80, 0x3F]))
+        XCTAssertEqual(blob[1076..<1088], Data(count: 12))
 
         // Everything after the ground layer is empty: zero-length spans do
         // not advance the cursor, so the arena ends at the width span's
@@ -653,7 +657,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         XCTAssertEqual(blob[48..<256], Data(count: 208), "Span padding must be deterministic zeros")
         XCTAssertEqual(blob[262..<512], Data(count: 250), "Span padding must be deterministic zeros")
         XCTAssertEqual(blob[776..<1024], Data(count: 248), "Span padding must be deterministic zeros")
-        XCTAssertEqual(blob[1072..<1280], Data(count: 208), "Span padding must be deterministic zeros")
+        XCTAssertEqual(blob[1088..<1280], Data(count: 192), "Span padding must be deterministic zeros")
     }
 
     func testWideIndexGeometrySkipsNarrowingAndRoundTrips() throws {
