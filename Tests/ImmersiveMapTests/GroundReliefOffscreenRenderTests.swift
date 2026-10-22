@@ -123,7 +123,10 @@ final class GroundReliefOffscreenRenderTests: XCTestCase {
         let zoomedOut = try await parkPixels(relief: terrain, lookingAt: Self.tile, building: true, zoom: 15.2,
                                              exaggeration: 1, afterZoom: 17.5, counting: Self.isBuilding)
         XCTAssertGreaterThan(fresh, 1000, "The building shows")
-        XCTAssertEqual(Double(zoomedOut), Double(fresh), accuracy: Double(fresh) * 0.05,
+        // A tenth: a lift kept from the deeper zoom would show the building
+        // many times larger, while the rasterization of two frames differs
+        // by a few percent on a runner's GPU.
+        XCTAssertEqual(Double(zoomedOut), Double(fresh), accuracy: Double(fresh) * 0.1,
                        "The lift holds after a zoom out: \(zoomedOut) pixels against \(fresh) fresh")
     }
 

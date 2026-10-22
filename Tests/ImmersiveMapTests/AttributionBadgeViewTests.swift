@@ -102,7 +102,9 @@ final class AttributionBadgeViewTests: XCTestCase {
         XCTAssertGreaterThan(twoSize.width, oneSize.width)
     }
 
-    /// Size presets must order the rendered badge monotonically.
+    /// Size presets must order the rendered badge monotonically. The
+    /// width is read in a frame wide enough for every credit at every
+    /// preset: a line cut at the frame's edge is the frame's width.
     func testSizePresetsScaleTheBadge() {
         func badgeSize(_ size: ImmersiveMapSettings.AttributionSettings.Size) -> CGSize {
             let settings = ImmersiveMapSettings.default
@@ -110,7 +112,7 @@ final class AttributionBadgeViewTests: XCTestCase {
                 attribution: settings.resolvedAttribution,
                 settings: ImmersiveMapSettings.AttributionSettings(size: size)
             )
-            return view.sizeThatFits(boundingSize)
+            return view.sizeThatFits(CGSize(width: 1600, height: 400))
         }
 
         let small = badgeSize(.small)
