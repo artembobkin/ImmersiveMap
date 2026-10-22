@@ -10,7 +10,7 @@ final class NightThemeTests: XCTestCase {
     /// The night is its own palette, baked into its own tiles: a dark land
     /// and water, light grey labels, the globe's biomes sunk into the dark,
     /// with the day's metrics and visibility.
-    func testTheNightPaletteIsDarkAndItsOwnCacheIdentity() {
+    func testTheNightPaletteIsDarkAndItsOwnCacheIdentity() throws {
         let day = ProtomapsBasemapTheme.default
         let night = ProtomapsBasemapTheme.night
 
@@ -28,6 +28,17 @@ final class NightThemeTests: XCTestCase {
         let desert = night.layers.biomes.desert
         XCTAssertGreaterThan(forest.y - forest.x, desert.y - desert.x, "A forest stays a greener dark than a desert")
         XCTAssertEqual(night.roadMetrics, day.roadMetrics, "The night changes colours, not the road metrics")
+        let plate = try XCTUnwrap(night.routeShields.fallback)
+        XCTAssertLessThan(plate.fillColor.x, 0.7, "A white plate is a grey one in the night")
+        XCTAssertGreaterThan(plate.fillColor.x, 0.4)
+        XCTAssertEqual(plate.textColor, day.routeShields.fallback?.textColor, "A dark number stays")
+        let russia = try XCTUnwrap(night.routeShields.rules.first { $0.network == "ru:national" }?.appearance)
+        let dayRussia = try XCTUnwrap(day.routeShields.rules.first { $0.network == "ru:national" }?.appearance)
+        XCTAssertLessThan(russia.fillColor.x, dayRussia.fillColor.x, "The red plate is a dark red")
+        XCTAssertGreaterThan(russia.fillColor.x, russia.fillColor.y * 3, "and still red")
+        XCTAssertLessThan(russia.textColor.x, 1, "The white number a shade under white")
+        XCTAssertEqual(night.routeShields.rules.map(\.network), day.routeShields.rules.map(\.network))
+        XCTAssertEqual(night.routeShields.minimumTileZoom, day.routeShields.minimumTileZoom)
         XCTAssertEqual(night.labelVisibility, day.labelVisibility)
         XCTAssertEqual(night.baseColors.map, night.layers.land, "What no tile paints follows the night's land")
     }
