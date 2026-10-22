@@ -165,13 +165,16 @@ extension ProtomapsBasemapDefaultMapStyle {
             // land use does not, so they cannot share a fill.
             let biomes = colors.biomes
             let coverDrawn = tileZoom >= biomes.coverMinimumTileZoom
+            // The cover comes in with the camera over the first cover
+            // zooms (`coverFadeIn`), and leaves with the biomes.
+            let coverFade = coverFadeIn(tileZoom: tileZoom) ?? fade
             switch kind {
             case "forest" where coverDrawn:
-                return polygon(key: 20, colorOf: \.biomes.forestCover, zoomFade: fade)
+                return polygon(key: 20, colorOf: \.biomes.forestCover, zoomFade: coverFade)
             case "farmland" where coverDrawn:
-                return polygon(key: 21, colorOf: \.biomes.farmlandCover, zoomFade: fade)
+                return polygon(key: 21, colorOf: \.biomes.farmlandCover, zoomFade: coverFade)
             case "barren" where coverDrawn:
-                return polygon(key: 22, colorOf: \.biomes.barrenCover, zoomFade: fade)
+                return polygon(key: 22, colorOf: \.biomes.barrenCover, zoomFade: coverFade)
             case "glacier":
                 return polygon(key: 23, colorOf: \.ice, zoomFade: fade)
             case "urban_area":
@@ -206,6 +209,21 @@ extension ProtomapsBasemapDefaultMapStyle {
         default:
             return landcoverStyle(kind: nil, tileZoom: tileZoom)
         }
+    }
+
+    /// The fade the cover over the biomes comes in with on a tile of the
+    /// first cover zooms (`BiomeStyles.coverFadeInZooms`): from the cover
+    /// zoom, in full `coverFadeInZooms` camera zooms later, on every tile
+    /// whose zoom the camera is within that span at. Nil on a deeper tile,
+    /// or with no span: the cover shows whole there.
+    func coverFadeIn(tileZoom: Int) -> ImmersiveMapZoomFade? {
+        let biomes = theme.layers.biomes
+        let span = Double(biomes.coverFadeInZooms)
+        let from = Double(biomes.coverMinimumTileZoom)
+        guard span > 0, tileZoom >= biomes.coverMinimumTileZoom, Double(tileZoom) < from + span else {
+            return nil
+        }
+        return .fadeIn(from: from, to: from + span)
     }
 
     /// How far the vegetation classes blend toward the shared tone at a tile
@@ -254,20 +272,22 @@ extension ProtomapsBasemapDefaultMapStyle {
             // biomes and the raster-derived land cover fade out under it
             // over camera zoom 7 to 8, the woods and the fields stand
             // through to the street map and the z8 tiles take them over in
-            // place, with no cover to appear from nowhere.
+            // place, with no cover to appear from nowhere. It comes in with
+            // the land cover over the first cover zooms (`coverFadeIn`).
             let biomes = colors.biomes
             guard tileZoom >= biomes.coverMinimumTileZoom else {
                 return kind == "glacier" ? polygon(key: 29, colorOf: \.ice) : hiddenStyle
             }
+            let coverFade = coverFadeIn(tileZoom: tileZoom) ?? .none
             switch kind {
             case "forest", "wood":
-                return polygon(key: 25, colorOf: \.biomes.forestCover)
+                return polygon(key: 25, colorOf: \.biomes.forestCover, zoomFade: coverFade)
             case "farmland", "orchard", "allotments", "vineyard", "plant_nursery":
-                return polygon(key: 26, colorOf: \.biomes.farmlandCover)
+                return polygon(key: 26, colorOf: \.biomes.farmlandCover, zoomFade: coverFade)
             case "sand", "beach", "bare_rock", "quarry", "scree", "shingle":
-                return polygon(key: 27, colorOf: \.biomes.barrenCover)
+                return polygon(key: 27, colorOf: \.biomes.barrenCover, zoomFade: coverFade)
             case "wetland":
-                return polygon(key: 28, colorOf: \.wetland)
+                return polygon(key: 28, colorOf: \.wetland, zoomFade: coverFade)
             case "glacier":
                 return polygon(key: 29, colorOf: \.ice)
             default:

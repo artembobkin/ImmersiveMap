@@ -194,6 +194,26 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
         }
     }
 
+    /// The cover's fade in is the theme's span from the cover zoom, on
+    /// every tile whose zoom the camera is within the span at: none with a
+    /// span of nothing, and the span is baked into the tiles.
+    func testTheCoverComesInOverTheThemesSpan() {
+        let standard = ProtomapsBasemapDefaultMapStyle(theme: .default)
+        XCTAssertEqual(standard.coverFadeIn(tileZoom: 2), .fadeIn(from: 2, to: 3))
+        XCTAssertNil(standard.coverFadeIn(tileZoom: 3))
+        XCTAssertNil(standard.coverFadeIn(tileZoom: 1), "Under the cover zoom there is no cover")
+
+        let wide = ProtomapsBasemapDefaultMapStyle(theme: .default.layers { $0.biomes.coverFadeInZooms = 2 })
+        XCTAssertEqual(wide.coverFadeIn(tileZoom: 2), .fadeIn(from: 2, to: 4))
+        XCTAssertEqual(wide.coverFadeIn(tileZoom: 3), .fadeIn(from: 2, to: 4))
+        XCTAssertNil(wide.coverFadeIn(tileZoom: 4))
+
+        let whole = ProtomapsBasemapDefaultMapStyle(theme: .default.layers { $0.biomes.coverFadeInZooms = 0 })
+        XCTAssertNil(whole.coverFadeIn(tileZoom: 2))
+        XCTAssertEqual(makeStyle(whole, layerName: "landcover", kind: "forest", zoom: 2).zoomFade, .fadeOut(from: 7, to: 8))
+        XCTAssertNotEqual(whole.cacheFingerprint, standard.cacheFingerprint, "The span is baked into the tiles")
+    }
+
     /// The default theme with the overview's biomes never drawn: the land
     /// cover rules as they stand with the overview off.
     private static var themeWithoutTheOverview: ProtomapsBasemapTheme {
@@ -296,11 +316,16 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
             } else {
                 // The country zooms: the cover over every biome, under the
                 // water, the land cover fading with the biomes and the land
-                // use over it, staying.
+                // use over it, staying. On the first cover tiles both come
+                // in with the camera over a zoom.
+                let coverFade: ImmersiveMapZoomFade = zoom == biomes.coverMinimumTileZoom
+                    ? .fadeIn(from: Double(zoom), to: Double(zoom) + 1)
+                    : .fadeOut(from: 7, to: 8)
+                let useFade: ImmersiveMapZoomFade = zoom == biomes.coverMinimumTileZoom ? coverFade : .none
                 for (kind, color, useKinds) in cover {
                     let fill = makeStyle(style, layerName: "landcover", kind: kind, zoom: zoom)
                     XCTAssertEqual(fill.color, color, "\(kind) z\(zoom)")
-                    XCTAssertEqual(fill.zoomFade, .fadeOut(from: 7, to: 8), "\(kind) z\(zoom)")
+                    XCTAssertEqual(fill.zoomFade, coverFade, "\(kind) z\(zoom)")
                     XCTAssertGreaterThan(fill.key, keys.max() ?? 0, "\(kind) lies over the biomes at z\(zoom)")
                     XCTAssertLessThan(fill.key, city.key, "\(kind) lies under the cities at z\(zoom)")
                     for useKind in useKinds {
@@ -308,12 +333,12 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
                         XCTAssertGreaterThan(use.key, city.key, "\(useKind) lies over the land cover at z\(zoom)")
                         XCTAssertLessThan(use.key, water.key, "\(useKind) lies under the water at z\(zoom)")
                         XCTAssertEqual(use.color, color, "\(useKind) wears the \(kind) cover's tone at z\(zoom)")
-                        XCTAssertEqual(use.zoomFade, .none, "\(useKind) stays while the cover leaves at z\(zoom)")
+                        XCTAssertEqual(use.zoomFade, useFade, "\(useKind) stays while the cover leaves at z\(zoom)")
                     }
                 }
                 let wetland = makeStyle(style, layerName: "landuse", kind: "wetland", zoom: zoom)
                 XCTAssertEqual(wetland.color, colors.wetland, "z\(zoom)")
-                XCTAssertEqual(wetland.zoomFade, .none, "z\(zoom)")
+                XCTAssertEqual(wetland.zoomFade, useFade, "z\(zoom)")
                 XCTAssertGreaterThan(wetland.key, city.key, "The wetlands lie over the land cover at z\(zoom)")
                 XCTAssertLessThan(wetland.key, useIce.key, "The ice lies over the wetlands at z\(zoom)")
             }

@@ -554,6 +554,15 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// the woods, and the holes between the land cover's raster-derived
         /// blobs show the biome instead of bare land.
         public var coverMinimumTileZoom: Int
+        /// How many camera zooms the cover takes to come in over the
+        /// biomes from `coverMinimumTileZoom`, 1 by default: the forests,
+        /// the fields and the bare ground of the first cover tiles fade in
+        /// with the camera over that span rather than appearing whole at
+        /// the zoom, a fixed fade by the camera's zoom, not an animation.
+        /// Zero shows them whole from the zoom. A span longer than one
+        /// zoom fades the tiles of the next zooms too, while the camera is
+        /// within it.
+        public var coverFadeInZooms: Float
 
         public init(tropicalMoistForest: SIMD4<Float> = SIMD4<Float>(0.624, 0.812, 0.541, 1.0),
                     tropicalDryForest: SIMD4<Float> = SIMD4<Float>(0.706, 0.847, 0.580, 1.0),
@@ -573,7 +582,8 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
                     farmlandCover: SIMD4<Float> = SIMD4<Float>(0.728, 0.865, 0.654, 1.0),
                     barrenCover: SIMD4<Float> = SIMD4<Float>(0.950, 0.910, 0.780, 1.0),
                     maximumTileZoom: Int = 7,
-                    coverMinimumTileZoom: Int = 2) {
+                    coverMinimumTileZoom: Int = 2,
+                    coverFadeInZooms: Float = 1) {
             self.tropicalMoistForest = tropicalMoistForest
             self.tropicalDryForest = tropicalDryForest
             self.tropicalConiferForest = tropicalConiferForest
@@ -593,6 +603,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
             self.barrenCover = barrenCover
             self.maximumTileZoom = maximumTileZoom
             self.coverMinimumTileZoom = coverMinimumTileZoom
+            self.coverFadeInZooms = coverFadeInZooms
         }
 
         /// The atlas palette above.
@@ -910,6 +921,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
             for color in layers.biomes.colors { add(color) }
             out.append(Float(layers.biomes.maximumTileZoom))
             out.append(Float(layers.biomes.coverMinimumTileZoom))
+            out.append(layers.biomes.coverFadeInZooms)
             // The overview's road network, baked into the same tiles.
             add(layers.overviewRoads.major); add(layers.overviewRoads.minor)
             out.append(contentsOf: [layers.overviewRoads.majorWidthPoints, layers.overviewRoads.minorWidthPoints,

@@ -991,7 +991,11 @@ final class PreparedTileDiskCaching {
     // with the label's own by the air handover: a theme with globe labels
     // (`ProtomapsBasemapTheme.globeLabels`) letters the globe in them. A
     // v154 text style has no such colours.
-    static let preparedFormatVersion: UInt32 = 155
+    // 156: the cover over the biomes comes in with the camera over the
+    // first cover zooms (`ProtomapsBasemapTheme.BiomeStyles.coverFadeInZooms`):
+    // the cover fills of a tile at the cover zoom carry a fade in, the
+    // land use's cover block included. A v155 tile shows them whole.
+    static let preparedFormatVersion: UInt32 = 156
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity
