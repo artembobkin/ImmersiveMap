@@ -1495,7 +1495,8 @@ public extension ImmersiveMapView {
                                     margin: Double? = nil,
                                     textColor: SIMD4<Float>? = nil,
                                     emphasizesLeadingCredit: Bool? = nil,
-                                    isProvidedExternally: Bool? = nil) -> ImmersiveMapView {
+                                    isProvidedExternally: Bool? = nil,
+                                    showsEngineCredit: Bool? = nil) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.attributionSettings(isVisible: isVisible,
                                                           size: size,
@@ -1503,7 +1504,8 @@ public extension ImmersiveMapView {
                                                           margin: margin,
                                                           textColor: textColor,
                                                           emphasizesLeadingCredit: emphasizesLeadingCredit,
-                                                          isProvidedExternally: isProvidedExternally)
+                                                          isProvidedExternally: isProvidedExternally,
+                                                          showsEngineCredit: showsEngineCredit)
         return view
     }
 

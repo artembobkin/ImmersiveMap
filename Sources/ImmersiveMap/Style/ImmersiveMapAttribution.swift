@@ -14,8 +14,10 @@ import Foundation
 /// data set that the map draws through a few zooms only, as the overview
 /// of the globe, is credited at those zooms and not past them.
 ///
-/// The engine never puts its own brand here: a map drawn on top of
-/// OpenStreetMap data must credit OpenStreetMap, not the renderer.
+/// The data's credits come first and are what the licenses require. The
+/// engine's own, `engineCredit`, closes the line by default as a courtesy
+/// the MIT license does not ask for, and goes with
+/// `AttributionSettings.showsEngineCredit`.
 public struct ImmersiveMapAttribution: Equatable, Sendable {
     /// One credit on the line.
     public struct Credit: Equatable, Sendable {
@@ -82,6 +84,11 @@ public struct ImmersiveMapAttribution: Equatable, Sendable {
     /// whose data source is unknown to the engine. If such a source serves OSM
     /// or other data that requires attribution, its author must set it.
     public static let none = ImmersiveMapAttribution(credits: [])
+
+    /// The engine's own credit, the last on the default badge's line
+    /// (`ImmersiveMapSettings.resolvedAttribution`). A courtesy, not a
+    /// license term: `AttributionSettings.showsEngineCredit` drops it.
+    public static let engineCredit = Credit("Powered by ImmersiveMap")
 
     /// Minimal attribution for OpenStreetMap data (ODbL).
     public static let openStreetMap = ImmersiveMapAttribution(

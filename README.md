@@ -91,7 +91,7 @@ The default map is built from open data, and three of its sources ask to be cred
 
 The attribution badge shows each credit at the zooms its data is on screen, and a source switched off takes its credit with it.
 
-Otherwise the license is MIT and nothing here changes that. It would just be cool if you mention ImmersiveMap somewhere:
+Otherwise the license is MIT and nothing here changes that. The badge ends with "Powered by ImmersiveMap" by default, a courtesy the license does not ask for: `.attributionSettings(showsEngineCredit: false)` drops it. It would just be cool if you mention ImmersiveMap somewhere:
 
 ```text
 Maps powered by ImmersiveMap (immersivemap.dev)

@@ -2036,6 +2036,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// overlay, an about screen). Suppresses the hidden-attribution
         /// warning; it does not change what the badge draws.
         public var isProvidedExternally: Bool
+        /// Whether the engine's own credit, "Powered by ImmersiveMap",
+        /// closes the badge's line (`ImmersiveMapAttribution.engineCredit`).
+        /// On by default. A courtesy, not a license term: off leaves the
+        /// data's credits alone.
+        public var showsEngineCredit: Bool
         public var attributionOverride: ImmersiveMapAttribution?
 
         public init(isVisible: Bool = true,
@@ -2045,6 +2050,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     textColor: SIMD4<Float>? = nil,
                     emphasizesLeadingCredit: Bool = false,
                     isProvidedExternally: Bool = false,
+                    showsEngineCredit: Bool = true,
                     attributionOverride: ImmersiveMapAttribution? = nil) {
             self.isVisible = isVisible
             self.size = size
@@ -2053,6 +2059,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.textColor = textColor
             self.emphasizesLeadingCredit = emphasizesLeadingCredit
             self.isProvidedExternally = isProvidedExternally
+            self.showsEngineCredit = showsEngineCredit
             self.attributionOverride = attributionOverride
         }
     }
@@ -3051,8 +3058,12 @@ public extension ImmersiveMapSettings {
                              margin: Double? = nil,
                              textColor: SIMD4<Float>? = nil,
                              emphasizesLeadingCredit: Bool? = nil,
-                             isProvidedExternally: Bool? = nil) -> ImmersiveMapSettings {
+                             isProvidedExternally: Bool? = nil,
+                             showsEngineCredit: Bool? = nil) -> ImmersiveMapSettings {
         var attribution = self.attribution
+        if let showsEngineCredit {
+            attribution.showsEngineCredit = showsEngineCredit
+        }
         if let isVisible {
             attribution.isVisible = isVisible
         }
@@ -3107,6 +3118,9 @@ public extension ImmersiveMapSettings {
         }
         if let reliefCredit = tiles.groundRelief.credit {
             resolved = resolved.appending(reliefCredit)
+        }
+        if attribution.showsEngineCredit {
+            resolved = resolved.appending(ImmersiveMapAttribution.engineCredit)
         }
         return resolved
     }

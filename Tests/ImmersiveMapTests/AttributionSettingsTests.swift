@@ -6,19 +6,24 @@ import XCTest
 
 final class AttributionSettingsTests: XCTestCase {
     /// The built-in tiles are OpenStreetMap data under ODbL, built by the
-    /// ImmersiveMap tile pipeline. The badge names the data, and only the
-    /// data: not the engine, and no second party whose schema the tiles no
-    /// longer follow. The overview the engine ships adds its own credit
-    /// after it.
-    func testDefaultAttributionCreditsOpenStreetMapAndNotTheEngine() {
+    /// ImmersiveMap tile pipeline. The badge names the data first, and no
+    /// second party whose schema the tiles no longer follow. The overview
+    /// the engine ships adds its own credit after it, and the engine's own
+    /// closes the line, a courtesy the app may drop.
+    func testDefaultAttributionCreditsOpenStreetMapFirstAndTheEngineLast() {
         let attribution = ImmersiveMapSettings.default.resolvedAttribution
 
         XCTAssertEqual(attribution.credits.first?.text, "© OpenStreetMap")
         XCTAssertNil(attribution.credits.first?.zoomRange, "The tiles are on screen at every zoom")
         XCTAssertEqual(attribution.linkURL, URL(string: "https://www.openstreetmap.org/copyright"))
-        XCTAssertFalse(attribution.credits.contains { $0.text.contains("ImmersiveMap") })
+        XCTAssertEqual(attribution.credits.last, ImmersiveMapAttribution.engineCredit)
+        XCTAssertNil(attribution.credits.last?.zoomRange, "The engine's credit stays at every zoom")
         XCTAssertEqual(ImmersiveMapTilesService.attribution.credits.count, 1,
                        "The service credits its own data alone")
+
+        let plain = ImmersiveMapSettings.default.attributionSettings(showsEngineCredit: false).resolvedAttribution
+        XCTAssertFalse(plain.credits.contains { $0.text.contains("ImmersiveMap") })
+        XCTAssertEqual(plain.credits.first?.text, "© OpenStreetMap")
     }
 
     /// The biomes of the overview are CC BY 4.0 and credited while they
@@ -28,15 +33,15 @@ final class AttributionSettingsTests: XCTestCase {
     func testTheOverviewIsCreditedAtTheZoomsItIsDrawnAt() {
         let attribution = ImmersiveMapSettings.default.resolvedAttribution
 
-        XCTAssertEqual(attribution.credits.count, 3)
+        XCTAssertEqual(attribution.credits.count, 4)
         let overview = attribution.credits[1]
         XCTAssertEqual(overview.text, "Biomes © RESOLVE, CC BY 4.0")
         XCTAssertEqual(overview.zoomRange, 0..<8)
-        XCTAssertEqual(attribution.credits(atZoom: 0).count, 2)
-        XCTAssertEqual(attribution.credits(atZoom: 7.9).count, 2)
-        XCTAssertEqual(attribution.credits(atZoom: 8).map(\.text), ["© OpenStreetMap"])
-        XCTAssertEqual(attribution.credits(atZoom: 9.9).map(\.text), ["© OpenStreetMap"])
-        XCTAssertEqual(attribution.credits(atZoom: nil).count, 3, "Before the camera is placed every credit shows")
+        XCTAssertEqual(attribution.credits(atZoom: 0).count, 3)
+        XCTAssertEqual(attribution.credits(atZoom: 7.9).count, 3)
+        XCTAssertEqual(attribution.credits(atZoom: 8).map(\.text), ["© OpenStreetMap", "Powered by ImmersiveMap"])
+        XCTAssertEqual(attribution.credits(atZoom: 9.9).map(\.text), ["© OpenStreetMap", "Powered by ImmersiveMap"])
+        XCTAssertEqual(attribution.credits(atZoom: nil).count, 4, "Before the camera is placed every credit shows")
     }
 
     /// The credit's zoom follows the setting, for a theme that keeps the
@@ -48,7 +53,7 @@ final class AttributionSettingsTests: XCTestCase {
         XCTAssertTrue(raised.credits(atZoom: 9).contains { $0.text.hasPrefix("Biomes") })
 
         let off = ImmersiveMapSettings.default.overviewTiles(isEnabled: false).resolvedAttribution
-        XCTAssertEqual(off.credits.map(\.text), ["© OpenStreetMap", "© Mapterhorn"])
+        XCTAssertEqual(off.credits.map(\.text), ["© OpenStreetMap", "© Mapterhorn", "Powered by ImmersiveMap"])
     }
 
     /// Mapterhorn's terrain asks for a credit, shown at the camera zooms
@@ -60,9 +65,9 @@ final class AttributionSettingsTests: XCTestCase {
         let terrain = attribution.credits[2]
         XCTAssertEqual(terrain.text, "© Mapterhorn")
         XCTAssertEqual(terrain.zoomRange, 10..<13.7)
-        XCTAssertEqual(attribution.credits(atZoom: 9.9).map(\.text), ["© OpenStreetMap"])
-        XCTAssertEqual(attribution.credits(atZoom: 12.2).map(\.text), ["© OpenStreetMap", "© Mapterhorn"])
-        XCTAssertEqual(attribution.credits(atZoom: 13.7).map(\.text), ["© OpenStreetMap"])
+        XCTAssertEqual(attribution.credits(atZoom: 9.9).map(\.text), ["© OpenStreetMap", "Powered by ImmersiveMap"])
+        XCTAssertEqual(attribution.credits(atZoom: 12.2).map(\.text), ["© OpenStreetMap", "© Mapterhorn", "Powered by ImmersiveMap"])
+        XCTAssertEqual(attribution.credits(atZoom: 13.7).map(\.text), ["© OpenStreetMap", "Powered by ImmersiveMap"])
     }
 
     /// The terrain's credit follows the relief's zooms, and goes with the
@@ -71,7 +76,7 @@ final class AttributionSettingsTests: XCTestCase {
         var settings = ImmersiveMapSettings.default
         settings.tiles.groundRelief.appearZoom = 8
         settings.tiles.groundRelief.collapseZoom = 15
-        XCTAssertEqual(settings.resolvedAttribution.credits.last?.zoomRange, 8..<15)
+        XCTAssertEqual(settings.resolvedAttribution.credits.first { $0.text == "© Mapterhorn" }?.zoomRange, 8..<15)
 
         var off = ImmersiveMapSettings.default
         off.tiles.groundRelief.isEnabled = false
@@ -99,10 +104,10 @@ final class AttributionSettingsTests: XCTestCase {
 
         let resolved = settings.resolvedAttribution
         XCTAssertEqual(resolved.linkURL, override.linkURL)
-        XCTAssertEqual(resolved.credits.map(\.text), ["Custom source", "© Custom data", "Biomes © RESOLVE, CC BY 4.0", "© Mapterhorn"])
+        XCTAssertEqual(resolved.credits.map(\.text), ["Custom source", "© Custom data", "Biomes © RESOLVE, CC BY 4.0", "© Mapterhorn", "Powered by ImmersiveMap"])
 
         let withoutOverview = settings.overviewTiles(isEnabled: false).resolvedAttribution
-        XCTAssertEqual(withoutOverview.credits.map(\.text), ["Custom source", "© Custom data", "© Mapterhorn"])
+        XCTAssertEqual(withoutOverview.credits.map(\.text), ["Custom source", "© Custom data", "© Mapterhorn", "Powered by ImmersiveMap"])
     }
 
     /// An explicit empty override empties the badge: the app took the whole
