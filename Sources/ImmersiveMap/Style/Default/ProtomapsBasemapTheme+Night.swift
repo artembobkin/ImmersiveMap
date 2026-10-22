@@ -9,8 +9,9 @@ public extension ProtomapsBasemapTheme {
     /// day's palette and the biomes of the globe sunk into the night at a
     /// fifth of their light with a blue cast, the roads a warm grey over
     /// the dark land and the overview's highways an amber net, the
-    /// buildings a shade above the land, and every label a near-white on a
-    /// black halo. The slopes shade by the moon: a deeper shadow and a cool,
+    /// buildings a shade above the land, and every label a light grey on
+    /// a black halo, graded as the day's greys are, never white: a white
+    /// name on a dark map reads as a lamp. The slopes shade by the moon: a deeper shadow and a cool,
     /// faint highlight. The road metrics, the route shields and the label
     /// visibility are the day's.
     ///
@@ -88,13 +89,25 @@ public extension ProtomapsBasemapTheme {
                 features.buildingFillColor = SIMD4<Float>(0.18, 0.19, 0.23, 1)
             }
             .labels { labels in
-                let fill = SIMD3<Float>(0.92, 0.94, 1.0)
+                // The day's greys mirrored into the dark, graded as the
+                // day's are: the cities the lightest, the villages and the
+                // lettering of the lands a step dimmer, none of them white.
+                // A white name on a dark map reads as a lamp, not as ink.
                 let stroke = SIMD3<Float>(0.02, 0.03, 0.06)
-                for keyPath in [\LabelStyles.city, \.town, \.district, \.country, \.region, \.poi, \.water, \.road] {
+                let fills: [(WritableKeyPath<LabelStyles, LabelAppearance>, SIMD3<Float>)] = [
+                    (\.city, SIMD3<Float>(0.84, 0.86, 0.92)),
+                    (\.town, SIMD3<Float>(0.74, 0.77, 0.84)),
+                    (\.district, SIMD3<Float>(0.60, 0.63, 0.71)),
+                    (\.country, SIMD3<Float>(0.66, 0.68, 0.78)),
+                    (\.region, SIMD3<Float>(0.60, 0.62, 0.72)),
+                    (\.poi, SIMD3<Float>(0.62, 0.65, 0.73)),
+                    (\.road, SIMD3<Float>(0.60, 0.62, 0.68)),
+                    (\.water, SIMD3<Float>(0.42, 0.58, 0.84)),
+                ]
+                for (keyPath, fill) in fills {
                     labels[keyPath: keyPath].fillColor = fill
                     labels[keyPath: keyPath].strokeColor = stroke
                 }
-                labels.water.fillColor = SIMD3<Float>(0.55, 0.72, 0.96)
             }
             .apply { theme in
                 theme.hillshade.shadowColor = SIMD4<Float>(0.0, 0.01, 0.04, 0.45)

@@ -8,7 +8,7 @@ import XCTest
 /// and the one modifier that sets both.
 final class NightThemeTests: XCTestCase {
     /// The night is its own palette, baked into its own tiles: a dark land
-    /// and water, near-white labels, the globe's biomes sunk into the dark,
+    /// and water, light grey labels, the globe's biomes sunk into the dark,
     /// with the day's metrics and visibility.
     func testTheNightPaletteIsDarkAndItsOwnCacheIdentity() {
         let day = ProtomapsBasemapTheme.default
@@ -17,7 +17,10 @@ final class NightThemeTests: XCTestCase {
         XCTAssertNotEqual(night.cacheFingerprint, day.cacheFingerprint)
         XCTAssertLessThan(night.layers.land.x + night.layers.land.y + night.layers.land.z, 0.5)
         XCTAssertLessThan(night.layers.water.y, day.layers.water.y)
-        XCTAssertGreaterThan(night.labels.city.fillColor.x, 0.9, "Labels are near-white on the dark")
+        XCTAssertGreaterThan(night.labels.city.fillColor.x, 0.75, "Labels are light on the dark")
+        XCTAssertLessThan(night.labels.city.fillColor.x, 0.9, "but never white, a lamp on a dark map")
+        XCTAssertGreaterThan(night.labels.city.fillColor.x, night.labels.town.fillColor.x, "Graded as the day's greys")
+        XCTAssertGreaterThan(night.labels.town.fillColor.x, night.labels.district.fillColor.x)
         XCTAssertLessThan(night.labels.city.strokeColor.x, 0.1)
         XCTAssertLessThan(night.layers.biomes.temperateBroadleafForest.y, day.layers.biomes.temperateBroadleafForest.y * 0.5,
                           "The biomes sink into the night")

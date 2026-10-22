@@ -739,7 +739,7 @@ public extension ImmersiveMapView {
     }
 
     /// The map of a night: the night palette (`ProtomapsBasemapTheme.night`,
-    /// the land a deep blue-grey, the water a navy, the labels near-white)
+    /// the land a deep blue-grey, the water a navy, the labels a light grey)
     /// with the night's air (`ImmersiveMapSettings.FogSettings.night`, a
     /// navy sky and horizon the ground fog follows). `night(false)` is the
     /// day again: the built-in style and the day's air. Both are live
