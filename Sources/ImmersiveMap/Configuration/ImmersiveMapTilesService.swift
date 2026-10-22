@@ -44,8 +44,9 @@ public enum ImmersiveMapTilesService {
 
     /// The credit the data requires: OpenStreetMap, per ODbL, for the
     /// hosted archive, with the link carrying the full story. The overview
-    /// the engine ships adds its own credit to the line
-    /// (`ImmersiveMapSettings.resolvedAttribution`, `OverviewTileSource`).
+    /// the engine ships and the relief's terrain add their own credits to
+    /// the line (`ImmersiveMapSettings.resolvedAttribution`,
+    /// `OverviewTileSource`, `GroundReliefSettings.credit`).
     public static let attribution = ImmersiveMapAttribution(
         "© OpenStreetMap",
         linkURL: URL(string: "https://www.openstreetmap.org/copyright")

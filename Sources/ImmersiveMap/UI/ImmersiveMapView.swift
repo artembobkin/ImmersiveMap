@@ -25,6 +25,11 @@ public struct ImmersiveMapView: View {
     private var sceneModelsController: ImmersiveMapSceneModelsController?
     private var cameraController: ImmersiveMapCameraController?
     private var cameraUIControls: CameraUIControls?
+    /// The controller the camera buttons drive when the app attaches none:
+    /// a controller is the app's handle on the camera from code, the
+    /// buttons are a modifier of their own (`enableCameraUIControls`), and
+    /// one must not need the other.
+    @State private var builtInCameraController = ImmersiveMapCameraController()
     private var selectionController: ImmersiveMapSelectionController?
     private var avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
     private var sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)?
@@ -50,7 +55,8 @@ public struct ImmersiveMapView: View {
     /// otherwise SwiftUI destroys and recreates the entire platform map view
     /// (renderer, caches, controller bindings).
     public var body: some View {
-        ImmersiveMapUIViewRepresentable(settings: settings,
+        let cameraController = resolvedCameraController
+        return ImmersiveMapUIViewRepresentable(settings: settings,
                                         avatarsController: avatarsController,
                                         sceneModelsController: sceneModelsController,
                                         cameraPosition: cameraPosition,
@@ -63,12 +69,23 @@ public struct ImmersiveMapView: View {
                                         markerContent: markerContent,
                                         tourVideoRecorder: tourVideoRecorder)
             .immersiveMapCameraControlsOverlay(
-                isEnabled: (cameraUIControls?.isEnabled ?? false) && cameraController != nil
-                    && settings.controls.isHidden == false,
+                isEnabled: isCameraUIControlsEnabled && settings.controls.isHidden == false,
                 camera: cameraController,
                 initialCameraPosition: cameraPosition ?? Self.defaultCameraControlsPosition,
                 maximumPitch: cameraUIControls?.maximumPitch ?? ImmersiveMapSettings.default.camera.maximumPitch
             )
+    }
+
+    private var isCameraUIControlsEnabled: Bool {
+        cameraUIControls?.isEnabled ?? false
+    }
+
+    /// The app's controller, or with the camera buttons on and no
+    /// controller of the app's the built-in one, so the buttons work on
+    /// a bare `ImmersiveMapView().enableCameraUIControls()`. Without the
+    /// buttons and without a controller none is attached, as before.
+    private var resolvedCameraController: ImmersiveMapCameraController? {
+        cameraController ?? (isCameraUIControlsEnabled ? builtInCameraController : nil)
     }
 
 }
@@ -267,6 +284,9 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Attaches a controller to drive the camera from the app's code: jumps,
+    /// flights, following a path, and the camera's position read back. The
+    /// on-screen camera buttons need none (`enableCameraUIControls`).
     func cameraController(_ controller: ImmersiveMapCameraController?) -> ImmersiveMapView {
         var view = self
         view.cameraController = controller
@@ -281,6 +301,12 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Shows the on-screen camera buttons, the bearing and the pitch, on
+    /// their own or beside a controller of the app's (`cameraController`),
+    /// which they then drive.
+    ///
+    ///     ImmersiveMapView()
+    ///         .enableCameraUIControls()
     func enableCameraUIControls(_ isEnabled: Bool = true,
                                 maximumPitch: Float = ImmersiveMapSettings.default.camera.maximumPitch) -> ImmersiveMapView {
         var view = self

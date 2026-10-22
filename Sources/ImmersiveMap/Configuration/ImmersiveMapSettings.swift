@@ -808,7 +808,9 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// of square images (PNG or WebP, of any size) whose pixels hold
             /// heights in `encoding`. The default is Mapterhorn's open
             /// global terrain, 30 m everywhere to zoom 12 and lidar deeper
-            /// where a country publishes it. Mapterhorn asks to be credited.
+            /// where a country publishes it. Mapterhorn asks to be credited,
+            /// and the badge credits it while the relief reads its tiles
+            /// (`credit`).
             public var tileURLTemplate: String
             /// How a pixel of a terrain tile holds its height
             /// (`GroundReliefEncoding`): Terrarium by default, as
@@ -991,6 +993,28 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                 let zoom = appearZoom.isFinite ? Int(max(appearZoom, 0).rounded(.down)) : 0
                 return max(0, min(zoom, deepestTileZoom))
             }
+
+            /// The credit Mapterhorn's terrain asks for, laid on the
+            /// attribution line after the overview's while the relief is on
+            /// and reads Mapterhorn's tiles (`ImmersiveMapSettings
+            /// .resolvedAttribution`), at the camera zooms the relief stands
+            /// out of the plane at, from `appearZoom` up to `collapseZoom`:
+            /// below and past them no terrain is read and the map draws none
+            /// of it. Nil when the relief is off, never rises, or reads
+            /// another source, whose credit the app states with
+            /// `attributionSettings`.
+            var credit: ImmersiveMapAttribution.Credit? {
+                guard isEnabled,
+                      tileURLTemplate.hasPrefix(Self.mapterhornTileURLPrefix),
+                      appearZoom < collapseZoom else {
+                    return nil
+                }
+                return ImmersiveMapAttribution.Credit(Self.mapterhornCreditText,
+                                                      zoomRange: appearZoom..<collapseZoom)
+            }
+
+            static let mapterhornTileURLPrefix = "https://tiles.mapterhorn.com/"
+            static let mapterhornCreditText = "© Mapterhorn"
         }
 
         /// How the country around the point the camera looks at is read as
@@ -3066,17 +3090,25 @@ public extension ImmersiveMapSettings {
     /// hosted service's credit, which is what the default source requires,
     /// and after either the credit of the overview the engine lays into the
     /// tiles while it is on (`OverviewTileSource.credit`, at the zooms up to
-    /// `TileSettings.OverviewSettings.creditMaximumZoom`). An app that
-    /// points the map at its own data owns the credit of that data and
-    /// states it with `attributionSettings`. An empty override is the app
-    /// taking the whole credit, the overview's with it, off the badge: the
+    /// `TileSettings.OverviewSettings.creditMaximumZoom`), then the credit
+    /// of Mapterhorn's terrain at the zooms the relief rises at
+    /// (`GroundReliefSettings.credit`). An app that points the map at its
+    /// own data owns the credit of that data and states it with
+    /// `attributionSettings`. An empty override is the app taking the whole
+    /// credit, the overview's and the terrain's with it, off the badge: the
     /// badge stays empty and the hidden-attribution warning stands.
     var resolvedAttribution: ImmersiveMapAttribution {
-        let base = attribution.attributionOverride ?? ImmersiveMapTilesService.attribution
-        guard tiles.overview.isEnabled, base.isEmpty == false else {
-            return base
+        var resolved = attribution.attributionOverride ?? ImmersiveMapTilesService.attribution
+        guard resolved.isEmpty == false else {
+            return resolved
         }
-        return base.appending(OverviewTileSource.credit(maximumZoom: tiles.overview.creditMaximumZoom))
+        if tiles.overview.isEnabled {
+            resolved = resolved.appending(OverviewTileSource.credit(maximumZoom: tiles.overview.creditMaximumZoom))
+        }
+        if let reliefCredit = tiles.groundRelief.credit {
+            resolved = resolved.appending(reliefCredit)
+        }
+        return resolved
     }
 
     func postProcessingSettings(_ postProcessing: PostProcessingSettings) -> ImmersiveMapSettings {

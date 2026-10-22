@@ -28,15 +28,15 @@ final class AttributionSettingsTests: XCTestCase {
     func testTheOverviewIsCreditedAtTheZoomsItIsDrawnAt() {
         let attribution = ImmersiveMapSettings.default.resolvedAttribution
 
-        XCTAssertEqual(attribution.credits.count, 2)
+        XCTAssertEqual(attribution.credits.count, 3)
         let overview = attribution.credits[1]
         XCTAssertEqual(overview.text, "Biomes © RESOLVE, CC BY 4.0")
         XCTAssertEqual(overview.zoomRange, 0..<8)
         XCTAssertEqual(attribution.credits(atZoom: 0).count, 2)
         XCTAssertEqual(attribution.credits(atZoom: 7.9).count, 2)
         XCTAssertEqual(attribution.credits(atZoom: 8).map(\.text), ["© OpenStreetMap"])
-        XCTAssertEqual(attribution.credits(atZoom: 12.2).map(\.text), ["© OpenStreetMap"])
-        XCTAssertEqual(attribution.credits(atZoom: nil).count, 2, "Before the camera is placed every credit shows")
+        XCTAssertEqual(attribution.credits(atZoom: 9.9).map(\.text), ["© OpenStreetMap"])
+        XCTAssertEqual(attribution.credits(atZoom: nil).count, 3, "Before the camera is placed every credit shows")
     }
 
     /// The credit's zoom follows the setting, for a theme that keeps the
@@ -48,12 +48,49 @@ final class AttributionSettingsTests: XCTestCase {
         XCTAssertTrue(raised.credits(atZoom: 9).contains { $0.text.hasPrefix("Biomes") })
 
         let off = ImmersiveMapSettings.default.overviewTiles(isEnabled: false).resolvedAttribution
-        XCTAssertEqual(off.credits.map(\.text), ["© OpenStreetMap"])
+        XCTAssertEqual(off.credits.map(\.text), ["© OpenStreetMap", "© Mapterhorn"])
+    }
+
+    /// Mapterhorn's terrain asks for a credit, shown at the camera zooms
+    /// the relief stands out of the plane at and not below or past them,
+    /// where no terrain is read.
+    func testTheTerrainIsCreditedAtTheZoomsTheReliefRisesAt() {
+        let attribution = ImmersiveMapSettings.default.resolvedAttribution
+
+        let terrain = attribution.credits[2]
+        XCTAssertEqual(terrain.text, "© Mapterhorn")
+        XCTAssertEqual(terrain.zoomRange, 10..<13.7)
+        XCTAssertEqual(attribution.credits(atZoom: 9.9).map(\.text), ["© OpenStreetMap"])
+        XCTAssertEqual(attribution.credits(atZoom: 12.2).map(\.text), ["© OpenStreetMap", "© Mapterhorn"])
+        XCTAssertEqual(attribution.credits(atZoom: 13.7).map(\.text), ["© OpenStreetMap"])
+    }
+
+    /// The terrain's credit follows the relief's zooms, and goes with the
+    /// relief when it is off, never rises, or reads another source.
+    func testTheTerrainCreditFollowsTheRelief() {
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.groundRelief.appearZoom = 8
+        settings.tiles.groundRelief.collapseZoom = 15
+        XCTAssertEqual(settings.resolvedAttribution.credits.last?.zoomRange, 8..<15)
+
+        var off = ImmersiveMapSettings.default
+        off.tiles.groundRelief.isEnabled = false
+        XCTAssertFalse(off.resolvedAttribution.credits.contains { $0.text == "© Mapterhorn" })
+
+        var neverRises = ImmersiveMapSettings.default
+        neverRises.tiles.groundRelief.appearZoom = 14
+        neverRises.tiles.groundRelief.collapseZoom = 14
+        XCTAssertFalse(neverRises.resolvedAttribution.credits.contains { $0.text == "© Mapterhorn" })
+
+        var elsewhere = ImmersiveMapSettings.default
+        elsewhere.tiles.groundRelief.tileURLTemplate = "https://example.com/terrain/{z}/{x}/{y}.png"
+        XCTAssertFalse(elsewhere.resolvedAttribution.credits.contains { $0.text == "© Mapterhorn" })
     }
 
     /// An app pointing the map at its own data owns the credit of that
     /// data: the override leads the line. The overview is still laid into
-    /// its tiles, so the overview's credit follows it.
+    /// its tiles and the relief still reads Mapterhorn's terrain, so their
+    /// credits follow it.
     func testApplicationOverrideLeadsTheLineAndTheOverviewFollows() {
         let override = ImmersiveMapAttribution(credits: [.init("Custom source"), .init("© Custom data")],
                                                linkURL: URL(string: "https://example.com/licence"))
@@ -62,10 +99,10 @@ final class AttributionSettingsTests: XCTestCase {
 
         let resolved = settings.resolvedAttribution
         XCTAssertEqual(resolved.linkURL, override.linkURL)
-        XCTAssertEqual(resolved.credits.map(\.text), ["Custom source", "© Custom data", "Biomes © RESOLVE, CC BY 4.0"])
+        XCTAssertEqual(resolved.credits.map(\.text), ["Custom source", "© Custom data", "Biomes © RESOLVE, CC BY 4.0", "© Mapterhorn"])
 
         let withoutOverview = settings.overviewTiles(isEnabled: false).resolvedAttribution
-        XCTAssertEqual(withoutOverview, override)
+        XCTAssertEqual(withoutOverview.credits.map(\.text), ["Custom source", "© Custom data", "© Mapterhorn"])
     }
 
     /// An explicit empty override empties the badge: the app took the whole
