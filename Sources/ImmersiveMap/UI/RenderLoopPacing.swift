@@ -220,6 +220,8 @@ private extension RenderInvalidationReason {
             return "tile retry due"
         case .sceneModelAssetLoaded:
             return "scene model asset loaded"
+        case .layerDataLoaded:
+            return "layer data loaded"
         case .externalStateChanged:
             return "external state changed"
         }

@@ -109,6 +109,9 @@ enum RenderGraphFactory {
                                                 depthDisabledState: context.depthDisabledState,
                                                 settings: settings.scene.trees,
                                                 riseSeconds: settings.scene.extrusion.riseSeconds)
+        let layerSubsystem = LayerRenderSubsystem(store: context.layerMeshStore,
+                                                  pipeline: context.layerPipeline,
+                                                  depthDisabledState: context.depthDisabledState)
         let reliefShadowCasterSubsystem = GroundReliefShadowCasterSubsystem(device: context.metalContext.device,
                                                                             pipeline: context.rasterTilePipeline,
                                                                             depthState: context.extrudedDepthState,
@@ -176,6 +179,10 @@ enum RenderGraphFactory {
             reliefShadowCasterSubsystem,
             starfieldSubsystem,
             globeVectorSurfaceSubsystem,
+            // The layers of the app's data over the ground of either
+            // surface: after the flat map's roads and the trees' shadows,
+            // after the globe's ground, before the labels painted on both.
+            layerSubsystem,
             surfaceLabelSubsystem,
             globeCapSubsystem,
             horizonSubsystem,

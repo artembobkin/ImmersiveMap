@@ -771,6 +771,28 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Layers of the app's own data drawn over the map, in the order given:
+    /// zones (polygons), lines and points, from Swift values or a GeoJSON
+    /// document. They lie on the ground of the globe and the flat map,
+    /// over the roads and under the names painted on the map and the
+    /// buildings. A later call replaces the layers of an earlier one. A
+    /// change applies in place: a layer whose data changed is prepared
+    /// off the main thread and replaces the old one when ready.
+    ///
+    ///     ImmersiveMapView()
+    ///         .layers([
+    ///             try ImmersiveMapLayer(id: "districts", geoJSON: districts),
+    ///             ImmersiveMapLayer(id: "sensors", points: sensors.map { ImmersiveMapPoint(coordinate: $0) },
+    ///                               pointStyle: ImmersiveMapPointStyle(radiusPoints: 3))
+    ///         ])
+    ///
+    /// See ``ImmersiveMapLayer``.
+    public func layers(_ layers: [ImmersiveMapLayer]) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.layers(layers)
+        return view
+    }
+
     /// Models that take the place of the map's own buildings: the OSM
     /// elements each one lists (its building's outline and parts) are left
     /// out once the model is loaded, and the model is drawn where they

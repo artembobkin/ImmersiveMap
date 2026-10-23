@@ -100,6 +100,10 @@ final class RenderPersistentContext {
     let treePipeline: TreePipeline
     /// The colours of the trees, as the style states them.
     let treePalette: ImmersiveMapTreePalette
+    /// The layers of the app's data on the GPU and their pipelines
+    /// (`LayerRenderSubsystem`).
+    let layerMeshStore: LayerMeshStore
+    let layerPipeline: LayerPipeline
 
     // MARK: - Avatar and Debug Resources
 
@@ -212,6 +216,9 @@ final class RenderPersistentContext {
         self.treePalette = styleRuntime.treePalette
         self.treeModelStore = TreeModelStore(device: metal.device)
         self.treeModelStore.eventSink = eventSink
+        self.layerPipeline = shared.layerPipeline
+        self.layerMeshStore = LayerMeshStore(device: metal.device)
+        self.layerMeshStore.eventSink = eventSink
 
         self.avatarSource = avatarSource
         self.markerSource = markerSource

@@ -9,16 +9,28 @@ struct ImmersiveMapDevMacApp: App {
     /// Every control over the map hidden for a clean frame
     /// (`controlsHidden`): Map > Hide Controls, Shift-Command-H.
     @State private var controlsHidden = false
+    /// The demo layers shown (`DemoLayers`): Layers menu.
+    @State private var demoLayers: Set<DemoLayers.Kind> = Set(DemoLayers.Kind.allCases)
 
     var body: some Scene {
         WindowGroup("ImmersiveMap Dev") {
-            MapScreen(controlsHidden: controlsHidden)
+            MapScreen(controlsHidden: controlsHidden, demoLayers: demoLayers)
         }
         .defaultSize(width: 1200, height: 860)
         .commands {
             CommandMenu("Map") {
                 Toggle("Hide Controls", isOn: $controlsHidden)
                     .keyboardShortcut("h", modifiers: [.command, .shift])
+            }
+            CommandMenu("Layers") {
+                ForEach(DemoLayers.Kind.allCases) { kind in
+                    Toggle(kind.title, isOn: Binding(
+                        get: { demoLayers.contains(kind) },
+                        set: { isOn in
+                            if isOn { demoLayers.insert(kind) } else { demoLayers.remove(kind) }
+                        }))
+                        .keyboardShortcut(kind.shortcut, modifiers: [.command, .option])
+                }
             }
         }
     }
@@ -36,6 +48,8 @@ struct ImmersiveMapDevMacApp: App {
 private struct MapScreen: View {
     /// Every control over the map hidden.
     let controlsHidden: Bool
+    /// The demo layers drawn over the map.
+    let demoLayers: Set<DemoLayers.Kind>
     @State private var camera = ImmersiveMapCameraController()
 
     var body: some View {
@@ -81,6 +95,10 @@ private struct MapScreen: View {
             // previous build. Every launch here starts from the network.
             .tileSettings(clearDiskCachesOnLaunch: false)
             .labelSettings(language: .english)
+            // The layers of the app's own data: zones, a route, points and
+            // a GeoJSON document over Moscow, and a few across the world
+            // for the globe. Each is switched in the Layers menu.
+            .layers(DemoLayers.layers(demoLayers))
             // Camera coordinates and renderer diagnostics, drawn as host-view
             // chrome above the map, with the zoom badge in the corner: the
             // camera's zoom and the planning zoom, which part over the
@@ -155,3 +173,176 @@ private let devModelArchive = ProcessInfo.processInfo
         return value.hasPrefix("/") ? URL(fileURLWithPath: value) : URL(string: value)
     }
     ?? URL(string: "https://tiles.immersivemap.dev/models.pmtiles")!
+
+/// Layers of made-up data that show what `ImmersiveMapLayer` draws: zones
+/// with a hole and a stroke, a route, twenty thousand points, a GeoJSON
+/// document styled by its own simplestyle properties, and shapes across
+/// the world, one of them over the 180th meridian, to look at on the globe
+/// and through the morph. Built once: a layer compares by its data, so the
+/// map prepares each for the GPU once however often the view updates.
+enum DemoLayers {
+    enum Kind: String, CaseIterable, Identifiable {
+        case zones, route, points, geoJSON, world
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .zones: "Zones (Kremlin, Garden Ring)"
+            case .route: "Route (Tverskaya)"
+            case .points: "20 000 points"
+            case .geoJSON: "GeoJSON (simplestyle)"
+            case .world: "World (globe, antimeridian)"
+            }
+        }
+
+        var shortcut: KeyEquivalent {
+            switch self {
+            case .zones: "1"
+            case .route: "2"
+            case .points: "3"
+            case .geoJSON: "4"
+            case .world: "5"
+            }
+        }
+    }
+
+    static func layers(_ kinds: Set<Kind>) -> [ImmersiveMapLayer] {
+        // Drawn in this order: the big zones under the points and the route.
+        [(Kind.world, world), (.zones, zones), (.geoJSON, geoJSON), (.points, points), (.route, route)]
+            .filter { kinds.contains($0.0) }
+            .map(\.1)
+    }
+
+    private static let moscow = GeoCoordinate(latitude: 55.752, longitude: 37.618)
+
+    /// A circle of `radiusMetres` around `centre`, as a ring.
+    private static func circle(around centre: GeoCoordinate, radiusMetres: Double, steps: Int = 96) -> [GeoCoordinate] {
+        let metresPerDegree = 111_320.0
+        return (0 ..< steps).map { index in
+            let angle = Double(index) / Double(steps) * 2 * .pi
+            return GeoCoordinate(latitude: centre.latitude + radiusMetres * sin(angle) / metresPerDegree,
+                                 longitude: centre.longitude
+                                     + radiusMetres * cos(angle) / (metresPerDegree * cos(centre.latitude * .pi / 180)))
+        }
+    }
+
+    /// The Kremlin as a red zone, and a ring between two circles round the
+    /// centre: a zone with a hole.
+    private static let zones = ImmersiveMapLayer(
+        id: "demo.zones",
+        polygons: [
+            ImmersiveMapPolygon(exterior: circle(around: moscow, radiusMetres: 2_600),
+                                holes: [circle(around: moscow, radiusMetres: 1_600)]),
+            ImmersiveMapPolygon(exterior: [GeoCoordinate(latitude: 55.7520, longitude: 37.6114),
+                                           GeoCoordinate(latitude: 55.7553, longitude: 37.6178),
+                                           GeoCoordinate(latitude: 55.7520, longitude: 37.6230),
+                                           GeoCoordinate(latitude: 55.7488, longitude: 37.6185),
+                                           GeoCoordinate(latitude: 55.7497, longitude: 37.6122)],
+                                style: ImmersiveMapPolygonStyle(fillColor: [0.86, 0.16, 0.16, 0.30],
+                                                                strokeColor: [0.86, 0.16, 0.16, 1],
+                                                                strokeWidthPoints: 3))
+        ],
+        polygonStyle: ImmersiveMapPolygonStyle(fillColor: [0.18, 0.47, 0.96, 0.18],
+                                               strokeColor: [0.18, 0.47, 0.96, 0.9],
+                                               strokeWidthPoints: 2))
+
+    /// Tverskaya from the Kremlin to the Belorussky station, with its stops.
+    private static let route: ImmersiveMapLayer = {
+        let path = [GeoCoordinate(latitude: 55.7560, longitude: 37.6150),
+                    GeoCoordinate(latitude: 55.7600, longitude: 37.6110),
+                    GeoCoordinate(latitude: 55.7650, longitude: 37.6050),
+                    GeoCoordinate(latitude: 55.7700, longitude: 37.5960),
+                    GeoCoordinate(latitude: 55.7745, longitude: 37.5880),
+                    GeoCoordinate(latitude: 55.7765, longitude: 37.5815)]
+        return ImmersiveMapLayer(
+            id: "demo.route",
+            polylines: [ImmersiveMapPolyline(coordinates: path)],
+            points: [path.first!, path[2], path[4], path.last!].map { ImmersiveMapPoint(coordinate: $0) },
+            polylineStyle: ImmersiveMapPolylineStyle(color: [0.55, 0.20, 0.85, 0.95], widthPoints: 6),
+            pointStyle: ImmersiveMapPointStyle(color: [1, 1, 1, 1], radiusPoints: 5,
+                                               strokeColor: [0.55, 0.20, 0.85, 1], strokeWidthPoints: 3))
+    }()
+
+    /// Twenty thousand made-up measurements over Moscow, the colour from
+    /// cool to warm with the distance from the centre: what a scientist's
+    /// sample looks like on the map. A fixed seed, so every launch draws
+    /// the same.
+    private static let points: ImmersiveMapLayer = {
+        var state: UInt64 = 0x9E37_79B9_7F4A_7C15
+        func random() -> Double {
+            state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return Double(state >> 11) / Double(1 << 53)
+        }
+        let points = (0 ..< 20_000).map { _ -> ImmersiveMapPoint in
+            // Denser towards the centre.
+            let distance = pow(random(), 0.7) * 0.25
+            let angle = random() * 2 * .pi
+            let coordinate = GeoCoordinate(latitude: moscow.latitude + distance * sin(angle) * 0.56,
+                                           longitude: moscow.longitude + distance * cos(angle))
+            let t = Float(min(distance / 0.25, 1))
+            let color = SIMD4<Float>(0.15 + 0.85 * t, 0.75 - 0.35 * t, 1 - 0.85 * t, 0.85)
+            return ImmersiveMapPoint(coordinate: coordinate,
+                                     style: ImmersiveMapPointStyle(color: color, radiusPoints: 2.5, strokeWidthPoints: 0))
+        }
+        return ImmersiveMapLayer(id: "demo.points", points: points, zoomRange: 9 ... 30)
+    }()
+
+    /// A GeoJSON document whose features carry their own simplestyle
+    /// properties: Gorky Park in green, a walk along the river in orange,
+    /// two places as large red markers.
+    private static let geoJSON: ImmersiveMapLayer = {
+        let document = """
+        {"type": "FeatureCollection", "features": [
+          {"type": "Feature",
+           "properties": {"name": "Gorky Park", "fill": "#2ecc71", "fill-opacity": 0.35, "stroke": "#1e8449", "stroke-width": 2},
+           "geometry": {"type": "Polygon", "coordinates": [[
+             [37.5930, 55.7310], [37.6040, 55.7330], [37.6080, 55.7290],
+             [37.5990, 55.7240], [37.5880, 55.7230], [37.5850, 55.7270], [37.5930, 55.7310]]]}},
+          {"type": "Feature",
+           "properties": {"name": "River walk", "stroke": "#e67e22", "stroke-width": 5},
+           "geometry": {"type": "LineString", "coordinates": [
+             [37.6090, 55.7440], [37.6040, 55.7395], [37.6010, 55.7350], [37.5960, 55.7320]]}},
+          {"type": "Feature",
+           "properties": {"name": "Bolshoi Theatre", "marker-color": "#e74c3c", "marker-size": "large"},
+           "geometry": {"type": "Point", "coordinates": [37.6186, 55.7601]}},
+          {"type": "Feature",
+           "properties": {"name": "Red Square", "marker-color": "#e74c3c", "marker-size": "large"},
+           "geometry": {"type": "Point", "coordinates": [37.6208, 55.7539]}}
+        ]}
+        """
+        return try! ImmersiveMapLayer(id: "demo.geojson", geoJSON: Data(document.utf8))
+    }()
+
+    /// Shapes the size of countries, to see on the globe and through the
+    /// morph: a zone over the Bering Strait across the 180th meridian, one
+    /// over the Mediterranean, a line from Moscow to New York, and a point
+    /// at every capital the line passes.
+    private static let world = ImmersiveMapLayer(
+        id: "demo.world",
+        polygons: [
+            ImmersiveMapPolygon(exterior: [GeoCoordinate(latitude: 55, longitude: 160),
+                                           GeoCoordinate(latitude: 55, longitude: -160),
+                                           GeoCoordinate(latitude: 70, longitude: -160),
+                                           GeoCoordinate(latitude: 70, longitude: 160)]),
+            ImmersiveMapPolygon(exterior: [GeoCoordinate(latitude: 31, longitude: -5),
+                                           GeoCoordinate(latitude: 31, longitude: 36),
+                                           GeoCoordinate(latitude: 45, longitude: 36),
+                                           GeoCoordinate(latitude: 45, longitude: -5)],
+                                style: ImmersiveMapPolygonStyle(fillColor: [0.95, 0.65, 0.10, 0.25],
+                                                                strokeColor: [0.95, 0.65, 0.10, 1]))
+        ],
+        polylines: [ImmersiveMapPolyline(coordinates: [moscow,
+                                                       GeoCoordinate(latitude: 52.52, longitude: 13.40),
+                                                       GeoCoordinate(latitude: 51.51, longitude: -0.13),
+                                                       GeoCoordinate(latitude: 40.71, longitude: -74.01)])],
+        points: [moscow,
+                 GeoCoordinate(latitude: 52.52, longitude: 13.40),
+                 GeoCoordinate(latitude: 51.51, longitude: -0.13),
+                 GeoCoordinate(latitude: 40.71, longitude: -74.01)].map { ImmersiveMapPoint(coordinate: $0) },
+        polygonStyle: ImmersiveMapPolygonStyle(fillColor: [0.10, 0.70, 0.75, 0.25],
+                                               strokeColor: [0.10, 0.70, 0.75, 1]),
+        polylineStyle: ImmersiveMapPolylineStyle(color: [0.95, 0.25, 0.45, 1], widthPoints: 3),
+        pointStyle: ImmersiveMapPointStyle(color: [0.95, 0.25, 0.45, 1], radiusPoints: 6),
+        zoomRange: 0 ... 9)
+}

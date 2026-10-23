@@ -5,6 +5,8 @@ enum RenderInvalidationReason {
     case tileAvailable
     case tileRetryDue
     case sceneModelAssetLoaded
+    /// A layer of the app's data is ready on the GPU (`LayerMeshStore`).
+    case layerDataLoaded
     case externalStateChanged
 }
 

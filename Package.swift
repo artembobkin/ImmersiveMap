@@ -64,6 +64,7 @@ let package = Package(
                 .process("Globe/Shaders"),
                 .process("Horizon/Shaders"),
                 .process("Labels/Shaders"),
+                .process("Layers/Shaders"),
                 .process("Render/Debug/Shaders"),
                 .process("Render/PostProcessing/Shaders"),
                 .process("Render/Shaders/Shared/GeoMath.metal"),
