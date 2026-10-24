@@ -69,7 +69,11 @@ final class DebugOverlayHUDLiveTileRowsTests: XCTestCase {
         let ready = await reporter.waitUntilRow(for: tile, hasDetail: "ready")
         XCTAssertEqual(ready?.detail, "ready")
         XCTAssertFalse(frame.pacing.needsFrameRendering)
-        XCTAssertGreaterThan(changes.count, changesBeforeLanding, "The reporter announced the landing")
+        // The reporter writes the row under its queue and speaks outside it,
+        // so the row reads "ready" a moment before the word of it arrives:
+        // the word is waited for, not assumed to have come with the row.
+        let announced = await waitUntil { changes.count > changesBeforeLanding }
+        XCTAssertTrue(announced, "The reporter announced the landing")
 
         // The panel's refresh on that word reads the reporter itself.
         let appliedBefore = panel.appliedCount
@@ -189,6 +193,16 @@ private struct ReplayedHUDPanel {
     func shownRowText(for tile: Tile) -> String? {
         shownRow(for: tile).map { DebugOverlayTileCard($0).headline }
     }
+}
+
+/// Polls `condition` for up to five seconds, since the loader finishes on
+/// its own task and the test has no handle to await.
+private func waitUntil(_ condition: () -> Bool) async -> Bool {
+    for _ in 0..<500 {
+        if condition() { return true }
+        try? await Task.sleep(nanoseconds: 10_000_000)
+    }
+    return condition()
 }
 
 private extension TileLoadingStatusReporter {
