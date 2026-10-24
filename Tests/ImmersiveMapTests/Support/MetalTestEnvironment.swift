@@ -22,6 +22,19 @@ enum MetalTestEnvironment {
         ProcessInfo.processInfo.environment[requirementKey] == "1"
     }
 
+    /// Set to `1` to run the picture tests, the ones that render a frame
+    /// through `OffscreenFrameHarness` and assert on its pixels.
+    ///
+    /// They are off by default and no CI job sets this: a picture test is
+    /// brittle (a driver, a runner image or a one-pixel shift in a shader
+    /// fails it) and is not maintained as a gate. The key exists for a
+    /// developer who wants to run the old suite once, by hand.
+    static let pictureTestsKey = "IMMERSIVE_MAP_RUN_PICTURE_TESTS"
+
+    static var arePictureTestsEnabled: Bool {
+        ProcessInfo.processInfo.environment[pictureTestsKey] == "1"
+    }
+
     /// Why this build cannot run GPU code at all, or nil when it can.
     ///
     /// Both conditions are facts about how the tests were built rather than

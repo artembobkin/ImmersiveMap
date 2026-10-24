@@ -17,7 +17,7 @@ permissions:
 jobs:
   test:
     name: Build & Test (SPM)
-    runs-on: macos-15
+    runs-on: macos-26
 
     steps:
       - name: Checkout
@@ -33,13 +33,16 @@ jobs:
         run: swift test
 
   # SwiftPM does not compile the package's .metal sources for the test bundle,
-  # so every Metal-backed test skips itself under `swift test`: the whole
-  # rendering suite, including the end-to-end offscreen frames, is invisible to
-  # the job above. Building through Xcode compiles the shaders, which is the
-  # only way those tests run at all.
+  # so every Metal-backed test skips itself under `swift test`: the shader and
+  # pipeline tests are invisible to the job above. Building through Xcode
+  # compiles the shaders, which is the only way those tests run at all.
+  #
+  # The picture tests (a frame rendered offscreen and judged by its pixels)
+  # are not part of this job or any other: they are brittle and are run by
+  # hand only, with IMMERSIVE_MAP_RUN_PICTURE_TESTS=1. Do not set that here.
   gpu-test:
     name: Test with shaders (Xcode, macOS)
-    runs-on: macos-15
+    runs-on: macos-26
 
     env:
       # Turns "this machine cannot render" from a silent skip into a failure.
@@ -76,7 +79,7 @@ jobs:
   # only compiles and runs on iOS, so the macOS jobs above never touch it.
   ios-test:
     name: Test (Xcode, iOS Simulator)
-    runs-on: macos-15
+    runs-on: macos-26
 
     env:
       IMMERSIVE_MAP_REQUIRE_METAL: "1"

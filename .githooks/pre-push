@@ -1,0 +1,27 @@
+#!/bin/bash
+# Copyright (c) 2025-2026 ImmersiveMap contributors.
+# SPDX-License-Identifier: MIT
+#
+# Runs the native test suite before a push, so a commit that fails
+# `swift test` never reaches CI. The suite is what the "Build & Test (SPM)"
+# job runs and takes about a minute. The shader-backed tests still skip here,
+# as they do under any `swift test`.
+#
+# Installed once per clone with `git config core.hooksPath .githooks`.
+# `git push --no-verify` skips it on purpose.
+
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+echo "pre-push: running swift test"
+# `set -o pipefail` above makes the pipe report the test run's exit code, not
+# tail's, so a failed suite is seen here.
+if swift test 2>&1 | tail -n 30; then
+    echo "pre-push: tests passed"
+    exit 0
+fi
+
+echo >&2
+echo "pre-push: swift test failed, push refused. Fix the tests, or skip with 'git push --no-verify'." >&2
+exit 1

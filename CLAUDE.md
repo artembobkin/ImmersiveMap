@@ -19,6 +19,12 @@ xcodebuild test -workspace .swiftpm/xcode/package.xcworkspace -scheme ImmersiveM
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'   # full suite, iOS (runs UIKit-gated tests)
 ```
 
+CI (`.github/workflows/ci.yml`) runs on the `macos-26` image, whose default Xcode is the one the code is developed with (Xcode 26.6, Swift 6.3). Keep the two the same: strict concurrency diagnostics differ between Swift versions, and a mismatch shows up as a CI build that fails on code the local build accepts. When the local Xcode moves, move the image (or select the Xcode with `DEVELOPER_DIR`) in the same change.
+
+`.githooks/pre-push` runs `swift test` before every push and refuses the push when it fails. It is installed once per clone with `git config core.hooksPath .githooks`, and `git push --no-verify` skips it when that is wanted.
+
+The picture tests (an offscreen frame judged by its pixels) are skipped by default and are never run in CI. To run them once by hand, set `IMMERSIVE_MAP_RUN_PICTURE_TESTS=1` (with the `TEST_RUNNER_` prefix for xcodebuild). Never write new ones, see `.claude/rules/tests.md`.
+
 To run the map in an app, open `ImmersiveMap.xcworkspace`. Work in progress is shown in `Develop/ImmersiveMapDevMac`, and `Examples/macOS/ImmersiveMapMac` stays the untouched demonstration of the shipping tile service.
 
 ## Architecture

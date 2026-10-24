@@ -19,7 +19,10 @@ import XCTest
 /// tests assert on the picture at all.
 ///
 /// A compiled Metal library is required, so `makeOrSkip` skips under
-/// `swift test` and runs in the xcodebuild workspace suite.
+/// `swift test`. It also skips in the xcodebuild suite unless
+/// `IMMERSIVE_MAP_RUN_PICTURE_TESTS=1` is set: the tests built on this
+/// harness are picture tests, kept for a developer to run by hand and
+/// never part of CI (see `MetalTestEnvironment.pictureTestsKey`).
 @MainActor
 final class OffscreenFrameHarness {
     enum Failure: Error, CustomStringConvertible {
@@ -126,9 +129,18 @@ final class OffscreenFrameHarness {
     /// The harness reads its frames back on the CPU, so it needs a
     /// unified-memory GPU: that rules out the iOS Simulator, where these tests
     /// skip even under the requirement.
+    ///
+    /// The picture tests are opt-in, so the skip for a run that did not ask
+    /// for them comes first and holds even when Metal is required.
     @discardableResult
     static func requireMetalDeviceOrSkip() throws -> MTLDevice {
-        try MetalTestEnvironment.requireDevice(needsReadback: true)
+        guard MetalTestEnvironment.arePictureTestsEnabled else {
+            throw XCTSkip("""
+            Picture tests are off (\(MetalTestEnvironment.pictureTestsKey) is unset): they render a frame \
+            and assert on its pixels, and they are run by hand, never in CI.
+            """)
+        }
+        return try MetalTestEnvironment.requireDevice(needsReadback: true)
     }
 
     private init(settings: ImmersiveMapSettings,
