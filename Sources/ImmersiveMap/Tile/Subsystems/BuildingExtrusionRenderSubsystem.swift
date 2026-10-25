@@ -47,7 +47,6 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     /// index-aligned with them, 0 for one not drawn.
     private var heightScales: [Float] = []
     /// The ground relief the buildings stand on, nil while it is off.
-    private let groundReliefStore: GroundReliefStore?
     /// Each of the frame's placements' lifts over the relief, index-aligned
     /// with them: one float per volume of the tile, in the terrain's own
     /// metres, nil for a tile whose terrain is not in. Metres, not world
@@ -66,10 +65,8 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
          shadowMapTextureProvider: @escaping () -> MTLTexture?,
          shadowFallbackTexture: MTLTexture,
          extrusion: ImmersiveMapSettings.ExtrusionSettings = ImmersiveMapSettings.ExtrusionSettings(),
-         debugOverlayControls: DebugOverlayControlState,
-         groundReliefStore: GroundReliefStore? = nil) {
+         debugOverlayControls: DebugOverlayControlState) {
         self.debugOverlayControls = debugOverlayControls
-        self.groundReliefStore = groundReliefStore
         self.extrusion = extrusion
         self.extrudedTilePipeline = extrudedTilePipeline
         self.extrudedDepthState = extrudedDepthState
@@ -138,30 +135,24 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     }
 
     /// Each drawn placement's lifts over the relief (`BuildingReliefLifts`).
-    private func updateLiftBuffers(placements: [PlaceTile], drawnKeys: [VisibleTile?], frameContext _: FrameContext) {
+    private func updateLiftBuffers(placements: [PlaceTile], drawnKeys: [VisibleTile?], frameContext: FrameContext) {
         liftBuffers = reliefLifts.update(placements: placements,
                                          drawnKeys: drawnKeys,
-                                         store: groundReliefStore,
+                                         relief: frameContext.services.groundRelief,
                                          device: extrudedTilePipeline.pipelineState.device)
     }
 
-    /// The datum the lifts are drawn from this frame, in the lifts' own
-    /// metres: the terrain under the point the camera looks at
-    /// (`GroundReliefStore.datumMetres`).
-    private var liftDatumMetres: Float {
-        groundReliefStore?.datumMetres ?? 0
-    }
-
-    /// The frame's strength the lifts are drawn at
-    /// (`GroundReliefStore.strengthScale`).
-    private var liftStrength: Float {
-        groundReliefStore?.strengthScale ?? 1
-    }
-
-    /// The world units a metre of terrain rises by this frame, one for
-    /// every tile (`GroundReliefStore.worldUnitsPerMetre`).
-    private var liftUnitsPerMetre: Float {
-        groundReliefStore?.worldUnitsPerMetre ?? 0
+    /// The frame's relief the lifts are drawn by: the datum, the terrain
+    /// under the point the camera looks at in the lifts' own metres
+    /// (`GroundReliefFrame.datumMetres`), the frame's strength
+    /// (`GroundReliefFrame.strength`) and the world units a metre of
+    /// terrain rises by this frame, one for every tile
+    /// (`GroundReliefFrame.worldUnitsPerMetre`). The plane without a relief.
+    private static func lift(_ frameContext: FrameContext) -> (datumMetres: Float, strength: Float, unitsPerMetre: Float) {
+        guard let relief = frameContext.services.groundRelief else {
+            return (0, 1, 0)
+        }
+        return (relief.datumMetres, relief.strength, relief.worldUnitsPerMetre)
     }
 
     /// The model tile (`ModelTileStore.tileZoom`) a map tile lies in.
@@ -180,6 +171,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
             // The casters are the building coverage, the same partition the
             // world pass draws, so a building casts exactly once a window.
             hiddenBuildingIndexBuffers.update(frameContext.sharedState.sceneModelState.replacedBuildings)
+            let lift = Self.lift(frameContext)
             BuildingExtrusionDrawer.drawShadowCasters(
                 renderEncoder: encoder,
                 lightProjectionView: lightProjectionView,
@@ -188,9 +180,9 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
                 flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                 heightScales: heightScales,
                 liftBuffers: liftBuffers,
-                liftDatumMetres: liftDatumMetres,
-                liftStrength: liftStrength,
-                liftUnitsPerMetre: liftUnitsPerMetre,
+                liftDatumMetres: lift.datumMetres,
+                liftStrength: lift.strength,
+                liftUnitsPerMetre: lift.unitsPerMetre,
                 extrudedTilePipeline: extrudedTilePipeline,
                 extrudedDepthState: extrudedDepthState)
             return
@@ -214,6 +206,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
                                                           fallbackTexture: shadowFallbackTexture)
         hiddenBuildingIndexBuffers.update(frameContext.sharedState.sceneModelState.replacedBuildings)
         GroundFogUniform.bind(GroundFogUniform.resolveForBuildings(frameContext: frameContext), encoder: encoder)
+        let lift = Self.lift(frameContext)
         BuildingExtrusionDrawer.drawBuildings(renderEncoder: encoder,
                                               cameraUniform: frameContext.cameraUniform,
                                               shadowBinding: shadowBinding,
@@ -222,9 +215,9 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
                                               flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                               heightScales: heightScales,
                                               liftBuffers: liftBuffers,
-                                              liftDatumMetres: liftDatumMetres,
-                                              liftStrength: liftStrength,
-                                              liftUnitsPerMetre: liftUnitsPerMetre,
+                                              liftDatumMetres: lift.datumMetres,
+                                              liftStrength: lift.strength,
+                                              liftUnitsPerMetre: lift.unitsPerMetre,
                                               extrudedTilePipeline: extrudedTilePipeline,
                                               extrudedStencilTestState: extrudedStencilTestState,
                                               depthDisabledState: depthDisabledState)

@@ -5,12 +5,12 @@ import Foundation
 import simd
 
 /// Reads what the country around the point the camera looks at is like
-/// off the terrain store (`ImmersiveMapTerrainSurroundings`), once a frame
+/// off the frame's relief (`ImmersiveMapTerrainSurroundings`), once a frame
 /// while the frame is on the terrain. The frame's own reading, kept by the
 /// engine across frames for the smoothing and the hysteresis.
 ///
 /// The heights are read on the CPU from the camera's own terrain map
-/// (`GroundReliefStore.cameraTerrainZoom`, the map the camera flies over
+/// (`GroundReliefFrame.cameraTerrainZoom`, the map the camera flies over
 /// at every zoom, bilinear and continuous in the camera's place), at the
 /// centre and on two rings around it, a few dozen lookups: nothing of the
 /// GPU, no readback, no latency. The sample is taken again only when the
@@ -40,15 +40,15 @@ struct GroundReliefSurroundings {
     /// terrain under the point is still on its way the first time. Off the
     /// terrain the smoothing and the kind are dropped, so a relief that
     /// rises again starts from what it finds, not from where it left off.
-    mutating func update(store: GroundReliefStore,
+    mutating func update(relief: GroundReliefFrame,
                          centerWorldMercator: SIMD2<Double>,
                          settings: Settings,
                          deltaTime: TimeInterval) -> ImmersiveMapTerrainSurroundings? {
-        guard store.isActive else {
+        guard relief.isActive else {
             reset()
             return nil
         }
-        sample(store: store, centerWorldMercator: centerWorldMercator, settings: settings)
+        sample(relief: relief, centerWorldMercator: centerWorldMercator, settings: settings)
         guard let sampledSpanMetres else {
             return nil
         }
@@ -67,7 +67,7 @@ struct GroundReliefSurroundings {
         return ImmersiveMapTerrainSurroundings(kind: kind,
                                                mountainousness: (Self.mountainousness(spanMetres: smoothed, settings: settings) * 100).rounded() / 100,
                                                heightSpanMetres: smoothed.rounded(),
-                                               groundMetres: store.datumMetres.rounded())
+                                               groundMetres: relief.datumMetres.rounded())
     }
 
     mutating func reset() {
@@ -82,23 +82,23 @@ struct GroundReliefSurroundings {
     /// Takes the disc's span again when the point moved a share of the
     /// radius, the terrain in changed or the radius was set. A sample that
     /// finds no terrain keeps the last one.
-    private mutating func sample(store: GroundReliefStore, centerWorldMercator: SIMD2<Double>, settings: Settings) {
+    private mutating func sample(relief: GroundReliefFrame, centerWorldMercator: SIMD2<Double>, settings: Settings) {
         let radiusMetres = max(settings.sampleRadiusMetres, 1)
         let latitude = ImmersiveMapProjection.latitude(fromNormalizedWorldY: centerWorldMercator.y)
         let metresPerWorld = ImmersiveMapProjection.earthCircumferenceMeters * max(cos(latitude), 1e-6)
         let radiusWorld = Double(radiusMetres) / metresPerWorld
-        if let sampledCentre, sampledVersion == store.version, sampledRadiusMetres == radiusMetres,
+        if let sampledCentre, sampledVersion == relief.version, sampledRadiusMetres == radiusMetres,
            simd_length(centerWorldMercator - sampledCentre) < radiusWorld * Self.resampleShare {
             return
         }
         guard let span = Self.spanMetres(centerWorldMercator: centerWorldMercator, radiusWorld: radiusWorld, read: {
-            store.elevation(atNormalizedWorld: $0, terrainZoom: store.cameraTerrainZoom)
+            relief.elevation(atNormalizedWorld: $0, terrainZoom: relief.cameraTerrainZoom)
         }) else {
             return
         }
         sampledSpanMetres = span
         sampledCentre = centerWorldMercator
-        sampledVersion = store.version
+        sampledVersion = relief.version
         sampledRadiusMetres = radiusMetres
     }
 

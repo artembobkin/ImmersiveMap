@@ -13,7 +13,7 @@ import simd
 /// the buildings and the models, which they never paint over.
 /// Nothing is drawn under them: beyond the last rule the haze paints the
 /// horizon. With the relief on, a flattened tile rises by its terrain
-/// (`GroundReliefStore`).
+/// (`GroundReliefFrame`).
 final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     let name: String = "FlatMapSurface"
 
@@ -29,7 +29,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     /// (`GroundShadowMaskBinding.cascades`), and its depth fallback.
     private let shadowMapTextureProvider: () -> MTLTexture?
     private let shadowFallbackTexture: MTLTexture?
-    private let groundReliefStore: GroundReliefStore?
     /// The tile zoom the ground is flattened from, the coarsest the
     /// terrain under the screen's centre is read at.
     private let groundFlatteningFromTileZoom: Int?
@@ -48,7 +47,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
          groundShadowMaskFallbackTexture: MTLTexture,
          shadowMapTextureProvider: @escaping () -> MTLTexture? = { nil },
          shadowFallbackTexture: MTLTexture? = nil,
-         groundReliefStore: GroundReliefStore? = nil,
          groundFlatteningFromTileZoom: Int? = nil) {
         self.tilePipeline = tilePipeline
         self.groundOwnerState = groundOwnerState
@@ -60,7 +58,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         self.groundShadowMaskFallbackTexture = groundShadowMaskFallbackTexture
         self.shadowMapTextureProvider = shadowMapTextureProvider
         self.shadowFallbackTexture = shadowFallbackTexture
-        self.groundReliefStore = groundReliefStore
         self.groundFlatteningFromTileZoom = groundFlatteningFromTileZoom
     }
 
@@ -110,7 +107,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
                                   roadRankState: roadRankState,
                                   part: part,
                                   isWireframeEnabled: isWireframeEnabled,
-                                  groundRelief: groundReliefStore,
+                                  groundRelief: frameContext.services.groundRelief,
                                   pointWidthReferenceDepth: reliefCentreDepth(frameContext: frameContext))
         encoder.setDepthStencilState(depthDisabledState)
     }
@@ -118,8 +115,8 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
     /// The depth the road widths are stated at on a relief: the terrain
     /// under the screen's centre, one lookup a frame. Nil off the relief.
     private func reliefCentreDepth(frameContext: FrameContext) -> Float? {
-        guard let groundReliefStore else { return nil }
-        if let depth = GroundReliefCameraLift.centreGroundDepth(store: groundReliefStore,
+        guard let groundRelief = frameContext.services.groundRelief else { return nil }
+        if let depth = GroundReliefCameraLift.centreGroundDepth(relief: groundRelief,
                                                                 cameraMatrix: frameContext.cameraMatrices.projectionView,
                                                                 centerWorldMercator: frameContext.visibleContent.centerWorldMercator,
                                                                 tileZoom: frameContext.visibleContent.tileZoomLevel,
@@ -129,11 +126,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         return groundReliefCentreDepth
     }
 
-    func handleMemoryWarning() {
-        groundReliefStore?.removeAll()
-    }
+    func handleMemoryWarning() {}
 
-    func evict() {
-        groundReliefStore?.removeAll()
-    }
+    func evict() {}
 }

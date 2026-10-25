@@ -7,8 +7,8 @@ import simd
 /// the scene's light, the share of the style's intensity the relief's rise
 /// leaves, the style's colours, and how it fades with the distance from
 /// the eye, as the fills' fragment stages read them (`GroundReliefUniform`,
-/// `groundReliefHillshade` in GroundRelief.h). Resolved once a frame by the
-/// store (`GroundReliefStore.setLight`), so every draw on the relief shades
+/// `groundReliefHillshade` in GroundRelief.h). Resolved once a frame
+/// (`GroundReliefFrameState.setLight`), so every draw on the relief shades
 /// by the same light.
 struct GroundReliefHillshade: Equatable {
     /// The direction toward the light in the flat basis (+X east, +Y north,

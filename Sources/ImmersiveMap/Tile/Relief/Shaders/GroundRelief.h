@@ -24,13 +24,13 @@ using namespace metal;
 // GroundReliefUniform):
 // - placement: the tile's north-west corner and side in the terrain
 //   texture's 0...1, and the world units a metre of terrain rises by, the
-//   frame's for every tile (GroundReliefStore.worldUnitsPerMetre), the
+//   frame's for every tile (GroundReliefFrame.worldUnitsPerMetre), the
 //   exaggeration not in it.
 // - frame: the datum, the terrain's metres under the point the camera
 //   looks at, which the ground is drawn from, so that point lies on the
 //   ground at the origin (GroundReliefCameraLift), the strength, the
 //   configured exaggeration times what the zoom fades leave this frame
-//   (GroundReliefStore.setFrame), and the ground metres the terrain
+//   (GroundReliefFrameState.setFrame), and the ground metres the terrain
 //   texture spans a side.
 // - hillshadeLight: the direction toward the scene's light in the flat
 //   basis (+x east, +y north, +z up), unit length, and the amount of

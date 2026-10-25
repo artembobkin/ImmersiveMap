@@ -89,9 +89,10 @@ final class RenderPersistentContext {
     let sceneModelPipeline: SceneModelPipeline
     /// The models of the model archive, nil for a map without one.
     let modelTileStore: ModelTileStore?
-    /// The terrain the flattened ground rises by, nil while the relief is
-    /// off (`TileSettings.GroundReliefSettings`).
-    let groundReliefStore: GroundReliefStore?
+    /// The ground relief: the terrain the flattened ground rises by and
+    /// the state the frames draw it by, nil while the relief is off
+    /// (`TileSettings.GroundReliefSettings`).
+    let groundRelief: GroundReliefFrameState?
     let modelTilePipeline: ModelTilePipeline
     let placementStencilPipeline: PlacementStencilPipeline
     /// The trees of the woods and the parks: their model and their
@@ -207,11 +208,11 @@ final class RenderPersistentContext {
                                                   device: metal.device,
                                                   schema: styleRuntime.schema)
         self.modelTileStore?.eventSink = eventSink
-        self.groundReliefStore = GroundReliefStore.make(settings: config,
+        self.groundRelief = GroundReliefFrameState.make(settings: config,
                                                         hillshade: styleRuntime.hillshade,
                                                         occlusion: styleRuntime.terrainOcclusion,
                                                         device: metal.device)
-        self.groundReliefStore?.eventSink = eventSink
+        self.groundRelief?.store.eventSink = eventSink
         self.treePipeline = shared.treePipeline
         self.treePalette = styleRuntime.treePalette
         self.treeModelStore = TreeModelStore(device: metal.device)

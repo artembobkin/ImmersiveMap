@@ -22,7 +22,7 @@ import simd
 /// A frame past the relief's zooms, collapsed into the plane, asks for
 /// the terrain the relief would read when it rises back, no finer: its
 /// targets stand for their ancestors at `maximumTargetZoom`, the tile
-/// zoom of the collapse (`GroundReliefStore.collapseTileZoom`). The
+/// zoom of the collapse (`GroundReliefFrameState.collapseTileZoom`). The
 /// street zooms' own tiles are nothing the relief ever reads, and most
 /// of them the source has not got.
 enum GroundReliefDemand {

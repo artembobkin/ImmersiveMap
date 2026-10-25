@@ -122,17 +122,17 @@ final class GroundReliefStandInOffscreenTests: XCTestCase {
         var scene = try await makeSceneOverADownTerrainHost()
         // The host comes up. The camera does not move.
         scene.serves.withLock { $0 = true }
-        let parkNow = try await scene.framesUntilTheParkGoes(within: GroundReliefStore.retryBaseDelay + 10)
+        let parkNow = try await scene.framesUntilTheParkGoes(within: GroundReliefLoadStates.retryBaseDelay + 10)
         XCTAssertEqual(parkNow, 0, "The zoom 10 tiles take their slots once their terrain lands")
     }
 
     /// A terrain host that stays down: once its loads have failed
-    /// `GroundReliefStore.unavailableAfterAttempts` times, the tiles over
+    /// `GroundReliefLoadStates.unavailableAfterAttempts` times, the tiles over
     /// it are placed flat, on the plane, instead of waiting for ever.
     @MainActor
     func testATerrainHostThatStaysDownLeavesTheTilesOnThePlane() async throws {
         var scene = try await makeSceneOverADownTerrainHost()
-        let parkNow = try await scene.framesUntilTheParkGoes(within: GroundReliefStore.retryBaseDelay + 10)
+        let parkNow = try await scene.framesUntilTheParkGoes(within: GroundReliefLoadStates.retryBaseDelay + 10)
         XCTAssertEqual(parkNow, 0, "The zoom 10 tiles are placed flat once the host is known to be down")
     }
 

@@ -97,10 +97,10 @@ enum RoadLabelPlacer {
     struct PointLifts {
         /// The terrain's metres under each path point, `pathPoints.count` of them.
         let metres: [Float]
-        /// The frame's datum (`GroundReliefStore.datumMetres`).
+        /// The frame's datum (`GroundReliefFrame.datumMetres`).
         let datumMetres: Float
         /// World units per metre over the datum this frame: the rise
-        /// (`GroundReliefStore.worldUnitsPerMetre`) times the relief's
+        /// (`GroundReliefFrame.worldUnitsPerMetre`) times the relief's
         /// strength (`GroundRelief.strength`).
         let unitsPerMetre: Float
 

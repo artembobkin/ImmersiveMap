@@ -35,7 +35,7 @@ import simd
 /// faces (`ImmersiveMapHillshade`).
 ///
 /// It draws when the mountains cast this frame
-/// (`GroundReliefStore.castsShadowsThisFrame`), which opens the shadow pass
+/// (`GroundReliefFrame.castsShadows`), which opens the shadow pass
 /// with no building in sight (`ShadowPassGateResolver`), and the pass runs
 /// only when the map went stale (`ShadowMapReuseController`, the terrain's
 /// `ShadowSignature` among what makes it so).
@@ -54,18 +54,15 @@ final class GroundReliefShadowCasterSubsystem: RenderSubsystem {
     private let pipeline: RasterTilePipeline
     private let grid: RasterTileGrid
     private let depthState: MTLDepthStencilState
-    private let groundReliefStore: GroundReliefStore?
     private let groundFlattening: ImmersiveMapSettings.TileSettings.GroundFlatteningSettings
 
     init(device: MTLDevice,
          pipeline: RasterTilePipeline,
          depthState: MTLDepthStencilState,
-         groundReliefStore: GroundReliefStore?,
          groundFlattening: ImmersiveMapSettings.TileSettings.GroundFlatteningSettings) {
         self.pipeline = pipeline
         self.grid = RasterTileGrid(device: device)
         self.depthState = depthState
-        self.groundReliefStore = groundReliefStore
         self.groundFlattening = groundFlattening
     }
 
@@ -76,7 +73,7 @@ final class GroundReliefShadowCasterSubsystem: RenderSubsystem {
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard let slot = ShadowCascadeSlot(casterLayer: layer),
               frameContext.renderSurfaceMode == .flat,
-              let store = groundReliefStore, store.castsShadowsThisFrame,
+              let relief = frameContext.services.groundRelief, relief.castsShadows,
               let lightProjectionView = frameContext.shadowFrameState?.lightProjectionView(for: slot) else { return }
         let placements = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
         // The horizon backdrop is no ground of the planner's and casts nothing.
@@ -103,7 +100,7 @@ final class GroundReliefShadowCasterSubsystem: RenderSubsystem {
             if let cached = sourceReliefs[source] {
                 resolved = cached
             } else {
-                resolved = source.displacement.flatMap { store.relief(for: source.tile, terrain: $0) }.map { relief in
+                resolved = source.displacement.flatMap { relief.relief(for: source.tile, terrain: $0) }.map { relief in
                     let gridCells = groundFlattening.grid(forTileZoom: source.tile.z)
                     let cells = rasterSizeByTile[source.tile].map {
                         RasterTileGrid.reliefCells(gridCells: gridCells, relief: relief, rasterSize: $0)
@@ -119,7 +116,7 @@ final class GroundReliefShadowCasterSubsystem: RenderSubsystem {
             guard let mesh = grid.mesh(forTileZoom: square.z, atLeast: squareCells) else { continue }
             GroundReliefUniform.bind(resolved.relief.narrowed(to: square, in: source.tile),
                                      over: square,
-                                     store: store,
+                                     frame: relief,
                                      renderMapSize: flatRenderState.renderMapSize,
                                      encoder: encoder)
             let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: square.x,

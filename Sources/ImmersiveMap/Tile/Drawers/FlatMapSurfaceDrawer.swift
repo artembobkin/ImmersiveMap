@@ -56,8 +56,8 @@ enum FlatMapSurfaceDrawer {
 
     /// - Parameter roadRankState: the road buckets' state, the rank depth
     ///   tested and written (`RoadRankDepth`).
-    /// - Parameter groundRelief: the terrain the flattened ground rises by,
-    ///   nil for a flat ground. Everything of a flattened tile whose terrain
+    /// - Parameter groundRelief: the frame's relief the flattened ground
+    ///   rises by, nil for a flat ground. Everything of a flattened tile whose terrain
     ///   is in rises by it: its fills, its lines, its roads and its bridges.
     /// - Parameter pointWidthReferenceDepth: the view depth the point-locked
     ///   road widths are stated at, the ground under the centre of the
@@ -85,7 +85,7 @@ enum FlatMapSurfaceDrawer {
                      roadRankState: MTLDepthStencilState,
                      part: Part,
                      isWireframeEnabled: Bool,
-                     groundRelief: GroundReliefStore? = nil,
+                     groundRelief: GroundReliefFrame? = nil,
                      pointWidthReferenceDepth: Float? = nil) {
         tilePipeline.selectPipeline(renderEncoder: renderEncoder)
         // Every tile triangle (ground, road buckets, bridge overlay) is
@@ -147,7 +147,7 @@ enum FlatMapSurfaceDrawer {
         // source placed in its own slot and as a stand-in rises by one
         // terrain, drawn through the relief variant of every class's
         // pipeline.
-        let reliefStore = tilePipeline.flatReliefPipelineStates.isEmpty ? nil : groundRelief
+        let reliefFrame = tilePipeline.flatReliefPipelineStates.isEmpty ? nil : groundRelief
         var sourceIndices: [FlatGroundSourceKey: Int] = [:]
         var sources: [Source] = []
         sources.reserveCapacity(placeTilesContext.tilePlacements.count)
@@ -183,8 +183,8 @@ enum FlatMapSurfaceDrawer {
         sources.sort { $0.stencilReference > $1.stencilReference }
         for index in sources.indices where sources[index].metalTile.tileBuffers.ground.isFlattened {
             let tile = sources[index].metalTile.tile
-            sources[index].relief = sources[index].displacement.flatMap { reliefStore?.relief(for: tile, terrain: $0) }
-            sources[index].shading = sources[index].terrain.flatMap { reliefStore?.relief(for: tile, terrain: $0) }
+            sources[index].relief = sources[index].displacement.flatMap { reliefFrame?.relief(for: tile, terrain: $0) }
+            sources[index].shading = sources[index].terrain.flatMap { reliefFrame?.relief(for: tile, terrain: $0) }
         }
         let linedSources = sources.filter(\.drawsLines)
         let groundSources = sources.filter(\.drawsGround)
@@ -240,7 +240,7 @@ enum FlatMapSurfaceDrawer {
             GroundReliefUniform.bind(relief,
                                      shading: source.shading,
                                      over: source.metalTile.tile,
-                                     store: groundRelief,
+                                     frame: groundRelief,
                                      renderMapSize: flatRenderState.renderMapSize,
                                      encoder: renderEncoder)
         }
@@ -450,7 +450,7 @@ enum FlatMapSurfaceDrawer {
     /// its terrain texture at vertex texture 0, and at vertex buffer 9
     /// where the tile lies in it, the world units a metre of terrain rises
     /// by at the tile's latitude, worked out here once for the tile, the
-    /// frame's datum (`GroundReliefStore.datumMetres`) and the frame's
+    /// frame's datum (`GroundReliefFrame.datumMetres`) and the frame's
     /// strength.
     private static func drawFlatGeometryLayer(renderEncoder: MTLRenderCommandEncoder,
                                               buffers: TileBuffers.GeometryLayer,

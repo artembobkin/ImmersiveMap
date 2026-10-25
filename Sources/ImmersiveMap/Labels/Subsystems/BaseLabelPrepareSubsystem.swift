@@ -510,7 +510,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             // the record, the frame's datum and rise over them.
             var lifts: RoadLabelPlacer.PointLifts?
             if let groundRelief,
-               let tileLift = GroundReliefTileLift(store: groundRelief,
+               let tileLift = GroundReliefTileLift(relief: groundRelief,
                                                    tile: record.ownerKey.tile,
                                                    terrain: displacementBySource[record.ownerKey.tile]) {
                 lifts = RoadLabelPlacer.PointLifts(metres: record.reliefMetres(for: tileLift.relief),

@@ -31,7 +31,10 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
 
     private let tileRenderStore: TileRenderStore
     private let tileTraceRecorder: TileTraceRecorder
-    private let groundReliefStore: GroundReliefStore?
+    /// The terrain store as the planner sees it, nil while the relief is
+    /// off. How the frame draws the relief is the frame's
+    /// (`FrameContextServices.groundRelief`).
+    private let terrainDemand: (any GroundReliefTerrainDemand)?
 
     private var placeTilesContext: PlaceTilesContext = .empty
     /// The planner's placements alone, without the horizon backdrop: what
@@ -63,11 +66,11 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
 
     init(tileRenderStore: TileRenderStore,
          tileTraceRecorder: TileTraceRecorder,
-         groundReliefStore: GroundReliefStore? = nil,
+         terrainDemand: (any GroundReliefTerrainDemand)? = nil,
          buildingsMinimumTileZoom: Int = BuildingCoveragePlanner.minimumSourceZoom) {
         self.tileRenderStore = tileRenderStore
         self.tileTraceRecorder = tileTraceRecorder
-        self.groundReliefStore = groundReliefStore
+        self.terrainDemand = terrainDemand
         self.buildingsMinimumTileZoom = buildingsMinimumTileZoom
     }
 
@@ -179,9 +182,10 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
         // tile in flight keeps the per-frame request going, which the
         // loaders' retries rely on.
         let coverageVersion = visibleContent.coverageVersion
-        let reliefActive = groundReliefStore?.isActive ?? false
-        let reliefVersion = groundReliefStore?.version
-        let terrainInFlight = groundReliefStore?.hasLoadsPending ?? false
+        let groundRelief = frameContext.services.groundRelief
+        let reliefActive = groundRelief?.isActive ?? false
+        let reliefVersion = terrainDemand?.version
+        let terrainInFlight = terrainDemand?.hasLoadsPending ?? false
         if coverageVersion == plannedCoverageVersion,
            tileRenderStore.cacheContentVersion == plannedContentVersion,
            reliefActive == plannedReliefActive,
@@ -256,12 +260,12 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
                                                                // slot's ring, once that is in.
                                                                terrain: { tile, slotZoom in
                                                                    guard reliefActive, frameContext.renderSurfaceMode == .flat,
-                                                                         let store = groundReliefStore else { return nil }
+                                                                         let store = terrainDemand else { return nil }
                                                                    return (store.terrainSource(for: tile, targetZoom: slotZoom),
                                                                            store.displacementSource(for: tile, targetZoom: slotZoom))
                                                                },
                                                                terrainResident: { tile in
-                                                                   let resident = groundReliefStore?.isResident(tile) ?? false
+                                                                   let resident = terrainDemand?.isResident(tile) ?? false
                                                                    if resident == false, missingTerrainSeen.insert(tile).inserted {
                                                                        missingTerrain.append(tile)
                                                                    }
@@ -300,27 +304,18 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
             plannedReliefActive = reliefActive
         }
 
-        // The terrain the frame reads, nearest first, asked for once a
-        // frame, as the map tiles are: what the camera reads moves with
-        // it between replans. Off the terrain, nothing.
-        // The terrain is asked for on the terrain and while the relief is
-        // collapsed past its zooms (`GroundReliefSettings.collapseZoom`),
-        // then for the tiles of the collapse's zoom the relief reads when
-        // it rises back, no finer, so the rise finds every placement's
-        // terrain in. Below the relief's tile zoom, nothing.
-        if let groundReliefStore {
-            let keepsTerrain = frameContext.renderSurfaceMode == .flat
-                && (groundReliefStore.isActive || tileZoomLevel >= groundReliefStore.fromTileZoom)
-            groundReliefStore.request(tiles: keepsTerrain
-                ? GroundReliefDemand.tiles(targets: targets,
-                                           shown: plannedPlacements,
-                                           also: plannedMissingTerrain,
-                                           centerWorldMercator: visibleContent.centerWorldMercator,
-                                           zooms: groundReliefStore.zooms,
-                                           maximumTargetZoom: groundReliefStore.isActive ? .max : groundReliefStore.collapseTileZoom,
-                                           terrainSource: { (groundReliefStore.terrainSource(for: $0, targetZoom: $1),
-                                                             groundReliefStore.displacementSource(for: $0, targetZoom: $1)) })
-                : [])
+        // The terrain the frame reads, asked for once a frame, as the map
+        // tiles are: what the camera reads moves with it between replans.
+        // Which terrain that is, is the relief's own business
+        // (`GroundReliefTerrainDemand.request(for:...)`).
+        if let terrainDemand, let groundRelief {
+            terrainDemand.request(for: groundRelief,
+                                  onFlatMap: frameContext.renderSurfaceMode == .flat,
+                                  tileZoom: tileZoomLevel,
+                                  targets: targets,
+                                  shown: plannedPlacements,
+                                  missing: plannedMissingTerrain,
+                                  centerWorldMercator: visibleContent.centerWorldMercator)
         }
 
         let visibleTilesCount = targets.count
@@ -390,6 +385,9 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
 
     func handleMemoryWarning() {
         tileRenderStore.handleMemoryWarning()
+        // The terrain goes too: the placements bound to it are planned
+        // again when it is back.
+        terrainDemand?.removeAll()
         // The placement contexts are kept and hold their tiles strongly, and
         // the store keeps the demanded set, so the map does not go blank.
         // The next frame replans from scratch.
@@ -400,6 +398,7 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
 
     func evict() {
         tileRenderStore.evict()
+        terrainDemand?.removeAll()
         placeTilesContext = .empty
         buildingPlaceTilesContext = .empty
         plannedCoverageVersion = nil

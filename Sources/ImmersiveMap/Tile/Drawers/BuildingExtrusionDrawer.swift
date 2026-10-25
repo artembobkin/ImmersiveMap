@@ -19,12 +19,12 @@ enum BuildingExtrusionDrawer {
     /// terrain's metres under each and the mountain share of its place
     /// (`BuildingExtrusionRenderSubsystem`), nil for a placement that
     /// stands on the plane: `liftUnitsPerMetre`, the world units a metre
-    /// of terrain rises by this frame (`GroundReliefStore.worldUnitsPerMetre`),
+    /// of terrain rises by this frame (`GroundReliefFrame.worldUnitsPerMetre`),
     /// is bound with them, and the frame's
     /// fades and zoom (`liftFrame`), so the lifts hold at any zoom and
     /// through the relief's fade, and `liftDatumMetres`, the terrain
     /// under the point the camera looks at in the same metres
-    /// (`GroundReliefStore.datumMetres`), which the lifts are drawn from.
+    /// (`GroundReliefFrame.datumMetres`), which the lifts are drawn from.
     static func drawBuildings(renderEncoder: MTLRenderCommandEncoder,
                               cameraUniform: CameraUniform,
                               shadowBinding: ShadowReceiverBinding,
@@ -194,7 +194,7 @@ enum BuildingExtrusionDrawer {
     /// A tile's lifts, the terrain's metres per building, at vertex
     /// buffer 4, and at buffer 5 the world units a metre of terrain rises
     /// by this frame, one for every tile as for the ground
-    /// (`GroundReliefStore.worldUnitsPerMetre`), the datum the lifts are
+    /// (`GroundReliefFrame.worldUnitsPerMetre`), the datum the lifts are
     /// drawn from, and the frame's strength.
     private static func bindLifts(_ liftBuffer: MTLBuffer,
                                   unitsPerMetre: Float,
@@ -296,7 +296,7 @@ enum BuildingExtrusionDrawer {
 /// Mirror of `BuildingLift` in TileExtruded.metal (vertex buffer 5): the
 /// world units a metre spans over the tile, the datum in metres that the
 /// tile's lifts are drawn from, and the frame's strength
-/// (`GroundReliefStore.strengthScale`), as the ground's
+/// (`GroundReliefFrame.strength`), as the ground's
 /// `GroundReliefUniform`.
 struct BuildingLiftUniform {
     var unitsPerMetre: Float

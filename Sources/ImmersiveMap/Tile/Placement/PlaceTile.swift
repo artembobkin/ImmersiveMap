@@ -65,7 +65,7 @@ struct PlaceTile: Hashable {
     /// placement stands, so a tile and its heights come and go together
     /// and the ground never changes shape under a tile that stays. Every
     /// draw of the placement reads this terrain
-    /// (`GroundReliefStore.relief(for:terrain:)`), never a stand-in for it.
+    /// (`GroundReliefFrame.relief(for:terrain:)`), never a stand-in for it.
     let terrain: Tile?
     /// The terrain tile the placement's grid rises by, nil on the plane:
     /// `terrain` or its ancestor at the displacement's zoom

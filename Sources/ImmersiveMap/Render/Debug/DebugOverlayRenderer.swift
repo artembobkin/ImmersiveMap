@@ -516,7 +516,7 @@ final class DebugOverlayRenderer {
     /// The watermark's terrain part, when the tile is on the ground
     /// relief: `t11` for a source tile whose relief is read out of the
     /// zoom 11 terrain, the ring's or a coarser stand-in's
-    /// (`GroundReliefStore.relief(for:terrainZoom:)`), `flat` for a tile
+    /// (`GroundReliefFrame.relief(for:terrainZoom:)`), `flat` for a tile
     /// without one. `tile` is the source drawn, the relief's own tile.
     static func formatTerrainTag(_ tile: Tile, relief: GroundRelief?) -> String {
         guard let relief else {

@@ -92,15 +92,15 @@ final class ShadowMapReuseControllerTests: XCTestCase {
     func testTheTerrainChangingDrawsTheMapAgain() throws {
         let controller = ShadowMapReuseController()
         let texture = try makeTexture()
-        let terrain = GroundReliefStore.ShadowSignature(version: 1, strength: 1, worldUnitsPerMetre: 0.5, datumMetres: 1200)
+        let terrain = GroundReliefFrame.ShadowSignature(version: 1, strength: 1, worldUnitsPerMetre: 0.5, datumMetres: 1200)
         _ = try XCTUnwrap(resolve(controller))
         XCTAssertTrue(controller.planShadowRender(casterKeys: [], hasModelCasters: false, terrain: terrain, texture: texture))
         _ = try XCTUnwrap(resolve(controller))
         XCTAssertFalse(controller.planShadowRender(casterKeys: [], hasModelCasters: false, terrain: terrain, texture: texture),
                        "The same terrain reuses the map")
-        let welded = GroundReliefStore.ShadowSignature(version: 2, strength: 1, worldUnitsPerMetre: 0.5, datumMetres: 1200)
+        let welded = GroundReliefFrame.ShadowSignature(version: 2, strength: 1, worldUnitsPerMetre: 0.5, datumMetres: 1200)
         XCTAssertTrue(controller.planShadowRender(casterKeys: [], hasModelCasters: false, terrain: welded, texture: texture))
-        let panned = GroundReliefStore.ShadowSignature(version: 2, strength: 1, worldUnitsPerMetre: 0.5, datumMetres: 1250)
+        let panned = GroundReliefFrame.ShadowSignature(version: 2, strength: 1, worldUnitsPerMetre: 0.5, datumMetres: 1250)
         XCTAssertTrue(controller.planShadowRender(casterKeys: [], hasModelCasters: false, terrain: panned, texture: texture),
                       "A pan to another datum")
         XCTAssertTrue(controller.planShadowRender(casterKeys: [], hasModelCasters: false, terrain: nil, texture: texture),

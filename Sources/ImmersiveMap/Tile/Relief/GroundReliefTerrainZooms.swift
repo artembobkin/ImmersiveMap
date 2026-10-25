@@ -46,7 +46,7 @@ struct GroundReliefTerrainZooms: Equatable, Sendable {
     /// own for a zoom the frame has no band for (a stand-in coarser than
     /// every band, a store asked outside a frame). Past that the reads
     /// fall to the finest coarser terrain in
-    /// (`GroundReliefStore.relief(for:terrainZoom:)`).
+    /// (`GroundReliefFrame.relief(for:terrainZoom:)`).
     func terrainZoom(forTargetZoom zoom: Int) -> Int {
         terrainZoomByTargetZoom[zoom] ?? max(zoom, 0)
     }

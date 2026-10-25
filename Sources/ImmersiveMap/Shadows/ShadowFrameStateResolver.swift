@@ -222,7 +222,7 @@ enum ShadowFrameStateResolver {
         let far: CascadeInputs?
         /// How far the ground falls and rises about the plane, in world
         /// units: the ground relief's heights over the frame's datum
-        /// (`GroundReliefStore`), the plane alone without it. The window's
+        /// (`GroundReliefFrame`), the plane alone without it. The window's
         /// depth spans the lowest ground to the highest ground plus the
         /// caster-height cap, so a valley's floor and a building on a
         /// summit are both inside it.

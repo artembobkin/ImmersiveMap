@@ -22,7 +22,7 @@ class CameraStateController {
     private var lastSettlePath: TerrainFollowReport.Path = .hit
     /// The zoom the map is planned by: the zoom of the coverage's target
     /// tiles and the ring rules (`RenderFrameVisibilityResolver`) and of
-    /// the relief's thresholds (`GroundReliefStore`). It moves only when
+    /// the relief's thresholds (`GroundReliefFrameState`). It moves only when
     /// the zoom is set on purpose, and then takes the camera's zoom as it
     /// comes out: a zoom gesture, or a zoom set outright (`setZoom`,
     /// `setCameraPosition`, `setCameraState`). Over the terrain the

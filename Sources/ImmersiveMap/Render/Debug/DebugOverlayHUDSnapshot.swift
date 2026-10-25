@@ -194,7 +194,7 @@ struct DebugOverlayHUDSnapshot: Equatable {
     /// over the relief keeps (`CameraTerrainFollow`). Empty without a
     /// relief or off the flat map.
     private static func reliefLines(frameContext: FrameContext) -> [String] {
-        guard let store = frameContext.services.groundRelief,
+        guard let relief = frameContext.services.groundRelief,
               frameContext.renderSurfaceMode == .flat else {
             return []
         }
@@ -203,12 +203,12 @@ struct DebugOverlayHUDSnapshot: Equatable {
         let unitsPerMetre = ImmersiveMapProjection.worldUnitsPerMeter(latitudeRadians: latitude,
                                                                       renderMapSize: frameContext.flatRenderState.renderMapSize)
         let eyeHeightMetres = Double(frameContext.cameraEye.z) / unitsPerMetre
-        let state = store.isActive ? "on" : "off"
-        let terrainZoom = store.terrainZoom(forTargetZoom: frameContext.visibleContent.tileZoomLevel)
-        let strength = store.strength(atNormalizedWorld: centre, terrainZoom: terrainZoom).map { Double($0) }
+        let state = relief.isActive ? "on" : "off"
+        let terrainZoom = relief.terrainZoom(forTargetZoom: frameContext.visibleContent.tileZoomLevel)
+        let strength = relief.strength(atNormalizedWorld: centre, terrainZoom: terrainZoom).map { Double($0) }
         return ["relief:\(state)",
-                "datum:\(format(Double(store.datumMetres)))m",
-                "eye alt:\(format(Double(store.datumMetres) + eyeHeightMetres))m",
+                "datum:\(format(Double(relief.datumMetres)))m",
+                "eye alt:\(format(Double(relief.datumMetres) + eyeHeightMetres))m",
                 "eye height:\(format(eyeHeightMetres))m",
                 "strength:x\(strength.map(format) ?? "-")"]
     }

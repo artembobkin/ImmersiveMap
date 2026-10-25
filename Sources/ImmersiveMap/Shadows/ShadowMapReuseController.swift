@@ -52,8 +52,8 @@ final class ShadowMapReuseController {
         let staticModelCasters: Set<StaticModelCasterKey>
         let hiddenBuildings: ReplacedBuildings
         let heightScales: SIMD2<Float>
-        /// The mountains the window holds (`GroundReliefStore.shadowSignature`).
-        let terrain: GroundReliefStore.ShadowSignature?
+        /// The mountains the window holds (`GroundReliefFrame.shadowSignature`).
+        let terrain: GroundReliefFrame.ShadowSignature?
     }
 
     private var fits: [ShadowCascadeSlot: ShadowAnchoredFit] = [:]
@@ -134,7 +134,7 @@ final class ShadowMapReuseController {
                           staticModelCasters: Set<StaticModelCasterKey> = [],
                           hiddenBuildings: ReplacedBuildings = .none,
                           heightScales: SIMD2<Float> = SIMD2<Float>(1, 1),
-                          terrain: GroundReliefStore.ShadowSignature? = nil,
+                          terrain: GroundReliefFrame.ShadowSignature? = nil,
                           texture: MTLTexture,
                           slot: ShadowCascadeSlot = .near) -> Bool {
         let window = RenderedWindow(fitGeneration: fitGenerations[slot] ?? 0,

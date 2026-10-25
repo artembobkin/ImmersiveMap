@@ -8,7 +8,7 @@ import simd
 /// buffer 9): the tile's corner and side in the terrain texture its grid
 /// rises by and the world units a metre of terrain rises by, then the
 /// datum, the terrain's metres the ground is drawn from
-/// (`GroundReliefStore.datumMetres`), the frame's strength
+/// (`GroundReliefFrame.datumMetres`), the frame's strength
 /// (`GroundRelief.strength`) and the metres the shading's terrain texture
 /// spans, then the frame's shading of the slopes and its fade
 /// (`GroundReliefHillshade`), and last the tile's corner and side in the
@@ -28,7 +28,7 @@ struct GroundReliefUniform {
     /// slopes are shaded by, the same where the ring's terrain is no finer
     /// than the displacement's. `terrainSideMetres` is the shading's.
     /// `occlusion` is the frame's darkening by the occlusion of the sky
-    /// (`GroundReliefStore.occlusionUniform`).
+    /// (`GroundReliefFrame.occlusionUniform`).
     init(relief: GroundRelief,
          shading: GroundRelief,
          worldUnitsPerMetre: Float,
@@ -55,7 +55,7 @@ struct GroundReliefUniform {
     }
 
     /// The ground metres a terrain texture spans a side, in the frame's
-    /// metres (`GroundReliefStore.worldUnitsPerMetre`): the tile's side
+    /// metres (`GroundReliefFrame.worldUnitsPerMetre`): the tile's side
     /// over its share of the texture (`GroundRelief.scale`).
     static func terrainSideMetres(of relief: GroundRelief, over tile: Tile, worldUnitsPerMetre: Float, renderMapSize: Double) -> Float {
         let tileSideWorld = Float(renderMapSize / Double(1 << tile.z))
@@ -70,7 +70,7 @@ struct GroundReliefUniform {
     /// texture 3, its occlusion of the sky (`GroundRelief.occlusion`, or
     /// one texel of none while it is not computed) at fragment texture 4,
     /// the uniform at vertex and fragment buffer 9, with the
-    /// store's datum, world units a metre rises by and shading of the
+    /// frame's datum, world units a metre rises by and shading of the
     /// slopes this frame: one rise for every tile, so neighbours meet with
     /// one height at one rise. The vertex stage raises the ground by the
     /// first, the fills' fragment stage shades the slopes by the second
@@ -80,25 +80,25 @@ struct GroundReliefUniform {
     static func bind(_ relief: GroundRelief,
                      shading: GroundRelief? = nil,
                      over tile: Tile,
-                     store: GroundReliefStore,
+                     frame: GroundReliefFrame,
                      renderMapSize: Double,
                      encoder: MTLRenderCommandEncoder) {
-        let unitsPerMetre = store.worldUnitsPerMetre
+        let unitsPerMetre = frame.worldUnitsPerMetre
         let shading = shading ?? relief
         var uniform = GroundReliefUniform(relief: relief,
                                           shading: shading,
                                           worldUnitsPerMetre: unitsPerMetre,
-                                          datumMetres: store.datumMetres,
+                                          datumMetres: frame.datumMetres,
                                           terrainSideMetres: terrainSideMetres(of: shading,
                                                                                over: tile,
                                                                                worldUnitsPerMetre: unitsPerMetre,
                                                                                renderMapSize: renderMapSize),
-                                          hillshade: store.hillshade,
-                                          occlusion: store.occlusionUniform)
+                                          hillshade: frame.hillshade,
+                                          occlusion: frame.occlusionUniform)
         encoder.setVertexTexture(relief.texture, index: 0)
         encoder.setVertexBytes(&uniform, length: MemoryLayout<GroundReliefUniform>.stride, index: 9)
         encoder.setFragmentTexture(shading.texture, index: 3)
-        encoder.setFragmentTexture(shading.occlusion ?? store.occlusionFallbackTexture, index: 4)
+        encoder.setFragmentTexture(shading.occlusion ?? frame.occlusionFallbackTexture, index: 4)
         encoder.setFragmentBytes(&uniform, length: MemoryLayout<GroundReliefUniform>.stride, index: 9)
     }
 }

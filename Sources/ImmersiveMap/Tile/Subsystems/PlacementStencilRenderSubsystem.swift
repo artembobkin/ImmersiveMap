@@ -62,7 +62,6 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
     private let placementStencilReliefWriteState: MTLDepthStencilState
     private let placementDepthResetState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
-    private let groundReliefStore: GroundReliefStore?
     private let groundFlattening: ImmersiveMapSettings.TileSettings.GroundFlatteningSettings
 
     /// - Parameter placementStencilWriteState: the plane's and the
@@ -80,7 +79,6 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
          placementStencilReliefWriteState: MTLDepthStencilState,
          placementDepthResetState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState,
-         groundReliefStore: GroundReliefStore? = nil,
          groundFlattening: ImmersiveMapSettings.TileSettings.GroundFlatteningSettings = .init()) {
         self.pipeline = pipeline
         self.grid = RasterTileGrid(device: device)
@@ -89,7 +87,6 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
         self.placementStencilReliefWriteState = placementStencilReliefWriteState
         self.placementDepthResetState = placementDepthResetState
         self.depthDisabledState = depthDisabledState
-        self.groundReliefStore = groundReliefStore
         self.groundFlattening = groundFlattening
     }
 
@@ -129,9 +126,9 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
 
     private func encodeFlat(placements: [PlaceTile], encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         let flatRenderState = frameContext.resolvedPresentation.flatRenderState
-        guard let store = groundReliefStore, store.isActive else {
+        guard let frame = frameContext.services.groundRelief, frame.isActive else {
             // The plane: the marks alone, the depth untouched.
-            encodeFlatMarks(placements: placements, encoder: encoder, flatRenderState: flatRenderState, store: nil)
+            encodeFlatMarks(placements: placements, encoder: encoder, flatRenderState: flatRenderState, frame: nil)
             return
         }
         // The horizon backdrop first, flat and with no depth: its mark is
@@ -141,15 +138,15 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
         let backdrops = placements.filter(\.isHorizonBackdrop)
         let ground = placements.filter { $0.isHorizonBackdrop == false }
         if backdrops.isEmpty == false {
-            encodeFlatMarks(placements: backdrops, encoder: encoder, flatRenderState: flatRenderState, store: nil)
+            encodeFlatMarks(placements: backdrops, encoder: encoder, flatRenderState: flatRenderState, frame: nil)
         }
         // The relief: the ground's depth, then the marks tested against it.
         encoder.setDepthStencilState(placementDepthWriteState)
         encoder.setDepthBias(Self.groundDepthBias, slopeScale: Self.groundDepthSlopeBias, clamp: 0)
-        encodeFlatGroundDepth(placements: ground, encoder: encoder, flatRenderState: flatRenderState, store: store)
+        encodeFlatGroundDepth(placements: ground, encoder: encoder, flatRenderState: flatRenderState, frame: frame)
         encoder.setDepthBias(0, slopeScale: 0, clamp: 0)
         encoder.setDepthStencilState(placementStencilReliefWriteState)
-        encodeFlatMarks(placements: ground, encoder: encoder, flatRenderState: flatRenderState, store: store)
+        encodeFlatMarks(placements: ground, encoder: encoder, flatRenderState: flatRenderState, frame: frame)
         // The depth back to the far plane: it was the marks' to test
         // against, and the ground meets the cleared depth as before.
         encoder.pushDebugGroup("ground.placementDepthReset")
@@ -174,9 +171,9 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
     private func sourceGround(tile: Tile,
                               displacement: Tile?,
                               rasterSizeByTile: [Tile: Int],
-                              store: GroundReliefStore?) -> SourceGround {
+                              frame: GroundReliefFrame?) -> SourceGround {
         let gridCells = groundFlattening.grid(forTileZoom: tile.z)
-        guard let displacement, let relief = store?.relief(for: tile, terrain: displacement) else {
+        guard let displacement, let relief = frame?.relief(for: tile, terrain: displacement) else {
             return SourceGround(relief: nil, cells: 0)
         }
         let cells = rasterSizeByTile[tile].map {
@@ -192,7 +189,7 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
     private func encodeFlatGroundDepth(placements: [PlaceTile],
                                        encoder: MTLRenderCommandEncoder,
                                        flatRenderState: FlatRenderState,
-                                       store: GroundReliefStore) {
+                                       frame: GroundReliefFrame) {
         let rasterSizeByTile = RasterTileGrid.rasterSizesBySource(placements)
         var grounds: [PlacementGroundSquare.Source: SourceGround] = [:]
         var selectedRelief: Bool?
@@ -203,7 +200,7 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
             if let known = grounds[source] {
                 ground = known
             } else {
-                ground = sourceGround(tile: source.tile, displacement: source.displacement, rasterSizeByTile: rasterSizeByTile, store: store)
+                ground = sourceGround(tile: source.tile, displacement: source.displacement, rasterSizeByTile: rasterSizeByTile, frame: frame)
                 grounds[source] = ground
             }
             let tile = square.square.tile
@@ -222,7 +219,7 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
             if let relief = ground.relief {
                 GroundReliefUniform.bind(relief.narrowed(to: tile, in: source.tile),
                                          over: tile,
-                                         store: store,
+                                         frame: frame,
                                          renderMapSize: flatRenderState.renderMapSize,
                                          encoder: encoder)
             }
@@ -236,11 +233,11 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
     /// its source's grid (the source's cells over the square, as the
     /// relief's first pass drew them, so a square's mark meets its own
     /// depth), lifted by the source's relief narrowed to the square, or
-    /// on the plane without a store.
+    /// on the plane without a relief.
     private func encodeFlatMarks(placements: [PlaceTile],
                                  encoder: MTLRenderCommandEncoder,
                                  flatRenderState: FlatRenderState,
-                                 store: GroundReliefStore?) {
+                                 frame: GroundReliefFrame?) {
         let rasterSizeByTile = RasterTileGrid.rasterSizesBySource(placements)
         // A source's relief is one terrain wherever it draws, so a mark
         // meets the depth the first pass drew from the same heights.
@@ -258,7 +255,7 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
             if let known = grounds[sourceKey] {
                 ground = known
             } else {
-                ground = sourceGround(tile: source, displacement: sourceKey.displacement, rasterSizeByTile: rasterSizeByTile, store: store)
+                ground = sourceGround(tile: source, displacement: sourceKey.displacement, rasterSizeByTile: rasterSizeByTile, frame: frame)
                 grounds[sourceKey] = ground
             }
             let squareCells = PlacementGroundSquare.cells(ofSource: ground.cells, sourceZoom: source.z, squareZoom: tile.z)
@@ -270,10 +267,10 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
             }
             guard let mesh else { continue }
             selectPipeline(relief: ground.relief != nil, selected: &selectedRelief, encoder: encoder)
-            if let relief = ground.relief, let store {
+            if let relief = ground.relief, let frame {
                 GroundReliefUniform.bind(relief.narrowed(to: tile, in: source),
                                          over: tile,
-                                         store: store,
+                                         frame: frame,
                                          renderMapSize: flatRenderState.renderMapSize,
                                          encoder: encoder)
             }

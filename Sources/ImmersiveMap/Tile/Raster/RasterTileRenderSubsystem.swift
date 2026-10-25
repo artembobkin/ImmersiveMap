@@ -32,7 +32,7 @@ import simd
 /// tile, drawn at full extent under the tile-priority stencil
 /// (`TileSourceStencilPriority`) on either surface. On the plane it takes the
 /// ground shadow mask as the vector ground does, and rises by the ground
-/// relief where the frame is on it (`GroundReliefStore`), on a grid as
+/// relief where the frame is on it (`GroundReliefFrame`), on a grid as
 /// fine as the zoom's flattening grid but no finer than its terrain and
 /// its raster can show (`RasterTileGrid.reliefCells`). On the sphere it follows the
 /// unroll as the sphere's tiles do.
@@ -86,7 +86,6 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
     /// (`GroundShadowMaskBinding.cascades`), and its depth fallback.
     private let shadowMapTextureProvider: () -> MTLTexture?
     private let shadowFallbackTexture: MTLTexture?
-    private let groundReliefStore: GroundReliefStore?
     private let groundFlattening: ImmersiveMapSettings.TileSettings.GroundFlatteningSettings
 
     /// The frame's sources, by the tile drawn, finest first.
@@ -124,11 +123,9 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
          groundShadowMaskFallbackTexture: MTLTexture,
          shadowMapTextureProvider: @escaping () -> MTLTexture? = { nil },
          shadowFallbackTexture: MTLTexture? = nil,
-         groundReliefStore: GroundReliefStore? = nil,
          groundFlattening: ImmersiveMapSettings.TileSettings.GroundFlatteningSettings = .init()) {
         self.device = device
         self.pipeline = pipeline
-        self.groundReliefStore = groundReliefStore
         self.groundFlattening = groundFlattening
         self.grid = RasterTileGrid(device: device)
         let descriptor = MTLSamplerDescriptor()
@@ -484,6 +481,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
         // The relief variant for a tile whose terrain is in, the plain one
         // for the rest, selected only where it changes from the last draw.
         var selectedRelief = false
+        let groundRelief = frameContext.services.groundRelief
         for source in sources {
             guard let texture = source.texture else { continue }
             let tile = source.metalTile.tile
@@ -496,9 +494,9 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
                 // (`TileWorkingSetSubsystem.horizonBackdrops`): no band
                 // places a tile that coarse.
                 let relief = tile.z > TileCulling.flatBackdropZoomLevel
-                    ? placement.displacement.flatMap { groundReliefStore?.relief(for: tile, terrain: $0) }
+                    ? placement.displacement.flatMap { groundRelief?.relief(for: tile, terrain: $0) }
                     : nil
-                let shading = relief == nil ? nil : placement.terrain.flatMap { groundReliefStore?.relief(for: tile, terrain: $0) }
+                let shading = relief == nil ? nil : placement.terrain.flatMap { groundRelief?.relief(for: tile, terrain: $0) }
                 // As fine as the terrain and the raster can show, no finer.
                 let cells = relief.map {
                     RasterTileGrid.reliefCells(gridCells: groundFlattening.grid(forTileZoom: tile.z), relief: $0, rasterSize: source.size)
@@ -508,11 +506,11 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
                     selectedRelief = relief != nil
                     encoder.setRenderPipelineState(selectedRelief ? pipeline.flatReliefPipelineState : pipeline.flatPipelineState)
                 }
-                if let relief, let groundReliefStore {
+                if let relief, let groundRelief {
                     GroundReliefUniform.bind(relief,
                                              shading: shading,
                                              over: tile,
-                                             store: groundReliefStore,
+                                             frame: groundRelief,
                                              renderMapSize: flatRenderState.renderMapSize,
                                              encoder: encoder)
                 }
@@ -529,7 +527,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
                 // would hang over the valleys below that point, a sheet in
                 // the air wherever a far tile is still on its way.
                 let floorLift: Float = tile.z <= TileCulling.flatBackdropZoomLevel
-                    ? Self.backdropFloorLift(store: groundReliefStore)
+                    ? Self.backdropFloorLift(relief: groundRelief)
                     : 0
                 var modelMatrix = Matrix.translationMatrix(x: originAndSize.x,
                                                            y: originAndSize.y,
@@ -545,10 +543,10 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
     /// The world z the horizon backdrop lies at on the relief: the frame's
     /// lowest terrain over the datum, in world units at the frame's rise,
     /// never over the plane. Zero off the relief.
-    static func backdropFloorLift(store: GroundReliefStore?) -> Float {
-        guard let store, store.isActive, let range = store.heightRangeMetres else { return 0 }
-        let metres = min(range.lowerBound - store.datumMetres, 0)
-        return metres * store.worldUnitsPerMetre * store.strengthScale
+    static func backdropFloorLift(relief: GroundReliefFrame?) -> Float {
+        guard let relief, relief.isActive, let range = relief.heightRangeMetres else { return 0 }
+        let metres = min(range.lowerBound - relief.datumMetres, 0)
+        return metres * relief.worldUnitsPerMetre * relief.strength
     }
 
     private func encodeSphere(encoder: MTLRenderCommandEncoder,

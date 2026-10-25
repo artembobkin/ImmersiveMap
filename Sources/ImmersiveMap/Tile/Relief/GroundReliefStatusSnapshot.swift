@@ -4,7 +4,7 @@
 import Foundation
 
 /// What the terrain store holds and does at a moment
-/// (`GroundReliefStore.statusSnapshot()`), for the debug panel's relief tab:
+/// (`GroundReliefFrame.statusSnapshot()`), for the debug panel's relief tab:
 /// every terrain tile the frame wants or the store keeps, and the totals.
 struct GroundReliefStatusSnapshot: Equatable {
     enum State: Equatable {
@@ -39,7 +39,7 @@ struct GroundReliefStatusSnapshot: Equatable {
     /// The wanted tiles nearest first, then the ones kept from earlier
     /// frames, the coarse first.
     let tiles: [TileStatus]
-    /// The frame is on the terrain (`GroundReliefStore.isActive`).
+    /// The frame is on the terrain (`GroundReliefFrame.isActive`).
     let isActive: Bool
     let standingShare: Float
     let datumMetres: Float

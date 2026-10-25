@@ -12,7 +12,7 @@ enum RenderGraphFactory {
                                  groundShadowMaskTextureProvider: @escaping () -> MTLTexture?) -> RenderGraph {
         let tileWorkingSetSubsystem = TileWorkingSetSubsystem(tileRenderStore: context.tileRenderStore,
                                                               tileTraceRecorder: context.tileTraceRecorder,
-                                                              groundReliefStore: context.groundReliefStore,
+                                                              terrainDemand: context.groundRelief?.store,
                                                               buildingsMinimumTileZoom: BuildingCoveragePlanner.minimumDrawZoom(settings: settings))
         let tileProjectionIndexSubsystem = TileProjectionIndexSubsystem(flatTileOriginCalculator: context.flatTileOriginCalculator)
         let baseLabelSubsystem = BaseLabelPrepareSubsystem(baseLabelCache: context.baseLabelCache,
@@ -65,7 +65,6 @@ enum RenderGraphFactory {
                                                                     groundShadowMaskFallbackTexture: context.groundShadowMaskFallbackTexture,
                                                                     shadowMapTextureProvider: shadowMapTextureProvider,
                                                                     shadowFallbackTexture: context.shadowFallbackTexture,
-                                                                    groundReliefStore: context.groundReliefStore,
                                                                     groundFlatteningFromTileZoom: settings.tiles.resolvedGroundFlatteningFromTileZoom)
         let groundShadowMaskSubsystem = GroundShadowMaskRenderSubsystem(pipeline: context.groundShadowMaskPipeline,
                                                                         depthDisabledState: context.depthDisabledState,
@@ -77,7 +76,6 @@ enum RenderGraphFactory {
                                                                         placementStencilReliefWriteState: context.placementStencilReliefWriteState,
                                                                         placementDepthResetState: context.placementDepthResetState,
                                                                         depthDisabledState: context.depthDisabledState,
-                                                                        groundReliefStore: context.groundReliefStore,
                                                                         groundFlattening: settings.tiles.groundFlattening)
         let rasterTileSubsystem = RasterTileRenderSubsystem(device: context.metalContext.device,
                                                             pipeline: context.rasterTilePipeline,
@@ -90,7 +88,6 @@ enum RenderGraphFactory {
                                                             groundShadowMaskFallbackTexture: context.groundShadowMaskFallbackTexture,
                                                             shadowMapTextureProvider: shadowMapTextureProvider,
                                                             shadowFallbackTexture: context.shadowFallbackTexture,
-                                                            groundReliefStore: context.groundReliefStore,
                                                             groundFlattening: settings.tiles.groundFlattening)
         let buildingExtrusionSubsystem = BuildingExtrusionRenderSubsystem(extrudedTilePipeline: context.extrudedTilePipeline,
                                                                           extrudedDepthState: context.extrudedDepthState,
@@ -99,8 +96,7 @@ enum RenderGraphFactory {
                                                                           shadowMapTextureProvider: shadowMapTextureProvider,
                                                                           shadowFallbackTexture: context.shadowFallbackTexture,
                                                                           extrusion: settings.scene.extrusion,
-                                                                          debugOverlayControls: debugOverlayControls,
-                                                                          groundReliefStore: context.groundReliefStore)
+                                                                          debugOverlayControls: debugOverlayControls)
         let treeSubsystem = TreeRenderSubsystem(modelStore: context.treeModelStore,
                                                 pipeline: context.treePipeline,
                                                 palette: context.treePalette,
@@ -115,7 +111,6 @@ enum RenderGraphFactory {
         let reliefShadowCasterSubsystem = GroundReliefShadowCasterSubsystem(device: context.metalContext.device,
                                                                             pipeline: context.rasterTilePipeline,
                                                                             depthState: context.extrudedDepthState,
-                                                                            groundReliefStore: context.groundReliefStore,
                                                                             groundFlattening: settings.tiles.groundFlattening)
         let starfieldSubsystem = StarfieldRenderSubsystem(starfieldRenderer: context.starfieldRenderer,
                                                           skyBackdropDepthState: context.skyBackdropDepthState,

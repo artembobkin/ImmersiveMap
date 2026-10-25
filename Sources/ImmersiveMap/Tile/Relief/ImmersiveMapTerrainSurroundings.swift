@@ -33,7 +33,7 @@ public struct ImmersiveMapTerrainSurroundings: Equatable, Sendable {
     /// as smoothed: what the two values above are read from.
     public let heightSpanMetres: Float
     /// The terrain under the point the camera looks at, in metres over the
-    /// sea, the height the relief is drawn from (`GroundReliefStore.datumMetres`).
+    /// sea, the height the relief is drawn from (`GroundReliefFrame.datumMetres`).
     public let groundMetres: Float
 
     public init(kind: Kind, mountainousness: Float, heightSpanMetres: Float, groundMetres: Float) {

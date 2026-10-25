@@ -139,36 +139,36 @@ final class GroundReliefOcclusionTests: XCTestCase {
         let image = try Self.png(size: 8, metres: 500)
         let settings = ImmersiveMapSettings.TileSettings.GroundReliefSettings(isEnabled: true, minimumSourceZoom: 12)
         let style = ImmersiveMapTerrainOcclusion(resolution: 32)
-        let store = GroundReliefStore(device: device, settings: settings, occlusion: style, fetch: { _ in .image(image) })
+        let ground = makeTestRelief(device: device, settings: settings, occlusion: style, fetch: { _ in .image(image) })
         let tile = Tile(x: 4823, y: 6160, z: 13)
-        store.setBands([FlatRingBand(zoom: 13, distance: 1, tileCount: 9, terrainZoom: 13)])
-        XCTAssertTrue(waitUntil { store.request(tiles: [tile]); return store.isResident(tile) })
-        let relief = try XCTUnwrap(store.relief(for: tile, terrain: tile))
+        ground.setBands([FlatRingBand(zoom: 13, distance: 1, tileCount: 9, terrainZoom: 13)])
+        XCTAssertTrue(waitUntil { ground.store.request(tiles: [tile]); return ground.store.isResident(tile) })
+        let relief = try XCTUnwrap(ground.frame.relief(for: tile, terrain: tile))
         let computed = try XCTUnwrap(relief.occlusion, "Computed as the tile landed")
         XCTAssertEqual(computed.width, 32)
         XCTAssertEqual(computed.pixelFormat, .r8Unorm)
-        XCTAssertEqual(store.statusSnapshot().occlusionComputedCount, 1)
-        XCTAssertEqual(store.occlusionUniform.x, 0.6, accuracy: 1e-6, "The style's strength, the relief risen")
-        XCTAssertEqual(store.occlusionUniform.y, 0)
+        XCTAssertEqual(ground.frame.statusSnapshot().occlusionComputedCount, 1)
+        XCTAssertEqual(ground.frame.occlusionUniform.x, 0.6, accuracy: 1e-6, "The style's strength, the relief risen")
+        XCTAssertEqual(ground.frame.occlusionUniform.y, 0)
 
         // The panel's radius: computed again, at the new key.
         var dragged = style
         dragged.radiusMeters = 500
         dragged.resolution = 16
-        store.setOcclusion(dragged, debugView: true)
-        XCTAssertNil(store.relief(for: tile, terrain: tile)?.occlusion, "The old occlusion is not handed out under the new key")
-        XCTAssertTrue(waitUntil { store.relief(for: tile, terrain: tile)?.occlusion?.width == 16 })
-        XCTAssertEqual(store.occlusionUniform.y, 1, "The view of the occlusion alone")
+        ground.setOcclusion(dragged, debugView: true)
+        XCTAssertNil(ground.frame.relief(for: tile, terrain: tile)?.occlusion, "The old occlusion is not handed out under the new key")
+        XCTAssertTrue(waitUntil { ground.frame.relief(for: tile, terrain: tile)?.occlusion?.width == 16 })
+        XCTAssertEqual(ground.frame.occlusionUniform.y, 1, "The view of the occlusion alone")
 
         // Off: nothing is computed, nothing darkens.
         // Spelt out: `.none` on the optional parameter would be nil, the style's.
-        store.setOcclusion(ImmersiveMapTerrainOcclusion.none, debugView: false)
-        XCTAssertNil(store.relief(for: tile, terrain: tile)?.occlusion)
-        XCTAssertEqual(store.occlusionUniform.x, 0)
-        XCTAssertNotNil(store.occlusionFallbackTexture, "A draw samples one texel of none")
+        ground.setOcclusion(ImmersiveMapTerrainOcclusion.none, debugView: false)
+        XCTAssertNil(ground.frame.relief(for: tile, terrain: tile)?.occlusion)
+        XCTAssertEqual(ground.frame.occlusionUniform.x, 0)
+        XCTAssertNotNil(ground.frame.occlusionFallbackTexture, "A draw samples one texel of none")
         // Back to the style's: computed once more.
-        store.setOcclusion(nil, debugView: false)
-        XCTAssertTrue(waitUntil { store.relief(for: tile, terrain: tile)?.occlusion?.width == 32 })
+        ground.setOcclusion(nil, debugView: false)
+        XCTAssertTrue(waitUntil { ground.frame.relief(for: tile, terrain: tile)?.occlusion?.width == 32 })
     }
 
     private func waitUntil(_ condition: () -> Bool) -> Bool {

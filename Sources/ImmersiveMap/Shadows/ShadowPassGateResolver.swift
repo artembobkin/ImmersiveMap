@@ -64,12 +64,12 @@ enum ShadowPassGateResolver {
     /// (`FrameContextSharedState.drawnBuildingPlacements`): planned but off
     /// the buildings' zoom, or waiting for a model tile, they cast nothing.
     /// The mountains cast wherever the relief stands
-    /// (`GroundReliefStore.castsShadowsThisFrame`), with no building in sight.
+    /// (`GroundReliefFrame.castsShadows`), with no building in sight.
     static func resolve(frameContext: FrameContext) -> ShadowFrameState? {
         resolve(shadowFrameState: frameContext.shadowFrameState,
                 hasBuildingCasters: frameContext.sharedState.drawnBuildingPlacements.isEmpty == false,
                 hasModelCasters: frameContext.sharedState.sceneModelState.hasShadowCasters,
-                hasTerrainCasters: frameContext.services.groundRelief?.castsShadowsThisFrame ?? false)
+                hasTerrainCasters: frameContext.services.groundRelief?.castsShadows ?? false)
     }
 
     static func resolve(shadowFrameState: ShadowFrameState?,

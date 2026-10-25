@@ -10,7 +10,7 @@ import simd
 
 struct TilePointScreenProjector {
     /// Whether a flat point rises by the ground relief under it
-    /// (`GroundReliefStore`), as the labels do. The debug overlay projects
+    /// (`GroundReliefFrame`), as the labels do. The debug overlay projects
     /// on the plane instead: its tile frames and watermarks are read, not
     /// looked at, and a watermark's letters lifted one by one by a slope
     /// come out torn.
@@ -247,7 +247,7 @@ struct TilePointScreenProjector {
             if let known = reliefByTile[tile] {
                 entry = known
             } else {
-                entry = GroundReliefTileLift(store: groundRelief,
+                entry = GroundReliefTileLift(relief: groundRelief,
                                              tile: tile,
                                              terrain: displacementBySource[tile])
                 reliefByTile[tile] = entry

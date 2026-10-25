@@ -15,7 +15,7 @@ import simd
 /// moves the camera off its pose, so the camera's own motion is all the
 /// eye ever feels. Everything the frame draws sees the same datum.
 ///
-/// One terrain lookup a frame (`GroundReliefStore.elevation`), a datum
+/// One terrain lookup a frame (`GroundReliefFrame.elevation`), a datum
 /// every receiver subtracts: nothing per vertex. It is continuous in the
 /// camera's place, the terrain being bilinear, so the ground glides under
 /// the camera rather than steps.
@@ -25,7 +25,7 @@ import simd
 enum GroundReliefCameraLift {
     /// The terrain under the point the camera looks at
     /// (`centerWorldMercator`), in metres before the exaggeration: the
-    /// frame's datum (`GroundReliefStore.datumMetres`). Read off the
+    /// frame's datum (`GroundReliefFrame.datumMetres`). Read off the
     /// camera's map (`GroundReliefStore.cameraTerrainZoom`), the one map
     /// the camera flies over at every zoom, so the point the camera looks
     /// at is on the ground the camera keeps its height by, or, while that
@@ -33,18 +33,18 @@ enum GroundReliefCameraLift {
     /// there (`GroundReliefStore.terrainZoom(forTargetZoom:)`). Zero over
     /// tiles coarser than the relief's zoom (`tileZoom`, the frame's),
     /// which lie on the plane. Nil while no terrain under the point is in.
-    static func datumMetres(store: GroundReliefStore,
+    static func datumMetres(relief: GroundReliefFrame,
                             centerWorldMercator: SIMD2<Double>,
                             tileZoom: Int) -> Float? {
-        guard tileZoom >= store.fromTileZoom else {
+        guard tileZoom >= relief.fromTileZoom else {
             return 0
         }
-        return store.elevation(atNormalizedWorld: centerWorldMercator, terrainZoom: store.cameraTerrainZoom)
-            ?? store.elevation(atNormalizedWorld: centerWorldMercator, terrainZoom: store.terrainZoom(forTargetZoom: tileZoom))
+        return relief.elevation(atNormalizedWorld: centerWorldMercator, terrainZoom: relief.cameraTerrainZoom)
+            ?? relief.elevation(atNormalizedWorld: centerWorldMercator, terrainZoom: relief.terrainZoom(forTargetZoom: tileZoom))
     }
 
     /// The view depth of the point where the centre of the screen meets
-    /// the terrain, drawn from the store's datum, what the point-locked
+    /// the terrain, drawn from the frame's datum, what the point-locked
     /// road widths are stated at, nil where the terrain under the centre
     /// is on its way or the centre ray misses the ground. `cameraMatrix`
     /// is the frame's projection-view. The terrain
@@ -52,12 +52,12 @@ enum GroundReliefCameraLift {
     /// where it meets the plane, to the plane of the terrain's height
     /// there, and again, which settles in three for any slope a camera
     /// looks down on.
-    static func centreGroundDepth(store: GroundReliefStore,
+    static func centreGroundDepth(relief: GroundReliefFrame,
                                   cameraMatrix: matrix_float4x4,
                                   centerWorldMercator: SIMD2<Double>,
                                   tileZoom: Int,
                                   renderMapSize: Double) -> Float? {
-        guard tileZoom >= store.fromTileZoom else {
+        guard tileZoom >= relief.fromTileZoom else {
             return nil
         }
         let inverse = cameraMatrix.inverse
@@ -72,7 +72,7 @@ enum GroundReliefCameraLift {
         guard abs(descent) > .leastNormalMagnitude else {
             return nil
         }
-        let zoom = store.terrainZoom(forTargetZoom: tileZoom)
+        let zoom = relief.terrainZoom(forTargetZoom: tileZoom)
         var height: Float = 0
         var ground = near
         for _ in 0 ..< 3 {
@@ -82,11 +82,11 @@ enum GroundReliefCameraLift {
             }
             ground = near + (far - near) * t
             let point = centerWorldMercator + SIMD2<Double>(Double(ground.x), -Double(ground.y)) / renderMapSize
-            guard let drawn = store.drawnMetres(atNormalizedWorld: point, terrainZoom: zoom) else {
+            guard let drawn = relief.drawnMetres(atNormalizedWorld: point, terrainZoom: zoom) else {
                 return nil
             }
-            // The ground's rise, the frame's (`GroundReliefStore.worldUnitsPerMetre`).
-            height = (drawn - store.datumMetres) * store.worldUnitsPerMetre
+            // The ground's rise, the frame's (`GroundReliefFrame.worldUnitsPerMetre`).
+            height = (drawn - relief.datumMetres) * relief.worldUnitsPerMetre
         }
         let depth = (cameraMatrix * SIMD4<Float>(ground.x, ground.y, height, 1)).w
         return depth.isFinite && depth > 0 ? depth : nil

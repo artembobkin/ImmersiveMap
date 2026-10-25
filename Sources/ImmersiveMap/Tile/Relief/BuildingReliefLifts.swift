@@ -29,13 +29,13 @@ final class BuildingReliefLifts {
 
     /// The lifts of each placement, index-aligned with `placements`: nil
     /// for one not drawn (`drawnKeys` nil), with no buildings, or whose
-    /// terrain is not in. With no store, every entry is nil and the cache
+    /// terrain is not in. With no relief, every entry is nil and the cache
     /// is let go.
     func update(placements: [PlaceTile],
                 drawnKeys: [VisibleTile?],
-                store: GroundReliefStore?,
+                relief frame: GroundReliefFrame?,
                 device: MTLDevice) -> [MTLBuffer?] {
-        guard let store else {
+        guard let frame else {
             buffersByTile.removeAll()
             return Array(repeating: nil, count: placements.count)
         }
@@ -46,7 +46,7 @@ final class BuildingReliefLifts {
             let metalTile = placement.metalTile
             let anchors = metalTile.tileBuffers.extruded.buildingAnchors
             guard key != nil, anchors.isEmpty == false, let displacement = placement.displacement,
-                  let relief = store.relief(for: metalTile.tile, terrain: displacement) else {
+                  let relief = frame.relief(for: metalTile.tile, terrain: displacement) else {
                 lifts.append(nil)
                 continue
             }

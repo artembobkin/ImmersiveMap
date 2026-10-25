@@ -56,7 +56,7 @@ struct GroundFogUniform {
     /// with the globe the fog comes in over `morphFadeSpanShare` of the
     /// transition span past the zoom the morph ends at (`morphFade`).
     /// `datumMetres` is the altitude of the plane the ground is drawn from
-    /// on the relief (`GroundReliefStore.datumMetres`): with
+    /// on the relief (`GroundReliefFrame.datumMetres`): with
     /// `GroundFogSettings.heightsFromSeaLevel` the fog's heights are the
     /// ground's own altitudes, the plane's plus it.
     ///

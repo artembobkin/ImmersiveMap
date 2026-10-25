@@ -153,9 +153,9 @@ final class RenderFrameEngine {
             reporter.onChange = { [weak eventSink] in eventSink?.tileLoadingStatusDidChange() }
         }
         // Over a terrain the camera looks at a point on it
-        // (`GroundReliefStore.makeTerrainFollow`).
-        if let store = persistentContext.groundReliefStore {
-            renderCamera.setTerrainFollow(store.makeTerrainFollow(
+        // (`GroundReliefFrameState.makeTerrainFollow`).
+        if let groundRelief = persistentContext.groundRelief {
+            renderCamera.setTerrainFollow(groundRelief.makeTerrainFollow(
                 tileSettings: settings.tiles,
                 globeRadiusScale: settings.presentation.globeRadiusScale,
                 cameraZoom: { [weak renderCamera] in renderCamera?.currentCameraState().zoom ?? 0 }))
@@ -311,7 +311,7 @@ final class RenderFrameEngine {
         // scene (the still capture): the tiles the frame asked the relief
         // for this frame, less the ones in.
         frameContext.diagnostics.setCounter(.pendingTerrainTiles,
-                                            value: persistentContext.groundReliefStore?.pendingWantedCount ?? 0)
+                                            value: persistentContext.groundRelief?.pendingTerrainTileCount ?? 0)
         let hasActiveLabelFadeAnimations = frameContext.sharedState.baseLabelState.hasActiveFadeAnimations
             || frameContext.sharedState.roadLabelState.hasActiveFadeAnimations
         let hasActiveAvatarAnimations = frameContext.sharedState.avatarState.hasActiveAnimations
@@ -321,7 +321,7 @@ final class RenderFrameEngine {
                                                          sceneModelAnimationRenderingActive: hasActiveSceneModelAnimations,
                                                          extrusionRiseRenderingActive: frameContext.sharedState.isExtrusionRising,
                                                          animatedZoomRenderingActive: animatedZoom.isSettling
-                                                             || (persistentContext.groundReliefStore?.isTransitioning ?? false)))
+                                                             || (persistentContext.groundRelief?.isTransitioning ?? false)))
         // Independent of `didSchedule`: the animation advanced in `update`
         // whether or not this frame reached a drawable.
         let pathAnimationResults = frameContext.sharedState.sceneModelState.pathAnimationResults
@@ -348,11 +348,11 @@ final class RenderFrameEngine {
         let diagnostics = FrameDiagnostics(frameIndex: frameTick.index, frameDeltaTime: frameTick.deltaTime)
         diagnostics.setMeasurement(.gpuFrameDurationMs,
                                    value: lastCompletedGPUFrameDuration.withLock { $0 } * 1000.0)
-        let services = FrameContextServices(diagnostics: diagnostics,
+        var services = FrameContextServices(diagnostics: diagnostics,
                                             settings: settings,
                                             baseColors: persistentContext.baseColors,
-                                            now: clock.currentDate(),
-                                            groundRelief: persistentContext.groundReliefStore)
+                                            now: clock.currentDate())
+        let groundRelief = persistentContext.groundRelief
 
         // The presentation depends on the semantic camera state alone, and
         // the render camera's pose depends on the presentation's phase (the
@@ -376,8 +376,8 @@ final class RenderFrameEngine {
                                                      snap: cameraJumped)
         // The terrain tiles' edges welded to their neighbours' since the
         // last frame, written before this frame's command buffer, on the
-        // same queue (`GroundReliefStore.applyPendingWelds`).
-        persistentContext.groundReliefStore?.applyPendingWelds(commandQueue: persistentContext.metalContext.commandQueue)
+        // same queue (`GroundReliefFrameState.beginFrame`).
+        groundRelief?.beginFrame(commandQueue: persistentContext.metalContext.commandQueue)
         guard let commandBuffer = persistentContext.metalContext.makeCommandBuffer() else {
             diagnostics.recordSkipReason(.missingCommandBuffer)
             currentDiagnostics = diagnostics
@@ -394,35 +394,37 @@ final class RenderFrameEngine {
         // The relief's thresholds read the planning zoom, which a drag
         // over the terrain never moves: through a drag the drawn relief
         // must stand still.
-        persistentContext.groundReliefStore?.setFrame(zoom: cameraFrameState.planningZoom,
+        groundRelief?.setFrame(zoom: cameraFrameState.planningZoom,
                                                       deltaTime: frameTick.deltaTime,
                                                       snap: cameraJumped)
         // One rise a metre for every tile this frame, the latitude of the
         // point the camera looks at.
-        persistentContext.groundReliefStore?.setWorldScale(centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
+        groundRelief?.setWorldScale(centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
                                                            renderMapSize: resolvedPresentation.flatRenderState.renderMapSize)
         // The slopes are shaded by the scene's light, which the settings
         // change live, and fade with the distance from the eye, in metres
         // at the frame's zoom. The debug panel drags the fade's curves and
         // the amounts over the style's.
-        persistentContext.groundReliefStore?.setLight(direction: settings.scene.light.direction,
+        groundRelief?.setLight(direction: settings.scene.light.direction,
                                                       cameraEye: cameraFrameState.cameraEye,
                                                       fade: debugOverlayControls.hillshadeFade(),
                                                       amounts: debugOverlayControls.hillshadeAmounts())
         // The darkening where the terrain hides the sky, the style's or the
         // debug panel's over it, and the panel's view of it alone.
-        persistentContext.groundReliefStore?.setOcclusion(debugOverlayControls.terrainOcclusion(),
+        groundRelief?.setOcclusion(debugOverlayControls.terrainOcclusion(),
                                                           debugView: debugOverlayControls.terrainOcclusionDebugView())
         // The mountains' shadows, as the settings and the debug panel say.
-        persistentContext.groundReliefStore?.setCastsShadows(settings.tiles.groundRelief.castsShadows
+        groundRelief?.setCastsShadows(settings.tiles.groundRelief.castsShadows
             && debugOverlayControls.reliefCastsShadows() != false)
-        if let store = persistentContext.groundReliefStore, store.isActive,
+        // On the terrain and at the datum as the last frame left them, at
+        // this frame's rise.
+        if let relief = groundRelief?.frame, relief.isActive,
            resolvedPresentation.renderSurfaceMode == .flat,
-           let range = store.heightRangeMetres {
+           let range = relief.heightRangeMetres {
             // At the strength of a mountain: the most any point rises.
-            let unitsPerMetre = store.worldUnitsPerMetre * store.strengthScale
-            reliefHeights = ((range.lowerBound - store.datumMetres) * unitsPerMetre)
-                ... ((range.upperBound - store.datumMetres) * unitsPerMetre)
+            let unitsPerMetre = relief.worldUnitsPerMetre * relief.strength
+            reliefHeights = ((range.lowerBound - relief.datumMetres) * unitsPerMetre)
+                ... ((range.upperBound - relief.datumMetres) * unitsPerMetre)
         }
         let visibleContent = visibilityResolver.resolve(cameraFrameState: cameraFrameState,
                                                         resolvedPresentation: resolvedPresentation,
@@ -438,29 +440,31 @@ final class RenderFrameEngine {
         // After the coverage, which the camera's own pose decides.
         let cameraMatrices = cameraFrameState.cameraMatrices
         let cameraEye = cameraFrameState.cameraEye
-        if let groundReliefStore = persistentContext.groundReliefStore {
+        if let groundRelief {
             // The terrain each ring reads is its rule's, resolved with the
             // coverage (`FlatRingBand.terrainZoom`).
-            groundReliefStore.setBands(resolvedPresentation.renderSurfaceMode == .flat ? visibleContent.flatRingBands : [])
+            groundRelief.setBands(resolvedPresentation.renderSurfaceMode == .flat ? visibleContent.flatRingBands : [])
             if resolvedPresentation.renderSurfaceMode == .flat {
-                groundReliefStore.setActive(visibleContent.tileZoomLevel >= groundReliefStore.fromTileZoom
-                                            && groundReliefStore.isVisible(atZoom: cameraFrameState.planningZoom))
-                if let datum = GroundReliefCameraLift.datumMetres(store: groundReliefStore,
+                groundRelief.setActive(visibleContent.tileZoomLevel >= groundRelief.fromTileZoom
+                                       && groundRelief.isVisible(atZoom: cameraFrameState.planningZoom))
+                if let datum = GroundReliefCameraLift.datumMetres(relief: groundRelief.frame,
                                                                   centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
                                                                   tileZoom: visibleContent.tileZoomLevel) {
-                    groundReliefStore.setDatum(metres: datum)
+                    groundRelief.setDatum(metres: datum)
                 }
             } else {
-                groundReliefStore.setActive(false)
-                groundReliefStore.setDatum(metres: 0)
+                groundRelief.setActive(false)
+                groundRelief.setDatum(metres: 0)
             }
+            // Settled: every feature of the frame reads this one relief.
+            services.groundRelief = groundRelief.frame
         }
         // Mountains or a plain around the point the camera looks at, read
         // off the terrain now that the frame knows whether it is on it. A
         // few dozen height lookups on the CPU, nil off the terrain.
         let terrainSurroundings: ImmersiveMapTerrainSurroundings?
-        if let groundReliefStore = persistentContext.groundReliefStore {
-            terrainSurroundings = groundReliefSurroundings.update(store: groundReliefStore,
+        if let relief = services.groundRelief {
+            terrainSurroundings = groundReliefSurroundings.update(relief: relief,
                                                                   centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
                                                                   settings: settings.tiles.groundRelief.surroundings,
                                                                   deltaTime: frameTick.deltaTime)
