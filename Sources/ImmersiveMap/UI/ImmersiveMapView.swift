@@ -972,7 +972,11 @@ public extension ImmersiveMapView {
     /// keeps its height and flies right up to a ridge between it and the
     /// point it looks at, or stays `cameraClearanceMetres` over one when
     /// that is set. The mountains cast their shadows into the shadow map
-    /// unless `castsShadows` is false. The decoded terrain tiles
+    /// unless `castsShadows` is false. Where the source has no terrain
+    /// tile at the zoom the near ring reads (Mapterhorn past zoom 12,
+    /// without a country's lidar) the relief collapses as it does past
+    /// `collapseZoom`, unless `collapsesWhereTerrainIsMissing` is false.
+    /// The decoded terrain tiles
     /// live with the tiles they raise, and `maximumConcurrentLoads` of them
     /// load at once, the frame's nearest first. On by default, on
     /// Mapterhorn's open terrain: `isEnabled: false` lays the map flat. An
@@ -990,6 +994,7 @@ public extension ImmersiveMapView {
                              exaggeration: Float? = nil,
                              appearZoom: Double? = nil,
                              collapseZoom: Double? = nil,
+                             collapsesWhereTerrainIsMissing: Bool? = nil,
                              transitionSeconds: TimeInterval? = nil,
                              cameraTerrainZoom: Int? = nil,
                              displacementMaximumZoom: Int? = nil,
@@ -1003,6 +1008,7 @@ public extension ImmersiveMapView {
                                                    exaggeration: exaggeration,
                                                    appearZoom: appearZoom,
                                                    collapseZoom: collapseZoom,
+                                                   collapsesWhereTerrainIsMissing: collapsesWhereTerrainIsMissing,
                                                    transitionSeconds: transitionSeconds,
                                                    cameraTerrainZoom: cameraTerrainZoom,
                                                    displacementMaximumZoom: displacementMaximumZoom,

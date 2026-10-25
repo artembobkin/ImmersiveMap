@@ -238,6 +238,20 @@ final class GroundReliefStore: GroundReliefTerrainDemand, @unchecked Sendable {
         return existingSourceLocked(of: currentZooms.terrainTile(for: tile, targetZoom: targetZoom))
     }
 
+    /// Whether the source has no terrain where a ring of `targetZoom`
+    /// reads it under a point of the world (normalized world mercator):
+    /// the ring's terrain tile over the point is one the source answered
+    /// missing for, so the ring draws its fallback, the finest ancestor
+    /// in. False until the source has answered, so a frame stands on the
+    /// fallback for the frames the answer takes and leaves it as the
+    /// answer lands (`GroundReliefFrameState.setFrame`).
+    func ringTerrainIsMissing(under point: SIMD2<Double>, targetZoom: Int) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let tile = Tile.containing(normalizedWorld: point, zoom: targetZoom)
+        return loads.isMissing(currentZooms.terrainTile(for: tile, targetZoom: targetZoom))
+    }
+
     /// The terrain tile a source drawn in a ring of `targetZoom` displaces
     /// its grid by (`PlaceTile.displacement`): the ring's terrain no finer
     /// than the displacement's zoom (`GroundReliefTerrainZooms

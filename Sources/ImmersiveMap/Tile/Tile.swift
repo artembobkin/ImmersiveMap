@@ -35,6 +35,19 @@ struct Tile: Hashable {
                other.y >= minY && other.y <= maxY
     }
 
+    /// The tile of `zoom` that holds a point of the world (normalized
+    /// world mercator), the x wrapped around the antimeridian and the y
+    /// clamped to the map.
+    static func containing(normalizedWorld point: SIMD2<Double>, zoom: Int) -> Tile {
+        let zoom = max(0, zoom)
+        let tilesCount = Double(1 << zoom)
+        let x = ImmersiveMapProjection.wrapNormalizedWorldX(point.x)
+        let y = ImmersiveMapProjection.clampNormalizedWorldY(point.y)
+        return Tile(x: min(Int(x * tilesCount), Int(tilesCount) - 1),
+                    y: min(Int(y * tilesCount), Int(tilesCount) - 1),
+                    z: zoom)
+    }
+
     func findParentTile(atZoom targetZoom: Int) -> Tile? {
         guard z >= targetZoom, targetZoom >= 0 else {
             return nil

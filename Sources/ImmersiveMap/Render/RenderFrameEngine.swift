@@ -395,8 +395,9 @@ final class RenderFrameEngine {
         // over the terrain never moves: through a drag the drawn relief
         // must stand still.
         groundRelief?.setFrame(zoom: cameraFrameState.planningZoom,
-                                                      deltaTime: frameTick.deltaTime,
-                                                      snap: cameraJumped)
+                               centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,
+                               deltaTime: frameTick.deltaTime,
+                               snap: cameraJumped)
         // One rise a metre for every tile this frame, the latitude of the
         // point the camera looks at.
         groundRelief?.setWorldScale(centerWorldMercator: cameraFrameState.mapCameraState.centerWorldMercator,

@@ -30,6 +30,13 @@ final class GroundReliefFrameState {
     private let configuredExaggeration: Float
     private let appearZoom: Double
     private let collapseZoom: Double
+    /// Whether the relief collapses where the source has no terrain at the
+    /// zoom the near ring reads it (`GroundReliefSettings
+    /// .collapsesWhereTerrainIsMissing`).
+    private let collapsesWhereTerrainIsMissing: Bool
+    /// The tileset's deepest zoom, which bounds the near ring's tile zoom
+    /// (`TileCoverageZoomPolicy`).
+    private let deepestTileZoom: Int
     private let transitionSeconds: TimeInterval
     /// The frame's tile zoom the ground rises from, the tile zoom of
     /// `GroundReliefSettings.appearZoom` (`tileZoom(deepestTileZoom:)`), the
@@ -69,6 +76,11 @@ final class GroundReliefFrameState {
     private var strength: Float
     /// The frame's zoom (`setFrame`), which the hillshade's fade is read at.
     private var frameZoom: Double = 0
+    /// Whether the source has no terrain at the zoom the near ring reads
+    /// it under the point the camera looks at this frame (`setFrame`,
+    /// `GroundReliefStore.ringTerrainIsMissing`): the relief lies in the
+    /// plane there as past `collapseZoom`.
+    private var terrainIsMissing = false
     private var lightDirection = ImmersiveMapSettings.SceneLightSettings().direction
     private var cameraEye = SIMD3<Float>(0, 0, 1)
     private var hillshadeFade: GroundReliefHillshade.Fade?
@@ -123,6 +135,8 @@ final class GroundReliefFrameState {
         self.configuredExaggeration = settings.exaggeration
         self.appearZoom = settings.appearZoom
         self.collapseZoom = settings.collapseZoom
+        self.collapsesWhereTerrainIsMissing = settings.collapsesWhereTerrainIsMissing
+        self.deepestTileZoom = deepestTileZoom
         self.transitionSeconds = max(settings.transitionSeconds, 0)
         self.fromTileZoom = settings.tileZoom(deepestTileZoom: deepestTileZoom)
         self.cameraClearanceMetres = max(0, settings.cameraClearanceMetres)
@@ -178,8 +192,25 @@ final class GroundReliefFrameState {
     /// not, by `deltaTime` over `transitionSeconds`, or at once with
     /// `snap`. Without a `deltaTime` it is settled where the zoom puts
     /// it.
-    func setFrame(zoom: Double, deltaTime: TimeInterval? = nil, snap: Bool = false) {
+    ///
+    /// `centerWorldMercator` is the point the camera looks at: where the
+    /// source has no terrain at the zoom the near ring reads it under
+    /// that point (`GroundReliefSettings.collapsesWhereTerrainIsMissing`),
+    /// the relief moves toward the plane as past `collapseZoom`. Nil reads
+    /// no terrain, and the zoom alone decides.
+    func setFrame(zoom: Double,
+                  centerWorldMercator: SIMD2<Double>? = nil,
+                  deltaTime: TimeInterval? = nil,
+                  snap: Bool = false) {
         frameZoom = zoom
+        if collapsesWhereTerrainIsMissing, let centerWorldMercator {
+            let tileZoom = TileCoverageZoomPolicy.resolve(cameraZoom: zoom,
+                                                          renderSurfaceMode: .flat,
+                                                          maximumZoomLevel: deepestTileZoom).baseZoom
+            terrainIsMissing = store.ringTerrainIsMissing(under: centerWorldMercator, targetZoom: tileZoom)
+        } else {
+            terrainIsMissing = false
+        }
         let target: Float = stands(atZoom: zoom) ? 1 : 0
         if let deltaTime, snap == false, transitionSeconds > 0 {
             let step = Float(max(deltaTime, 0) / transitionSeconds)
@@ -198,9 +229,10 @@ final class GroundReliefFrameState {
     var isTransitioning: Bool { standingShare > 0 && standingShare < 1 }
 
     /// Whether the relief stands at a zoom: from `appearZoom` up to
-    /// `collapseZoom`.
+    /// `collapseZoom`, and not where the frame found the source without
+    /// terrain for the near ring (`setFrame`, `terrainIsMissing`).
     func stands(atZoom zoom: Double) -> Bool {
-        zoom >= appearZoom && zoom < collapseZoom
+        zoom >= appearZoom && zoom < collapseZoom && terrainIsMissing == false
     }
 
     /// Whether anything of the relief stands at a zoom (the zoom held

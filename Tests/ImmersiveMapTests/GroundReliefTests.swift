@@ -505,6 +505,53 @@ final class GroundReliefTests: XCTestCase {
         XCTAssertTrue(everywhere.isVisible(atZoom: 20))
     }
 
+    /// Where the source has no terrain at the zoom the near ring reads
+    /// under the camera, the relief collapses as past the collapse zoom:
+    /// Mapterhorn has lidar past zoom 12 only where a country publishes
+    /// it, and zoom 12's 30 m cells stretched over zoom 13 read as hills.
+    /// Decided by the source's answer, so the relief stands on the
+    /// ancestor until the answer is in, and rises again as the zoom
+    /// crosses back. Off, the relief stands on the ancestor.
+    func testTheReliefCollapsesWhereTheSourceHasNoTerrainForTheNearRing() throws {
+        let device = try Self.device()
+        let image = try Self.png(size: 2, pixels: Array(repeating: (128, 100, 0), count: 4))
+        var settings = ImmersiveMapSettings.default
+        settings.tiles.coverage.maximumZoomLevel = 16
+        settings = settings.groundRelief(isEnabled: true, appearZoom: 10, collapseZoom: 13.7)
+        XCTAssertTrue(ImmersiveMapSettings.default.tiles.groundRelief.collapsesWhereTerrainIsMissing, "On by default")
+        // The source stops at zoom 12, as Mapterhorn does without lidar.
+        let fetch: @Sendable (URL) async throws -> GroundReliefURLTerrainSource.Fetched = { url in
+            url.path.contains("/13/") ? .missing : .image(image)
+        }
+        let ground = makeTestRelief(device: device, settings: settings.tiles.groundRelief, fetch: fetch)
+        let deep = Tile(x: 4823, y: 6160, z: 13)
+        let tilesCount = Double(1 << 13)
+        let centre = SIMD2<Double>((Double(deep.x) + 0.5) / tilesCount, (Double(deep.y) + 0.5) / tilesCount)
+        XCTAssertEqual(Tile.containing(normalizedWorld: centre, zoom: 13), deep)
+        ground.setBands([FlatRingBand(zoom: 13, distance: 1, tileCount: 9, terrainZoom: 13)])
+
+        ground.setFrame(zoom: 13.2, centerWorldMercator: centre)
+        XCTAssertEqual(ground.standingShare, 1, "Stands on the ancestor until the source has answered")
+        XCTAssertTrue(waitUntil { ground.store.request(tiles: [deep]); return ground.frame.statusSnapshot().missingCount == 1 },
+                      "The source has no zoom 13 here, and its parent is in")
+        ground.setFrame(zoom: 13.2, centerWorldMercator: centre)
+        XCTAssertEqual(ground.standingShare, 0, "Collapsed: the near ring would draw zoom 12 stretched")
+        XCTAssertFalse(ground.stands(atZoom: 13.2))
+        XCTAssertFalse(ground.isVisible(atZoom: 13.2))
+        ground.setFrame(zoom: 12.9, centerWorldMercator: centre)
+        XCTAssertEqual(ground.standingShare, 1, "On zoom 12's own tiles the relief stands again")
+        ground.setFrame(zoom: 13.2)
+        XCTAssertEqual(ground.standingShare, 1, "Without a point looked at the zoom alone decides")
+
+        let onTheAncestor = makeTestRelief(device: device,
+                                           settings: settings.groundRelief(collapsesWhereTerrainIsMissing: false).tiles.groundRelief,
+                                           fetch: fetch)
+        onTheAncestor.setBands([FlatRingBand(zoom: 13, distance: 1, tileCount: 9, terrainZoom: 13)])
+        XCTAssertTrue(waitUntil { onTheAncestor.store.request(tiles: [deep]); return onTheAncestor.frame.statusSnapshot().missingCount == 1 })
+        onTheAncestor.setFrame(zoom: 13.2, centerWorldMercator: centre)
+        XCTAssertEqual(onTheAncestor.standingShare, 1, "Off, the relief stands on the ancestor up to the collapse zoom")
+    }
+
     /// The relief rises when the zoom crosses `appearZoom`: flat below
     /// it, up over `transitionSeconds` once the zoom is past it, never
     /// scaled with the zoom itself, with the collapse on top. The

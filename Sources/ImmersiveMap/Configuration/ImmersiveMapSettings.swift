@@ -863,6 +863,24 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// would drop and raise the mountains with every slope. The
             /// relief is never scaled with the zoom, for the same reason.
             public var collapseZoom: Double
+            /// Whether the relief collapses where the terrain source has no
+            /// tile at the zoom the near ring reads it, under the point the
+            /// camera looks at. True by default. A missing tile is no hole:
+            /// the ring draws the finest ancestor the source has, and past
+            /// the ancestor's own zoom its cells, 30 m over most of the
+            /// world, read as hills where there are none, which is what
+            /// `collapseZoom` guards against. With this on the guard reads
+            /// the data: Mapterhorn has lidar past zoom 12 only where a
+            /// country publishes it, so there the relief stands to
+            /// `collapseZoom`, and elsewhere it collapses at the first zoom
+            /// whose terrain tile the source does not have, 13, and rises
+            /// again as the zoom crosses back. Decided by the source's
+            /// answer (an HTTP 404, remembered for good), so the relief
+            /// stands on the ancestor for the frames the first answer takes.
+            /// False keeps the relief standing on the ancestor up to
+            /// `collapseZoom`, for a source whose coarser tiles are wanted
+            /// past their zoom.
+            public var collapsesWhereTerrainIsMissing: Bool
             /// How long the relief takes to rise out of the plane and to
             /// collapse back into it, in seconds, when the zoom crosses
             /// `appearZoom` or `collapseZoom`: 0.3 by default. 0 switches
@@ -957,6 +975,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                         exaggeration: Float = 1,
                         appearZoom: Double = 10,
                         collapseZoom: Double = 13.7,
+                        collapsesWhereTerrainIsMissing: Bool = true,
                         transitionSeconds: TimeInterval = 0.3,
                         minimumSourceZoom: Int = 12,
                         cameraTerrainZoom: Int = 10,
@@ -972,6 +991,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                 self.exaggeration = exaggeration
                 self.appearZoom = appearZoom
                 self.collapseZoom = collapseZoom
+                self.collapsesWhereTerrainIsMissing = collapsesWhereTerrainIsMissing
                 self.transitionSeconds = transitionSeconds
                 self.minimumSourceZoom = minimumSourceZoom
                 self.cameraTerrainZoom = cameraTerrainZoom
@@ -2577,6 +2597,7 @@ public extension ImmersiveMapSettings {
                       exaggeration: Float? = nil,
                       appearZoom: Double? = nil,
                       collapseZoom: Double? = nil,
+                      collapsesWhereTerrainIsMissing: Bool? = nil,
                       transitionSeconds: TimeInterval? = nil,
                       cameraTerrainZoom: Int? = nil,
                       displacementMaximumZoom: Int? = nil,
@@ -2585,6 +2606,9 @@ public extension ImmersiveMapSettings {
                       cameraClearanceMetres: Float? = nil,
                       castsShadows: Bool? = nil) -> ImmersiveMapSettings {
         var settings = self
+        if let collapsesWhereTerrainIsMissing {
+            settings.tiles.groundRelief.collapsesWhereTerrainIsMissing = collapsesWhereTerrainIsMissing
+        }
         if let castsShadows {
             settings.tiles.groundRelief.castsShadows = castsShadows
         }
