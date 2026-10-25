@@ -43,20 +43,30 @@ import simd
 /// The main type of `Tile/Relief`, the relief's core. The relief draws
 /// nothing of its own: it changes how other features draw, so its code
 /// lies in a `Relief` folder of each feature it changes, and this folder
-/// holds what they all share: the terrain tiles, their source and this
-/// store (`GroundReliefTile`, `GroundReliefTerrainSource`,
-/// `GroundReliefLoadStates`, `GroundReliefReleasedCache`,
-/// `GroundReliefOcclusionScheduler`), the frame's relief
-/// (`GroundReliefFrameState`, `GroundReliefFrame`), the heights read on the
-/// CPU (`GroundRelief`, `GroundReliefTileLift`), the frame's datum
-/// (`GroundReliefCameraLift`), the GPU side every rising draw binds
-/// (`GroundReliefUniform`, `Shaders/GroundRelief.h`), and the relief of the
-/// tile's own features, the ground and the buildings
-/// (`BuildingReliefLifts`). It holds no drawing and no parsing, and
-/// depends on nothing of a feature but the tile's address. The other
-/// features' relief lies in their own `Relief` folders
-/// (`Camera/Relief`), and a feature whose relief is a call into this
-/// core (the labels) keeps the call where it is.
+/// holds what they all share, in a subfolder per reader:
+///
+/// - `Store/`: the terrain tiles, where they come from and this store
+///   (`GroundReliefTile`, `GroundReliefDecoder`, `GroundReliefEdgeWeld`,
+///   `GroundReliefTerrainSource`, `GroundReliefLoadStates`,
+///   `GroundReliefReleasedCache`, `GroundReliefOcclusion` and its
+///   scheduler, `GroundReliefStatusSnapshot`). Nothing of a frame.
+/// - `Frame/`: what the frames draw the relief by (`GroundReliefFrameState`,
+///   settled into `GroundReliefFrame`), the shading and the mountains'
+///   shadows (`GroundReliefHillshade`, `GroundReliefShadowCasterSubsystem`),
+///   and the GPU side every rising draw binds (`GroundReliefUniform`,
+///   `Shaders/GroundRelief.h`).
+/// - `Demand/`: which terrain a frame needs, as the planner asks for it
+///   (`GroundReliefDemand`, `GroundReliefTerrainDemand`,
+///   `GroundReliefTerrainZooms`).
+/// - `Lifts/`: the heights read on the CPU (`GroundRelief`,
+///   `GroundReliefTileLift`), the frame's datum (`GroundReliefCameraLift`),
+///   the country around the camera (`GroundReliefSurroundings`), and the
+///   relief of the tile's own buildings (`BuildingReliefLifts`).
+///
+/// It holds no drawing and no parsing, and depends on nothing of a feature
+/// but the tile's address. The other features' relief lies in their own
+/// `Relief` folders (`Camera/Relief`), and a feature whose relief is a
+/// call into this core (the labels) keeps the call where it is.
 final class GroundReliefStore: GroundReliefTerrainDemand, @unchecked Sendable {
     weak var eventSink: RenderFrameEventSink?
 
