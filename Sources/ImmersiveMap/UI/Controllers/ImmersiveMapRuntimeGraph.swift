@@ -22,7 +22,16 @@ final class ImmersiveMapRuntimeGraph {
     /// The debug panel over the map, once one is installed
     /// (`installDebugPanel`): nil in an app that links no panel.
     private(set) var debugPanelRuntime: (any ImmersiveMapDebugPanelRuntime)?
-    private let debugPanelHost: ImmersiveMapDebugPanelHost
+    /// What a panel reads and drags, kept for the frames whether or not
+    /// a panel is ever installed, and the view a panel lays itself into.
+    /// The view is held weakly: it owns this graph through the host
+    /// runtime, and a strong reference here kept every dismantled map
+    /// view alive with its renderer.
+    private let debugOverlayControls: DebugOverlayControlState
+    private let debugOverlayHUDSnapshotStore: DebugOverlayHUDSnapshotStore
+    private let tileTraceRecorder: TileTraceRecorder
+    private let baseLabelTraceRecorder: BaseLabelTraceRecorder
+    private weak var mapView: ImmersiveMapHostView?
     let tapHandler: ImmersiveMapTapHandler
     let rendererBuilder: ImmersiveMapRendererBuilder
     let frameRenderDelegate: ImmersiveMapFrameRenderDelegate
@@ -67,14 +76,6 @@ final class ImmersiveMapRuntimeGraph {
         let debugOverlayHUDSnapshotStore = DebugOverlayHUDSnapshotStore()
         let tileTraceRecorder = TileTraceRecorder()
         let baseLabelTraceRecorder = BaseLabelTraceRecorder()
-        let debugPanelHost = ImmersiveMapDebugPanelHost(mapView: mapView,
-                                                        controls: debugOverlayControls,
-                                                        hudSnapshotStore: debugOverlayHUDSnapshotStore,
-                                                        tileTraceRecorder: tileTraceRecorder,
-                                                        baseLabelTraceRecorder: baseLabelTraceRecorder,
-                                                        renderRuntime: renderRuntime,
-                                                        cameraRuntime: cameraRuntime,
-                                                        cameraAnimationRuntime: cameraAnimationRuntime)
         let tapHandler = ImmersiveMapTapHandler(controlsRuntime: controlsRuntime,
                                                 selectionHandler: selectionHandler,
                                                 cameraRuntime: cameraRuntime)
@@ -105,7 +106,11 @@ final class ImmersiveMapRuntimeGraph {
         self.cameraAnimationRuntime = cameraAnimationRuntime
         self.cameraCommandHandler = cameraCommandHandler
         self.selectionHandler = selectionHandler
-        self.debugPanelHost = debugPanelHost
+        self.debugOverlayControls = debugOverlayControls
+        self.debugOverlayHUDSnapshotStore = debugOverlayHUDSnapshotStore
+        self.tileTraceRecorder = tileTraceRecorder
+        self.baseLabelTraceRecorder = baseLabelTraceRecorder
+        self.mapView = mapView
         self.tapHandler = tapHandler
         self.rendererBuilder = rendererBuilder
         self.frameRenderDelegate = frameRenderDelegate
@@ -113,13 +118,21 @@ final class ImmersiveMapRuntimeGraph {
 
     /// Installs the debug panel over the map, once: a host view keeps the
     /// first panel it is given, as it keeps its layer. Returns the panel's
-    /// runtime, nil when one is installed already.
+    /// runtime, nil when one is installed already or the view is gone.
     @discardableResult
     func installDebugPanel(_ panel: ImmersiveMapDebugPanel) -> (any ImmersiveMapDebugPanelRuntime)? {
-        guard debugPanelRuntime == nil else {
+        guard debugPanelRuntime == nil, let mapView else {
             return nil
         }
-        let runtime = panel.makeRuntime(debugPanelHost)
+        let host = ImmersiveMapDebugPanelHost(mapView: mapView,
+                                              controls: debugOverlayControls,
+                                              hudSnapshotStore: debugOverlayHUDSnapshotStore,
+                                              tileTraceRecorder: tileTraceRecorder,
+                                              baseLabelTraceRecorder: baseLabelTraceRecorder,
+                                              renderRuntime: renderRuntime,
+                                              cameraRuntime: cameraRuntime,
+                                              cameraAnimationRuntime: cameraAnimationRuntime)
+        let runtime = panel.makeRuntime(host)
         debugPanelRuntime = runtime
         return runtime
     }

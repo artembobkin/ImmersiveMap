@@ -26,7 +26,10 @@ public struct ImmersiveMapDebugPanel: Sendable {
 
 /// What the engine hands a debug panel to work with: the view to lay
 /// itself into, the controls it drags and the stores it reads, and the
-/// runtimes it asks for a frame or a surface switch.
+/// runtimes it asks for a frame or a surface switch. Made for the one
+/// call that installs a panel and kept by nothing: the view owns the
+/// engine's runtimes, so a runtime that stored this would keep the view
+/// alive after it was dismantled.
 @MainActor
 package struct ImmersiveMapDebugPanelHost {
     package let mapView: ImmersiveMapHostView
