@@ -13,9 +13,9 @@ Because the repo is public: never commit tile-provider API keys, bearer tokens, 
 `swift test` runs natively on macOS but cannot compile `.metal` shaders (tests that need a compiled Metal library skip themselves). To run the suite with compiled shaders or on iOS, use xcodebuild against the SwiftPM-generated workspace:
 
 ```sh
-xcodebuild test -workspace .swiftpm/xcode/package.xcworkspace -scheme ImmersiveMap \
+xcodebuild test -workspace .swiftpm/xcode/package.xcworkspace -scheme ImmersiveMap-Package \
   -destination 'platform=macOS'                          # full suite, native macOS
-xcodebuild test -workspace .swiftpm/xcode/package.xcworkspace -scheme ImmersiveMap \
+xcodebuild test -workspace .swiftpm/xcode/package.xcworkspace -scheme ImmersiveMap-Package \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'   # full suite, iOS (runs UIKit-gated tests)
 ```
 

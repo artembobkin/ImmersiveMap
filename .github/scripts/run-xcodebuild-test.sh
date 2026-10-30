@@ -20,17 +20,21 @@ run_xcodebuild() {
     # `set -o pipefail` above is what makes the pipe safe: without it a failing
     # xcodebuild piped into a formatter reports success, which is the exact
     # class of silently green CI this suite exists to prevent.
+    #
+    # The package has two library products, so SwiftPM names a scheme after
+    # each, and those build their product alone. The tests run under the
+    # scheme for the whole package, ImmersiveMap-Package.
     if command -v xcbeautify >/dev/null 2>&1; then
         xcodebuild test \
             -workspace .swiftpm/xcode/package.xcworkspace \
-            -scheme ImmersiveMap \
+            -scheme ImmersiveMap-Package \
             -destination "${destination}" \
             -resultBundlePath "${result_bundle}" \
             | xcbeautify --renderer github-actions
     else
         xcodebuild test \
             -workspace .swiftpm/xcode/package.xcworkspace \
-            -scheme ImmersiveMap \
+            -scheme ImmersiveMap-Package \
             -destination "${destination}" \
             -resultBundlePath "${result_bundle}"
     fi
