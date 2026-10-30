@@ -8,7 +8,7 @@ import QuartzCore
 /// Owns time-based camera animations for a single map view.
 /// Coordinates camera flights and globe pan inertia, then synchronizes render-loop activity.
 @MainActor
-final class ImmersiveMapCameraAnimationRuntime {
+package final class ImmersiveMapCameraAnimationRuntime {
     private let cameraRuntime: ImmersiveMapCameraRuntime
     private let interactionRuntime: ImmersiveMapInteractionRuntime
     private let renderRuntime: ImmersiveMapRenderRuntime
@@ -185,7 +185,7 @@ final class ImmersiveMapCameraAnimationRuntime {
         refreshRenderingState()
     }
 
-    func cancelAnimations() {
+    package func cancelAnimations() {
         cancelGlobeCameraPanInertia()
         cancelCameraPitchFollow()
         cancelCameraBearingFollow()

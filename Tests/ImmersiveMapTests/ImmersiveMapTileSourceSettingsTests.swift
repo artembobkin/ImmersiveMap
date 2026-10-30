@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
+@testable import ImmersiveMapDebug
 import XCTest
 
 @MainActor
@@ -57,7 +58,7 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         let view = ImmersiveMapView()
             .cameraController(camera)
             .enableCameraUIControls()
-            .debugPanel()
+            .debugPanel(.hud)
 
         let settings: ImmersiveMapSettings? = reflectedValue("settings", in: view)
         let unwrappedSettings = try XCTUnwrap(settings)

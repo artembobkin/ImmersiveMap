@@ -3,24 +3,24 @@
 
 import Foundation
 
-enum DebugOverlayDiagnosticsTextStyle: Equatable {
+package enum DebugOverlayDiagnosticsTextStyle: Equatable {
     case section(String)
     case key
     case warningValue
 }
 
-struct DebugOverlayDiagnosticsTextStyleRun: Equatable {
-    let range: NSRange
-    let style: DebugOverlayDiagnosticsTextStyle
+package struct DebugOverlayDiagnosticsTextStyleRun: Equatable {
+    package let range: NSRange
+    package let style: DebugOverlayDiagnosticsTextStyle
 }
 
-enum DebugOverlayDiagnosticsTextStylePlanner {
+package enum DebugOverlayDiagnosticsTextStylePlanner {
     private static let keyExpression = try! NSRegularExpression(
         pattern: "(^| )([A-Za-z][A-Za-z0-9]*:)",
         options: []
     )
 
-    static func makeRuns(for text: String) -> [DebugOverlayDiagnosticsTextStyleRun] {
+    package static func makeRuns(for text: String) -> [DebugOverlayDiagnosticsTextStyleRun] {
         let lines = text.components(separatedBy: "\n")
         var runs: [DebugOverlayDiagnosticsTextStyleRun] = []
         var activeSection: String?

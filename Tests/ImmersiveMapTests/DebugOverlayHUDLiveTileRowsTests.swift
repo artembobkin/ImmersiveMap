@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
+@testable import ImmersiveMapDebug
 import Foundation
 import QuartzCore
 import XCTest

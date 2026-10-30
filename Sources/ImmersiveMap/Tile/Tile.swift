@@ -12,13 +12,13 @@ import Foundation
 /// contract stated once in `TileCoordinateSpace`.
 ///
 /// Content identity of a vector tile.
-struct Tile: Hashable {
-    let x: Int
-    let y: Int
-    let z: Int
+package struct Tile: Hashable {
+    package let x: Int
+    package let y: Int
+    package let z: Int
 
     // Check whether the current tile covers another tile.
-    func covers(_ other: Tile) -> Bool {
+    package func covers(_ other: Tile) -> Bool {
         // A tile covers another if it has a lower zoom level
         // and contains the other tile's coordinates.
         if z >= other.z {
@@ -38,7 +38,7 @@ struct Tile: Hashable {
     /// The tile of `zoom` that holds a point of the world (normalized
     /// world mercator), the x wrapped around the antimeridian and the y
     /// clamped to the map.
-    static func containing(normalizedWorld point: SIMD2<Double>, zoom: Int) -> Tile {
+    package static func containing(normalizedWorld point: SIMD2<Double>, zoom: Int) -> Tile {
         let zoom = max(0, zoom)
         let tilesCount = Double(1 << zoom)
         let x = ImmersiveMapProjection.wrapNormalizedWorldX(point.x)
@@ -48,7 +48,7 @@ struct Tile: Hashable {
                     z: zoom)
     }
 
-    func findParentTile(atZoom targetZoom: Int) -> Tile? {
+    package func findParentTile(atZoom targetZoom: Int) -> Tile? {
         guard z >= targetZoom, targetZoom >= 0 else {
             return nil
         }

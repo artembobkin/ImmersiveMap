@@ -37,12 +37,6 @@ final class ImmersiveMapHostRuntime {
                                                      layer: layer,
                                                      settings: settings,
                                                      initialCameraPosition: initialCameraPosition)
-        runtimeGraph.debugOverlayRuntime.apply(settings: settings)
-        // The debug panel edits live settings (the shadow group), and they
-        // take the same road as any other change.
-        runtimeGraph.debugOverlayRuntime.onSettingsChangeRequested = { [weak self] requested in
-            self?.applySettings(requested)
-        }
         mapView.applyBackgroundTransparency(settings.scene.space.isTransparent)
 
         createRenderer(settings: settings,
@@ -116,7 +110,11 @@ final class ImmersiveMapHostRuntime {
                 terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)? = nil,
                 markerContent: MarkerViewContent?,
                 cameraPosition: ImmersiveMapCameraPosition?,
-                tourVideoRecorder: ImmersiveMapTourVideoRecorder? = nil) {
+                tourVideoRecorder: ImmersiveMapTourVideoRecorder? = nil,
+                debugPanel: ImmersiveMapDebugPanel? = nil) {
+        if let debugPanel {
+            installDebugPanel(debugPanel)
+        }
         applySettings(settings)
         syncControllers(avatarsController: avatarsController,
                         sceneModelsController: sceneModelsController,
@@ -134,6 +132,21 @@ final class ImmersiveMapHostRuntime {
     func updateMarkerContent(_ markerContent: MarkerViewContent?) {
         currentMarkerContent = markerContent
         runtimeGraph.markerRuntime.update(content: markerContent)
+    }
+
+    /// Installs the debug panel over the map, the first time one is given
+    /// (`ImmersiveMapRuntimeGraph.installDebugPanel`). The panel edits
+    /// live settings (the shadow group), and they take the same road as
+    /// any other change.
+    func installDebugPanel(_ panel: ImmersiveMapDebugPanel) {
+        guard let runtime = runtimeGraph.installDebugPanel(panel) else {
+            return
+        }
+        runtime.onSettingsChangeRequested = { [weak self] requested in
+            self?.applySettings(requested)
+        }
+        runtime.apply(settings: runtimeGraph.cameraRuntime.currentSettings)
+        requestsLayout()
     }
 
     func dismantle() {
@@ -161,7 +174,7 @@ final class ImmersiveMapHostRuntime {
         // The debug panel's live edits ride on top: SwiftUI re-sends the app's
         // own value on every update of the hierarchy, which would otherwise
         // revert a slider as soon as anything else on screen changed.
-        let settings = runtimeGraph.debugOverlayRuntime.applyingOverrides(to: settings)
+        let settings = runtimeGraph.debugPanelRuntime?.applyingOverrides(to: settings) ?? settings
         let currentSettings = runtimeGraph.cameraRuntime.currentSettings
         guard currentSettings != settings else {
             return
@@ -179,7 +192,7 @@ final class ImmersiveMapHostRuntime {
                                                       settings: settings.attribution)
         runtimeGraph.controlsRuntime.applyControlZones(settings.camera.controlZones,
                                                        isHidden: settings.controls.isHidden)
-        runtimeGraph.debugOverlayRuntime.apply(settings: settings)
+        runtimeGraph.debugPanelRuntime?.apply(settings: settings)
         requestsLayout()
         runtimeGraph.renderRuntime.updateRenderLoopSettings(settings.renderLoop)
         if plan.requiresRendererRecreation {

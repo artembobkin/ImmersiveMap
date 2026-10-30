@@ -6,8 +6,8 @@ import Foundation
 /// What the terrain store holds and does at a moment
 /// (`GroundReliefFrame.statusSnapshot()`), for the debug panel's relief tab:
 /// every terrain tile the frame wants or the store keeps, and the totals.
-struct GroundReliefStatusSnapshot: Equatable {
-    enum State: Equatable {
+package struct GroundReliefStatusSnapshot: Equatable {
+    package enum State: Equatable {
         /// Wanted, waiting for a load slot.
         case queued
         case loading
@@ -17,63 +17,63 @@ struct GroundReliefStatusSnapshot: Equatable {
         case failed
     }
 
-    struct TileStatus: Equatable {
-        let tile: Tile
-        let state: State
+    package struct TileStatus: Equatable {
+        package let tile: Tile
+        package let state: State
         /// The tile's place in the frame's demand, nearest first from 0,
         /// nil for one kept from earlier frames.
-        let priority: Int?
+        package let priority: Int?
         /// What it costs in memory, zero until it is in.
-        let bytes: Int
+        package let bytes: Int
         /// Its lowest and highest heights in metres, once it is in.
-        let heightRange: ClosedRange<Float>?
+        package let heightRange: ClosedRange<Float>?
         /// Seconds the load has run, or till the next attempt of a failed
         /// one.
-        let seconds: Int
+        package let seconds: Int
         /// The failed attempts so far.
-        let attempts: Int
+        package let attempts: Int
 
-        var isWanted: Bool { priority != nil }
+        package var isWanted: Bool { priority != nil }
     }
 
     /// The wanted tiles nearest first, then the ones kept from earlier
     /// frames, the coarse first.
-    let tiles: [TileStatus]
+    package let tiles: [TileStatus]
     /// The frame is on the terrain (`GroundReliefFrame.isActive`).
-    let isActive: Bool
-    let standingShare: Float
-    let datumMetres: Float
-    let cameraTerrainZoom: Int
+    package let isActive: Bool
+    package let standingShare: Float
+    package let datumMetres: Float
+    package let cameraTerrainZoom: Int
     /// The terrain zoom of each ring's band, target zoom to terrain zoom
     /// (`GroundReliefTerrainZooms.statusText`).
-    let terrainByRing: String
-    let wantedCount: Int
-    let wantedResidentCount: Int
-    let residentCount: Int
-    let residentBytes: Int
+    package let terrainByRing: String
+    package let wantedCount: Int
+    package let wantedResidentCount: Int
+    package let residentCount: Int
+    package let residentBytes: Int
     /// The tiles the frame stopped reading, kept for a frame that reads
     /// them again (`GroundReliefSettings.releasedCacheBytes`).
-    let releasedCount: Int
-    let releasedBytes: Int
-    let releasedCacheBytes: Int
+    package let releasedCount: Int
+    package let releasedBytes: Int
+    package let releasedCacheBytes: Int
     /// The tiles in whose occlusion of the sky is computed under the
     /// current key (`GroundReliefOcclusion`), and how long the last one
     /// took, in milliseconds.
-    let occlusionComputedCount: Int
-    let occlusionMillisecondsLast: Double
-    let loadingCount: Int
-    let maximumConcurrentLoads: Int
-    let failedCount: Int
+    package let occlusionComputedCount: Int
+    package let occlusionMillisecondsLast: Double
+    package let loadingCount: Int
+    package let maximumConcurrentLoads: Int
+    package let failedCount: Int
     /// Tiles the source does not have, replaced by their ancestors.
-    let missingCount: Int
+    package let missingCount: Int
     /// The country around the camera as the frame read it
     /// (`FrameContext.terrainSurroundings`), set by the frame's snapshot,
     /// nil off the terrain or before the terrain under the camera is in.
-    var surroundings: ImmersiveMapTerrainSurroundings? = nil
+    package var surroundings: ImmersiveMapTerrainSurroundings? = nil
 
     /// The frame on the terrain or off it, how far the relief has risen
     /// and the datum: the panel's Relief group, one value a line.
-    var stateLines: [String] {
+    package var stateLines: [String] {
         ["relief: \(isActive ? "on the terrain" : "off the terrain")",
          "standing \(String(format: "%.2f", standingShare))",
          "datum \(String(format: "%.0f", datumMetres)) m"]
@@ -81,7 +81,7 @@ struct GroundReliefStatusSnapshot: Equatable {
 
     /// What the frame wants and how the loads go: the panel's Terrain
     /// loading group.
-    var loadingLines: [String] {
+    package var loadingLines: [String] {
         ["wanted \(wantedCount)",
          "wanted and in \(wantedResidentCount)",
          "loading \(loadingCount) of \(maximumConcurrentLoads)",
@@ -91,7 +91,7 @@ struct GroundReliefStatusSnapshot: Equatable {
 
     /// What the store keeps and which maps it reads: the panel's Terrain
     /// memory group.
-    var memoryLines: [String] {
+    package var memoryLines: [String] {
         let megabytes = { (bytes: Int) in String(format: "%.1f", Double(bytes) / 1_048_576) }
         return ["in memory \(residentCount) tiles, \(megabytes(residentBytes)) MB",
                 "released \(releasedCount) tiles, \(megabytes(releasedBytes)) of \(megabytes(releasedCacheBytes)) MB",
@@ -100,7 +100,7 @@ struct GroundReliefStatusSnapshot: Equatable {
     }
 
     /// The occlusion of the sky as computed: the panel's AO tab.
-    var occlusionLines: [String] {
+    package var occlusionLines: [String] {
         ["computed \(occlusionComputedCount) of \(residentCount) tiles",
          "last tile \(String(format: "%.1f", occlusionMillisecondsLast)) ms"]
     }
@@ -108,7 +108,7 @@ struct GroundReliefStatusSnapshot: Equatable {
     /// The country around the camera as read: the panel's Surroundings
     /// group. "waiting for terrain" while the frame is on the terrain and
     /// the reading has not come, "off the terrain" otherwise.
-    var surroundingsLines: [String] {
+    package var surroundingsLines: [String] {
         guard let surroundings else {
             return ["around: \(isActive ? "waiting for terrain" : "off the terrain")"]
         }
@@ -120,7 +120,7 @@ struct GroundReliefStatusSnapshot: Equatable {
 
     /// The panel's summary where it is one text (the iOS panel): every
     /// group's lines in turn.
-    var lines: [String] {
+    package var lines: [String] {
         stateLines + loadingLines + memoryLines + surroundingsLines
     }
 }

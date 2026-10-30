@@ -3,6 +3,7 @@
 
 import SwiftUI
 import ImmersiveMap
+import ImmersiveMapDebug
 
 @main
 struct ImmersiveMapDevMacApp: App {
@@ -103,7 +104,7 @@ private struct MapScreen: View {
             // chrome above the map, with the zoom badge in the corner: the
             // camera's zoom and the planning zoom, which part over the
             // relief through a drag. A development aid, off by default.
-            .debugPanel()
+            .debugPanel(.hud)
             .controlsHidden(false)
             .ignoresSafeArea()
     }

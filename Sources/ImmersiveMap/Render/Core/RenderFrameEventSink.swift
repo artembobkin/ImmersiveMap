@@ -1,7 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
-enum RenderInvalidationReason {
+package enum RenderInvalidationReason {
     case tileAvailable
     case tileRetryDue
     case sceneModelAssetLoaded

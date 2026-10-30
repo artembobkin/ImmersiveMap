@@ -1558,7 +1558,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
 
         /// The strength at a camera zoom, 0 to 1.
-        func strength(atZoom zoom: Double) -> Float {
+        package func strength(atZoom zoom: Double) -> Float {
             min(max(strength.value(atZoom: zoom), 0), 1)
         }
 
@@ -1800,12 +1800,12 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
         /// The zooms the overview's stops of the shipping curves sit at,
         /// the relief's zooms and below.
-        static let overviewStopZooms: ClosedRange<Double> = 0...13
+        package static let overviewStopZooms: ClosedRange<Double> = 0...13
 
         /// `curve` with every stop up to zoom 13 dropped and one value put
         /// at zooms 7 and 12 in their place: the overview reads it, and the
         /// stops past it are the curve's own.
-        static func replacingOverviewStops(of curve: ImmersiveMapZoomCurve, with value: Float) -> ImmersiveMapZoomCurve {
+        package static func replacingOverviewStops(of curve: ImmersiveMapZoomCurve, with value: Float) -> ImmersiveMapZoomCurve {
             let kept = curve.stops.filter { overviewStopZooms.contains($0.zoom) == false }
             return ImmersiveMapZoomCurve(stops: kept + [ImmersiveMapZoomCurve.Stop(zoom: 7, value: value),
                                                         ImmersiveMapZoomCurve.Stop(zoom: 12, value: value)])

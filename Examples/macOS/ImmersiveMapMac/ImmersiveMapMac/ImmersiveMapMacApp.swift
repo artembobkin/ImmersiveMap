@@ -30,9 +30,6 @@ private struct MapScreen: View {
             // they drive it, so without one the modifier does nothing.
             .camera(camera, position: Self.start)
             .enableCameraUIControls()
-            // Camera coordinates and renderer diagnostics, drawn as host-view
-            // chrome above the map. A development aid, off by default.
-            .debugPanel()
             .ignoresSafeArea()
     }
 

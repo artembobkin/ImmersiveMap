@@ -48,7 +48,6 @@ public class ImmersiveMapUIView: UIView {
     var interactionRuntime: ImmersiveMapInteractionRuntime { runtimeGraph.interactionRuntime }
     var cameraAnimationRuntime: ImmersiveMapCameraAnimationRuntime { runtimeGraph.cameraAnimationRuntime }
     var selectionHandler: ImmersiveMapSelectionHandler { runtimeGraph.selectionHandler }
-    var debugOverlayRuntime: ImmersiveMapDebugOverlayRuntime { runtimeGraph.debugOverlayRuntime }
     var tapHandler: ImmersiveMapTapHandler { runtimeGraph.tapHandler }
     var rendererBuilder: ImmersiveMapRendererBuilder { runtimeGraph.rendererBuilder }
 
@@ -142,8 +141,8 @@ public class ImmersiveMapUIView: UIView {
 
         controlsRuntime.layout(in: bounds,
                                safeAreaInsets: safeAreaInsets)
-        debugOverlayRuntime.layout(in: bounds,
-                                   safeAreaTopInset: safeAreaInsets.top)
+        runtimeGraph.debugPanelRuntime?.layout(in: bounds,
+                                               safeAreaTopInset: safeAreaInsets.top)
         markerRuntime.layout(in: bounds)
     }
 
@@ -161,7 +160,8 @@ public class ImmersiveMapUIView: UIView {
                 terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)? = nil,
                 markerContent: MarkerViewContent?,
                 cameraPosition: ImmersiveMapCameraPosition?,
-                tourVideoRecorder: ImmersiveMapTourVideoRecorder? = nil) {
+                tourVideoRecorder: ImmersiveMapTourVideoRecorder? = nil,
+                debugPanel: ImmersiveMapDebugPanel? = nil) {
         hostRuntime.update(settings: settings,
                            avatarsController: avatarsController,
                            sceneModelsController: sceneModelsController,
@@ -173,7 +173,8 @@ public class ImmersiveMapUIView: UIView {
                            terrainSurroundingsAction: terrainSurroundingsAction,
                            markerContent: markerContent,
                            cameraPosition: cameraPosition,
-                           tourVideoRecorder: tourVideoRecorder)
+                           tourVideoRecorder: tourVideoRecorder,
+                           debugPanel: debugPanel)
     }
 
     func dismantle() {

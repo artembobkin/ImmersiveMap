@@ -3,9 +3,9 @@
 
 import Foundation
 
-struct TileParseLayerTiming: Equatable {
-    let layerName: String
-    let duration: TimeInterval
+package struct TileParseLayerTiming: Equatable {
+    package let layerName: String
+    package let duration: TimeInterval
 }
 
 struct PreparedTileLoadResult {

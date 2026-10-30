@@ -79,7 +79,7 @@ public struct ImmersiveMapZoomCurve: Hashable, Sendable {
     }
 
     /// The value, when the curve is the same at every zoom.
-    var constantValue: Float? {
+    package var constantValue: Float? {
         stops.count == 1 ? stops[0].value : nil
     }
 }

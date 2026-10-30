@@ -3,9 +3,9 @@
 
 import Foundation
 
-struct DebugOverlayHUDSnapshotStoreValue: Equatable {
-    let version: UInt64
-    let snapshot: DebugOverlayHUDSnapshot?
+package struct DebugOverlayHUDSnapshotStoreValue: Equatable {
+    package let version: UInt64
+    package let snapshot: DebugOverlayHUDSnapshot?
 }
 
 /// The frame's HUD snapshot on its way from the engine to the panel, and
@@ -19,7 +19,7 @@ struct DebugOverlayHUDSnapshotStoreValue: Equatable {
 /// provider, so the rows never stay behind the loader. The panel says
 /// which content it shows (`requestedContent`), and a frame builds only
 /// that.
-final class DebugOverlayHUDSnapshotStore: @unchecked Sendable {
+package final class DebugOverlayHUDSnapshotStore: @unchecked Sendable {
     private let lock = NSLock()
     private var version: UInt64 = 0
     private var snapshot: DebugOverlayHUDSnapshot?
@@ -30,14 +30,14 @@ final class DebugOverlayHUDSnapshotStore: @unchecked Sendable {
     /// The panel's hooks, set once by the panel's runtime and called on the
     /// main thread only: a frame's snapshot just published, and the
     /// loader's state moved between frames.
-    nonisolated(unsafe) var onSnapshotPublished: (@MainActor () -> Void)?
-    nonisolated(unsafe) var onTileLoadingStatusChanged: (@MainActor () -> Void)?
+    package nonisolated(unsafe) var onSnapshotPublished: (@MainActor () -> Void)?
+    package nonisolated(unsafe) var onTileLoadingStatusChanged: (@MainActor () -> Void)?
 
-    init() {}
+    package init() {}
 
     /// What the panel shows, for the frame to build: the panel sets it on
     /// a tab change, the engine reads it every frame.
-    var requestedContent: DebugOverlayHUDContentRequest {
+    package var requestedContent: DebugOverlayHUDContentRequest {
         get {
             lock.lock()
             defer { lock.unlock() }
@@ -53,7 +53,7 @@ final class DebugOverlayHUDSnapshotStore: @unchecked Sendable {
     /// The reporter's word that its state moved, from the loader's threads:
     /// one hop to the main thread for a burst of changes, where the panel
     /// reads the rows again.
-    func noteTileLoadingStatusChanged() {
+    package func noteTileLoadingStatusChanged() {
         lock.lock()
         let schedule = isTileLoadingStatusRefreshScheduled == false
         isTileLoadingStatusRefreshScheduled = true
@@ -72,7 +72,7 @@ final class DebugOverlayHUDSnapshotStore: @unchecked Sendable {
 
     /// The engine attaches its reporter when it is built and detaches it
     /// when discarded. Thread-safe like the rest of the store.
-    func attachTileLoadingStatus(provider: (@Sendable () -> TileLoadingStatusSnapshot?)?) {
+    package func attachTileLoadingStatus(provider: (@Sendable () -> TileLoadingStatusSnapshot?)?) {
         lock.lock()
         tileLoadingStatusProvider = provider
         lock.unlock()
@@ -80,7 +80,7 @@ final class DebugOverlayHUDSnapshotStore: @unchecked Sendable {
 
     /// The reporter's state right now, or nil without a provider (no engine,
     /// or the debug panel is off and the engine keeps no reporter).
-    func currentTileLoadingStatus() -> TileLoadingStatusSnapshot? {
+    package func currentTileLoadingStatus() -> TileLoadingStatusSnapshot? {
         lock.lock()
         let provider = tileLoadingStatusProvider
         lock.unlock()
@@ -90,7 +90,7 @@ final class DebugOverlayHUDSnapshotStore: @unchecked Sendable {
     /// The between-frames refresh: the snapshot the panel shows with its
     /// tile list read again from the reporter, or nil when there is nothing
     /// shown, no provider, or nothing moved since.
-    func refreshedSnapshot(applying applied: DebugOverlayHUDSnapshot?) -> DebugOverlayHUDSnapshot? {
+    package func refreshedSnapshot(applying applied: DebugOverlayHUDSnapshot?) -> DebugOverlayHUDSnapshot? {
         guard let applied, let status = currentTileLoadingStatus() else {
             return nil
         }
@@ -99,7 +99,7 @@ final class DebugOverlayHUDSnapshotStore: @unchecked Sendable {
     }
 
     @discardableResult
-    func publish(_ snapshot: DebugOverlayHUDSnapshot?) -> UInt64 {
+    package func publish(_ snapshot: DebugOverlayHUDSnapshot?) -> UInt64 {
         lock.lock()
         defer { lock.unlock() }
 
@@ -108,7 +108,7 @@ final class DebugOverlayHUDSnapshotStore: @unchecked Sendable {
         return version
     }
 
-    func consumeLatest(after consumedVersion: UInt64) -> DebugOverlayHUDSnapshotStoreValue? {
+    package func consumeLatest(after consumedVersion: UInt64) -> DebugOverlayHUDSnapshotStoreValue? {
         lock.lock()
         defer { lock.unlock() }
 

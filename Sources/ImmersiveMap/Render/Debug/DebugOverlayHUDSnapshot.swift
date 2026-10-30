@@ -4,59 +4,63 @@
 import Foundation
 import simd
 
-struct DebugOverlayCoordinateLines: Equatable {
-    let zoom: String
-    let latLon: String
+package struct DebugOverlayCoordinateLines: Equatable {
+    package let zoom: String
+    package let latLon: String
 }
 
 /// What the debug panel shows right now, so a frame builds only that: the
 /// panel is in step with every rendered frame, one to one, and the frame
 /// pays for one tab's data, not the whole panel's.
-struct DebugOverlayHUDContentRequest: OptionSet, Sendable, Equatable {
-    let rawValue: UInt8
+package struct DebugOverlayHUDContentRequest: OptionSet, Sendable, Equatable {
+    package let rawValue: UInt8
+
+    package init(rawValue: UInt8) {
+        self.rawValue = rawValue
+    }
 
     /// The camera's lines and the frame's diagnostics.
-    static let stats = DebugOverlayHUDContentRequest(rawValue: 1 << 0)
+    package static let stats = DebugOverlayHUDContentRequest(rawValue: 1 << 0)
     /// The loader's status, the tile cards and the coverage map.
-    static let tiles = DebugOverlayHUDContentRequest(rawValue: 1 << 1)
+    package static let tiles = DebugOverlayHUDContentRequest(rawValue: 1 << 1)
     /// The terrain store's status, the terrain cards and their map.
-    static let relief = DebugOverlayHUDContentRequest(rawValue: 1 << 2)
-    static let all: DebugOverlayHUDContentRequest = [.stats, .tiles, .relief]
+    package static let relief = DebugOverlayHUDContentRequest(rawValue: 1 << 2)
+    package static let all: DebugOverlayHUDContentRequest = [.stats, .tiles, .relief]
 }
 
-struct DebugOverlayHUDSnapshot: Equatable {
-    let coordinateLines: DebugOverlayCoordinateLines
-    let diagnosticsLines: [String]
-    let tileLoadingStatusLines: [String]
-    let tileLoadingStatusTiles: [TileLoadingStatusTileSnapshot]
-    let coordinateScale: Float
-    let diagnosticsScale: Float
-    let leftPadding: Float
-    let topPadding: Float
-    let sectionSpacing: Float
-    let textColor: SIMD3<Float>
+package struct DebugOverlayHUDSnapshot: Equatable {
+    package let coordinateLines: DebugOverlayCoordinateLines
+    package let diagnosticsLines: [String]
+    package let tileLoadingStatusLines: [String]
+    package let tileLoadingStatusTiles: [TileLoadingStatusTileSnapshot]
+    package let coordinateScale: Float
+    package let diagnosticsScale: Float
+    package let leftPadding: Float
+    package let topPadding: Float
+    package let sectionSpacing: Float
+    package let textColor: SIMD3<Float>
     /// The planning zoom as a number (`FrameContext.planningZoom`), for the
     /// controls that read a value off a zoom curve (the ground fog group),
     /// which the frame reads at that zoom.
-    var cameraZoom: Double = 0
+    package var cameraZoom: Double = 0
     /// The camera's own zoom as a number, for the zoom badge
     /// (`DebugOverlayZoomBadge`), which shows it beside `cameraZoom`.
-    var zoom: Double = 0
+    package var zoom: Double = 0
     /// The compass direction the camera looks in, in degrees clockwise
     /// from north (`DebugOverlaySunDial.viewAzimuthDegrees`): the sun
     /// picker turns with it.
-    var viewAzimuthDegrees: Double = 0
+    package var viewAzimuthDegrees: Double = 0
     /// The frame's tile coverage from above, for the panel's coverage map.
-    var tileCoverage: DebugOverlayTileCoverage? = nil
+    package var tileCoverage: DebugOverlayTileCoverage? = nil
     /// The terrain store's status (`GroundReliefStatusSnapshot`), nil with
     /// the relief off or its tab not shown.
-    var reliefStatus: GroundReliefStatusSnapshot? = nil
+    package var reliefStatus: GroundReliefStatusSnapshot? = nil
     /// The terrain from above, for the relief tab's map.
-    var reliefCoverage: DebugOverlayReliefCoverage? = nil
+    package var reliefCoverage: DebugOverlayReliefCoverage? = nil
 
     /// The same frame snapshot with the tile list read again from the
     /// reporter: what the panel applies between frames.
-    func replacingTileLoadingStatus(_ tileLoadingStatus: TileLoadingStatusSnapshot?) -> DebugOverlayHUDSnapshot {
+    package func replacingTileLoadingStatus(_ tileLoadingStatus: TileLoadingStatusSnapshot?) -> DebugOverlayHUDSnapshot {
         DebugOverlayHUDSnapshot(coordinateLines: coordinateLines,
                                 diagnosticsLines: diagnosticsLines,
                                 tileLoadingStatusLines: tileLoadingStatus?.lines ?? [],
@@ -122,6 +126,16 @@ struct DebugOverlayHUDSnapshot: Equatable {
 
     /// The frame's snapshot for the panel's `content`: the rest is left
     /// empty and never built.
+    /// The compass direction the camera looks in, in degrees clockwise
+    /// from north, 0 to 360: the camera turned by `bearingRadians` sees
+    /// the world rotated by it (`ZoomAnchorMath`), so its view is the
+    /// bearing's opposite turn. What the panel's sun picker turns its
+    /// disc by (`DebugOverlaySunDial`).
+    package static func viewAzimuthDegrees(bearingRadians: Double) -> Double {
+        let degrees = (-bearingRadians * 180 / .pi).truncatingRemainder(dividingBy: 360)
+        return degrees < 0 ? degrees + 360 : degrees
+    }
+
     static func make(settings: ImmersiveMapSettings.DebugSettings,
                      frameContext: FrameContext,
                      diagnostics: FrameDiagnostics?,
@@ -135,7 +149,7 @@ struct DebugOverlayHUDSnapshot: Equatable {
         return make(settings: settings,
                     zoom: frameContext.mapCameraState.zoom,
                     planningZoom: frameContext.planningZoom,
-                    viewAzimuthDegrees: DebugOverlaySunDial.viewAzimuthDegrees(bearingRadians: Double(frameContext.mapCameraState.bearing)),
+                    viewAzimuthDegrees: viewAzimuthDegrees(bearingRadians: Double(frameContext.mapCameraState.bearing)),
                     latitude: cameraPosition.latitudeDegrees,
                     longitude: cameraPosition.longitudeDegrees,
                     cameraDebugLines: content.contains(.stats) ? makeCameraDebugLines(frameContext: frameContext) : [],

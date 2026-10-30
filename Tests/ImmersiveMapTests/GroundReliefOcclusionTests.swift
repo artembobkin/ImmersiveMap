@@ -4,6 +4,7 @@
 import CoreGraphics
 import ImageIO
 @testable import ImmersiveMap
+@testable import ImmersiveMapDebug
 import Metal
 import UniformTypeIdentifiers
 import XCTest

@@ -9,7 +9,7 @@ struct TileLoadingPhaseSnapshot: Equatable {
     let failed: Int
 }
 
-enum TileLoadingTileStatus: Equatable {
+package enum TileLoadingTileStatus: Equatable {
     case queued
     case loading
     case parsing
@@ -17,19 +17,19 @@ enum TileLoadingTileStatus: Equatable {
     case failed
 }
 
-struct TileLoadingStatusTileSnapshot: Equatable {
-    let tile: Tile
-    let status: TileLoadingTileStatus
-    let progress: Double
-    let detail: String
-    let preparationStages: [TilePreparationStageSnapshot]
+package struct TileLoadingStatusTileSnapshot: Equatable {
+    package let tile: Tile
+    package let status: TileLoadingTileStatus
+    package let progress: Double
+    package let detail: String
+    package let preparationStages: [TilePreparationStageSnapshot]
     /// How long the row has shown its current detail, in whole seconds, for
     /// a record whose status is live work (`.loading`, `.parsing`); zero
     /// otherwise. A stage that stays put grows old in the HUD instead of
     /// looking like it started a moment ago.
-    let stageAgeSeconds: Int
+    package let stageAgeSeconds: Int
 
-    init(tile: Tile,
+    package init(tile: Tile,
          status: TileLoadingTileStatus,
          progress: Double,
          detail: String,
@@ -44,12 +44,12 @@ struct TileLoadingStatusTileSnapshot: Equatable {
     }
 }
 
-struct TilePreparationStageSnapshot: Equatable {
-    let name: String
-    let duration: TimeInterval?
-    let layerTimings: [TileParseLayerTiming]
+package struct TilePreparationStageSnapshot: Equatable {
+    package let name: String
+    package let duration: TimeInterval?
+    package let layerTimings: [TileParseLayerTiming]
 
-    init(name: String,
+    package init(name: String,
          duration: TimeInterval?,
          layerTimings: [TileParseLayerTiming] = []) {
         self.name = name
@@ -58,26 +58,26 @@ struct TilePreparationStageSnapshot: Equatable {
     }
 }
 
-struct TileLoadingStatusSnapshot: Equatable {
-    let requested: Int
-    let deduplicated: Int
-    let activeLoads: Int
-    let scheduled: Int
+package struct TileLoadingStatusSnapshot: Equatable {
+    package let requested: Int
+    package let deduplicated: Int
+    package let activeLoads: Int
+    package let scheduled: Int
     let disk: TileLoadingPhaseSnapshot
     let network: TileLoadingPhaseSnapshot
     let parsing: TileLoadingPhaseSnapshot
-    let totalCompleted: Int
-    let totalFailed: Int
-    let networkBytes: Int
-    let latestDiskTile: Tile?
-    let latestNetworkTile: Tile?
-    let latestParsingTile: Tile?
-    let latestFailure: String?
-    let latestParseLayerTimingTile: Tile?
+    package let totalCompleted: Int
+    package let totalFailed: Int
+    package let networkBytes: Int
+    package let latestDiskTile: Tile?
+    package let latestNetworkTile: Tile?
+    package let latestParsingTile: Tile?
+    package let latestFailure: String?
+    package let latestParseLayerTimingTile: Tile?
     let latestParseLayerTimings: [TileParseLayerTiming]
-    let tiles: [TileLoadingStatusTileSnapshot]
+    package let tiles: [TileLoadingStatusTileSnapshot]
 
-    var lines: [String] {
+    package var lines: [String] {
         guard requested > 0 || activeLoads > 0 || scheduled > 0 || totalCompleted > 0 || totalFailed > 0 else {
             return []
         }

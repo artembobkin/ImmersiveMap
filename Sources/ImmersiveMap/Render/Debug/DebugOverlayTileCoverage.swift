@@ -12,18 +12,18 @@ import simd
 /// rings as they are, nested bands of squares round the look-at point,
 /// which the perspective of the map itself folds into a few pixels at
 /// the horizon.
-struct DebugOverlayTileCoverage: Equatable {
-    struct Placement: Equatable {
+package struct DebugOverlayTileCoverage: Equatable {
+    package struct Placement: Equatable {
         /// The slot drawn: its square and its colour.
-        let slot: Tile
+        package let slot: Tile
         /// The tile drawn in it: the slot's own, or a coarser stand-in.
-        let source: Tile
-        let worldWrap: Int8
+        package let source: Tile
+        package let worldWrap: Int8
 
-        var isStandIn: Bool { slot != source }
+        package var isStandIn: Bool { slot != source }
 
         /// The slot's square in normalized Mercator.
-        var square: CGRect {
+        package var square: CGRect {
             let count = Double(1 << slot.z)
             return CGRect(x: Double(slot.x) / count + Double(worldWrap),
                           y: Double(slot.y) / count,
@@ -32,14 +32,14 @@ struct DebugOverlayTileCoverage: Equatable {
         }
     }
 
-    let placements: [Placement]
+    package let placements: [Placement]
     /// The ground footprint of the view, a convex polygon, empty on the
     /// globe.
-    let footprint: [SIMD2<Double>]
+    package let footprint: [SIMD2<Double>]
     /// The point the camera looks at.
-    let center: SIMD2<Double>
+    package let center: SIMD2<Double>
     /// Where the eye stands over the ground, nil on the globe.
-    let eye: SIMD2<Double>?
+    package let eye: SIMD2<Double>?
 
     /// The frame's coverage: the flat map's footprint and eye, the globe's
     /// placements alone.
@@ -84,19 +84,19 @@ struct DebugOverlayTileCoverage: Equatable {
 /// The geometry of the coverage map, shared by the platform views, which
 /// draw it by hand: the window of Mercator it shows and where a point of
 /// Mercator lands in it.
-enum DebugOverlayTileCoverageLayout {
-    static let side: CGFloat = 280
-    static let margin: Double = 0.06
-    static let cornerRadius: CGFloat = 8
-    static let tileLineWidth: CGFloat = 1.5
-    static let tileFillAlpha: CGFloat = 0.26
-    static let footprintLineWidth: CGFloat = 1.5
-    static let footprintFillAlpha: CGFloat = 0.08
-    static let markerRadius: CGFloat = 3.5
-    static let labelFontSize: CGFloat = 9
+package enum DebugOverlayTileCoverageLayout {
+    package static let side: CGFloat = 280
+    package static let margin: Double = 0.06
+    package static let cornerRadius: CGFloat = 8
+    package static let tileLineWidth: CGFloat = 1.5
+    package static let tileFillAlpha: CGFloat = 0.26
+    package static let footprintLineWidth: CGFloat = 1.5
+    package static let footprintFillAlpha: CGFloat = 0.08
+    package static let markerRadius: CGFloat = 3.5
+    package static let labelFontSize: CGFloat = 9
     /// A slot square narrower than this on the map carries no label.
-    static let labelledSquareSide: CGFloat = 44
-    static let sourceLabelledSquareSide: CGFloat = 60
+    package static let labelledSquareSide: CGFloat = 44
+    package static let sourceLabelledSquareSide: CGFloat = 60
 
     /// The square of Mercator shown: the bounds of every slot and of the
     /// point the camera looks at, widened by `margin`, squared round its
@@ -104,7 +104,7 @@ enum DebugOverlayTileCoverageLayout {
     /// footprint is left out on purpose: a camera on the horizon sees to
     /// the far plane, and a window round that put the tiles in a corner
     /// a few pixels wide. It is cut at the window's edge instead.
-    static func window(for coverage: DebugOverlayTileCoverage) -> CGRect {
+    package static func window(for coverage: DebugOverlayTileCoverage) -> CGRect {
         var bounds = CGRect(x: coverage.center.x, y: coverage.center.y, width: 0, height: 0)
         for placement in coverage.placements { bounds = bounds.union(placement.square) }
         guard bounds.width > 0 || bounds.height > 0 else {
@@ -116,12 +116,12 @@ enum DebugOverlayTileCoverageLayout {
 
     /// Where a point of Mercator lands in a map of `side` points, y down
     /// as Mercator's.
-    static func point(_ mercator: SIMD2<Double>, window: CGRect, side: CGFloat) -> CGPoint {
+    package static func point(_ mercator: SIMD2<Double>, window: CGRect, side: CGFloat) -> CGPoint {
         let scale = side / max(window.width, 1e-12)
         return CGPoint(x: (mercator.x - window.minX) * scale, y: (mercator.y - window.minY) * scale)
     }
 
-    static func rect(_ square: CGRect, window: CGRect, side: CGFloat) -> CGRect {
+    package static func rect(_ square: CGRect, window: CGRect, side: CGFloat) -> CGRect {
         let origin = point(SIMD2<Double>(square.minX, square.minY), window: window, side: side)
         let scale = side / max(window.width, 1e-12)
         return CGRect(x: origin.x, y: origin.y, width: square.width * scale, height: square.height * scale)
@@ -129,7 +129,7 @@ enum DebugOverlayTileCoverageLayout {
 
     /// The placements in drawing order: the coarse slots first, so a fine
     /// slot lies on the coarse one it splits.
-    static func drawingOrder(_ placements: [DebugOverlayTileCoverage.Placement]) -> [DebugOverlayTileCoverage.Placement] {
+    package static func drawingOrder(_ placements: [DebugOverlayTileCoverage.Placement]) -> [DebugOverlayTileCoverage.Placement] {
         placements.sorted { a, b in
             if a.slot.z != b.slot.z { return a.slot.z < b.slot.z }
             if a.slot.x != b.slot.x { return a.slot.x < b.slot.x }

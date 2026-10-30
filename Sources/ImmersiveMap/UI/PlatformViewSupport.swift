@@ -6,12 +6,12 @@ import UIKit
 
 /// The map's platform host view: UIKit on iOS, AppKit on macOS.
 /// Shared runtime files reference this typealias, not the concrete class.
-typealias ImmersiveMapHostView = ImmersiveMapUIView
+package typealias ImmersiveMapHostView = ImmersiveMapUIView
 typealias PlatformEdgeInsets = UIEdgeInsets
 #elseif canImport(AppKit)
 import AppKit
 
-typealias ImmersiveMapHostView = ImmersiveMapNSView
+package typealias ImmersiveMapHostView = ImmersiveMapNSView
 typealias PlatformEdgeInsets = NSEdgeInsets
 
 extension NSEdgeInsets {

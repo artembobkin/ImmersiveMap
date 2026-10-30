@@ -3,6 +3,7 @@
 
 #if canImport(UIKit)
 
+import ImmersiveMap
 import UIKit
 
 final class DebugOverlayHUDView: UIView {

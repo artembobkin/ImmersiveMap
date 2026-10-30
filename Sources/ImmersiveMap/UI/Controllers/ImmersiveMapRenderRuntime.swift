@@ -5,7 +5,7 @@ import QuartzCore
 
 /// Owns the render-loop runtime state of a single map view.
 /// Wraps `ImmersiveMapRenderDriver`, tracks render activities, frame requests, and renderer attachment.
-final class ImmersiveMapRenderRuntime {
+package final class ImmersiveMapRenderRuntime {
     private let driver: ImmersiveMapRenderDriver
     /// The engine the driver renders with, kept here for the frame index the
     /// rendered-frame event reports; the driver owns the attachment.
@@ -75,7 +75,7 @@ final class ImmersiveMapRenderRuntime {
         driver.applyPowerConstraintState(constraints)
     }
 
-    func requestFrame(reason: RenderInvalidationReason = .externalStateChanged) {
+    package func requestFrame(reason: RenderInvalidationReason = .externalStateChanged) {
         driver.requestFrame(reason: reason)
     }
 

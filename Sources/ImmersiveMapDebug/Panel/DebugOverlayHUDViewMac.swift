@@ -3,6 +3,7 @@
 
 #if os(macOS)
 
+import ImmersiveMap
 import AppKit
 import simd
 

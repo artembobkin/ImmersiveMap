@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import ImmersiveMap
 import Foundation
 
 /// The 3D buildings group's graph axes and titles, kept out of the AppKit

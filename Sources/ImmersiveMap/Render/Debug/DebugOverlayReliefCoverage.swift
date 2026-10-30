@@ -10,24 +10,24 @@ import simd
 /// kept from earlier frames faint, over the view's footprint, the point
 /// the camera looks at and the eye of the tiles' coverage map
 /// (`DebugOverlayTileCoverage`). Normalized Mercator, as that map.
-struct DebugOverlayReliefCoverage: Equatable {
-    struct Square: Equatable {
-        let tile: Tile
-        let state: GroundReliefStatusSnapshot.State
-        let isWanted: Bool
+package struct DebugOverlayReliefCoverage: Equatable {
+    package struct Square: Equatable {
+        package let tile: Tile
+        package let state: GroundReliefStatusSnapshot.State
+        package let isWanted: Bool
 
-        var square: CGRect {
+        package var square: CGRect {
             let count = Double(1 << tile.z)
             return CGRect(x: Double(tile.x) / count, y: Double(tile.y) / count, width: 1 / count, height: 1 / count)
         }
     }
 
-    let squares: [Square]
-    let footprint: [SIMD2<Double>]
-    let center: SIMD2<Double>
-    let eye: SIMD2<Double>?
+    package let squares: [Square]
+    package let footprint: [SIMD2<Double>]
+    package let center: SIMD2<Double>
+    package let eye: SIMD2<Double>?
 
-    static func make(status: GroundReliefStatusSnapshot, view: DebugOverlayTileCoverage) -> DebugOverlayReliefCoverage {
+    package static func make(status: GroundReliefStatusSnapshot, view: DebugOverlayTileCoverage) -> DebugOverlayReliefCoverage {
         DebugOverlayReliefCoverage(squares: status.tiles.map { Square(tile: $0.tile, state: $0.state, isWanted: $0.isWanted) },
                                    footprint: view.footprint,
                                    center: view.center,
@@ -38,7 +38,7 @@ struct DebugOverlayReliefCoverage: Equatable {
     /// at, as the tiles' map frames its slots
     /// (`DebugOverlayTileCoverageLayout.window(for:)`). A kept tile out of
     /// it is cut at its edge.
-    var window: CGRect {
+    package var window: CGRect {
         var bounds = CGRect(x: center.x, y: center.y, width: 0, height: 0)
         for square in squares where square.isWanted { bounds = bounds.union(square.square) }
         guard bounds.width > 0 || bounds.height > 0 else {
@@ -50,7 +50,7 @@ struct DebugOverlayReliefCoverage: Equatable {
 
     /// The squares in drawing order: the kept under the wanted, the
     /// coarse under the fine.
-    var drawingOrder: [Square] {
+    package var drawingOrder: [Square] {
         squares.sorted { a, b in
             if a.isWanted != b.isWanted { return a.isWanted == false }
             if a.tile.z != b.tile.z { return a.tile.z < b.tile.z }

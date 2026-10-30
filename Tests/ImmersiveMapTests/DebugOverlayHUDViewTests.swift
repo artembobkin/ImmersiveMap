@@ -4,6 +4,7 @@
 #if canImport(UIKit)
 
 @testable import ImmersiveMap
+@testable import ImmersiveMapDebug
 import UIKit
 import XCTest
 

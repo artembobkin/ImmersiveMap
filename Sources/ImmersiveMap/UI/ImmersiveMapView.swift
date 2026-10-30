@@ -37,6 +37,8 @@ public struct ImmersiveMapView: View {
     private var terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)?
     private var markerContent: MarkerViewContent?
     private var tourVideoRecorder: ImmersiveMapTourVideoRecorder?
+    /// The debug panel to install over the map (`debugPanel(_:zoomBadge:)`).
+    private var debugPanel: ImmersiveMapDebugPanel?
 
     public init(settings: ImmersiveMapSettings = .default,
                 avatarsController: ImmersiveMapAvatarsController? = nil,
@@ -67,7 +69,8 @@ public struct ImmersiveMapView: View {
                                         frameRenderedAction: frameRenderedAction,
                                         terrainSurroundingsAction: terrainSurroundingsAction,
                                         markerContent: markerContent,
-                                        tourVideoRecorder: tourVideoRecorder)
+                                        tourVideoRecorder: tourVideoRecorder,
+                                        debugPanel: debugPanel)
             .immersiveMapCameraControlsOverlay(
                 isEnabled: isCameraUIControlsEnabled && settings.controls.isHidden == false,
                 camera: cameraController,
@@ -104,6 +107,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
     let terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)?
     let markerContent: MarkerViewContent?
     let tourVideoRecorder: ImmersiveMapTourVideoRecorder?
+    let debugPanel: ImmersiveMapDebugPanel?
 
     public func makeUIView(context: Context) -> ImmersiveMapUIView {
         // Adopt a parked view when reuse is on: renderer and tile cache come
@@ -150,7 +154,8 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                       terrainSurroundingsAction: terrainSurroundingsAction,
                       markerContent: markerContent,
                       cameraPosition: cameraPosition,
-                      tourVideoRecorder: tourVideoRecorder)
+                      tourVideoRecorder: tourVideoRecorder,
+                      debugPanel: debugPanel)
     }
 
     public static func dismantleUIView(_ uiView: ImmersiveMapUIView, coordinator: ()) {
@@ -171,6 +176,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
     let terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)?
     let markerContent: MarkerViewContent?
     let tourVideoRecorder: ImmersiveMapTourVideoRecorder?
+    let debugPanel: ImmersiveMapDebugPanel?
 
     public func makeNSView(context: Context) -> ImmersiveMapNSView {
         // Adopt a parked view when reuse is on: renderer and tile cache come
@@ -217,7 +223,8 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                       terrainSurroundingsAction: terrainSurroundingsAction,
                       markerContent: markerContent,
                       cameraPosition: cameraPosition,
-                      tourVideoRecorder: tourVideoRecorder)
+                      tourVideoRecorder: tourVideoRecorder,
+                      debugPanel: debugPanel)
     }
 
     public static func dismantleNSView(_ nsView: ImmersiveMapNSView, coordinator: ()) {
@@ -1613,17 +1620,27 @@ public extension ImmersiveMapView {
     }
 
     /// The debug panel: camera coordinates, renderer diagnostics and the
-    /// bench controls, drawn over the map. A development aid, off by
-    /// default. `zoomBadge` shows or hides the panel's zoom badge in the
-    /// map's top trailing corner, the camera's zoom and the planning zoom
+    /// bench controls, drawn over the map. A development aid, shipped
+    /// apart from the engine in the `ImmersiveMapDebug` product, so an app
+    /// that links `ImmersiveMap` alone carries nothing of it. Linking it,
+    /// the panel is `ImmersiveMapDebugPanel.hud`, and this installs it and
+    /// turns it on (`DebugSettings.enableDebugPanel`). `zoomBadge` shows
+    /// or hides the panel's zoom badge in the map's top trailing corner,
+    /// the camera's zoom and the planning zoom
     /// (`DebugSettings.showsZoomBadge`, on by default), an omitted value
     /// left as configured:
     ///
+    ///     import ImmersiveMapDebug
+    ///
     ///     ImmersiveMapView()
-    ///         .debugPanel(zoomBadge: false)
-    public func debugPanel(_ isEnabled: Bool = true, zoomBadge: Bool? = nil) -> ImmersiveMapView {
+    ///         .debugPanel(.hud, zoomBadge: false)
+    ///
+    /// A host view keeps the first panel it is given. `enableDebugPanel`
+    /// shows and hides it from then on.
+    public func debugPanel(_ panel: ImmersiveMapDebugPanel, zoomBadge: Bool? = nil) -> ImmersiveMapView {
         var view = self
-        view.settings = view.settings.debugPanel(isEnabled, zoomBadge: zoomBadge)
+        view.debugPanel = panel
+        view.settings = view.settings.debugPanel(true, zoomBadge: zoomBadge)
         return view
     }
 
@@ -1635,7 +1652,7 @@ public extension ImmersiveMapView {
     /// the map data's license requires.
     ///
     ///     ImmersiveMapView()
-    ///         .debugPanel()
+    ///         .debugPanel(.hud)
     ///         .controlsHidden(isRecording)
     ///
     /// See `ImmersiveMapSettings.ControlsSettings`.

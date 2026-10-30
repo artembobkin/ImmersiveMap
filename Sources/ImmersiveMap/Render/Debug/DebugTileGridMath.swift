@@ -7,13 +7,13 @@ import simd
 /// Densities the debug tile grid offers. Six is the default: it splits a tile
 /// finely enough to point at a single block of a city while the per-cell stamp
 /// still reads at a normal zoom.
-enum DebugTileGridDensity {
-    static let options: [Int] = [2, 4, 6, 8]
-    static let standard: Int = 6
+package enum DebugTileGridDensity {
+    package static let options: [Int] = [2, 4, 6, 8]
+    package static let standard: Int = 6
 
     /// Nearest offered density, so a stored value can never draw a grid nobody
     /// can select back.
-    static func clamp(_ density: Int) -> Int {
+    package static func clamp(_ density: Int) -> Int {
         guard let nearest = options.min(by: { abs($0 - density) < abs($1 - density) }) else {
             return standard
         }

@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import ImmersiveMap
 import Foundation
 
 /// The tabs along the top of the debug panel: each shows the groups of one

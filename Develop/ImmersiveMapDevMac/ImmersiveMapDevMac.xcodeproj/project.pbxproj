@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		B10000000000000000000021 /* ImmersiveMapDevMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000020 /* ImmersiveMapDevMacApp.swift */; };
 		B10000000000000000000003 /* ImmersiveMap in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000004 /* ImmersiveMap */; };
+		B10000000000000000000031 /* ImmersiveMapDebug in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000030 /* ImmersiveMapDebug */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,6 +23,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B10000000000000000000003 /* ImmersiveMap in Frameworks */,
+				B10000000000000000000031 /* ImmersiveMapDebug in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -70,6 +72,7 @@
 			name = ImmersiveMapDevMac;
 			packageProductDependencies = (
 				B10000000000000000000004 /* ImmersiveMap */,
+				B10000000000000000000030 /* ImmersiveMapDebug */,
 			);
 			productName = ImmersiveMapDevMac;
 			productReference = B10000000000000000000005 /* ImmersiveMapDevMac.app */;
@@ -264,6 +267,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B10000000000000000000010 /* XCLocalSwiftPackageReference "../.." */;
 			productName = ImmersiveMap;
+		};
+		B10000000000000000000030 /* ImmersiveMapDebug */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B10000000000000000000010 /* XCLocalSwiftPackageReference "../.." */;
+			productName = ImmersiveMapDebug;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

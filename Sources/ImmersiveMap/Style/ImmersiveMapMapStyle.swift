@@ -18,8 +18,8 @@ public struct AnyImmersiveMapMapStyle: Equatable, Sendable {
 
     public let configurationFingerprint: UInt64
 
-    let schema: any ImmersiveMapTileSchema
-    let vectorTileStyle: any ImmersiveMapVectorTileStyle
+    package let schema: any ImmersiveMapTileSchema
+    package let vectorTileStyle: any ImmersiveMapVectorTileStyle
 
     public init<S: ImmersiveMapMapStyle>(_ mapStyle: S) {
         self.configurationFingerprint = mapStyle.configurationFingerprint

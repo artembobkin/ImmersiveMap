@@ -12,6 +12,13 @@ let package = Package(
         .library(
             name: "ImmersiveMap",
             targets: ["ImmersiveMap"]
+        ),
+        // The debug panel, apart from the engine: linked by a development
+        // app and the tests, never by a shipping app, which carries nothing
+        // of it.
+        .library(
+            name: "ImmersiveMapDebug",
+            targets: ["ImmersiveMapDebug"]
         )
     ],
     targets: [
@@ -82,6 +89,14 @@ let package = Package(
                 .copy("Tile/Trees/Resources/tree_broadleaf.immtree"),
             ]
         ),
+        // The debug panel over the map (`ImmersiveMapDebugPanel.hud`). The
+        // engine holds what the panel reads and drags and the slot it fills,
+        // at `package` access, and this target fills it from outside, so an
+        // app that links `ImmersiveMap` alone compiles none of the panel.
+        .target(
+            name: "ImmersiveMapDebug",
+            dependencies: ["ImmersiveMap"]
+        ),
         .testTarget(
             name: "EarcutTests",
             dependencies: ["Earcut"],
@@ -101,7 +116,7 @@ let package = Package(
         ),
         .testTarget(
             name: "ImmersiveMapTests",
-            dependencies: ["ImmersiveMap", "Mvt", "MvtTestSupport", "PMTilesTestSupport"]
+            dependencies: ["ImmersiveMap", "ImmersiveMapDebug", "Mvt", "MvtTestSupport", "PMTilesTestSupport"]
         )
     ],
     swiftLanguageModes: [.v6]

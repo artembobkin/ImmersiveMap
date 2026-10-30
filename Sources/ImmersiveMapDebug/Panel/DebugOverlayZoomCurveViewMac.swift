@@ -3,6 +3,7 @@
 
 #if os(macOS)
 
+import ImmersiveMap
 import AppKit
 
 /// A value over the camera zoom drawn as a graph in the debug panel, and

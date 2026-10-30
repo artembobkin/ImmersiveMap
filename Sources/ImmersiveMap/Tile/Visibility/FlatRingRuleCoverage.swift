@@ -8,22 +8,22 @@ import simd
 /// of tiles from the look-at tile (and past the previous rule's rings) is
 /// drawn `zoomDrop` levels below the target zoom, as geometry at every
 /// distance.
-struct FlatRingRule: Hashable {
-    var zoomDrop: Int
+package struct FlatRingRule: Hashable {
+    package var zoomDrop: Int
     /// In tiles of the target zoom, counted on the grid from the look-at
     /// tile: 0 is that tile alone, 1 the three by three tiles around it,
     /// and so on. A ring number, not a radius, so a rule's edge runs along
     /// tile edges.
-    var distance: Int
+    package var distance: Int
     /// Whether the band's tiles draw their lines: the ground line ribbons
     /// (rivers, borders) and every road bucket. Off, the band is fills
     /// only.
-    var drawsLines: Bool = true
+    package var drawsLines: Bool = true
     /// Whether the band's tiles draw their labels: the place and POI names,
     /// the house numbers, the road names and signs, the water names. Off,
     /// the band is unlabelled, so the far rings toward the horizon can be
     /// left to the map.
-    var drawsLabels: Bool = true
+    package var drawsLabels: Bool = true
     /// The edge, in texels, of the texture the band's tiles draw their
     /// ground from, nil for the ground as geometry. A tile's fills are
     /// drawn into the texture each frame and the texture drawn as one
@@ -32,7 +32,7 @@ struct FlatRingRule: Hashable {
     /// texture: with `drawsLines` they draw as geometry over it. One of
     /// `FlatRingRules.rasterSizes`, and a cost of every frame, so a far
     /// band wants a small one.
-    var rasterSize: Int?
+    package var rasterSize: Int?
     /// How many zooms coarser than the band's own tiles the ground reads
     /// its terrain, on the relief: 0 reads the terrain tile of each
     /// tile's own zoom, every height the source has that a grid can show,
@@ -41,9 +41,9 @@ struct FlatRingRule: Hashable {
     /// at in full detail, and a far ring at 3 or 4 rises from a handful of
     /// coarse tiles, which is all the texels it has for them. One of
     /// `FlatRingRules.terrainZoomDropRange`. Nothing on the plane.
-    var terrainZoomDrop: Int = 0
+    package var terrainZoomDrop: Int = 0
 
-    init(zoomDrop: Int,
+    package init(zoomDrop: Int,
          distance: Int,
          drawsLines: Bool = true,
          drawsLabels: Bool = true,
@@ -70,21 +70,21 @@ struct RasterTileSpec: Hashable {
 /// the list, and both surfaces read it: the plane through
 /// `FlatRingRuleCoverage`, the sphere through `GlobeTileCoverage`, which
 /// reads every switch of a rule as the plane does.
-struct FlatRingRules: Hashable {
-    var rules: [FlatRingRule]
+package struct FlatRingRules: Hashable {
+    package var rules: [FlatRingRule]
 
-    static let zoomDropRange = 0 ... 8
-    static let distanceRange = 0 ... 256
+    package static let zoomDropRange = 0 ... 8
+    package static let distanceRange = 0 ... 256
     /// How many zooms coarser than its tiles a band's terrain may be
     /// (`FlatRingRule.terrainZoomDrop`).
-    static let terrainZoomDropRange = 0 ... 8
+    package static let terrainZoomDropRange = 0 ... 8
     /// The texture edges a rule may draw its ground from
     /// (`FlatRingRule.rasterSize`): powers of two, so every mip level
     /// halves the one above it down to a single texel.
-    static let rasterSizes = [64, 128, 256, 512, 1024]
+    package static let rasterSizes = [64, 128, 256, 512, 1024]
 
     /// The allowed edge nearest to `size`, nil for nil.
-    static func normalizedRasterSize(_ size: Int?) -> Int? {
+    package static func normalizedRasterSize(_ size: Int?) -> Int? {
         guard let size else { return nil }
         return rasterSizes.min { abs($0 - size) < abs($1 - size) }
     }
@@ -100,7 +100,7 @@ struct FlatRingRules: Hashable {
     /// backdrop (`TileWorkingSetSubsystem.horizonBackdrops`). The map
     /// recedes toward the horizon soft and quiet, and the textures, drawn
     /// every frame, stay small.
-    static let `default` = FlatRingRules(rules: [
+    package static let `default` = FlatRingRules(rules: [
         FlatRingRule(zoomDrop: 0, distance: 1),
         FlatRingRule(zoomDrop: 1, distance: 2, drawsLines: false, drawsLabels: false, rasterSize: 128, terrainZoomDrop: 2),
         FlatRingRule(zoomDrop: 2, distance: 3, drawsLines: false, drawsLabels: false, rasterSize: 128, terrainZoomDrop: 1),
@@ -109,7 +109,7 @@ struct FlatRingRules: Hashable {
 
     /// The rules as the coverage reads them: every value inside its range,
     /// sorted by distance, one rule per distance, at least one rule.
-    func normalized() -> FlatRingRules {
+    package func normalized() -> FlatRingRules {
         var cleaned: [FlatRingRule] = []
         for rule in rules {
             let distance = min(max(rule.distance, Self.distanceRange.lowerBound), Self.distanceRange.upperBound)

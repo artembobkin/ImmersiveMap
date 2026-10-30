@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 @testable import ImmersiveMap
+@testable import ImmersiveMapDebug
 import XCTest
 
 /// The tile cards of the debug HUD (`DebugOverlayTileCard`): one card per

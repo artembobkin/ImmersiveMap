@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import ImmersiveMap
 import Foundation
 
 /// What the debug panel's Export tab writes: the values the panel tunes,

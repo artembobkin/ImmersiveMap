@@ -19,7 +19,10 @@ final class ImmersiveMapRuntimeGraph {
     let cameraAnimationRuntime: ImmersiveMapCameraAnimationRuntime
     let cameraCommandHandler: ImmersiveMapCameraCommandHandler
     let selectionHandler: ImmersiveMapSelectionHandler
-    let debugOverlayRuntime: ImmersiveMapDebugOverlayRuntime
+    /// The debug panel over the map, once one is installed
+    /// (`installDebugPanel`): nil in an app that links no panel.
+    private(set) var debugPanelRuntime: (any ImmersiveMapDebugPanelRuntime)?
+    private let debugPanelHost: ImmersiveMapDebugPanelHost
     let tapHandler: ImmersiveMapTapHandler
     let rendererBuilder: ImmersiveMapRendererBuilder
     let frameRenderDelegate: ImmersiveMapFrameRenderDelegate
@@ -64,14 +67,14 @@ final class ImmersiveMapRuntimeGraph {
         let debugOverlayHUDSnapshotStore = DebugOverlayHUDSnapshotStore()
         let tileTraceRecorder = TileTraceRecorder()
         let baseLabelTraceRecorder = BaseLabelTraceRecorder()
-        let debugOverlayRuntime = ImmersiveMapDebugOverlayRuntime(mapView: mapView,
-                                                                  controls: debugOverlayControls,
-                                                                  hudSnapshotStore: debugOverlayHUDSnapshotStore,
-                                                                  tileTraceRecorder: tileTraceRecorder,
-                                                                  baseLabelTraceRecorder: baseLabelTraceRecorder,
-                                                                  renderRuntime: renderRuntime,
-                                                                  cameraRuntime: cameraRuntime,
-                                                                  cameraAnimationRuntime: cameraAnimationRuntime)
+        let debugPanelHost = ImmersiveMapDebugPanelHost(mapView: mapView,
+                                                        controls: debugOverlayControls,
+                                                        hudSnapshotStore: debugOverlayHUDSnapshotStore,
+                                                        tileTraceRecorder: tileTraceRecorder,
+                                                        baseLabelTraceRecorder: baseLabelTraceRecorder,
+                                                        renderRuntime: renderRuntime,
+                                                        cameraRuntime: cameraRuntime,
+                                                        cameraAnimationRuntime: cameraAnimationRuntime)
         let tapHandler = ImmersiveMapTapHandler(controlsRuntime: controlsRuntime,
                                                 selectionHandler: selectionHandler,
                                                 cameraRuntime: cameraRuntime)
@@ -102,9 +105,22 @@ final class ImmersiveMapRuntimeGraph {
         self.cameraAnimationRuntime = cameraAnimationRuntime
         self.cameraCommandHandler = cameraCommandHandler
         self.selectionHandler = selectionHandler
-        self.debugOverlayRuntime = debugOverlayRuntime
+        self.debugPanelHost = debugPanelHost
         self.tapHandler = tapHandler
         self.rendererBuilder = rendererBuilder
         self.frameRenderDelegate = frameRenderDelegate
+    }
+
+    /// Installs the debug panel over the map, once: a host view keeps the
+    /// first panel it is given, as it keeps its layer. Returns the panel's
+    /// runtime, nil when one is installed already.
+    @discardableResult
+    func installDebugPanel(_ panel: ImmersiveMapDebugPanel) -> (any ImmersiveMapDebugPanelRuntime)? {
+        guard debugPanelRuntime == nil else {
+            return nil
+        }
+        let runtime = panel.makeRuntime(debugPanelHost)
+        debugPanelRuntime = runtime
+        return runtime
     }
 }

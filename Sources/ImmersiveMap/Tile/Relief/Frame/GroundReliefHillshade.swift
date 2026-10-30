@@ -10,20 +10,20 @@ import simd
 /// `groundReliefHillshade` in GroundRelief.h). Resolved once a frame
 /// (`GroundReliefFrameState.setLight`), so every draw on the relief shades
 /// by the same light.
-struct GroundReliefHillshade: Equatable {
+package struct GroundReliefHillshade: Equatable {
     /// The direction toward the light in the flat basis (+X east, +Y north,
     /// +Z up), unit length, and the amount of shading, the style's
     /// intensity times how far the relief has risen: zero draws none.
-    let light: SIMD4<Float>
-    let shadowColor: SIMD4<Float>
-    let highlightColor: SIMD4<Float>
+    package let light: SIMD4<Float>
+    package let shadowColor: SIMD4<Float>
+    package let highlightColor: SIMD4<Float>
     /// The eye in the world, where the fade is measured from.
-    let eye: SIMD4<Float>
+    package let eye: SIMD4<Float>
     /// The world distance from the eye the fade starts at, and one over
     /// the world distance it takes to fade out.
-    let fade: SIMD4<Float>
+    package let fade: SIMD4<Float>
 
-    static let none = GroundReliefHillshade(light: SIMD4<Float>(0, 0, 1, 0),
+    package static let none = GroundReliefHillshade(light: SIMD4<Float>(0, 0, 1, 0),
                                             shadowColor: .zero,
                                             highlightColor: .zero,
                                             eye: .zero,
@@ -33,24 +33,24 @@ struct GroundReliefHillshade: Equatable {
     /// (`ImmersiveMapHillshade`) the debug panel drags live: the
     /// intensity, and how far a slope goes toward the shadow colour and
     /// toward the highlight colour (the colours' alphas). Each 0 to 1.
-    struct Amounts: Equatable {
-        var intensity: Float
-        var shadow: Float
-        var highlight: Float
+    package struct Amounts: Equatable {
+        package var intensity: Float
+        package var shadow: Float
+        package var highlight: Float
 
-        init(intensity: Float, shadow: Float, highlight: Float) {
+        package init(intensity: Float, shadow: Float, highlight: Float) {
             self.intensity = min(max(intensity, 0), 1)
             self.shadow = min(max(shadow, 0), 1)
             self.highlight = min(max(highlight, 0), 1)
         }
 
         /// The amounts a style shades by.
-        init(style: ImmersiveMapHillshade) {
+        package init(style: ImmersiveMapHillshade) {
             self.init(intensity: style.intensity, shadow: style.shadowColor.w, highlight: style.highlightColor.w)
         }
 
         /// The style with these amounts in place of its own.
-        func applied(to style: ImmersiveMapHillshade) -> ImmersiveMapHillshade {
+        package func applied(to style: ImmersiveMapHillshade) -> ImmersiveMapHillshade {
             var adjusted = style
             adjusted.intensity = intensity
             adjusted.shadowColor.w = shadow
@@ -62,22 +62,22 @@ struct GroundReliefHillshade: Equatable {
     /// Where the shading fades, the two curves of a style
     /// (`ImmersiveMapHillshade.fadeStartMeters`, `fadeEndMeters`) the debug
     /// panel drags live: metres from the eye by the camera zoom.
-    struct Fade: Equatable {
-        var startMeters: ImmersiveMapZoomCurve
-        var endMeters: ImmersiveMapZoomCurve
+    package struct Fade: Equatable {
+        package var startMeters: ImmersiveMapZoomCurve
+        package var endMeters: ImmersiveMapZoomCurve
 
-        init(startMeters: ImmersiveMapZoomCurve, endMeters: ImmersiveMapZoomCurve) {
+        package init(startMeters: ImmersiveMapZoomCurve, endMeters: ImmersiveMapZoomCurve) {
             self.startMeters = startMeters
             self.endMeters = endMeters
         }
 
         /// The fade a style shades with.
-        init(style: ImmersiveMapHillshade) {
+        package init(style: ImmersiveMapHillshade) {
             self.init(startMeters: style.fadeStartMeters, endMeters: style.fadeEndMeters)
         }
 
         /// The style with this fade in place of its own.
-        func applied(to style: ImmersiveMapHillshade) -> ImmersiveMapHillshade {
+        package func applied(to style: ImmersiveMapHillshade) -> ImmersiveMapHillshade {
             var adjusted = style
             adjusted.fadeStartMeters = startMeters
             adjusted.fadeEndMeters = endMeters
@@ -93,7 +93,7 @@ struct GroundReliefHillshade: Equatable {
     /// fade and `amounts` its amounts (the debug panel's). A light at or
     /// under the horizon shades nothing: the level ground would be lit as
     /// edgewise as the steepest slope.
-    static func resolve(style: ImmersiveMapHillshade,
+    package static func resolve(style: ImmersiveMapHillshade,
                         lightDirection: SIMD3<Float>,
                         risenShare: Float,
                         cameraEye: SIMD3<Float>,
@@ -125,5 +125,5 @@ struct GroundReliefHillshade: Equatable {
 
     /// The lowest light the slopes are shaded by, the sine of its
     /// elevation: about half a degree over the horizon.
-    static let minimumLightZ: Float = 0.01
+    package static let minimumLightZ: Float = 0.01
 }

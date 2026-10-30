@@ -62,7 +62,7 @@ struct ShadowAnchoredFit {
     let window: ShadowCascadeAnchoredFit
 }
 
-enum ShadowFrameStateResolver {
+package enum ShadowFrameStateResolver {
     /// Below this light elevation (z of the normalized direction) shadows are
     /// dropped: near-horizontal light produces quasi-infinite shadows the
     /// cascade maps cannot represent.
@@ -70,7 +70,7 @@ enum ShadowFrameStateResolver {
     /// Range `ShadowSettings.maxCasterHeightMeters` is clamped to. Receivers
     /// above the limit fall outside the fitted depth window, and taller
     /// casters are pancaked onto the near plane by the depth clamp.
-    static let maxCasterHeightRange: ClosedRange<Float> = 10...500
+    package static let maxCasterHeightRange: ClosedRange<Float> = 10...500
     /// ...and never taller than this many window radii.
     ///
     /// The window must be wider than its own disc by `height * |L.xy| / L.z`,
@@ -110,7 +110,7 @@ enum ShadowFrameStateResolver {
     /// occluder closer to a wall than the offset stops shadowing it, which at
     /// street zooms is under a meter and only reaches a few meters when the
     /// camera is high enough that such gaps are a pixel or two wide.
-    static let normalOffsetTexelsRange: ClosedRange<Float> = 0...8
+    package static let normalOffsetTexelsRange: ClosedRange<Float> = 0...8
     /// Grazing-wall cutoff of the geometric self-shadow test, in N·L; mirrors
     /// `kShadowGeometricCutoffStart` / `kShadowGeometricCutoffEnd` in
     /// RenderUniforms.h (pinned by `ShadowFrameStateResolverTests`). Below the
@@ -129,7 +129,7 @@ enum ShadowFrameStateResolver {
     /// drifts the reconstructed kernel away from a tent; well past this the
     /// four lobes start to read as a cross in the ramp. It is also what
     /// `uvInsetTexels` is sized for.
-    static let softnessRange: ClosedRange<Float> = 1...2.5
+    package static let softnessRange: ClosedRange<Float> = 1...2.5
     /// Sampling-rectangle inset in texels: keeps the tent's taps inside the
     /// fitted window, at the widest spread `softnessRange` allows.
     ///
@@ -145,7 +145,7 @@ enum ShadowFrameStateResolver {
     /// wind the window right down and look at the texel grid itself. See
     /// `fadeDistances` for what happens under a window of one camera
     /// distance.
-    static let coverageMetersRange: ClosedRange<Float> = 5...1_000_000
+    package static let coverageMetersRange: ClosedRange<Float> = 5...1_000_000
 
     struct CascadeSpec {
         let radius: Float
@@ -182,7 +182,7 @@ enum ShadowFrameStateResolver {
     /// and once the radius dropped under one camera distance the whole band
     /// lay in front of the nearest visible ground, so every shadow in the
     /// frame vanished instead of an edge being hidden.
-    static func fadeDistances(farRadius: Float) -> (start: Float, end: Float) {
+    package static func fadeDistances(farRadius: Float) -> (start: Float, end: Float) {
         (farRadius * fadeStartShare, farRadius)
     }
 
@@ -194,7 +194,7 @@ enum ShadowFrameStateResolver {
     /// ends or beyond, so a receiver is faded by one window at a time and
     /// the far window adds ground the near one does not reach. Under that
     /// the far coverage is off, and the frame has the near window alone.
-    static func farWindowReaches(farRadius: Float, nearRadius: Float) -> Bool {
+    package static func farWindowReaches(farRadius: Float, nearRadius: Float) -> Bool {
         farRadius * fadeStartShare >= nearRadius
     }
 

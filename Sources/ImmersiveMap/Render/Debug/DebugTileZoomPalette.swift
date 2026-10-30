@@ -11,16 +11,16 @@ import simd
 /// take hues far apart, a golden-ratio step round the wheel, so z6 and z7
 /// never look alike. Bright and saturated, for the black stroke on a dark
 /// map.
-enum DebugTileZoomPalette {
+package enum DebugTileZoomPalette {
     private static let hueStep: Float = 0.618034
     private static let hueOffset: Float = 0.12
 
-    static func color(forZoom zoom: Int) -> SIMD3<Float> {
+    package static func color(forZoom zoom: Int) -> SIMD3<Float> {
         let hue = (Float(max(0, zoom)) * hueStep + hueOffset).truncatingRemainder(dividingBy: 1)
         return rgb(hue: hue, saturation: 0.85, value: 1)
     }
 
-    static func rgb(hue: Float, saturation: Float, value: Float) -> SIMD3<Float> {
+    package static func rgb(hue: Float, saturation: Float, value: Float) -> SIMD3<Float> {
         let sector = hue * 6
         let index = Int(sector.rounded(.down)) % 6
         let fraction = sector - sector.rounded(.down)

@@ -1,6 +1,7 @@
 // Copyright (c) 2025-2026 ImmersiveMap contributors.
 // SPDX-License-Identifier: MIT
 
+import ImmersiveMap
 import Foundation
 
 /// The Relief tab's Surroundings group: the ranges and titles of the

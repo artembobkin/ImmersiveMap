@@ -3,12 +3,16 @@
 
 import CoreGraphics
 import Foundation
+import ImmersiveMap
 #if os(macOS)
 import AppKit
 #endif
 
+/// The debug panel's runtime: wires the HUD views to the engine's controls
+/// and snapshot store, and hands the engine the settings the panel drags
+/// (`ImmersiveMapDebugPanelRuntime`).
 @MainActor
-final class ImmersiveMapDebugOverlayRuntime {
+final class ImmersiveMapDebugOverlayRuntime: ImmersiveMapDebugPanelRuntime {
     private let hudView = DebugOverlayHUDView()
     /// The panel's zoom badge (`DebugSettings.showsZoomBadge`), read off
     /// the same snapshots, laid out in the map's corner.
@@ -48,14 +52,15 @@ final class ImmersiveMapDebugOverlayRuntime {
     /// only borrows it between updates.
     var onSettingsChangeRequested: ((ImmersiveMapSettings) -> Void)?
 
-    init(mapView: ImmersiveMapHostView,
-         controls: DebugOverlayControlState,
-         hudSnapshotStore: DebugOverlayHUDSnapshotStore,
-         tileTraceRecorder: TileTraceRecorder,
-         baseLabelTraceRecorder: BaseLabelTraceRecorder,
-         renderRuntime: ImmersiveMapRenderRuntime,
-         cameraRuntime: ImmersiveMapCameraRuntime,
-         cameraAnimationRuntime: ImmersiveMapCameraAnimationRuntime) {
+    init(host: ImmersiveMapDebugPanelHost) {
+        let mapView = host.mapView
+        let controls = host.controls
+        let hudSnapshotStore = host.hudSnapshotStore
+        let tileTraceRecorder = host.tileTraceRecorder
+        let baseLabelTraceRecorder = host.baseLabelTraceRecorder
+        let renderRuntime = host.renderRuntime
+        let cameraRuntime = host.cameraRuntime
+        let cameraAnimationRuntime = host.cameraAnimationRuntime
         self.controls = controls
         self.hudSnapshotStore = hudSnapshotStore
         self.tileTraceRecorder = tileTraceRecorder

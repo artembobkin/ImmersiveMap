@@ -3,9 +3,14 @@
 
 import Foundation
 
-struct TileTraceRecorderSnapshot: Equatable {
-    let isRecording: Bool
-    let fileURL: URL?
+package struct TileTraceRecorderSnapshot: Equatable {
+    package let isRecording: Bool
+    package let fileURL: URL?
+
+    package init(isRecording: Bool, fileURL: URL?) {
+        self.isRecording = isRecording
+        self.fileURL = fileURL
+    }
 }
 
 enum TileTraceValue {
@@ -349,7 +354,7 @@ extension TileTraceEvent {
     }
 }
 
-final class TileTraceRecorder {
+package final class TileTraceRecorder {
     private let fileManager: FileManager
     private let directoryURL: URL
     private let now: () -> Date
@@ -360,7 +365,7 @@ final class TileTraceRecorder {
     private var currentFileURL: URL?
     private var isRecordingFlag = false
 
-    init(fileManager: FileManager = .default,
+    package init(fileManager: FileManager = .default,
          directoryURL: URL? = nil,
          now: @escaping () -> Date = Date.init) {
         self.fileManager = fileManager
@@ -369,7 +374,7 @@ final class TileTraceRecorder {
     }
 
     @discardableResult
-    func startRecording() -> URL? {
+    package func startRecording() -> URL? {
         queue.sync {
             if fileHandle != nil {
                 return currentFileURL
@@ -393,7 +398,7 @@ final class TileTraceRecorder {
         }
     }
 
-    func stopRecording() {
+    package func stopRecording() {
         queue.sync {
             guard let fileHandle else { return }
             try? fileHandle.synchronize()
@@ -403,7 +408,7 @@ final class TileTraceRecorder {
         }
     }
 
-    func snapshot() -> TileTraceRecorderSnapshot {
+    package func snapshot() -> TileTraceRecorderSnapshot {
         queue.sync {
             TileTraceRecorderSnapshot(isRecording: fileHandle != nil,
                                       fileURL: currentFileURL)

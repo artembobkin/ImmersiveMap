@@ -3,9 +3,14 @@
 
 import Foundation
 
-struct BaseLabelTraceRecorderSnapshot: Equatable {
-    let isRecording: Bool
-    let fileURL: URL?
+package struct BaseLabelTraceRecorderSnapshot: Equatable {
+    package let isRecording: Bool
+    package let fileURL: URL?
+
+    package init(isRecording: Bool, fileURL: URL?) {
+        self.isRecording = isRecording
+        self.fileURL = fileURL
+    }
 }
 
 struct BaseLabelTraceOptions: Equatable {
@@ -128,7 +133,7 @@ struct BaseLabelTraceEvent {
 
 /// Internally synchronized: state is guarded by `stateLock`, file writes happen
 /// on the serial `queue`.
-final class BaseLabelTraceRecorder: @unchecked Sendable {
+package final class BaseLabelTraceRecorder: @unchecked Sendable {
     let options: BaseLabelTraceOptions
 
     private let fileManager: FileManager
@@ -154,7 +159,7 @@ final class BaseLabelTraceRecorder: @unchecked Sendable {
     }
 
     @discardableResult
-    func startRecording() -> URL? {
+    package func startRecording() -> URL? {
         queue.sync {
             if fileHandle != nil {
                 return currentFileURL
@@ -179,7 +184,7 @@ final class BaseLabelTraceRecorder: @unchecked Sendable {
         }
     }
 
-    func stopRecording() {
+    package func stopRecording() {
         queue.sync {
             guard let fileHandle else { return }
             try? fileHandle.synchronize()
@@ -189,18 +194,18 @@ final class BaseLabelTraceRecorder: @unchecked Sendable {
         }
     }
 
-    func snapshot() -> BaseLabelTraceRecorderSnapshot {
+    package func snapshot() -> BaseLabelTraceRecorderSnapshot {
         queue.sync {
             BaseLabelTraceRecorderSnapshot(isRecording: fileHandle != nil,
                                            fileURL: currentFileURL)
         }
     }
 
-    var isRecordingActive: Bool {
+    package var isRecordingActive: Bool {
         isRecording
     }
 
-    var currentDroppedEventCount: Int {
+    package var currentDroppedEventCount: Int {
         stateLock.lock()
         defer { stateLock.unlock() }
         return droppedEventCount
