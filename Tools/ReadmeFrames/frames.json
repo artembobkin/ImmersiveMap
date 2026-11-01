@@ -81,7 +81,7 @@
     "alt": "A 3D scene model by the Eiffel Tower",
     "latitude": 48.8570, "longitude": 2.2952, "zoom": 15.6, "pitch": 55, "bearing": 30,
     "sceneModels": [
-      { "id": 9001, "model": "Examples/macOS/ImmersiveMapSceneModelsMac/ImmersiveMapSceneModelsMac/Resources/spot.usdz",
+      { "id": 9001, "model": "Tools/ReadmeFrames/Resources/spot.usdz",
         "latitude": 48.8570, "longitude": 2.2952, "headingDegrees": 210, "fitDiameterMeters": 160 }
     ]
   },

@@ -871,8 +871,7 @@ public extension ImmersiveMapView {
     /// `tileArchive(_:headers:)`: an archive that stops at z14 sets
     /// `.tileMaximumZoomLevel(14)` so the renderer never asks for tiles the
     /// archive cannot answer. Past the deepest level the camera keeps
-    /// zooming and the deepest tiles are scaled up, exactly as before; offline
-    /// region downloads clamp to the same level.
+    /// zooming and the deepest tiles are scaled up, exactly as before.
     /// How far past the visible ground the flat map's far texture bands
     /// ask for their tiles, as a share of the footprint's reach from the
     /// camera (`ImmersiveMapSettings.TileSettings.CoverageSettings
@@ -1140,23 +1139,6 @@ public extension ImmersiveMapView {
             preparedDiskCacheSizeInBytes: preparedDiskCacheSizeInBytes,
             memoryCacheSizeInBytes: memoryCacheSizeInBytes
         )
-        return view
-    }
-
-    public func offlineTileSettings(_ offline: ImmersiveMapSettings.TileSettings.OfflineSettings) -> ImmersiveMapView {
-        var view = self
-        view.settings = view.settings.offlineTileSettings(offline)
-        return view
-    }
-
-    /// How the map uses regions downloaded through
-    /// `ImmersiveMapOfflineController`: `.automatic` (the default) falls back
-    /// to them whenever a tile request fails, `.offlineOnly` renders from them
-    /// without ever touching the network. Serving needs no other wiring; any
-    /// region downloaded for the same tile provider is found on disk.
-    public func offlineTileMode(_ mode: ImmersiveMapSettings.TileSettings.OfflineSettings.Mode) -> ImmersiveMapView {
-        var view = self
-        view.settings = view.settings.offlineTileMode(mode)
         return view
     }
 

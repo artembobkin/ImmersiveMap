@@ -12,8 +12,7 @@ import XCTest
 /// Most of the table is the old status mapping, unchanged. The one new
 /// distinction is that a 404 on the archive is not a 404 on a tile: the first
 /// must back off and retry, the second is remembered as empty for a long
-/// while. Confusing them would put a whole planet in the not-found cooldown,
-/// and make an offline region download write empty markers for every tile,
+/// while. Confusing them would put a whole planet in the not-found cooldown
 /// because the file was missing for a minute.
 final class TileDownloaderFailureMappingTests: XCTestCase {
     private static func downloader(_ response: @escaping @Sendable (Range<UInt64>) -> PMTilesArchiveClient.RangeResponse) -> TileDownloader {

@@ -213,19 +213,6 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         XCTAssertTrue(plan.requiresRendererRecreation)
     }
 
-    func testOfflineTileModeChangeRecreatesTheRendererWithoutInvalidatingCaches() {
-        let oldSettings = ImmersiveMapSettings.default
-        let newSettings = oldSettings.offlineTileMode(.offlineOnly)
-
-        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
-
-        XCTAssertEqual(plan.changedDomains, [.tiles])
-        // The bytes come from the same tile source either way, so the caches
-        // stay valid; only the pipeline's transports need rebuilding.
-        XCTAssertEqual(plan.actions, [.recreateRenderer])
-        XCTAssertTrue(plan.requiresRendererRecreation)
-    }
-
     /// The depth bias of the models is a curve over the zoom whose every
     /// stop is kept within its range, and a stop that is not a number
     /// draws the models where they stand.

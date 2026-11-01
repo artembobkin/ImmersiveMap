@@ -12,16 +12,21 @@ struct ImmersiveMapDevMacApp: App {
     @State private var controlsHidden = false
     /// The demo layers shown (`DemoLayers`): Layers menu.
     @State private var demoLayers: Set<DemoLayers.Kind> = Set(DemoLayers.Kind.allCases)
+    /// The SwiftUI markers shown (`DemoMarkers`): Map > SwiftUI Markers,
+    /// Shift-Command-M.
+    @State private var showsMarkers = true
 
     var body: some Scene {
         WindowGroup("ImmersiveMap Dev") {
-            MapScreen(controlsHidden: controlsHidden, demoLayers: demoLayers)
+            MapScreen(controlsHidden: controlsHidden, demoLayers: demoLayers, showsMarkers: showsMarkers)
         }
         .defaultSize(width: 1200, height: 860)
         .commands {
             CommandMenu("Map") {
                 Toggle("Hide Controls", isOn: $controlsHidden)
                     .keyboardShortcut("h", modifiers: [.command, .shift])
+                Toggle("SwiftUI Markers", isOn: $showsMarkers)
+                    .keyboardShortcut("m", modifiers: [.command, .shift])
             }
             CommandMenu("Layers") {
                 ForEach(DemoLayers.Kind.allCases) { kind in
@@ -41,23 +46,33 @@ struct ImmersiveMapDevMacApp: App {
 /// pointed at whatever tile source is being worked on this week rather than at
 /// the hosted one.
 ///
-/// `Examples/macOS/ImmersiveMapMac` is the same screen for a reader: it shows
-/// the engine on the shipping tile service, with the defaults untouched, and it
-/// stays that way. This one is free to move: change the source, the start
-/// position, the settings, and leave the state of the current experiment
-/// committed, because that is the point of the folder.
+/// It is free to move: change the source, the start position, the settings,
+/// and leave the state of the current experiment committed, because that is
+/// the point of the folder.
 private struct MapScreen: View {
     /// Every control over the map hidden.
     let controlsHidden: Bool
     /// The demo layers drawn over the map.
     let demoLayers: Set<DemoLayers.Kind>
+    /// The SwiftUI markers drawn over the map.
+    let showsMarkers: Bool
     @State private var camera = ImmersiveMapCameraController()
+    /// The place whose marker is opened by a click.
+    @State private var selectedPlace: DemoPlace.ID?
+    /// Seconds since the courier set off (`DemoMarkers.markers(rideTime:)`).
+    @State private var rideTime = 0.0
 
     var body: some View {
         ImmersiveMapView()
             .tileArchive(devTileArchive)
             .mapStyle(.default.apply { theme in
                 theme.features.buildingExtrusion = true
+                // The map's own POI icons stand down while the SwiftUI
+                // markers are on, so the markers read as the app's views and
+                // not as more of the map's icons. The street names stay.
+                if showsMarkers {
+                    theme.labelVisibility.poiMinimumZoom = 99
+                }
             })
             // The buildings from zoom 14, a level before the default's 15,
             // standing up at once.
@@ -96,17 +111,42 @@ private struct MapScreen: View {
             // previous build. Every launch here starts from the network.
             .tileSettings(clearDiskCachesOnLaunch: false)
             .labelSettings(language: .english)
+            // Plain SwiftUI views pinned to coordinates: places around the
+            // Kremlin that open on a click, and a courier riding up
+            // Tverskaya, moved by setting its coordinate.
+            .markers(showsMarkers ? DemoMarkers.markers(rideTime: rideTime) : [],
+                     coordinate: \.coordinate,
+                     anchor: .bottom) { place in
+                if place.id == DemoMarkers.courierID {
+                    CourierMarker(eta: place.detail)
+                } else {
+                    PlaceMarker(place: place, isSelected: selectedPlace == place.id) {
+                        withAnimation(.snappy) {
+                            selectedPlace = selectedPlace == place.id ? nil : place.id
+                        }
+                    }
+                }
+            }
             // The layers of the app's own data: zones, a route, points and
             // a GeoJSON document over Moscow, and a few across the world
             // for the globe. Each is switched in the Layers menu.
-            .layers(DemoLayers.layers(demoLayers))
+            //.layers(DemoLayers.layers(demoLayers))
             // Camera coordinates and renderer diagnostics, drawn as host-view
             // chrome above the map, with the zoom badge in the corner: the
             // camera's zoom and the planning zoom, which part over the
             // relief through a drag. A development aid, off by default.
             .debugPanel(.hud)
-            .controlsHidden(false)
+            .controlsHidden(true)
             .ignoresSafeArea()
+            .task(id: showsMarkers) {
+                guard showsMarkers else { return }
+                let start = ContinuousClock.now
+                while Task.isCancelled == false {
+                    let elapsed = (ContinuousClock.now - start).components
+                    rideTime = Double(elapsed.seconds) + Double(elapsed.attoseconds) * 1e-18
+                    try? await Task.sleep(for: .milliseconds(16))
+                }
+            }
     }
 
     /// Strawberry Fields in Central Park at street level, tilted to the
@@ -346,4 +386,191 @@ enum DemoLayers {
         polylineStyle: ImmersiveMapPolylineStyle(color: [0.95, 0.25, 0.45, 1], widthPoints: 3),
         pointStyle: ImmersiveMapPointStyle(color: [0.95, 0.25, 0.45, 1], radiusPoints: 6),
         zoomRange: 0 ... 9)
+}
+
+/// A place on the map shown by a SwiftUI marker (`DemoMarkers`).
+struct DemoPlace: Identifiable {
+    let id: String
+    let name: String
+    /// A line under the name. For the courier, the minutes to the end of
+    /// the street it rides to.
+    let detail: String
+    let symbol: String
+    let color: Color
+    let coordinate: GeoCoordinate
+}
+
+/// SwiftUI views over the centre of Moscow, to show what `markers(_:)`
+/// draws: place cards that open on a click with a button inside, and a
+/// courier that rides along Tverskaya and back with its minutes counting
+/// down, moved by nothing but its coordinate.
+enum DemoMarkers {
+    static let courierID = "courier"
+
+    static let places = [
+        DemoPlace(id: "bolshoi", name: "Bolshoi Theatre", detail: "Swan Lake tonight, 19:00",
+                  symbol: "theatermasks.fill", color: .purple,
+                  coordinate: GeoCoordinate(latitude: 55.7601, longitude: 37.6186)),
+        DemoPlace(id: "gum", name: "GUM", detail: "Ice cream on the first floor",
+                  symbol: "bag.fill", color: .pink,
+                  coordinate: GeoCoordinate(latitude: 55.7547, longitude: 37.6215)),
+        DemoPlace(id: "st-basil", name: "Saint Basil's Cathedral", detail: "Open until 19:00",
+                  symbol: "building.columns.fill", color: .red,
+                  coordinate: GeoCoordinate(latitude: 55.7525, longitude: 37.6231)),
+        DemoPlace(id: "zaryadye", name: "Zaryadye Park", detail: "The floating bridge over the river",
+                  symbol: "leaf.fill", color: .green,
+                  coordinate: GeoCoordinate(latitude: 55.7512, longitude: 37.6285)),
+        DemoPlace(id: "pushkin", name: "Pushkin Square", detail: "Meet at the monument",
+                  symbol: "person.2.fill", color: .blue,
+                  coordinate: GeoCoordinate(latitude: 55.7655, longitude: 37.6060)),
+    ]
+
+    /// Tverskaya from the Kremlin to the Belorussky station.
+    private static let tverskaya = [
+        GeoCoordinate(latitude: 55.7560, longitude: 37.6150),
+        GeoCoordinate(latitude: 55.7600, longitude: 37.6110),
+        GeoCoordinate(latitude: 55.7650, longitude: 37.6050),
+        GeoCoordinate(latitude: 55.7700, longitude: 37.5960),
+        GeoCoordinate(latitude: 55.7745, longitude: 37.5880),
+        GeoCoordinate(latitude: 55.7765, longitude: 37.5815),
+    ]
+
+    /// Seconds the courier takes from one end of the street to the other.
+    private static let rideSeconds = 24.0
+    /// The minutes the courier's label shows for the whole street.
+    private static let rideMinutes = 12.0
+
+    /// The places and the courier `rideTime` seconds after it set off: up
+    /// the street and back, its label counting the minutes to the end it
+    /// rides to.
+    static func markers(rideTime: Double) -> [DemoPlace] {
+        let phase = (rideTime / rideSeconds).truncatingRemainder(dividingBy: 2)
+        let progress = phase <= 1 ? phase : 2 - phase
+        let remaining = phase <= 1 ? 1 - phase : phase - 1
+        let minutes = max(Int((remaining * rideMinutes).rounded(.up)), 1)
+        return places + [DemoPlace(id: courierID, name: "Courier", detail: "\(minutes) min",
+                                   symbol: "bicycle", color: .orange,
+                                   coordinate: courierCoordinate(at: progress))]
+    }
+
+    /// The point `progress` of the way along Tverskaya, by length.
+    private static func courierCoordinate(at progress: Double) -> GeoCoordinate {
+        let lengths = zip(tverskaya, tverskaya.dropFirst()).map { a, b in
+            hypot(b.latitude - a.latitude, (b.longitude - a.longitude) * cos(a.latitude * .pi / 180))
+        }
+        var remaining = min(max(progress, 0), 1) * lengths.reduce(0, +)
+        for (index, length) in lengths.enumerated() {
+            if remaining <= length || index == lengths.count - 1 {
+                let t = length > 0 ? min(remaining / length, 1) : 0
+                let a = tverskaya[index], b = tverskaya[index + 1]
+                return GeoCoordinate(latitude: a.latitude + (b.latitude - a.latitude) * t,
+                                     longitude: a.longitude + (b.longitude - a.longitude) * t)
+            }
+            remaining -= length
+        }
+        return tverskaya[tverskaya.count - 1]
+    }
+}
+
+/// A place's card: its icon and name on a white card whose tail points at
+/// the place. A click opens a line of detail and a Directions button, which
+/// keeps its own state while the card is open.
+private struct PlaceMarker: View {
+    let place: DemoPlace
+    let isSelected: Bool
+    let action: () -> Void
+    @State private var isOnTheWay = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: place.symbol)
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 38, height: 38)
+                    .background(place.color.gradient, in: Circle())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(place.name)
+                        .font(.system(size: 16, weight: .semibold))
+                        .padding(.top, isSelected ? 0 : 9)
+                    if isSelected {
+                        Text(place.detail)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                        Button {
+                            withAnimation(.snappy) { isOnTheWay.toggle() }
+                        } label: {
+                            Label(isOnTheWay ? "On the way" : "Directions",
+                                  systemImage: isOnTheWay ? "checkmark" : "arrow.triangle.turn.up.right.diamond.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(place.color)
+                        .padding(.top, 4)
+                    }
+                }
+                .fixedSize()
+            }
+            .padding(10)
+            .background(.white, in: RoundedRectangle(cornerRadius: 16))
+            MarkerTail()
+                .fill(.white)
+                .frame(width: 18, height: 10)
+        }
+        .foregroundStyle(.black)
+        .environment(\.colorScheme, .light)
+        .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: action)
+    }
+}
+
+/// The courier: a pulsing icon under a label with the minutes it has left,
+/// both read from the marker's data on every update.
+private struct CourierMarker: View {
+    let eta: String
+    @State private var pulses = false
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(eta)
+                .font(.system(size: 14, weight: .bold).monospacedDigit())
+                .foregroundStyle(.white)
+                .contentTransition(.numericText(countsDown: true))
+                .animation(.snappy, value: eta)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Color.black.opacity(0.8), in: Capsule())
+            Image(systemName: "bicycle")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 46, height: 46)
+                .background(Color.orange.gradient, in: Circle())
+                .overlay(Circle().stroke(.white, lineWidth: 3))
+                .background(
+                    Circle()
+                        .fill(Color.orange.opacity(0.4))
+                        .scaleEffect(pulses ? 2.2 : 1)
+                        .opacity(pulses ? 0 : 1)
+                )
+        }
+        .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+        .onAppear {
+            withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) {
+                pulses = true
+            }
+        }
+    }
+}
+
+/// The triangle under a card, pointing down at the place.
+private struct MarkerTail: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path { path in
+            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+            path.closeSubpath()
+        }
+    }
 }

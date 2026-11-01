@@ -7,15 +7,9 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
     // nil when the prepared-tile cache is disabled; the pipeline then always parses
     // from raw bytes and never persists the parsed result.
     private let preparedTileDiskCaching: PreparedTileDiskCaching?
-    // nil in offline-only mode: the pipeline then owns no network transport at
-    // all.
-    private let tileDownloader: TileDownloader?
-    // nil when offline regions are disabled.
-    private let offlineTileStore: OfflineTileStore?
-    private let offlineMode: ImmersiveMapSettings.TileSettings.OfflineSettings.Mode
+    private let tileDownloader: TileDownloader
     // Which upload of the archive the prepared tiles on disk must be of.
-    // nil when nothing is checked: no network transport, or a caller that
-    // wires none.
+    // nil when nothing is checked: a caller that wires none.
     private let archiveVersion: TileArchiveVersion?
     // The overview of the globe laid into the tiles of the zooms it covers
     // (`OverviewTileSource`), nil when the setting is off or the package
@@ -27,36 +21,27 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
                      config: ImmersiveMapSettings,
                      preparedTileCacheIdentity: PreparedTileCacheIdentity,
                      geometryTransport: any PreparedTileGeometryTransporting) {
-        let offlineMode = config.tiles.offline.mode
         self.init(tileRenderStore: tileRenderStore,
                   preparedTileDiskCaching: config.tiles.cache.preparedTileCacheEnabled
                       ? PreparedTileDiskCaching(config: config,
                                                 cacheIdentity: preparedTileCacheIdentity,
                                                 geometryTransport: geometryTransport)
                       : nil,
-                  tileDownloader: offlineMode == .offlineOnly ? nil : TileDownloader(config: config),
-                  offlineTileStore: offlineMode == .disabled ? nil : OfflineTileStore(network: config.tiles.network),
-                  offlineMode: offlineMode,
-                  archiveVersion: offlineMode == .offlineOnly
-                      ? nil
-                      : TileArchiveVersion(sourceRevision: preparedTileCacheIdentity.tileSourceRevision,
-                                           clearsRemembered: config.tiles.cache.clearDiskCachesOnLaunch),
+                  tileDownloader: TileDownloader(config: config),
+                  archiveVersion: TileArchiveVersion(sourceRevision: preparedTileCacheIdentity.tileSourceRevision,
+                                                     clearsRemembered: config.tiles.cache.clearDiskCachesOnLaunch),
                   overviewTileSource: config.tiles.overview.isEnabled ? OverviewTileSource.bundled() : nil)
     }
 
     init(tileRenderStore: TileRenderStore?,
          preparedTileDiskCaching: PreparedTileDiskCaching?,
-         tileDownloader: TileDownloader?,
-         offlineTileStore: OfflineTileStore?,
-         offlineMode: ImmersiveMapSettings.TileSettings.OfflineSettings.Mode,
+         tileDownloader: TileDownloader,
          archiveVersion: TileArchiveVersion? = nil,
          overviewTileSource: OverviewTileSource? = nil) {
         self.archiveVersion = archiveVersion
         self.overviewTileSource = overviewTileSource
         self.preparedTileDiskCaching = preparedTileDiskCaching
         self.tileDownloader = tileDownloader
-        self.offlineTileStore = offlineTileStore
-        self.offlineMode = offlineMode
         self.tileRenderStore = tileRenderStore
     }
 
@@ -83,9 +68,10 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
     /// task: a map whose tiles are all on disk downloads nothing, and
     /// would otherwise never learn that the archive was uploaded again.
     private func startArchiveCheckIfNeeded() {
-        guard let archiveVersion, let tileDownloader, archiveVersion.beginSessionCheck() else {
+        guard let archiveVersion, archiveVersion.beginSessionCheck() else {
             return
         }
+        let tileDownloader = tileDownloader
         Task.detached(priority: .utility) {
             do {
                 archiveVersion.observe(archiveETag: try await tileDownloader.archiveETag())
@@ -95,10 +81,10 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
         }
     }
 
-    /// The tile's bytes from the source the offline mode names, with the
-    /// overview's layers laid in where the overview covers the tile.
+    /// The tile's bytes from the archive, with the overview's layers laid in
+    /// where the overview covers the tile.
     func download(tile: Tile) async -> TileDownloader.DownloadResult {
-        let result = await sourceResult(tile: tile)
+        let result = await networkResult(tile: tile)
         guard let overviewTileSource,
               case let .success(data, etag) = result,
               let overview = await overviewTileSource.tileBytes(tile) else {
@@ -107,28 +93,7 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
         return .success(OverviewTileSource.merge(mapTile: data, overview: overview), etag: etag)
     }
 
-    private func sourceResult(tile: Tile) async -> TileDownloader.DownloadResult {
-        switch offlineMode {
-        case .disabled:
-            return await networkResult(tile: tile)
-        case .offlineOnly:
-            // A miss reports `.network`, whose short retry backoff makes the
-            // tile recheck the store while a region download is filling it.
-            return offlineTileStore?.downloadResult(for: tile) ?? .failure(.network)
-        case .automatic:
-            let result = await networkResult(tile: tile)
-            if case .failure = result,
-               let offlineResult = offlineTileStore?.downloadResult(for: tile) {
-                return offlineResult
-            }
-            return result
-        }
-    }
-
     private func networkResult(tile: Tile) async -> TileDownloader.DownloadResult {
-        guard let tileDownloader else {
-            return .failure(.network)
-        }
         let result = await tileDownloader.downloadResult(tile: tile)
         // Every answer says which upload the archive is now, and a request
         // that did not arrive says the disk is all there is for the moment.

@@ -42,7 +42,7 @@ final class DebugOverlayShadowGroupTests: XCTestCase {
     }
 
     /// The shipping default light must read back as a sun in the south-west,
-    /// which is what every shadow in the example apps is aimed by.
+    /// which is what every shadow of a map with the defaults is aimed by.
     func testDefaultLightReadsAsASouthWesternSun() {
         let angles = DebugOverlaySunAngles.angles(
             direction: ImmersiveMapSettings.SceneLightSettings().direction)

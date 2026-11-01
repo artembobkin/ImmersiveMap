@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ImmersiveMap is a Swift + Metal vector-tile map engine for SwiftUI: globe/flat presentation, labels, starfield, extruded buildings with directional shadows, SwiftUI markers, avatar markers, routes, 3D scene models, offline regions, and video/still export. It is the **public** Swift Package `artembobkin/ImmersiveMap` (library product `ImmersiveMap`), Swift 6 tools with language mode v6 (strict concurrency), platforms iOS 18 (UIKit) and native macOS 15 (AppKit)
+ImmersiveMap is a Swift + Metal vector-tile map engine for SwiftUI: globe/flat presentation, labels, starfield, extruded buildings with directional shadows, SwiftUI markers, avatar markers, routes, 3D scene models, and video/still export. It is the **public** Swift Package `artembobkin/ImmersiveMap` (library product `ImmersiveMap`), Swift 6 tools with language mode v6 (strict concurrency), platforms iOS 18 (UIKit) and native macOS 15 (AppKit)
 
 Because the repo is public: never commit tile-provider API keys, bearer tokens, credentials, `LocalSecrets.plist`-style files, or build artifacts (`.build/`, `DerivedData/`, `Traces/`).
 
@@ -25,7 +25,7 @@ CI (`.github/workflows/ci.yml`) runs on the `macos-26` image, whose default Xcod
 
 The picture tests (an offscreen frame judged by its pixels) are skipped by default and are never run in CI. To run them once by hand, set `IMMERSIVE_MAP_RUN_PICTURE_TESTS=1` (with the `TEST_RUNNER_` prefix for xcodebuild). Never write new ones, see `.claude/rules/tests.md`.
 
-To run the map in an app, open `ImmersiveMap.xcworkspace`. Work in progress is shown in `Develop/ImmersiveMapDevMac`, and `Examples/macOS/ImmersiveMapMac` stays the untouched demonstration of the shipping tile service.
+To run the map in an app, open `ImmersiveMap.xcworkspace` and run `Develop/ImmersiveMapDevMac`, the scratch app of the work in progress. There are no example apps in the repository, on purpose: the doc comments on the public API are the reference, and `Develop/` is the only app.
 
 ## Architecture
 

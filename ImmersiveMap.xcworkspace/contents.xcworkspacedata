@@ -9,41 +9,6 @@
    </FileRef>
    <Group
       location = "container:"
-      name = "Examples">
-      <FileRef
-         location = "group:Examples/ImmersiveMapIOS/ImmersiveMapIOS.xcodeproj">
-      </FileRef>
-      <Group
-         location = "container:"
-         name = "macOS">
-         <FileRef
-            location = "group:Examples/macOS/ImmersiveMapMac/ImmersiveMapMac.xcodeproj">
-         </FileRef>
-         <FileRef
-            location = "group:Examples/macOS/ImmersiveMapCameraTourMac/ImmersiveMapCameraTourMac.xcodeproj">
-         </FileRef>
-         <FileRef
-            location = "group:Examples/macOS/ImmersiveMapMarkersMac/ImmersiveMapMarkersMac.xcodeproj">
-         </FileRef>
-         <FileRef
-            location = "group:Examples/macOS/ImmersiveMapAvatarsMac/ImmersiveMapAvatarsMac.xcodeproj">
-         </FileRef>
-         <FileRef
-            location = "group:Examples/macOS/ImmersiveMapSceneModelsMac/ImmersiveMapSceneModelsMac.xcodeproj">
-         </FileRef>
-         <FileRef
-            location = "group:Examples/macOS/ImmersiveMapSettingsMac/ImmersiveMapSettingsMac.xcodeproj">
-         </FileRef>
-         <FileRef
-            location = "group:Examples/macOS/ImmersiveMapCustomTilesMac/ImmersiveMapCustomTilesMac.xcodeproj">
-         </FileRef>
-         <FileRef
-            location = "group:Examples/macOS/ImmersiveMapOfflineMac/ImmersiveMapOfflineMac.xcodeproj">
-         </FileRef>
-      </Group>
-   </Group>
-   <Group
-      location = "container:"
       name = "Tools">
       <FileRef
          location = "group:Tools/DeviceTests/ImmersiveMapDeviceTests.xcodeproj">

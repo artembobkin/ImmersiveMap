@@ -104,13 +104,6 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         if oldValue.tiles.rasterization != newValue.tiles.rasterization {
             mark(.tiles, actions: [.recreateRenderer])
         }
-        // The offline mode decides which transports the load pipeline is even
-        // built with (offline-only maps never create a downloader), so it
-        // applies by recreating the renderer; caches stay valid because the
-        // bytes come from the same tile source either way.
-        if oldValue.tiles.offline != newValue.tiles.offline {
-            mark(.tiles, actions: [.recreateRenderer])
-        }
         // The overview is laid into the tiles by the load pipeline, built
         // with the renderer, and baked into the prepared tiles, whose
         // identity it is part of.

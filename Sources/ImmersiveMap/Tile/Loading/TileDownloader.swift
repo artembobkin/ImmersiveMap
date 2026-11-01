@@ -50,8 +50,8 @@ final class TileNoticeThrottle: @unchecked Sendable {
 /// the archive's answers translated into the loader's download vocabulary.
 ///
 /// `@unchecked Sendable`: every stored property is immutable after `init`,
-/// and the client synchronises its own state. The loader and the offline
-/// region downloader both call `downloadResult` from many concurrent tasks.
+/// and the client synchronises its own state. The loader calls
+/// `downloadResult` from many concurrent tasks.
 class TileDownloader: @unchecked Sendable {
     private static let logger = Logger(subsystem: "ImmersiveMap", category: "Tiles")
 

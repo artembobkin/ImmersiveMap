@@ -133,8 +133,6 @@ final class OverviewTileSourceTests: XCTestCase {
         let pipeline = DefaultTileLoadPipeline(tileRenderStore: nil,
                                                preparedTileDiskCaching: nil,
                                                tileDownloader: ScriptedTileDownloader(result: .success(mapBytes, etag: "\"planet\"")),
-                                               offlineTileStore: nil,
-                                               offlineMode: .disabled,
                                                overviewTileSource: OverviewTileSource(archiveURL: archiveURL))
 
         let laid = await pipeline.download(tile: covered)

@@ -74,8 +74,7 @@ final class TileArchiveVersionTests: XCTestCase {
         XCTAssertNil(version.expectedSourceETag(for: Self.tile))
     }
 
-    /// A tile served with no source ETag (from an offline region) says
-    /// nothing about the archive.
+    /// A tile served with no source ETag says nothing about the archive.
     func testATileWithoutASourceETagChangesNothing() throws {
         let version = makeVersion()
         version.observe(archiveETag: "\"upload-1\"")

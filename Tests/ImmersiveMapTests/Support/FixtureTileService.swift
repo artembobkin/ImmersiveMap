@@ -140,18 +140,10 @@ enum FixtureTiles {
     /// earlier one wrote. A warm prepared-tile cache is a way for yesterday's
     /// tiles to appear in today's frame, which is the same non-determinism the
     /// network was removed to avoid.
-    ///
-    /// The regions because `DefaultTileLoadPipeline` otherwise builds an
-    /// `OfflineTileStore` rooted in the user's real Application Support
-    /// directory, and in `.automatic` mode consults it on every failed
-    /// download. Nothing in the suite writes there, so today it only ever
-    /// reads, but a store the tests never populate has no business being
-    /// consulted by them at all.
     private static func cacheless(_ settings: ImmersiveMapSettings) -> ImmersiveMapSettings {
         var cacheless = settings
         cacheless.tiles.cache.urlCacheEnabled = false
         cacheless.tiles.cache.preparedTileCacheEnabled = false
-        cacheless.tiles.offline.mode = .disabled
         prewarmSharedRenderResourcesIfPossible()
         return cacheless
     }
