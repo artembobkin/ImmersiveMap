@@ -5,17 +5,13 @@ import Metal
 
 /// The pipelines the models of the model tiles draw with (ModelTile.metal):
 /// the opaque world-pass pipeline, its variant that drops the fragments
-/// below the ground and the stencil-only footprint pipeline, the two the
-/// ground cut adds, and the shadow caster pipeline. The same four the scene
-/// models have, over the vertex a model tile carries, in the tile's space.
+/// below the ground for a tile coming up out of it, and the shadow caster
+/// pipeline, over the vertex a model tile carries, in the tile's space.
 final class ModelTilePipeline {
     let pipelineState: MTLRenderPipelineState
-    /// The opaque pipeline with `kModelTileClipsBelowGround` on: the second
-    /// draw of a model that cuts into the ground, outside its ground hole.
+    /// The opaque pipeline with `kModelTileClipsBelowGround` on: the draw
+    /// of a tile still rising out of the ground (`ExtrusionRise`).
     let belowGroundClippedPipelineState: MTLRenderPipelineState
-    /// The model flattened onto the ground plane, writing neither colour
-    /// nor depth: the draw that raises or lowers the ground hole bit.
-    let groundFootprintPipelineState: MTLRenderPipelineState
     /// Depth-only replay into the shadow map.
     let shadowPipelineState: MTLRenderPipelineState
     let baseColorSampler: MTLSamplerState
@@ -66,19 +62,6 @@ final class ModelTilePipeline {
             descriptor: makeMainDescriptor(clipsBelowGround: false))
         self.belowGroundClippedPipelineState = try! metalDevice.makeRenderPipelineState(
             descriptor: makeMainDescriptor(clipsBelowGround: true))
-
-        // Stencil only: the colour attachment is the world pass's, masked
-        // off, and no fragment function runs.
-        let footprintDescriptor = MTLRenderPipelineDescriptor()
-        footprintDescriptor.vertexFunction = library.makeFunction(name: "modelTileGroundFootprintVertexShader")
-        footprintDescriptor.fragmentFunction = nil
-        footprintDescriptor.vertexDescriptor = vertexDescriptor
-        footprintDescriptor.rasterSampleCount = sampleCount
-        footprintDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-        footprintDescriptor.colorAttachments[0].writeMask = []
-        footprintDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-        footprintDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
-        self.groundFootprintPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: footprintDescriptor)
 
         let shadowDescriptor = MTLRenderPipelineDescriptor()
         shadowDescriptor.vertexFunction = library.makeFunction(name: "modelTileShadowVertexShader")

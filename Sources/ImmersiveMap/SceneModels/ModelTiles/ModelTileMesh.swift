@@ -12,26 +12,15 @@ enum ModelTileMeshError: Error, Equatable {
 /// A model tile on the GPU: one vertex buffer, one index buffer and one
 /// texture array for every model of the tile. The vertices are in the
 /// tile's space, so the frame binds each once, sets the tile's matrix, and
-/// draws the merged models in one call.
+/// draws the tile in one call.
 ///
 /// Immutable after creation, so it is shared between the load that makes it
 /// and the frames that draw it (`@unchecked Sendable`: Metal objects are
 /// safe to use from any thread, and nothing here changes).
 final class ModelTileMesh: @unchecked Sendable {
-    /// A model that cuts into the ground: its place in the index buffer,
-    /// for the draws of its own.
-    struct GroundCutModel {
-        let indexByteOffset: Int
-        let indexCount: Int
-    }
-
     let tile: Tile
-    /// Every index of the tile: what the shadow casters draw.
+    /// Every index of the tile: what one draw of the tile takes.
     let indexCount: Int
-    /// The indices from the first that draw in one call.
-    let mergedIndexCount: Int
-    /// The models after them, each drawn on its own.
-    let groundCutModels: [GroundCutModel]
     /// The tile feature ids of the map buildings the tile's models stand
     /// in for, the ones the map's schema can name, by the zoom of the map
     /// tiles each list is for.
@@ -142,13 +131,8 @@ final class ModelTileMesh: @unchecked Sendable {
         self.texture = texture
         self.costInBytes = contents.vertexRange.count + contents.indexRange.count + contents.textureRange.count
         self.indexCount = contents.indexCount
-        self.mergedIndexCount = contents.mergedIndexCount
         self.boundsMinimum = contents.boundsMinimum
         self.boundsMaximum = contents.boundsMaximum
-        self.groundCutModels = contents.models.filter(\.cutsIntoGround).map { model in
-            GroundCutModel(indexByteOffset: model.firstIndex * MemoryLayout<UInt32>.stride,
-                           indexCount: model.indexCount)
-        }
         var replaced: [Int: Set<UInt64>] = [:]
         for model in contents.models {
             for entry in model.replacedBuildings {

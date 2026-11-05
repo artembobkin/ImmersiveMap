@@ -45,7 +45,6 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
     private let pipeline: ModelTilePipeline
     private let extrudedDepthState: MTLDepthStencilState
     private let surfaceMaskState: MTLDepthStencilState
-    private let groundCutStates: SceneModelGroundCutStates
     private let depthDisabledState: MTLDepthStencilState
     private let shadowMapTextureProvider: () -> MTLTexture?
     private let shadowFallbackTexture: MTLTexture
@@ -65,7 +64,6 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
          pipeline: ModelTilePipeline,
          extrudedDepthState: MTLDepthStencilState,
          surfaceMaskState: MTLDepthStencilState,
-         groundCutStates: SceneModelGroundCutStates,
          depthDisabledState: MTLDepthStencilState,
          shadowMapTextureProvider: @escaping () -> MTLTexture?,
          shadowFallbackTexture: MTLTexture,
@@ -77,7 +75,6 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
         self.pipeline = pipeline
         self.extrudedDepthState = extrudedDepthState
         self.surfaceMaskState = surfaceMaskState
-        self.groundCutStates = groundCutStates
         self.depthDisabledState = depthDisabledState
         self.shadowMapTextureProvider = shadowMapTextureProvider
         self.shadowFallbackTexture = shadowFallbackTexture
@@ -255,7 +252,6 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
                                  depthBias: depthBias,
                                  pipeline: pipeline,
                                  surfaceMaskState: surfaceMaskState,
-                                 groundCutStates: groundCutStates,
                                  depthDisabledState: depthDisabledState)
         case .shadowCasters, .farShadowCasters:
             guard let slot = ShadowCascadeSlot(casterLayer: layer),

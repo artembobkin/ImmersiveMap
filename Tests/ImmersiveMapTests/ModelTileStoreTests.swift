@@ -67,7 +67,7 @@ final class ModelTileStoreTests: XCTestCase {
         let schema = ImmersiveMapSettings.default.mapStyle.schema
         var fixture = ModelTileFixture()
         fixture.models = [ModelTileFixture.Model(id: "bolshoi", replaced: [(2, 84_653_688, 14), (3, 3_334_755, 15), (2, 84_653_688, 15)]),
-                          ModelTileFixture.Model(id: "okhotny-ryad", cutsIntoGround: true, replaced: [(3, 6_233_742, 15)])]
+                          ModelTileFixture.Model(id: "okhotny-ryad", replaced: [(3, 6_233_742, 15)])]
         let data = fixture.serialized()
         let store = ModelTileStore(device: device,
                                    schema: schema,
@@ -84,11 +84,7 @@ final class ModelTileStoreTests: XCTestCase {
         XCTAssertEqual(second.pending.count, 0)
         let mesh = try XCTUnwrap(second.ready.first)
         XCTAssertEqual(mesh.tile, Self.tileA)
-        XCTAssertEqual(mesh.indexCount, 6)
-        XCTAssertEqual(mesh.mergedIndexCount, 3, "one call draws the model that needs no state of its own")
-        XCTAssertEqual(mesh.groundCutModels.count, 1)
-        XCTAssertEqual(mesh.groundCutModels[0].indexByteOffset, 3 * MemoryLayout<UInt32>.stride)
-        XCTAssertEqual(mesh.groundCutModels[0].indexCount, 3)
+        XCTAssertEqual(mesh.indexCount, 6, "one draw takes every index of both models")
         XCTAssertEqual(mesh.boundsMaximum, SIMD3(10, 20, 0))
         XCTAssertEqual(mesh.replacedBuildingIDs,
                        [14: Set([schema.tileFeatureID(of: .way(84_653_688))].compactMap { $0 }),

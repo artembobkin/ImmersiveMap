@@ -16,7 +16,6 @@ struct ModelTileFixture {
         var latitude: Double = 55.7558
         var longitude: Double = 37.6173
         var altitudeMeters: Float = 0
-        var cutsIntoGround = false
         /// The map features the model replaces: the kind (1 node, 2 way,
         /// 3 relation) and the id of each, and the zoom of the map tiles
         /// the entry is for.
@@ -30,8 +29,6 @@ struct ModelTileFixture {
     var zoom = 14
     var x = 9904
     var y = 5121
-    /// A model that cuts into the ground goes after the ones that do not,
-    /// as the baker orders them.
     var models: [Model] = [Model(id: "model")]
     var layerCount = 1
     var textureSize = 16
@@ -57,7 +54,6 @@ struct ModelTileFixture {
         var indices = Data()
         var vertexCount: UInt32 = 0
         var indexCount: UInt32 = 0
-        var mergedIndexCount: UInt32 = 0
         var tileMinimum = SIMD3<Float>(repeating: .infinity)
         var tileMaximum = SIMD3<Float>(repeating: -.infinity)
         for model in models {
@@ -85,7 +81,6 @@ struct ModelTileFixture {
             append(model.latitude.bitPattern, to: &table)
             append(model.longitude.bitPattern, to: &table)
             append(model.altitudeMeters, to: &table)
-            append(UInt32(model.cutsIntoGround ? 1 : 0), to: &table)
             append(UInt32(replaced.count / 16), to: &table)
             append(UInt32(model.replaced.count), to: &table)
             for element in model.replaced {
@@ -94,9 +89,6 @@ struct ModelTileFixture {
                 append(UInt32(0), to: &replaced)
             }
             append(UInt32(0), to: &table)
-            if model.cutsIntoGround == false {
-                mergedIndexCount = indexCount
-            }
             tileMinimum = simd_min(tileMinimum, minimum)
             tileMaximum = simd_max(tileMaximum, maximum)
             append(UInt32(strings.count), to: &table)
@@ -132,13 +124,13 @@ struct ModelTileFixture {
         let textureOffset = aligned(indicesOffset + indices.count)
 
         var tile = Data("IMMT".utf8)
-        for value in [4, zoom, x, y, models.count, Int(vertexCount), Int(indexCount), 20,
+        for value in [5, zoom, x, y, models.count, Int(vertexCount), Int(indexCount), 20,
                       layerCount, textureSize, textureSize, mipLevelCount, blockEdge,
                       tableOffset, table.count, stringsOffset, strings.count,
                       verticesOffset, vertices.count, indicesOffset, indices.count,
                       textureOffset, texture.count,
                       replacedOffset, replaced.count,
-                      Int(mergedIndexCount), 0] {
+                      0, 0] {
             append(UInt32(value), to: &tile)
         }
         for value in [tileMinimum.x, tileMinimum.y, tileMinimum.z, tileMaximum.x, tileMaximum.y, tileMaximum.z] {

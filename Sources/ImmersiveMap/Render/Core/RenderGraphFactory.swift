@@ -49,7 +49,6 @@ enum RenderGraphFactory {
                                                           pipeline: context.modelTilePipeline,
                                                           extrudedDepthState: context.extrudedDepthState,
                                                           surfaceMaskState: context.sceneModelSurfaceMaskState,
-                                                          groundCutStates: context.sceneModelGroundCutStates,
                                                           depthDisabledState: context.depthDisabledState,
                                                           shadowMapTextureProvider: shadowMapTextureProvider,
                                                           shadowFallbackTexture: context.shadowFallbackTexture,

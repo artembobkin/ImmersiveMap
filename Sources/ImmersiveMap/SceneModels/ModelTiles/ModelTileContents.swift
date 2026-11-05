@@ -18,9 +18,8 @@ enum ModelTileFormatError: Error, Equatable {
 /// A model tile, decoded: every model whose origin lies in one map tile,
 /// merged into one mesh, with the places of the tile's vertex, index and
 /// texture blocks in the bytes. One vertex buffer, one index buffer and one
-/// texture array serve the whole tile, every vertex is in the tile's own
-/// space, and the models that take no state of their own come first in the
-/// indices, so the frame draws them all in one call under the tile's
+/// texture array serve the whole tile and every vertex is in the tile's own
+/// space, so the frame draws the whole tile in one call under the tile's
 /// matrix.
 ///
 /// Tile space is the space the map's own buildings are in: X east and Y
@@ -28,7 +27,7 @@ enum ModelTileFormatError: Error, Equatable {
 /// edge, Z up from the ground in the same units. A model reaching over the
 /// tile's edge has coordinates outside that range. It is not cut.
 ///
-/// The format, version 4. This comment is its reference: the archives are
+/// The format, version 5. This comment is its reference: the archives are
 /// baked outside this repository, by the baker of the project the models
 /// are made in, which writes what is described here.
 ///
@@ -40,7 +39,7 @@ enum ModelTileFormatError: Error, Equatable {
 /// Header, `headerByteCount` bytes:
 ///
 ///     0   4 bytes  magic "IMMT"
-///     4   u32      version, 4
+///     4   u32      version, 5
 ///     8   u32 x 3  tile zoom, x, y
 ///     20  u32      model count
 ///     24  u32      vertex count
@@ -56,29 +55,25 @@ enum ModelTileFormatError: Error, Equatable {
 ///     80  u32 x 2  index block offset, byte count
 ///     88  u32 x 2  texture block offset, byte count
 ///     96  u32 x 2  replaced building block offset, byte count
-///     104 u32      merged index count: the indices from the first that
-///                  draw in one call
+///     104 u32      reserved, 0
 ///     108 u32      reserved, 0
 ///     112 f32 x 3  minimum of the tile's bounding box, tile space
 ///     124 f32 x 3  maximum of the tile's bounding box, tile space
 ///
-/// Model table, `modelRecordByteCount` bytes per model. The models whose
-/// indices are merged come first, then the ones that cut into the ground,
-/// which the map draws one by one:
+/// Model table, `modelRecordByteCount` bytes per model:
 ///
 ///     0   f64 x 2  latitude, longitude of the model's origin, degrees
 ///     16  f32      altitude of the origin above the map surface, meters,
 ///                  already in the vertices
-///     20  u32      flags: bit 0, the model cuts into the ground
-///     24  u32 x 2  the buildings the model replaces, in the replaced
+///     20  u32 x 2  the buildings the model replaces, in the replaced
 ///                  building block: first entry, entry count
-///     32  u32      reserved, 0
-///     36  u32 x 2  the model's id in the string block: offset, byte count
-///     44  u32 x 2  first index, index count
-///     52  u32 x 2  first vertex, vertex count
-///     60  f32 x 3  minimum of the model's bounding box, tile space
-///     72  f32 x 3  maximum of the model's bounding box, tile space
-///     84  u32      reserved, 0
+///     28  u32      reserved, 0
+///     32  u32 x 2  the model's id in the string block: offset, byte count
+///     40  u32 x 2  first index, index count
+///     48  u32 x 2  first vertex, vertex count
+///     56  f32 x 3  minimum of the model's bounding box, tile space
+///     68  f32 x 3  maximum of the model's bounding box, tile space
+///     80  u32      reserved, 0
 ///
 /// String block: the ids, UTF-8, one after another.
 ///
@@ -115,14 +110,14 @@ enum ModelTileFormatError: Error, Equatable {
 /// `ceil(w / edge) * ceil(h / edge) * 16` bytes per layer.
 struct ModelTileContents: Equatable {
     static let magic: [UInt8] = Array("IMMT".utf8)
-    static let version: UInt32 = 4
+    static let version: UInt32 = 5
     static let replacedBuildingEntryByteCount = 16
     static let headerByteCount = 136
     /// The units of tile space along a tile's edge, the map's own extent.
     static let tileExtent: Float = 4096
     /// The bits of a replaced building entry the element's kind sits above.
     static let replacedBuildingKindShift: UInt64 = 60
-    static let modelRecordByteCount = 88
+    static let modelRecordByteCount = 84
     static let vertexStride = 20
     /// The byte offsets inside a vertex.
     static let normalOffset = 12
@@ -139,9 +134,6 @@ struct ModelTileContents: Equatable {
 
     struct Model: Equatable {
         var id: String
-        /// See `ImmersiveMapSceneModel.cutsIntoGround`. Such a model's
-        /// indices follow the merged ones, and it is drawn on its own.
-        var cutsIntoGround: Bool
         /// The features of the map's own tiles the model stands in for,
         /// each in the map tiles of one zoom: the building's outline and
         /// its parts in the deepest tiles, the groups they are merged into
@@ -189,9 +181,6 @@ struct ModelTileContents: Equatable {
     var models: [Model]
     var vertexCount: Int
     var indexCount: Int
-    /// The indices from the first that draw in one call: every model that
-    /// does not cut into the ground.
-    var mergedIndexCount: Int
     /// The bounds of every vertex of the tile, in tile space.
     var boundsMinimum: SIMD3<Float>
     var boundsMaximum: SIMD3<Float>
@@ -249,9 +238,8 @@ struct ModelTileContents: Equatable {
         let indexRange = try block("index")
         let textureRange = try block("texture")
         let replacedRange = try block("replaced building")
-        let mergedIndexCount = Int(reader.uint32())
-        // Reserved. The first bakes of this version stated a zoom here that
-        // the models showed from. There is no such rule: a loaded tile draws.
+        // Reserved.
+        _ = reader.uint32()
         _ = reader.uint32()
         let boundsMinimum = SIMD3<Float>(reader.float32(), reader.float32(), reader.float32())
         let boundsMaximum = SIMD3<Float>(reader.float32(), reader.float32(), reader.float32())
@@ -263,7 +251,7 @@ struct ModelTileContents: Equatable {
               vertexRange.count == vertexCount * Self.vertexStride,
               indexRange.count == indexCount * MemoryLayout<UInt32>.stride,
               replacedRange.count % Self.replacedBuildingEntryByteCount == 0,
-              indexCount % 3 == 0, mergedIndexCount % 3 == 0, mergedIndexCount <= indexCount else {
+              indexCount % 3 == 0 else {
             throw ModelTileFormatError.malformed("a block's byte count disagrees with its element count")
         }
         let texture = Texture(width: width, height: height, mipLevelCount: mipLevelCount,
@@ -311,7 +299,6 @@ struct ModelTileContents: Equatable {
             let latitude = reader.float64()
             let longitude = reader.float64()
             let altitudeMeters = reader.float32()
-            let flags = reader.uint32()
             let firstReplaced = Int(reader.uint32())
             let replacedCount = Int(reader.uint32())
             _ = reader.uint32()
@@ -346,7 +333,6 @@ struct ModelTileContents: Equatable {
                 throw ModelTileFormatError.malformed("model \(id) reaches outside the replaced buildings")
             }
             models.append(Model(id: id,
-                                cutsIntoGround: flags & 1 != 0,
                                 replacedBuildings: Array(replacedElements[firstReplaced..<(firstReplaced + replacedCount)]),
                                 firstIndex: firstIndex,
                                 indexCount: modelIndexCount,
@@ -354,20 +340,10 @@ struct ModelTileContents: Equatable {
                                 boundsMaximum: boundsMaximum))
         }
 
-        // The merged indices are those of the models that do not cut into
-        // the ground, and those models come first: the one call draws them
-        // and nothing else.
-        let mergedEnd = models.filter { $0.cutsIntoGround == false }.map { $0.firstIndex + $0.indexCount }.max() ?? 0
-        let separateStart = models.filter(\.cutsIntoGround).map(\.firstIndex).min() ?? indexCount
-        guard mergedEnd <= mergedIndexCount, mergedIndexCount <= separateStart else {
-            throw ModelTileFormatError.malformed("the merged index count cuts through a model")
-        }
-
         self.tile = Tile(x: x, y: y, z: zoom)
         self.models = models
         self.vertexCount = vertexCount
         self.indexCount = indexCount
-        self.mergedIndexCount = mergedIndexCount
         self.boundsMinimum = boundsMinimum
         self.boundsMaximum = boundsMaximum
         self.texture = texture

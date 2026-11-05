@@ -12,8 +12,7 @@ struct ModelTileDrawItem {
     /// out of the ground (`ExtrusionRise`).
     let modelMatrix: matrix_float4x4
     /// Whether the tile is still partly under the ground, coming up: what
-    /// is below it is not drawn, and the models that cut into the ground
-    /// draw as the others, without their hole.
+    /// is below the ground is not drawn.
     var isRising = false
 }
 
@@ -22,9 +21,8 @@ enum ModelTileDrawer {
     /// raising the surface mask bit where they land so the horizon's haze
     /// passes them by. They are drawn nearer in depth than they stand by
     /// `depthBias`, a share of their distance from the eye
-    /// (`ModelArchiveSettings.depthBias`). A tile binds its buffer and its texture array once
-    /// and draws its merged models in one call. A model that cuts into the
-    /// ground takes the four draws of the ground cut after it (ModelTile.metal).
+    /// (`ModelArchiveSettings.depthBias`). A tile binds its buffer and its
+    /// texture array once and draws every model it holds in one call.
     static func draw(renderEncoder: MTLRenderCommandEncoder,
                      cameraUniform: CameraUniform,
                      shadowBinding: ShadowReceiverBinding,
@@ -32,7 +30,6 @@ enum ModelTileDrawer {
                      depthBias: Float,
                      pipeline: ModelTilePipeline,
                      surfaceMaskState: MTLDepthStencilState,
-                     groundCutStates: SceneModelGroundCutStates,
                      depthDisabledState: MTLDepthStencilState) {
         guard items.isEmpty == false else { return }
 
@@ -49,23 +46,22 @@ enum ModelTileDrawer {
         renderEncoder.setFragmentTexture(shadowBinding.texture, index: 1)
         renderEncoder.setFragmentSamplerState(pipeline.baseColorSampler, index: 0)
 
-        // Every tile's merged models first, under one pipeline and one
-        // state: one draw a tile.
+        // Every standing tile under one pipeline and one state: one draw
+        // a tile.
         renderEncoder.setRenderPipelineState(pipeline.pipelineState)
         renderEncoder.setDepthStencilState(surfaceMaskState)
         renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.surfaceMaskBit)
-        for item in items where item.mesh.mergedIndexCount > 0 && item.isRising == false {
+        for item in items where item.mesh.indexCount > 0 && item.isRising == false {
             bind(item, renderEncoder: renderEncoder, withTextures: true)
             renderEncoder.drawIndexedPrimitives(type: .triangle,
-                                                indexCount: item.mesh.mergedIndexCount,
+                                                indexCount: item.mesh.indexCount,
                                                 indexType: .uint32,
                                                 indexBuffer: item.mesh.indexBuffer,
                                                 indexBufferOffset: 0)
         }
 
-        // A tile coming up out of the ground: all of it, the models that
-        // cut into the ground with the others, with what is still below
-        // the ground dropped.
+        // A tile coming up out of the ground, with what is still below the
+        // ground dropped.
         if items.contains(where: \.isRising) {
             renderEncoder.setRenderPipelineState(pipeline.belowGroundClippedPipelineState)
             for item in items where item.isRising && item.mesh.indexCount > 0 {
@@ -78,48 +74,13 @@ enum ModelTileDrawer {
             }
         }
 
-        // The models that cut into the ground after them, each with the
-        // four draws of its cut.
-        for item in items where item.mesh.groundCutModels.isEmpty == false && item.isRising == false {
-            bind(item, renderEncoder: renderEncoder, withTextures: true)
-            for model in item.mesh.groundCutModels {
-                // The hole: the outline on the ground, raised, and the
-                // stencil reference carries the bit the inside draw tests
-                // for and the surface mask bit both draws raise.
-                renderEncoder.setRenderPipelineState(pipeline.groundFootprintPipelineState)
-                renderEncoder.setCullMode(.none)
-                renderEncoder.setDepthStencilState(groundCutStates.holeWrite)
-                renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.groundHoleBit)
-                draw(model, of: item.mesh, renderEncoder: renderEncoder)
-                renderEncoder.setCullMode(.back)
-
-                renderEncoder.setRenderPipelineState(pipeline.pipelineState)
-                renderEncoder.setDepthStencilState(groundCutStates.holeTest)
-                renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.groundHoleBit
-                                                       | TileSourceStencilPriority.surfaceMaskBit)
-                draw(model, of: item.mesh, renderEncoder: renderEncoder)
-
-                renderEncoder.setRenderPipelineState(pipeline.belowGroundClippedPipelineState)
-                renderEncoder.setDepthStencilState(groundCutStates.holeTest)
-                renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.surfaceMaskBit)
-                draw(model, of: item.mesh, renderEncoder: renderEncoder)
-
-                renderEncoder.setRenderPipelineState(pipeline.groundFootprintPipelineState)
-                renderEncoder.setCullMode(.none)
-                renderEncoder.setDepthStencilState(groundCutStates.holeClear)
-                draw(model, of: item.mesh, renderEncoder: renderEncoder)
-                renderEncoder.setCullMode(.back)
-            }
-        }
-
         renderEncoder.setCullMode(.none)
         renderEncoder.setFrontFacing(.clockwise)
         renderEncoder.setDepthStencilState(depthDisabledState)
     }
 
     /// Depth-only replay of the tiles from the light's orthographic camera,
-    /// cull `.none`, like the scene models' casters: one draw a tile, the
-    /// merged models and the ones that cut into the ground alike.
+    /// cull `.none`, like the scene models' casters: one draw a tile.
     static func drawShadowCasters(renderEncoder: MTLRenderCommandEncoder,
                                   lightProjectionView: matrix_float4x4,
                                   items: [ModelTileDrawItem],
@@ -158,15 +119,5 @@ enum ModelTileDrawer {
         if withTextures {
             renderEncoder.setFragmentTexture(item.mesh.texture, index: 0)
         }
-    }
-
-    private static func draw(_ model: ModelTileMesh.GroundCutModel,
-                             of mesh: ModelTileMesh,
-                             renderEncoder: MTLRenderCommandEncoder) {
-        renderEncoder.drawIndexedPrimitives(type: .triangle,
-                                            indexCount: model.indexCount,
-                                            indexType: .uint32,
-                                            indexBuffer: mesh.indexBuffer,
-                                            indexBufferOffset: model.indexByteOffset)
     }
 }

@@ -17,11 +17,6 @@ using namespace metal;
 // buildings of the same tile take, so the models lie on the flat map as the
 // buildings do. They draw on the flat map only, as the buildings do: at the
 // zooms that show them the map is flat.
-//
-// The ground cut is the scene models' (SceneModel.metal), in the same four
-// draws: the footprint vertex function below raises and lowers the ground
-// hole bit, and the clipped variant of the fragment function drops what
-// lies below the surface outside the hole. The ground is the plane Z = 0.
 
 // A model is drawn a little nearer in depth than it stands (depthBias, a
 // share of its distance from the eye): every vertex moves toward the eye
@@ -32,8 +27,11 @@ using namespace metal;
 // of the model is nearer than the share takes the model, and still covers
 // it. The shadow and the ground hole take a vertex where it stands.
 
-// The clipped variant of the fragment function: below-ground fragments are
-// dropped. Its own pipeline, so the plain variant keeps early depth.
+// The clipped variant of the fragment function: the fragments below the
+// ground, the plane Z = 0, are dropped. A tile coming up out of the ground
+// (ExtrusionRise) is drawn lowered, and the flat ground writes no real
+// depth, so what is still below the surface would show through it. Its own
+// pipeline, so the plain variant keeps early depth.
 constant bool kModelTileClipsBelowGround [[function_constant(0)]];
 
 struct ModelTileVertexIn {
@@ -70,17 +68,6 @@ vertex ModelTileVertexOut modelTileVertexShader(ModelTileVertexIn vertexIn [[sta
     out.uv = vertexIn.uv;
     out.layer = vertexIn.layer;
     return out;
-}
-
-// The ground hole of a model that cuts into the ground: every vertex
-// dropped onto the ground plane, so the mesh rasterises as its outline on
-// the surface. No fragment function: the draw's stencil state raises or
-// lowers the ground hole bit.
-vertex float4 modelTileGroundFootprintVertexShader(ModelTileVertexIn vertexIn [[stage_in]],
-                                                   constant Camera& camera [[buffer(1)]],
-                                                   constant float4x4& modelMatrix [[buffer(2)]]) {
-    float4 worldPosition = modelMatrix * float4(vertexIn.position, 1.0);
-    return camera.matrix * float4(worldPosition.xy, 0.0, 1.0);
 }
 
 // Depth-only vertex of the shadow map pass: no fragment function, the

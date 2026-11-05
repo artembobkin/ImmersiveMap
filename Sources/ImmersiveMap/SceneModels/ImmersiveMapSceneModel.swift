@@ -19,9 +19,8 @@ import Foundation
 // camera (`ModelTileStore`), and its own pipeline, drawer and subsystem.
 // A tile's models are one mesh in the tile's own space, placed like the
 // map's buildings of that tile and not by `SceneModelAnchorMath`. It shares
-// the ground cut and the frame state with the scene models, and nothing
-// with the map's tile loading: a model tile is requested, cached and
-// released on its own.
+// the frame state with the scene models, and nothing with the map's tile
+// loading: a model tile is requested, cached and released on its own.
 
 /// A 3D model (USDZ or OBJ, loaded via Model I/O) anchored at a geographic
 /// coordinate. Rendered inside the map world pass in flat, globe, and the
