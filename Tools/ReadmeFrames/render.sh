@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Renders the README's frames: builds the tool through xcodebuild, which
-# compiles the engine's Metal shaders into the resource bundle (a plain
-# `swift run` ships the shader sources only, and the capture cannot draw),
+# Renders the README's frames: builds the tool through xcodebuild in Release,
 # then runs it with the arguments given.
 #
 #   Tools/ReadmeFrames/render.sh                       # every frame of frames.json into Assets/

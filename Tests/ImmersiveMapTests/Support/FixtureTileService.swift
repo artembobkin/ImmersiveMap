@@ -161,7 +161,7 @@ enum FixtureTiles {
             return
         }
         MainActor.assumeIsolated {
-            _ = SharedRenderResources.shared()
+            _ = try? SharedRenderResources.shared()
         }
     }
 }

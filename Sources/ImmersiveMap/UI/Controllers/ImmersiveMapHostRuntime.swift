@@ -3,6 +3,7 @@
 
 import CoreGraphics
 import Foundation
+import OSLog
 import QuartzCore
 
 /// Logic shared by the UIKit/AppKit host views for owning the runtime graph and `RenderFrameEngine`:
@@ -24,6 +25,11 @@ final class ImmersiveMapHostRuntime {
     /// process has none for the settings' sample count yet; see
     /// `createRenderer`.
     private var pendingRendererCreation: Task<Void, Never>?
+    /// Shown in place of the map while no renderer could be built, see
+    /// `showRendererUnavailable`.
+    private var rendererUnavailableView: RendererUnavailableView?
+
+    private static let logger = Logger(subsystem: "ImmersiveMap", category: "Renderer")
 
     init(mapView: ImmersiveMapHostView,
          layer: CAMetalLayer,
@@ -274,7 +280,10 @@ final class ImmersiveMapHostRuntime {
     /// are built on a background task, so the first map view of a process
     /// never blocks the main thread on shader pipelines and atlases. Until
     /// the renderer exists the view shows nothing, the camera keeps every
-    /// position it is given, and the first frame follows the creation.
+    /// position it is given, and the first frame follows the creation. When
+    /// the engine's resources cannot be loaded, the view shows why in place
+    /// of the map (`RendererUnavailableView`), and the next creation, on a
+    /// settings change that recreates the renderer, tries again.
     private func createRenderer(settings: ImmersiveMapSettings,
                                 cameraPosition: ImmersiveMapCameraPosition?) {
         pendingRendererCreation?.cancel()
@@ -285,11 +294,21 @@ final class ImmersiveMapHostRuntime {
             return
         }
         pendingRendererCreation = Task { @MainActor [weak self] in
-            _ = await SharedRenderResources.resources(sampleCount: sampleCount)
+            let failure: (any Error)?
+            do {
+                _ = try await SharedRenderResources.resources(sampleCount: sampleCount)
+                failure = nil
+            } catch {
+                failure = error
+            }
             guard let self, Task.isCancelled == false else {
                 return
             }
             self.pendingRendererCreation = nil
+            if let failure {
+                self.showRendererUnavailable(failure)
+                return
+            }
             // The settings and the camera may have moved on while the
             // resources were building; the renderer starts from the latest.
             self.createRendererNow(settings: self.runtimeGraph.cameraRuntime.currentSettings,
@@ -303,14 +322,41 @@ final class ImmersiveMapHostRuntime {
         // path animation it would have finished is gone: resolve the app's
         // completions now instead of leaving chains waiting forever.
         runtimeGraph.sceneModelRuntime.cancelAllPathAnimations()
-        let renderer = runtimeGraph.rendererBuilder.makeRenderer(layer: metalLayer,
-                                                                 settings: settings,
-                                                                 cameraPosition: cameraPosition)
+        let renderer: RenderFrameEngine
+        do {
+            renderer = try runtimeGraph.rendererBuilder.makeRenderer(layer: metalLayer,
+                                                                     settings: settings,
+                                                                     cameraPosition: cameraPosition)
+        } catch {
+            showRendererUnavailable(error)
+            return
+        }
+        hideRendererUnavailable()
         self.renderer = renderer
         runtimeGraph.renderRuntime.attachRenderer(renderer)
         runtimeGraph.avatarRuntime.markSnapshotDirty()
         runtimeGraph.sceneModelRuntime.markSnapshotDirty()
         requestFrame()
+    }
+
+    /// The map cannot draw: says why over the view and in the log, once per
+    /// failed creation. The view stays until a renderer is built.
+    private func showRendererUnavailable(_ error: any Error) {
+        Self.logger.error("ImmersiveMap: the map cannot draw: \(error.localizedDescription, privacy: .public)")
+        rendererUnavailableView?.removeFromSuperview()
+        guard let mapView else {
+            rendererUnavailableView = nil
+            return
+        }
+        let view = RendererUnavailableView(error: error)
+        view.frame = mapView.bounds
+        mapView.addSubview(view)
+        rendererUnavailableView = view
+    }
+
+    private func hideRendererUnavailable() {
+        rendererUnavailableView?.removeFromSuperview()
+        rendererUnavailableView = nil
     }
 
     private func recreateRenderer(with settings: ImmersiveMapSettings) {

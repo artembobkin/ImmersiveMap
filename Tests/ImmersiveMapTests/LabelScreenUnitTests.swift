@@ -260,8 +260,8 @@ final class LabelScreenUnitTests: XCTestCase {
     /// under the xcodebuild suite.
     private func makeTextLabelsBuilder() throws -> TileTextLabelsBuilder {
         let device = try MetalTestEnvironment.requireDevice()
-        let library = try device.makeDefaultLibrary(bundle: .module)
-        return TileTextLabelsBuilder(textRenderer: TextRenderer(device: device, library: library))
+        let library = try device.makeDefaultLibrary(bundle: ImmersiveMapResourceBundle.bundle())
+        return try TileTextLabelsBuilder(textRenderer: TextRenderer(device: device, library: library, resourceBundle: ImmersiveMapResourceBundle.bundle()))
     }
 
     private func labelSizePoints(builder: TileTextLabelsBuilder,

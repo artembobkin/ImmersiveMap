@@ -107,16 +107,16 @@ final class RenderFrameEngine {
          eventSink: RenderFrameEventSink,
          tileTraceRecorder: TileTraceRecorder,
          baseLabelTraceRecorder: BaseLabelTraceRecorder,
-         clock: RenderFrameClock = RenderFrameWallClock()) {
-        let persistentContext = RenderPersistentContext(layer: layer,
-                                                        avatarSource: avatarSource,
-                                                        markerSource: markerSource,
-                                                        sceneModelSource: sceneModelSource,
-                                                        styleRuntime: styleRuntime,
-                                                        config: settings,
-                                                        eventSink: eventSink,
-                                                        tileTraceRecorder: tileTraceRecorder,
-                                                        baseLabelTraceRecorder: baseLabelTraceRecorder)
+         clock: RenderFrameClock = RenderFrameWallClock()) throws {
+        let persistentContext = try RenderPersistentContext(layer: layer,
+                                                            avatarSource: avatarSource,
+                                                            markerSource: markerSource,
+                                                            sceneModelSource: sceneModelSource,
+                                                            styleRuntime: styleRuntime,
+                                                            config: settings,
+                                                            eventSink: eventSink,
+                                                            tileTraceRecorder: tileTraceRecorder,
+                                                            baseLabelTraceRecorder: baseLabelTraceRecorder)
         let attachments = FrameAttachmentStore(metalDevice: persistentContext.metalContext.device,
                                                renderSampleCount: persistentContext.metalContext.renderSampleCount)
 

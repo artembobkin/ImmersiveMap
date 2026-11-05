@@ -16,6 +16,10 @@ public enum ImmersiveMapStillCaptureError: Error, Equatable, Sendable {
     case invalidConfiguration(String)
     /// No Metal device, or one that cannot back an offscreen render target.
     case metalUnavailable
+    /// The engine's resources could not be loaded: its resource bundle was
+    /// not found, or it holds no shader library. The message says which,
+    /// and where it was searched.
+    case resourcesUnavailable(String)
     /// The renderer refused to schedule the frame, or the GPU reported failure.
     case renderFrameFailure
     /// The rendered pixels could not be turned into a `CGImage`.
@@ -38,6 +42,8 @@ extension ImmersiveMapStillCaptureError: CustomStringConvertible, LocalizedError
             return "Invalid still capture configuration: \(field)"
         case .metalUnavailable:
             return "Metal is unavailable on this device"
+        case let .resourcesUnavailable(reason):
+            return "The map's resources could not be loaded: \(reason)"
         case .renderFrameFailure:
             return "The map frame could not be rendered"
         case .imageCreationFailure:

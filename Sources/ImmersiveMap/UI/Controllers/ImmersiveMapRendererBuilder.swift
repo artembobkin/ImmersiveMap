@@ -42,7 +42,7 @@ final class ImmersiveMapRendererBuilder {
 
     func makeRenderer(layer: CAMetalLayer,
                       settings: ImmersiveMapSettings,
-                      cameraPosition: ImmersiveMapCameraPosition?) -> RenderFrameEngine {
+                      cameraPosition: ImmersiveMapCameraPosition?) throws -> RenderFrameEngine {
         let renderCamera = cameraRuntime.makeRenderCamera(settings: settings,
                                                           cameraPosition: cameraPosition)
         let eventSink = ImmersiveMapRenderEventSink(renderRuntime: renderRuntime,
@@ -51,17 +51,17 @@ final class ImmersiveMapRendererBuilder {
                                                     sceneModelRuntime: sceneModelRuntime,
                                                     debugOverlayHUDSnapshotStore: debugOverlayHUDSnapshotStore)
         let styleRuntime = MapStyleRuntime(settings: settings)
-        return RenderFrameEngine(layer: layer,
-                                 avatarSource: avatarRuntime,
-                                 markerSource: markerRuntime,
-                                 sceneModelSource: sceneModelRuntime,
-                                 styleRuntime: styleRuntime,
-                                 settings: settings,
-                                 debugOverlayControls: debugOverlayControls,
-                                 renderCamera: renderCamera,
-                                 presentationStateResolver: cameraRuntime.presentationStateResolver,
-                                 eventSink: eventSink,
-                                 tileTraceRecorder: tileTraceRecorder,
-                                 baseLabelTraceRecorder: baseLabelTraceRecorder)
+        return try RenderFrameEngine(layer: layer,
+                                     avatarSource: avatarRuntime,
+                                     markerSource: markerRuntime,
+                                     sceneModelSource: sceneModelRuntime,
+                                     styleRuntime: styleRuntime,
+                                     settings: settings,
+                                     debugOverlayControls: debugOverlayControls,
+                                     renderCamera: renderCamera,
+                                     presentationStateResolver: cameraRuntime.presentationStateResolver,
+                                     eventSink: eventSink,
+                                     tileTraceRecorder: tileTraceRecorder,
+                                     baseLabelTraceRecorder: baseLabelTraceRecorder)
     }
 }

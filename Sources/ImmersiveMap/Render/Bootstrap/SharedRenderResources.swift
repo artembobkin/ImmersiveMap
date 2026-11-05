@@ -160,7 +160,7 @@ final class SharedRenderResources {
     private static var cached: [Int: SharedRenderResources] = [:]
     /// The builds in progress, one per resolved sample count, so a prewarm
     /// and the first map view that arrives while it runs share one build.
-    private static var inFlight: [Int: Task<SharedRenderResources, Never>] = [:]
+    private static var inFlight: [Int: Task<SharedRenderResources, any Error>] = [:]
     /// Metal objects are thread-safe; the box carries the device into the
     /// background build under strict concurrency.
     private struct DeviceBox: @unchecked Sendable {
@@ -182,12 +182,15 @@ final class SharedRenderResources {
     /// device resolves alike share one set. The synchronous path: the
     /// offscreen recorders and the tests take it; a map view goes through
     /// `resources(sampleCount:)` so the build never blocks the main thread.
-    static func shared(sampleCount: Int = 1) -> SharedRenderResources {
+    /// Throws when the engine's resources cannot be found
+    /// (`ImmersiveMapResourceBundle.NotFound`, `RenderResourcesError`), and
+    /// a later call tries again.
+    static func shared(sampleCount: Int = 1) throws -> SharedRenderResources {
         let (device, resolved) = resolvedSampleCount(sampleCount)
         if let cached = cached[resolved] {
             return cached
         }
-        let resources = SharedRenderResources(built: Self.build(device: device, renderSampleCount: resolved))
+        let resources = SharedRenderResources(built: try Self.build(device: device, renderSampleCount: resolved))
         cached[resolved] = resources
         return resources
     }
@@ -206,19 +209,27 @@ final class SharedRenderResources {
     /// made here at the end. Concurrent callers await the same build; a
     /// synchronous `shared` call that lands in the meantime builds its own
     /// copy and wins, and the awaited build is then dropped in its favour.
-    static func resources(sampleCount: Int = 1) async -> SharedRenderResources {
+    /// Throws as `shared(sampleCount:)` does, to every caller awaiting the
+    /// build, and a later call tries again.
+    static func resources(sampleCount: Int = 1) async throws -> SharedRenderResources {
         let (device, resolved) = resolvedSampleCount(sampleCount)
         if let cached = cached[resolved] {
             return cached
         }
         if let inFlight = inFlight[resolved] {
-            return await inFlight.value
+            return try await inFlight.value
         }
         let box = DeviceBox(device: device)
-        let task = Task { @MainActor () -> SharedRenderResources in
-            let built = await Task.detached(priority: .userInitiated) {
-                Self.build(device: box.device, renderSampleCount: resolved)
-            }.value
+        let task = Task { @MainActor () throws -> SharedRenderResources in
+            let built: Built
+            do {
+                built = try await Task.detached(priority: .userInitiated) {
+                    try Self.build(device: box.device, renderSampleCount: resolved)
+                }.value
+            } catch {
+                inFlight[resolved] = nil
+                throw error
+            }
             if let cached = cached[resolved] {
                 inFlight[resolved] = nil
                 return cached
@@ -229,14 +240,15 @@ final class SharedRenderResources {
             return resources
         }
         inFlight[resolved] = task
-        return await task.value
+        return try await task.value
     }
 
     /// Builds the resources for a sample count ahead of the first map view,
     /// off the main thread; see `resources(sampleCount:)`. Returns when
-    /// they are ready.
+    /// they are ready, or when the build failed: the map view that needs
+    /// them builds again and shows the error.
     static func prewarm(sampleCount: Int = 1) async {
-        _ = await resources(sampleCount: sampleCount)
+        _ = try? await resources(sampleCount: sampleCount)
     }
 
     #if DEBUG
@@ -280,10 +292,14 @@ final class SharedRenderResources {
         let compiled: ConcurrentlyCompiledResources
     }
 
-    private nonisolated static func build(device: MTLDevice, renderSampleCount: Int) -> Built {
-        let library = RendererSetup.makeLibrary(metalDevice: device, bundle: .module)
+    private nonisolated static func build(device: MTLDevice, renderSampleCount: Int) throws -> Built {
+        // The bundle first: the text atlases and the avatar marker are read
+        // from it whichever library the shaders come from.
+        let resourceBundle = try ImmersiveMapResourceBundle.bundle()
+        let library = try RendererSetup.makeLibrary(metalDevice: device, bundle: resourceBundle)
         let compiled = Self.makeConcurrentlyCompiledResources(device: device,
                                                               library: library,
+                                                              resourceBundle: resourceBundle,
                                                               pixelFormat: .bgra8Unorm,
                                                               sampleCount: renderSampleCount)
         return Built(device: device,
@@ -405,6 +421,7 @@ final class SharedRenderResources {
     private nonisolated static func makeConcurrentlyCompiledResources(
         device: MTLDevice,
         library: MTLLibrary,
+        resourceBundle: Bundle,
         pixelFormat: MTLPixelFormat,
         sampleCount: Int
     ) -> ConcurrentlyCompiledResources {
@@ -431,10 +448,12 @@ final class SharedRenderResources {
             // The heaviest groups go first so they overlap the whole batch.
             { textRenderer = TextRenderer(device: device,
                                           library: library,
+                                          resourceBundle: resourceBundle,
                                           sampleCount: 1) },
             { avatars = AvatarsRenderer.SharedResources.make(metalDevice: device,
                                                              pixelFormat: pixelFormat,
                                                              library: library,
+                                                             resourceBundle: resourceBundle,
                                                              sampleCount: 1) },
             { globeCap = GlobeCapRenderer.SharedResources.make(metalDevice: device,
                                                                pixelFormat: pixelFormat,

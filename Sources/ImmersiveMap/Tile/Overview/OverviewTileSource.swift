@@ -84,7 +84,8 @@ final class OverviewTileSource: @unchecked Sendable {
     /// resource, which is logged: the map then draws the tiles' own land
     /// cover, as it did before the overview.
     static func bundled() -> OverviewTileSource? {
-        guard let archiveURL = Bundle.module.url(forResource: resourceName, withExtension: resourceExtension) else {
+        guard let archiveURL = (try? ImmersiveMapResourceBundle.bundle())?.url(forResource: resourceName,
+                                                                               withExtension: resourceExtension) else {
             logger.warning("ImmersiveMap: the overview archive \(resourceName, privacy: .public).\(resourceExtension, privacy: .public) is missing from the package resources, so the overview zooms draw the tile source's own land cover.")
             return nil
         }

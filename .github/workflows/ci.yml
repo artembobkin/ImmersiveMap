@@ -32,10 +32,11 @@ jobs:
       - name: Test
         run: swift test
 
-  # SwiftPM does not compile the package's .metal sources for the test bundle,
-  # so every Metal-backed test skips itself under `swift test`: the shader and
-  # pipeline tests are invisible to the job above. Building through Xcode
-  # compiles the shaders, which is the only way those tests run at all.
+  # Every build compiles the shaders (the MetalLibraryPlugin build tool
+  # plugin), so the job above runs the Metal-backed tests too, but lets them
+  # skip where the runner has no GPU. This job runs them through Xcode, as an
+  # app built in Xcode gets them, and requires Metal: a runner that cannot
+  # render fails here instead of passing having rendered nothing.
   #
   # The picture tests (a frame rendered offscreen and judged by its pixels)
   # are not part of this job or any other: they are brittle and are run by

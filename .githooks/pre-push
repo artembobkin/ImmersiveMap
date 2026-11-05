@@ -4,8 +4,8 @@
 #
 # Runs the native test suite before a push, so a commit that fails
 # `swift test` never reaches CI. The suite is what the "Build & Test (SPM)"
-# job runs and takes about a minute. The shader-backed tests still skip here,
-# as they do under any `swift test`.
+# job runs and takes about a minute, the shader-backed tests included: the
+# build compiles the shaders (MetalLibraryPlugin).
 #
 # Installed once per clone with `git config core.hooksPath .githooks`.
 # `git push --no-verify` skips it on purpose.

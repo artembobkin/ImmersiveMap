@@ -16,7 +16,7 @@ final class ImmersiveMapNSViewTests: XCTestCase {
         }
         // swift test (SwiftPM CLI) does not compile .metal into a metallib - the renderer cannot be built there;
         // under xcodebuild test the shaders compile and the test runs in full.
-        guard (try? device.makeDefaultLibrary(bundle: .module)) != nil else {
+        guard (try? device.makeDefaultLibrary(bundle: ImmersiveMapResourceBundle.bundle())) != nil else {
             throw XCTSkip("Compiled Metal library is unavailable in this test environment")
         }
 

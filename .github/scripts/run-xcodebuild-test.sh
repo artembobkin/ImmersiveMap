@@ -2,9 +2,8 @@
 # Copyright (c) 2025-2026 ImmersiveMap contributors.
 # SPDX-License-Identifier: MIT
 #
-# Runs the package test suite through Xcode, which (unlike `swift test`)
-# compiles the .metal sources and therefore actually executes the rendering
-# tests.
+# Runs the package test suite through Xcode, the way an app built in Xcode
+# builds the engine, on macOS or on an iOS Simulator.
 #
 # Usage: run-xcodebuild-test.sh <destination> <result-bundle-prefix>
 

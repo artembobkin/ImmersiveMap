@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 
 import PackageDescription
 
@@ -64,30 +64,47 @@ let package = Package(
         .target(
             name: "ImmersiveMap",
             dependencies: ["Earcut", "Mvt", "PMTiles", "TileFlattening"],
+            // The shaders and their headers: not resources, so no build
+            // system makes a library of its own from them. `MetalLibraryPlugin`
+            // compiles every .metal file of the target into the one
+            // default.metallib of the resource bundle, under Xcode and under
+            // `swift build` alike. A new shader folder goes here.
+            exclude: [
+                "Avatars/Shaders",
+                "Globe/Shaders",
+                "Horizon/Shaders",
+                "Labels/Shaders",
+                "Layers/Shaders",
+                "Render/Debug/Shaders",
+                "Render/PostProcessing/Shaders",
+                "Render/Shaders",
+                "SceneModels/Shaders",
+                "Shadows/Shaders",
+                "Starfield/Shaders",
+                "Text/Shaders",
+                "Tile/Relief/Shaders",
+                "Tile/Shaders",
+            ],
             resources: [
                 .process("Avatars/Resources/avatar_marker_sdf.json"),
                 .process("Avatars/Resources/avatar_marker_sdf.png"),
-                .process("Avatars/Shaders"),
-                .process("Globe/Shaders"),
-                .process("Horizon/Shaders"),
-                .process("Labels/Shaders"),
-                .process("Layers/Shaders"),
-                .process("Render/Debug/Shaders"),
-                .process("Render/PostProcessing/Shaders"),
-                .process("Render/Shaders/Shared/GeoMath.metal"),
-                .process("SceneModels/Shaders"),
-                .process("Shadows/Shaders"),
-                .process("Starfield/Shaders"),
                 .process("Text/Resources"),
-                .process("Text/Shaders"),
-                .process("Tile/Shaders"),
                 // The overview of the globe laid into the tiles of zooms 0 to 5
                 // (`OverviewTileSource`): copied whole, a PMTiles archive.
                 .copy("Tile/Overview/Resources/overview.pmtiles"),
                 // The tree model the woods and the parks stand
                 // (`TreeModelContents`): copied whole, as the GPU reads it.
                 .copy("Tile/Trees/Resources/tree_broadleaf.immtree"),
-            ]
+            ],
+            plugins: ["MetalLibraryPlugin"]
+        ),
+        // Compiles the engine's shaders into its resource bundle's
+        // default.metallib with `xcrun metal`, the same way for Xcode and for
+        // SwiftPM's command line, which on its own copies .metal files into
+        // the bundle uncompiled.
+        .plugin(
+            name: "MetalLibraryPlugin",
+            capability: .buildTool()
         ),
         // The debug panel over the map (`ImmersiveMapDebugPanel.hud`). The
         // engine holds what the panel reads and drags and the slot it fills,

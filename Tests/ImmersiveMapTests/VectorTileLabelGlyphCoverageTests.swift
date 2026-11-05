@@ -77,7 +77,7 @@ final class VectorTileLabelGlyphCoverageTests: XCTestCase {
     }
 
     private static func loadBundledAtlas(named name: String) throws -> AtlasData {
-        let url = try XCTUnwrap(Bundle.module.url(forResource: name, withExtension: "json"))
+        let url = try XCTUnwrap(ImmersiveMapResourceBundle.bundle().url(forResource: name, withExtension: "json"))
         let data = try Data(contentsOf: url)
         return try JSONDecoder().decode(AtlasData.self, from: data)
     }

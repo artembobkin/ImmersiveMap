@@ -196,7 +196,8 @@ final class TreeModelStore: @unchecked Sendable {
     }
 
     private func load(device: MTLDevice) async {
-        guard let url = Bundle.module.url(forResource: Self.resourceName, withExtension: Self.resourceExtension) else {
+        guard let url = (try? ImmersiveMapResourceBundle.bundle())?.url(forResource: Self.resourceName,
+                                                                         withExtension: Self.resourceExtension) else {
             assertionFailure("The tree model is missing from the package resources")
             return
         }

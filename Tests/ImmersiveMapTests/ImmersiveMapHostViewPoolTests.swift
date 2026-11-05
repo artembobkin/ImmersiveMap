@@ -199,7 +199,7 @@ final class ImmersiveMapHostViewPoolTests: XCTestCase {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw XCTSkip("Metal device is unavailable")
         }
-        guard (try? device.makeDefaultLibrary(bundle: .module)) != nil else {
+        guard (try? device.makeDefaultLibrary(bundle: ImmersiveMapResourceBundle.bundle())) != nil else {
             throw XCTSkip("Compiled Metal library is unavailable in this test environment")
         }
     }

@@ -186,13 +186,15 @@ class TextRenderer {
     private var boldGlyphLookup: [UInt32: Glyph] = [:]
     private var thinGlyphLookup: [UInt32: Glyph] = [:]
     
+    /// `resourceBundle` holds the atlases (`ImmersiveMapResourceBundle`).
     init(device: MTLDevice,
          library: MTLLibrary,
+         resourceBundle: Bundle,
          sampleCount: Int = 1) {
         self.device = device
         self.library = library
         self.sampleCount = sampleCount
-        self.bundle = .module
+        self.bundle = resourceBundle
         
         // The JSON first: it carries the dimensions the raw pixel file has
         // no header for.

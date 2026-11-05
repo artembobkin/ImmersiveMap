@@ -3,6 +3,25 @@
 
 import Metal
 import MetalKit
+import OSLog
+
+/// Why the renderer could not be built. The map view shows the description
+/// in place of the map, and the offscreen recorders throw it inside their
+/// own errors.
+enum RenderResourcesError: Error, Equatable, CustomStringConvertible, LocalizedError {
+    /// The resource bundle holds no shader library, and the app's main
+    /// library does not hold the engine's shaders either.
+    case shaderLibraryUnavailable(bundlePath: String, reason: String)
+
+    var description: String {
+        switch self {
+        case let .shaderLibraryUnavailable(bundlePath, reason):
+            return "The map's shader library could not be loaded from \(bundlePath) (\(reason)), and the app's own library does not hold the map's shaders."
+        }
+    }
+
+    var errorDescription: String? { description }
+}
 
 enum RendererSetup {
     /// The per-view half of the Metal bootstrap: stamps the shared device and
@@ -38,16 +57,34 @@ enum RendererSetup {
         } ?? 1
     }
 
-    static func makeLibrary(metalDevice: MTLDevice, bundle: Bundle) -> MTLLibrary {
+    /// The engine's shaders: the `default.metallib` of its resource bundle
+    /// (`ImmersiveMapResourceBundle`), which the build tool plugin
+    /// `MetalLibraryPlugin` compiles whoever builds the package. When the
+    /// bundle has none, the main bundle's default library is taken if it
+    /// holds the engine's shaders, which is how an app that compiled them
+    /// into its own library still runs. Otherwise the map cannot draw, and
+    /// the error says so: the map view shows it, an export throws it.
+    static func makeLibrary(metalDevice: MTLDevice, bundle: Bundle) throws -> MTLLibrary {
+        let bundleFailure: any Error
         do {
             return try metalDevice.makeDefaultLibrary(bundle: bundle)
         } catch {
-            if let fallback = metalDevice.makeDefaultLibrary() {
-                return fallback
-            }
-            fatalError("Could not create the MTLLibrary: \(error)")
+            bundleFailure = error
         }
+        if let fallback = metalDevice.makeDefaultLibrary(),
+           fallback.functionNames.contains(engineFunctionName) {
+            logger.warning("ImmersiveMap: the resource bundle at \(bundle.bundlePath, privacy: .public) holds no shader library (\(String(describing: bundleFailure), privacy: .public)), so the app's main library is used.")
+            return fallback
+        }
+        throw RenderResourcesError.shaderLibraryUnavailable(bundlePath: bundle.bundlePath,
+                                                            reason: String(describing: bundleFailure))
     }
+
+    /// An entry point every build of the engine's shaders holds: what tells
+    /// the engine's shaders apart from an app's own in the main library.
+    static let engineFunctionName = "fxaaFragmentShader"
+
+    private static let logger = Logger(subsystem: "ImmersiveMap", category: "Renderer")
 
     static func configureCamera(_ cameraStateController: CameraStateController) {
         //cameraStateController.setZoom(zoom: 8)

@@ -13,8 +13,8 @@ final class TextAtlasRawResourceTests: XCTestCase {
 
     func testEveryAtlasShipsItsPixelsRawAtTheSizeTheMetricsDescribe() throws {
         for name in atlasNames {
-            let jsonURL = try XCTUnwrap(Bundle.module.url(forResource: name, withExtension: "json"), "\(name).json ships")
-            let pixelsURL = try XCTUnwrap(Bundle.module.url(forResource: name, withExtension: "bgra"), "\(name).bgra ships")
+            let jsonURL = try XCTUnwrap(ImmersiveMapResourceBundle.bundle().url(forResource: name, withExtension: "json"), "\(name).json ships")
+            let pixelsURL = try XCTUnwrap(ImmersiveMapResourceBundle.bundle().url(forResource: name, withExtension: "bgra"), "\(name).bgra ships")
             let atlas = try JSONDecoder().decode(AtlasData.self, from: Data(contentsOf: jsonURL)).atlas
             let size = try XCTUnwrap(FileManager.default.attributesOfItem(atPath: pixelsURL.path)[.size] as? Int)
             XCTAssertEqual(size, atlas.width * atlas.height * 4,
@@ -24,9 +24,9 @@ final class TextAtlasRawResourceTests: XCTestCase {
 
     func testTheRendererUploadsTheFileByteForByte() throws {
         let device = try MetalTestEnvironment.requireDevice(needsReadback: true)
-        let library = try device.makeDefaultLibrary(bundle: .module)
-        let renderer = TextRenderer(device: device, library: library)
-        let pixelsURL = try XCTUnwrap(Bundle.module.url(forResource: "atlas", withExtension: "bgra"))
+        let library = try device.makeDefaultLibrary(bundle: ImmersiveMapResourceBundle.bundle())
+        let renderer = try TextRenderer(device: device, library: library, resourceBundle: ImmersiveMapResourceBundle.bundle())
+        let pixelsURL = try XCTUnwrap(ImmersiveMapResourceBundle.bundle().url(forResource: "atlas", withExtension: "bgra"))
         let file = try Data(contentsOf: pixelsURL)
 
         let texture = try XCTUnwrap(renderer.texture)

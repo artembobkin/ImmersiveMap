@@ -27,7 +27,7 @@ final class RenderFrameOffscreenTargetTests: XCTestCase {
         guard let probeDevice = MTLCreateSystemDefaultDevice() else {
             throw XCTSkip("Metal device is unavailable")
         }
-        guard (try? probeDevice.makeDefaultLibrary(bundle: .module)) != nil else {
+        guard (try? probeDevice.makeDefaultLibrary(bundle: ImmersiveMapResourceBundle.bundle())) != nil else {
             throw XCTSkip("Compiled Metal library is unavailable in this test environment")
         }
         guard probeDevice.hasUnifiedMemory else {
@@ -40,18 +40,18 @@ final class RenderFrameOffscreenTargetTests: XCTestCase {
         let renderCamera = FrameCameraStateResolver(settings: settings)
         let presentation = MapPresentationStateController(settings: settings)
         let layer = CAMetalLayer()
-        let engine = RenderFrameEngine(layer: layer,
-                                       avatarSource: StubAvatarSource(),
-                                       markerSource: StubMarkerSource(),
-                                       sceneModelSource: StubSceneModelSource(),
-                                       styleRuntime: MapStyleRuntime(settings: settings),
-                                       settings: settings,
-                                       renderCamera: renderCamera,
-                                       presentationStateResolver: presentation,
-                                       eventSink: eventSink,
-                                       tileTraceRecorder: TileTraceRecorder(),
-                                       baseLabelTraceRecorder: BaseLabelTraceRecorder(),
-                                       clock: clock)
+        let engine = try RenderFrameEngine(layer: layer,
+                                           avatarSource: StubAvatarSource(),
+                                           markerSource: StubMarkerSource(),
+                                           sceneModelSource: StubSceneModelSource(),
+                                           styleRuntime: MapStyleRuntime(settings: settings),
+                                           settings: settings,
+                                           renderCamera: renderCamera,
+                                           presentationStateResolver: presentation,
+                                           eventSink: eventSink,
+                                           tileTraceRecorder: TileTraceRecorder(),
+                                           baseLabelTraceRecorder: BaseLabelTraceRecorder(),
+                                           clock: clock)
         let device = try XCTUnwrap(layer.device)
 
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm,

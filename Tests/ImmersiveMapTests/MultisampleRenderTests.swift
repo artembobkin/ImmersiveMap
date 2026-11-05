@@ -36,16 +36,16 @@ final class MultisampleRenderTests: XCTestCase {
     @MainActor
     func testSharedResourcesAreCachedPerSampleCount() throws {
         guard let device = MTLCreateSystemDefaultDevice(),
-              (try? device.makeDefaultLibrary(bundle: .module)) != nil else {
+              (try? device.makeDefaultLibrary(bundle: ImmersiveMapResourceBundle.bundle())) != nil else {
             throw XCTSkip("Compiled Metal library is unavailable in this test environment")
         }
-        let one = SharedRenderResources.shared(sampleCount: 1)
-        XCTAssertTrue(one === SharedRenderResources.shared(sampleCount: 1))
+        let one = try SharedRenderResources.shared(sampleCount: 1)
+        XCTAssertTrue(try one === SharedRenderResources.shared(sampleCount: 1))
         XCTAssertEqual(one.renderSampleCount, 1)
-        let four = SharedRenderResources.shared(sampleCount: 4)
+        let four = try SharedRenderResources.shared(sampleCount: 4)
         XCTAssertEqual(four.renderSampleCount,
                        RendererSetup.resolvedRenderSampleCount(requested: 4, metalDevice: device))
-        XCTAssertTrue(four === SharedRenderResources.shared(sampleCount: 4))
+        XCTAssertTrue(try four === SharedRenderResources.shared(sampleCount: 4))
         if four.renderSampleCount > 1 {
             XCTAssertFalse(one === four)
         }

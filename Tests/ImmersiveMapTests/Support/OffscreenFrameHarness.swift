@@ -160,18 +160,18 @@ final class OffscreenFrameHarness {
         self.sceneModelSource = sceneModelSource
 
         let layer = CAMetalLayer()
-        self.engine = RenderFrameEngine(layer: layer,
-                                        avatarSource: avatarSource,
-                                        markerSource: markerSource,
-                                        sceneModelSource: sceneModelSource,
-                                        styleRuntime: MapStyleRuntime(settings: settings),
-                                        settings: settings,
-                                        renderCamera: camera,
-                                        presentationStateResolver: MapPresentationStateController(settings: settings),
-                                        eventSink: eventSink,
-                                        tileTraceRecorder: tileTraceRecorder,
-                                        baseLabelTraceRecorder: BaseLabelTraceRecorder(),
-                                        clock: clock)
+        self.engine = try RenderFrameEngine(layer: layer,
+                                            avatarSource: avatarSource,
+                                            markerSource: markerSource,
+                                            sceneModelSource: sceneModelSource,
+                                            styleRuntime: MapStyleRuntime(settings: settings),
+                                            settings: settings,
+                                            renderCamera: camera,
+                                            presentationStateResolver: MapPresentationStateController(settings: settings),
+                                            eventSink: eventSink,
+                                            tileTraceRecorder: tileTraceRecorder,
+                                            baseLabelTraceRecorder: BaseLabelTraceRecorder(),
+                                            clock: clock)
 
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm,
                                                                   width: size,

@@ -127,8 +127,8 @@ final class RenderPersistentContext {
          config: ImmersiveMapSettings,
          eventSink: RenderFrameEventSink,
          tileTraceRecorder: TileTraceRecorder,
-         baseLabelTraceRecorder: BaseLabelTraceRecorder) {
-        let shared = SharedRenderResources.shared(sampleCount: config.postProcessing.multisampleCount)
+         baseLabelTraceRecorder: BaseLabelTraceRecorder) throws {
+        let shared = try SharedRenderResources.shared(sampleCount: config.postProcessing.multisampleCount)
         let metal = RendererSetup.buildMetal(layer: layer, sharedResources: shared)
         self.metalContext = metal
         self.tileTraceRecorder = tileTraceRecorder

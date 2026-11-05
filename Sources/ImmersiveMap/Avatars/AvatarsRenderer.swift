@@ -83,9 +83,12 @@ final class AvatarsRenderer {
         let countBadgePipeline: AvatarCountBadgePipeline
         let markerSDF: AvatarMarkerSDFResource
 
+        /// `resourceBundle` holds the marker's distance field
+        /// (`ImmersiveMapResourceBundle`).
         static func make(metalDevice: MTLDevice,
                          pixelFormat: MTLPixelFormat,
                          library: MTLLibrary,
+                         resourceBundle: Bundle,
                          sampleCount: Int = 1) -> SharedResources {
             SharedResources(
                 avatarPipeline: AvatarPipeline(metalDevice: metalDevice,
@@ -108,7 +111,7 @@ final class AvatarsRenderer {
                                                              pixelFormat: pixelFormat,
                                                              library: library,
                                                              sampleCount: sampleCount),
-                markerSDF: try! AvatarMarkerSDFResource(device: metalDevice)
+                markerSDF: try! AvatarMarkerSDFResource(device: metalDevice, bundle: resourceBundle)
             )
         }
     }

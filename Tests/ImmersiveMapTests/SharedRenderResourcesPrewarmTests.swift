@@ -22,8 +22,8 @@ final class SharedRenderResourcesPrewarmTests: XCTestCase {
         await SharedRenderResources.prewarm(sampleCount: sampleCount)
 
         XCTAssertTrue(SharedRenderResources.isAvailable(sampleCount: sampleCount))
-        let built = await SharedRenderResources.resources(sampleCount: sampleCount)
-        XCTAssertTrue(built === SharedRenderResources.shared(sampleCount: sampleCount),
+        let built = try await SharedRenderResources.resources(sampleCount: sampleCount)
+        XCTAssertTrue(try built === SharedRenderResources.shared(sampleCount: sampleCount),
                       "The prewarmed set is the one every later path hands out")
         XCTAssertEqual(built.renderSampleCount,
                        RendererSetup.resolvedRenderSampleCount(requested: sampleCount, metalDevice: built.device))
@@ -37,10 +37,10 @@ final class SharedRenderResourcesPrewarmTests: XCTestCase {
 
         async let first = SharedRenderResources.resources(sampleCount: sampleCount)
         async let second = SharedRenderResources.resources(sampleCount: sampleCount)
-        let (a, b) = await (first, second)
+        let (a, b) = try await (first, second)
 
         XCTAssertTrue(a === b, "Two requests in flight together wait for the same build")
-        XCTAssertTrue(a === SharedRenderResources.shared(sampleCount: sampleCount))
+        XCTAssertTrue(try a === SharedRenderResources.shared(sampleCount: sampleCount))
     }
 
     @MainActor

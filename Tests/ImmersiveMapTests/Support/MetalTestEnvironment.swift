@@ -9,11 +9,12 @@ import XCTest
 /// out of one.
 ///
 /// Every Metal-backed test skips itself when the environment cannot serve it,
-/// which is right for `swift test` (SwiftPM does not compile the `.metal`
-/// sources for the test bundle) and wrong for the CI job that exists to run
-/// exactly those tests: there, a suite that skips its way to green reports
-/// health it never checked. That job sets `IMMERSIVE_MAP_REQUIRE_METAL=1`, and
-/// this type turns the skips into failures.
+/// which is right for a machine without a GPU and wrong for the CI jobs that
+/// exist to run exactly those tests: there, a suite that skips its way to
+/// green reports health it never checked. Those jobs set
+/// `IMMERSIVE_MAP_REQUIRE_METAL=1`, and this type turns the skips into
+/// failures. The shaders themselves are compiled by every build of the
+/// package, `swift test` included (`MetalLibraryPlugin`).
 enum MetalTestEnvironment {
     /// Set to `1` by the CI job whose whole purpose is the GPU suite.
     static let requirementKey = "IMMERSIVE_MAP_REQUIRE_METAL"
@@ -37,15 +38,15 @@ enum MetalTestEnvironment {
 
     /// Why this build cannot run GPU code at all, or nil when it can.
     ///
-    /// Both conditions are facts about how the tests were built rather than
-    /// about the machine: a missing default library means the `.metal` sources
-    /// were not compiled into the bundle. That is what
+    /// A missing default library is a fact about how the tests were built
+    /// rather than about the machine: the engine's resource bundle was not
+    /// found, or the shaders were not compiled into it. That is what
     /// `IMMERSIVE_MAP_REQUIRE_METAL` exists to refuse.
     static func unavailabilityReason() -> String? {
         guard let device = MTLCreateSystemDefaultDevice() else {
             return "Metal device is unavailable"
         }
-        guard (try? device.makeDefaultLibrary(bundle: .module)) != nil else {
+        guard (try? device.makeDefaultLibrary(bundle: ImmersiveMapResourceBundle.bundle())) != nil else {
             return "Compiled Metal library is unavailable in this test environment"
         }
         return nil

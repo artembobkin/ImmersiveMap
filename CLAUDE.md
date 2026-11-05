@@ -10,7 +10,7 @@ Because the repo is public: never commit tile-provider API keys, bearer tokens, 
 
 ## Commands
 
-`swift test` runs natively on macOS but cannot compile `.metal` shaders (tests that need a compiled Metal library skip themselves). To run the suite with compiled shaders or on iOS, use xcodebuild against the SwiftPM-generated workspace:
+`swift test` runs the whole suite natively on macOS, the Metal-backed tests included, since every build of the package compiles the shaders (`MetalLibraryPlugin`, below). To run it on iOS, or as CI's Xcode jobs do, use xcodebuild against the SwiftPM-generated workspace:
 
 ```sh
 xcodebuild test -workspace .swiftpm/xcode/package.xcworkspace -scheme ImmersiveMap-Package \
@@ -66,7 +66,8 @@ The code shows how things are wired. These are the decisions behind it, which th
   // Copyright (c) 2025-2026 ImmersiveMap contributors.
   // SPDX-License-Identifier: MIT
   ```
-- Shaders and resources load via `Bundle.module`. Every new `.metal` file or resource directory must be registered under `resources:` in `Package.swift`, otherwise the resource silently doesn't ship.
+- The engine reads its resources through `ImmersiveMapResourceBundle.bundle()`, never `Bundle.module` directly. The resources travel with the engine in its one bundle, and in an app that bundle is in the app's `Contents/Resources`: an app looks there and nowhere else, and only a program that is no app (the tests, a command-line tool) takes `Bundle.module`. SwiftPM's command-line accessor looks beside an app's `Contents`, where code signing allows nothing, and then at the build folder compiled into the binary, so an app must never reach it. An app without the bundle gets an error: the map view shows it in place of the map (`RendererUnavailableView`), an export throws it, nothing stops the process. A new resource file or directory is registered under `resources:` in `Package.swift`, otherwise it silently doesn't ship.
+- The shaders are not resources. The build tool plugin `MetalLibraryPlugin` (`Plugins/`) compiles every `.metal` file of the target with `xcrun metal` into the one `default.metallib` of the resource bundle, under Xcode and `swift build` alike, for the platform the build settings name (macOS under SwiftPM's command line). A new shader folder goes into the target's `exclude:` list in `Package.swift`, and a shader finds its headers by relative `#include` paths. When the bundle holds no library, `RendererSetup.makeLibrary` takes the app's main library only if it holds the engine's shaders, and otherwise throws. An app that adds the package in Xcode is asked once to trust the plugin.
 - Never change the code on your own. A request to look into something, to find a cause, to think about an approach or to propose a fix is answered with an investigation and a proposal, and nothing in the working tree changes until the person at the screen says to go ahead with it, in their own explicit word. A request that asks for a change outright is that word. The same holds for a follow-up fix noticed along the way: name it and wait.
 - Never commit, run tests or push on your own. A change is left in the working tree, built if a build is needed to check it, and reported. The person at the screen looks first and says when to commit, which tests to run, and when to push, each one its own explicit word.
 - There is no separate documentation to keep up: the guides and the DocC catalog were removed on purpose, and the doc comments in the code are the reference. Do not add them back. `Assets/` holds the README's images.

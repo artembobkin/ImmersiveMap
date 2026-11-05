@@ -226,19 +226,23 @@ final class ImmersiveMapStillRuntime {
         // this layer for a drawable.
         let metalLayer = CAMetalLayer()
         self.metalLayer = metalLayer
-        self.engine = RenderFrameEngine(layer: metalLayer,
-                                        avatarSource: avatarSource,
-                                        markerSource: markerSource,
-                                        sceneModelSource: sceneModelSource,
-                                        styleRuntime: MapStyleRuntime(settings: settings),
-                                        settings: settings,
-                                        debugOverlayControls: DebugOverlayControlState(),
-                                        renderCamera: renderCamera,
-                                        presentationStateResolver: presentationStateResolver,
-                                        eventSink: eventSink,
-                                        tileTraceRecorder: TileTraceRecorder(),
-                                        baseLabelTraceRecorder: BaseLabelTraceRecorder(),
-                                        clock: clock)
+        do {
+            self.engine = try RenderFrameEngine(layer: metalLayer,
+                                                avatarSource: avatarSource,
+                                                markerSource: markerSource,
+                                                sceneModelSource: sceneModelSource,
+                                                styleRuntime: MapStyleRuntime(settings: settings),
+                                                settings: settings,
+                                                debugOverlayControls: DebugOverlayControlState(),
+                                                renderCamera: renderCamera,
+                                                presentationStateResolver: presentationStateResolver,
+                                                eventSink: eventSink,
+                                                tileTraceRecorder: TileTraceRecorder(),
+                                                baseLabelTraceRecorder: BaseLabelTraceRecorder(),
+                                                clock: clock)
+        } catch {
+            throw ImmersiveMapStillCaptureError.resourcesUnavailable(error.localizedDescription)
+        }
         guard let device = metalLayer.device else {
             throw ImmersiveMapStillCaptureError.metalUnavailable
         }

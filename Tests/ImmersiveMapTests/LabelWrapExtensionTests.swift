@@ -15,8 +15,8 @@ final class LabelWrapExtensionTests: XCTestCase {
 
     private func makeRenderer() throws -> TextRenderer {
         let device = try MetalTestEnvironment.requireDevice()
-        let library = try device.makeDefaultLibrary(bundle: .module)
-        return TextRenderer(device: device, library: library)
+        let library = try device.makeDefaultLibrary(bundle: ImmersiveMapResourceBundle.bundle())
+        return try TextRenderer(device: device, library: library, resourceBundle: ImmersiveMapResourceBundle.bundle())
     }
 
     private func metrics(_ text: String, renderer: TextRenderer) -> TextMetrics {

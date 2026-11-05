@@ -17,6 +17,10 @@ public enum ImmersiveMapVideoExportError: Error {
     case emptyShots
     /// No Metal device is available for offscreen rendering.
     case metalUnavailable
+    /// The engine's resources could not be loaded: its resource bundle was
+    /// not found, or it holds no shader library. The message says which,
+    /// and where it was searched.
+    case resourcesUnavailable(String)
     /// The video writer failed; carries the underlying `AVAssetWriter` error
     /// when one was reported.
     case videoWriterFailure((any Error)?)

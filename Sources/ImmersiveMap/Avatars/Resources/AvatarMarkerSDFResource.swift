@@ -43,8 +43,9 @@ final class AvatarMarkerSDFResource {
     let params: AvatarMarkerSDFParams
     let shapeMetrics: AvatarMarkerSDFShapeMetrics
 
+    /// `bundle` is the engine's resource bundle (`ImmersiveMapResourceBundle`).
     init(device: MTLDevice,
-         bundle: Bundle = .module) throws {
+         bundle: Bundle) throws {
         let textureURL = try Self.textureURL(in: bundle)
         let metadataURL = try Self.metadataURL(in: bundle)
 

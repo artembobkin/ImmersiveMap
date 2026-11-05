@@ -48,11 +48,11 @@ final class ShadowMapAttachmentTests: XCTestCase {
     @MainActor
     func testSharedResourcesBuildWhereverTheTestsRun() throws {
         let device = try makeDevice()
-        guard (try? device.makeDefaultLibrary(bundle: .module)) != nil else {
+        guard (try? device.makeDefaultLibrary(bundle: ImmersiveMapResourceBundle.bundle())) != nil else {
             throw XCTSkip("Compiled Metal library is unavailable in this test environment")
         }
 
-        let fallback = SharedRenderResources.shared(sampleCount: 1).shadowFallbackTexture
+        let fallback = try SharedRenderResources.shared(sampleCount: 1).shadowFallbackTexture
 
         XCTAssertEqual(fallback.textureType, .type2DArray)
         XCTAssertEqual(fallback.arrayLength, ShadowCascadeAtlas.sliceCount)

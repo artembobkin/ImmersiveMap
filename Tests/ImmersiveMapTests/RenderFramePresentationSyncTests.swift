@@ -33,7 +33,7 @@ final class RenderFramePresentationSyncTests: XCTestCase {
         guard let probeDevice = MTLCreateSystemDefaultDevice() else {
             throw XCTSkip("Metal device is unavailable")
         }
-        guard (try? probeDevice.makeDefaultLibrary(bundle: .module)) != nil else {
+        guard (try? probeDevice.makeDefaultLibrary(bundle: ImmersiveMapResourceBundle.bundle())) != nil else {
             throw XCTSkip("Compiled Metal library is unavailable in this test environment")
         }
 
@@ -42,18 +42,18 @@ final class RenderFramePresentationSyncTests: XCTestCase {
         let eventSink = VideoExportRenderEventSink()
         let markerSource = MutableMarkerSource()
         let layer = CAMetalLayer()
-        let engine = RenderFrameEngine(layer: layer,
-                                       avatarSource: StubAvatarSource(),
-                                       markerSource: markerSource,
-                                       sceneModelSource: StubSceneModelSource(),
-                                       styleRuntime: MapStyleRuntime(settings: settings),
-                                       settings: settings,
-                                       renderCamera: FrameCameraStateResolver(settings: settings),
-                                       presentationStateResolver: MapPresentationStateController(settings: settings),
-                                       eventSink: eventSink,
-                                       tileTraceRecorder: TileTraceRecorder(),
-                                       baseLabelTraceRecorder: BaseLabelTraceRecorder(),
-                                       clock: clock)
+        let engine = try RenderFrameEngine(layer: layer,
+                                           avatarSource: StubAvatarSource(),
+                                           markerSource: markerSource,
+                                           sceneModelSource: StubSceneModelSource(),
+                                           styleRuntime: MapStyleRuntime(settings: settings),
+                                           settings: settings,
+                                           renderCamera: FrameCameraStateResolver(settings: settings),
+                                           presentationStateResolver: MapPresentationStateController(settings: settings),
+                                           eventSink: eventSink,
+                                           tileTraceRecorder: TileTraceRecorder(),
+                                           baseLabelTraceRecorder: BaseLabelTraceRecorder(),
+                                           clock: clock)
         layer.drawableSize = CGSize(width: 64, height: 64)
         XCTAssertFalse(layer.presentsWithTransaction,
                        "A fresh layer starts in free-running presentation")

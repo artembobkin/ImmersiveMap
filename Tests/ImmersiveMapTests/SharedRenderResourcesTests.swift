@@ -15,15 +15,15 @@ final class SharedRenderResourcesTests: XCTestCase {
     func testSharedReturnsTheSameInstance() throws {
         try skipUnlessMetalAvailable()
 
-        XCTAssertTrue(SharedRenderResources.shared(sampleCount: 1) === SharedRenderResources.shared(sampleCount: 1))
+        XCTAssertTrue(try SharedRenderResources.shared(sampleCount: 1) === SharedRenderResources.shared(sampleCount: 1))
     }
 
     @MainActor
     func testTwoRendererContextsShareImmutableResources() throws {
         try skipUnlessMetalAvailable()
 
-        let first = makePersistentContext()
-        let second = makePersistentContext()
+        let first = try makePersistentContext()
+        let second = try makePersistentContext()
 
         // The heavyweight resources must be the very same objects.
         XCTAssertTrue(first.textRenderer === second.textRenderer,
@@ -58,27 +58,27 @@ final class SharedRenderResourcesTests: XCTestCase {
     }
 
     @MainActor
-    private func makePersistentContext() -> RenderPersistentContext {
+    private func makePersistentContext() throws -> RenderPersistentContext {
         // A persistent context owns the tile store, and the tile store builds
         // the transport: with the shipped settings this reaches the hosted
         // tile service before a frame is asked for.
         let settings = FixtureTiles.tilelessSettings()
-        return RenderPersistentContext(layer: CAMetalLayer(),
-                                avatarSource: StubAvatarSource(),
-                                markerSource: StubMarkerSource(),
-                                sceneModelSource: StubSceneModelSource(),
-                                styleRuntime: MapStyleRuntime(settings: settings),
-                                config: settings,
-                                eventSink: VideoExportRenderEventSink(),
-                                tileTraceRecorder: TileTraceRecorder(),
-                                baseLabelTraceRecorder: BaseLabelTraceRecorder())
+        return try RenderPersistentContext(layer: CAMetalLayer(),
+                                           avatarSource: StubAvatarSource(),
+                                           markerSource: StubMarkerSource(),
+                                           sceneModelSource: StubSceneModelSource(),
+                                           styleRuntime: MapStyleRuntime(settings: settings),
+                                           config: settings,
+                                           eventSink: VideoExportRenderEventSink(),
+                                           tileTraceRecorder: TileTraceRecorder(),
+                                           baseLabelTraceRecorder: BaseLabelTraceRecorder())
     }
 
     private func skipUnlessMetalAvailable() throws {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw XCTSkip("Metal device is unavailable")
         }
-        guard (try? device.makeDefaultLibrary(bundle: .module)) != nil else {
+        guard (try? device.makeDefaultLibrary(bundle: ImmersiveMapResourceBundle.bundle())) != nil else {
             throw XCTSkip("Compiled Metal library is unavailable in this test environment")
         }
     }
