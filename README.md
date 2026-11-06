@@ -73,10 +73,12 @@ Add ImmersiveMap as a Swift Package dependency:
 https://github.com/artembobkin/ImmersiveMap.git
 ```
 
+The package compiles its Metal shaders with a build plugin, so Xcode asks you to trust it on the first build. On the command line, pass `-skipPackagePluginValidation` to `xcodebuild`.
+
 ## Requirements
 
-- Swift 6.0+
-- Xcode 16+
+- Swift 6.1+
+- Xcode 16.3+
 - iOS 18+
 - macOS 15+
 - Metal-capable device or simulator
