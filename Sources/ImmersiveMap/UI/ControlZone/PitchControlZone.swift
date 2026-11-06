@@ -8,7 +8,7 @@ import UIKit
 
 /// Owns the pitch control zone in the bottom leading corner: a vertical drag
 /// inside it tilts the camera instead of panning the map.
-/// Opt-in through `cameraSettings.controlZones`.
+/// On by default, set through `cameraSettings.controlZones`.
 @MainActor
 final class PitchControlZone {
     private enum Layout {

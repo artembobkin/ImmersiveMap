@@ -4,26 +4,31 @@
 @testable import ImmersiveMap
 import XCTest
 
-/// The corner control zones capture drags that would otherwise pan the map, and
-/// nothing on screen announces them, so they are opt-in. These tests guard the
-/// settings that gate them: the runtime creates the zones straight from here.
+/// The corner control zones drive the camera with one thumb, and they are on by
+/// default: a map on a phone is driven with one hand out of the box. These
+/// tests guard the settings that gate them: the runtime creates the zones
+/// straight from here.
 @MainActor
 final class CameraControlZoneSettingsTests: XCTestCase {
-    func testControlZonesAreOffByDefault() {
+    func testControlZonesAreOnByDefault() {
         let controlZones = ImmersiveMapSettings.default.camera.controlZones
-
-        XCTAssertFalse(controlZones.isPitchZoneEnabled)
-        XCTAssertFalse(controlZones.isZoomZoneEnabled)
-    }
-
-    func testModifierEnablesBothZones() {
-        let controlZones = ImmersiveMapView().cameraControlZones().settings.camera.controlZones
 
         XCTAssertTrue(controlZones.isPitchZoneEnabled)
         XCTAssertTrue(controlZones.isZoomZoneEnabled)
     }
 
-    func testModifierCanEnableASingleZone() {
+    func testModifierTurnsBothZonesOff() {
+        let controlZones = ImmersiveMapView()
+            .cameraControlZones(pitch: false, zoom: false)
+            .settings
+            .camera
+            .controlZones
+
+        XCTAssertFalse(controlZones.isPitchZoneEnabled)
+        XCTAssertFalse(controlZones.isZoomZoneEnabled)
+    }
+
+    func testModifierCanKeepASingleZone() {
         let controlZones = ImmersiveMapView().cameraControlZones(pitch: false).settings.camera.controlZones
 
         XCTAssertFalse(controlZones.isPitchZoneEnabled)

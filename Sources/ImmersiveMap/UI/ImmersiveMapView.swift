@@ -527,15 +527,16 @@ public extension ImmersiveMapView {
         return view
     }
 
-    /// Turns on the invisible one-thumb camera drag zones in the bottom corners:
+    /// The invisible one-thumb camera drag zones in the bottom corners:
     /// dragging in the bottom leading corner tilts the camera, dragging in the
-    /// bottom trailing one zooms. Both are off by default, because a zone
-    /// captures drags that would otherwise pan the map and nothing on screen
-    /// announces it.
+    /// bottom trailing one zooms. Both are on by default. A zone captures the
+    /// drags that would otherwise pan the map there and nothing on screen
+    /// announces it, so turn one off where the corner holds the app's own
+    /// controls.
     ///
     ///     ImmersiveMapView()
-    ///         .cameraControlZones()            // both zones
-    ///         .cameraControlZones(pitch: false) // zoom only
+    ///         .cameraControlZones(pitch: false)            // zoom only
+    ///         .cameraControlZones(pitch: false, zoom: false) // neither
     ///
     /// Touch platforms only; the modifier is accepted and ignored on macOS.
     /// Pointer scroll zoom (trackpad, mouse wheel) is independent of these zones.

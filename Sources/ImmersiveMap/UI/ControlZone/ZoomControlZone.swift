@@ -8,8 +8,8 @@ import UIKit
 
 /// Owns the drag zoom zone in the bottom trailing corner: a vertical drag inside
 /// it changes camera zoom instead of panning the map.
-/// Opt-in through `cameraSettings.controlZones`; pointer scroll zoom lives in
-/// ``ScrollZoomGesture`` and is unaffected by it.
+/// On by default, set through `cameraSettings.controlZones`. Pointer scroll
+/// zoom lives in ``ScrollZoomGesture`` and is unaffected by it.
 @MainActor
 final class ZoomControlZone {
     private enum Layout {

@@ -93,16 +93,18 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     public struct CameraSettings: Equatable, Sendable {
         /// The invisible drag zones in the bottom corners that let one thumb drive
         /// the camera: pitch in the bottom leading corner, zoom in the bottom
-        /// trailing one. Both are off by default, because a zone captures drags that
-        /// would otherwise pan the map, and nothing on screen announces it, so an
-        /// app opts in only when it wants one-handed camera control.
+        /// trailing one. Both are on by default, so a map on a phone is driven
+        /// with one hand out of the box. A zone captures the drags that would
+        /// otherwise pan the map there, and nothing on screen announces it:
+        /// turn a zone off (`cameraControlZones(pitch:zoom:)`) where the
+        /// corner belongs to the app's own controls.
         /// Touch platforms only; ignored on macOS.
         public struct ControlZoneSettings: Equatable, Sendable {
             public var isPitchZoneEnabled: Bool
             public var isZoomZoneEnabled: Bool
 
-            public init(isPitchZoneEnabled: Bool = false,
-                        isZoomZoneEnabled: Bool = false) {
+            public init(isPitchZoneEnabled: Bool = true,
+                        isZoomZoneEnabled: Bool = true) {
                 self.isPitchZoneEnabled = isPitchZoneEnabled
                 self.isZoomZoneEnabled = isZoomZoneEnabled
             }
