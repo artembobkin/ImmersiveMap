@@ -25,7 +25,7 @@ CI (`.github/workflows/ci.yml`) runs on the `macos-26` image, whose default Xcod
 
 The picture tests (an offscreen frame judged by its pixels) are skipped by default and are never run in CI. To run them once by hand, set `IMMERSIVE_MAP_RUN_PICTURE_TESTS=1` (with the `TEST_RUNNER_` prefix for xcodebuild). Never write new ones, see `.claude/rules/tests.md`.
 
-To run the map in an app, open `ImmersiveMap.xcworkspace` and run `Develop/ImmersiveMapDevMac`, the scratch app of the work in progress. There are no example apps in the repository, on purpose: the doc comments on the public API are the reference, and `Develop/` is the only app.
+To run the map in an app, open `ImmersiveMap.xcworkspace` and run `Develop/ImmersiveMapDevMac`, the scratch app of the work in progress, or `Develop/ImmersiveMapDevIOS`, its iOS counterpart for a simulator or a device. There are no example apps in the repository, on purpose: the doc comments on the public API are the reference, and `Develop/` is the only app.
 
 ## Architecture
 
@@ -33,7 +33,7 @@ A folder's boundary rules, what it owns and what it must not contain, are in the
 
 ### Targets
 
-The package follows the standard SwiftPM layout (`Sources/<Target>`, `Tests/<Target>Tests`), so `Package.swift` states no paths. There are two products: `ImmersiveMap`, the engine, and `ImmersiveMapDebug`, the debug panel, linked by `Develop/ImmersiveMapDevMac` and the tests and never by a shipping app, which carries nothing of it. Besides them there are five targets at `package` access, visible to every target of the package and to no app that links a product:
+The package follows the standard SwiftPM layout (`Sources/<Target>`, `Tests/<Target>Tests`), so `Package.swift` states no paths. There are two products: `ImmersiveMap`, the engine, and `ImmersiveMapDebug`, the debug panel, linked by the `Develop/` apps and the tests and never by a shipping app, which carries nothing of it. Besides them there are five targets at `package` access, visible to every target of the package and to no app that links a product:
 
 - `ImmersiveMapDebug` (`Sources/ImmersiveMapDebug`): the debug panel over the map, `ImmersiveMapDebugPanel.hud`, installed with `ImmersiveMapView.debugPanel(.hud)`. The engine keeps no panel of its own: it holds what a panel reads and drags (`DebugOverlayControlState`, `DebugOverlayHUDSnapshotStore`, under `Render/Debug`) and the slot a panel fills (`ImmersiveMapDebugPanel`, `ImmersiveMapDebugPanelHost`, `ImmersiveMapDebugPanelRuntime` in `UI/Controllers/ImmersiveMapDebugPanel.swift`, at `package` access), and `Panel/` here fills it: the HUD views of each platform, the zoom badge, the planners that turn a dragged control into settings, the settings export, and the runtime that wires them (`ImmersiveMapDebugOverlayRuntime`). Everything of the engine the panel reads is marked `package`, never `public`, so a type the panel needs is opened to the package and not to the apps. The engine never reaches into this target, and nothing here draws into the frame: the in-frame overlay (`DebugOverlayRenderer`, the tile grid) is still the engine's, under `Render/Debug`.
 

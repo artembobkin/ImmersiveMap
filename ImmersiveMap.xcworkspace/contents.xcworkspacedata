@@ -20,5 +20,8 @@
       <FileRef
          location = "group:Develop/ImmersiveMapDevMac/ImmersiveMapDevMac.xcodeproj">
       </FileRef>
+      <FileRef
+         location = "group:Develop/ImmersiveMapDevIOS/ImmersiveMapDevIOS.xcodeproj">
+      </FileRef>
    </Group>
 </Workspace>
