@@ -2351,16 +2351,18 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         // streets at the skyline.
         camera: CameraSettings(maximumPitch: Float.pi * 17.0 / 36.0,
                                minimumZoom: 0.0,
-                               // Two levels past the deepest tile: closer in,
-                               // the tiles' detail is blown up past what it
-                               // was drawn for. The flattened ground
-                               // (`TileSettings.GroundFlatteningSettings`)
-                               // keeps the near ground whole at any depth.
-                               // A layered ground's rank depth holds a level
-                               // past the tiles' zoom (Tile.metal): deeper, a
-                               // street tilt can drop blocks of the near
-                               // ground.
-                               maximumZoom: 18.0,
+                               // Five levels past the deepest tile (15), close
+                               // enough to stand among the trees and read the
+                               // facades. The tiles' detail is blown up there
+                               // past what it was drawn for. The flattened
+                               // ground (`TileSettings.GroundFlatteningSettings`,
+                               // on by default) keeps the near ground whole at
+                               // any depth. A layered ground's rank depth holds
+                               // a level past the tiles' zoom (Tile.metal), so
+                               // with the flattening off a street tilt this deep
+                               // can drop blocks of the near ground: a map that
+                               // turns the flattening off lowers this with it.
+                               maximumZoom: 20.0,
                                focusedMarkerZoom: 15.25,
                                highZoomPitchExtension: 0,
                                highZoomPitchExtensionStartZoom: 15.0,
