@@ -94,6 +94,79 @@ final class AttributionBadgeLayoutMathTests: XCTestCase {
         XCTAssertEqual(size.width, ceil(120 + metrics.horizontalInset * 2))
     }
 
+    /// A map under the safe area, as `.ignoresSafeArea()` lays it out on an
+    /// iPhone: a bottom badge sits on the bottom edge by default, moved in
+    /// from the sides by the bottom inset, clear of the rounded corners.
+    func testABottomBadgeSitsOnTheBottomEdgeByDefault() {
+        let phone = PlatformEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
+        let insets = AttributionBadgeLayoutMath.badgeInsets(safeAreaInsets: phone,
+                                                            position: .bottomTrailing,
+                                                            respectsBottomSafeArea: false)
+        XCTAssertEqual(insets.bottom, 0)
+        XCTAssertEqual(insets.left, 34)
+        XCTAssertEqual(insets.right, 34)
+        XCTAssertEqual(insets.top, 59)
+
+        let bounds = CGRect(x: 0, y: 0, width: 402, height: 874)
+        let frame = AttributionBadgeLayoutMath.badgeFrame(badgeSize: badgeSize,
+                                                          position: .bottomTrailing,
+                                                          bounds: bounds,
+                                                          safeAreaInsets: insets,
+                                                          margin: 0,
+                                                          isRightToLeft: false)
+        XCTAssertEqual(frame.maxY, bounds.maxY, "the very bottom of the screen")
+        XCTAssertEqual(frame.maxX, bounds.maxX - 34)
+    }
+
+    /// Respecting the bottom safe area, and every top position, keeps the
+    /// view's insets as they are. A side inset larger than the bottom one,
+    /// a phone in landscape, is kept too.
+    func testTheSafeAreaIsKeptWhereTheBadgeRespectsItOrSitsAtTheTop() {
+        let phone = PlatformEdgeInsets(top: 59, left: 0, bottom: 34, right: 0)
+        let respected = AttributionBadgeLayoutMath.badgeInsets(safeAreaInsets: phone,
+                                                               position: .bottomCenter,
+                                                               respectsBottomSafeArea: true)
+        XCTAssertEqual(respected.bottom, 34)
+        XCTAssertEqual(respected.left, 0)
+
+        let top = AttributionBadgeLayoutMath.badgeInsets(safeAreaInsets: phone,
+                                                         position: .topLeading,
+                                                         respectsBottomSafeArea: false)
+        XCTAssertEqual(top.bottom, 34)
+        XCTAssertEqual(top.top, 59)
+
+        let landscape = PlatformEdgeInsets(top: 0, left: 59, bottom: 21, right: 59)
+        let sides = AttributionBadgeLayoutMath.badgeInsets(safeAreaInsets: landscape,
+                                                           position: .bottomLeading,
+                                                           respectsBottomSafeArea: false)
+        XCTAssertEqual(sides.left, 59)
+        XCTAssertEqual(sides.right, 59)
+        XCTAssertEqual(sides.bottom, 0)
+    }
+
+    /// A map inside the safe area has no bottom inset: nothing moves.
+    func testAMapInsideTheSafeAreaKeepsItsInsets() {
+        let inside = PlatformEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
+        let insets = AttributionBadgeLayoutMath.badgeInsets(safeAreaInsets: inside,
+                                                            position: .bottomTrailing,
+                                                            respectsBottomSafeArea: false)
+        XCTAssertEqual(insets.left, 0)
+        XCTAssertEqual(insets.right, 0)
+        XCTAssertEqual(insets.bottom, 0)
+    }
+
+    /// The modifier sets the setting and leaves the rest of the badge alone.
+    func testTheModifierSetsTheBottomSafeArea() {
+        XCTAssertFalse(ImmersiveMapSettings.default.attribution.respectsBottomSafeArea)
+        let settings = ImmersiveMapView()
+            .attributionSettings(position: .bottomCenter)
+            .attributionSettings(respectsBottomSafeArea: true)
+            .settings
+            .attribution
+        XCTAssertTrue(settings.respectsBottomSafeArea)
+        XCTAssertEqual(settings.position, .bottomCenter)
+    }
+
     /// A line longer than the width it is given fills that width, and the
     /// label cuts it: the line may run along the whole edge of the map and
     /// no further.

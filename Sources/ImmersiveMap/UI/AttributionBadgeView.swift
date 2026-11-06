@@ -159,8 +159,11 @@ final class AttributionBadgeView: UIView {
         UIApplication.shared.open(linkURL)
     }
 
-    func layout(in bounds: CGRect, safeAreaInsets: UIEdgeInsets) {
-        lastLayout = (bounds, safeAreaInsets)
+    func layout(in bounds: CGRect, safeAreaInsets viewSafeAreaInsets: UIEdgeInsets) {
+        lastLayout = (bounds, viewSafeAreaInsets)
+        let safeAreaInsets = AttributionBadgeLayoutMath.badgeInsets(safeAreaInsets: viewSafeAreaInsets,
+                                                                    position: position,
+                                                                    respectsBottomSafeArea: settings.respectsBottomSafeArea)
         let availableWidth = AttributionBadgeLayoutMath.availableWidth(bounds: bounds,
                                                                        safeAreaInsets: safeAreaInsets,
                                                                        margin: margin)

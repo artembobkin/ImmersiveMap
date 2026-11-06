@@ -2046,7 +2046,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             case large
         }
 
-        /// Where the badge sits inside the map view, inset by the safe area.
+        /// Where the badge sits inside the map view, inset by the safe area
+        /// (the bottom one only with `respectsBottomSafeArea`).
         /// Leading/trailing follow the view's layout direction.
         public enum Position: String, CaseIterable, Equatable, Sendable {
             case bottomTrailing
@@ -2064,6 +2065,16 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// after the safe area). 0, the default, pins the badge tightly into
         /// its corner; raise it to float the badge over the map.
         public var margin: Double
+        /// Whether a badge at the bottom stays above the view's bottom safe
+        /// area, the home indicator's on an iPhone. Off, the default, it sits
+        /// at the map view's bottom edge: the very bottom of the screen for a
+        /// map that runs under the safe area (`.ignoresSafeArea()`), moved in
+        /// from the sides by the bottom safe area's height so the screen's
+        /// rounded corners do not cut the line. A map inside the safe area
+        /// has no bottom inset, and the badge sits where it always did. Turn
+        /// it on to keep the line clear of the home indicator. The top and
+        /// side safe areas are always kept.
+        public var respectsBottomSafeArea: Bool
         /// Badge text color as RGBA in `0...1` (same convention as
         /// `AvatarSettings.borderColor`); `nil` keeps the default white.
         /// The line renders at the given alpha, so a translucent badge is
@@ -2090,6 +2101,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     size: Size = .regular,
                     position: Position = .bottomTrailing,
                     margin: Double = 0,
+                    respectsBottomSafeArea: Bool = false,
                     textColor: SIMD4<Float>? = nil,
                     emphasizesLeadingCredit: Bool = false,
                     isProvidedExternally: Bool = false,
@@ -2099,6 +2111,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.size = size
             self.position = position
             self.margin = margin
+            self.respectsBottomSafeArea = respectsBottomSafeArea
             self.textColor = textColor
             self.emphasizesLeadingCredit = emphasizesLeadingCredit
             self.isProvidedExternally = isProvidedExternally
@@ -3147,6 +3160,7 @@ public extension ImmersiveMapSettings {
                              size: AttributionSettings.Size? = nil,
                              position: AttributionSettings.Position? = nil,
                              margin: Double? = nil,
+                             respectsBottomSafeArea: Bool? = nil,
                              textColor: SIMD4<Float>? = nil,
                              emphasizesLeadingCredit: Bool? = nil,
                              isProvidedExternally: Bool? = nil,
@@ -3166,6 +3180,9 @@ public extension ImmersiveMapSettings {
         }
         if let margin {
             attribution.margin = margin
+        }
+        if let respectsBottomSafeArea {
+            attribution.respectsBottomSafeArea = respectsBottomSafeArea
         }
         if let textColor {
             attribution.textColor = textColor

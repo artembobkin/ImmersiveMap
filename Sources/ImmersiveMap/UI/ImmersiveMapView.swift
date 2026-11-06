@@ -1535,10 +1535,15 @@ public extension ImmersiveMapView {
     ///
     ///     ImmersiveMapView()
     ///         .attributionSettings(size: .large, position: .topLeading)
+    ///
+    /// `respectsBottomSafeArea: true` keeps a bottom badge above the home
+    /// indicator of a map that runs under the safe area. By default it sits
+    /// at the very bottom (`AttributionSettings.respectsBottomSafeArea`).
     public func attributionSettings(isVisible: Bool? = nil,
                                     size: ImmersiveMapSettings.AttributionSettings.Size? = nil,
                                     position: ImmersiveMapSettings.AttributionSettings.Position? = nil,
                                     margin: Double? = nil,
+                                    respectsBottomSafeArea: Bool? = nil,
                                     textColor: SIMD4<Float>? = nil,
                                     emphasizesLeadingCredit: Bool? = nil,
                                     isProvidedExternally: Bool? = nil,
@@ -1548,6 +1553,7 @@ public extension ImmersiveMapView {
                                                           size: size,
                                                           position: position,
                                                           margin: margin,
+                                                          respectsBottomSafeArea: respectsBottomSafeArea,
                                                           textColor: textColor,
                                                           emphasizesLeadingCredit: emphasizesLeadingCredit,
                                                           isProvidedExternally: isProvidedExternally,

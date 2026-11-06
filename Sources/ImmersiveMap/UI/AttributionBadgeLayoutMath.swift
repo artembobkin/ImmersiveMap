@@ -36,6 +36,33 @@ enum AttributionBadgeLayoutMath {
         }
     }
 
+    /// The insets the badge keeps from the view's edges, from the view's
+    /// safe area. A badge at the bottom that does not respect the bottom
+    /// safe area (`AttributionSettings.respectsBottomSafeArea`) sits at the
+    /// bottom edge, and moves in from each side by at least the bottom
+    /// inset: a screen with a home indicator has rounded corners, and that
+    /// much keeps them from cutting the line. A view with no bottom inset
+    /// keeps its insets as they are.
+    static func badgeInsets(safeAreaInsets: PlatformEdgeInsets,
+                            position: ImmersiveMapSettings.AttributionSettings.Position,
+                            respectsBottomSafeArea: Bool) -> PlatformEdgeInsets {
+        let isBottom: Bool
+        switch position {
+        case .bottomLeading, .bottomTrailing, .bottomCenter:
+            isBottom = true
+        case .topLeading, .topTrailing, .topCenter:
+            isBottom = false
+        }
+        guard isBottom, respectsBottomSafeArea == false, safeAreaInsets.bottom > 0 else {
+            return safeAreaInsets
+        }
+        var insets = safeAreaInsets
+        insets.left = max(insets.left, safeAreaInsets.bottom)
+        insets.right = max(insets.right, safeAreaInsets.bottom)
+        insets.bottom = 0
+        return insets
+    }
+
     /// Width the badge may occupy: bounds minus safe area minus the margin
     /// on both sides. The margin is the app-configured distance between the
     /// badge and the view edges; 0, the default, pins the badge into its
