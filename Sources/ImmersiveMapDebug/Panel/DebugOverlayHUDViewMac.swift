@@ -147,6 +147,13 @@ final class DebugOverlayHUDView: NSView {
     private let localLabelDistanceSlider = NSSlider()
     private let labelMinimumScaleLabel = NSTextField(labelWithString: "")
     private let labelMinimumScaleSlider = NSSlider()
+    /// The names' and the POIs' opacity over the zoom
+    /// (`ImmersiveMapLabelOpacity`), each on a graph of its own.
+    private let labelNamesOpacityLabel = NSTextField(labelWithString: "")
+    private let labelNamesOpacityGraph = DebugOverlayZoomCurveView()
+    private let labelPoisOpacityLabel = NSTextField(labelWithString: "")
+    private let labelPoisOpacityGraph = DebugOverlayZoomCurveView()
+    private var labelOpacity = ImmersiveMapLabelOpacity()
 
     /// How far a distant label may shrink, as a fraction of its size.
     private static let labelMinimumScaleRange: ClosedRange<Double> = 0.3...1
@@ -477,6 +484,8 @@ final class DebugOverlayHUDView: NSView {
     var onLocalLabelDistanceChanged: ((Float) -> Void)?
     /// The labels' shrink floor, on every drag.
     var onLabelMinimumScaleChanged: ((Float) -> Void)?
+    /// The names' and the POIs' opacity curves, on every drag.
+    var onLabelOpacityChanged: ((ImmersiveMapLabelOpacity) -> Void)?
     /// The hillshade's fade dragged to, metres from the eye by the zoom.
     var onHillshadeFadeChanged: ((GroundReliefHillshade.Fade) -> Void)?
     /// The hillshade's amounts dragged to.
@@ -571,6 +580,10 @@ final class DebugOverlayHUDView: NSView {
         configureSlider(labelMinimumScaleSlider,
                         range: Self.labelMinimumScaleRange,
                         action: #selector(labelMinimumScaleSliderChanged))
+        configureControlLabel(labelNamesOpacityLabel, text: "")
+        configureControlLabel(labelPoisOpacityLabel, text: "")
+        configureLabelOpacityGraph(labelNamesOpacityGraph, keyPath: \.names)
+        configureLabelOpacityGraph(labelPoisOpacityGraph, keyPath: \.pois)
         configureSlider(localLabelDistanceSlider,
                         range: Self.localLabelDistanceRange,
                         action: #selector(localLabelDistanceSliderChanged))
@@ -904,6 +917,8 @@ final class DebugOverlayHUDView: NSView {
          roadLabelBoundsLabel, roadLabelBoundsSwitch,
          localLabelDistanceLabel, localLabelDistanceSlider,
          labelMinimumScaleLabel, labelMinimumScaleSlider,
+         labelNamesOpacityLabel, labelNamesOpacityGraph,
+         labelPoisOpacityLabel, labelPoisOpacityGraph,
          shadowsGroupLabel, shadowsEnabledLabel, shadowsEnabledSwitch,
          shadowGraphHint,
          shadowStrengthLabel, shadowStrengthGraph,
@@ -1006,6 +1021,7 @@ final class DebugOverlayHUDView: NSView {
             updateModelControls()
             updateShadowControls()
             updateHillshadeFadeControls()
+            updateLabelOpacityControls()
         }
         updateText()
         updateVisibility()
@@ -1714,6 +1730,11 @@ final class DebugOverlayHUDView: NSView {
         cursor = layoutSwitchRow(roadLabelBoundsLabel, roadLabelBoundsSwitch, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(localLabelDistanceLabel, localLabelDistanceSlider, at: cursor, contentWidth: contentWidth)
         cursor = layoutControlRow(labelMinimumScaleLabel, labelMinimumScaleSlider, at: cursor, contentWidth: contentWidth)
+        for (label, graph) in [(labelNamesOpacityLabel, labelNamesOpacityGraph),
+                               (labelPoisOpacityLabel, labelPoisOpacityGraph)] {
+            cursor = layoutFullWidthRow(label, at: cursor, contentWidth: contentWidth, height: Layout.graphTitleHeight)
+            cursor = layoutFullWidthRow(graph, at: cursor, contentWidth: contentWidth, height: Layout.graphHeight)
+        }
         cursor = layoutFullWidthRow(baseLabelTraceButton, at: cursor, contentWidth: contentWidth, height: Layout.controlRowHeight)
         cursor = layoutFullWidthRow(baseLabelTraceStatusLabel, at: cursor, contentWidth: contentWidth, height: Layout.traceStatusHeight)
         cursor += Layout.groupSpacing
@@ -2224,6 +2245,33 @@ final class DebugOverlayHUDView: NSView {
         }
     }
 
+    private func configureLabelOpacityGraph(_ graph: DebugOverlayZoomCurveView,
+                                            keyPath: WritableKeyPath<ImmersiveMapLabelOpacity, ImmersiveMapZoomCurve>) {
+        graph.axes = DebugOverlayLabelOpacitySettingsPlanner.opacityAxes
+        graph.valueText = DebugOverlayLabelOpacitySettingsPlanner.opacityText
+        graph.onChange = { [weak self] curve in
+            guard let self else { return }
+            var opacity = labelOpacity
+            opacity[keyPath: keyPath] = curve
+            labelOpacity = opacity
+            updateLabelOpacityControls()
+            onLabelOpacityChanged?(opacity)
+        }
+    }
+
+    private func updateLabelOpacityControls() {
+        let zoom = groundFogCameraZoom
+        labelNamesOpacityLabel.stringValue = DebugOverlayLabelOpacitySettingsPlanner.namesTitle(labelOpacity.names,
+                                                                                                cameraZoom: zoom)
+        labelPoisOpacityLabel.stringValue = DebugOverlayLabelOpacitySettingsPlanner.poisTitle(labelOpacity.pois,
+                                                                                              cameraZoom: zoom)
+        for (graph, curve) in [(labelNamesOpacityGraph, labelOpacity.names),
+                               (labelPoisOpacityGraph, labelOpacity.pois)] {
+            graph.curve = curve
+            graph.cameraZoom = zoom
+        }
+    }
+
     private func configureHillshadeFadeGraph(_ graph: DebugOverlayZoomCurveView,
                                              keyPath: WritableKeyPath<GroundReliefHillshade.Fade, ImmersiveMapZoomCurve>) {
         graph.axes = DebugOverlayShadowSettingsPlanner.hillshadeFadeAxes
@@ -2585,6 +2633,14 @@ final class DebugOverlayHUDView: NSView {
 
     /// The hillshade's fade, as the map runs with it: the panel's own once
     /// dragged, the style's before.
+    /// The names' and the POIs' opacity curves, the panel's drag or the
+    /// style's.
+    func apply(labelOpacity opacity: ImmersiveMapLabelOpacity) {
+        guard opacity != labelOpacity else { return }
+        labelOpacity = opacity
+        updateLabelOpacityControls()
+    }
+
     func apply(hillshadeFade fade: GroundReliefHillshade.Fade) {
         guard fade != hillshadeFade else { return }
         hillshadeFade = fade

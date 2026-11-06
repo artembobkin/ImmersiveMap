@@ -532,6 +532,8 @@ enum PreparedTileDiskCodec {
         let emboldenPoints: Float
         let letterSpacingEm: Float
         let opacity: Float
+        let haloSoftness: Float
+        let isPointOfInterest: Bool
         /// The colours on the globe, absent where the style states none.
         let sphereFillColor: [Float]?
         let sphereStrokeColor: [Float]?
@@ -547,6 +549,8 @@ enum PreparedTileDiskCodec {
             self.emboldenPoints = style.emboldenPoints
             self.letterSpacingEm = style.letterSpacingEm
             self.opacity = style.opacity
+            self.haloSoftness = style.haloSoftness
+            self.isPointOfInterest = style.isPointOfInterest
             self.sphereFillColor = style.sphereFillColor.map { [$0.x, $0.y, $0.z] }
             self.sphereStrokeColor = style.sphereStrokeColor.map { [$0.x, $0.y, $0.z] }
         }
@@ -570,6 +574,8 @@ enum PreparedTileDiskCodec {
                                   emboldenPoints: emboldenPoints,
                                   letterSpacingEm: letterSpacingEm,
                                   opacity: opacity,
+                                  haloSoftness: haloSoftness,
+                                  isPointOfInterest: isPointOfInterest,
                                   sphereFillColor: sphereFillColor.map { SIMD3<Float>($0[0], $0[1], $0[2]) },
                                   sphereStrokeColor: sphereStrokeColor.map { SIMD3<Float>($0[0], $0[1], $0[2]) })
         }

@@ -80,6 +80,10 @@ public protocol ImmersiveMapVectorTileStyle: Sendable {
     /// time, not part of the cache fingerprint. The default is the
     /// built-in theme's.
     var treePalette: ImmersiveMapTreePalette { get }
+    /// How opaque the names and the POIs are by the zoom, over each
+    /// label's own opacity. Drawn at frame time, not part of the cache
+    /// fingerprint. The default is the built-in theme's.
+    var labelOpacity: ImmersiveMapLabelOpacity { get }
     /// The style's identity: the namespace its label identities are minted
     /// in, so two styles never share a label across tiles. The default is
     /// one shared namespace for styles that state none.
@@ -118,6 +122,10 @@ public extension ImmersiveMapVectorTileStyle {
 
     var treePalette: ImmersiveMapTreePalette {
         ProtomapsBasemapTheme.default.treePalette
+    }
+
+    var labelOpacity: ImmersiveMapLabelOpacity {
+        ProtomapsBasemapTheme.default.labelOpacity
     }
 
     var styleID: String {

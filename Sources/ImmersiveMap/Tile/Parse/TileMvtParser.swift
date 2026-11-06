@@ -258,8 +258,12 @@ final class TileMvtParser {
                                     tools: tools,
                                     into: &result)
                 } else if feature.type == .point {
-                    // Point features exist only to be labelled: with labels
-                    // off the layer is skipped whole, decision engine included.
+                    // A mapped tree stands where it is, labels or not.
+                    if case .tree(let tree) = style {
+                        treeReader.collect(points: layerGeometry.points(of: feature), tree: tree, tile: tile, into: &result)
+                        continue
+                    }
+                    // Every other point exists only to be labelled.
                     guard options.labelsEnabled, case .pointLabel(let label) = style else { continue }
                     labelReader.read(feature: feature,
                                      facts: facts,
@@ -465,7 +469,7 @@ final class TileMvtParser {
             // polygons.
             guard line.fillsAreas else { return }
             appendGroundPolygons(polygons, pass: line.pass, placement: line.placement, tile: tile, tools: tools, into: &result)
-        case .pointLabel, .hidden:
+        case .pointLabel, .tree, .hidden:
             return
         }
     }

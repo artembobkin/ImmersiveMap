@@ -460,6 +460,10 @@ final class RenderFrameEngine {
             // Settled: every feature of the frame reads this one relief.
             services.groundRelief = groundRelief.frame
         }
+        // How opaque the names and the POIs are at the zoom the labels are
+        // planned by: the style's curves, or the debug panel's over them.
+        services.labelOpacity = (debugOverlayControls.labelOpacity() ?? persistentContext.labelOpacity)
+            .frame(atZoom: cameraFrameState.planningZoom)
         // Mountains or a plain around the point the camera looks at, read
         // off the terrain now that the frame knows whether it is on it. A
         // few dozen height lookups on the CPU, nil off the terrain.

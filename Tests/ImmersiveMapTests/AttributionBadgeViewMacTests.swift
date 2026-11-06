@@ -20,7 +20,8 @@ final class AttributionBadgeViewMacTests: XCTestCase {
     /// One line, every credit on it before the camera is placed, the
     /// terrain's included, each glyph in a dark halo.
     func testTheBadgeIsOneLineOfCredits() throws {
-        let settings = ImmersiveMapSettings.default
+        // The relief on, so the terrain's credit is on the line too.
+        let settings = ImmersiveMapSettings.default.groundRelief(isEnabled: true)
         let view = AttributionBadgeView(attribution: settings.resolvedAttribution,
                                         settings: settings.attribution)
 
@@ -65,7 +66,8 @@ final class AttributionBadgeViewMacTests: XCTestCase {
     /// at the zooms the relief rises at, and the badge narrows with the
     /// line.
     func testACreditLeavesTheLineWithTheZoom() {
-        let settings = ImmersiveMapSettings.default
+        // The relief on, so the terrain's credit is on the line too.
+        let settings = ImmersiveMapSettings.default.groundRelief(isEnabled: true)
         let view = AttributionBadgeView(attribution: settings.resolvedAttribution,
                                         settings: settings.attribution)
 

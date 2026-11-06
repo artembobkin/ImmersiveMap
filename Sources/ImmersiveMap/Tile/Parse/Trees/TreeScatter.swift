@@ -14,6 +14,12 @@ import simd
 /// fill, inside the tile, on no building's footprint and off every road
 /// of the ground by the fill's clearance (`TreeFillStyle.roadClearanceMetres`).
 ///
+/// A tree the data maps at a point (`TreePointStyle`) stands there as it
+/// is, on no lattice and kept off nothing, sized and turned by a hash of
+/// its place on the lattice's zoom, so it is the same tree in every parse.
+/// No scattered tree stands within its crown
+/// (`TreePointStyle.crownClearanceMetres`).
+///
 /// Every tree draws a priority from its hash, and a tile's trees are
 /// sorted by it, so the frame thins a tile by drawing the first of them,
 /// and a tile that keeps at most `maximumCount` keeps the first too: what
@@ -58,6 +64,12 @@ enum TreeScatter {
         let interiors: [[SIMD2<Float>]]
     }
 
+    /// A tree the data maps, at its point in tile space.
+    struct MappedTree {
+        let tilePoint: SIMD2<Float>
+        let style: TreePointStyle
+    }
+
     /// What the trees keep off: the footprints and the roads.
     struct Obstacles {
         var footprints: [Footprint] = []
@@ -68,13 +80,15 @@ enum TreeScatter {
     /// centre, each way: never at the edge, so two neighbours never touch.
     private static let jitterSpan: Float = 0.8
 
-    /// The trees of `areas` in `tile`, sorted by priority and cut at
-    /// `maximumCount`, off `obstacles`.
+    /// The trees of `areas` and the `mapped` ones in `tile`, sorted by
+    /// priority and cut at `maximumCount`, the scattered ones off
+    /// `obstacles` and off the mapped trees' crowns.
     static func scatter(areas: [Area],
+                        mapped: [MappedTree] = [],
                         tile: Tile,
                         obstacles: Obstacles,
                         maximumCount: Int) -> [TreeInstance] {
-        guard areas.isEmpty == false, maximumCount > 0 else { return [] }
+        guard areas.isEmpty == false || mapped.isEmpty == false, maximumCount > 0 else { return [] }
         let extent = TileCoordinateSpace.tileExtent
         // The scale at the latitude of the tile's ancestor on the
         // coverage's grid (`latitudeZoom`): the Web-Mercator metre,
@@ -95,6 +109,25 @@ enum TreeScatter {
                                           roadWidthScale: Float(1 / latticePerTileUnit),
                                           maximumClearance: clearances.max() ?? 0)
         var candidates: [(priority: Float, instance: TreeInstance)] = []
+        // The mapped trees first, where they stand: a hash of the lattice
+        // point they lie on turns, tints and sizes each, as a cell's hash
+        // does a scattered tree.
+        let crowns = CrownIndex(mapped: mapped, unitsPerMetre: unitsPerMetre)
+        for tree in mapped {
+            let latticePoint = latticeOrigin + SIMD2<Double>(tree.tilePoint) * latticePerTileUnit
+            let hash = Self.hash(UInt32(truncatingIfNeeded: Int64(latticePoint.x.rounded(.down))),
+                                 UInt32(truncatingIfNeeded: Int64(latticePoint.y.rounded(.down))),
+                                 Self.mappedSalt)
+            let second = Self.hash(hash, 0x9E37_79B9, Self.mappedSalt)
+            let size = Float(second & 0xFFFF) / 65535
+            let height = tree.style.minimumHeightMetres
+                + (tree.style.maximumHeightMetres - tree.style.minimumHeightMetres) * size
+            candidates.append((priority: Float((second >> 16) & 0xFFFF) / 65535,
+                               instance: TreeInstance(position: TileCoordinateSpace.renderPoint(tree.tilePoint),
+                                                      height: height * unitsPerMetre,
+                                                      rotation: Float(hash >> 24) / 255,
+                                                      tint: Float((hash >> 16) & 0xFF) / 255)))
+        }
         for (areaIndex, area) in areas.enumerated() {
             let cell = area.style.spacingMetres * unitsPerMetreAtLattice
             guard cell > 0, cell.isFinite else { continue }
@@ -133,7 +166,8 @@ enum TreeScatter {
                         guard tilePoint.x >= 0, tilePoint.x < extent, tilePoint.y >= 0, tilePoint.y < extent,
                               Self.contains(tilePoint, exterior: exterior, interiors: interiors) else { continue }
                         let renderPoint = TileCoordinateSpace.renderPoint(tilePoint)
-                        guard obstacleIndex.covers(renderPoint, roadClearance: clearance) == false else { continue }
+                        guard obstacleIndex.covers(renderPoint, roadClearance: clearance) == false,
+                              crowns.covers(tilePoint) == false else { continue }
                         let second = Self.hash(hash, 0x9E37_79B9, salt)
                         let size = Float(second & 0xFFFF) / 65535
                         let height = area.style.minimumHeightMetres
@@ -151,6 +185,50 @@ enum TreeScatter {
             lhs.priority < rhs.priority || (lhs.priority == rhs.priority && lhs.instance.packed < rhs.instance.packed)
         }
         return candidates.prefix(maximumCount).map(\.instance)
+    }
+
+    /// The salt of the mapped trees' hashes, apart from every fill's lattice.
+    private static let mappedSalt: UInt32 = 0x7EE5_0001
+
+    /// The mapped trees' crowns, in tile space, bucketed over the tile so a
+    /// scattered tree asks only the crowns near it.
+    private struct CrownIndex {
+        private static let gridSize = 32
+        private let buckets: [[(centre: SIMD2<Float>, radius: Float)]]
+
+        init(mapped: [MappedTree], unitsPerMetre: Float) {
+            var buckets: [[(centre: SIMD2<Float>, radius: Float)]] =
+                Array(repeating: [], count: Self.gridSize * Self.gridSize)
+            for tree in mapped {
+                let radius = tree.style.crownClearanceMetres * unitsPerMetre
+                guard radius > 0 else { continue }
+                let reach = SIMD2<Float>(repeating: radius)
+                let start = Self.bucket(of: tree.tilePoint - reach)
+                let end = Self.bucket(of: tree.tilePoint + reach)
+                for y in start.y...end.y {
+                    for x in start.x...end.x {
+                        buckets[y * Self.gridSize + x].append((tree.tilePoint, radius))
+                    }
+                }
+            }
+            self.buckets = buckets
+        }
+
+        private static func bucket(of point: SIMD2<Float>) -> (x: Int, y: Int) {
+            let scale = Float(gridSize) / TileCoordinateSpace.tileExtent
+            return (min(max(Int(point.x * scale), 0), gridSize - 1),
+                    min(max(Int(point.y * scale), 0), gridSize - 1))
+        }
+
+        /// Whether a point lies within a mapped tree's crown.
+        func covers(_ point: SIMD2<Float>) -> Bool {
+            let bucket = Self.bucket(of: point)
+            for crown in buckets[bucket.y * Self.gridSize + bucket.x]
+            where simd_length_squared(point - crown.centre) < crown.radius * crown.radius {
+                return true
+            }
+            return false
+        }
     }
 
     /// A 32-bit mix of a cell and a salt: the one source of every tree's

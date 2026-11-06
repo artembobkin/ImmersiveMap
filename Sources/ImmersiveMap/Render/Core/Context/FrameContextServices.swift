@@ -26,4 +26,9 @@ struct FrameContextServices {
     /// labels and the shadows rise by (`GroundReliefFrame`), nil while it
     /// is off.
     var groundRelief: GroundReliefFrame? = nil
+    /// How opaque the names and the POIs are this frame, the style's
+    /// curves or the debug panel's over them, read at the planning zoom
+    /// (`ImmersiveMapLabelOpacity`). Every label drawer multiplies a
+    /// label's own opacity by it.
+    var labelOpacity: LabelOpacityFrame = .solid
 }

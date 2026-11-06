@@ -36,6 +36,9 @@ struct ReadingStageResult {
     /// the fills no tree stands on (`FillStyle.excludesTrees`).
     var treeRoads: [TreeScatter.Road] = []
     var treeExcludedFills: [TreeScatter.Footprint] = []
+    /// The trees the data maps at points (`TreePointStyle`), gathered with
+    /// the fills and planted with their trees.
+    var mappedTrees: [TreeScatter.MappedTree] = []
     /// The tile's trees, sorted by priority (`TreeScatter`).
     var trees: [TreeInstance] = []
     var textLabels: [ParsedTextLabel] = []

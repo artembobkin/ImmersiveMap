@@ -1019,7 +1019,16 @@ final class PreparedTileDiskCaching {
     // 161: a road's width keeps the trees off at one width on the ground
     // whatever the tile's zoom (`TreeScatter.Road`). A v160 z14 tile
     // keeps them off twice as far as its children.
-    static let preparedFormatVersion: UInt32 = 161
+    // 162: a label's style carries how softly its halo ends
+    // (`LabelTextStyle.haloSoftness`) and whether it names a POI
+    // (`LabelTextStyle.isPointOfInterest`). A v161 tile has neither field.
+    // 163: a tree stands at every point the data maps one
+    // (`TreePointStyle`), the scattered trees off its crown. A v162 tile
+    // has no tree on a street.
+    // 164: a line style carries the camera zoom it keeps its sphere colour
+    // and alpha up to (`TileLineStyle.sphereLookUntilZoom`), 68 bytes. A
+    // v163 arena's line styles are 64.
+    static let preparedFormatVersion: UInt32 = 164
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

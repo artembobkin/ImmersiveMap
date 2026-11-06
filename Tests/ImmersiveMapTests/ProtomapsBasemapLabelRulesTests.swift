@@ -138,7 +138,7 @@ final class ProtomapsBasemapLabelRulesTests: XCTestCase {
         }
         XCTAssertFalse(city.uppercased)
         XCTAssertEqual(city.letterSpacingEm, 0)
-        XCTAssertEqual(city.opacity, 1)
+        XCTAssertGreaterThan(city.opacity, country.opacity, "A city's name reads more solid than a land's")
         XCTAssertEqual(capital.weight, .bold)
     }
 

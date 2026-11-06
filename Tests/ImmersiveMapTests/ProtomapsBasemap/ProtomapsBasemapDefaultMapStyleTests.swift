@@ -182,7 +182,7 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
             for zoom in [2, 5, 7, 9] {
                 let fill = makeStyle(style, layerName: "landcover", kind: kind, zoom: zoom)
                 XCTAssertNotEqual(fill.key, 0, "\(kind) z\(zoom)")
-                XCTAssertEqual(fill.zoomFade, .fadeOut(from: 7, to: 8), "\(kind) z\(zoom)")
+                XCTAssertEqual(fill.zoomFade, ProtomapsBasemapDefaultMapStyle.landcoverZoomFade, "\(kind) z\(zoom)")
             }
         }
         for kind in ["residential", "wood", "park", "farmland", "runway", "protected_area", "other", "platform"] {
@@ -210,7 +210,7 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
 
         let whole = ProtomapsBasemapDefaultMapStyle(theme: .default.layers { $0.biomes.coverFadeInZooms = 0 })
         XCTAssertNil(whole.coverFadeIn(tileZoom: 2))
-        XCTAssertEqual(makeStyle(whole, layerName: "landcover", kind: "forest", zoom: 2).zoomFade, .fadeOut(from: 7, to: 8))
+        XCTAssertEqual(makeStyle(whole, layerName: "landcover", kind: "forest", zoom: 2).zoomFade, ProtomapsBasemapDefaultMapStyle.landcoverZoomFade)
         XCTAssertNotEqual(whole.cacheFingerprint, standard.cacheFingerprint, "The span is baked into the tiles")
     }
 
@@ -264,7 +264,7 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
             for (kind, color) in painted {
                 let biome = makeStyle(style, layerName: "biome", kind: kind, zoom: zoom)
                 XCTAssertEqual(biome.color, color, "\(kind) z\(zoom)")
-                XCTAssertEqual(biome.zoomFade, .fadeOut(from: 7, to: 8), "\(kind) leaves with the land cover at z\(zoom)")
+                XCTAssertEqual(biome.zoomFade, ProtomapsBasemapDefaultMapStyle.landcoverZoomFade, "\(kind) leaves with the land cover at z\(zoom)")
                 XCTAssertGreaterThan(biome.key, earth.key, "\(kind) lies over the earth at z\(zoom)")
                 XCTAssertLessThan(biome.key, ice.key, "\(kind) lies under the ice at z\(zoom)")
                 XCTAssertLessThan(biome.key, city.key, "\(kind) lies under the cities at z\(zoom)")
@@ -275,7 +275,7 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
             // A kind the style does not name draws in the temperate grassland tone.
             XCTAssertEqual(makeStyle(style, layerName: "biome", kind: "moon", zoom: zoom).color, biomes.temperateGrassland)
             XCTAssertEqual(ice.color, colors.ice, "z\(zoom)")
-            XCTAssertEqual(ice.zoomFade, .fadeOut(from: 7, to: 8), "The land cover's ice leaves with the biomes at z\(zoom)")
+            XCTAssertEqual(ice.zoomFade, ProtomapsBasemapDefaultMapStyle.landcoverZoomFade, "The land cover's ice leaves with the biomes at z\(zoom)")
             let useIce = makeStyle(style, layerName: "landuse", kind: "glacier", zoom: zoom)
             XCTAssertEqual(useIce.color, colors.ice, "z\(zoom)")
             XCTAssertEqual(useIce.zoomFade, .none, "The land use's ice stays at z\(zoom)")
@@ -320,7 +320,7 @@ final class ProtomapsBasemapDefaultMapStyleTests: XCTestCase {
                 // in with the camera over a zoom.
                 let coverFade: ImmersiveMapZoomFade = zoom == biomes.coverMinimumTileZoom
                     ? .fadeIn(from: Double(zoom), to: Double(zoom) + 1)
-                    : .fadeOut(from: 7, to: 8)
+                    : ProtomapsBasemapDefaultMapStyle.landcoverZoomFade
                 let useFade: ImmersiveMapZoomFade = zoom == biomes.coverMinimumTileZoom ? coverFade : .none
                 for (kind, color, useKinds) in cover {
                     let fill = makeStyle(style, layerName: "landcover", kind: kind, zoom: zoom)

@@ -18,6 +18,9 @@ struct TextStyle {
     float strokeWidthPx;
     // The opacity of the fill and the halo, 1 solid.
     float opacity;
+    // The share of the halo's width, in from its outer edge, over which it
+    // fades out (LabelTextStyle.haloSoftness), 0 solid to its edge.
+    float haloSoftness;
 };
 
 struct TextDistance {
@@ -84,7 +87,11 @@ static TextFragmentOut shadeGlyph(TextDistance distance,
                                   constant TextStyle& style,
                                   float vertexAlpha) {
     half fill = half(smoothstep(-0.5, 0.5, fillPxDist));
-    half outer = half(smoothstep(-strokeWidthPx - 0.5, -strokeWidthPx + 0.5, distance.sdfPxDist));
+    // The halo ends where it always did, and fades in from there over its
+    // softness's share of its width: 0 leaves the one-pixel ramp that
+    // antialiases a solid edge.
+    float fadePx = strokeWidthPx * style.haloSoftness;
+    half outer = half(smoothstep(-strokeWidthPx - 0.5, -strokeWidthPx + 0.5 + fadePx, distance.sdfPxDist));
     // A style that asks for no halo gets none, exactly: the fill and the outer
     // edge are read from two different distance fields (the MSDF keeps a
     // corner sharp where the plain SDF rounds it), so at zero width their

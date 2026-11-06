@@ -18,7 +18,10 @@ final class TextShaderStrokeClampTests: XCTestCase {
 
         XCTAssertTrue(source.contains("atlasSample.a"))
         XCTAssertTrue(source.contains("sdfPxDist"))
-        XCTAssertTrue(source.contains("half outer = half(smoothstep(-strokeWidthPx - 0.5, -strokeWidthPx + 0.5, distance.sdfPxDist));"))
+        // The halo ends where it always did and fades in over its softness's
+        // share of its width (LabelTextStyle.haloSoftness).
+        XCTAssertTrue(source.contains("float fadePx = strokeWidthPx * style.haloSoftness;"))
+        XCTAssertTrue(source.contains("half outer = half(smoothstep(-strokeWidthPx - 0.5, -strokeWidthPx + 0.5 + fadePx, distance.sdfPxDist));"))
     }
 
     /// A class that asks for no halo (the POIs) must get none: fill and outer

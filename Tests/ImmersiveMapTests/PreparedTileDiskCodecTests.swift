@@ -8,7 +8,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
     private static let testBlobURL = URL(fileURLWithPath: "/nonexistent/test.ptgeo")
 
     func testPreparedTileCacheFormatVersionIncludesArenaImageRevision() {
-        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 161)
+        XCTAssertEqual(PreparedTileDiskCaching.preparedFormatVersion, 164)
     }
 
     /// Each building's place in the extruded indices travels with the
@@ -587,7 +587,7 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         // The vertex layout is a binding contract (vertex descriptor, arena
         // strides); pin the ABI before trusting stride-derived expectations.
         XCTAssertEqual(MemoryLayout<TileVertexIn>.stride, 16)
-        XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 64)
+        XCTAssertEqual(MemoryLayout<TileLineStyle>.stride, 68)
 
         // Slot sequence: 5 ground + 20 road phases x 5 (four structures:
         // tunnel, ground, automobile ground, bridge) + 5 bridge overlay
@@ -637,10 +637,11 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         // Ground line styles: one TileLineStyle for the plain polygon, all
         // zero but the ramp's start alpha, which is one without a ramp
         // (the twelfth Float32, 1.0 little-endian [0x00, 0x00, 0x80, 0x3F]),
-        // and the sphere alpha after it, one too. The sphere colour that
-        // closes the 64 bytes, what the fill wears on the globe, is the
-        // zero the fixture states.
-        XCTAssertEqual(spans[4], TileArenaSpan(byteOffset: 1024, byteCount: 64, elementCount: 1, indexWidth: nil))
+        // and the sphere alpha after it, one too. The sphere colour after
+        // that, what the fill wears on the globe, is the zero the fixture
+        // states, and the zoom its globe look holds to closes the 68 bytes,
+        // zero for none.
+        XCTAssertEqual(spans[4], TileArenaSpan(byteOffset: 1024, byteCount: 68, elementCount: 1, indexWidth: nil))
         XCTAssertEqual(blob[1024..<1068], Data(count: 44))
         XCTAssertEqual(blob[1068..<1072], Data([0x00, 0x00, 0x80, 0x3F]))
         XCTAssertEqual(blob[1072..<1076], Data([0x00, 0x00, 0x80, 0x3F]))
@@ -875,6 +876,8 @@ final class PreparedTileDiskCodecTests: XCTestCase {
                        weight: seed.isMultiple(of: 2) ? .thin : .bold,
                        letterSpacingEm: Float(seed) * 0.01,
                        opacity: 1 - Float(seed) * 0.01,
+                       haloSoftness: Float(seed % 4) * 0.25,
+                       isPointOfInterest: seed.isMultiple(of: 3),
                        // Every other style wears its own colours on the globe.
                        sphereFillColor: seed.isMultiple(of: 2)
                            ? nil : SIMD3<Float>(Float(seed) + 0.07, Float(seed) + 0.08, Float(seed) + 0.09),
@@ -941,6 +944,8 @@ final class PreparedTileDiskCodecTests: XCTestCase {
         XCTAssertEqual(actual.weight, expected.weight, file: file, line: line)
         XCTAssertEqual(actual.letterSpacingEm, expected.letterSpacingEm, file: file, line: line)
         XCTAssertEqual(actual.opacity, expected.opacity, file: file, line: line)
+        XCTAssertEqual(actual.haloSoftness, expected.haloSoftness, file: file, line: line)
+        XCTAssertEqual(actual.isPointOfInterest, expected.isPointOfInterest, file: file, line: line)
         XCTAssertEqual(actual.sphereFillColor, expected.sphereFillColor, file: file, line: line)
         XCTAssertEqual(actual.sphereStrokeColor, expected.sphereStrokeColor, file: file, line: line)
     }

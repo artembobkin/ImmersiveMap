@@ -26,6 +26,9 @@ final class RendererLabelDrawer {
     /// `handover` is how far the globe's look has been handed over to the
     /// plane's (`FrameContext.groundHandover`): a label's colours on the
     /// globe (`LabelTextStyle.sphereFillColor`) at 0, its own at 1.
+    /// `labelOpacity` is the frame's factor over every label's own
+    /// opacity (`FrameContextServices.labelOpacity`), the POIs' for a POI's
+    /// plate and name.
     static func drawBaseLabels(renderEncoder: MTLRenderCommandEncoder,
                                screenMatrix: matrix_float4x4,
                                screenScale: ScreenScale,
@@ -34,7 +37,8 @@ final class RendererLabelDrawer {
                                screenPositionsBuffer: MTLBuffer,
                                labelRuntimeMetaBuffer: MTLBuffer,
                                baseLabelsDrawBatches: [BaseLabelDrawBatch],
-                               handover: Float = 1) {
+                               handover: Float = 1,
+                               labelOpacity: LabelOpacityFrame = .solid) {
         var screenMatrixValue = screenMatrix
         // Label geometry is authored in layout points; this is the one place the
         // base label pass converts it to the device pixels the screen matrix maps.
@@ -64,7 +68,8 @@ final class RendererLabelDrawer {
                                                   poiIconRun.style.fillColor.y,
                                                   poiIconRun.style.fillColor.z,
                                                   1.0),
-                    iconColor: SIMD4<Float>(1.0, 1.0, 1.0, 1.0)
+                    iconColor: SIMD4<Float>(1.0, 1.0, 1.0, 1.0),
+                    opacity: labelOpacity.opacity(of: poiIconRun.style)
                 )
                 if bindings.poiIconStyle != iconStyle {
                     var iconStyleValue = iconStyle
@@ -92,6 +97,7 @@ final class RendererLabelDrawer {
                           textRenderer: textRenderer,
                           baseLabelsDrawBatches: baseLabelsDrawBatches,
                           handover: handover,
+                          labelOpacity: labelOpacity,
                           bindings: &bindings)
     }
 
@@ -104,7 +110,8 @@ final class RendererLabelDrawer {
                                textRenderer: TextRenderer,
                                roadDrawLabels: [DrawRoadLabels],
                                sceneDepth: MTLTexture,
-                               sceneDepthUniforms: RoadLabelSceneDepthUniforms) {
+                               sceneDepthUniforms: RoadLabelSceneDepthUniforms,
+                               labelOpacity: LabelOpacityFrame = .solid) {
         guard roadDrawLabels.isEmpty == false else {
             return
         }
@@ -153,7 +160,8 @@ final class RendererLabelDrawer {
                                              strokeColor: style.strokeColor,
                                              strokeWidthPx: style.haloWidthPixels(screenScale: screenScale),
                                              fillBiasPx: style.emboldenPixels(screenScale: screenScale),
-                                             opacity: style.opacity)
+                                             opacity: labelOpacity.opacity(of: style),
+                                             haloSoftness: style.haloSoftness)
             setTextStyle(textStyle, renderEncoder: renderEncoder, bindings: &bindings)
             renderEncoder.drawPrimitives(type: .triangle,
                                          vertexStart: 0,
@@ -209,6 +217,7 @@ final class RendererLabelDrawer {
                                           textRenderer: TextRenderer,
                                           baseLabelsDrawBatches: [BaseLabelDrawBatch],
                                           handover: Float,
+                                          labelOpacity: LabelOpacityFrame,
                                           bindings: inout EncoderBindings) {
         for drawBatch in baseLabelsDrawBatches {
             for run in drawBatch.labelsByStyleRuns {
@@ -225,7 +234,8 @@ final class RendererLabelDrawer {
                                                  strokeColor: style.strokeColor(atHandover: handover),
                                                  strokeWidthPx: style.haloWidthPixels(screenScale: screenScale),
                                                  fillBiasPx: style.emboldenPixels(screenScale: screenScale),
-                                                 opacity: style.opacity)
+                                                 opacity: labelOpacity.opacity(of: style),
+                                                 haloSoftness: style.haloSoftness)
 
                 setFragmentTexture(texture, renderEncoder: renderEncoder, bindings: &bindings)
                 setTextStyle(textStyle, renderEncoder: renderEncoder, bindings: &bindings)

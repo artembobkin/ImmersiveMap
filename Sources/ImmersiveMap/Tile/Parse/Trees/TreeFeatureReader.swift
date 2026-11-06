@@ -49,6 +49,22 @@ struct TreeFeatureReader {
         ring.map { TileCoordinateSpace.renderPoint(SIMD2<Float>(Float($0.x), Float($0.y))) }
     }
 
+    /// A mapped tree's points (`TreePointStyle`), kept to be planted with
+    /// the fills' trees, on a tile deep enough to draw them. A point
+    /// outside the tile is its neighbour's.
+    func collect(points: MultiPoint,
+                 tree: TreePointStyle,
+                 tile: Tile,
+                 into result: inout ReadingStageResult) {
+        guard standsTrees(in: tile) else { return }
+        let extent = TileCoordinateSpace.tileExtent
+        for point in points {
+            let tilePoint = SIMD2<Float>(Float(point.x), Float(point.y))
+            guard tilePoint.x >= 0, tilePoint.x < extent, tilePoint.y >= 0, tilePoint.y < extent else { continue }
+            result.mappedTrees.append(TreeScatter.MappedTree(tilePoint: tilePoint, style: tree))
+        }
+    }
+
     /// A road's lines, kept for the trees to keep off: the roads of the
     /// ground, as wide as the widest stroke the style draws them with,
     /// read as tile units of the lattice's zoom (`TreeScatter.Road`). A
@@ -70,7 +86,8 @@ struct TreeFeatureReader {
 
     /// Places the tile's trees over the gathered fills, off the buildings'
     /// footprints in `footprints`, the gathered roads and the gathered
-    /// fills no tree stands on.
+    /// fills no tree stands on, and the mapped trees at their points, the
+    /// scattered ones off their crowns.
     func finish(tile: Tile,
                 footprints: [TreeScatter.Footprint],
                 into result: inout ReadingStageResult) {
@@ -78,9 +95,11 @@ struct TreeFeatureReader {
             result.treeAreas.removeAll()
             result.treeRoads.removeAll()
             result.treeExcludedFills.removeAll()
+            result.mappedTrees.removeAll()
         }
-        guard result.treeAreas.isEmpty == false else { return }
+        guard result.treeAreas.isEmpty == false || result.mappedTrees.isEmpty == false else { return }
         result.trees = TreeScatter.scatter(areas: result.treeAreas,
+                                           mapped: result.mappedTrees,
                                            tile: tile,
                                            obstacles: TreeScatter.Obstacles(footprints: footprints + result.treeExcludedFills,
                                                                             roads: result.treeRoads),

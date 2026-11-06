@@ -155,6 +155,10 @@ final class ImmersiveMapDebugOverlayRuntime: ImmersiveMapDebugPanelRuntime {
             controls?.setLabelPerspectiveMinimumScale(scale)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
         }
+        hudView.onLabelOpacityChanged = { [weak controls, weak renderRuntime] opacity in
+            controls?.setLabelOpacity(opacity)
+            renderRuntime?.requestFrame(reason: .externalStateChanged)
+        }
         hudView.onHillshadeFadeChanged = { [weak controls, weak renderRuntime] fade in
             controls?.setHillshadeFade(fade)
             renderRuntime?.requestFrame(reason: .externalStateChanged)
@@ -258,7 +262,8 @@ final class ImmersiveMapDebugOverlayRuntime: ImmersiveMapDebugPanelRuntime {
         guard let settings = currentSettings else { return }
         let date = Date()
         let cameraLines = appliedHUDSnapshot.map { [$0.coordinateLines.zoom, $0.coordinateLines.latLon] } ?? []
-        let text = DebugOverlaySettingsExport.swiftCode(settings: settings, date: date, cameraLines: cameraLines)
+        let text = DebugOverlaySettingsExport.swiftCode(settings: settings, date: date, cameraLines: cameraLines,
+                                                        labelOpacity: controls.labelOpacity())
         let fileName = DebugOverlaySettingsExport.fileName(date: date)
         let folders = [FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first,
                        FileManager.default.temporaryDirectory].compactMap { $0 }
@@ -356,12 +361,14 @@ final class ImmersiveMapDebugOverlayRuntime: ImmersiveMapDebugPanelRuntime {
             controls.setLabelPerspectiveMinimumScale(nil)
             controls.setHillshadeFade(nil)
             controls.setHillshadeAmounts(nil)
+            controls.setLabelOpacity(nil)
             controls.setReliefCastsShadows(nil)
             controls.setTerrainOcclusion(nil)
             controls.setTerrainOcclusionDebugView(false)
         }
         hudView.apply(reliefCastsShadows: controls.reliefCastsShadows() ?? settings.tiles.groundRelief.castsShadows)
         let hillshade = settings.mapStyle.vectorTileStyle.hillshade
+        hudView.apply(labelOpacity: controls.labelOpacity() ?? settings.mapStyle.vectorTileStyle.labelOpacity)
         hudView.apply(hillshadeFade: controls.hillshadeFade() ?? GroundReliefHillshade.Fade(style: hillshade))
         hudView.apply(hillshadeAmounts: controls.hillshadeAmounts() ?? GroundReliefHillshade.Amounts(style: hillshade))
         hudView.apply(terrainOcclusion: controls.terrainOcclusion() ?? settings.mapStyle.vectorTileStyle.terrainOcclusion)

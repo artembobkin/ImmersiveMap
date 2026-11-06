@@ -360,7 +360,9 @@ extension ProtomapsBasemapDefaultMapStyle {
     /// highway tones of the overview's road network
     /// (`OverviewRoadStyles`, the main tone for the motorways and the
     /// trunks, the minor one below), so the globe's view is one yellow net
-    /// through the unroll, and the asphalt arrives with the plane.
+    /// through the unroll. The yellow under the veil holds until the land
+    /// cover starts to fade, and switches to asphalt there with no blend
+    /// (`roadLookSwitchZoom`).
     func overviewRoadStyle(_ stroke: OverviewRoadStroke,
                            roadClass: RoadClass,
                            name: String,
@@ -393,6 +395,9 @@ extension ProtomapsBasemapDefaultMapStyle {
             pointWidthRamp: ramp,
             sphereAlpha: theme.roadMetrics.globeOpacity,
             sphereColor: SIMD3<Float>(globeColor.x, globeColor.y, globeColor.z),
+            // The yellow and the veil hold past the globe's air, and switch
+            // to the road's own at once as the land cover starts to fade.
+            sphereLookUntilZoom: Self.roadLookSwitchZoom,
             lineGeometry: geometry
         )
         // A ground line at the coarse zooms, a road from

@@ -344,6 +344,7 @@ vertex VertexOut tileVertexShader(VertexIn vertexIn [[stage_in]],
         // and the width ramp's alpha, all functions of the style and the
         // frame only.
         out.color = half4(styles[vertexIn.styleIndex].color);
+        out.color = tileLineZoomLook(lineStyles[vertexIn.styleIndex], out.color, overviewFade.cameraZoom);
         out.color.a *= tileStyleFade(styleZoomFades[vertexIn.styleIndex], overviewFade);
         out.color.a *= half(tilePointWidthRampAlpha(lineStyles[vertexIn.styleIndex], overviewFade.cameraZoom));
         // A road that is invisible this frame is cut whole, so it writes no

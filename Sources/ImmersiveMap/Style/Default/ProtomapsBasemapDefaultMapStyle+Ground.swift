@@ -89,9 +89,9 @@ extension ProtomapsBasemapDefaultMapStyle {
     /// under the land use. The biomes tile the land without overlapping,
     /// so their order among themselves is nothing. A kind the style does
     /// not name draws in the temperate grassland tone rather than not at
-    /// all. The biomes fade out with the land cover over camera zoom 7 to
-    /// 8 (`landcoverZoomFade`), so the z7 tiles, the last to carry them,
-    /// hand the land tone to the z8 tiles with the camera.
+    /// all. The biomes fade out with the land cover over camera zoom 6.7
+    /// to 7.1 (`landcoverZoomFade`), with the globe's unroll and the roads'
+    /// switch to their own look.
     func biomeStyle(kind: String?, tileZoom: Int) -> FeatureStyle {
         guard overviewPaintsLand(tileZoom: tileZoom) else {
             return hiddenStyle
@@ -141,9 +141,8 @@ extension ProtomapsBasemapDefaultMapStyle {
     /// The land cover draws on every tile that ships it, under the land
     /// use of the same tile, and a class the style does not name draws in
     /// the grassland tone rather than not at all. It fades out over camera
-    /// zoom 7 to 8 (`landcoverZoomFade`), while the z7 tiles, the last to
-    /// carry it, still serve the view, so it leaves with the camera instead
-    /// of popping off with the tile level.
+    /// zoom 6.7 to 7.1 (`landcoverZoomFade`), with the camera instead of
+    /// popping off with the tile level.
     func landcoverStyle(kind: String?, tileZoom: Int) -> FeatureStyle {
         let colors = theme.layers
         let fade = Self.landcoverZoomFade

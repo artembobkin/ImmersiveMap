@@ -95,7 +95,8 @@ final class SurfaceLabelRenderSubsystem: RenderSubsystem {
 
         let screen = SurfaceLabelScreen(
             viewportSizePx: SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height)),
-            pixelsPerPoint: Float(frameContext.pixelsPerPoint)
+            pixelsPerPoint: Float(frameContext.pixelsPerPoint),
+            labelOpacity: frameContext.services.labelOpacity
         )
 
         let surface: Surface
@@ -137,6 +138,9 @@ final class SurfaceLabelRenderSubsystem: RenderSubsystem {
     private struct SurfaceLabelScreen {
         let viewportSizePx: SIMD2<Float>
         let pixelsPerPoint: Float
+        /// The frame's factor over the labels' own opacity
+        /// (`FrameContextServices.labelOpacity`).
+        let labelOpacity: LabelOpacityFrame
     }
 
     private enum Surface {
@@ -187,8 +191,11 @@ final class SurfaceLabelRenderSubsystem: RenderSubsystem {
         case .flat: handover = 1
         case .sphere(let globeHandover): handover = globeHandover
         }
-        var drawUniform = SurfaceLabelDrawUniform(fillColor: SIMD4<Float>(style.fillColor(atHandover: handover), style.opacity),
-                                                  strokeColor: SIMD4<Float>(style.strokeColor(atHandover: handover), style.opacity),
+        // The label's own opacity under the frame's factor for its kind
+        // (`FrameContextServices.labelOpacity`).
+        let opacity = screen.labelOpacity.opacity(of: style)
+        var drawUniform = SurfaceLabelDrawUniform(fillColor: SIMD4<Float>(style.fillColor(atHandover: handover), opacity),
+                                                  strokeColor: SIMD4<Float>(style.strokeColor(atHandover: handover), opacity),
                                                   haloAtlasTexels: haloAtlasTexels,
                                                   depth: SurfaceLabelDepth.depth,
                                                   haloPass: haloPass ? 1 : 0,
@@ -197,7 +204,8 @@ final class SurfaceLabelRenderSubsystem: RenderSubsystem {
                                                       referenceZoom: record.placement.referenceZoom,
                                                       tileScreenPoints: tileScreenPoints),
                                                   viewportSizePx: screen.viewportSizePx,
-                                                  pixelsPerPoint: screen.pixelsPerPoint)
+                                                  pixelsPerPoint: screen.pixelsPerPoint,
+                                                  haloSoftness: style.haloSoftness)
         encoder.setVertexBytes(&drawUniform, length: MemoryLayout<SurfaceLabelDrawUniform>.stride, index: 4)
         encoder.setFragmentBytes(&drawUniform, length: MemoryLayout<SurfaceLabelDrawUniform>.stride, index: 0)
         encoder.setFragmentTexture(style.weight == .thin ? textRenderer.thinTexture : textRenderer.texture, index: 0)

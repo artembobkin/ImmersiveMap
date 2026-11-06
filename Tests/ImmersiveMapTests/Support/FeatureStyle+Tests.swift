@@ -37,7 +37,7 @@ extension FeatureStyle {
         case .line(let line): return line.pass
         case .road(let road): return road.fill ?? road.orderedPasses.first?.pass
         case .extrusion(let extrusion): return BakedStyle(extrusion: extrusion).pass
-        case .pointLabel: return nil
+        case .pointLabel, .tree: return nil
         }
     }
 

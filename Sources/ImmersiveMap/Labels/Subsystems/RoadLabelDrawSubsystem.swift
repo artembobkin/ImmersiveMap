@@ -112,7 +112,8 @@ final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
                                            textRenderer: textRenderer,
                                            roadDrawLabels: roadLabelState.drawLabels,
                                            sceneDepth: sceneDepth ?? fallbackDepthTexture,
-                                           sceneDepthUniforms: sceneDepthUniforms)
+                                           sceneDepthUniforms: sceneDepthUniforms,
+                                           labelOpacity: frameContext.services.labelOpacity)
         encoder.setDepthStencilState(depthDisabledState)
     }
 

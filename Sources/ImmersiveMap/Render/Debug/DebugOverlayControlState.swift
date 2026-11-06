@@ -65,6 +65,7 @@ package final class DebugOverlayControlState {
     private var localLabelMaximumDistanceMeters: Float?
     private var labelPerspectiveMinimumScale: Float?
     private var draggedHillshadeFade: GroundReliefHillshade.Fade?
+    private var draggedLabelOpacity: ImmersiveMapLabelOpacity?
     private var draggedHillshadeAmounts: GroundReliefHillshade.Amounts?
     private var reliefShadows: Bool?
     private var draggedTerrainOcclusion: ImmersiveMapTerrainOcclusion?
@@ -179,6 +180,20 @@ package final class DebugOverlayControlState {
     package func setHillshadeFade(_ fade: GroundReliefHillshade.Fade?) {
         lock.lock()
         draggedHillshadeFade = fade
+        lock.unlock()
+    }
+
+    /// The names' and the POIs' opacity curves the panel has been dragged
+    /// to, nil for the style's (`ImmersiveMapLabelOpacity`).
+    package func labelOpacity() -> ImmersiveMapLabelOpacity? {
+        lock.lock()
+        defer { lock.unlock() }
+        return draggedLabelOpacity
+    }
+
+    package func setLabelOpacity(_ opacity: ImmersiveMapLabelOpacity?) {
+        lock.lock()
+        draggedLabelOpacity = opacity
         lock.unlock()
     }
 

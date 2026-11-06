@@ -66,7 +66,9 @@ struct SurfaceLabelDrawUniform {
     var tileUnitsPerPoint: Float
     var viewportSizePx: SIMD2<Float>
     var pixelsPerPoint: Float
-    var _padding: Float = 0
+    /// The share of the halo's width over which it fades out
+    /// (`LabelTextStyle.haloSoftness`).
+    var haloSoftness: Float
 }
 
 /// How large a label painted on the map is on screen. The map's own scale

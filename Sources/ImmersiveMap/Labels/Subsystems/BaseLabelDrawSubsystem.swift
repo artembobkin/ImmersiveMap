@@ -77,7 +77,8 @@ final class BaseLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
                                            screenPositionsBuffer: screenPositionsBuffer,
                                            labelRuntimeMetaBuffer: labelRuntimeMetaBuffer,
                                            baseLabelsDrawBatches: baseLabelState.baseLabelsDrawBatches,
-                                           handover: frameContext.groundHandover)
+                                           handover: frameContext.groundHandover,
+                                           labelOpacity: frameContext.services.labelOpacity)
         encoder.setDepthStencilState(depthDisabledState)
     }
 

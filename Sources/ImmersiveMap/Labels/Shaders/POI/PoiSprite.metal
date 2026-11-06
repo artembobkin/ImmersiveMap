@@ -14,6 +14,9 @@ using namespace metal;
 struct PoiIconStyle {
     float4 backgroundColor;
     float4 iconColor;
+    // The plate's and the icon's opacity together (PoiIconStyleUniform.opacity),
+    // applied to the composite.
+    float opacity;
 };
 
 vertex VertexOut poiSpriteVertex(LabelVertexIn in [[stage_in]],
@@ -65,5 +68,8 @@ fragment half4 poiSpriteFragment(VertexOut in [[stage_in]],
     half alpha = foregroundAlpha + backgroundAlpha * (1.0h - foregroundAlpha);
     half3 color = half3(style.iconColor.rgb) * foregroundAlpha
         + half3(style.backgroundColor.rgb) * backgroundAlpha * (1.0h - foregroundAlpha);
-    return half4(color, alpha);
+    // The pipeline blends by the source alpha (TextRenderer.makePipelineState),
+    // so the opacity scales the alpha alone: the composite fades as one, the
+    // icon over its plate as it was.
+    return half4(color, alpha * half(style.opacity));
 }

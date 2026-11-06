@@ -35,6 +35,9 @@ struct MapStyleRuntime {
     let terrainOcclusion: ImmersiveMapTerrainOcclusion
     /// The colours of the trees, as the style states them.
     let treePalette: ImmersiveMapTreePalette
+    /// How opaque the names and the POIs are by the zoom, as the style
+    /// states it.
+    let labelOpacity: ImmersiveMapLabelOpacity
     /// The style's identity, the namespace its label identities are minted
     /// in.
     let styleID: String
@@ -57,6 +60,7 @@ struct MapStyleRuntime {
         self.hillshade = style.hillshade
         self.terrainOcclusion = style.terrainOcclusion
         self.treePalette = style.treePalette
+        self.labelOpacity = style.labelOpacity
     }
 
     /// The style's part of the prepared-tile cache identity: the reading's

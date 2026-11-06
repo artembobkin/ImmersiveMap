@@ -68,6 +68,11 @@ struct TileLineStyle {
     var sphereColorRed: Float
     var sphereColorGreen: Float
     var sphereColorBlue: Float
+    /// The camera zoom the stroke keeps its sphere colour and alpha up to,
+    /// on both surfaces, switching to its own at it
+    /// (`LinePass.sphereLookUntilZoom`). Zero is none: the plane draws the
+    /// stroke's own look, and the globe hands it over with the air.
+    var sphereLookUntilZoom: Float
 
     init(widthPoints: Float,
          dashLengthPoints: Float,
@@ -79,7 +84,8 @@ struct TileLineStyle {
          worldLockZoom: Float = 0,
          widthRamp: LinePass.WidthRamp? = nil,
          sphereAlpha: Float = 1,
-         sphereColor: SIMD3<Float> = SIMD3<Float>(repeating: 0)) {
+         sphereColor: SIMD3<Float> = SIMD3<Float>(repeating: 0),
+         sphereLookUntilZoom: Float = 0) {
         self.rampStartWidthPoints = widthRamp?.startWidthPoints ?? 0
         self.rampStartZoom = widthRamp?.startZoom ?? 0
         self.rampEndZoom = widthRamp?.endZoom ?? 0
@@ -88,6 +94,7 @@ struct TileLineStyle {
         self.sphereColorRed = sphereColor.x
         self.sphereColorGreen = sphereColor.y
         self.sphereColorBlue = sphereColor.z
+        self.sphereLookUntilZoom = max(sphereLookUntilZoom, 0)
         self.halfWidthUnits = halfWidthUnits
         self.worldLockZoom = worldLockZoom
         self.widthPoints = widthPoints

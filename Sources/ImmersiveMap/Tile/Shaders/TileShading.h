@@ -70,7 +70,29 @@ struct LineStyle {
     // surfaces. See the Swift TileLineStyle.sphereAlpha and sphereColor.
     float sphereAlpha;
     packed_float3 sphereColor;
+    // The camera zoom the stroke keeps its sphere colour and alpha up to,
+    // on the plane as on the globe, its own look from it, switched with no
+    // blend. Zero: none, the plane in the style's own look and the globe
+    // handing it over with the air. See the Swift
+    // TileLineStyle.sphereLookUntilZoom.
+    float sphereLookUntilZoom;
 };
+
+/// Whether the style switches its look at a zoom of its own
+/// (LineStyle.sphereLookUntilZoom), instead of with the globe's air.
+static inline bool tileLineSwitchesLookByZoom(LineStyle lineStyle) {
+    return lineStyle.sphereLookUntilZoom > 0.0;
+}
+
+/// A stroke's colour and alpha at the camera zoom: its globe look below its
+/// switch zoom, its own from it. A style without a switch zoom is left as
+/// it is.
+static inline half4 tileLineZoomLook(LineStyle lineStyle, half4 ownColor, float cameraZoom) {
+    if (tileLineSwitchesLookByZoom(lineStyle) && cameraZoom < lineStyle.sphereLookUntilZoom) {
+        return half4(half3(float3(lineStyle.sphereColor)), ownColor.a * half(lineStyle.sphereAlpha));
+    }
+    return ownColor;
+}
 
 /// How far a style's zoom ramp has come, 0...1; one for a style without.
 static inline float tilePointWidthRampProgress(LineStyle lineStyle, float cameraZoom) {
@@ -428,6 +450,7 @@ static inline half4 tileLineFragmentColor(uint styleIndex,
                                           float deferredEdgePx) {
     Style style = styles[styleIndex];
     half4 color = half4(style.color);
+    color = tileLineZoomLook(lineStyles[styleIndex], color, overviewFade.cameraZoom);
     color.a *= tileStyleFade(styleZoomFades[styleIndex], overviewFade);
     color.a *= half(tilePointWidthRampAlpha(lineStyles[styleIndex], overviewFade.cameraZoom));
     color.a *= tileLineFragmentCoverage(styleIndex, lineDistance, lineParameterRaw,

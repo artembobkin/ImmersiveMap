@@ -27,7 +27,8 @@ final class AttributionBadgeViewTests: XCTestCase {
     /// No plate behind the words: the badge is one line of text, each
     /// glyph in a dark halo so it reads on any map colour underneath.
     func testTheBadgeIsOneLineOfPlainTextInAHaloForAnyBackground() throws {
-        let settings = ImmersiveMapSettings.default
+        // The relief on, so the terrain's credit is on the line too.
+        let settings = ImmersiveMapSettings.default.groundRelief(isEnabled: true)
         let view = AttributionBadgeView(attribution: settings.resolvedAttribution,
                                         settings: settings.attribution)
 
@@ -45,7 +46,8 @@ final class AttributionBadgeViewTests: XCTestCase {
     /// The overview's credit is on the line at the zooms the overview is
     /// drawn at and off it past them, and the badge narrows with the line.
     func testACreditLeavesTheLineWithTheZoom() throws {
-        let settings = ImmersiveMapSettings.default
+        // The relief on, so the terrain's credit is on the line too.
+        let settings = ImmersiveMapSettings.default.groundRelief(isEnabled: true)
         let view = AttributionBadgeView(attribution: settings.resolvedAttribution,
                                         settings: settings.attribution)
 

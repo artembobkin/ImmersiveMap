@@ -275,14 +275,19 @@ final class GroundFlatteningParseTests: XCTestCase {
 
     /// Without a zoom of its own the flattening starts at the tileset's
     /// deepest zoom, whatever depth the archive is built to, on a map laid
-    /// flat. The relief, on by default, stands in for it with its own.
+    /// flat, which it is by default. The relief, when on, stands in for it
+    /// with its own.
     func testTheDefaultFollowsTheTilesetsDeepestZoom() {
         let flat = ImmersiveMapSettings.defaultWithoutRelief
         XCTAssertEqual(flat.tiles.resolvedGroundFlatteningFromTileZoom, flat.tiles.coverage.maximumZoomLevel)
         XCTAssertEqual(flat.tileMaximumZoomLevel(14).tiles.resolvedGroundFlatteningFromTileZoom, 14)
         XCTAssertEqual(flat.tileMaximumZoomLevel(16).tiles.resolvedGroundFlatteningFromTileZoom, 16)
         XCTAssertEqual(ImmersiveMapSettings.default.tiles.resolvedGroundFlatteningFromTileZoom,
-                       Int(ImmersiveMapSettings.default.tiles.groundRelief.appearZoom),
+                       ImmersiveMapSettings.default.tiles.coverage.maximumZoomLevel,
+                       "Laid flat by default")
+        let relief = ImmersiveMapSettings.default.groundRelief(isEnabled: true)
+        XCTAssertEqual(relief.tiles.resolvedGroundFlatteningFromTileZoom,
+                       Int(relief.tiles.groundRelief.appearZoom),
                        "The relief's zoom stands in for it")
     }
 }

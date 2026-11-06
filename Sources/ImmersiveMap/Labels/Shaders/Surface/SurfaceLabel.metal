@@ -65,7 +65,9 @@ struct SurfaceLabelDraw {
     float tileUnitsPerPoint;
     float2 viewportSizePx;
     float pixelsPerPoint;
-    float _padding;
+    /// The share of the halo's width, in from its outer edge, over which it
+    /// fades out (LabelTextStyle.haloSoftness), 0 solid to its edge.
+    float haloSoftness;
 };
 
 struct SurfaceLabelVertexOut {
@@ -278,7 +280,10 @@ fragment half4 surfaceLabelFragment(SurfaceLabelFragmentIn in [[stage_in]],
         if (haloPx <= 0.0) {
             discard_fragment();
         }
-        coverage = half(smoothstep(-haloPx - 0.5, -haloPx + 0.5, sdfDistance * screenPxRange));
+        // The halo ends where it always did and fades in from there, as a
+        // screen label's does (TextShader.metal, shadeGlyph).
+        float fadePx = haloPx * draw.haloSoftness;
+        coverage = half(smoothstep(-haloPx - 0.5, -haloPx + 0.5 + fadePx, sdfDistance * screenPxRange));
         color = half3(draw.strokeColor.rgb);
         opacity = half(draw.strokeColor.a);
     } else {

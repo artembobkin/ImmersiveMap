@@ -313,10 +313,14 @@ fragment half4 tileSphereFragmentShader(SphereFragmentIn in [[stage_in]],
                                       overviewFade, lineDash, 0.0);
         // The globe's look of the stroke (LineStyle.sphereColor and
         // sphereAlpha): whole through the globe's view and the unroll,
-        // handed over to the plane's with the air.
+        // handed over to the plane's with the air. A style that switches its
+        // look at a zoom of its own has it already (tileLineFragmentColor),
+        // with no blend.
         LineStyle lineStyle = lineStyles[in.styleIndex];
-        color.rgb = mix(half3(float3(lineStyle.sphereColor)), color.rgb, half(handover.handover));
-        color.a *= half(mix(lineStyle.sphereAlpha, 1.0, handover.handover));
+        if (!tileLineSwitchesLookByZoom(lineStyle)) {
+            color.rgb = mix(half3(float3(lineStyle.sphereColor)), color.rgb, half(handover.handover));
+            color.a *= half(mix(lineStyle.sphereAlpha, 1.0, handover.handover));
+        }
     } else {
         color = in.color;
     }

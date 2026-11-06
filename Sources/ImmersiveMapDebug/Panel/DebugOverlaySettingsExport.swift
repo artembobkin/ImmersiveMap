@@ -11,20 +11,36 @@ import Foundation
 /// the globe's atmosphere, and how the country around the camera is read
 /// as mountains or a plain.
 ///
+/// And the labels' opacity curves where the panel has dragged them: a
+/// style's values, not a setting's, so they come as the built-in style
+/// they are applied to.
+///
 /// Only those. The rest of `ImmersiveMapSettings` holds the tile archive's
 /// address and request headers, where an access token lives, and a file
 /// made to be passed around must not carry one.
 enum DebugOverlaySettingsExport {
     /// The file's text: a header naming when and where it was taken, then
     /// the modifiers, one per line.
-    static func swiftCode(settings: ImmersiveMapSettings, date: Date, cameraLines: [String]) -> String {
+    static func swiftCode(settings: ImmersiveMapSettings,
+                          date: Date,
+                          cameraLines: [String],
+                          labelOpacity: ImmersiveMapLabelOpacity? = nil) -> String {
         let scene = settings.scene
         var lines = ["// ImmersiveMap settings exported from the debug panel",
                      "// \(ISO8601DateFormatter().string(from: date))"]
         lines += cameraLines.map { "// \($0)" }
         lines += ["", "ImmersiveMapView()"]
         lines += modifiers(scene, surroundings: settings.tiles.groundRelief.surroundings).map { "    \($0)" }
+        if let labelOpacity {
+            lines.append("    " + labelOpacityModifier(labelOpacity))
+        }
         return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// The labels' opacity curves as the built-in style with them.
+    static func labelOpacityModifier(_ opacity: ImmersiveMapLabelOpacity) -> String {
+        ".mapStyle(ProtomapsBasemapMapStyle.default.apply { $0.labelOpacity = "
+            + "ImmersiveMapLabelOpacity(names: \(curve(opacity.names)), pois: \(curve(opacity.pois))) })"
     }
 
     /// The file's name: sortable by when it was taken.

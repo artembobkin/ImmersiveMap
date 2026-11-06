@@ -43,6 +43,10 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// (`LabelTextStyle.opacity`): 1 solid, less lets the map show
         /// through a name laid over it.
         public var opacity: Float
+        /// How softly the halo ends (`LabelTextStyle.haloSoftness`): the
+        /// share of its width over which it fades out into the map, 0 a
+        /// halo solid to its edge.
+        public var haloSoftness: Float
 
         public init(fillColor: SIMD3<Float>,
                     strokeColor: SIMD3<Float>,
@@ -52,7 +56,8 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
                     uppercased: Bool = false,
                     emboldenPoints: Float = LabelTextStyle.defaultEmboldenPoints,
                     letterSpacingEm: Float = 0,
-                    opacity: Float = 1) {
+                    opacity: Float = 1,
+                    haloSoftness: Float = 0) {
             self.fillColor = fillColor
             self.strokeColor = strokeColor
             self.haloEm = haloEm
@@ -62,6 +67,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
             self.emboldenPoints = emboldenPoints
             self.letterSpacingEm = letterSpacingEm
             self.opacity = opacity
+            self.haloSoftness = haloSoftness
         }
     }
 
@@ -755,15 +761,21 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// The trees of the parks, the gardens, the cemeteries and the
         /// reserves: scattered, with lawn between them.
         public var park: TreeFillStyle?
+        /// The trees the data maps one by one, at their points (the
+        /// basemap's `pois` of kind `tree`, OpenStreetMap's `natural=tree`):
+        /// the street trees, the trees of a square. Nil plants none.
+        public var mapped: TreePointStyle?
         /// The colours of every tree (`ImmersiveMapTreePalette`), drawn at
         /// frame time: a change needs no re-parse.
         public var palette: ImmersiveMapTreePalette
 
         public init(wood: TreeFillStyle? = TreeFillStyle(spacingMetres: 9, heightMetres: 7 ... 11),
                     park: TreeFillStyle? = TreeFillStyle(spacingMetres: 22, heightMetres: 6 ... 10),
+                    mapped: TreePointStyle? = TreePointStyle(heightMetres: 7 ... 12, crownClearanceMetres: 4),
                     palette: ImmersiveMapTreePalette = .default) {
             self.wood = wood
             self.park = park
+            self.mapped = mapped
             self.palette = palette
         }
 
@@ -773,11 +785,13 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         /// kind that grows none contributes zeros. The palette is not
         /// among them.
         var fingerprintComponents: [Float] {
-            [wood, park].flatMap { style -> [Float] in
+            let fills = [wood, park].flatMap { style -> [Float] in
                 guard let style else { return [0, 0, 0, 0] }
                 return [style.spacingMetres, style.minimumHeightMetres, style.maximumHeightMetres,
                         style.roadClearanceMetres]
             }
+            guard let mapped else { return fills + [0, 0, 0] }
+            return fills + [mapped.minimumHeightMetres, mapped.maximumHeightMetres, mapped.crownClearanceMetres]
         }
     }
 
@@ -905,6 +919,10 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
     /// How the ground is darkened where the terrain hides the sky, where
     /// the ground relief stands (`ImmersiveMapTerrainOcclusion`).
     public var terrainOcclusion: ImmersiveMapTerrainOcclusion
+    /// How opaque the names and the POIs are by the zoom, a factor over
+    /// each label's own opacity (`ImmersiveMapLabelOpacity`). Drawn at frame
+    /// time, so a change re-parses nothing.
+    public var labelOpacity: ImmersiveMapLabelOpacity
 
     /// The colours of the trees (`TreeStyles.palette`).
     public var treePalette: ImmersiveMapTreePalette {
@@ -920,7 +938,8 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
                 roadMetrics: RoadMetrics = RoadMetrics(),
                 routeShields: RouteShields = RouteShields(),
                 hillshade: ImmersiveMapHillshade = ImmersiveMapHillshade(),
-                terrainOcclusion: ImmersiveMapTerrainOcclusion = ImmersiveMapTerrainOcclusion()) {
+                terrainOcclusion: ImmersiveMapTerrainOcclusion = ImmersiveMapTerrainOcclusion(),
+                labelOpacity: ImmersiveMapLabelOpacity = ImmersiveMapLabelOpacity()) {
         self.labels = labels
         self.globeLabels = globeLabels
         self.labelVisibility = labelVisibility
@@ -931,6 +950,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         self.routeShields = routeShields
         self.hillshade = hillshade
         self.terrainOcclusion = terrainOcclusion
+        self.labelOpacity = labelOpacity
     }
 
     public static let `default` = ProtomapsBasemapTheme()
@@ -1032,7 +1052,7 @@ public struct ProtomapsBasemapTheme: Equatable, Sendable {
         func add(_ a: LabelAppearance) {
             add(a.fillColor); add(a.strokeColor)
             out.append(contentsOf: [a.haloEm, a.sizePoints, Float(a.weight.rawValue), a.uppercased ? 1 : 0,
-                                    a.emboldenPoints, a.letterSpacingEm, a.opacity])
+                                    a.emboldenPoints, a.letterSpacingEm, a.opacity, a.haloSoftness])
         }
         func add(_ layers: LayerStyles) {
             add(layers.land); add(layers.water); add(layers.wood); add(layers.grass)
@@ -1199,13 +1219,18 @@ public extension ProtomapsBasemapTheme.LabelStyles {
     /// a class derived from another (an ocean label is the water appearance a
     /// few points larger) is measured against the floor after its own
     /// adjustment rather than on top of a base that was already lifted.
+    ///
+    /// Every name is laid over the map a little transparent (0.85, the
+    /// countries and the regions lighter still), and every halo fades out
+    /// over the outer half of its width, so a name reads without standing
+    /// out of the map as a sticker would.
     static let `default` = ProtomapsBasemapTheme.LabelStyles(
         city: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.20, 0.20, 0.22), strokeColor: SIMD3<Float>(1, 1, 1),
-            haloEm: 0.153, sizePoints: 15, weight: .bold),
+            haloEm: 0.153, sizePoints: 15, weight: .bold, opacity: 0.85, haloSoftness: 0.5),
         town: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.30, 0.30, 0.32), strokeColor: SIMD3<Float>(1, 1, 1),
-            haloEm: 0.173, sizePoints: 11, weight: .thin),
+            haloEm: 0.173, sizePoints: 11, weight: .thin, opacity: 0.85, haloSoftness: 0.5),
         // The districts are lettered like the streets, the deep black
         // being the cities' alone: light grey capitals in the thin face
         // with a little added weight and a narrow halo, so a district
@@ -1213,7 +1238,8 @@ public extension ProtomapsBasemapTheme.LabelStyles {
         // of it.
         district: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.45, 0.45, 0.46), strokeColor: SIMD3<Float>(1, 1, 1),
-            haloEm: 0.1, sizePoints: 10, weight: .thin, uppercased: true, emboldenPoints: 0.2),
+            haloEm: 0.1, sizePoints: 10, weight: .thin, uppercased: true, emboldenPoints: 0.2,
+            opacity: 0.85, haloSoftness: 0.5),
         // A country's name is the name of a land: spaced capitals in the
         // thin face with a little added weight, a shade above a capital's
         // size (16.5), in a lighter grey of its own with a narrow halo, so
@@ -1225,19 +1251,19 @@ public extension ProtomapsBasemapTheme.LabelStyles {
         country: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.38, 0.37, 0.44), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.1, sizePoints: 17, weight: .thin, uppercased: true, emboldenPoints: 0.3,
-            letterSpacingEm: 0.12, opacity: 0.65),
+            letterSpacingEm: 0.12, opacity: 0.65, haloSoftness: 0.5),
         region: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.46, 0.45, 0.51), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.1, sizePoints: 15, weight: .thin, uppercased: true, emboldenPoints: 0.3,
-            letterSpacingEm: 0.1, opacity: 0.7),
+            letterSpacingEm: 0.1, opacity: 0.7, haloSoftness: 0.5),
         poi: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.40, 0.42, 0.40), strokeColor: SIMD3<Float>(1, 1, 1),
-            haloEm: 0.225, sizePoints: 8, weight: .thin),
+            haloEm: 0.225, sizePoints: 8, weight: .thin, opacity: 0.85, haloSoftness: 0.5),
         // The water names lie on the water: a deeper blue of its own hue
         // and no halo, so they read as part of the surface.
         water: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.29, 0.49, 0.71), strokeColor: SIMD3<Float>(1, 1, 1),
-            haloEm: 0, sizePoints: 9.5, weight: .thin),
+            haloEm: 0, sizePoints: 9.5, weight: .thin, opacity: 0.85),
         // The street names stay under the places and the landmarks: small
         // light grey capitals in the thin face with a little added weight
         // and a narrow halo, the way a commercial map letters its streets,
@@ -1245,6 +1271,7 @@ public extension ProtomapsBasemapTheme.LabelStyles {
         // runs through.
         road: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.45, 0.45, 0.46), strokeColor: SIMD3<Float>(1, 1, 1),
-            haloEm: 0.1, sizePoints: 11, weight: .thin, uppercased: true, emboldenPoints: 0.2)
+            haloEm: 0.1, sizePoints: 11, weight: .thin, uppercased: true, emboldenPoints: 0.2,
+            opacity: 0.85, haloSoftness: 0.5)
     )
 }

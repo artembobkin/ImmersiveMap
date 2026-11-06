@@ -20,7 +20,7 @@ import simd
 /// Nothing in them is public: the members are
 /// internal only so that the extensions can share them across files.
 public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
-    static let implementationRevision: UInt32 = 24
+    static let implementationRevision: UInt32 = 27
     /// The style draws what the tile carries and adds no zoom gate of its
     /// own: the basemap already thins every layer per tile level, so a
     /// feature in a tile is a feature on the map. A road shows from the
@@ -28,10 +28,20 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
     static let roadZoomFade = ImmersiveMapZoomFade.none
     /// The basemap ships the continuous `landcover` through tile z7 only,
     /// and the engine draws the z7 tiles for camera zoom 7.0 up to 8.0. The
-    /// land cover fades out over that range, so the z8 tiles, which carry
-    /// none, take over a frame it has already left. The fade hides nothing
-    /// a tile would otherwise show: past camera zoom 8 no tile has it.
-    static let landcoverZoomFade = ImmersiveMapZoomFade.fadeOut(from: 7, to: 8)
+    /// land cover and the biomes fade out over camera zoom 6.7 to 7.1,
+    /// around the globe's last tenths of the unroll and the roads' switch
+    /// to their own look (`roadLookSwitchZoom`), so the country view
+    /// arrives as one change. Up to zoom 7 the z6 tiles serve the view, and
+    /// they carry a handful of the land use's woods and fields, so the land
+    /// the cover leaves there is plainer until the z7 tiles bring them. The
+    /// fade hides nothing a tile would otherwise show past it: from camera
+    /// zoom 8 no tile has the cover.
+    static let landcoverZoomFade = ImmersiveMapZoomFade.fadeOut(from: 6.7, to: 7.1)
+    /// The camera zoom the roads switch from the globe's look, the highway
+    /// yellow under its veil, to their own colour and alpha, at once
+    /// (`LinePass.sphereLookUntilZoom`): where the globe has finished its
+    /// unroll and the land cover is fading out (`landcoverZoomFade`).
+    static let roadLookSwitchZoom: Float = 7.0
     let theme: ProtomapsBasemapTheme
 
     /// The land, the water and the ice of the theme, where no tile paints.
@@ -42,6 +52,10 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
     /// The theme's shading of the slopes.
     public var hillshade: ImmersiveMapHillshade {
         theme.hillshade
+    }
+
+    public var labelOpacity: ImmersiveMapLabelOpacity {
+        theme.labelOpacity
     }
 
     /// The theme's darkening where the terrain hides the sky.
@@ -161,6 +175,10 @@ public struct ProtomapsBasemapDefaultMapStyle: ImmersiveMapVectorTileStyle {
         case "places":
             return placeLabelStyle(kind: kind, kindDetail: kindDetail, props: props)
         case "pois":
+            // A mapped tree is no POI to name: it stands as a tree.
+            if kind == "tree" {
+                return theme.layers.trees.mapped.map(FeatureStyle.tree) ?? hiddenStyle
+            }
             return poiLabelStyle(kind: kind, props: props)
         default:
             return hiddenStyle

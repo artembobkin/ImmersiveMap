@@ -171,7 +171,8 @@ enum TileUnificationStage {
                              worldLockZoom: pass.pointWidthWorldLockZoom,
                              widthRamp: pass.pointWidthRamp,
                              sphereAlpha: pass.sphereAlpha,
-                             sphereColor: pass.sphereColor ?? SIMD3<Float>(pass.color.x, pass.color.y, pass.color.z))
+                             sphereColor: pass.sphereColor ?? SIMD3<Float>(pass.color.x, pass.color.y, pass.color.z),
+                             sphereLookUntilZoom: pass.sphereLookUntilZoom ?? 0)
     }
 
     /// One road layer: a role of a structure. The flat drawer orders the

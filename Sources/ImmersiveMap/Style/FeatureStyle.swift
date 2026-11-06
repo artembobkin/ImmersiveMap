@@ -82,6 +82,14 @@ public struct LabelTextStyle: Sendable {
     /// over the land as lettering rather than a sign, letting the map
     /// show through. 1 is solid.
     public var opacity: Float
+    /// How softly the halo ends, 0 to 1: the share of the halo's width,
+    /// counted in from its outer edge, over which it fades to nothing, so
+    /// the halo melts into the map instead of ending in a line. 0 is a
+    /// halo solid to its edge. The halo keeps its width either way.
+    public var haloSoftness: Float
+    /// Whether the label is a POI's name, which fades with the POIs and
+    /// not with the other names (`ImmersiveMapLabelOpacity.pois`).
+    public var isPointOfInterest: Bool
     /// The fill and the halo the label wears on the globe, nil for its own:
     /// the day's dark lettering under a night palette, so the planet keeps
     /// its daylight while the plane is dark. They hold through the globe's
@@ -108,6 +116,8 @@ public struct LabelTextStyle: Sendable {
                 emboldenPoints: Float = LabelTextStyle.defaultEmboldenPoints,
                 letterSpacingEm: Float = 0,
                 opacity: Float = 1,
+                haloSoftness: Float = 0,
+                isPointOfInterest: Bool = false,
                 sphereFillColor: SIMD3<Float>? = nil,
                 sphereStrokeColor: SIMD3<Float>? = nil) {
         self.key = key
@@ -120,6 +130,8 @@ public struct LabelTextStyle: Sendable {
         self.emboldenPoints = emboldenPoints
         self.letterSpacingEm = letterSpacingEm
         self.opacity = opacity
+        self.haloSoftness = min(max(haloSoftness, 0), 1)
+        self.isPointOfInterest = isPointOfInterest
         self.sphereFillColor = sphereFillColor
         self.sphereStrokeColor = sphereStrokeColor
     }
@@ -240,9 +252,16 @@ public struct LinePass: Sendable {
     public var sphereAlpha: Float
     /// The colour the stroke wears on the globe, nil for its own: an
     /// atlas's highway yellow over the painted globe where the plane draws
-    /// asphalt. Handed over with `sphereAlpha`. Only the sphere's ribbons
-    /// read it.
+    /// asphalt. Handed over with `sphereAlpha`, unless
+    /// `sphereLookUntilZoom` switches both at a zoom of its own.
     public var sphereColor: SIMD3<Float>?
+    /// The camera zoom the stroke keeps its globe look up to, on the plane
+    /// as well as on the globe: `sphereColor` and `sphereAlpha` below it,
+    /// the stroke's own colour and alpha from it, switched at once with no
+    /// blend, so the change lands where the style wants it rather than with
+    /// the globe's air. Nil, the default, hands both over with the air and
+    /// draws the plane in the stroke's own.
+    public var sphereLookUntilZoom: Float?
     public var lineGeometry: LineGeometryStyle
 
     public init(key: UInt8,
@@ -257,6 +276,7 @@ public struct LinePass: Sendable {
                 pointWidthRamp: WidthRamp? = nil,
                 sphereAlpha: Float = 1,
                 sphereColor: SIMD3<Float>? = nil,
+                sphereLookUntilZoom: Float? = nil,
                 lineGeometry: LineGeometryStyle) {
         self.key = key
         self.color = color
@@ -270,6 +290,7 @@ public struct LinePass: Sendable {
         self.pointWidthRamp = pointWidthRamp
         self.sphereAlpha = sphereAlpha
         self.sphereColor = sphereColor
+        self.sphereLookUntilZoom = sphereLookUntilZoom
         self.lineGeometry = lineGeometry
     }
 }
@@ -364,6 +385,27 @@ public struct TreeFillStyle: Sendable, Equatable {
     /// apart, so a park inside a wood grows its own trees.
     var lattice: UInt32 {
         spacingMetres.bitPattern
+    }
+}
+
+/// A tree that stands at a point the data maps it at (OpenStreetMap's
+/// `natural=tree`): one tree of the engine's model there, sized and turned
+/// by a hash of its place, among the trees the fills grow
+/// (`TreeFillStyle`). The scattered trees keep off its crown, so a mapped
+/// tree in a park is never doubled.
+public struct TreePointStyle: Sendable, Equatable {
+    /// The height of the shortest and the tallest mapped tree in metres:
+    /// each takes its own between the two, since the data states none.
+    public var minimumHeightMetres: Float
+    public var maximumHeightMetres: Float
+    /// How far from a mapped tree no scattered tree stands, in metres:
+    /// about its crown's radius.
+    public var crownClearanceMetres: Float
+
+    public init(heightMetres: ClosedRange<Float>, crownClearanceMetres: Float = 4) {
+        minimumHeightMetres = max(heightMetres.lowerBound, 0)
+        maximumHeightMetres = max(heightMetres.upperBound, minimumHeightMetres)
+        self.crownClearanceMetres = max(crownClearanceMetres, 0)
     }
 }
 
@@ -584,8 +626,11 @@ public enum FeatureStyle: Sendable {
     case road(RoadStyle)
     case extrusion(ExtrusionStyle)
     case pointLabel(PointLabelStyle)
+    /// A tree at the feature's point (`TreePointStyle`).
+    case tree(TreePointStyle)
 
-    /// The style's identity within a tile, 0 for `hidden`.
+    /// The style's identity within a tile, 0 for `hidden` and a `tree`,
+    /// which bake no style of their own.
     public var key: UInt8 {
         switch self {
         case .hidden: return 0
@@ -594,6 +639,7 @@ public enum FeatureStyle: Sendable {
         case .road(let road): return road.key
         case .extrusion(let extrusion): return extrusion.key
         case .pointLabel(let label): return label.key
+        case .tree: return 0
         }
     }
 
@@ -616,7 +662,7 @@ public enum FeatureStyle: Sendable {
             return road
         case .line(let line):
             return RoadStyle(fill: line.pass, placement: line.placement)
-        case .hidden, .fill, .extrusion, .pointLabel:
+        case .hidden, .fill, .extrusion, .pointLabel, .tree:
             return nil
         }
     }
@@ -628,6 +674,11 @@ public enum FeatureStyle: Sendable {
 
     public var pointLabelStyle: PointLabelStyle? {
         if case .pointLabel(let label) = self { return label }
+        return nil
+    }
+
+    public var treePointStyle: TreePointStyle? {
+        if case .tree(let tree) = self { return tree }
         return nil
     }
 }

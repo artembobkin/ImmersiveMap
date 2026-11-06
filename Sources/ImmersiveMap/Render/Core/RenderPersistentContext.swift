@@ -101,6 +101,9 @@ final class RenderPersistentContext {
     let treePipeline: TreePipeline
     /// The colours of the trees, as the style states them.
     let treePalette: ImmersiveMapTreePalette
+    /// How opaque the names and the POIs are by the zoom, the style's
+    /// (`ImmersiveMapLabelOpacity`), which the frame reads at its zoom.
+    let labelOpacity: ImmersiveMapLabelOpacity
     /// The layers of the app's data on the GPU and their pipelines
     /// (`LayerRenderSubsystem`).
     let layerMeshStore: LayerMeshStore
@@ -215,6 +218,7 @@ final class RenderPersistentContext {
         self.groundRelief?.store.eventSink = eventSink
         self.treePipeline = shared.treePipeline
         self.treePalette = styleRuntime.treePalette
+        self.labelOpacity = styleRuntime.labelOpacity
         self.treeModelStore = TreeModelStore(device: metal.device)
         self.treeModelStore.eventSink = eventSink
         self.layerPipeline = shared.layerPipeline

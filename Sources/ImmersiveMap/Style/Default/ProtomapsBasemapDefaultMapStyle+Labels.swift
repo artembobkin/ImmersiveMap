@@ -432,8 +432,11 @@ extension ProtomapsBasemapDefaultMapStyle {
                     placement: LabelPlacement = .screen,
                     standsOnRoof: Bool = false,
                     isLocal: Bool = false) -> FeatureStyle {
+        // A label with an icon is a POI's: its plate and its name fade with
+        // the POIs (`ImmersiveMapLabelOpacity.pois`).
         FeatureStyle.pointLabel(key: key,
-                                labelTextStyle(key: Int(key), appearance: appearance, globeAppearance: globeAppearance),
+                                labelTextStyle(key: Int(key), appearance: appearance, globeAppearance: globeAppearance,
+                                               isPointOfInterest: icon != nil),
                                 rank: rank,
                                 collisionRank: Self.labelCollisionRank(band: band, rank: rank),
                                 minCameraZoom: minCameraZoom,
@@ -449,7 +452,8 @@ extension ProtomapsBasemapDefaultMapStyle {
     /// is given.
     func labelTextStyle(key: Int,
                         appearance: ProtomapsBasemapTheme.LabelAppearance,
-                        globeAppearance: ProtomapsBasemapTheme.LabelAppearance? = nil) -> LabelTextStyle {
+                        globeAppearance: ProtomapsBasemapTheme.LabelAppearance? = nil,
+                        isPointOfInterest: Bool = false) -> LabelTextStyle {
         LabelTextStyle(key: key,
                        fillColor: appearance.fillColor,
                        strokeColor: appearance.strokeColor,
@@ -460,6 +464,8 @@ extension ProtomapsBasemapDefaultMapStyle {
                        emboldenPoints: appearance.emboldenPoints,
                        letterSpacingEm: appearance.letterSpacingEm,
                        opacity: appearance.opacity,
+                       haloSoftness: appearance.haloSoftness,
+                       isPointOfInterest: isPointOfInterest,
                        sphereFillColor: globeAppearance?.fillColor,
                        sphereStrokeColor: globeAppearance?.strokeColor)
     }
