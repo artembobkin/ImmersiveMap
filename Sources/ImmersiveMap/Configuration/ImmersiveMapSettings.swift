@@ -2282,9 +2282,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     /// Models that take the place of the map's own buildings, see
     /// `ImmersiveMapLandmark`.
     public var landmarks: [ImmersiveMapLandmark]
-    /// The archive the map loads building models from by tile: the hosted
-    /// one by default (`ImmersiveMapTilesService.modelArchiveURL`), nil for
-    /// a map without models. See `ModelArchiveSettings`.
+    /// The archive the map loads building models from by tile, nil for a
+    /// map without models, which is the default: the models are a download
+    /// of their own, and a map takes it on by pointing here, at the hosted
+    /// archive (`ImmersiveMapTilesService.modelArchiveURL`) or its own. See
+    /// `ModelArchiveSettings`.
     public var modelArchive: ModelArchiveSettings?
     /// The layers of the app's own data drawn over the map, in the order
     /// they draw: zones, lines and points (`ImmersiveMapLayer`). Applies
@@ -2423,7 +2425,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                              topPadding: 190.0,
                              sectionSpacing: 28.0,
                              textColor: SIMD3<Float>(0.82, 0.36, 0.0)),
-        modelArchive: ModelArchiveSettings(archiveURL: ImmersiveMapTilesService.modelArchiveURL)
+        modelArchive: nil
     )
 }
 

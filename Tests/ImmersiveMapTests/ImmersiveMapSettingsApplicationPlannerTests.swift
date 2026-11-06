@@ -53,9 +53,10 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         XCTAssertEqual(settings.modelArchive?.requestHeaders, ["Authorization": "Bearer x"])
         XCTAssertEqual(settings.modelArchive?.memoryBudgetInBytes, 1_000)
         XCTAssertEqual(settings.modelArchive?.diskCacheSizeInBytes, 2_000)
-        XCTAssertEqual(ImmersiveMapSettings.default.modelArchive?.archiveURL, ImmersiveMapTilesService.modelArchiveURL,
-                       "The hosted models by default")
-        XCTAssertNil(ImmersiveMapSettings.default.modelArchiveSettings(nil).modelArchive, "Nil turns them off")
+        XCTAssertNil(ImmersiveMapSettings.default.modelArchive, "No models by default")
+        XCTAssertEqual(ImmersiveMapSettings.default.modelArchive(ImmersiveMapTilesService.modelArchiveURL).modelArchive,
+                       ImmersiveMapSettings.ModelArchiveSettings(archiveURL: ImmersiveMapTilesService.modelArchiveURL),
+                       "Pointing at the hosted archive turns them on with the default budgets")
     }
 
 

@@ -811,13 +811,13 @@ public extension ImmersiveMapView {
     }
 
     /// Loads the 3D models of the map's buildings from an archive of model
-    /// tiles, the hosted one by default
-    /// (`ImmersiveMapTilesService.modelArchiveURL`):
+    /// tiles. The models are off by default, and this turns them on: the
+    /// hosted archive is `ImmersiveMapTilesService.modelArchiveURL`.
     ///
     ///     ImmersiveMapView()
-    ///         .modelArchive(URL(string: "https://tiles.example.com/models.pmtiles")!)
+    ///         .modelArchive(ImmersiveMapTilesService.modelArchiveURL)
     ///
-    /// `modelArchiveSettings(nil)` turns the models off.
+    /// `modelArchiveSettings(nil)` turns the models off again.
     ///
     /// The archive is one PMTiles v3 file whose zoom 14 tiles hold models
     /// ready for the GPU (`ModelTileContents` is the format). It is read over HTTP

@@ -5,10 +5,12 @@ import Foundation
 
 /// The hosted ImmersiveMap archives: one PMTiles file of vector tiles built
 /// from OpenStreetMap data, under ODbL, and one of building models, both
-/// read over HTTP range requests. These constants are what a bare
+/// read over HTTP range requests. The tile archive is what a bare
 /// `ImmersiveMapView()` renders with, the ground relief on Mapterhorn's open
-/// terrain beside them (`GroundReliefSettings.tileURLTemplate`). Pointing
-/// the map elsewhere is one `.tileArchive(_:headers:)` or
+/// terrain beside it (`GroundReliefSettings.tileURLTemplate`). The model
+/// archive is off until a map asks for it, with
+/// `.modelArchive(ImmersiveMapTilesService.modelArchiveURL)`. Pointing the
+/// map elsewhere is one `.tileArchive(_:headers:)` or
 /// `.modelArchive(_:headers:depthBias:)` call.
 public enum ImmersiveMapTilesService {
     /// The hosted PMTiles archive. The file name carries the planet's date:
