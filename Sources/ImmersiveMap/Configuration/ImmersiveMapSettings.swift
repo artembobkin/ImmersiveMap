@@ -797,12 +797,12 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// roads, the ground lines, the buildings, the models, the labels
         /// and the ground's shadows stay on the plane, so a hill covers the
         /// roads that cross it. Read at draw time, not baked into the
-        /// prepared tiles. On by default, on Mapterhorn's open terrain
-        /// (`tileURLTemplate`): `groundRelief(isEnabled: false)` lays the
-        /// map flat and flattens the tiles from the flattening's own zoom
-        /// again, not from the relief's (`appearZoom`).
+        /// prepared tiles. Off by default, the map lying flat and the tiles
+        /// flattened from the flattening's own zoom, not from the relief's
+        /// (`appearZoom`): `groundRelief(isEnabled: true)` raises the ground
+        /// on Mapterhorn's open terrain (`tileURLTemplate`).
         public struct GroundReliefSettings: Equatable, Sendable {
-            /// Whether the flattened ground rises. True by default.
+            /// Whether the flattened ground rises. False by default.
             public var isEnabled: Bool
             /// The terrain tiles: a URL with `{z}`, `{x}` and `{y}` in it,
             /// of square images (PNG or WebP, of any size) whose pixels hold
@@ -969,7 +969,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// reading `ImmersiveMapView.onTerrainSurroundingsChange` reports.
             public var surroundings: TerrainSurroundingsSettings
 
-            public init(isEnabled: Bool = true,
+            public init(isEnabled: Bool = false,
                         tileURLTemplate: String = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp",
                         encoding: GroundReliefEncoding = .terrarium,
                         exaggeration: Float = 1,

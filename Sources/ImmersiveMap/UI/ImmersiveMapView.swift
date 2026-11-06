@@ -984,8 +984,8 @@ public extension ImmersiveMapView {
     /// `collapseZoom`, unless `collapsesWhereTerrainIsMissing` is false.
     /// The decoded terrain tiles
     /// live with the tiles they raise, and `maximumConcurrentLoads` of them
-    /// load at once, the frame's nearest first. On by default, on
-    /// Mapterhorn's open terrain: `isEnabled: false` lays the map flat. An
+    /// load at once, the frame's nearest first. Off by default:
+    /// `isEnabled: true` raises the ground on Mapterhorn's open terrain. An
     /// omitted value is left as configured:
     ///
     ///     ImmersiveMapView()

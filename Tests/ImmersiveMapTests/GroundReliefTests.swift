@@ -233,9 +233,9 @@ final class GroundReliefTests: XCTestCase {
         XCTAssertNil(ground.frame.relief(for: tile, terrainZoom: tile.z))
     }
 
-    func testTheReliefIsOnByDefault() {
-        XCTAssertTrue(ImmersiveMapSettings.default.tiles.groundRelief.isEnabled)
-        XCTAssertFalse(ImmersiveMapSettings.default.groundRelief(isEnabled: false).tiles.groundRelief.isEnabled)
+    func testTheReliefIsOffByDefault() {
+        XCTAssertFalse(ImmersiveMapSettings.default.tiles.groundRelief.isEnabled)
+        XCTAssertTrue(ImmersiveMapSettings.default.groundRelief(isEnabled: true).tiles.groundRelief.isEnabled)
         let settings = ImmersiveMapSettings.defaultWithoutRelief.groundRelief(isEnabled: true, exaggeration: 3)
         XCTAssertTrue(settings.tiles.groundRelief.isEnabled)
         XCTAssertEqual(settings.tiles.groundRelief.exaggeration, 3)
