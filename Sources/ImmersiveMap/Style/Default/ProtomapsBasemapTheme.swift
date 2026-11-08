@@ -1220,17 +1220,17 @@ public extension ProtomapsBasemapTheme.LabelStyles {
     /// few points larger) is measured against the floor after its own
     /// adjustment rather than on top of a base that was already lifted.
     ///
-    /// Every name is laid over the map a little transparent (0.85, the
+    /// Every name is laid over the map a little transparent (0.8, the
     /// countries and the regions lighter still), and every halo fades out
     /// over the outer half of its width, so a name reads without standing
     /// out of the map as a sticker would.
     static let `default` = ProtomapsBasemapTheme.LabelStyles(
         city: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.20, 0.20, 0.22), strokeColor: SIMD3<Float>(1, 1, 1),
-            haloEm: 0.153, sizePoints: 15, weight: .bold, opacity: 0.85, haloSoftness: 0.5),
+            haloEm: 0.153, sizePoints: 15, weight: .bold, opacity: 0.8, haloSoftness: 0.5),
         town: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.30, 0.30, 0.32), strokeColor: SIMD3<Float>(1, 1, 1),
-            haloEm: 0.173, sizePoints: 11, weight: .thin, opacity: 0.85, haloSoftness: 0.5),
+            haloEm: 0.173, sizePoints: 11, weight: .thin, opacity: 0.8, haloSoftness: 0.5),
         // The districts are lettered like the streets, the deep black
         // being the cities' alone: light grey capitals in the thin face
         // with a little added weight and a narrow halo, so a district
@@ -1239,7 +1239,7 @@ public extension ProtomapsBasemapTheme.LabelStyles {
         district: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.45, 0.45, 0.46), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.1, sizePoints: 10, weight: .thin, uppercased: true, emboldenPoints: 0.2,
-            opacity: 0.85, haloSoftness: 0.5),
+            opacity: 0.8, haloSoftness: 0.5),
         // A country's name is the name of a land: spaced capitals in the
         // thin face with a little added weight, a shade above a capital's
         // size (16.5), in a lighter grey of its own with a narrow halo, so
@@ -1258,12 +1258,12 @@ public extension ProtomapsBasemapTheme.LabelStyles {
             letterSpacingEm: 0.1, opacity: 0.7, haloSoftness: 0.5),
         poi: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.40, 0.42, 0.40), strokeColor: SIMD3<Float>(1, 1, 1),
-            haloEm: 0.225, sizePoints: 8, weight: .thin, opacity: 0.85, haloSoftness: 0.5),
+            haloEm: 0.225, sizePoints: 8, weight: .thin, opacity: 0.8, haloSoftness: 0.5),
         // The water names lie on the water: a deeper blue of its own hue
         // and no halo, so they read as part of the surface.
         water: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.29, 0.49, 0.71), strokeColor: SIMD3<Float>(1, 1, 1),
-            haloEm: 0, sizePoints: 9.5, weight: .thin, opacity: 0.85),
+            haloEm: 0, sizePoints: 9.5, weight: .thin, opacity: 0.8),
         // The street names stay under the places and the landmarks: small
         // light grey capitals in the thin face with a little added weight
         // and a narrow halo, the way a commercial map letters its streets,
@@ -1272,6 +1272,6 @@ public extension ProtomapsBasemapTheme.LabelStyles {
         road: ProtomapsBasemapTheme.LabelAppearance(
             fillColor: SIMD3<Float>(0.45, 0.45, 0.46), strokeColor: SIMD3<Float>(1, 1, 1),
             haloEm: 0.1, sizePoints: 11, weight: .thin, uppercased: true, emboldenPoints: 0.2,
-            opacity: 0.85, haloSoftness: 0.5)
+            opacity: 0.8, haloSoftness: 0.5)
     )
 }

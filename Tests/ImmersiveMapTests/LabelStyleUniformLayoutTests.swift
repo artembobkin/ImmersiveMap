@@ -36,10 +36,10 @@ final class LabelStyleUniformLayoutTests: XCTestCase {
         let labels = ProtomapsBasemapTheme.LabelStyles.default
         for (name, appearance) in [("city", labels.city), ("town", labels.town), ("district", labels.district),
                                    ("poi", labels.poi), ("road", labels.road)] {
-            XCTAssertEqual(appearance.opacity, 0.85, name)
+            XCTAssertEqual(appearance.opacity, 0.8, name)
             XCTAssertEqual(appearance.haloSoftness, 0.5, name)
         }
-        XCTAssertEqual(labels.water.opacity, 0.85)
+        XCTAssertEqual(labels.water.opacity, 0.8)
         XCTAssertEqual(labels.country.opacity, 0.65)
         XCTAssertEqual(labels.country.haloSoftness, 0.5)
         XCTAssertEqual(labels.region.opacity, 0.7)
