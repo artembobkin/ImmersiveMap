@@ -121,11 +121,11 @@ enum FixtureTiles {
     private static func sourced(_ settings: ImmersiveMapSettings, archiveURL: URL) -> ImmersiveMapSettings {
         var sourced = settings
         sourced.tiles.network.tileArchiveURL = archiveURL
-        if sourced.tiles.groundRelief.tileURLTemplate == ImmersiveMapSettings.TileSettings.GroundReliefSettings().tileURLTemplate {
-            sourced.tiles.groundRelief.tileURLTemplate = deadEndTerrainTemplate
+        if sourced.tiles.groundRelief.source == .mapterhorn {
+            sourced.tiles.groundRelief.source = ImmersiveMapTerrainSource(tileURLTemplate: deadEndTerrainTemplate)
         }
-        if sourced.modelArchive?.archiveURL == ImmersiveMapTilesService.modelArchiveURL {
-            sourced.modelArchive?.archiveURL = deadEndArchiveURL
+        if sourced.modelArchive.archiveURL == ImmersiveMapTilesService.modelArchiveURL {
+            sourced.modelArchive.archiveURL = deadEndArchiveURL
         }
         return sourced
     }
@@ -142,7 +142,6 @@ enum FixtureTiles {
     /// network was removed to avoid.
     private static func cacheless(_ settings: ImmersiveMapSettings) -> ImmersiveMapSettings {
         var cacheless = settings
-        cacheless.tiles.cache.urlCacheEnabled = false
         cacheless.tiles.cache.preparedTileCacheEnabled = false
         prewarmSharedRenderResourcesIfPossible()
         return cacheless

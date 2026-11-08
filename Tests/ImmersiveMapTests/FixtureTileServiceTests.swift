@@ -150,11 +150,10 @@ final class FixtureTileServiceTests: XCTestCase {
             // The terrain's address stays home too, for a case that turns
             // the relief on, and the models are off unless a case turns
             // them on.
-            XCTAssertTrue(settings.tiles.groundRelief.tileURLTemplate.hasPrefix("http://127.0.0.1:"), "\(label) terrain")
-            XCTAssertNil(settings.modelArchive, "\(label) model archive")
+            XCTAssertTrue(settings.tiles.groundRelief.source.tileURLTemplate.hasPrefix("http://127.0.0.1:"), "\(label) terrain")
+            XCTAssertNil(settings.modelArchive.archiveURL, "\(label) model archive")
             // A run must leave nothing behind in the user's caches, and must
             // not be able to read what an earlier run wrote.
-            XCTAssertFalse(settings.tiles.cache.urlCacheEnabled, "\(label) raw tile cache")
             XCTAssertFalse(settings.tiles.cache.preparedTileCacheEnabled, "\(label) prepared tile cache")
         }
     }

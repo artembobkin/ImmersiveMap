@@ -33,10 +33,11 @@ final class GroundReliefStandInOffscreenTests: XCTestCase {
         settings.scene.shadows.isEnabled = false
         settings.scene.fog.isEnabled = false
         settings.labels.isEnabled = false
-        settings = settings.groundRelief(isEnabled: true,
-                                         tileURLTemplate: terrain.absoluteString + "{z}/{x}/{y}.png",
-                                         exaggeration: 1,
-                                         collapseZoom: 30)
+        settings = settings
+            .terrain(ImmersiveMapTerrainSource(tileURLTemplate: terrain.absoluteString + "{z}/{x}/{y}.png"))
+            .groundRelief(isEnabled: true,
+                          exaggeration: 1,
+                          collapseZoom: 30)
         let harness = try OffscreenFrameHarness.makeOrSkip(settings: settings, size: 768)
 
         // The zoom 9 tiles, parsed in layers (the flattening starts at the
@@ -182,10 +183,11 @@ final class GroundReliefStandInOffscreenTests: XCTestCase {
         settings.scene.shadows.isEnabled = false
         settings.scene.fog.isEnabled = false
         settings.labels.isEnabled = false
-        settings = settings.groundRelief(isEnabled: true,
-                                         tileURLTemplate: base.absoluteString + "/{z}/{x}/{y}.png",
-                                         exaggeration: 1,
-                                         collapseZoom: 30)
+        settings = settings
+            .terrain(ImmersiveMapTerrainSource(tileURLTemplate: base.absoluteString + "/{z}/{x}/{y}.png"))
+            .groundRelief(isEnabled: true,
+                          exaggeration: 1,
+                          collapseZoom: 30)
         let harness = try OffscreenFrameHarness.makeOrSkip(settings: settings, size: 768)
         let park = VectorTileFixture.fullCoverageTile(layerName: "landuse", properties: ["kind": "park"])
         let residential = VectorTileFixture.fullCoverageTile(layerName: "landuse", properties: ["kind": "residential"])

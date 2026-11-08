@@ -42,7 +42,7 @@ enum BuildingCoveragePlanner {
     static func minimumDrawZoom(settings: ImmersiveMapSettings) -> Int {
         let minimumZoom = settings.scene.extrusion.buildingsMinimumZoom
         let wanted = minimumZoom.isFinite ? Int(max(minimumZoom, 0).rounded(.down)) : Int.max
-        return max(minimumSourceZoom, min(wanted, settings.tiles.coverage.maximumZoomLevel))
+        return max(minimumSourceZoom, min(wanted, settings.tiles.coverage.resolvedMaximumZoomLevel))
     }
 
     /// `groundPlacements` are the frame's ground placements

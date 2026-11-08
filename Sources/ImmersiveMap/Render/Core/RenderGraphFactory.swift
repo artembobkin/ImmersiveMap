@@ -52,7 +52,7 @@ enum RenderGraphFactory {
                                                           depthDisabledState: context.depthDisabledState,
                                                           shadowMapTextureProvider: shadowMapTextureProvider,
                                                           shadowFallbackTexture: context.shadowFallbackTexture,
-                                                          minimumZoom: settings.modelArchive?.minimumZoom ?? 0,
+                                                          minimumZoom: settings.modelArchive.minimumZoom,
                                                           riseSeconds: settings.scene.extrusion.riseSeconds)
         let flatMapSurfaceSubsystem = FlatMapSurfaceRenderSubsystem(tilePipeline: context.tilePipeline,
                                                                     groundOwnerState: context.groundOwnerState,

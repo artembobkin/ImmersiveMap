@@ -70,7 +70,7 @@ final class GroundReliefTests: XCTestCase {
     func testTheURLTemplateTakesTheAddress() throws {
         let device = try Self.device()
         let settings = ImmersiveMapSettings.TileSettings.GroundReliefSettings(isEnabled: true,
-                                                                              tileURLTemplate: "https://terrain.example/{z}/{x}/{y}.png")
+                                                                              source: ImmersiveMapTerrainSource(tileURLTemplate: "https://terrain.example/{z}/{x}/{y}.png"))
         _ = try Self.device()
         let source = GroundReliefURLTerrainSource(settings: settings, fetch: { _ in .missing })
         XCTAssertEqual(source.url(for: Tile(x: 3, y: 5, z: 4))?.absoluteString, "https://terrain.example/4/3/5.png")
@@ -109,7 +109,7 @@ final class GroundReliefTests: XCTestCase {
         let device = try Self.device()
         let parentImage = try Self.png(size: 2, pixels: Array(repeating: (128, 10, 0), count: 4))
         let settings = ImmersiveMapSettings.TileSettings.GroundReliefSettings(isEnabled: true,
-                                                                              tileURLTemplate: "https://terrain.example/{z}/{x}/{y}.png",
+                                                                              source: ImmersiveMapTerrainSource(tileURLTemplate: "https://terrain.example/{z}/{x}/{y}.png"),
                                                                               minimumSourceZoom: 12)
         let ground = makeTestRelief(device: device, settings: settings, fetch: { url in
             url.absoluteString.contains("/15/") ? .missing : .image(parentImage)
@@ -239,9 +239,7 @@ final class GroundReliefTests: XCTestCase {
         let settings = ImmersiveMapSettings.defaultWithoutRelief.groundRelief(isEnabled: true, exaggeration: 3)
         XCTAssertTrue(settings.tiles.groundRelief.isEnabled)
         XCTAssertEqual(settings.tiles.groundRelief.exaggeration, 3)
-        XCTAssertEqual(settings.tiles.groundRelief.tileURLTemplate,
-                       ImmersiveMapSettings.TileSettings.GroundReliefSettings().tileURLTemplate,
-                       "An omitted value is left as configured")
+        XCTAssertEqual(settings.tiles.groundRelief.source, .mapterhorn, "An omitted value is left as configured")
     }
 
     /// The relief and the flattening start at one zoom: the tile zoom of
@@ -260,7 +258,7 @@ final class GroundReliefTests: XCTestCase {
         settings = settings.groundRelief(appearZoom: 11.6)
         XCTAssertEqual(settings.tiles.resolvedGroundFlatteningFromTileZoom, 11, "The tile zoom of a fractional appear zoom")
         settings = settings.groundRelief(appearZoom: 30)
-        XCTAssertEqual(settings.tiles.resolvedGroundFlatteningFromTileZoom, settings.tiles.coverage.maximumZoomLevel,
+        XCTAssertEqual(settings.tiles.resolvedGroundFlatteningFromTileZoom, settings.tiles.coverage.resolvedMaximumZoomLevel,
                        "Past the tileset, its deepest zoom")
         settings = settings.groundFlattening(isEnabled: false).groundRelief(appearZoom: 10)
         XCTAssertEqual(settings.tiles.resolvedGroundFlatteningFromTileZoom, 10, "The relief flattens on its own")
@@ -1076,7 +1074,7 @@ final class GroundReliefTests: XCTestCase {
         let device = try Self.device()
         let image = try Self.png(size: 2, pixels: Array(repeating: (128, 0, 0), count: 4))
         let settings = ImmersiveMapSettings.TileSettings.GroundReliefSettings(isEnabled: true,
-                                                                              tileURLTemplate: "https://terrain.example/{z}/{x}/{y}.png",
+                                                                              source: ImmersiveMapTerrainSource(tileURLTemplate: "https://terrain.example/{z}/{x}/{y}.png"),
                                                                               minimumSourceZoom: 12)
         let ground = makeTestRelief(device: device, settings: settings, fetch: { url in
             url.absoluteString.contains("/15/") ? .missing : .image(image)
@@ -1195,7 +1193,7 @@ final class GroundReliefTests: XCTestCase {
 /// bytes and the clock the tests' own.
 func makeTestRelief(device: MTLDevice,
                     settings: ImmersiveMapSettings.TileSettings.GroundReliefSettings,
-                    deepestTileZoom: Int = ImmersiveMapSettings.default.tiles.coverage.maximumZoomLevel,
+                    deepestTileZoom: Int = ImmersiveMapSettings.default.tiles.coverage.resolvedMaximumZoomLevel,
                     hillshade: ImmersiveMapHillshade = ImmersiveMapHillshade(),
                     occlusion: ImmersiveMapTerrainOcclusion = ImmersiveMapTerrainOcclusion(),
                     fetch: @escaping @Sendable (URL) async throws -> GroundReliefURLTerrainSource.Fetched,

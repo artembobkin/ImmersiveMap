@@ -29,7 +29,7 @@ final class RenderFrameVisibilityResolver {
         // every slope a drag crosses (`CameraStateController.planningZoom`).
         let zoomPlan = TileCoverageZoomPolicy.resolve(cameraZoom: cameraFrameState.planningZoom,
                                                       renderSurfaceMode: resolvedPresentation.renderSurfaceMode,
-                                                      maximumZoomLevel: tileSettings.coverage.maximumZoomLevel)
+                                                      maximumZoomLevel: tileSettings.coverage.resolvedMaximumZoomLevel)
         // The frame is drawn by the rules of the set its planning zoom
         // falls in. Not the target zoom: that stops at the tileset's
         // deepest zoom, and a set starting past it would never be reached.

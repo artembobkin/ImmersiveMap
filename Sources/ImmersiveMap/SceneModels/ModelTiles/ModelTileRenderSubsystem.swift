@@ -244,7 +244,7 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
             // The bias is the frame's settings' at the camera's zoom
             // (`ModelArchiveSettings.depthBias`), read here so the debug
             // panel's drag applies live.
-            let depthBias = frameContext.services.settings.modelArchive?.depthBias(atZoom: frameContext.planningZoom) ?? 0
+            let depthBias = frameContext.services.settings.modelArchive.depthBias(atZoom: frameContext.planningZoom)
             ModelTileDrawer.draw(renderEncoder: encoder,
                                  cameraUniform: frameContext.cameraUniform,
                                  shadowBinding: shadowBinding,

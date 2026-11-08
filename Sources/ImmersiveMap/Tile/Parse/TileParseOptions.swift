@@ -127,7 +127,7 @@ struct TileParseOptions: Equatable {
         self.init(labelsEnabled: settings.labels.isEnabled,
                   addTestBorders: settings.tiles.parsing.addTestBorders,
                   buildingMinimumSourceZoom: BuildingCoveragePlanner.minimumDrawZoom(settings: settings),
-                  buildingDeepestSourceZoom: settings.tiles.coverage.maximumZoomLevel,
+                  buildingDeepestSourceZoom: settings.tiles.coverage.resolvedMaximumZoomLevel,
                   groundFlatteningFromTileZoom: settings.tiles.resolvedGroundFlatteningFromTileZoom,
                   groundFlatteningGrid: settings.tiles.groundFlattening.grid,
                   groundFlatteningGridByTileZoom: settings.tiles.groundFlattening.gridByTileZoom,

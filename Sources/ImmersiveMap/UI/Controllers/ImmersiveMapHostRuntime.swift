@@ -21,6 +21,9 @@ final class ImmersiveMapHostRuntime {
     /// marker views into the video.
     private var currentMarkerContent: MarkerViewContent?
     private var powerStateObservers: NotificationObserverBag?
+    /// Watches for the archive's depth turning out other than the one the
+    /// map was planned by (`TileArchiveDepths.didChange`).
+    private var archiveDepthObserver: NotificationObserverBag?
     /// The build of the shared resources the renderer waits for, while the
     /// process has none for the settings' sample count yet; see
     /// `createRenderer`.
@@ -36,6 +39,8 @@ final class ImmersiveMapHostRuntime {
          settings: ImmersiveMapSettings,
          initialCameraPosition: ImmersiveMapCameraPosition?,
          requestsLayout: @escaping () -> Void) {
+        // Planned by the archive's depth as last read (`TileArchiveDepths`).
+        let settings = settings.resolvingArchiveDepth()
         self.metalLayer = layer
         self.mapView = mapView
         self.requestsLayout = requestsLayout
@@ -49,6 +54,23 @@ final class ImmersiveMapHostRuntime {
                        cameraPosition: initialCameraPosition)
         runtimeGraph.cameraRuntime.syncPitchControlValue()
         subscribeToPowerStateNotifications()
+        subscribeToArchiveDepthChanges()
+    }
+
+    /// When the archive's header names a depth other than the one the map
+    /// was planned by, the settings are applied again with it, and the
+    /// planner rebuilds what the depth decides.
+    private func subscribeToArchiveDepthChanges() {
+        archiveDepthObserver = NotificationObserverBag(observers: [
+            NotificationCenter.default.addObserver(forName: TileArchiveDepths.didChange,
+                                                   object: nil,
+                                                   queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.applySettings(self.runtimeGraph.cameraRuntime.currentSettings)
+                }
+            }
+        ])
     }
 
     /// Thermal pressure and Low Power Mode cap the display-link rates for the
@@ -180,7 +202,8 @@ final class ImmersiveMapHostRuntime {
         // The debug panel's live edits ride on top: SwiftUI re-sends the app's
         // own value on every update of the hierarchy, which would otherwise
         // revert a slider as soon as anything else on screen changed.
-        let settings = runtimeGraph.debugPanelRuntime?.applyingOverrides(to: settings) ?? settings
+        let settings = (runtimeGraph.debugPanelRuntime?.applyingOverrides(to: settings) ?? settings)
+            .resolvingArchiveDepth()
         let currentSettings = runtimeGraph.cameraRuntime.currentSettings
         guard currentSettings != settings else {
             return

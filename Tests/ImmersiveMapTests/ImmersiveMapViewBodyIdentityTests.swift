@@ -14,11 +14,11 @@ final class ImmersiveMapViewBodyIdentityTests: XCTestCase {
     func testBodyTypeDoesNotDependOnCameraUIControlsToggle() {
         let camera = ImmersiveMapCameraController()
         let enabledType = String(describing: type(of: ImmersiveMapView()
-            .camera(camera)
+            .cameraController(camera)
             .enableCameraUIControls(true)
             .body))
         let disabledType = String(describing: type(of: ImmersiveMapView()
-            .camera(camera)
+            .cameraController(camera)
             .enableCameraUIControls(false)
             .body))
         let plainType = String(describing: type(of: ImmersiveMapView().body))

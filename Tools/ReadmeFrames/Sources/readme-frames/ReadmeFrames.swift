@@ -9,8 +9,8 @@ import UniformTypeIdentifiers
 
 /// Renders the README's frames and lays out its gallery: every frame of
 /// `frames.json` with a camera is captured offscreen by the engine's still
-/// capture (`ImmersiveMapStillRecorder`) and written as a PNG into
-/// `Assets/`, then the gallery between the README's markers
+/// capture (`ImmersiveMapStillRecorder`) and written as an AVIF picture
+/// into `Assets/` (`Picture`), then the gallery between the README's markers
 /// (`<!-- gallery:start -->` and `<!-- gallery:end -->`) is written again
 /// from the list, in its order: a `full` frame takes a row of its own, the
 /// `half` frames stand two to a row. So the pictures on the repository's
@@ -19,6 +19,7 @@ import UniformTypeIdentifiers
 ///     Tools/ReadmeFrames/render.sh
 ///     Tools/ReadmeFrames/render.sh --only readme-globe-europe
 ///     Tools/ReadmeFrames/render.sh --gallery-only
+///     Tools/ReadmeFrames/render.sh --compress
 ///     Tools/ReadmeFrames/render.sh --frames my.json --out /tmp/frames
 ///
 /// Through `render.sh`, which builds with xcodebuild: a plain `swift run`
@@ -28,14 +29,15 @@ import UniformTypeIdentifiers
 /// needs the credit beside it, as the README has.
 ///
 /// A frame is a place in the gallery and, when it has a camera, a render
-/// (`Frame`): its name (the PNG's name under `Assets/`), the picture's
+/// (`Frame`): its name (the picture's name under `Assets/`), the picture's
 /// `alt` text and its `layout`, and the camera's latitude, longitude and
 /// zoom, its bearing and pitch in degrees (0 by default), the output's
 /// width and height in pixels, the pixels per point (2 by default, a
 /// Retina screen) and the scene's date (a fixed summer noon by default, so
 /// the sun and the night side are the same on every run). A frame without
-/// a camera is placed as the PNG already in `Assets/`: a picture taken by
-/// hand, until it gets a camera. A frame may name a `theme` (`night`,
+/// a camera is placed as the picture already in `Assets/`: a picture taken
+/// by hand, until it gets a camera, made an AVIF from its PNG by
+/// `--compress`. A frame may name a `theme` (`night`,
 /// the dark palette of the settings example), carry `avatars` (markers
 /// with a portrait from a URL or a file, a battery or a speed badge) and
 /// `sceneModels` (a USDZ file of the repository placed on the map), all
@@ -56,7 +58,10 @@ struct ReadmeFrames {
             let rendered = frames.filter { frame in
                 frame.camera != nil && (options.only == nil || options.only == frame.name)
             }
-            if options.galleryOnly == false {
+            if options.compress {
+                try Picture.compress(frames: frames.filter { options.only == nil || options.only == $0.name },
+                                     in: options.outputDirectory)
+            } else if options.galleryOnly == false {
                 guard rendered.isEmpty == false else {
                     throw ToolError("No frame to render: \(options.only.map { "no frame named \($0) with a camera" } ?? "no frame has a camera")")
                 }
@@ -71,8 +76,8 @@ struct ReadmeFrames {
                                                            avatars: try frame.avatarMarkers(),
                                                            sceneModels: try frame.sceneModelValues(),
                                                            configuration: frame.configuration(settleTimeout: options.settleTimeout))
-                    let url = options.outputDirectory.appendingPathComponent("\(frame.name).png")
-                    try Self.writePNG(image, to: url)
+                    let url = Picture.url(of: frame, in: options.outputDirectory)
+                    try Picture.write(image, to: url, maximumWidth: Picture.maximumWidth(of: frame))
                     print("  -> \(url.path) in \(String(format: "%.1f", Date().timeIntervalSince(started))) s")
                 }
             }
@@ -98,7 +103,8 @@ struct ReadmeFrames {
             })
             .buildingExtrusion(buildingsMinimumZoom: 14, risesFromTheGround: false)
             .groundRelief(isEnabled: true)
-            .modelArchive(modelArchive, depthBias: 0.05)
+            .modelArchive(modelArchive)
+            .modelArchiveSettings(depthBias: 0.05)
             .labelSettings(language: .english)
     }
 
@@ -133,14 +139,78 @@ struct ReadmeFrames {
         .deletingLastPathComponent()  // Tools
         .deletingLastPathComponent()  // repository root
 
-    static func writePNG(_ image: CGImage, to url: URL) throws {
-        guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil) else {
-            throw ToolError("Cannot create \(url.path)")
+}
+
+/// The README's pictures as they are published: AVIF, which a PNG of a
+/// rendered map is fifteen to thirty times the size of, at the width the
+/// gallery shows them at on a Retina screen. A `full` frame stands at the
+/// page's width, about 900 points, and keeps 2400 pixels. A `half` one
+/// stands at half of it and is scaled down to 1600, from the render at the
+/// frame's own size, so the framing and the labels are those of the render.
+enum Picture {
+    static let fileExtension = "avif"
+    /// The encoder's quality, 0 to 1: small labels stay clean at 0.7.
+    static let quality = 0.7
+    static let fullWidth = 2400
+    static let halfWidth = 1600
+
+    static func url(of frame: Frame, in directory: URL) -> URL {
+        directory.appendingPathComponent("\(frame.name).\(fileExtension)")
+    }
+
+    static func maximumWidth(of frame: Frame) -> Int {
+        frame.layout == .full ? fullWidth : halfWidth
+    }
+
+    /// Writes `image` as AVIF, scaled down to `maximumWidth` when wider.
+    static func write(_ image: CGImage, to url: URL, maximumWidth: Int) throws {
+        let scaled = try scaledDown(image, toWidth: maximumWidth)
+        guard let destination = CGImageDestinationCreateWithURL(url as CFURL, "public.avif" as CFString, 1, nil) else {
+            throw ToolError("Cannot create \(url.path): this macOS writes no AVIF")
         }
-        CGImageDestinationAddImage(destination, image, nil)
+        CGImageDestinationAddImage(destination, scaled,
+                                   [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
         guard CGImageDestinationFinalize(destination) else {
             throw ToolError("Cannot write \(url.path)")
         }
+    }
+
+    /// Makes an AVIF of every frame's PNG in `directory` and removes the
+    /// PNG: the pictures rendered before the README took AVIF, and a
+    /// picture taken by hand.
+    static func compress(frames: [Frame], in directory: URL) throws {
+        var compressed = 0
+        for frame in frames {
+            let png = directory.appendingPathComponent("\(frame.name).png")
+            guard FileManager.default.fileExists(atPath: png.path) else { continue }
+            guard let source = CGImageSourceCreateWithURL(png as CFURL, nil),
+                  let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+                throw ToolError("Cannot read \(png.path)")
+            }
+            let url = url(of: frame, in: directory)
+            try write(image, to: url, maximumWidth: maximumWidth(of: frame))
+            try FileManager.default.removeItem(at: png)
+            let bytes = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+            print("\(frame.name): \(url.lastPathComponent), \(bytes / 1024) KB")
+            compressed += 1
+        }
+        print("compressed: \(compressed) pictures")
+    }
+
+    private static func scaledDown(_ image: CGImage, toWidth width: Int) throws -> CGImage {
+        guard image.width > width else { return image }
+        let height = Int((Double(image.height) * Double(width) / Double(image.width)).rounded())
+        guard let colorSpace = image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            throw ToolError("Cannot scale a picture to \(width) pixels")
+        }
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let scaled = context.makeImage() else {
+            throw ToolError("Cannot scale a picture to \(width) pixels")
+        }
+        return scaled
     }
 }
 
@@ -164,7 +234,7 @@ struct Frame: Decodable {
     /// `half` by default: the first frame of a gallery is the one to make `full`.
     let layout: Layout?
     /// The camera. A frame without one is placed in the gallery as the
-    /// PNG already in `Assets/` and never rendered.
+    /// picture already in `Assets/` and never rendered.
     let latitude: Double?
     let longitude: Double?
     let zoom: Double?
@@ -310,11 +380,11 @@ enum Gallery {
         }
         let assetsFolder = assets.lastPathComponent
         var missing: [String] = []
-        for frame in frames where FileManager.default.fileExists(atPath: assets.appendingPathComponent("\(frame.name).png").path) == false {
+        for frame in frames where FileManager.default.fileExists(atPath: Picture.url(of: frame, in: assets).path) == false {
             missing.append(frame.name)
         }
         guard missing.isEmpty else {
-            throw ToolError("No picture for \(missing.joined(separator: ", ")) in \(assets.path): give the frame a camera and render it, or put the PNG there")
+            throw ToolError("No picture for \(missing.joined(separator: ", ")) in \(assets.path): give the frame a camera and render it, or put its PNG there and run --compress")
         }
         let rows = Self.rows(frames: frames)
         var block = "\n<!-- Written by Tools/ReadmeFrames from frames.json: edit the frames, not these rows. -->\n"
@@ -322,7 +392,7 @@ enum Gallery {
             block += "<p align=\"center\">\n"
             for frame in row {
                 let width = frame.layout == .full ? "100%" : "49%"
-                block += "  <img src=\"\(assetsFolder)/\(frame.name).png\" width=\"\(width)\" alt=\"\(escape(frame.alt ?? frame.name))\">\n"
+                block += "  <img src=\"\(assetsFolder)/\(frame.name).\(Picture.fileExtension)\" width=\"\(width)\" alt=\"\(escape(frame.alt ?? frame.name))\">\n"
             }
             block += "</p>\n"
         }
@@ -363,6 +433,7 @@ struct Options {
     var readmeURL = ReadmeFrames.repositoryRoot.appendingPathComponent("README.md")
     var only: String?
     var galleryOnly = false
+    var compress = false
     var settleTimeout: TimeInterval = 60
 
     init(arguments: [String]) throws {
@@ -380,13 +451,14 @@ struct Options {
             case "--readme": readmeURL = URL(fileURLWithPath: try value(for: argument))
             case "--only": only = try value(for: argument)
             case "--gallery-only": galleryOnly = true
+            case "--compress": compress = true
             case "--settle":
                 guard let seconds = TimeInterval(try value(for: argument)), seconds >= 0 else {
                     throw ToolError("--settle needs a number of seconds")
                 }
                 settleTimeout = seconds
             default:
-                throw ToolError("Unknown argument \(argument). Options: --frames <json>, --out <dir>, --readme <file>, --only <name>, --gallery-only, --settle <seconds>")
+                throw ToolError("Unknown argument \(argument). Options: --frames <json>, --out <dir>, --readme <file>, --only <name>, --gallery-only, --compress, --settle <seconds>")
             }
         }
     }

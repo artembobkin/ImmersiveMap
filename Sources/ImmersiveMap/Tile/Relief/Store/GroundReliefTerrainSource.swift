@@ -26,8 +26,8 @@ enum GroundReliefTerrainResponse: Sendable {
 }
 
 /// Terrain tiles as images at a URL template
-/// (`GroundReliefSettings.tileURLTemplate`), decoded by their encoding
-/// (`GroundReliefSettings.encoding`, `GroundReliefDecoder`). An HTTP 404,
+/// (`ImmersiveMapTerrainSource.tileURLTemplate`), decoded by their encoding
+/// (`ImmersiveMapTerrainSource.encoding`, `GroundReliefDecoder`). An HTTP 404,
 /// or a file that is not there for a terrain directory on disk, is a tile
 /// the source does not have.
 struct GroundReliefURLTerrainSource: GroundReliefTerrainSource {
@@ -55,7 +55,7 @@ struct GroundReliefURLTerrainSource: GroundReliefTerrainSource {
 
     init(settings: ImmersiveMapSettings.TileSettings.GroundReliefSettings,
          fetch: @escaping @Sendable (URL) async throws -> Fetched = GroundReliefURLTerrainSource.fetchOverHTTP) {
-        self.init(tileURLTemplate: settings.tileURLTemplate, encoding: settings.encoding, fetch: fetch)
+        self.init(tileURLTemplate: settings.source.tileURLTemplate, encoding: settings.source.encoding, fetch: fetch)
     }
 
     func heights(of tile: Tile) async throws -> GroundReliefTerrainResponse {
@@ -67,7 +67,7 @@ struct GroundReliefURLTerrainSource: GroundReliefTerrainSource {
             do {
                 return .heights(try GroundReliefDecoder.decode(data, encoding: encoding))
             } catch let error as GroundReliefDecoder.Failure {
-                Self.logger.warning("ImmersiveMap: terrain tile \(tile.z, privacy: .public)/\(tile.x, privacy: .public)/\(tile.y, privacy: .public) cannot be decoded (\(String(describing: error), privacy: .public)). Check that groundRelief(tileURLTemplate:) serves Terrarium images.")
+                Self.logger.warning("ImmersiveMap: terrain tile \(tile.z, privacy: .public)/\(tile.x, privacy: .public)/\(tile.y, privacy: .public) cannot be decoded (\(String(describing: error), privacy: .public)). Check that the terrain(_:) source serves images in its encoding.")
                 return .missing
             }
         case .missing:

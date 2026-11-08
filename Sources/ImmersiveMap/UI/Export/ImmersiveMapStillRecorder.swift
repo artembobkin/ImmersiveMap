@@ -167,6 +167,8 @@ final class ImmersiveMapStillRuntime {
          avatars: [AvatarMarker],
          sceneModels: [ImmersiveMapSceneModel],
          configuration: ImmersiveMapStillConfiguration) throws {
+        // Planned by the archive's depth as last read (`TileArchiveDepths`).
+        let settings = settings.resolvingArchiveDepth()
         self.configuration = configuration
         self.drawSize = CGSize(width: configuration.width, height: configuration.height)
 

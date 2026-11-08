@@ -556,7 +556,16 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
     public struct TileSettings: Equatable, Sendable {
         public struct CoverageSettings: Equatable, Sendable {
-            public var maximumZoomLevel: Int
+            /// The deepest tile zoom the map asks the archive for, at most:
+            /// nil, the default, takes the archive's own depth, the deepest
+            /// zoom its header names. A cap under it leaves the archive's
+            /// deepest zooms unread. Past the deepest zoom the camera keeps
+            /// zooming and the deepest tiles are stretched.
+            public var maximumZoomLevel: Int?
+            /// The archive's own depth, read from its header by the map
+            /// (`TileArchiveDepths`), nil while it was never read. Not the
+            /// app's to set: `resolvingArchiveDepth()` fills it in.
+            var archiveMaximumZoomLevel: Int?
             /// How far past the visible ground the flat map's texture bands
             /// (the ring rules with a `rasterSize`) ask for their tiles, as
             /// a share of the footprint's reach from the camera: 0.25 by
@@ -571,9 +580,23 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// a loading tile, and their tiles cost far more.
             public var rasterBandMarginShare: Float
 
-            public init(maximumZoomLevel: Int, rasterBandMarginShare: Float = 0.25) {
+            public init(maximumZoomLevel: Int? = nil, rasterBandMarginShare: Float = 0.25) {
                 self.maximumZoomLevel = maximumZoomLevel
                 self.rasterBandMarginShare = rasterBandMarginShare
+            }
+
+            /// The depth a map plans by before its archive's header was ever
+            /// read: the hosted archive's.
+            static let provisionalMaximumZoomLevel = ImmersiveMapTilesService.maximumTileZoomLevel
+
+            /// The deepest tile zoom the map asks for: the archive's depth,
+            /// under the cap when there is one. Before the archive's depth
+            /// is known, the cap, or the provisional depth without one.
+            var resolvedMaximumZoomLevel: Int {
+                guard let archiveMaximumZoomLevel else {
+                    return maximumZoomLevel ?? Self.provisionalMaximumZoomLevel
+                }
+                return min(maximumZoomLevel ?? archiveMaximumZoomLevel, archiveMaximumZoomLevel)
             }
         }
 
@@ -588,21 +611,15 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// HTTP header fields added to every archive request. This is how
             /// header-based credentials travel, e.g. `["Authorization": "Bearer xxx"]`.
             public var tileRequestHeaders: [String: String]
-            /// Folded into the raw and prepared disk-cache namespaces so a
-            /// content change invalidates the caches even when the archive URL
-            /// is unchanged. 0 means "not provider-derived".
-            public var cacheIdentity: UInt64
 
             public init(maxConcurrentFetches: Int,
                         pendingRequestQueueCapacity: Int,
                         tileArchiveURL: URL = ImmersiveMapTilesService.tileArchiveURL,
-                        tileRequestHeaders: [String: String] = [:],
-                        cacheIdentity: UInt64 = 0) {
+                        tileRequestHeaders: [String: String] = [:]) {
                 self.maxConcurrentFetches = maxConcurrentFetches
                 self.pendingRequestQueueCapacity = pendingRequestQueueCapacity
                 self.tileArchiveURL = tileArchiveURL
                 self.tileRequestHeaders = tileRequestHeaders
-                self.cacheIdentity = cacheIdentity
             }
         }
 
@@ -610,12 +627,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             public static let defaultPreparedDiskCacheSizeInBytes: Int = 2 * 1_024 * 1_024 * 1_024
 
             public var clearDiskCachesOnLaunch: Bool
-            /// URLSession's URLCache on the tile session. Inert with the
-            /// archive source: it is read by byte range, and range answers
-            /// bypass the cache. Kept as a setting so an app that toggled it
-            /// still compiles and the planner still treats it as a cache
-            /// change.
-            public var urlCacheEnabled: Bool
             /// On-disk cache of parsed/tessellated tiles: the layer every tile
             /// the camera has already looked at comes back from, without the
             /// network. When false, tiles are re-parsed from the raw bytes on
@@ -634,63 +645,17 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             /// decides how much of a revisited area comes back without a
             /// re-download and re-parse.
             public var preparedDiskCacheSizeInBytes: Int
-            /// Backing storage of the deprecated `memoryCacheSizeInBytes`: kept
-            /// so the public surface round-trips the value without the package
-            /// itself touching a deprecated symbol.
-            var legacyMemoryCacheSizeInBytes: Int
 
-            @available(*, deprecated, message: "Has no effect: tiles stay in GPU memory only while a frame draws them, with no byte budget. Size the prepared disk cache instead: preparedDiskCacheSizeInBytes, or the preparedTileDiskCacheSize(bytes:) modifier.")
-            public var memoryCacheSizeInBytes: Int {
-                get { legacyMemoryCacheSizeInBytes }
-                set { legacyMemoryCacheSizeInBytes = newValue }
-            }
-
-            /// - Parameter memoryCacheSizeInBytes: ignored; kept for source
-            ///   compatibility (see the deprecated property of the same name).
-            public init(clearDiskCachesOnLaunch: Bool,
-                        urlCacheEnabled: Bool = true,
+            public init(clearDiskCachesOnLaunch: Bool = false,
                         preparedTileCacheEnabled: Bool = true,
                         preparedDiskCompressionEnabled: Bool = true,
                         preparedDiskTimeToLive: TimeInterval,
-                        memoryCacheSizeInBytes: Int) {
-                self.init(clearDiskCachesOnLaunch: clearDiskCachesOnLaunch,
-                          urlCacheEnabled: urlCacheEnabled,
-                          preparedTileCacheEnabled: preparedTileCacheEnabled,
-                          preparedDiskCompressionEnabled: preparedDiskCompressionEnabled,
-                          preparedDiskTimeToLive: preparedDiskTimeToLive,
-                          preparedDiskCacheSizeInBytes: Self.defaultPreparedDiskCacheSizeInBytes,
-                          memoryCacheSizeInBytes: memoryCacheSizeInBytes)
-            }
-
-            /// - Parameter memoryCacheSizeInBytes: ignored; kept for source
-            ///   compatibility (see the deprecated property of the same name).
-            public init(clearDiskCachesOnLaunch: Bool,
-                        urlCacheEnabled: Bool = true,
-                        preparedTileCacheEnabled: Bool = true,
-                        preparedDiskCompressionEnabled: Bool = true,
-                        preparedDiskTimeToLive: TimeInterval,
-                        preparedDiskCacheSizeInBytes: Int,
-                        memoryCacheSizeInBytes: Int) {
+                        preparedDiskCacheSizeInBytes: Int = CacheSettings.defaultPreparedDiskCacheSizeInBytes) {
                 self.clearDiskCachesOnLaunch = clearDiskCachesOnLaunch
-                self.urlCacheEnabled = urlCacheEnabled
                 self.preparedTileCacheEnabled = preparedTileCacheEnabled
                 self.preparedDiskCompressionEnabled = preparedDiskCompressionEnabled
                 self.preparedDiskTimeToLive = preparedDiskTimeToLive
                 self.preparedDiskCacheSizeInBytes = preparedDiskCacheSizeInBytes
-                self.legacyMemoryCacheSizeInBytes = memoryCacheSizeInBytes
-            }
-
-            /// The deprecated `memoryCacheSizeInBytes` is left out on purpose:
-            /// a no-op field must not make two settings unequal, or changing it
-            /// would still recreate the renderer through
-            /// `ImmersiveMapSettingsApplicationPlanner`.
-            public static func == (lhs: CacheSettings, rhs: CacheSettings) -> Bool {
-                lhs.clearDiskCachesOnLaunch == rhs.clearDiskCachesOnLaunch
-                    && lhs.urlCacheEnabled == rhs.urlCacheEnabled
-                    && lhs.preparedTileCacheEnabled == rhs.preparedTileCacheEnabled
-                    && lhs.preparedDiskCompressionEnabled == rhs.preparedDiskCompressionEnabled
-                    && lhs.preparedDiskTimeToLive == rhs.preparedDiskTimeToLive
-                    && lhs.preparedDiskCacheSizeInBytes == rhs.preparedDiskCacheSizeInBytes
             }
         }
 
@@ -802,23 +767,15 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// prepared tiles. Off by default, the map lying flat and the tiles
         /// flattened from the flattening's own zoom, not from the relief's
         /// (`appearZoom`): `groundRelief(isEnabled: true)` raises the ground
-        /// on Mapterhorn's open terrain (`tileURLTemplate`).
+        /// on the terrain of `source`, Mapterhorn's open terrain by default.
         public struct GroundReliefSettings: Equatable, Sendable {
             /// Whether the flattened ground rises. False by default.
             public var isEnabled: Bool
-            /// The terrain tiles: a URL with `{z}`, `{x}` and `{y}` in it,
-            /// of square images (PNG or WebP, of any size) whose pixels hold
-            /// heights in `encoding`. The default is Mapterhorn's open
-            /// global terrain, 30 m everywhere to zoom 12 and lidar deeper
-            /// where a country publishes it. Mapterhorn asks to be credited,
-            /// and the badge credits it while the relief reads its tiles
-            /// (`credit`).
-            public var tileURLTemplate: String
-            /// How a pixel of a terrain tile holds its height
-            /// (`GroundReliefEncoding`): Terrarium by default, as
-            /// Mapterhorn serves. Set it with `tileURLTemplate` to a source
-            /// in another encoding.
-            public var encoding: GroundReliefEncoding
+            /// Where the heights come from (`ImmersiveMapTerrainSource`):
+            /// Mapterhorn's open global terrain by default
+            /// (`ImmersiveMapTerrainSource.mapterhorn`). Set with
+            /// `ImmersiveMapView.terrain(_:)`.
+            public var source: ImmersiveMapTerrainSource
             /// How much taller than the ground's real heights the relief is
             /// drawn: 1 is true scale, 2 doubles every height. Raise it to
             /// see a gentle relief.
@@ -972,8 +929,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             public var surroundings: TerrainSurroundingsSettings
 
             public init(isEnabled: Bool = false,
-                        tileURLTemplate: String = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp",
-                        encoding: GroundReliefEncoding = .terrarium,
+                        source: ImmersiveMapTerrainSource = .mapterhorn,
                         exaggeration: Float = 1,
                         appearZoom: Double = 10,
                         collapseZoom: Double = 13.7,
@@ -988,8 +944,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                         castsShadows: Bool = true,
                         surroundings: TerrainSurroundingsSettings = TerrainSurroundingsSettings()) {
                 self.isEnabled = isEnabled
-                self.tileURLTemplate = tileURLTemplate
-                self.encoding = encoding
+                self.source = source
                 self.exaggeration = exaggeration
                 self.appearZoom = appearZoom
                 self.collapseZoom = collapseZoom
@@ -1016,27 +971,21 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                 return max(0, min(zoom, deepestTileZoom))
             }
 
-            /// The credit Mapterhorn's terrain asks for, laid on the
-            /// attribution line after the overview's while the relief is on
-            /// and reads Mapterhorn's tiles (`ImmersiveMapSettings
-            /// .resolvedAttribution`), at the camera zooms the relief stands
-            /// out of the plane at, from `appearZoom` up to `collapseZoom`:
-            /// below and past them no terrain is read and the map draws none
-            /// of it. Nil when the relief is off, never rises, or reads
-            /// another source, whose credit the app states with
-            /// `attributionSettings`.
+            /// The credit of the terrain's source, laid on the attribution
+            /// line after the overview's while the relief is on
+            /// (`ImmersiveMapSettings.resolvedAttribution`), at the camera
+            /// zooms the relief stands out of the plane at, from
+            /// `appearZoom` up to `collapseZoom`: below and past them no
+            /// terrain is read and the map draws none of it. Nil when the
+            /// relief is off, never rises, or its source states no credit.
             var credit: ImmersiveMapAttribution.Credit? {
                 guard isEnabled,
-                      tileURLTemplate.hasPrefix(Self.mapterhornTileURLPrefix),
+                      let text = source.credit,
                       appearZoom < collapseZoom else {
                     return nil
                 }
-                return ImmersiveMapAttribution.Credit(Self.mapterhornCreditText,
-                                                      zoomRange: appearZoom..<collapseZoom)
+                return ImmersiveMapAttribution.Credit(text, zoomRange: appearZoom..<collapseZoom)
             }
-
-            static let mapterhornTileURLPrefix = "https://tiles.mapterhorn.com/"
-            static let mapterhornCreditText = "© Mapterhorn"
         }
 
         /// How the country around the point the camera looks at is read as
@@ -1078,7 +1027,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
 
         /// How a pixel of a terrain tile holds its height in metres
-        /// (`GroundReliefSettings.encoding`). Both are RGB images, PNG or
+        /// (`ImmersiveMapTerrainSource.encoding`). Both are RGB images, PNG or
         /// WebP, and differ only in the arithmetic.
         public enum GroundReliefEncoding: String, CaseIterable, Equatable, Sendable {
             /// Red × 256 + green + blue / 256 − 32768: Mapterhorn, AWS
@@ -1182,16 +1131,16 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// Every reader of the flattening's zoom reads this.
         var resolvedGroundFlatteningFromTileZoom: Int? {
             if groundRelief.isEnabled {
-                return groundRelief.tileZoom(deepestTileZoom: coverage.maximumZoomLevel)
+                return groundRelief.tileZoom(deepestTileZoom: coverage.resolvedMaximumZoomLevel)
             }
             guard groundFlattening.isEnabled else { return nil }
-            return groundFlattening.fromTileZoom ?? coverage.maximumZoomLevel
+            return groundFlattening.fromTileZoom ?? coverage.resolvedMaximumZoomLevel
         }
 
         func resolvedCoverageZoomLevel(forCameraZoom cameraZoom: Double) -> Int {
             TileCoverageZoomPolicy.resolve(cameraZoom: cameraZoom,
                                            renderSurfaceMode: .flat,
-                                           maximumZoomLevel: coverage.maximumZoomLevel).baseZoom
+                                           maximumZoomLevel: coverage.resolvedMaximumZoomLevel).baseZoom
         }
     }
 
@@ -2199,7 +2148,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
         /// The archive, over HTTP(S) range requests or from disk for a file
         /// URL. A query string is sent as written, so a key can live there.
-        public var archiveURL: URL
+        /// Nil for a map without models, the default: the models are a
+        /// download of their own, and a map takes it on by pointing here,
+        /// at the hosted archive (`ImmersiveMapTilesService.modelArchiveURL`)
+        /// or its own.
+        public var archiveURL: URL?
         /// HTTP header fields added to every archive request, for
         /// credentials that travel as headers.
         public var requestHeaders: [String: String]
@@ -2240,7 +2193,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// this says.
         public var minimumZoom: Double
 
-        public init(archiveURL: URL,
+        public init(archiveURL: URL? = nil,
                     requestHeaders: [String: String] = [:],
                     memoryBudgetInBytes: Int = ModelArchiveSettings.defaultMemoryBudgetInBytes,
                     diskCacheSizeInBytes: Int = ModelArchiveSettings.defaultDiskCacheSizeInBytes,
@@ -2293,12 +2246,11 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     public var debug: DebugSettings
     /// The controls drawn over the map, see `ControlsSettings`.
     public var controls: ControlsSettings
-    /// The archive the map loads building models from by tile, nil for a
-    /// map without models, which is the default: the models are a download
-    /// of their own, and a map takes it on by pointing here, at the hosted
-    /// archive (`ImmersiveMapTilesService.modelArchiveURL`) or its own. See
+    /// The archive the map loads building models from by tile, and how
+    /// the models load and draw. No archive by default
+    /// (`ModelArchiveSettings.archiveURL`), and then no models. See
     /// `ModelArchiveSettings`.
-    public var modelArchive: ModelArchiveSettings?
+    public var modelArchive: ModelArchiveSettings
     /// The layers of the app's own data drawn over the map, in the order
     /// they draw: zones, lines and points (`ImmersiveMapLayer`). Applies
     /// live.
@@ -2317,7 +2269,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                 viewReuse: ViewReuseSettings = ViewReuseSettings(),
                 debug: DebugSettings,
                 controls: ControlsSettings = ControlsSettings(),
-                modelArchive: ModelArchiveSettings? = nil,
+                modelArchive: ModelArchiveSettings = ModelArchiveSettings(),
                 layers: [ImmersiveMapLayer] = []) {
         self.renderLoop = renderLoop
         self.camera = camera
@@ -2384,14 +2336,12 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                            automaticTransitionSpan: 1.0,
                                            globeRadiusScale: 0.14),
         mapStyle: AnyImmersiveMapMapStyle(ProtomapsBasemapMapStyle()),
-        tiles: TileSettings(coverage: TileSettings.CoverageSettings(maximumZoomLevel: ImmersiveMapTilesService.maximumTileZoomLevel),
+        tiles: TileSettings(coverage: TileSettings.CoverageSettings(),
                             network: TileSettings.NetworkSettings(maxConcurrentFetches: 5,
                                                                   pendingRequestQueueCapacity: 50,
-                                                                  tileArchiveURL: ImmersiveMapTilesService.tileArchiveURL,
-                                                                  cacheIdentity: ImmersiveMapTilesService.cacheIdentity),
+                                                                  tileArchiveURL: ImmersiveMapTilesService.tileArchiveURL),
                             cache: TileSettings.CacheSettings(clearDiskCachesOnLaunch: false,
-                                                              preparedDiskTimeToLive: 7 * 24 * 60 * 60,
-                                                              memoryCacheSizeInBytes: 256 * 1024 * 1024),
+                                                              preparedDiskTimeToLive: 7 * 24 * 60 * 60),
                             parsing: TileSettings.ParsingSettings(addTestBorders: false)),
         labels: LabelSettings(language: .english,
                               fallbackPolicy: .international,
@@ -2436,7 +2386,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                              topPadding: 190.0,
                              sectionSpacing: 28.0,
                              textColor: SIMD3<Float>(0.82, 0.36, 0.0)),
-        modelArchive: nil
+        modelArchive: ModelArchiveSettings()
     )
 }
 
@@ -2519,27 +2469,42 @@ public extension ImmersiveMapSettings {
     }
 
 
-    /// Points the map at an archive of model tiles, keeping the budgets
-    /// already set, and the depth bias too when `depthBias` is nil. See
+    /// Points the map at an archive of model tiles, nil for no models,
+    /// keeping how the models load and draw as set. See
     /// `ModelArchiveSettings`.
-    func modelArchive(_ archiveURL: URL,
-                      headers: [String: String] = [:],
-                      depthBias: ImmersiveMapZoomCurve? = nil) -> ImmersiveMapSettings {
+    func modelArchive(_ archiveURL: URL?,
+                      headers: [String: String] = [:]) -> ImmersiveMapSettings {
         var settings = self
-        var archive = settings.modelArchive ?? ModelArchiveSettings(archiveURL: archiveURL)
-        archive.archiveURL = archiveURL
-        archive.requestHeaders = headers
-        if let depthBias {
-            archive.depthBias = depthBias
-        }
-        settings.modelArchive = archive
+        settings.modelArchive.archiveURL = archiveURL
+        settings.modelArchive.requestHeaders = headers
         return settings
     }
 
-    /// The model archive in full, nil for a map without one.
-    func modelArchiveSettings(_ modelArchive: ModelArchiveSettings?) -> ImmersiveMapSettings {
+    /// The model archive in full.
+    func modelArchiveSettings(_ modelArchive: ModelArchiveSettings) -> ImmersiveMapSettings {
         var settings = self
         settings.modelArchive = modelArchive
+        return settings
+    }
+
+    /// How the models load and draw, a nil leaving a value as configured.
+    func modelArchiveSettings(memoryBudgetInBytes: Int? = nil,
+                              diskCacheSizeInBytes: Int? = nil,
+                              depthBias: ImmersiveMapZoomCurve? = nil,
+                              minimumZoom: Double? = nil) -> ImmersiveMapSettings {
+        var settings = self
+        if let memoryBudgetInBytes {
+            settings.modelArchive.memoryBudgetInBytes = memoryBudgetInBytes
+        }
+        if let diskCacheSizeInBytes {
+            settings.modelArchive.diskCacheSizeInBytes = diskCacheSizeInBytes
+        }
+        if let depthBias {
+            settings.modelArchive.depthBias = depthBias
+        }
+        if let minimumZoom {
+            settings.modelArchive.minimumZoom = minimumZoom
+        }
         return settings
     }
 
@@ -2570,8 +2535,6 @@ public extension ImmersiveMapSettings {
     /// (`TileSettings.GroundReliefSettings`), a nil leaving a value as
     /// configured.
     func groundRelief(isEnabled: Bool? = nil,
-                      tileURLTemplate: String? = nil,
-                      encoding: TileSettings.GroundReliefEncoding? = nil,
                       exaggeration: Float? = nil,
                       appearZoom: Double? = nil,
                       collapseZoom: Double? = nil,
@@ -2611,14 +2574,8 @@ public extension ImmersiveMapSettings {
         if let transitionSeconds {
             settings.tiles.groundRelief.transitionSeconds = max(transitionSeconds, 0)
         }
-        if let encoding {
-            settings.tiles.groundRelief.encoding = encoding
-        }
         if let isEnabled {
             settings.tiles.groundRelief.isEnabled = isEnabled
-        }
-        if let tileURLTemplate {
-            settings.tiles.groundRelief.tileURLTemplate = tileURLTemplate
         }
         if let exaggeration {
             settings.tiles.groundRelief.exaggeration = exaggeration
@@ -2626,6 +2583,13 @@ public extension ImmersiveMapSettings {
         if let cameraClearanceMetres {
             settings.tiles.groundRelief.cameraClearanceMetres = cameraClearanceMetres
         }
+        return settings
+    }
+
+    /// The terrain the relief reads its heights from.
+    func terrain(_ source: ImmersiveMapTerrainSource) -> ImmersiveMapSettings {
+        var settings = self
+        settings.tiles.groundRelief.source = source
         return settings
     }
 
@@ -2711,56 +2675,41 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
-    func tileMaximumZoomLevel(_ maximumZoomLevel: Int) -> ImmersiveMapSettings {
+    func tileMaximumZoomLevel(_ maximumZoomLevel: Int?) -> ImmersiveMapSettings {
         var settings = self
         settings.tiles.coverage.maximumZoomLevel = maximumZoomLevel
         return settings
     }
 
-    /// The byte quota of the prepared tile cache on disk: parsed and
-    /// tessellated tiles, which is where every tile the camera has already
-    /// looked at comes back from. See
-    /// `ImmersiveMapView.preparedTileDiskCacheSize(bytes:)`.
-    func preparedTileDiskCacheSize(bytes: Int) -> ImmersiveMapSettings {
+    /// The settings with the archive's depth as last read from its header
+    /// (`TileArchiveDepths`), which `TileSettings.CoverageSettings
+    /// .resolvedMaximumZoomLevel` plans by. Every path that builds a map
+    /// from settings passes them through here.
+    internal func resolvingArchiveDepth(_ depths: TileArchiveDepths = .shared) -> ImmersiveMapSettings {
         var settings = self
-        settings.tiles.cache.preparedDiskCacheSizeInBytes = bytes
+        let revision = PreparedTileCacheIdentity.tileSourceRevision(for: tiles.network)
+        settings.tiles.coverage.archiveMaximumZoomLevel = depths.maximumZoom(sourceRevision: revision)
+        return settings
+    }
+
+    /// The size of the prepared tile cache on disk: parsed and tessellated
+    /// tiles, which is where every tile the camera has already looked at
+    /// comes back from. See `ImmersiveMapView.preparedTileDiskCacheSize(_:)`.
+    func preparedTileDiskCacheSize(_ size: ImmersiveMapByteCount) -> ImmersiveMapSettings {
+        var settings = self
+        settings.tiles.cache.preparedDiskCacheSizeInBytes = size.bytes
         return settings
     }
 
     /// Adjusts only the provided cache fields; nil leaves a field unchanged.
-    /// `memoryCacheSizeInBytes` is accepted for source compatibility and
-    /// ignored: tiles stay in GPU memory only while a frame draws them.
     func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
-                      urlCacheEnabled: Bool? = nil,
                       preparedTileCacheEnabled: Bool? = nil,
                       preparedDiskCompressionEnabled: Bool? = nil,
                       preparedDiskTimeToLive: TimeInterval? = nil,
-                      memoryCacheSizeInBytes: Int? = nil) -> ImmersiveMapSettings {
-        tileSettings(clearDiskCachesOnLaunch: clearDiskCachesOnLaunch,
-                     urlCacheEnabled: urlCacheEnabled,
-                     preparedTileCacheEnabled: preparedTileCacheEnabled,
-                     preparedDiskCompressionEnabled: preparedDiskCompressionEnabled,
-                     preparedDiskTimeToLive: preparedDiskTimeToLive,
-                     preparedDiskCacheSizeInBytes: nil,
-                     memoryCacheSizeInBytes: memoryCacheSizeInBytes)
-    }
-
-    /// Adjusts only the provided cache fields; nil leaves a field unchanged.
-    /// `memoryCacheSizeInBytes` is accepted for source compatibility and
-    /// ignored: tiles stay in GPU memory only while a frame draws them.
-    func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
-                      urlCacheEnabled: Bool? = nil,
-                      preparedTileCacheEnabled: Bool? = nil,
-                      preparedDiskCompressionEnabled: Bool? = nil,
-                      preparedDiskTimeToLive: TimeInterval? = nil,
-                      preparedDiskCacheSizeInBytes: Int?,
-                      memoryCacheSizeInBytes: Int? = nil) -> ImmersiveMapSettings {
+                      preparedDiskCacheSizeInBytes: Int? = nil) -> ImmersiveMapSettings {
         var settings = self
         if let clearDiskCachesOnLaunch {
             settings.tiles.cache.clearDiskCachesOnLaunch = clearDiskCachesOnLaunch
-        }
-        if let urlCacheEnabled {
-            settings.tiles.cache.urlCacheEnabled = urlCacheEnabled
         }
         if let preparedTileCacheEnabled {
             settings.tiles.cache.preparedTileCacheEnabled = preparedTileCacheEnabled
@@ -2773,9 +2722,6 @@ public extension ImmersiveMapSettings {
         }
         if let preparedDiskCacheSizeInBytes {
             settings.tiles.cache.preparedDiskCacheSizeInBytes = preparedDiskCacheSizeInBytes
-        }
-        if let memoryCacheSizeInBytes {
-            settings.tiles.cache.legacyMemoryCacheSizeInBytes = memoryCacheSizeInBytes
         }
         return settings
     }
@@ -3201,7 +3147,7 @@ public extension ImmersiveMapSettings {
     /// and after either the credit of the overview the engine lays into the
     /// tiles while it is on (`OverviewTileSource.credit`, at the zooms up to
     /// `TileSettings.OverviewSettings.creditMaximumZoom`), then the credit
-    /// of Mapterhorn's terrain at the zooms the relief rises at
+    /// of the terrain's source at the zooms the relief rises at
     /// (`GroundReliefSettings.credit`). An app that points the map at its
     /// own data owns the credit of that data and states it with
     /// `attributionSettings`. An empty override is the app taking the whole

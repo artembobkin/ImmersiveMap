@@ -91,9 +91,15 @@ final class AttributionSettingsTests: XCTestCase {
         neverRises.tiles.groundRelief.collapseZoom = 14
         XCTAssertFalse(neverRises.resolvedAttribution.credits.contains { $0.text == "© Mapterhorn" })
 
-        var elsewhere = reliefOn
-        elsewhere.tiles.groundRelief.tileURLTemplate = "https://example.com/terrain/{z}/{x}/{y}.png"
+        let elsewhere = reliefOn.terrain(ImmersiveMapTerrainSource(tileURLTemplate: "https://example.com/terrain/{z}/{x}/{y}.png"))
         XCTAssertFalse(elsewhere.resolvedAttribution.credits.contains { $0.text == "© Mapterhorn" })
+
+        let credited = reliefOn.terrain(ImmersiveMapTerrainSource(tileURLTemplate: "https://example.com/terrain/{z}/{x}/{y}.png",
+                                                                  credit: "© Example Terrain"))
+        XCTAssertEqual(credited.resolvedAttribution.credits.last,
+                       ImmersiveMapAttribution.Credit("© Example Terrain",
+                                                      zoomRange: reliefOn.tiles.groundRelief.appearZoom..<reliefOn.tiles.groundRelief.collapseZoom),
+                       "A source's own credit is laid on the line")
     }
 
     /// An app pointing the map at its own data owns the credit of that

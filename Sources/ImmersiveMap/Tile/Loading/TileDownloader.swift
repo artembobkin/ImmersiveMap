@@ -120,11 +120,7 @@ class TileDownloader: @unchecked Sendable {
     private let archive: PMTilesArchiveClient
 
     init(config: ImmersiveMapSettings) {
-        let configuration = Self.makeSessionConfiguration(urlCacheEnabled: config.tiles.cache.urlCacheEnabled,
-                                                          maxConcurrentFetches: config.tiles.network.maxConcurrentFetches)
-        if config.tiles.cache.clearDiskCachesOnLaunch {
-            configuration.urlCache?.removeAllCachedResponses()
-        }
+        let configuration = Self.makeSessionConfiguration(maxConcurrentFetches: config.tiles.network.maxConcurrentFetches)
         let network = config.tiles.network
         // Nothing is fetched here: the client reads the archive header on
         // the first tile, so building a downloader touches no network.
@@ -138,8 +134,7 @@ class TileDownloader: @unchecked Sendable {
         self.archive = archive
     }
 
-    static func makeSessionConfiguration(urlCacheEnabled: Bool = true,
-                                         maxConcurrentFetches: Int = 5) -> URLSessionConfiguration {
+    static func makeSessionConfiguration(maxConcurrentFetches: Int = 5) -> URLSessionConfiguration {
         let configuration = URLSessionConfiguration.default
         // The loader dispatches up to maxConcurrentFetches tile requests at
         // once; matching the per-host connection cap keeps none of them queued
@@ -153,20 +148,12 @@ class TileDownloader: @unchecked Sendable {
         // and the disk stage keeps serving previous content meanwhile.
         configuration.timeoutIntervalForRequest = 30
         configuration.timeoutIntervalForResource = 60
-        if urlCacheEnabled {
-            // Kept for a session that answers whole resources. The archive
-            // client reads by byte range and bypasses the cache on every
-            // request (a 206 is not cached by URLCache, and the header fetch
-            // must see the live ETag), so with the archive as the only source
-            // this cache holds nothing. The parsed result is what is cached,
-            // by PreparedTileDiskCaching.
-            configuration.urlCache = URLCache(memoryCapacity: 16 * 1024 * 1024,
-                                              diskCapacity: 1024 * 1024 * 1024)
-            configuration.requestCachePolicy = .useProtocolCachePolicy
-        } else {
-            configuration.urlCache = nil
-            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        }
+        // No URLCache: the archive client reads by byte range and bypasses
+        // the cache on every request (a 206 is not cached by URLCache, and
+        // the header fetch must see the live ETag). The parsed result is
+        // what is cached, by PreparedTileDiskCaching.
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         return configuration
     }
 
@@ -176,6 +163,12 @@ class TileDownloader: @unchecked Sendable {
     /// from memory after that.
     func archiveETag() async throws -> String? {
         try await archive.archiveETag()
+    }
+
+    /// The deepest zoom the archive has, from its header, read with its
+    /// ETag. Throws when the archive cannot be reached.
+    func archiveMaximumZoom() async throws -> Int {
+        try await archive.maximumZoom()
     }
 
     func download(tile: Tile) async -> Data? {

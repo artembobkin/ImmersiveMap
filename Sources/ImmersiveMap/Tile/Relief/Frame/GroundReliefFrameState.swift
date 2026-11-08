@@ -117,7 +117,7 @@ final class GroundReliefFrameState {
                                       occlusionKey: GroundReliefOcclusion.Key(style: occlusion))
         return GroundReliefFrameState(store: store,
                                       settings: relief,
-                                      deepestTileZoom: settings.tiles.coverage.maximumZoomLevel,
+                                      deepestTileZoom: settings.tiles.coverage.resolvedMaximumZoomLevel,
                                       hillshade: hillshade,
                                       occlusion: occlusion)
     }
@@ -128,7 +128,7 @@ final class GroundReliefFrameState {
     /// occlusion's key from here on.
     init(store: GroundReliefStore,
          settings: ImmersiveMapSettings.TileSettings.GroundReliefSettings,
-         deepestTileZoom: Int = ImmersiveMapSettings.default.tiles.coverage.maximumZoomLevel,
+         deepestTileZoom: Int = ImmersiveMapSettings.default.tiles.coverage.resolvedMaximumZoomLevel,
          hillshade: ImmersiveMapHillshade = ImmersiveMapHillshade(),
          occlusion: ImmersiveMapTerrainOcclusion = ImmersiveMapTerrainOcclusion()) {
         self.store = store

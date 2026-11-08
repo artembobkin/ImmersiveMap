@@ -168,10 +168,11 @@ final class GroundReliefOffscreenRenderTests: XCTestCase {
             // zooms on the plane. The near ring reads the terrain of its
             // own zoom by the default rules, and the grid rises by the
             // terrain of the displacement's zoom, which the fixture serves.
-            settings = settings.groundRelief(isEnabled: true,
-                                             tileURLTemplate: terrain.absoluteString + "{z}/{x}/{y}.png",
-                                             exaggeration: exaggeration,
-                                             collapseZoom: 30)
+            settings = settings
+                .terrain(ImmersiveMapTerrainSource(tileURLTemplate: terrain.absoluteString + "{z}/{x}/{y}.png"))
+                .groundRelief(isEnabled: true,
+                              exaggeration: exaggeration,
+                              collapseZoom: 30)
         } else {
             // The plane: with the relief on, a tile is placed only with its
             // terrain, and the harness serves none.

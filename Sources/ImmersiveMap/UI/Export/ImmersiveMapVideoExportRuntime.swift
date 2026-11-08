@@ -78,6 +78,8 @@ final class ImmersiveMapVideoExportRuntime {
          markerContent: MarkerViewContent?,
          configuration: ImmersiveMapVideoExportConfiguration,
          outputURL: URL) throws {
+        // Planned by the archive's depth as last read (`TileArchiveDepths`).
+        let settings = settings.resolvingArchiveDepth()
         self.configuration = configuration
         self.settings = settings
         let drawSize = CGSize(width: configuration.width, height: configuration.height)

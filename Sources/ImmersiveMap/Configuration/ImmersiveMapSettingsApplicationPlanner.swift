@@ -88,7 +88,13 @@ public enum ImmersiveMapSettingsApplicationPlanner {
             mark(.scene, actions: [.rebuildGPUResources, .recreateRenderer])
         }
 
-        if oldValue.tiles.coverage != newValue.tiles.coverage {
+        // The depth decides how the tiles are parsed (the quarters a tile
+        // coarser than the deepest keeps) and the prepared tiles' namespace,
+        // both built with the renderer. The rest of the coverage is read
+        // per frame.
+        if oldValue.tiles.coverage.resolvedMaximumZoomLevel != newValue.tiles.coverage.resolvedMaximumZoomLevel {
+            mark(.tiles, actions: [.rebuildPreparedData, .recreateRenderer])
+        } else if oldValue.tiles.coverage != newValue.tiles.coverage {
             mark(.tiles, actions: [.liveApply])
         }
         if oldValue.tiles.network != newValue.tiles.network
@@ -148,8 +154,7 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         // do not depend on the models. The depth bias alone is read per
         // frame.
         if oldValue.modelArchive != newValue.modelArchive {
-            if let oldArchive = oldValue.modelArchive, let newArchive = newValue.modelArchive,
-               oldArchive.withDepthBias(newArchive.depthBias) == newArchive {
+            if oldValue.modelArchive.withDepthBias(newValue.modelArchive.depthBias) == newValue.modelArchive {
                 mark(.modelArchive, actions: [.liveApply])
             } else {
                 mark(.modelArchive, actions: [.recreateRenderer])

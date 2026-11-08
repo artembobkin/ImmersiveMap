@@ -134,6 +134,12 @@ package final class PMTilesArchiveClient: @unchecked Sendable {
         try await loadIndex().etag
     }
 
+    /// The deepest zoom the archive's header names, the archive's depth.
+    /// Reads the header if it is not read yet.
+    package func maximumZoom() async throws -> Int {
+        Int(try await loadIndex().header.maxZoom)
+    }
+
     private func lookup(z: Int, x: Int, y: Int) async throws -> Outcome {
         let index = try await loadIndex()
         let header = index.header

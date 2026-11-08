@@ -78,7 +78,7 @@ struct DebugOverlaySettingsOverride: Equatable {
             overridden.tiles.groundRelief.surroundings = terrainSurroundings
         }
         if let modelDepthBias {
-            overridden.modelArchive?.depthBias = modelDepthBias
+            overridden.modelArchive.depthBias = modelDepthBias
         }
         return overridden
     }

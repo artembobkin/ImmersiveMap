@@ -73,7 +73,11 @@ struct PreparedTileCacheIdentity {
         for field in network.tileRequestHeaders.keys.sorted() {
             hasher.combine("header:\(field)")
         }
-        hasher.combine(String(network.cacheIdentity))
+        // The hosted archive's manual lever: a bump re-parses every tile
+        // of it even at the same URL.
+        if network.tileArchiveURL == ImmersiveMapTilesService.tileArchiveURL {
+            hasher.combine("revision:\(ImmersiveMapTilesService.contentRevision)")
+        }
         return hasher.finalize()
     }
 }

@@ -144,6 +144,13 @@ final class PMTilesArchiveClientTests: XCTestCase {
         XCTAssertEqual(tooDeep, PMTilesArchiveClient.Outcome.outsideZoomRange)
     }
 
+    /// The archive's depth is the deepest zoom its header names.
+    func testTheDepthComesFromTheHeader() async throws {
+        let host = try ScriptedHost(.archive(Self.makeArchive()))
+        let depth = try await host.client().maximumZoom()
+        XCTAssertEqual(depth, 12)
+    }
+
     /// The archive's validator rides on every tile, so the prepared cache's
     /// ETag-matched reuse can never match a tile of a previous upload.
     func testTheTileETagCarriesTheArchiveValidator() async throws {

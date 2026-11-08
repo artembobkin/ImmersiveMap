@@ -204,9 +204,9 @@ final class ImmersiveMapDebugOverlayRuntime: ImmersiveMapDebugPanelRuntime {
             onSettingsChangeRequested?(settings)
         }
         hudView.onModelDepthBiasChanged = { [weak self] depthBias in
-            guard let self, var settings = currentSettings, settings.modelArchive != nil else { return }
+            guard let self, var settings = currentSettings, settings.modelArchive.archiveURL != nil else { return }
             settingsOverride.modelDepthBias = depthBias
-            settings.modelArchive?.depthBias = depthBias
+            settings.modelArchive.depthBias = depthBias
             onSettingsChangeRequested?(settings)
         }
         hudView.onAtmosphereSettingsChanged = { [weak self] atmosphere in
@@ -351,7 +351,7 @@ final class ImmersiveMapDebugOverlayRuntime: ImmersiveMapDebugPanelRuntime {
         hudView.apply(fogSettings: settings.scene.fog)
         hudView.apply(atmosphereSettings: settings.scene.atmosphere)
         hudView.apply(globeLightSettings: settings.scene.globeLight)
-        hudView.apply(modelDepthBias: settings.modelArchive?.depthBias)
+        hudView.apply(modelDepthBias: settings.modelArchive.archiveURL == nil ? nil : settings.modelArchive.depthBias)
         hudView.apply(groundFogSettings: settings.scene.groundFog, horizonColor: settings.scene.fog.horizonColor)
         hudView.apply(mountainGroundFogSettings: settings.scene.mountainGroundFog)
         hudView.apply(terrainSurroundingsSettings: settings.tiles.groundRelief.surroundings)

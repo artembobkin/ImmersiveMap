@@ -279,11 +279,11 @@ final class GroundFlatteningParseTests: XCTestCase {
     /// with its own.
     func testTheDefaultFollowsTheTilesetsDeepestZoom() {
         let flat = ImmersiveMapSettings.defaultWithoutRelief
-        XCTAssertEqual(flat.tiles.resolvedGroundFlatteningFromTileZoom, flat.tiles.coverage.maximumZoomLevel)
+        XCTAssertEqual(flat.tiles.resolvedGroundFlatteningFromTileZoom, flat.tiles.coverage.resolvedMaximumZoomLevel)
         XCTAssertEqual(flat.tileMaximumZoomLevel(14).tiles.resolvedGroundFlatteningFromTileZoom, 14)
         XCTAssertEqual(flat.tileMaximumZoomLevel(16).tiles.resolvedGroundFlatteningFromTileZoom, 16)
         XCTAssertEqual(ImmersiveMapSettings.default.tiles.resolvedGroundFlatteningFromTileZoom,
-                       ImmersiveMapSettings.default.tiles.coverage.maximumZoomLevel,
+                       ImmersiveMapSettings.default.tiles.coverage.resolvedMaximumZoomLevel,
                        "Laid flat by default")
         let relief = ImmersiveMapSettings.default.groundRelief(isEnabled: true)
         XCTAssertEqual(relief.tiles.resolvedGroundFlatteningFromTileZoom,

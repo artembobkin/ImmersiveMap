@@ -85,7 +85,8 @@ final class ModelTileStore: @unchecked Sendable {
     static func make(settings: ImmersiveMapSettings,
                      device: MTLDevice,
                      schema: any ImmersiveMapTileSchema) -> ModelTileStore? {
-        guard let archive = settings.modelArchive else {
+        let archive = settings.modelArchive
+        guard let archiveURL = archive.archiveURL else {
             return nil
         }
         guard ModelTileMesh.isSupported(device: device) else {
@@ -96,7 +97,8 @@ final class ModelTileStore: @unchecked Sendable {
         }
         return ModelTileStore(device: device,
                               schema: schema,
-                              source: ModelTileSource(settings: archive,
+                              source: ModelTileSource(archiveURL: archiveURL,
+                                                      settings: archive,
                                                       clearsDiskCache: settings.tiles.cache.clearDiskCachesOnLaunch),
                               costLimitBytes: archive.memoryBudgetInBytes)
     }

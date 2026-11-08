@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import Foundation
+import os
 
 final class DefaultTileLoadPipeline: TileLoadPipeline {
     // nil when the prepared-tile cache is disabled; the pipeline then always parses
@@ -15,6 +16,10 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
     // (`OverviewTileSource`), nil when the setting is off or the package
     // lacks the archive.
     private let overviewTileSource: OverviewTileSource?
+    // Where the archive's depth is reported once a session, by the
+    // archive's source revision, nil when nothing is reported.
+    private let archiveDepths: (depths: TileArchiveDepths, sourceRevision: UInt64)?
+    private let archiveDepthCheck = OSAllocatedUnfairLock(initialState: false)
     private weak var tileRenderStore: TileRenderStore?
 
     convenience init(tileRenderStore: TileRenderStore,
@@ -30,16 +35,19 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
                   tileDownloader: TileDownloader(config: config),
                   archiveVersion: TileArchiveVersion(sourceRevision: preparedTileCacheIdentity.tileSourceRevision,
                                                      clearsRemembered: config.tiles.cache.clearDiskCachesOnLaunch),
-                  overviewTileSource: config.tiles.overview.isEnabled ? OverviewTileSource.bundled() : nil)
+                  overviewTileSource: config.tiles.overview.isEnabled ? OverviewTileSource.bundled() : nil,
+                  archiveDepths: (.shared, preparedTileCacheIdentity.tileSourceRevision))
     }
 
     init(tileRenderStore: TileRenderStore?,
          preparedTileDiskCaching: PreparedTileDiskCaching?,
          tileDownloader: TileDownloader,
          archiveVersion: TileArchiveVersion? = nil,
-         overviewTileSource: OverviewTileSource? = nil) {
+         overviewTileSource: OverviewTileSource? = nil,
+         archiveDepths: (depths: TileArchiveDepths, sourceRevision: UInt64)? = nil) {
         self.archiveVersion = archiveVersion
         self.overviewTileSource = overviewTileSource
+        self.archiveDepths = archiveDepths
         self.preparedTileDiskCaching = preparedTileDiskCaching
         self.tileDownloader = tileDownloader
         self.tileRenderStore = tileRenderStore
@@ -60,6 +68,7 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
     /// new archive.
     func requestPreparedDiskCached(tile: Tile, matchingETag: String?) async -> PreparedTileDiskCacheHit? {
         startArchiveCheckIfNeeded()
+        startArchiveDepthCheckIfNeeded()
         let expectedETag = matchingETag ?? archiveVersion?.expectedSourceETag(for: tile)
         return await preparedTileDiskCaching?.requestPreparedDiskCached(tile: tile, matchingETag: expectedETag)
     }
@@ -78,6 +87,27 @@ final class DefaultTileLoadPipeline: TileLoadPipeline {
             } catch {
                 archiveVersion.observeUnreachable()
             }
+        }
+    }
+
+    /// Reads the archive's depth from its header once a session, off the
+    /// caller's task, and reports it (`TileArchiveDepths`): the map plans by
+    /// the depth it kept from an earlier session, and learns here when the
+    /// archive turns out deeper or shallower. A failure leaves the kept one.
+    private func startArchiveDepthCheckIfNeeded() {
+        guard let archiveDepths,
+              archiveDepthCheck.withLock({ started in
+                  defer { started = true }
+                  return started == false
+              }) else {
+            return
+        }
+        let tileDownloader = tileDownloader
+        Task.detached(priority: .utility) {
+            guard let maximumZoom = try? await tileDownloader.archiveMaximumZoom() else {
+                return
+            }
+            archiveDepths.depths.observe(maximumZoom: maximumZoom, sourceRevision: archiveDepths.sourceRevision)
         }
     }
 

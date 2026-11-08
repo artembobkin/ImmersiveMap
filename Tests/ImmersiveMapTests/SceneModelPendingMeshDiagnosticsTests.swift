@@ -22,7 +22,7 @@ final class SceneModelPendingMeshDiagnosticsTests: XCTestCase {
         // their way, and the default has one: this scene is the app's own
         // models alone.
         var settings = ImmersiveMapSettings.default
-        settings.modelArchive = nil
+        settings.modelArchive.archiveURL = nil
         let harness = try OffscreenFrameHarness.makeOrSkip(settings: settings, size: 96)
         harness.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: 0,
                                                              longitudeDegrees: 0,

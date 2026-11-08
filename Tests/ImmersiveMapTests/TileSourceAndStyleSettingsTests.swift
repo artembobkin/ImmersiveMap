@@ -18,8 +18,7 @@ final class TileSourceAndStyleSettingsTests: XCTestCase {
                        URL(string: "https://tiles.example.com/planet.pmtiles"))
         XCTAssertEqual(settings.mapStyle.configurationFingerprint,
                        AnyImmersiveMapMapStyle(ProtomapsBasemapMapStyle(theme: style)).configurationFingerprint)
-        XCTAssertEqual(settings.tiles.coverage.maximumZoomLevel,
-                       ImmersiveMapTilesService.maximumTileZoomLevel)
+        XCTAssertNil(settings.tiles.coverage.maximumZoomLevel, "The archive's own depth")
     }
 
     func testDefaultSettingsPointAtTheHostedService() {
@@ -28,7 +27,6 @@ final class TileSourceAndStyleSettingsTests: XCTestCase {
         XCTAssertEqual(network.tileArchiveURL, ImmersiveMapTilesService.tileArchiveURL)
         XCTAssertEqual(network.tileArchiveURL.pathExtension, "pmtiles")
         XCTAssertTrue(network.tileRequestHeaders.isEmpty)
-        XCTAssertNotEqual(network.cacheIdentity, 0)
     }
 
     func testMapStyleChangeRebuildsPreparedData() {

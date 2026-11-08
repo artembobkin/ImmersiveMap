@@ -18,13 +18,14 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         XCTAssertEqual(plan.actions, [.recreateRenderer])
 
         var resized = newSettings
-        resized.modelArchive?.memoryBudgetInBytes = 32 * 1_024 * 1_024
+        resized.modelArchive.memoryBudgetInBytes = 32 * 1_024 * 1_024
         XCTAssertEqual(ImmersiveMapSettingsApplicationPlanner.makePlan(from: newSettings, to: resized).actions,
                        [.recreateRenderer])
         XCTAssertTrue(ImmersiveMapSettingsApplicationPlanner.makePlan(from: newSettings, to: newSettings).actions.isEmpty)
     }
 
-    /// The modifier keeps the budgets a map already set.
+    /// The modifier names the source alone and keeps how the models load
+    /// and draw, set before it or after.
     func testModelArchiveModifierKeepsTheBudgets() {
         let settings = ImmersiveMapSettings.default
             .modelArchiveSettings(.init(archiveURL: URL(string: "https://tiles.example.com/a.pmtiles")!,
@@ -32,11 +33,18 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
                                         diskCacheSizeInBytes: 2_000))
             .modelArchive(URL(string: "https://tiles.example.com/b.pmtiles")!, headers: ["Authorization": "Bearer x"])
 
-        XCTAssertEqual(settings.modelArchive?.archiveURL.lastPathComponent, "b.pmtiles")
-        XCTAssertEqual(settings.modelArchive?.requestHeaders, ["Authorization": "Bearer x"])
-        XCTAssertEqual(settings.modelArchive?.memoryBudgetInBytes, 1_000)
-        XCTAssertEqual(settings.modelArchive?.diskCacheSizeInBytes, 2_000)
-        XCTAssertNil(ImmersiveMapSettings.default.modelArchive, "No models by default")
+        XCTAssertEqual(settings.modelArchive.archiveURL?.lastPathComponent, "b.pmtiles")
+        XCTAssertEqual(settings.modelArchive.requestHeaders, ["Authorization": "Bearer x"])
+        XCTAssertEqual(settings.modelArchive.memoryBudgetInBytes, 1_000)
+        XCTAssertEqual(settings.modelArchive.diskCacheSizeInBytes, 2_000)
+        XCTAssertNil(ImmersiveMapSettings.default.modelArchive.archiveURL, "No models by default")
+        XCTAssertNil(settings.modelArchive(nil).modelArchive.archiveURL, "nil turns them off")
+
+        let tunedFirst = ImmersiveMapSettings.default
+            .modelArchiveSettings(depthBias: 0.02, minimumZoom: 15)
+            .modelArchive(URL(string: "https://tiles.example.com/b.pmtiles")!)
+        XCTAssertEqual(tunedFirst.modelArchive.depthBias, 0.02, "Tuned before the source is named")
+        XCTAssertEqual(tunedFirst.modelArchive.minimumZoom, 15)
         XCTAssertEqual(ImmersiveMapSettings.default.modelArchive(ImmersiveMapTilesService.modelArchiveURL).modelArchive,
                        ImmersiveMapSettings.ModelArchiveSettings(archiveURL: ImmersiveMapTilesService.modelArchiveURL),
                        "Pointing at the hosted archive turns them on with the default budgets")
@@ -112,20 +120,6 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         XCTAssertEqual(plan.changedDomains, [.debug])
         XCTAssertEqual(plan.actions, [.recreateRenderer])
         XCTAssertTrue(plan.requiresRendererRecreation)
-    }
-
-    func testChangingOnlyTheDeprecatedMemoryCacheSizeYieldsNoActions() {
-        let oldSettings = ImmersiveMapSettings.default
-        var newSettings = oldSettings
-        newSettings.tiles.cache.legacyMemoryCacheSizeInBytes += 1
-
-        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
-
-        // The field is deprecated and ignored; a difference in it must not
-        // recreate the renderer or invalidate any cache.
-        XCTAssertTrue(plan.changedDomains.isEmpty)
-        XCTAssertTrue(plan.actions.isEmpty)
-        XCTAssertFalse(plan.requiresRendererRecreation)
     }
 
     /// With labels off the parser bakes no text, so the switch is a
@@ -213,8 +207,8 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
         archive.depthBias = 9
         XCTAssertEqual(archive.depthBias, ImmersiveMapZoomCurve(Archive.maximumDepthBias))
 
-        let kept = ImmersiveMapSettings.default.modelArchive(url, depthBias: 0.02).modelArchive(url)
-        XCTAssertEqual(kept.modelArchive?.depthBias, 0.02, "pointing at an archive again keeps the bias set")
+        let kept = ImmersiveMapSettings.default.modelArchive(url).modelArchiveSettings(depthBias: 0.02).modelArchive(url)
+        XCTAssertEqual(kept.modelArchive.depthBias, 0.02, "pointing at an archive again keeps the bias set")
     }
 
     /// The default bias is there at the models' zoom and down to a trace
@@ -234,7 +228,7 @@ final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
     func testAChangeOfTheModelDepthBiasAloneAppliesLive() {
         let url = URL(string: "https://tiles.example.com/models.pmtiles")!
         let oldSettings = ImmersiveMapSettings.default.modelArchive(url)
-        let newSettings = oldSettings.modelArchive(url, depthBias: [14: 0.1, 16: 0])
+        let newSettings = oldSettings.modelArchiveSettings(depthBias: [14: 0.1, 16: 0])
         let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
         XCTAssertEqual(plan.changedDomains, [.modelArchive])
         XCTAssertEqual(plan.actions, [.liveApply])

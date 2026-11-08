@@ -64,7 +64,7 @@ final class ModelTileSource: @unchecked Sendable {
     private static let maintenanceQueue = DispatchQueue(label: "ImmersiveMap.ModelTileSource.maintenance",
                                                         qos: .utility)
 
-    convenience init(settings: ImmersiveMapSettings.ModelArchiveSettings, clearsDiskCache: Bool) {
+    convenience init(archiveURL: URL, settings: ImmersiveMapSettings.ModelArchiveSettings, clearsDiskCache: Bool) {
         let configuration = URLSessionConfiguration.ephemeral
         // A model tile that stops arriving for 30 s has failed for the
         // frame's purposes: the map's building stands meanwhile, and the
@@ -73,7 +73,7 @@ final class ModelTileSource: @unchecked Sendable {
         configuration.timeoutIntervalForResource = 120
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.urlCache = nil
-        self.init(archive: PMTilesArchiveClient(archiveURL: settings.archiveURL,
+        self.init(archive: PMTilesArchiveClient(archiveURL: archiveURL,
                                                 requestHeaders: settings.requestHeaders,
                                                 session: URLSession(configuration: configuration),
                                                 tileType: .unknown),

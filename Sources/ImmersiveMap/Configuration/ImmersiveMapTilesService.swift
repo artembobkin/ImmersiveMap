@@ -9,9 +9,9 @@ import Foundation
 /// `ImmersiveMapView()` renders with. The model archive is off until a map
 /// asks for it, with `.modelArchive(ImmersiveMapTilesService.modelArchiveURL)`,
 /// and so is the ground relief on Mapterhorn's open terrain
-/// (`.groundRelief(isEnabled: true)`, `GroundReliefSettings.tileURLTemplate`).
+/// (`.groundRelief(isEnabled: true)`, `ImmersiveMapTerrainSource.mapterhorn`).
 /// Pointing the map elsewhere is one `.tileArchive(_:headers:)` or
-/// `.modelArchive(_:headers:depthBias:)` call.
+/// `.modelArchive(_:headers:)` call.
 public enum ImmersiveMapTilesService {
     /// The hosted PMTiles archive. The file name carries the planet's date:
     /// a new planet is a new URL, which starts new cache namespaces. An
@@ -20,8 +20,10 @@ public enum ImmersiveMapTilesService {
     /// parses again the tiles it kept from the older one.
     public static let tileArchiveURL = URL(string: "https://tiles.immersivemap.dev/20260922.pmtiles")!
 
-    /// The deepest zoom the hosted archive ships.
-    public static let maximumTileZoomLevel = 15
+    /// The deepest zoom the hosted archive ships: the depth a map plans by
+    /// before it has read any archive's header
+    /// (`TileSettings.CoverageSettings.provisionalMaximumZoomLevel`).
+    static let maximumTileZoomLevel = 15
 
     /// The hosted archive of building models (`ModelArchiveSettings`), one
     /// fixed name overwritten by each bake: the engine tells the uploads
@@ -30,19 +32,9 @@ public enum ImmersiveMapTilesService {
 
     /// Manual "invalidate every cached tile" lever: bump to force all clients
     /// to re-fetch and re-parse. A new planet at a new URL does not need a
-    /// bump, the URL is in the cache identity already.
+    /// bump, the URL is in the cache identity already
+    /// (`PreparedTileCacheIdentity.tileSourceRevision`).
     static let contentRevision = 4
-
-    /// Folded into `NetworkSettings.cacheIdentity` for the default source, so a
-    /// `contentRevision` bump lands in both disk-cache namespaces.
-    static var cacheIdentity: UInt64 {
-        var hasher = StableFNV1aHasher()
-        hasher.combine("immersivemaptiles")
-        hasher.combine(tileArchiveURL.absoluteString)
-        hasher.combine(String(maximumTileZoomLevel))
-        hasher.combine(String(contentRevision))
-        return hasher.finalize()
-    }
 
     /// The credit the data requires: OpenStreetMap, per ODbL, for the
     /// hosted archive, with the link carrying the full story. The overview
