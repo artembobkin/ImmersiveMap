@@ -43,7 +43,7 @@ ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps
 
 Built-in Protomaps vector tiles, native iOS (UIKit host), native macOS, SwiftUI integration, map styling and colors, SwiftUI markers, avatars, 3D scene models, 3D building models from a model archive, tour video export.
 
-The guides are in [Documentation](Documentation): [the tile source](Documentation/TileSource.md), [the camera](Documentation/Camera.md), [the style](Documentation/Style.md), [custom styles](Documentation/CustomStyle.md), [the relief](Documentation/Relief.md) and [attribution](Documentation/Attribution.md).
+The guides are on the website: [immersivemap.dev/documentation](https://immersivemap.dev/documentation/).
 
 ## Map Data
 
