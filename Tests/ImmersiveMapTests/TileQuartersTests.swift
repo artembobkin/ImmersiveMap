@@ -109,7 +109,7 @@ final class TileQuartersTests: XCTestCase {
         let trees = [tree(half + 10, half + 10, 1), tree(10, 10, 2), tree(10, half + 10, 3), tree(half + 20, half + 20, 4)]
         let (ordered, starts) = TreeFeatureReader.byQuarter(trees)
         XCTAssertEqual(ordered.map(\.height), [3, 1, 4, 2])
-        XCTAssertEqual(starts, [0, 1, 3, 3, 4])
+        XCTAssertEqual(starts, [0, 1, 3, 4, 4], "One in the north-west, two in the north-east, one in the south-west")
     }
 
     /// The trees a placement draws: a prefix of each quarter it draws, cut
