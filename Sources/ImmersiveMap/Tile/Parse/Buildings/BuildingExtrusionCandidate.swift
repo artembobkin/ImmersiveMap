@@ -25,6 +25,9 @@ struct BuildingExtrusionCandidate {
     /// The radius its edges are rounded by, in tile units at the tile's
     /// zoom (`ExtrusionStyle.edgeRadius`), zero for a sharp box.
     var edgeRadius: Float = 0
+    /// The quarter of its tile the footprint was cut to (`TileQuarters`),
+    /// nil for a tile kept whole.
+    var quarter: Int? = nil
 }
 
 /// A building's vertical extent in tile units at the tile's zoom, and the

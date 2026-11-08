@@ -29,6 +29,10 @@ struct ReadingStageResult {
     var bridgePolygonByStyle: [UInt8: [ParsedPolygon]] = [:]
     var bridgeStyles: [UInt8: BakedStyle] = [:]
     var extrudedByStyle: [UInt8: [ParsedExtrudedMesh]] = [:]
+    /// The tile keeps its buildings and its trees quarter by quarter
+    /// (`TileParseOptions.keepsQuarters`): their pieces are laid out one
+    /// quarter after another, and where each quarter starts is kept.
+    var keepsQuarters = false
     /// The fills that grow trees, gathered as the layers are read and
     /// placed once every layer is in (`TreeFeatureReader`).
     var treeAreas: [TreeScatter.Area] = []
@@ -39,8 +43,13 @@ struct ReadingStageResult {
     /// The trees the data maps at points (`TreePointStyle`), gathered with
     /// the fills and planted with their trees.
     var mappedTrees: [TreeScatter.MappedTree] = []
-    /// The tile's trees, sorted by priority (`TreeScatter`).
+    /// The tile's trees, sorted by priority (`TreeScatter`), quarter by
+    /// quarter on a tile that keeps quarters.
     var trees: [TreeInstance] = []
+    /// Where each quarter's trees start in `trees`, and their count last,
+    /// five values, on a tile that keeps quarters (`keepsQuarters`). Empty
+    /// for a tile kept whole.
+    var treeQuarterStarts: [UInt32] = []
     var textLabels: [ParsedTextLabel] = []
     /// The texts of the tile's own water-name labels, so the names the
     /// parser synthesizes at the coarse zooms skip what the tile already

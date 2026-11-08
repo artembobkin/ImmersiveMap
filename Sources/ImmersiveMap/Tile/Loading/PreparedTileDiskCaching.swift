@@ -1028,7 +1028,13 @@ final class PreparedTileDiskCaching {
     // 164: a line style carries the camera zoom it keeps its sphere colour
     // and alpha up to (`TileLineStyle.sphereLookUntilZoom`), 68 bytes. A
     // v163 arena's line styles are 64.
-    static let preparedFormatVersion: UInt32 = 164
+    // 165: a tile coarser than the tileset's deepest zoom keeps its
+    // buildings and its trees by quarters (`TileQuarters`): each volume is
+    // cut at the quarters' edges, the volumes and the trees are laid out
+    // one quarter after another, and the entry keeps where each quarter
+    // starts (`Entry.buildingQuarterIndexStarts`, `treeQuarterStarts`). A
+    // v164 tile is whole and its entry has neither field.
+    static let preparedFormatVersion: UInt32 = 165
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

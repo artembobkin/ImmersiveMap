@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 import Foundation
-import simd
 
 /// The flat map's building coverage: which tiles draw their buildings
 /// this frame.
@@ -10,27 +9,31 @@ import simd
 /// The buildings follow the ground. Every tile the ground shows this frame
 /// (`TilePlacementPlanner`), in its own slot or standing in, whose zoom is
 /// the buildings' zoom or finer (`minimumDrawZoom(settings:)`), draws its
-/// buildings, whole, in its own square: a tile's buildings are cut at its
-/// edges by the parser, so tiles of different zooms side by side draw
-/// each building once. Where two of them overlap, a tile standing in for
-/// its loading children over ground some of them already show, the
-/// coarser one draws and the finer ones wait: the buildings switch to the
-/// finer tiles together, when the coarser one leaves the ground. So the
-/// buildings stand through a change of zoom, as the ground does, and
-/// never draw twice. The planner never demands a tile. The tiles farther
-/// than `fieldRadiusInCells` from the eye's ground point are skipped:
-/// buildings are a near-field feature.
+/// buildings in its own square: a tile's buildings are cut at its edges by
+/// the parser, so tiles of different zooms side by side draw each building
+/// once. Where two of them overlap (a tile standing in for its loading
+/// children over ground some of them already show, a far ring's coarse
+/// tile reaching under a nearer ring's finer tiles) the finer one draws:
+/// a tile coarser than the tileset's deepest zoom keeps its buildings and
+/// its trees by quarters, each cut at the quarters' edges as its children
+/// cut theirs (`TileQuarters`), and draws only the quarters whose child is
+/// not there (`PlaceTile.quarters`). So the finest buildings the ground
+/// has stand, a building never draws twice, and no ground the coarse tile
+/// covers is left without them. A tile kept whole that a finer tile lies
+/// under draws whole and the finer one waits, as does a tile under a
+/// coarser one's drawn quarter, which happens only with a tileset two
+/// zooms deeper than the buildings start. The planner never demands a
+/// tile, and keeps no field
+/// of its own: how far the buildings reach is how far the ground's rings
+/// place tiles of the buildings' zoom, so the camera's tilt changes which
+/// tiles are in view and never which tile a building is drawn from.
 enum BuildingCoveragePlanner {
     /// The coarsest tile zoom whose buildings are drawn. A tile coarser
     /// than the tileset's deepest zoom ships them merged into groups of one
     /// height, each polygon standing at its group's height
     /// (`TileParseOptions.buildingDeepestSourceZoom`). Coarser than this,
-    /// the groups are too rough to stand. Also the grid the near field is
-    /// measured in.
+    /// the groups are too rough to stand.
     static let minimumSourceZoom = 14
-    /// How far from the eye's ground point, in grid cells, buildings are
-    /// drawn.
-    static let fieldRadiusInCells: Double = 3
 
     /// The tile zoom the buildings draw from: the zoom of the tiles a
     /// camera at `ExtrusionSettings.buildingsMinimumZoom` targets, within
@@ -42,29 +45,14 @@ enum BuildingCoveragePlanner {
         return max(minimumSourceZoom, min(wanted, settings.tiles.coverage.maximumZoomLevel))
     }
 
-    /// The eye's ground point in grid cell units. The engine's camera looks
-    /// at the world origin (the pan moves the world under it), so the eye
-    /// is taken as it is: its x and y over the target zoom's tile size,
-    /// away from the look-at point in tile units, with world y growing
-    /// north while tile y grows south, then scaled to the grid's zoom.
-    static func eyeGroundCell(eye: SIMD3<Float>,
-                              flatRenderState: FlatRenderState,
-                              lookAt: SIMD2<Double>,
-                              targetZoom: Int) -> SIMD2<Double> {
-        let tileUnits = flatRenderState.renderMapSize / Double(1 << max(0, targetZoom))
-        let eyeGround = lookAt + SIMD2<Double>(Double(eye.x), -Double(eye.y)) / tileUnits
-        return eyeGround * pow(2.0, Double(minimumSourceZoom - targetZoom))
-    }
-
     /// `groundPlacements` are the frame's ground placements
-    /// (`TilePlacementPlanner`). `eyeGroundCell` is the eye's ground point
-    /// in grid cell units (a z14 tile is one unit), nil for the globe,
-    /// where nothing is extruded. `minimumZoom` is the tile zoom the
-    /// buildings draw from (`minimumDrawZoom(settings:)`).
+    /// (`TilePlacementPlanner`). `onFlatMap` is false on the globe, where
+    /// nothing is extruded. `minimumZoom` is the tile zoom the buildings
+    /// draw from (`minimumDrawZoom(settings:)`).
     static func plan(groundPlacements: [PlaceTile],
-                     eyeGroundCell: SIMD2<Double>?,
+                     onFlatMap: Bool,
                      minimumZoom: Int = minimumSourceZoom) -> PlaceTilesContext {
-        guard let eyeGroundCell else { return .empty }
+        guard onFlatMap else { return .empty }
         let floorZoom = max(minimumZoom, minimumSourceZoom)
         // The buildings rise by the terrain their ground's grid does.
         let displacementBySource = PlaceTilesContext(tilePlacements: groundPlacements).displacementBySource()
@@ -73,28 +61,44 @@ enum BuildingCoveragePlanner {
         for placement in groundPlacements where placement.metalTile.tile.z >= floorZoom {
             sources[VisibleTile(tile: placement.metalTile.tile, worldWrap: placement.placeIn.worldWrap)] = placement.metalTile
         }
-        let cellsCount = Double(1 << minimumSourceZoom)
+        // From the coarsest down, so a tile knows what its ancestors draw:
+        // the ground a tile drawn whole takes, and the squares of the
+        // quarters drawn.
+        var takenWhole: Set<VisibleTile> = []
+        var takenQuarters: Set<VisibleTile> = []
         var result: [PlaceTile] = []
-        for (square, metalTile) in sources {
-            // A coarser tile drawing over this one's square draws its
-            // buildings there.
-            var isCovered = false
+        let ordered = sources.sorted { $0.key.z < $1.key.z }
+        for (square, metalTile) in ordered {
+            var isTaken = false
             var zoom = square.z - 1
-            while zoom >= floorZoom, isCovered == false {
-                if let ancestor = square.tile.findParentTile(atZoom: zoom),
-                   sources[VisibleTile(tile: ancestor, worldWrap: square.worldWrap)] != nil {
-                    isCovered = true
+            while zoom >= floorZoom, isTaken == false {
+                if let ancestor = square.tile.findParentTile(atZoom: zoom) {
+                    let ground = VisibleTile(tile: ancestor, worldWrap: square.worldWrap)
+                    isTaken = takenWhole.contains(ground) || takenQuarters.contains(ground)
                 }
                 zoom -= 1
             }
-            guard isCovered == false else { continue }
-            let cellsPerTile = pow(2.0, Double(minimumSourceZoom - square.z))
-            let center = SIMD2<Double>((Double(square.x) + 0.5) * cellsPerTile + Double(square.worldWrap) * cellsCount,
-                                       (Double(square.y) + 0.5) * cellsPerTile)
-            guard simd_length(center - eyeGroundCell) <= fieldRadiusInCells else {
-                continue
+            guard isTaken == false else { continue }
+            var quarters = TileQuarters.all
+            if metalTile.tileBuffers.extruded.quarterIndexStarts.isEmpty {
+                takenWhole.insert(square)
+            } else {
+                // A quarter whose child the ground shows is the child's.
+                for quarter in 0..<TileQuarters.count {
+                    let child = VisibleTile(tile: TileQuarters.child(of: square.tile, quarter: quarter),
+                                            worldWrap: square.worldWrap)
+                    if sources[child] != nil {
+                        quarters &= ~(1 << quarter)
+                    } else {
+                        takenQuarters.insert(child)
+                    }
+                }
+                guard quarters != 0 else { continue }
             }
-            result.append(PlaceTile(metalTile: metalTile, placeIn: square, displacement: displacementBySource[metalTile.tile]))
+            result.append(PlaceTile(metalTile: metalTile,
+                                    placeIn: square,
+                                    displacement: displacementBySource[metalTile.tile],
+                                    quarters: quarters))
         }
         result.sort { lhs, rhs in
             if lhs.placeIn.worldWrap != rhs.placeIn.worldWrap {

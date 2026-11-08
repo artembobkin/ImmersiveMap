@@ -55,11 +55,13 @@ final class TilePreparedDataBuilder {
                                                indices: parsedTile.drawingExtruded.indices,
                                                styles: parsedTile.drawingExtruded.styles,
                                                buildingRanges: parsedTile.drawingExtruded.buildingRanges,
-                                               buildingAnchors: parsedTile.drawingExtruded.buildingAnchors),
+                                               buildingAnchors: parsedTile.drawingExtruded.buildingAnchors,
+                                               quarterIndexStarts: parsedTile.drawingExtruded.quarterIndexStarts),
             textLabels: textLabels,
             roadLabels: roadLabels,
             surfaceLabels: surfaceLabels,
-            trees: parsedTile.trees
+            trees: parsedTile.trees,
+            treeQuarterStarts: parsedTile.treeQuarterStarts
         )
         return PreparedTileLoadResult(preparedTile: preparedTile,
                                       parseLayerTimings: parsedTile.parseLayerTimings)

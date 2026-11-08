@@ -5,13 +5,34 @@ import Metal
 import simd
 
 enum TreeDrawer {
-    /// One tile's trees this frame: the placement they draw from, how
-    /// many of its trees (a prefix, the tile's being sorted by priority),
+    /// One tile's trees this frame: the placement they draw from, which
+    /// of its trees (`instanceRanges`, a prefix of each quarter drawn, a
+    /// quarter's trees being sorted by priority, or of the whole tile's),
     /// and how far the tile has risen out of the ground (`ExtrusionRise`).
     struct Item {
         let placement: PlaceTile
-        let instanceCount: Int
+        let instanceRanges: [Range<Int>]
         let riseScale: Float
+
+        /// The first `share` of each run of `starts` that `quarters`
+        /// draws (`TileQuarters.runs`, a quarter at a time, never joined:
+        /// each is thinned on its own), at least one tree of a run that
+        /// has any. `count` is the tile's trees.
+        static func instanceRanges(count: Int, starts: [Int], quarters: UInt8, share: Float) -> [Range<Int>] {
+            let runs: [Range<Int>]
+            if starts.count == TileQuarters.count + 1 {
+                runs = (0..<TileQuarters.count).compactMap { quarter in
+                    quarters & (1 << quarter) != 0 ? starts[quarter]..<starts[quarter + 1] : nil
+                }
+            } else {
+                runs = quarters == TileQuarters.all ? [0..<count] : []
+            }
+            return runs.compactMap { run in
+                guard run.isEmpty == false else { return nil }
+                let drawn = min(run.count, max(Int((Float(run.count) * share).rounded(.up)), 1))
+                return run.lowerBound..<(run.lowerBound + drawn)
+            }
+        }
     }
 
     /// The share of the model's height its crown's centre stands at, and
@@ -52,7 +73,7 @@ enum TreeDrawer {
         renderEncoder.setVertexBytes(&frameUniform, length: MemoryLayout<TreeFrameUniform>.stride, index: 7)
         renderEncoder.setFragmentBytes(&frameUniform, length: MemoryLayout<TreeFrameUniform>.stride, index: 7)
 
-        forEachTile(items: items, mesh: mesh, flatRenderState: flatRenderState, renderEncoder: renderEncoder) { item, trees, tile in
+        forEachTile(items: items, mesh: mesh, flatRenderState: flatRenderState, renderEncoder: renderEncoder) { _, _, tile, instanceCount in
             renderEncoder.setStencilReferenceValue(TileSourceStencilPriority.reference(sourceZoom: tile.z)
                                                    | TileSourceStencilPriority.surfaceMaskBit)
             renderEncoder.drawIndexedPrimitives(type: .triangle,
@@ -60,7 +81,7 @@ enum TreeDrawer {
                                                 indexType: .uint16,
                                                 indexBuffer: mesh.buffer,
                                                 indexBufferOffset: levelOfDetail.indexOffset,
-                                                instanceCount: min(item.instanceCount, trees.count))
+                                                instanceCount: instanceCount)
         }
 
         renderEncoder.setCullMode(.none)
@@ -94,24 +115,25 @@ enum TreeDrawer {
         renderEncoder.setVertexBytes(&frameUniform, length: MemoryLayout<TreeFrameUniform>.stride, index: 7)
         renderEncoder.setFragmentBytes(&shadowUniformValue, length: MemoryLayout<ShadowUniform>.stride, index: 5)
 
-        forEachTile(items: items, mesh: mesh, flatRenderState: flatRenderState, renderEncoder: renderEncoder) { item, trees, _ in
+        forEachTile(items: items, mesh: mesh, flatRenderState: flatRenderState, renderEncoder: renderEncoder) { _, _, _, instanceCount in
             renderEncoder.drawPrimitives(type: .triangle,
                                          vertexStart: 0,
                                          vertexCount: 6,
-                                         instanceCount: min(item.instanceCount, trees.count))
+                                         instanceCount: instanceCount)
         }
 
         renderEncoder.setDepthStencilState(depthDisabledState)
     }
 
-    /// Binds each item's tile (its matrix at vertex buffer 3 and its
-    /// trees at vertex buffer 4) and hands it to `draw`.
+    /// Binds each item's tile (its matrix at vertex buffer 3) and, for
+    /// each of its instance ranges, the trees of the range at vertex buffer
+    /// 4, and hands it to `draw` with the range's count.
     private static func forEachTile(items: [Item],
                                     mesh: TreeModelMesh,
                                     flatRenderState: FlatRenderState,
                                     renderEncoder: MTLRenderCommandEncoder,
-                                    _ draw: (Item, TileBufferView, Tile) -> Void) {
-        for item in items where item.instanceCount > 0 {
+                                    _ draw: (Item, TileBufferView, Tile, Int) -> Void) {
+        for item in items where item.instanceRanges.isEmpty == false {
             let metalTile = item.placement.metalTile
             guard let trees = metalTile.tileBuffers.trees else { continue }
             let tile = metalTile.tile
@@ -128,8 +150,14 @@ enum TreeDrawer {
                     * Matrix.scaleMatrix(sx: scale, sy: scale, sz: scale),
                 heightScale: item.riseScale / mesh.contents.heightMetres)
             renderEncoder.setVertexBytes(&tileUniform, length: MemoryLayout<TreeTileUniform>.stride, index: 3)
-            renderEncoder.setVertexBuffer(trees.buffer, offset: trees.offset, index: 4)
-            draw(item, trees, tile)
+            for range in item.instanceRanges {
+                let clamped = range.clamped(to: 0..<trees.count)
+                guard clamped.isEmpty == false else { continue }
+                renderEncoder.setVertexBuffer(trees.buffer,
+                                              offset: trees.offset + clamped.lowerBound * MemoryLayout<TreeInstance>.stride,
+                                              index: 4)
+                draw(item, trees, tile, clamped.count)
+            }
         }
     }
 }

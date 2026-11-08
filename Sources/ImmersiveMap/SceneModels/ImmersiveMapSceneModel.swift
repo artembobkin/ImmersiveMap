@@ -11,7 +11,7 @@ import Foundation
 // loading, the meshes, the pipeline, the shader and the drawer. No map tile,
 // style or label logic and no views.
 //
-// A scene model and a landmark are local files: their sources are file URLs
+// A scene model is a local file: its source is a file URL
 // and nothing here fetches them. The one part of the folder that reaches a
 // network is `ModelTiles`, the models of a model archive: its format
 // (`ModelTileContents`), the archive and disk cache behind it

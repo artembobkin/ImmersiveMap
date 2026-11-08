@@ -14,7 +14,6 @@ public enum ImmersiveMapSettingsChangeDomain: String, CaseIterable, Equatable {
     case postProcessing
     case debug
     case controls
-    case landmarks
     case modelArchive
     case layers
 }
@@ -139,12 +138,6 @@ public enum ImmersiveMapSettingsApplicationPlanner {
             }
         }
 
-        // The landmarks are read per frame, the buildings they replace
-        // included: a tile keeps every building, and the frame leaves out
-        // the ones a drawn model stands in for.
-        if oldValue.landmarks != newValue.landmarks {
-            mark(.landmarks, actions: [.liveApply])
-        }
         // The layers of the app's data are read per frame and prepared
         // for the GPU off the main thread (`LayerMeshStore`).
         if oldValue.layers != newValue.layers {

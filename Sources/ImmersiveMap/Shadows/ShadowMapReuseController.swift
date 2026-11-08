@@ -41,6 +41,9 @@ final class ShadowMapReuseController {
         let tile: ObjectIdentifier
         let placeIn: Tile
         let worldWrap: Int8
+        /// The quarters the tile casts from (`PlaceTile.quarters`): a
+        /// quarter handed to its child changes the casters.
+        var quarters: UInt8 = TileQuarters.all
     }
 
     /// What a rendered window holds, compared against the frame to decide
@@ -173,7 +176,8 @@ final class ShadowMapReuseController {
         for placement in drawnPlacements {
             keys.insert(CasterKey(tile: ObjectIdentifier(placement.metalTile),
                                   placeIn: placement.placeIn.tile,
-                                  worldWrap: placement.placeIn.worldWrap))
+                                  worldWrap: placement.placeIn.worldWrap,
+                                  quarters: placement.quarters))
         }
         return keys
     }

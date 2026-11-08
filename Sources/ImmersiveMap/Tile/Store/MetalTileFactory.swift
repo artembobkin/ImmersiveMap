@@ -85,6 +85,8 @@ final class MetalTileFactory: @unchecked Sendable {
             roadEdgeLineIndexStarts: preparedTile.roadEdgeLineIndexStarts,
             buildingRanges: preparedTile.extruded.buildingRanges,
             buildingAnchors: preparedTile.extruded.buildingAnchors,
+            buildingQuarterIndexStarts: preparedTile.extruded.quarterIndexStarts,
+            treeQuarterStarts: preparedTile.treeQuarterStarts,
             textLabels: Self.textLabelSetMeta(from: preparedTile.textLabels),
             roadLabels: Self.roadLabelsMeta(from: preparedTile.roadLabels),
             surfaceLabels: preparedTile.surfaceLabels.labels
@@ -185,6 +187,8 @@ final class MetalTileFactory: @unchecked Sendable {
                                                       roadEdgeLineIndexStarts: image.roadEdgeLineIndexStarts,
                                                       buildingRanges: image.buildingRanges,
                                                       buildingAnchors: image.buildingAnchors,
+                                                      buildingQuarterIndexStarts: image.buildingQuarterIndexStarts,
+                                                      treeQuarterStarts: image.treeQuarterStarts,
                                                       textLabels: image.textLabels,
                                                       roadLabels: image.roadLabels,
                                                       surfaceLabels: image.surfaceLabels) else {
@@ -227,6 +231,8 @@ final class MetalTileFactory: @unchecked Sendable {
                                          roadEdgeLineIndexStarts: [UInt32],
                                          buildingRanges: [TileBuildingRange],
                                          buildingAnchors: [SIMD2<Float>],
+                                         buildingQuarterIndexStarts: [UInt32] = [],
+                                         treeQuarterStarts: [UInt32] = [],
                                          textLabels: PreparedTileArenaImage.TextLabelSetMeta,
                                          roadLabels: PreparedTileArenaImage.RoadLabelsMeta,
                                          surfaceLabels: [SurfaceLabelRecord]) -> TileBuffers? {
@@ -264,13 +270,21 @@ final class MetalTileFactory: @unchecked Sendable {
         }) else {
             return nil
         }
+        // So are the quarter starts: none, or five running up to the count.
+        guard let quarterIndexStarts = Self.quarterStarts(buildingQuarterIndexStarts, count: extrudedIndexCount) else {
+            return nil
+        }
         let extruded = TileBuffers.Extruded(vertices: extrudedVertices,
                                             indices: extrudedIndices.view,
                                             styles: cursor.takeView(.extrudedStyles),
                                             indexType: extrudedIndices.indexType,
                                             buildingRanges: buildingRanges,
-                                            buildingAnchors: buildingAnchors)
+                                            buildingAnchors: buildingAnchors,
+                                            quarterIndexStarts: quarterIndexStarts)
         let trees = cursor.takeView(.treeInstances)
+        guard let treeQuarterStarts = Self.quarterStarts(treeQuarterStarts, count: trees?.count ?? 0) else {
+            return nil
+        }
 
         let textLabelBuffers = takeTextLabelSet(textLabels, cursor: &cursor)
         let roadGlyphVertices = cursor.takeView(.roadLabelGlyphVertices)
@@ -307,7 +321,24 @@ final class MetalTileFactory: @unchecked Sendable {
                            roadLabels: roadLabelBuffers,
                            surfaceLabels: SurfaceLabels(labels: surfaceLabels,
                                                         vertices: surfaceLabelVertices),
-                           trees: trees)
+                           trees: trees,
+                           treeQuarterStarts: treeQuarterStarts)
+    }
+
+    /// A tile's quarter starts as the drawers read them
+    /// (`TileQuarters.runs`): none for a tile kept whole, or five that
+    /// start at zero, never go down and end at `count`. Nil for anything
+    /// else: the starts of a cached image are untrusted input.
+    static func quarterStarts(_ starts: [UInt32], count: Int) -> [Int]? {
+        guard starts.isEmpty == false else { return [] }
+        let values = starts.map(Int.init)
+        guard values.count == TileQuarters.count + 1,
+              values.first == 0,
+              values.last == count,
+              zip(values, values.dropFirst()).allSatisfy({ $0 <= $1 }) else {
+            return nil
+        }
+        return values
     }
 
     private static func takeGeometryLayer(_ layerID: TileArenaGeometryLayerID,

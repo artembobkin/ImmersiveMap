@@ -343,6 +343,12 @@ enum PreparedTileDiskCodec {
         /// ordinal.
         let buildingAnchors: Data
         let buildingAnchorCount: UInt32
+        /// Where each quarter's volumes start in the extruded indices
+        /// (`PreparedTileCPU.Extruded.quarterIndexStarts`), and each
+        /// quarter's trees in the trees (`PreparedTileCPU.treeQuarterStarts`),
+        /// empty for a tile kept whole.
+        let buildingQuarterIndexStarts: [UInt32]
+        let treeQuarterStarts: [UInt32]
         let text: TextLabelSetMetaValue
         let roadPathInputs: Data
         let roadPathInputCount: UInt32
@@ -788,6 +794,8 @@ enum PreparedTileDiskCodec {
             buildingAnchors: encodePODArray(preparedTile.extruded.buildingAnchors),
             buildingAnchorCount: encodeUInt32(preparedTile.extruded.buildingAnchors.count,
                                               field: "Extruded.buildingAnchors.count"),
+            buildingQuarterIndexStarts: preparedTile.extruded.quarterIndexStarts,
+            treeQuarterStarts: preparedTile.treeQuarterStarts,
             text: TextLabelSetMetaValue(preparedTile.textLabels),
             roadPathInputs: encodePODArray(preparedTile.roadLabels.pathInputs),
             roadPathInputCount: encodeUInt32(preparedTile.roadLabels.pathInputs.count, field: "RoadLabels.pathInputs.count"),
@@ -927,7 +935,9 @@ enum PreparedTileDiskCodec {
             buildingAnchors: try decodePODArray(entry.buildingAnchors,
                                                 count: Int(entry.buildingAnchorCount),
                                                 as: SIMD2<Float>.self,
-                                                field: "Entry.buildingAnchors")
+                                                field: "Entry.buildingAnchors"),
+            buildingQuarterIndexStarts: entry.buildingQuarterIndexStarts,
+            treeQuarterStarts: entry.treeQuarterStarts
         )
         return PreparedTileDiskCacheHit(image: image,
                                         sourceETag: entry.sourceETag.isEmpty ? nil : entry.sourceETag)

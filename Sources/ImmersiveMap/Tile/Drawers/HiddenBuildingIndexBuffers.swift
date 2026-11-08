@@ -27,8 +27,11 @@ final class HiddenBuildingIndexBuffers {
     enum Indices {
         /// The tile's own buffer, whole: it holds no hidden building.
         case whole
-        /// The working buffer, from its start.
-        case working(buffer: MTLBuffer, indexCount: Int)
+        /// The working buffer, from its start, and where each quarter's
+        /// volumes start in it, the count last, for a tile that keeps its
+        /// buildings by quarters (`TileBuffers.Extruded.quarterIndexStarts`),
+        /// empty for one kept whole.
+        case working(buffer: MTLBuffer, indexCount: Int, quarterStarts: [Int])
         /// Nothing: every building of the tile is hidden, or the working
         /// buffer could not be allocated.
         case none
@@ -120,23 +123,85 @@ final class HiddenBuildingIndexBuffers {
         guard let runs else {
             return .whole
         }
-        let indexCount = runs.reduce(0) { $0 + $1.count }
-        guard indexCount > 0, let source = extruded.indices else {
+        let layout = workingLayout(runs: runs, quarterStarts: extruded.quarterIndexStarts)
+        guard layout.indexCount > 0, let source = extruded.indices else {
             return .none
         }
         let indexByteCount = extruded.indexType == .uint16 ? MemoryLayout<UInt16>.stride : MemoryLayout<UInt32>.stride
         // Without the buffer the tile's buildings are not drawn: there is
         // no second way to draw them.
-        guard let buffer = source.buffer.device.makeBuffer(length: indexCount * indexByteCount,
+        guard let buffer = source.buffer.device.makeBuffer(length: layout.indexCount * indexByteCount,
                                                            options: .storageModeShared) else {
             return .none
         }
-        copy(runs: runs,
+        copy(layout: layout,
              indexByteCount: indexByteCount,
              from: source.buffer.contents() + source.offset,
              to: buffer.contents())
         buffer.label = "Buildings \(tile.z)/\(tile.x)/\(tile.y) without the replaced"
-        return .working(buffer: buffer, indexCount: indexCount)
+        return .working(buffer: buffer, indexCount: layout.indexCount, quarterStarts: layout.quarterStarts)
+    }
+
+    /// How a working buffer lays out the indices of `runs`: one quarter's
+    /// after another for a tile that keeps its buildings by quarters
+    /// (`quarterStarts`, the tile's own), each quarter starting at an even
+    /// index so its byte offset suits Metal as the tile's own do
+    /// (`TileUnificationStage`), an odd count padded by one degenerate
+    /// triangle. `segments` are the runs of each quarter, one segment of
+    /// every run for a tile kept whole, and `quarterStarts` where each
+    /// quarter starts in the working buffer, the count last.
+    struct WorkingLayout: Equatable {
+        var segments: [[Range<Int>]]
+        var paddedBefore: [Bool]
+        var quarterStarts: [Int]
+        var indexCount: Int
+    }
+
+    static func workingLayout(runs: [Range<Int>], quarterStarts: [Int]) -> WorkingLayout {
+        guard quarterStarts.count == TileQuarters.count + 1 else {
+            let count = runs.reduce(0) { $0 + $1.count }
+            return WorkingLayout(segments: [runs], paddedBefore: [false], quarterStarts: [], indexCount: count)
+        }
+        var layout = WorkingLayout(segments: [], paddedBefore: [], quarterStarts: [], indexCount: 0)
+        for quarter in 0..<TileQuarters.count {
+            let span = quarterStarts[quarter]..<quarterStarts[quarter + 1]
+            let segment = runs.compactMap { run -> Range<Int>? in
+                let clamped = run.clamped(to: span)
+                return clamped.isEmpty ? nil : clamped
+            }
+            let pads = layout.indexCount % 2 == 1
+            if pads {
+                layout.indexCount += 3
+            }
+            layout.quarterStarts.append(layout.indexCount)
+            layout.segments.append(segment)
+            layout.paddedBefore.append(pads)
+            layout.indexCount += segment.reduce(0) { $0 + $1.count }
+        }
+        layout.quarterStarts.append(layout.indexCount)
+        return layout
+    }
+
+    /// Copies the indices of `layout`, one run after another, from a
+    /// tile's index buffer to the start of a working one, a degenerate
+    /// triangle of index zero where the layout pads. `indexByteCount` is
+    /// the width of an index, 2 or 4 bytes.
+    static func copy(layout: WorkingLayout,
+                     indexByteCount: Int,
+                     from source: UnsafeRawPointer,
+                     to destination: UnsafeMutableRawPointer) {
+        var written = 0
+        for (segment, pads) in zip(layout.segments, layout.paddedBefore) {
+            if pads {
+                (destination + written).initializeMemory(as: UInt8.self, repeating: 0, count: 3 * indexByteCount)
+                written += 3 * indexByteCount
+            }
+            for run in segment {
+                let byteCount = run.count * indexByteCount
+                (destination + written).copyMemory(from: source + run.lowerBound * indexByteCount, byteCount: byteCount)
+                written += byteCount
+            }
+        }
     }
 
     /// Copies the indices of `runs`, one run after another, from a tile's
@@ -146,12 +211,10 @@ final class HiddenBuildingIndexBuffers {
                      indexByteCount: Int,
                      from source: UnsafeRawPointer,
                      to destination: UnsafeMutableRawPointer) {
-        var written = 0
-        for run in runs {
-            let byteCount = run.count * indexByteCount
-            (destination + written).copyMemory(from: source + run.lowerBound * indexByteCount, byteCount: byteCount)
-            written += byteCount
-        }
+        copy(layout: workingLayout(runs: runs, quarterStarts: []),
+             indexByteCount: indexByteCount,
+             from: source,
+             to: destination)
     }
 
     /// Drops the entries of released tiles, and their working buffers with

@@ -801,16 +801,6 @@ public extension ImmersiveMapView {
         return view
     }
 
-    /// Models that take the place of the map's own buildings: the OSM
-    /// elements each one lists (its building's outline and parts) are left
-    /// out once the model is loaded, and the model is drawn where they
-    /// stood. See ``ImmersiveMapLandmark``. A change applies in place.
-    public func landmarks(_ landmarks: [ImmersiveMapLandmark]) -> ImmersiveMapView {
-        var view = self
-        view.settings = view.settings.landmarks(landmarks)
-        return view
-    }
-
     /// Loads the 3D models of the map's buildings from an archive of model
     /// tiles. The models are off by default, and this turns them on: the
     /// hosted archive is `ImmersiveMapTilesService.modelArchiveURL`.

@@ -69,7 +69,8 @@ final class DebugOverlayHUDView: UIView {
     private let reliefListView = DebugOverlayTilesStatusListView()
     private var snapshot: DebugOverlayHUDSnapshot?
     private var isPanelEnabled = false
-    private var isCollapsed = false
+    /// The panel opens collapsed, its header alone over the map.
+    private var isCollapsed = true
     private var selectedTab: SelectedTab = .stats
     private var tileTraceSnapshot = TileTraceRecorderSnapshot(isRecording: false, fileURL: nil)
     private var baseLabelTraceSnapshot = BaseLabelTraceRecorderSnapshot(isRecording: false, fileURL: nil)

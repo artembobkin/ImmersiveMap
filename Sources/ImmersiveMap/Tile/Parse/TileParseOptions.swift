@@ -101,6 +101,16 @@ struct TileParseOptions: Equatable {
         return Float(TileCoordinateSpace.tileExtentDouble) / Float(groundFlatteningGrid(forTileZoom: tileZoom))
     }
 
+    /// Whether a tile of `tileZoom` keeps its buildings and its trees
+    /// quarter by quarter (`TileQuarters`): a tile that draws buildings
+    /// and is coarser than the tileset's deepest zoom, so its children
+    /// carry buildings of their own and the frame draws a quarter where
+    /// the child is not there to (`BuildingCoveragePlanner`).
+    func keepsQuarters(tileZoom: Int) -> Bool {
+        guard let buildingDeepestSourceZoom else { return false }
+        return tileZoom >= buildingMinimumSourceZoom && tileZoom < buildingDeepestSourceZoom
+    }
+
     /// Whether a tile of `tileZoom` carries its ground flattened.
     func flattensGround(tileZoom: Int) -> Bool {
         guard let groundFlatteningFromTileZoom else { return false }

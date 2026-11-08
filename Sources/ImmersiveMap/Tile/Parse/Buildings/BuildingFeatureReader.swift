@@ -121,10 +121,13 @@ struct BuildingFeatureReader {
     /// The candidate for one polygon of an extruded feature, nil for a
     /// polygon with no height or no usable footprint. The extrusion path's
     /// ONE entry into render space: the candidate's rings all flip here.
+    /// `quarter` is the quarter of the tile `parsedGeometry` was cut to,
+    /// nil for a tile kept whole (`TileParseOptions.keepsQuarters`).
     func candidate(polygon: Polygon,
                    parsedGeometry: ParsePolygon.ParsedGeometry,
                    styleKey: UInt8,
-                   extrusion: Extrusion) -> BuildingExtrusionCandidate? {
+                   extrusion: Extrusion,
+                   quarter: Int? = nil) -> BuildingExtrusionCandidate? {
         let heights = extrusion.heights
         guard heights.top > heights.base,
               let footprintSignature = BuildingFootprintSignature(polygon: polygon) else {
@@ -139,16 +142,28 @@ struct BuildingFeatureReader {
                                           roof: parsedGeometry.parsedPolygon,
                                           baseHeight: heights.base,
                                           topHeight: heights.top,
-                                          edgeRadius: heights.edgeRadius)
+                                          edgeRadius: heights.edgeRadius,
+                                          quarter: quarter)
     }
 
     /// After the whole tile is read: resolves the candidates against each
     /// other and builds a mesh for each survivor, marked with its
     /// building's id. Returns the survivors, the volumes the tile draws.
+    /// The pieces of a tile kept by quarters are resolved quarter by
+    /// quarter: the pieces of one footprint share its id, its signature
+    /// and its heights, and would otherwise go as one another's
+    /// duplicates.
     @discardableResult
     func appendExtrudedMeshes(resolving candidates: [BuildingExtrusionCandidate],
                               into result: inout ReadingStageResult) -> [BuildingExtrusionCandidate] {
-        let resolved = BuildingExtrusionResolver.resolveExterior(candidates)
+        let resolved: [BuildingExtrusionCandidate]
+        if candidates.contains(where: { $0.quarter != nil }) {
+            resolved = (0..<TileQuarters.count).flatMap { quarter in
+                BuildingExtrusionResolver.resolveExterior(candidates.filter { $0.quarter == quarter })
+            }
+        } else {
+            resolved = BuildingExtrusionResolver.resolveExterior(candidates)
+        }
         for candidate in resolved {
             if var extrudedMesh = BuildingExtrusionMeshBuilder.build(clippedExterior: candidate.clippedExterior,
                                                                      clippedInteriors: candidate.clippedInteriors,
@@ -158,6 +173,7 @@ struct BuildingFeatureReader {
                                                                      edgeRadius: candidate.edgeRadius,
                                                                      tileExtent: Float(tileExtent)) {
                 extrudedMesh.buildingID = candidate.buildingId
+                extrudedMesh.quarter = candidate.quarter
                 result.extrudedByStyle[candidate.styleKey, default: []].append(extrudedMesh)
             }
         }

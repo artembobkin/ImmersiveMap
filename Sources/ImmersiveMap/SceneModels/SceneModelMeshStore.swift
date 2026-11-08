@@ -102,7 +102,7 @@ final class SceneModelMeshStore: @unchecked Sendable {
     /// Loads run one at a time on a queue of their own, never on the Swift
     /// concurrency pool. A load blocks its thread: `MTKTextureLoader` hands
     /// each texture to Metal's IO queue and waits on a semaphore for it. As
-    /// detached tasks, a few dozen landmarks loading at once put every
+    /// detached tasks, a few dozen models loading at once put every
     /// thread of the pool to sleep in that wait, and the tile loads, which
     /// run on the same pool, could not start for as long as it lasted: the
     /// map stood empty with its tiles "stalled in disk". One at a time the

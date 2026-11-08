@@ -82,19 +82,15 @@ struct StaticModelCasterKey: Hashable {
 /// into groups that go by the id of one member, so the same id is one
 /// building in one zoom and a group of buildings in another. A model tile
 /// therefore lists what it replaces zoom by zoom (`byMapTileZoom`), and a
-/// map tile takes the list of its own zoom. A landmark set through the
-/// settings names OSM elements with no zoom (`atEveryZoom`), and holds
-/// back with its own `minimumZoom` instead.
+/// map tile takes the list of its own zoom.
 struct ReplacedBuildings: Equatable {
     static let none = ReplacedBuildings()
 
-    /// Left out of the map tiles of every zoom.
-    var atEveryZoom: Set<UInt64> = []
     /// Left out of the map tiles of one zoom, by that zoom.
     var byMapTileZoom: [Int: Set<UInt64>] = [:]
 
     var isEmpty: Bool {
-        atEveryZoom.isEmpty && byMapTileZoom.values.allSatisfy(\.isEmpty)
+        byMapTileZoom.values.allSatisfy(\.isEmpty)
     }
 
     /// The ids left out of a map tile of `zoom`: the list of that zoom, and
@@ -103,16 +99,13 @@ struct ReplacedBuildings: Equatable {
     /// A shallower tile with no list of its own takes none: its ids are
     /// groups the deeper lists know nothing of.
     func ids(forMapTileZoom zoom: Int) -> Set<UInt64> {
-        var listed: Set<UInt64>?
         if let exact = byMapTileZoom[zoom] {
-            listed = exact
-        } else if let deepest = byMapTileZoom.keys.max(), zoom > deepest {
-            listed = byMapTileZoom[deepest]
+            return exact
         }
-        guard let listed else {
-            return atEveryZoom
+        if let deepest = byMapTileZoom.keys.max(), zoom > deepest {
+            return byMapTileZoom[deepest] ?? []
         }
-        return atEveryZoom.isEmpty ? listed : listed.union(atEveryZoom)
+        return []
     }
 
     mutating func formUnion(byMapTileZoom other: [Int: Set<UInt64>]) {
@@ -134,7 +127,7 @@ struct SceneModelFrameState {
     /// shadow-pass gate together with the building-caster check.
     var hasShadowCasters: Bool
     /// At least one of those casters can move between frames (the app's
-    /// scene models and the landmarks set through the settings): the shadow
+    /// scene models): the shadow
     /// map is rendered again every frame while one is in it.
     var hasMovingShadowCasters = false
     /// The casters that never move, the models of the model tiles. The
@@ -180,10 +173,10 @@ final class FrameContextSharedState {
     /// from their first frame instead of standing until the model comes.
     var pendingModelTiles: Set<Tile> = []
     /// How far the extruded buildings have risen out of the ground this
-    /// frame (`ExtrusionRise`), by the tile they draw from, set in `update`
-    /// by their subsystem: the roofs the labels of a tile stand on rise
-    /// with its buildings. A tile missing draws no buildings.
-    var buildingRiseByTile: [Tile: Float] = [:]
+    /// frame (`ExtrusionRise`), by the tile and the quarters they draw
+    /// from, set in `update` by their subsystem: a label on a roof rises
+    /// with the buildings drawn under it, whichever tile draws them.
+    var buildingRise: BuildingRiseCoverage = .none
     /// The building placements the frame draws, set in `update` by
     /// `BuildingExtrusionRenderSubsystem`: the coverage's
     /// (`TilePlacementState.buildingPlaceTilesContext`) with buildings,

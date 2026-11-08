@@ -75,13 +75,13 @@ public protocol ImmersiveMapTileSchema: Sendable {
     /// The id the tiles give the features made from an OSM element, nil
     /// when the tiles carry no OSM identity. Every tile and every zoom the
     /// element appears in carries the same id, which is how the engine finds
-    /// the building a landmark replaces.
+    /// the building a model of a model archive replaces.
     func tileFeatureID(of element: ImmersiveMapOSMElement) -> UInt64?
 }
 
 public extension ImmersiveMapTileSchema {
     /// A schema whose tiles carry no OSM identity: no building can be
-    /// replaced by a landmark.
+    /// replaced by a model.
     func tileFeatureID(of element: ImmersiveMapOSMElement) -> UInt64? {
         nil
     }

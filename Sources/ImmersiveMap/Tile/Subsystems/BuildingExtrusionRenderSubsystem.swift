@@ -100,7 +100,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
 
         heightScales.removeAll(keepingCapacity: true)
         var drawnPlacements: [PlaceTile] = []
-        var riseByTile: [Tile: Float] = [:]
+        var riseCoverage = BuildingRiseCoverage()
         var signature: Float = 0
         for (placement, key) in zip(placements, drawnKeys) {
             guard let key, placement.metalTile.tileBuffers.extruded.indicesCount > 0 else {
@@ -113,13 +113,13 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
             // out of the scaled matrix and are normalized in the shader.
             let drawn = max(scale, 0.001)
             heightScales.append(drawn)
-            riseByTile[key.tile] = max(riseByTile[key.tile] ?? 0, scale)
+            riseCoverage.add(tile: key.tile, quarters: placement.quarters, rise: scale)
             signature += drawn
         }
         drawsAny = drawnPlacements.isEmpty == false
         updateLiftBuffers(placements: placements, drawnKeys: drawnKeys, frameContext: frameContext)
         frameContext.sharedState.drawnBuildingPlacements = drawnPlacements
-        frameContext.sharedState.buildingRiseByTile = riseByTile
+        frameContext.sharedState.buildingRise = riseCoverage
         frameContext.sharedState.buildingRiseSignature = signature
         frameContext.sharedState.isExtrusionRising = frameContext.sharedState.isExtrusionRising || rise.isAnimating
     }

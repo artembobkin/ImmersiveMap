@@ -11,6 +11,10 @@ struct ImmersiveMapDevMacApp: App {
         WindowGroup("ImmersiveMap Dev") {
             MapScreen()
         }
+        // The size a new window opens at. macOS restores the size of a
+        // window the user has resized, so this applies only to a window
+        // without a saved size.
+        .defaultSize(width: 1440, height: 900)
     }
 }
 

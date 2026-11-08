@@ -20,15 +20,6 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
     private let shadowMapTextureProvider: () -> MTLTexture?
     private let shadowFallbackTexture: MTLTexture
     private let presentationStateStore = SceneModelPresentationStateStore()
-    /// The landmarks' models, kept apart from the app's scene models: their
-    /// ids are the landmarks' positions in the settings, so they never meet
-    /// the controller's ids, and they draw but are not tappable.
-    private let landmarkStateStore = SceneModelPresentationStateStore()
-    private var appliedLandmarks: [ImmersiveMapLandmark] = []
-    /// The tile feature ids of the buildings each applied landmark
-    /// replaces, by the landmark's position: the ones the schema can name.
-    private var appliedLandmarkBuildingIDs: [[UInt64]] = []
-    private var landmarkSnapshotVersion: UInt64 = 0
     private var drawItems: [SceneModelDrawItem] = []
     private var shadowCasterItems: [SceneModelDrawItem] = []
 
@@ -67,18 +58,13 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
                                          time: frameContext.time)
         }
 
-        applyLandmarks(frameContext.services.settings.landmarks,
-                       schema: frameContext.services.settings.mapStyle.schema,
-                       time: frameContext.time)
-
-        // The app's models first, the landmarks after them: the index
-        // tells a landmark apart below.
-        let presentedSceneModels = presentationStateStore.presentedEntries(at: frameContext.time)
-        let presented = presentedSceneModels + presentedLandmarks(frameContext: frameContext)
+        let presented = presentationStateStore.presentedEntries(at: frameContext.time)
         frameContext.sharedState.sceneModelState.hasActiveAnimations = presentationStateStore.hasActiveAnimations
         frameContext.sharedState.sceneModelState.hasShadowCasters = false
         frameContext.sharedState.sceneModelState.hasMovingShadowCasters = false
         frameContext.sharedState.sceneModelState.staticShadowCasters = []
+        // The frame's replaced buildings start empty: the model tiles add
+        // theirs (`ModelTileRenderSubsystem`).
         frameContext.sharedState.sceneModelState.replacedBuildings = .none
         frameContext.sharedState.sceneModelState.hasDrawnModels = false
         // Cleared up front so every early return below leaves an empty
@@ -118,22 +104,13 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
         var items: [SceneModelDrawItem] = []
         var shadowItems: [SceneModelDrawItem] = []
         var selectionEntries: [SceneModelSelectionEntry] = []
-        var replacedBuildingIDs = Set<UInt64>()
         items.reserveCapacity(presented.count)
-        let landmarkStartIndex = presentedSceneModels.count
-        for (index, model) in presented.enumerated() {
+        for model in presented {
             guard let mesh = readyMeshes[model.source.url] else { continue }
             let anchor = SceneModelAnchorMath.resolveAnchor(presented: model,
                                                             bounds: mesh.localBounds,
                                                             constants: constants)
             guard anchor.boundingSphereRadius > 0 else { continue }
-            // A landmark whose model is loaded and shown takes its building
-            // out of the frame, in view or not: the shadow pass reaches
-            // past the view. Until then the building stands.
-            let isLandmark = index >= landmarkStartIndex
-            if isLandmark {
-                replacedBuildingIDs.formUnion(appliedLandmarkBuildingIDs[Int(model.id)])
-            }
 
             if let shadowFrustum,
                shadowFrustum.isSphereVisible(center: anchor.boundingSphereCenter,
@@ -153,8 +130,6 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
                                             modelMatrix: anchor.modelMatrix,
                                             groundPlane: anchor.groundPlane,
                                             cutsIntoGround: model.cutsIntoGround))
-            // A landmark draws but is not tappable: it stands for a building.
-            guard isLandmark == false else { continue }
             // Built from the drawn item, not from the presented list: the hit
             // volume is the geometry this frame put on screen, so the horizon
             // gate and the frustum cull it exactly as they cull the draw.
@@ -166,7 +141,6 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
         }
         drawItems = items
         shadowCasterItems = shadowItems
-        frameContext.sharedState.sceneModelState.replacedBuildings.atEveryZoom = replacedBuildingIDs
         frameContext.sharedState.sceneModelState.hasShadowCasters = shadowItems.isEmpty == false
         frameContext.sharedState.sceneModelState.hasMovingShadowCasters = shadowItems.isEmpty == false
         frameContext.sharedState.sceneModelState.hasDrawnModels = items.isEmpty == false
@@ -176,54 +150,6 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
             projectionView: frameContext.cameraMatrices.projectionView,
             cameraEye: frameContext.cameraEye,
             entries: selectionEntries)
-    }
-
-    /// The landmarks drawn at this zoom: one below its `minimumZoom` is left
-    /// out, and the map's own building stands. The zoom compared is the
-    /// tile zoom the frame draws. A landmark that is drawn takes its
-    /// building out of the same frame, so the model and the building never
-    /// both show or both go missing. The store's entries are the landmarks
-    /// in settings order: their ids are the positions.
-    private func presentedLandmarks(frameContext: FrameContext) -> [PresentedSceneModel] {
-        let entries = landmarkStateStore.presentedEntries(at: frameContext.time)
-        let maximumTileZoom = frameContext.services.settings.tiles.coverage.maximumZoomLevel
-        let tileZoom = min(max(0, frameContext.zoomLevel), maximumTileZoom)
-        return entries.filter { entry in
-            let index = Int(entry.id)
-            guard index < appliedLandmarks.count else { return false }
-            return tileZoom >= appliedLandmarks[index].effectiveMinimumZoom(maximumTileZoom: maximumTileZoom)
-        }
-    }
-
-    /// Feeds the landmarks from the settings into their own store when they
-    /// change: the whole list replaces the last one, and a model snaps to its
-    /// new transform. The schema names the tile features of the replaced
-    /// buildings. A renderer lives under one map style, so the schema is
-    /// the same for every call.
-    private func applyLandmarks(_ landmarks: [ImmersiveMapLandmark],
-                                schema: any ImmersiveMapTileSchema,
-                                time: TimeInterval) {
-        guard landmarks != appliedLandmarks else { return }
-        appliedLandmarkBuildingIDs = landmarks.map { landmark in
-            landmark.replacedBuildings.compactMap { schema.tileFeatureID(of: $0) }
-        }
-        let models = landmarks.enumerated().map { index, landmark in
-            ImmersiveMapSceneModel(id: UInt64(index),
-                                   source: landmark.model,
-                                   coordinate: landmark.coordinate,
-                                   altitudeMeters: landmark.altitudeMeters,
-                                   headingDegrees: landmark.headingDegrees,
-                                   scale: landmark.scale,
-                                   cutsIntoGround: landmark.cutsIntoGround)
-        }
-        let removedIds = (landmarks.count..<max(landmarks.count, appliedLandmarks.count)).map { UInt64($0) }
-        landmarkSnapshotVersion &+= 1
-        landmarkStateStore.apply(snapshot: SceneModelsSnapshot(models: models,
-                                                               transformAnimationDurationsById: [:],
-                                                               removedIds: removedIds,
-                                                               version: landmarkSnapshotVersion),
-                                 time: time)
-        appliedLandmarks = landmarks
     }
 
     func contributePassAvailability(settings _: ImmersiveMapSettings,

@@ -412,7 +412,8 @@ final class DebugOverlayHUDView: NSView {
 
     private var snapshot: DebugOverlayHUDSnapshot?
     private var isPanelEnabled = false
-    private var isCollapsed = false
+    /// The panel opens collapsed, its header alone over the map.
+    private var isCollapsed = true
     private var shadowSettings = ImmersiveMapSettings.ShadowSettings()
     private var sunDirection = ImmersiveMapSettings.SceneLightSettings().direction
     private var fogSettings = ImmersiveMapSettings.FogSettings()

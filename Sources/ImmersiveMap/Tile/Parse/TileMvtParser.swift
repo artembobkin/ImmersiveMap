@@ -94,7 +94,8 @@ final class TileMvtParser {
             roadTextLabels: readingStageResult.roadTextLabels,
             parseLayerTimings: readingStageResult.layerTimings,
             groundIsFlattened: readingStageResult.groundIsFlattened,
-            trees: readingStageResult.trees
+            trees: readingStageResult.trees,
+            treeQuarterStarts: readingStageResult.treeQuarterStarts
         )
     }
 
@@ -288,6 +289,7 @@ final class TileMvtParser {
 
         groundReader.finish(tile: tile, addTestBorders: options.addTestBorders, into: &result)
 
+        result.keepsQuarters = options.keepsQuarters(tileZoom: tile.z)
         // Only once every layer is read: an outline can come after its parts.
         let extrudedVolumes = buildingReader.appendExtrudedMeshes(resolving: buildingExtrusionCandidates,
                                                                   into: &result)
@@ -444,18 +446,36 @@ final class TileMvtParser {
             if tile.z >= options.buildingMinimumSourceZoom, facts.building?.isPart == false, feature.id != 0 {
                 buildingOutlineIDs.insert(feature.id)
             }
+            // A tile kept by quarters cuts each volume at the quarters'
+            // edges, as its children cut theirs at their tiles'.
+            let keepsQuarters = options.keepsQuarters(tileZoom: tile.z)
             for polygon in polygons {
                 guard let parsedGeometry = tools.parsePolygon.parseGeometry(polygon: polygon,
                                                                             tileExtent: tileExtent) else {
                     continue
                 }
                 result.appendGround(parsedGeometry.parsedPolygon, key: extrusion.key, placement: .ground)
-                if let extrusionInfo,
-                   let candidate = buildingReader.candidate(polygon: polygon,
-                                                            parsedGeometry: parsedGeometry,
-                                                            styleKey: extrusion.key,
-                                                            extrusion: extrusionInfo) {
-                    extrusionCandidates.append(candidate)
+                guard let extrusionInfo else { continue }
+                guard keepsQuarters else {
+                    if let candidate = buildingReader.candidate(polygon: polygon,
+                                                                parsedGeometry: parsedGeometry,
+                                                                styleKey: extrusion.key,
+                                                                extrusion: extrusionInfo) {
+                        extrusionCandidates.append(candidate)
+                    }
+                    continue
+                }
+                for quarter in 0..<TileQuarters.count {
+                    if let piece = tools.parsePolygon.parseGeometry(polygon: polygon,
+                                                                    tileExtent: tileExtent,
+                                                                    within: TileQuarters.square(of: quarter)),
+                       let candidate = buildingReader.candidate(polygon: polygon,
+                                                                parsedGeometry: piece,
+                                                                styleKey: extrusion.key,
+                                                                extrusion: extrusionInfo,
+                                                                quarter: quarter) {
+                        extrusionCandidates.append(candidate)
+                    }
                 }
             }
         case .road(let roadStyle):

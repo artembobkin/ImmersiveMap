@@ -17,4 +17,7 @@ struct ParsedExtrudedMesh {
     /// The tile feature id of the building the volume is, zero for a
     /// feature without one.
     var buildingID: UInt64 = 0
+    /// The quarter of its tile the volume stands in (`TileQuarters`), nil
+    /// for a tile kept whole.
+    var quarter: Int? = nil
 }

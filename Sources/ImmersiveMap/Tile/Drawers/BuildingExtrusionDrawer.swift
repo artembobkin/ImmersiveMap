@@ -185,6 +185,7 @@ enum BuildingExtrusionDrawer {
             renderEncoder.setVertexBytes(&modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
 
             drawIndices(of: metalTile,
+                        quarters: placeTile.quarters,
                         indices: extrudedIndices,
                         indexBuffers: indexBuffers,
                         renderEncoder: renderEncoder)
@@ -206,29 +207,39 @@ enum BuildingExtrusionDrawer {
         renderEncoder.setVertexBytes(&lift, length: MemoryLayout<BuildingLiftUniform>.stride, index: 5)
     }
 
-    /// The tile's buildings in one draw: from the tile's own index buffer,
+    /// The tile's buildings in the quarters the placement draws
+    /// (`PlaceTile.quarters`), one draw for every run of consecutive
+    /// quarters, one for a whole tile: from the tile's own index buffer,
     /// or from its working buffer when the frame leaves some buildings out
     /// (`HiddenBuildingIndexBuffers`).
     private static func drawIndices(of metalTile: MetalTile,
+                                    quarters: UInt8,
                                     indices: TileBufferView,
                                     indexBuffers: HiddenBuildingIndexBuffers,
                                     renderEncoder: MTLRenderCommandEncoder) {
         let extruded = metalTile.tileBuffers.extruded
+        let indexByteCount = extruded.indexType == .uint16 ? MemoryLayout<UInt16>.stride : MemoryLayout<UInt32>.stride
+        let buffer: MTLBuffer
+        let offset: Int
+        let runs: [Range<Int>]
         switch indexBuffers.indices(of: metalTile) {
         case .whole:
+            buffer = indices.buffer
+            offset = indices.offset
+            runs = TileQuarters.runs(starts: extruded.quarterIndexStarts, whole: 0..<indices.count, mask: quarters)
+        case .working(let working, let indexCount, let quarterStarts):
+            buffer = working
+            offset = 0
+            runs = TileQuarters.runs(starts: quarterStarts, whole: 0..<indexCount, mask: quarters)
+        case .none:
+            return
+        }
+        for run in runs {
             renderEncoder.drawIndexedPrimitives(type: .triangle,
-                                                indexCount: indices.count,
-                                                indexType: extruded.indexType,
-                                                indexBuffer: indices.buffer,
-                                                indexBufferOffset: indices.offset)
-        case .working(let buffer, let indexCount):
-            renderEncoder.drawIndexedPrimitives(type: .triangle,
-                                                indexCount: indexCount,
+                                                indexCount: run.count,
                                                 indexType: extruded.indexType,
                                                 indexBuffer: buffer,
-                                                indexBufferOffset: 0)
-        case .none:
-            break
+                                                indexBufferOffset: offset + run.lowerBound * indexByteCount)
         }
     }
 
@@ -286,6 +297,7 @@ enum BuildingExtrusionDrawer {
             renderEncoder.setVertexBytes(&modelMatrix, length: MemoryLayout<matrix_float4x4>.stride, index: 3)
 
             drawIndices(of: metalTile,
+                        quarters: placeTile.quarters,
                         indices: extrudedIndices,
                         indexBuffers: indexBuffers,
                         renderEncoder: renderEncoder)

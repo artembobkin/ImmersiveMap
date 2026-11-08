@@ -287,15 +287,9 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
                 : []
             placeTilesContext = PlaceTilesContext(tilePlacements: plannedPlacements + backdrops)
             // The buildings: the tiles the ground shows, from the
-            // buildings' zoom on, in the near field (see the planner).
-            let eyeGroundCell: SIMD2<Double>? = frameContext.renderSurfaceMode == .flat
-                ? BuildingCoveragePlanner.eyeGroundCell(eye: frameContext.cameraEye,
-                                                        flatRenderState: frameContext.resolvedPresentation.flatRenderState,
-                                                        lookAt: SIMD2<Double>(center.tileX, center.tileY),
-                                                        targetZoom: tileZoomLevel)
-                : nil
+            // buildings' zoom on (see the planner).
             buildingPlaceTilesContext = BuildingCoveragePlanner.plan(groundPlacements: plannedPlacements,
-                                                                     eyeGroundCell: eyeGroundCell,
+                                                                     onFlatMap: frameContext.renderSurfaceMode == .flat,
                                                                      minimumZoom: buildingsMinimumTileZoom)
             placementVersion &+= 1
             plannedCoverageVersion = coverageVersion

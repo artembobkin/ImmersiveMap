@@ -5,23 +5,6 @@
 import XCTest
 
 final class ImmersiveMapSettingsApplicationPlannerTests: XCTestCase {
-    /// The landmarks are read per frame, the buildings they replace
-    /// included: the tiles keep every building, so nothing is prepared again.
-    func testLandmarkChangeIsLiveApplied() {
-        let oldSettings = ImmersiveMapSettings.default
-        let landmark = ImmersiveMapLandmark(id: "bolshoi",
-                                            model: .init(url: URL(fileURLWithPath: "/models/bolshoi.usdz")),
-                                            coordinate: GeoCoordinate(latitude: 55.76013, longitude: 37.61861),
-                                            replacedBuildings: [.relation(3_334_755), .way(84_653_688)])
-        let newSettings = oldSettings.landmarks([landmark])
-
-        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(from: oldSettings, to: newSettings)
-
-        XCTAssertEqual(plan.changedDomains, [.landmarks])
-        XCTAssertEqual(plan.actions, [.liveApply])
-        XCTAssertFalse(plan.requiresRendererRecreation)
-    }
-
     /// The archive client, the disk cache and the memory budget are built
     /// with the renderer. The map's own tiles do not depend on the models,
     /// so no cache is invalidated and nothing is prepared again.

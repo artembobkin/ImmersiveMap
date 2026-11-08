@@ -74,6 +74,12 @@ struct PlaceTile: Hashable {
     /// What stands on the ground (the labels, the buildings) stands at
     /// this terrain's heights, the ground's as drawn.
     let displacement: Tile?
+    /// The quarters of the tile its buildings and trees draw in
+    /// (`TileQuarters`), a bit per quarter, every one for a tile drawn
+    /// whole. Only the building coverage leaves some out
+    /// (`BuildingCoveragePlanner`), and only of a tile that keeps its
+    /// buildings by quarters.
+    let quarters: UInt8
 
     init(metalTile: MetalTile,
          placeIn: VisibleTile,
@@ -81,7 +87,8 @@ struct PlaceTile: Hashable {
          rules: TileDrawRules = .all,
          isHorizonBackdrop: Bool = false,
          terrain: Tile? = nil,
-         displacement: Tile? = nil) {
+         displacement: Tile? = nil,
+         quarters: UInt8 = TileQuarters.all) {
         self.metalTile = metalTile
         self.placeIn = placeIn
         self.slot = slot ?? placeIn
@@ -89,6 +96,7 @@ struct PlaceTile: Hashable {
         self.isHorizonBackdrop = isHorizonBackdrop
         self.terrain = terrain
         self.displacement = displacement ?? terrain
+        self.quarters = quarters
     }
 
     /// The tile is drawn in its own slot, at its own extent.

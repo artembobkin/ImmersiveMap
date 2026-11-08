@@ -127,13 +127,21 @@ extension ProtomapsBasemapSchema {
     /// from the storey count itself when the source states no height. A
     /// part is `kind=building_part`. The basemap names no building
     /// identity, so every feature stands for itself, and a feature with a
-    /// negative `layer` lies underground and is not raised.
+    /// negative `layer` lies underground and is not raised. Neither is a
+    /// part whose `kind_detail` is `no`, OSM's `building:part=no`: an area
+    /// of a building's outline that is no part of it (the ground around
+    /// Lenin's Mausoleum and its tribunes), which Simple 3D Buildings never
+    /// raises. It ships with no height, and raised at the style's fallback
+    /// height it would stand as a slab over the whole area, the real parts
+    /// sunk in it.
     func building(_ properties: ImmersiveMapFeatureProperties) -> ImmersiveMapBuildingExtrusion {
-        ImmersiveMapBuildingExtrusion(heightMetres: properties.metres("height"),
-                                      baseHeightMetres: properties.metres("min_height"),
-                                      buildingIdentity: nil,
-                                      isPart: properties.string("kind") == "building_part",
-                                      isHidden: (properties.integer("layer") ?? 0) < 0)
+        let isPart = properties.string("kind") == "building_part"
+        let isNoPart = isPart && properties.string("kind_detail") == "no"
+        return ImmersiveMapBuildingExtrusion(heightMetres: properties.metres("height"),
+                                             baseHeightMetres: properties.metres("min_height"),
+                                             buildingIdentity: nil,
+                                             isPart: isPart,
+                                             isHidden: isNoPart || (properties.integer("layer") ?? 0) < 0)
     }
 
     /// A feature's names: `name` for the local name and `name:xx` for the

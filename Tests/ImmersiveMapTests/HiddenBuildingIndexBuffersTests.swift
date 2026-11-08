@@ -49,7 +49,7 @@ final class HiddenBuildingIndexBuffersTests: XCTestCase {
     private func contents(_ indices: HiddenBuildingIndexBuffers.Indices,
                           file: StaticString = #filePath,
                           line: UInt = #line) throws -> (buffer: MTLBuffer, indices: [UInt16]) {
-        guard case .working(let buffer, let indexCount) = indices else {
+        guard case .working(let buffer, let indexCount, _) = indices else {
             XCTFail("expected a working buffer, got \(indices)", file: file, line: line)
             throw XCTSkip("no working buffer")
         }
@@ -154,16 +154,6 @@ final class HiddenBuildingIndexBuffersTests: XCTestCase {
         }
         buffers.update(ReplacedBuildings(byMapTileZoom: [14: [2], 15: [1]]))
         XCTAssertEqual(try contents(buffers.indices(of: tile)).indices, [3, 4, 5, 6, 7, 8, 9, 10, 11])
-    }
-
-    /// A landmark set through the settings names its buildings with no
-    /// zoom: they are left out of every tile.
-    func testBuildingsHiddenAtEveryZoomReachEveryTile() throws {
-        let tile = try makeTile(device: makeDevice())
-        let buffers = HiddenBuildingIndexBuffers()
-
-        buffers.update(ReplacedBuildings(atEveryZoom: [3], byMapTileZoom: [15: [1]]))
-        XCTAssertEqual(try contents(buffers.indices(of: tile)).indices, [3, 4, 5, 6, 7, 8])
     }
 
     /// A released tile's entry never answers for a later tile, even one

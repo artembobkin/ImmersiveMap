@@ -17,8 +17,9 @@ import Foundation
 /// accident.
 public struct ProtomapsBasemapSchema: ImmersiveMapTileSchema {
     /// Bumped when the reading changes: every prepared tile is prepared
-    /// again under the new reading.
-    public var cacheFingerprint: UInt32 { 3 }
+    /// again under the new reading. 4: a `building_part` whose
+    /// `kind_detail` is `no` is not raised.
+    public var cacheFingerprint: UInt32 { 4 }
 
     public init() {}
 

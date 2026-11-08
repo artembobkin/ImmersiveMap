@@ -25,8 +25,11 @@ final class ParsedTile {
     /// Whether the ground fills are one flattened layer that does not
     /// overlap (`GroundFlattening`).
     let groundIsFlattened: Bool
-    /// The tile's trees, sorted by priority (`TreeScatter`).
+    /// The tile's trees, sorted by priority (`TreeScatter`), quarter by
+    /// quarter on a tile that keeps quarters.
     let trees: [TreeInstance]
+    /// Where each quarter's trees start (`ReadingStageResult.treeQuarterStarts`).
+    let treeQuarterStarts: [UInt32]
 
     init(
         drawingPolygon: DrawingPolygonBytes,
@@ -44,7 +47,8 @@ final class ParsedTile {
         roadTextLabels: [ParsedRoadTextLabel],
         parseLayerTimings: [TileParseLayerTiming],
         groundIsFlattened: Bool = false,
-        trees: [TreeInstance] = []
+        trees: [TreeInstance] = [],
+        treeQuarterStarts: [UInt32] = []
     ) {
         self.drawingPolygon = drawingPolygon
         self.drawingRoadPhases = drawingRoadPhases
@@ -62,5 +66,6 @@ final class ParsedTile {
         self.parseLayerTimings = parseLayerTimings
         self.groundIsFlattened = groundIsFlattened
         self.trees = trees
+        self.treeQuarterStarts = treeQuarterStarts
     }
 }

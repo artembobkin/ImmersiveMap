@@ -422,44 +422,64 @@ enum TileUnificationStage {
             }
         }
 
-        for styleKey in styleKeys {
-            let styleBufferIndex = styleIndexByKey[styleKey] ?? 0
-            if let extrudedMeshes = extrudedByStyle[styleKey] {
-                for extrudedMesh in extrudedMeshes {
-                    // The volume's ordinal and anchor: the centre of its
-                    // vertices' bounds. Past 65535 volumes the rest share
-                    // the last anchor.
-                    let ordinal = UInt16(clamping: buildingAnchors.count)
-                    if buildingAnchors.count <= Int(UInt16.max), extrudedMesh.vertices.isEmpty == false {
-                        var minimum = SIMD2<Float>(extrudedMesh.vertices[0].position.x, extrudedMesh.vertices[0].position.y)
-                        var maximum = minimum
-                        for vertex in extrudedMesh.vertices {
-                            let position = SIMD2<Float>(vertex.position.x, vertex.position.y)
-                            minimum = simd_min(minimum, position)
-                            maximum = simd_max(maximum, position)
+        // A tile kept by quarters lays its volumes out one quarter after
+        // another, so a quarter is one run of the indices, and keeps where
+        // each run starts.
+        let quarterPasses: [Int?] = readingStageResult.keepsQuarters ? Array(0..<TileQuarters.count) : [nil]
+        var quarterIndexStarts: [UInt32] = []
+        for quarterPass in quarterPasses {
+            if quarterPass != nil {
+                // A quarter starts at an even index, so its byte offset in
+                // a buffer of 16-bit indices is a multiple of four, as
+                // Metal wants an index offset: an odd count takes one
+                // degenerate triangle, which draws nothing.
+                if unifiedExtrudedIndices.count % 2 == 1 {
+                    unifiedExtrudedIndices.append(contentsOf: [0, 0, 0])
+                }
+                quarterIndexStarts.append(UInt32(unifiedExtrudedIndices.count))
+            }
+            for styleKey in styleKeys {
+                let styleBufferIndex = styleIndexByKey[styleKey] ?? 0
+                if let extrudedMeshes = extrudedByStyle[styleKey] {
+                    for extrudedMesh in extrudedMeshes where extrudedMesh.quarter == quarterPass {
+                        // The volume's ordinal and anchor: the centre of its
+                        // vertices' bounds. Past 65535 volumes the rest share
+                        // the last anchor.
+                        let ordinal = UInt16(clamping: buildingAnchors.count)
+                        if buildingAnchors.count <= Int(UInt16.max), extrudedMesh.vertices.isEmpty == false {
+                            var minimum = SIMD2<Float>(extrudedMesh.vertices[0].position.x, extrudedMesh.vertices[0].position.y)
+                            var maximum = minimum
+                            for vertex in extrudedMesh.vertices {
+                                let position = SIMD2<Float>(vertex.position.x, vertex.position.y)
+                                minimum = simd_min(minimum, position)
+                                maximum = simd_max(maximum, position)
+                            }
+                            buildingAnchors.append((minimum + maximum) * 0.5)
                         }
-                        buildingAnchors.append((minimum + maximum) * 0.5)
+                        for vertex in extrudedMesh.vertices {
+                            unifiedExtrudedVertices.append(ExtrudedVertexIn(position: vertex.position,
+                                                                            normal: vertex.normal,
+                                                                            styleIndex: styleBufferIndex,
+                                                                            buildingOrdinal: ordinal))
+                        }
+                        // A mesh is one building's volume and its indices go
+                        // in as one run: the run is that building's place.
+                        let indexStart = UInt32(unifiedExtrudedIndices.count)
+                        for index in extrudedMesh.indices {
+                            unifiedExtrudedIndices.append(index + currentExtrudedVertexOffset)
+                        }
+                        if extrudedMesh.buildingID != 0, extrudedMesh.indices.isEmpty == false {
+                            buildingRanges.append(TileBuildingRange(featureID: extrudedMesh.buildingID,
+                                                                    indexStart: indexStart,
+                                                                    indexCount: UInt32(extrudedMesh.indices.count)))
+                        }
+                        currentExtrudedVertexOffset += UInt32(extrudedMesh.vertices.count)
                     }
-                    for vertex in extrudedMesh.vertices {
-                        unifiedExtrudedVertices.append(ExtrudedVertexIn(position: vertex.position,
-                                                                        normal: vertex.normal,
-                                                                        styleIndex: styleBufferIndex,
-                                                                        buildingOrdinal: ordinal))
-                    }
-                    // A mesh is one building's volume and its indices go
-                    // in as one run: the run is that building's place.
-                    let indexStart = UInt32(unifiedExtrudedIndices.count)
-                    for index in extrudedMesh.indices {
-                        unifiedExtrudedIndices.append(index + currentExtrudedVertexOffset)
-                    }
-                    if extrudedMesh.buildingID != 0, extrudedMesh.indices.isEmpty == false {
-                        buildingRanges.append(TileBuildingRange(featureID: extrudedMesh.buildingID,
-                                                                indexStart: indexStart,
-                                                                indexCount: UInt32(extrudedMesh.indices.count)))
-                    }
-                    currentExtrudedVertexOffset += UInt32(extrudedMesh.vertices.count)
                 }
             }
+        }
+        if readingStageResult.keepsQuarters {
+            quarterIndexStarts.append(UInt32(unifiedExtrudedIndices.count))
         }
         
         return UnificationStageResult(
@@ -473,7 +493,8 @@ enum TileUnificationStage {
                 buildingRanges: buildingRanges.sorted { lhs, rhs in
                     lhs.featureID != rhs.featureID ? lhs.featureID < rhs.featureID : lhs.indexStart < rhs.indexStart
                 },
-                buildingAnchors: buildingAnchors
+                buildingAnchors: buildingAnchors,
+                quarterIndexStarts: quarterIndexStarts
             ),
             styles: groundLayer.styles,
             styleZoomFades: groundLayer.styleZoomFades,

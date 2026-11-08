@@ -27,15 +27,30 @@ class ParsePolygon {
         let parsedPolygon: ParsedPolygon
     }
 
+    /// A square of tile space a polygon is clipped to: the tile's own, or
+    /// one of its quarters (`TileQuarters`).
+    struct ClipSquare: Equatable {
+        let minimum: SIMD2<Float>
+        let maximum: SIMD2<Float>
+
+        static func tile(extent: Float) -> ClipSquare {
+            ClipSquare(minimum: .zero, maximum: SIMD2<Float>(repeating: extent))
+        }
+    }
+
     private func clip(polygon: Polygon, tileExtent: Float) -> ClippedPolygon? {
-        if isFullyInsideTile(ring: polygon.exteriorRing, tileExtent: tileExtent) {
-            let exterior = sanitizeRing(convertRing(polygon.exteriorRing, tileExtent: tileExtent))
+        clip(polygon: polygon, square: .tile(extent: tileExtent))
+    }
+
+    private func clip(polygon: Polygon, square: ClipSquare) -> ClippedPolygon? {
+        if isFullyInside(ring: polygon.exteriorRing, square: square) {
+            let exterior = sanitizeRing(convertRing(polygon.exteriorRing))
             guard exterior.count >= 3 else { return nil }
 
             var interiors: [[SIMD2<Float>]] = []
             interiors.reserveCapacity(polygon.interiorRings.count)
             for ring in polygon.interiorRings {
-                let sanitizedInterior = sanitizeRing(convertRing(ring, tileExtent: tileExtent))
+                let sanitizedInterior = sanitizeRing(convertRing(ring))
                 if sanitizedInterior.count >= 3 {
                     interiors.append(sanitizedInterior)
                 }
@@ -45,10 +60,10 @@ class ParsePolygon {
         }
 
         let clipPoly = Clipper.Polygon(points: [
-            Clipper.Point(x: 0.0, y: 0.0),
-            Clipper.Point(x: Double(tileExtent), y: 0.0),
-            Clipper.Point(x: Double(tileExtent), y: Double(tileExtent)),
-            Clipper.Point(x: 0.0, y: Double(tileExtent))
+            Clipper.Point(x: Double(square.minimum.x), y: Double(square.minimum.y)),
+            Clipper.Point(x: Double(square.maximum.x), y: Double(square.minimum.y)),
+            Clipper.Point(x: Double(square.maximum.x), y: Double(square.maximum.y)),
+            Clipper.Point(x: Double(square.minimum.x), y: Double(square.maximum.y))
         ])
 
         let exterior = polygon.exteriorRing.map {
@@ -84,6 +99,14 @@ class ParsePolygon {
 
     func parseGeometry(polygon: Polygon, tileExtent: Float) -> ParsedGeometry? {
         guard let clipped = clip(polygon: polygon, tileExtent: tileExtent) else { return nil }
+        return triangulateGeometry(clipped: clipped, tileExtent: tileExtent)
+    }
+
+    /// The polygon clipped to `square` of its tile and tessellated, nil
+    /// where none of it lies in the square: a building's piece in one
+    /// quarter of its tile (`TileQuarters`).
+    func parseGeometry(polygon: Polygon, tileExtent: Float, within square: ClipSquare) -> ParsedGeometry? {
+        guard let clipped = clip(polygon: polygon, square: square) else { return nil }
         return triangulateGeometry(clipped: clipped, tileExtent: tileExtent)
     }
 
@@ -200,7 +223,7 @@ class ParsePolygon {
         }
     }
 
-    private func isFullyInsideTile(ring: [Point], tileExtent: Float) -> Bool {
+    private func isFullyInside(ring: [Point], square: ClipSquare) -> Bool {
         guard let first = ring.first else { return false }
 
         var minX = Float(first.x)
@@ -217,10 +240,11 @@ class ParsePolygon {
             maxY = max(maxY, y)
         }
 
-        return minX >= 0 && maxX <= tileExtent && minY >= 0 && maxY <= tileExtent
+        return minX >= square.minimum.x && maxX <= square.maximum.x
+            && minY >= square.minimum.y && maxY <= square.maximum.y
     }
 
-    private func convertRing(_ ring: [Point], tileExtent: Float) -> [SIMD2<Float>] {
+    private func convertRing(_ ring: [Point]) -> [SIMD2<Float>] {
         var converted: [SIMD2<Float>] = []
         converted.reserveCapacity(ring.count)
         for point in ring {

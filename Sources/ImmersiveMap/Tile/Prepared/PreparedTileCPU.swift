@@ -62,17 +62,23 @@ struct PreparedTileCPU: Sendable {
         /// Each volume's anchor by its ordinal
         /// (`DrawingExtrudedBytes.buildingAnchors`).
         let buildingAnchors: [SIMD2<Float>]
+        /// Where each quarter's volumes start in `indices`
+        /// (`DrawingExtrudedBytes.quarterIndexStarts`), empty for a tile
+        /// kept whole.
+        let quarterIndexStarts: [UInt32]
 
         init(vertices: [ExtrudedVertexIn],
              indices: [UInt32],
              styles: [TilePolygonStyle],
              buildingRanges: [TileBuildingRange] = [],
-             buildingAnchors: [SIMD2<Float>] = []) {
+             buildingAnchors: [SIMD2<Float>] = [],
+             quarterIndexStarts: [UInt32] = []) {
             self.vertices = vertices
             self.indices = indices
             self.styles = styles
             self.buildingRanges = buildingRanges
             self.buildingAnchors = buildingAnchors
+            self.quarterIndexStarts = quarterIndexStarts
         }
     }
 
@@ -149,6 +155,10 @@ struct PreparedTileCPU: Sendable {
     /// The tile's trees, sorted by priority (`TreeScatter`), the arena
     /// slot `treeInstances`.
     var trees: [TreeInstance] = []
+    /// Where each quarter's trees start in `trees`
+    /// (`ReadingStageResult.treeQuarterStarts`), empty for a tile kept
+    /// whole.
+    var treeQuarterStarts: [UInt32] = []
 
     /// Where the edge lines start in each road layer's indices
     /// (`GeometryLayer.edgeLineIndexStart`), in the arena's layer order:

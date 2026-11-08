@@ -171,15 +171,20 @@ vertex TreeShadowVertexOut treeShadowVertexShader(uint vertexID [[vertex_id]],
 }
 
 // The darkening of the ground under the disc: full inside, feathered to
-// nothing at the rim, and gone into the fog as the ground is. The colour
+// nothing at the rim, faded with the distance as the shadow map's shadows
+// are (`shadowCascadeBlend`), so the trees' shadows end where the
+// buildings' do, and gone into the fog as the ground is. The colour
 // written is the multiplier the ground takes (the pipeline multiplies it
-// in), the shadow map's own for a shadow of that depth.
+// in), the shadow map's own for a shadow of that depth: the coverage is
+// scaled by the strength as a cast shadow's is (`sampleShadowFactor`), so
+// the disc darkens all the way from its centre to its rim.
 fragment half4 treeShadowFragmentShader(TreeShadowVertexOut in [[stage_in]],
                                         constant Shadow& shadow [[buffer(5)]],
                                         constant GroundFog& groundFog [[buffer(kGroundFogBufferIndex)]]) {
     float distance = length(in.disc);
     float coverage = 1.0 - smoothstep(0.55, 1.0, distance);
+    coverage *= shadowCascadeBlend(shadow, in.worldPosition.xy).fade;
     coverage *= 1.0 - groundFogAmount(in.worldPosition, groundFog);
-    float3 multiplier = shadowColorMultiplier(shadow, 1.0 - coverage);
+    float3 multiplier = shadowColorMultiplier(shadow, 1.0 - coverage * shadow.strength);
     return half4(half3(multiplier), 1.0h);
 }

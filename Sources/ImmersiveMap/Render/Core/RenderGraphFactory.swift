@@ -146,7 +146,7 @@ enum RenderGraphFactory {
             sceneModelSubsystem,
             modelTileSubsystem,
             // Before the labels: the buildings' rise this frame
-            // (`FrameContextSharedState.buildingHeightScale`) is the height
+            // (`FrameContextSharedState.buildingRise`) is the height
             // of the roofs the labels stand on.
             buildingExtrusionSubsystem,
             baseLabelSubsystem,

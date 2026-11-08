@@ -109,6 +109,10 @@ struct TileBuffers {
         /// (`DrawingExtrudedBytes.buildingAnchors`), where the relief
         /// lifts it from.
         var buildingAnchors: [SIMD2<Float>] = []
+        /// Where each quarter's volumes start in `indices`, and their
+        /// count last, five values for a tile that keeps its buildings by
+        /// quarters (`TileQuarters`), empty for a tile kept whole.
+        var quarterIndexStarts: [Int] = []
 
         var indicesCount: Int {
             indices?.count ?? 0
@@ -184,6 +188,10 @@ struct TileBuffers {
     /// The tile's trees (`TreeInstance`), sorted by priority, nil for
     /// none.
     var trees: TileBufferView? = nil
+    /// Where each quarter's trees start in `trees`, and their count last,
+    /// five values for a tile that keeps its trees by quarters
+    /// (`TileQuarters`), empty for a tile kept whole.
+    var treeQuarterStarts: [Int] = []
 
     var treesCount: Int {
         trees?.count ?? 0

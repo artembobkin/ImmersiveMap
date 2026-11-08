@@ -97,12 +97,32 @@ struct TreeFeatureReader {
             result.treeExcludedFills.removeAll()
             result.mappedTrees.removeAll()
         }
-        guard result.treeAreas.isEmpty == false || result.mappedTrees.isEmpty == false else { return }
-        result.trees = TreeScatter.scatter(areas: result.treeAreas,
-                                           mapped: result.mappedTrees,
-                                           tile: tile,
-                                           obstacles: TreeScatter.Obstacles(footprints: footprints + result.treeExcludedFills,
-                                                                            roads: result.treeRoads),
-                                           maximumCount: options.treeMaximumPerTile)
+        if result.treeAreas.isEmpty == false || result.mappedTrees.isEmpty == false {
+            result.trees = TreeScatter.scatter(areas: result.treeAreas,
+                                               mapped: result.mappedTrees,
+                                               tile: tile,
+                                               obstacles: TreeScatter.Obstacles(footprints: footprints + result.treeExcludedFills,
+                                                                                roads: result.treeRoads),
+                                               maximumCount: options.treeMaximumPerTile)
+        }
+        if result.keepsQuarters {
+            (result.trees, result.treeQuarterStarts) = Self.byQuarter(result.trees)
+        }
+    }
+
+    /// `trees` laid out quarter by quarter (`TileQuarters`), each quarter's
+    /// in their priority order, and where each quarter starts, the count
+    /// last: a quarter is thinned as the whole tile is, by drawing the
+    /// first of its trees.
+    static func byQuarter(_ trees: [TreeInstance]) -> (trees: [TreeInstance], starts: [UInt32]) {
+        var quarters: [[TreeInstance]] = Array(repeating: [], count: TileQuarters.count)
+        for tree in trees {
+            quarters[TileQuarters.quarter(ofRenderPoint: tree.position)].append(tree)
+        }
+        var starts: [UInt32] = [0]
+        for quarter in quarters {
+            starts.append(starts[starts.count - 1] + UInt32(quarter.count))
+        }
+        return (quarters.flatMap { $0 }, starts)
     }
 }

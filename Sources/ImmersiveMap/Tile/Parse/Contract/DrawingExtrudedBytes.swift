@@ -15,4 +15,8 @@ struct DrawingExtrudedBytes {
     /// (`ExtrudedVertexIn.buildingOrdinal`): where the relief's height
     /// under the volume is read.
     var buildingAnchors: [SIMD2<Float>] = []
+    /// Where each quarter's volumes start in `indices`, and their count
+    /// last, five values, for a tile that keeps its buildings by quarters
+    /// (`TileQuarters`). Empty for a tile kept whole.
+    var quarterIndexStarts: [UInt32] = []
 }

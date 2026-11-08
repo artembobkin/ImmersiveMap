@@ -2294,9 +2294,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     public var debug: DebugSettings
     /// The controls drawn over the map, see `ControlsSettings`.
     public var controls: ControlsSettings
-    /// Models that take the place of the map's own buildings, see
-    /// `ImmersiveMapLandmark`.
-    public var landmarks: [ImmersiveMapLandmark]
     /// The archive the map loads building models from by tile, nil for a
     /// map without models, which is the default: the models are a download
     /// of their own, and a map takes it on by pointing here, at the hosted
@@ -2321,7 +2318,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                 viewReuse: ViewReuseSettings = ViewReuseSettings(),
                 debug: DebugSettings,
                 controls: ControlsSettings = ControlsSettings(),
-                landmarks: [ImmersiveMapLandmark] = [],
                 modelArchive: ModelArchiveSettings? = nil,
                 layers: [ImmersiveMapLayer] = []) {
         self.renderLoop = renderLoop
@@ -2337,7 +2333,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         self.viewReuse = viewReuse
         self.debug = debug
         self.controls = controls
-        self.landmarks = landmarks
         self.modelArchive = modelArchive
         self.layers = layers
     }
@@ -2524,11 +2519,6 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
-    func landmarks(_ landmarks: [ImmersiveMapLandmark]) -> ImmersiveMapSettings {
-        var settings = self
-        settings.landmarks = landmarks
-        return settings
-    }
 
     /// Points the map at an archive of model tiles, keeping the budgets
     /// already set, and the depth bias too when `depthBias` is nil. See

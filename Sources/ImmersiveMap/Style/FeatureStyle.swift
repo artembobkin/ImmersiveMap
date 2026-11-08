@@ -574,7 +574,7 @@ public struct PointLabelStyle: Sendable {
     /// the building itself, the same OSM element as the building, rises to
     /// the roof, and one naming something inside it stays on the ground.
     /// On the ground where the frame draws no buildings (the globe, a zoom
-    /// coarser than the building tiles, beyond the near field).
+    /// coarser than the building tiles).
     public var standsOnRoof: Bool
     /// Whether the label is local detail, shown only near the camera: the
     /// house numbers, a memorial's plaque, a ticket office, the things one

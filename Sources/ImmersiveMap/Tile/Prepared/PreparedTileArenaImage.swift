@@ -101,4 +101,9 @@ struct PreparedTileArenaImage: Sendable {
     /// Each volume's anchor by its ordinal
     /// (`PreparedTileCPU.Extruded.buildingAnchors`).
     var buildingAnchors: [SIMD2<Float>] = []
+    /// Where each quarter's volumes and trees start
+    /// (`PreparedTileCPU.Extruded.quarterIndexStarts`,
+    /// `PreparedTileCPU.treeQuarterStarts`).
+    var buildingQuarterIndexStarts: [UInt32] = []
+    var treeQuarterStarts: [UInt32] = []
 }

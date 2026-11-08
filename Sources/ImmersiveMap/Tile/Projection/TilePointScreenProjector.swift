@@ -229,10 +229,11 @@ struct TilePointScreenProjector {
         let invisible = ScreenPointOutput(position: .zero, depth: 0, visible: 0)
         let count = snapshot.pointInputs.count
         let halfViewport = viewport * 0.5
-        // The roofs stand as high as the buildings of their tile have
-        // risen (`FrameContextSharedState.buildingRiseByTile`): on the
-        // ground where no buildings draw.
-        let riseByTile = frameContext.sharedState.buildingRiseByTile
+        // The roofs stand as high as the buildings drawn under the label
+        // have risen, by the tile and the quarter that draw them
+        // (`FrameContextSharedState.buildingRise`): on the ground where
+        // no buildings draw.
+        let buildingRise = frameContext.sharedState.buildingRise
         // The ground relief under each label, by its tile: the relief and
         // the world units a metre of it rises by, looked up once per tile
         // of the projection, nil for a tile whose terrain is not in.
@@ -300,7 +301,7 @@ struct TilePointScreenProjector {
                 // The relief under the label lifts it, roof or ground.
                 var drawnZ: Float = lift(tile: tile, uv: input.uv)
                 if drawsOnRoof {
-                    drawnZ += roofZ * (riseByTile[tile] ?? 0)
+                    drawnZ += roofZ * buildingRise.rise(tile: tile, uv: input.uv)
                 }
                 let clip = cameraMatrix * SIMD4<Float>(worldPosition.x, worldPosition.y, drawnZ, 1.0)
                 // `screenPointFromClip` written out: this loop runs over

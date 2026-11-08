@@ -84,9 +84,12 @@ final class TreeRenderSubsystem: RenderSubsystem {
             guard let key = drawnKeys[index] else { continue }
             let scale = rise.heightScale(of: key, time: time)
             guard scale > 0 else { continue }
-            let count = placement.metalTile.tileBuffers.treesCount
-            let drawn = min(count, max(Int((Float(count) * share).rounded(.up)), 1))
-            items.append(TreeDrawer.Item(placement: placement, instanceCount: drawn, riseScale: scale))
+            let buffers = placement.metalTile.tileBuffers
+            let ranges = TreeDrawer.Item.instanceRanges(count: buffers.treesCount,
+                                                        starts: buffers.treeQuarterStarts,
+                                                        quarters: placement.quarters,
+                                                        share: share)
+            items.append(TreeDrawer.Item(placement: placement, instanceRanges: ranges, riseScale: scale))
         }
         frameContext.sharedState.isExtrusionRising = frameContext.sharedState.isExtrusionRising || rise.isAnimating
     }

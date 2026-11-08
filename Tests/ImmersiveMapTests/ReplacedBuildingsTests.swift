@@ -31,13 +31,6 @@ final class ReplacedBuildingsTests: XCTestCase {
         XCTAssertTrue(ReplacedBuildings.none.ids(forMapTileZoom: 15).isEmpty)
     }
 
-    func testTheBuildingsOfEveryZoomAreAddedToEachList() {
-        let replaced = ReplacedBuildings(atEveryZoom: [9], byMapTileZoom: [15: [1]])
-
-        XCTAssertEqual(replaced.ids(forMapTileZoom: 15), [1, 9])
-        XCTAssertEqual(replaced.ids(forMapTileZoom: 14), [9])
-    }
-
     func testTheListsOfSeveralModelTilesAddUpZoomByZoom() {
         var replaced = ReplacedBuildings.none
         XCTAssertTrue(replaced.isEmpty)

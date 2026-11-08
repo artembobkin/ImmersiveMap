@@ -101,6 +101,14 @@ final class ProtomapsBasemapSchemaTests: XCTestCase {
         XCTAssertEqual(facts(layer: "buildings", ["kind": .string("building_part")], geometry: .polygon).building?.isPart, true)
         XCTAssertEqual(facts(layer: "buildings", ["layer": .sint(-1)], geometry: .polygon).building?.isHidden, true,
                        "an underground structure is not raised")
+        XCTAssertEqual(facts(layer: "buildings", ["kind": .string("building_part"), "kind_detail": .string("no")],
+                             geometry: .polygon).building?.isHidden, true,
+                       "building:part=no is an area of the outline that is no part, never raised")
+        XCTAssertEqual(facts(layer: "buildings", ["kind": .string("building_part"), "kind_detail": .string("yes")],
+                             geometry: .polygon).building?.isHidden, false)
+        XCTAssertEqual(facts(layer: "buildings", ["kind": .string("building"), "kind_detail": .string("no")],
+                             geometry: .polygon).building?.isHidden, false,
+                       "only a part says no")
         XCTAssertNil(facts(layer: "buildings", ["kind": .string("address"), "addr_housenumber": .string("12b")],
                            geometry: .point).building,
                      "an address point is neither raised nor labelled")
