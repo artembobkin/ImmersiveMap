@@ -13,6 +13,9 @@ func performOnMain(_ block: @escaping () -> Void) {
     if Thread.isMainThread {
         block()
     } else {
-        DispatchQueue.main.async(execute: block)
+        // The block is handed over to the main thread and runs there
+        // alone, so what it captures stays on one thread.
+        nonisolated(unsafe) let block = block
+        DispatchQueue.main.async { block() }
     }
 }

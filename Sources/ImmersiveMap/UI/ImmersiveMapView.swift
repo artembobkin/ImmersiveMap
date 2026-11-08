@@ -656,19 +656,19 @@ public extension ImmersiveMapView {
         return view
     }
 
-    public func renderLoopSettings(_ renderLoop: ImmersiveMapSettings.RenderLoopSettings) -> ImmersiveMapView {
+    func renderLoopSettings(_ renderLoop: ImmersiveMapSettings.RenderLoopSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.renderLoopSettings(renderLoop)
         return view
     }
 
-    public func cameraSettings(_ camera: ImmersiveMapSettings.CameraSettings) -> ImmersiveMapView {
+    func cameraSettings(_ camera: ImmersiveMapSettings.CameraSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.cameraSettings(camera)
         return view
     }
 
-    public func presentationSettings(_ presentation: ImmersiveMapSettings.PresentationSettings) -> ImmersiveMapView {
+    func presentationSettings(_ presentation: ImmersiveMapSettings.PresentationSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.presentationSettings(presentation)
         return view
@@ -692,7 +692,7 @@ public extension ImmersiveMapView {
     ///         .globe(airHandoverStart: 0.6, airHandoverEnd: 0.85)
     ///
     /// See `ImmersiveMapSettings.PresentationSettings`.
-    public func globe(isEnabled: Bool = true,
+    func globe(isEnabled: Bool = true,
                       airHandoverStart: Float? = nil,
                       airHandoverEnd: Float? = nil) -> ImmersiveMapView {
         var view = self
@@ -735,14 +735,14 @@ public extension ImmersiveMapView {
     /// An archive built to a depth other
     /// than the default states it via `tileMaximumZoomLevel(_:)`, and its
     /// data credit via `attributionSettings`.
-    public func tileArchive(_ archiveURL: URL,
+    func tileArchive(_ archiveURL: URL,
                             headers: [String: String] = [:]) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.tileArchive(archiveURL, headers: headers)
         return view
     }
 
-    public func mapStyle<S: ImmersiveMapMapStyle>(_ mapStyle: S) -> ImmersiveMapView {
+    func mapStyle<S: ImmersiveMapMapStyle>(_ mapStyle: S) -> ImmersiveMapView {
         self.mapStyle(AnyImmersiveMapMapStyle(mapStyle))
     }
 
@@ -759,7 +759,7 @@ public extension ImmersiveMapView {
     ///
     /// For a night of your own, `.mapStyle(.night.apply { theme in ... })`
     /// and `.fogSettings(...)` set the two apart.
-    public func night(_ isEnabled: Bool = true) -> ImmersiveMapView {
+    func night(_ isEnabled: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.night(isEnabled)
         return view
@@ -769,11 +769,11 @@ public extension ImmersiveMapView {
     /// `.mapStyle(.default)` or `.mapStyle(.default.apply { theme in ... })`.
     /// A concrete overload, so the leading dot resolves on the built-in style
     /// whatever the closure body does.
-    public func mapStyle(_ mapStyle: ProtomapsBasemapMapStyle) -> ImmersiveMapView {
+    func mapStyle(_ mapStyle: ProtomapsBasemapMapStyle) -> ImmersiveMapView {
         self.mapStyle(AnyImmersiveMapMapStyle(mapStyle))
     }
 
-    public func mapStyle(_ mapStyle: AnyImmersiveMapMapStyle) -> ImmersiveMapView {
+    func mapStyle(_ mapStyle: AnyImmersiveMapMapStyle) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.mapStyle(mapStyle)
         return view
@@ -795,7 +795,7 @@ public extension ImmersiveMapView {
     ///         ])
     ///
     /// See ``ImmersiveMapLayer``.
-    public func layers(_ layers: [ImmersiveMapLayer]) -> ImmersiveMapView {
+    func layers(_ layers: [ImmersiveMapLayer]) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.layers(layers)
         return view
@@ -832,7 +832,7 @@ public extension ImmersiveMapView {
     /// ``ImmersiveMapSettings/ModelArchiveSettings/depthBias``.
     ///
     /// The budgets are set with `modelArchiveSettings(_:)`.
-    public func modelArchive(_ archiveURL: URL,
+    func modelArchive(_ archiveURL: URL,
                              headers: [String: String] = [:],
                              depthBias: ImmersiveMapZoomCurve? = nil) -> ImmersiveMapView {
         var view = self
@@ -842,13 +842,13 @@ public extension ImmersiveMapView {
 
     /// The model archive with its memory and disk budgets, or nil to turn
     /// the models off. See ``ImmersiveMapSettings/ModelArchiveSettings``.
-    public func modelArchiveSettings(_ modelArchive: ImmersiveMapSettings.ModelArchiveSettings?) -> ImmersiveMapView {
+    func modelArchiveSettings(_ modelArchive: ImmersiveMapSettings.ModelArchiveSettings?) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.modelArchiveSettings(modelArchive)
         return view
     }
 
-    public func tileSettings(_ tiles: ImmersiveMapSettings.TileSettings) -> ImmersiveMapView {
+    func tileSettings(_ tiles: ImmersiveMapSettings.TileSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.tileSettings(tiles)
         return view
@@ -868,13 +868,13 @@ public extension ImmersiveMapView {
     /// camera (`ImmersiveMapSettings.TileSettings.CoverageSettings
     /// .rasterBandMarginShare`): a turn of the camera then finds the far
     /// tiles in already. 0.25 by default, 0 for none. Applies live.
-    public func tileCoverage(rasterBandMarginShare: Float) -> ImmersiveMapView {
+    func tileCoverage(rasterBandMarginShare: Float) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.tileCoverage(rasterBandMarginShare: rasterBandMarginShare)
         return view
     }
 
-    public func tileMaximumZoomLevel(_ maximumZoomLevel: Int) -> ImmersiveMapView {
+    func tileMaximumZoomLevel(_ maximumZoomLevel: Int) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.tileMaximumZoomLevel(maximumZoomLevel)
         return view
@@ -888,7 +888,7 @@ public extension ImmersiveMapView {
     ///
     ///     ImmersiveMapView()
     ///         .tileParsing(maximumConcurrentParses: 2)
-    public func tileParsing(maximumConcurrentParses: Int? = nil) -> ImmersiveMapView {
+    func tileParsing(maximumConcurrentParses: Int? = nil) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.tileParsing(maximumConcurrentParses: maximumConcurrentParses)
         return view
@@ -907,7 +907,7 @@ public extension ImmersiveMapView {
     /// map in the process, and the most recently created map's value is the
     /// active policy; entries older than `preparedDiskTimeToLive` leave
     /// regardless of it.
-    public func preparedTileDiskCacheSize(bytes: Int) -> ImmersiveMapView {
+    func preparedTileDiskCacheSize(bytes: Int) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.preparedTileDiskCacheSize(bytes: bytes)
         return view
@@ -935,7 +935,7 @@ public extension ImmersiveMapView {
     ///
     /// Baked into the prepared tiles, so a change re-parses them. See
     /// `ImmersiveMapSettings.TileSettings.GroundFlatteningSettings`.
-    public func groundFlattening(fromTileZoom: Int? = nil, grid: Int? = nil, gridByTileZoom: [Int: Int]? = nil) -> ImmersiveMapView {
+    func groundFlattening(fromTileZoom: Int? = nil, grid: Int? = nil, gridByTileZoom: [Int: Int]? = nil) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.groundFlattening(fromTileZoom: fromTileZoom, grid: grid, gridByTileZoom: gridByTileZoom)
         return view
@@ -985,7 +985,7 @@ public extension ImmersiveMapView {
     ///
     /// The relief is as fine as the flattening's grid. See
     /// `ImmersiveMapSettings.TileSettings.GroundReliefSettings`.
-    public func groundRelief(isEnabled: Bool? = nil,
+    func groundRelief(isEnabled: Bool? = nil,
                              tileURLTemplate: String? = nil,
                              encoding: ImmersiveMapSettings.TileSettings.GroundReliefEncoding? = nil,
                              exaggeration: Float? = nil,
@@ -1028,7 +1028,7 @@ public extension ImmersiveMapView {
     ///
     /// The debug panel's Relief tab drags the same values and shows the
     /// reading. See `ImmersiveMapSettings.TileSettings.TerrainSurroundingsSettings`.
-    public func terrainSurroundings(sampleRadiusMetres: Float? = nil,
+    func terrainSurroundings(sampleRadiusMetres: Float? = nil,
                                     plainBelowMetres: Float? = nil,
                                     mountainsAboveMetres: Float? = nil,
                                     smoothingHalfLife: TimeInterval? = nil) -> ImmersiveMapView {
@@ -1051,7 +1051,7 @@ public extension ImmersiveMapView {
     ///         .tileRasterization(mipLevelBias: 0.5)
     ///
     /// See `ImmersiveMapSettings.TileSettings.RasterizationSettings`.
-    public func tileRasterization(maximumAnisotropy: Int? = nil,
+    func tileRasterization(maximumAnisotropy: Int? = nil,
                                   mipLevelBias: Float? = nil) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.tileRasterization(maximumAnisotropy: maximumAnisotropy,
@@ -1061,7 +1061,7 @@ public extension ImmersiveMapView {
 
     /// The flattened ground on or off. Off, every tile keeps its layers at
     /// every zoom, as before the flattening.
-    public func groundFlattening(isEnabled: Bool) -> ImmersiveMapView {
+    func groundFlattening(isEnabled: Bool) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.groundFlattening(isEnabled: isEnabled)
         return view
@@ -1084,7 +1084,7 @@ public extension ImmersiveMapView {
     ///         .overviewTiles(isEnabled: false)
     ///
     /// See `ImmersiveMapSettings.TileSettings.OverviewSettings`.
-    public func overviewTiles(isEnabled: Bool? = nil,
+    func overviewTiles(isEnabled: Bool? = nil,
                               creditMaximumZoom: Double? = nil) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.overviewTiles(isEnabled: isEnabled,
@@ -1095,7 +1095,7 @@ public extension ImmersiveMapView {
     /// Adjusts only the provided cache fields; nil leaves a field unchanged.
     /// `memoryCacheSizeInBytes` is accepted for source compatibility and
     /// ignored: tiles stay in GPU memory only while a frame draws them.
-    public func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
+    func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
                              urlCacheEnabled: Bool? = nil,
                              preparedTileCacheEnabled: Bool? = nil,
                              preparedDiskCompressionEnabled: Bool? = nil,
@@ -1113,7 +1113,7 @@ public extension ImmersiveMapView {
     /// Adjusts only the provided cache fields; nil leaves a field unchanged.
     /// `memoryCacheSizeInBytes` is accepted for source compatibility and
     /// ignored: tiles stay in GPU memory only while a frame draws them.
-    public func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
+    func tileSettings(clearDiskCachesOnLaunch: Bool? = nil,
                              urlCacheEnabled: Bool? = nil,
                              preparedTileCacheEnabled: Bool? = nil,
                              preparedDiskCompressionEnabled: Bool? = nil,
@@ -1133,7 +1133,7 @@ public extension ImmersiveMapView {
         return view
     }
 
-    public func labelSettings(_ labels: ImmersiveMapSettings.LabelSettings) -> ImmersiveMapView {
+    func labelSettings(_ labels: ImmersiveMapSettings.LabelSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.labelSettings(labels)
         return view
@@ -1149,7 +1149,7 @@ public extension ImmersiveMapView {
     /// ```
     ///
     /// Both are baked into the prepared tiles, so a change re-prepares them.
-    public func labelSettings(language: ImmersiveMapSettings.LabelLanguage? = nil,
+    func labelSettings(language: ImmersiveMapSettings.LabelLanguage? = nil,
                               fallbackPolicy: ImmersiveMapSettings.LabelFallbackPolicy? = nil) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.labelSettings(language: language, fallbackPolicy: fallbackPolicy)
@@ -1161,7 +1161,7 @@ public extension ImmersiveMapView {
     /// placement and collision work behind it. It applies live and never
     /// re-prepares a tile, so a control the user scrubs can drive it,
     /// unlike the other label settings. On by default.
-    public func labels(isEnabled: Bool = true) -> ImmersiveMapView {
+    func labels(isEnabled: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.labels(isEnabled: isEnabled)
         return view
@@ -1181,7 +1181,7 @@ public extension ImmersiveMapView {
     ///         .buildingExtrusion(risesFromTheGround: false)
     ///
     /// Applies live.
-    public func buildingExtrusion(buildingsMinimumZoom: Double? = nil,
+    func buildingExtrusion(buildingsMinimumZoom: Double? = nil,
                                   riseSeconds: TimeInterval? = nil,
                                   risesFromTheGround: Bool? = nil) -> ImmersiveMapView {
         var view = self
@@ -1204,7 +1204,7 @@ public extension ImmersiveMapView {
     ///
     /// `isEnabled` and `maximumPerTile` are baked into the prepared
     /// tiles, the rest applies live.
-    public func trees(isEnabled: Bool? = nil,
+    func trees(isEnabled: Bool? = nil,
                       minimumZoom: Double? = nil,
                       fullDensityZoom: Double? = nil,
                       nearDetailZoom: Double? = nil,
@@ -1218,7 +1218,7 @@ public extension ImmersiveMapView {
         return view
     }
 
-    public func sceneSettings(_ scene: ImmersiveMapSettings.SceneSettings) -> ImmersiveMapView {
+    func sceneSettings(_ scene: ImmersiveMapSettings.SceneSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.sceneSettings(scene)
         return view
@@ -1230,7 +1230,7 @@ public extension ImmersiveMapView {
     /// transparent there, so the app's own background shows through and around
     /// the globe. A marker hanging off the limb no longer needs the map view
     /// clipped to a circle.
-    public func transparentSpace(_ isTransparent: Bool = true) -> ImmersiveMapView {
+    func transparentSpace(_ isTransparent: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.transparentSpace(isTransparent)
         return view
@@ -1239,7 +1239,7 @@ public extension ImmersiveMapView {
     /// World-space direction pointing towards the static sun
     /// (+X east, +Y north, +Z up). Defines where buildings and scene models
     /// cast their shadows.
-    public func sceneLight(direction: SIMD3<Float>) -> ImmersiveMapView {
+    func sceneLight(direction: SIMD3<Float>) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.sceneLight(direction: direction)
         return view
@@ -1247,7 +1247,7 @@ public extension ImmersiveMapView {
 
     /// Directional shadows cast by buildings and scene models in the flat
     /// presentation.
-    public func shadowSettings(_ shadows: ImmersiveMapSettings.ShadowSettings) -> ImmersiveMapView {
+    func shadowSettings(_ shadows: ImmersiveMapSettings.ShadowSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.shadowSettings(shadows)
         return view
@@ -1257,7 +1257,7 @@ public extension ImmersiveMapView {
     /// planet's limb and the glow on the surface toward it. Globe
     /// presentation only; it fades into the flat map's fog band through the
     /// morph. On by default.
-    public func atmosphereSettings(_ atmosphere: ImmersiveMapSettings.AtmosphereSettings) -> ImmersiveMapView {
+    func atmosphereSettings(_ atmosphere: ImmersiveMapSettings.AtmosphereSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.atmosphereSettings(atmosphere)
         return view
@@ -1265,7 +1265,7 @@ public extension ImmersiveMapView {
 
     /// The sun on the globe (`ImmersiveMapSettings.GlobeLightSettings`),
     /// whole. Applies live.
-    public func globeLightSettings(_ globeLight: ImmersiveMapSettings.GlobeLightSettings) -> ImmersiveMapView {
+    func globeLightSettings(_ globeLight: ImmersiveMapSettings.GlobeLightSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.globeLightSettings(globeLight)
         return view
@@ -1282,7 +1282,7 @@ public extension ImmersiveMapView {
     ///         .globeLight(subsolarLongitudeDegrees: 30, strength: [2: 0.8, 6: 0.2])
     ///
     /// See `ImmersiveMapSettings.GlobeLightSettings`. Applies live.
-    public func globeLight(isEnabled: Bool = true,
+    func globeLight(isEnabled: Bool = true,
                            subsolarLatitudeDegrees: Float? = nil,
                            subsolarLongitudeDegrees: Float? = nil,
                            strength: ImmersiveMapZoomCurve? = nil,
@@ -1301,7 +1301,7 @@ public extension ImmersiveMapView {
     /// Turns the globe's atmosphere on or off. Off leaves the planet bare
     /// against space, apart from the thin glow at the limb that hides the
     /// tile mesh's edge; the flat map's fog band is not affected.
-    public func atmosphere(isEnabled: Bool = true) -> ImmersiveMapView {
+    func atmosphere(isEnabled: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.atmosphere(isEnabled: isEnabled)
         return view
@@ -1337,7 +1337,7 @@ public extension ImmersiveMapView {
     ///                    maximumOpacity: [18: 1, 19: 0])
     ///
     /// See `ImmersiveMapSettings.GroundFogSettings`. Applies live.
-    public func groundFog(isEnabled: Bool = true,
+    func groundFog(isEnabled: Bool = true,
                           densityPerKilometer: ImmersiveMapZoomCurve? = nil,
                           heightMeters: ImmersiveMapZoomCurve? = nil,
                           startDistanceMeters: ImmersiveMapZoomCurve? = nil,
@@ -1372,14 +1372,14 @@ public extension ImmersiveMapView {
     /// plain's, and an omitted value is left as it is:
     ///
     ///     ImmersiveMapView()
-    ///         .mountainGroundFog(densityPerKilometer: [7: 0.02, 12: 0.02, 16: 17, 22: 6],
+    ///         .mountainGroundFog(densityPerKilometer: [7: 0.02, 12: 0.02, 16: 1.4, 22: 6],
     ///                            heightMeters: [7: 2500, 12: 2500, 16: 150, 22: 60],
     ///                            baseAltitudeMeters: 1500)
     ///
     /// Without it the air is one everywhere. The debug panel's Air tab
     /// switches it on with a preset and edits either air. See
     /// `ImmersiveMapSettings.SceneSettings.mountainGroundFog`. Applies live.
-    public func mountainGroundFog(isEnabled: Bool = true,
+    func mountainGroundFog(isEnabled: Bool = true,
                                   densityPerKilometer: ImmersiveMapZoomCurve? = nil,
                                   heightMeters: ImmersiveMapZoomCurve? = nil,
                                   startDistanceMeters: ImmersiveMapZoomCurve? = nil,
@@ -1407,7 +1407,7 @@ public extension ImmersiveMapView {
 
     /// The air over the mountains as a whole (`SceneSettings.mountainGroundFog`),
     /// nil for one air everywhere.
-    public func mountainGroundFog(_ fog: ImmersiveMapSettings.GroundFogSettings?) -> ImmersiveMapView {
+    func mountainGroundFog(_ fog: ImmersiveMapSettings.GroundFogSettings?) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.mountainGroundFog(fog)
         return view
@@ -1418,7 +1418,7 @@ public extension ImmersiveMapView {
     /// the line. The far ground is the ground fog's
     /// (`groundFog(isEnabled:densityPerKilometer:heightMeters:startDistanceMeters:startSoftnessMeters:color:maximumOpacity:veilsBuildings:takesSkyColor:heightsFromSeaLevel:baseAltitudeMeters:)`).
     /// Applies live.
-    public func fogSettings(_ fog: ImmersiveMapSettings.FogSettings) -> ImmersiveMapView {
+    func fogSettings(_ fog: ImmersiveMapSettings.FogSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.fogSettings(fog)
         return view
@@ -1428,7 +1428,7 @@ public extension ImmersiveMapView {
     /// map's clear colour and keeps only a thin band at the horizon line
     /// that hides the seam between the far ground and the sky. The ground
     /// fog has its own switch.
-    public func fog(isEnabled: Bool = true) -> ImmersiveMapView {
+    func fog(isEnabled: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.fog(isEnabled: isEnabled)
         return view
@@ -1448,7 +1448,7 @@ public extension ImmersiveMapView {
     /// value being the same at every zoom): the strength from the zoom the
     /// shadows come in at, the coverages the ground the sharp near window
     /// and the coarse far window reach, in metres. Applies live.
-    public func shadows(isEnabled: Bool = true,
+    func shadows(isEnabled: Bool = true,
                         strength: ImmersiveMapZoomCurve? = nil,
                         mapResolution: Int? = nil,
                         nearCoverageMeters: ImmersiveMapZoomCurve? = nil,
@@ -1474,13 +1474,13 @@ public extension ImmersiveMapView {
 
 
 
-    public func avatarSettings(_ avatars: ImmersiveMapSettings.AvatarSettings) -> ImmersiveMapView {
+    func avatarSettings(_ avatars: ImmersiveMapSettings.AvatarSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.avatarSettings(avatars)
         return view
     }
 
-    public func avatarSettings(size: ImmersiveMapSettings.AvatarSettings.Size? = nil,
+    func avatarSettings(size: ImmersiveMapSettings.AvatarSettings.Size? = nil,
                                sizeScale: Float? = nil,
                                compressedScale: Float? = nil,
                                atlasSizePx: Int? = nil,
@@ -1512,7 +1512,7 @@ public extension ImmersiveMapView {
         return view
     }
 
-    public func attributionSettings(_ attribution: ImmersiveMapSettings.AttributionSettings) -> ImmersiveMapView {
+    func attributionSettings(_ attribution: ImmersiveMapSettings.AttributionSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.attributionSettings(attribution)
         return view
@@ -1529,7 +1529,7 @@ public extension ImmersiveMapView {
     /// `respectsBottomSafeArea: true` keeps a bottom badge above the home
     /// indicator of a map that runs under the safe area. By default it sits
     /// at the very bottom (`AttributionSettings.respectsBottomSafeArea`).
-    public func attributionSettings(isVisible: Bool? = nil,
+    func attributionSettings(isVisible: Bool? = nil,
                                     size: ImmersiveMapSettings.AttributionSettings.Size? = nil,
                                     position: ImmersiveMapSettings.AttributionSettings.Position? = nil,
                                     margin: Double? = nil,
@@ -1558,13 +1558,13 @@ public extension ImmersiveMapView {
     ///
     /// What each provider requires and where it has to appear:
     /// https://github.com/artembobkin/ImmersiveMap#attribution
-    public func attributionProvidedExternally(_ isProvidedExternally: Bool = true) -> ImmersiveMapView {
+    func attributionProvidedExternally(_ isProvidedExternally: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.attributionProvidedExternally(isProvidedExternally)
         return view
     }
 
-    public func postProcessingSettings(_ postProcessing: ImmersiveMapSettings.PostProcessingSettings) -> ImmersiveMapView {
+    func postProcessingSettings(_ postProcessing: ImmersiveMapSettings.PostProcessingSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.postProcessingSettings(postProcessing)
         return view
@@ -1574,7 +1574,7 @@ public extension ImmersiveMapView {
     /// default: the map's own lines are antialiased analytically, and FXAA
     /// adds the optional smoothing of geometry silhouettes (building edges
     /// most visibly) at the price of one fullscreen pass.
-    public func fxaa(isEnabled: Bool = true) -> ImmersiveMapView {
+    func fxaa(isEnabled: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.fxaa(isEnabled: isEnabled)
         return view
@@ -1586,13 +1586,13 @@ public extension ImmersiveMapView {
     /// lines are antialiased analytically either way. Falls back to what
     /// the device supports; changing it recreates the renderer. See
     /// `PostProcessingSettings.multisampleCount` for other counts.
-    public func msaa(isEnabled: Bool = true) -> ImmersiveMapView {
+    func msaa(isEnabled: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.msaa(isEnabled: isEnabled)
         return view
     }
 
-    public func debugSettings(_ debug: ImmersiveMapSettings.DebugSettings) -> ImmersiveMapView {
+    func debugSettings(_ debug: ImmersiveMapSettings.DebugSettings) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.debugSettings(debug)
         return view
@@ -1616,7 +1616,7 @@ public extension ImmersiveMapView {
     ///
     /// A host view keeps the first panel it is given. `enableDebugPanel`
     /// shows and hides it from then on.
-    public func debugPanel(_ panel: ImmersiveMapDebugPanel, zoomBadge: Bool? = nil) -> ImmersiveMapView {
+    func debugPanel(_ panel: ImmersiveMapDebugPanel, zoomBadge: Bool? = nil) -> ImmersiveMapView {
         var view = self
         view.debugPanel = panel
         view.settings = view.settings.debugPanel(true, zoomBadge: zoomBadge)
@@ -1635,7 +1635,7 @@ public extension ImmersiveMapView {
     ///         .controlsHidden(isRecording)
     ///
     /// See `ImmersiveMapSettings.ControlsSettings`.
-    public func controlsHidden(_ isHidden: Bool = true) -> ImmersiveMapView {
+    func controlsHidden(_ isHidden: Bool = true) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.controlsHidden(isHidden)
         return view

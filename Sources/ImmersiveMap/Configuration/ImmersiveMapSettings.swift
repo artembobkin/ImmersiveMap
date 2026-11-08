@@ -1844,7 +1844,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var baseAltitudeMeters: Float
 
         public init(isEnabled: Bool = true,
-                    densityPerKilometer: ImmersiveMapZoomCurve = [7: 0.0019, 12: 0.06, 16: 17, 22: 6],
+                    densityPerKilometer: ImmersiveMapZoomCurve = [7: 0.0019, 12: 0.06, 16: 1.4, 22: 6],
                     heightMeters: ImmersiveMapZoomCurve = [7: 256_000, 12: 8000, 16: 150, 22: 60],
                     startDistanceMeters: ImmersiveMapZoomCurve = [7: 1_280_000, 12: 40_000, 16: 400, 22: 250],
                     startSoftnessMeters: ImmersiveMapZoomCurve = [7: 4_800_000, 12: 150_000, 16: 800, 22: 950],
@@ -1891,10 +1891,9 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// How far the night side goes toward `nightColor`, 0 to 1, by the
         /// camera zoom (`ImmersiveMapZoomCurve`): 1 draws the night side in
         /// the night colour outright, 0 leaves the surface as it is. By
-        /// default 0.6 up to zoom 4, down to 0.3 by zoom 6, where the
-        /// camera is close to the surface and the shading would only
-        /// darken the map in view. A single value states the same at every
-        /// zoom.
+        /// default 0.6 at zoom 0, gone by zoom 1: the terminator shows on
+        /// the whole planet, and past it the shading would only darken the
+        /// map in view. A single value states the same at every zoom.
         public var strength: ImmersiveMapZoomCurve
         /// The width of the terminator, as the cosine of the sun's angle to
         /// the surface: the shading runs from day to night over
@@ -1909,7 +1908,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public init(isEnabled: Bool = true,
                     subsolarLatitudeDegrees: Float = 10,
                     subsolarLongitudeDegrees: Float = -15,
-                    strength: ImmersiveMapZoomCurve = [4: 0.6, 6: 0.3],
+                    strength: ImmersiveMapZoomCurve = [0: 0.6, 1: 0],
                     terminatorSoftness: Float = 0.25,
                     nightColor: SIMD3<Float> = SIMD3<Float>(0.05, 0.08, 0.18)) {
             self.isEnabled = isEnabled

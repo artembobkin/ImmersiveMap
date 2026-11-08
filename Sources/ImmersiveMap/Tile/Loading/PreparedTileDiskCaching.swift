@@ -148,7 +148,10 @@ final class PreparedTileDiskIOCoordinator: @unchecked Sendable {
     }
 
     func enqueue(_ work: @escaping () -> Void) {
-        queue.async(execute: work)
+        // The queue runs the work items one at a time, so what they
+        // capture is never touched by two of them at once.
+        nonisolated(unsafe) let work = work
+        queue.async { work() }
     }
 
     /// The availability index of one cache directory, shared by every cache
@@ -1034,7 +1037,11 @@ final class PreparedTileDiskCaching {
     // one quarter after another, and the entry keeps where each quarter
     // starts (`Entry.buildingQuarterIndexStarts`, `treeQuarterStarts`). A
     // v164 tile is whole and its entry has neither field.
-    static let preparedFormatVersion: UInt32 = 165
+    // 166: a building cut at a quarter's edge stands no wall there and
+    // keeps its corners there sharp, as at a tile's edge
+    // (`BuildingExtrusionMeshBuilder.isBoundaryEdge`). A v165 zoom 14 tile
+    // has walls and rounded corners along its quarters' edges.
+    static let preparedFormatVersion: UInt32 = 166
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

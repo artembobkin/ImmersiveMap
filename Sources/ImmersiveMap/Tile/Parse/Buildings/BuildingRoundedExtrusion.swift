@@ -27,8 +27,10 @@ import simd
 /// The radius shrinks to what the building can take: a quarter of its
 /// narrow side, read off its area and perimeter, and under half its
 /// height. A corner draws its walls back at most a third of either edge.
-/// Where the footprint was clipped at the tile's edge nothing is rounded,
-/// so the building meets its continuation in the next tile.
+/// Where the footprint was clipped at the edge of its tile or of its
+/// quarter nothing is rounded, so the building meets its continuation in
+/// the next tile or quarter. A corner where the footprint turns back on
+/// itself stays sharp: it has no outward side to round toward.
 extension BuildingExtrusionMeshBuilder {
     /// The smallest radius worth drawing, in tile units: under it the
     /// bevel is lost to the vertex quantization (`ExtrudedVertexIn`).
@@ -59,7 +61,7 @@ extension BuildingExtrusionMeshBuilder {
                              baseHeight: Float,
                              topHeight: Float,
                              edgeRadius: Float,
-                             tileExtent: Float) -> ParsedExtrudedMesh? {
+                             cutSquare: ParsePolygon.ClipSquare) -> ParsedExtrudedMesh? {
         // Exterior clockwise, holes counter-clockwise, as the sharp build
         // winds them: every wall's left normal faces out of the material.
         let exterior = ensureWinding(sanitizeRing(clippedExterior), clockwise: true)
@@ -94,7 +96,7 @@ extension BuildingExtrusionMeshBuilder {
         let roofIndices = Earcut.tessellate(data: coordinates, holeIndices: holeIndices)
         guard roofIndices.count >= 3 else { return nil }
 
-        let rings = ([exterior] + interiors).map { roundedRing($0, radius: radius, tileExtent: tileExtent) }
+        let rings = ([exterior] + interiors).map { roundedRing($0, radius: radius, cutSquare: cutSquare) }
 
         var builder = MeshBuilder()
         let up = SIMD3<Float>(0, 0, 1)
@@ -191,10 +193,10 @@ extension BuildingExtrusionMeshBuilder {
     }
 
     /// What every corner of a ring does under the radius.
-    private static func roundedRing(_ points: [SIMD2<Float>], radius: Float, tileExtent: Float) -> RoundedRing {
+    private static func roundedRing(_ points: [SIMD2<Float>], radius: Float, cutSquare: ParsePolygon.ClipSquare) -> RoundedRing {
         let count = points.count
         let isWall = (0 ..< count).map { index in
-            isBoundaryEdge(points[index], points[(index + 1) % count], tileExtent: tileExtent) == false
+            isBoundaryEdge(points[index], points[(index + 1) % count], cutSquare: cutSquare) == false
         }
         let lengths = (0 ..< count).map { simd_distance(points[$0], points[($0 + 1) % count]) }
         let directions = (0 ..< count).map { index in
@@ -204,7 +206,6 @@ extension BuildingExtrusionMeshBuilder {
         var roofPoint = points
         for index in 0 ..< count {
             let previous = (index + count - 1) % count
-            let next = (index + 1) % count
             // A corner at the tile's edge stays sharp and its roof stays on
             // the edge, where the next tile's building goes on.
             guard isWall[previous], isWall[index] else { continue }
@@ -214,6 +215,13 @@ extension BuildingExtrusionMeshBuilder {
             let incoming = directions[previous]
             let outgoing = directions[index]
             let shortest = min(incomingLength, outgoingLength)
+            // A corner that turns back on itself has no outward side: its
+            // bevel's normal would be the normal of nothing.
+            let incomingNormal = leftNormal(incoming)
+            let outgoingNormal = leftNormal(outgoing)
+            let bisector = incomingNormal + outgoingNormal
+            let bisectorLength = simd_length(bisector)
+            guard bisectorLength > 1e-4 else { continue }
 
             // The walls draw back by the radius times the tangent of half
             // the turn: a right angle draws back by the radius.
@@ -224,11 +232,6 @@ extension BuildingExtrusionMeshBuilder {
 
             // The roof's rim drawn in along the corner's bisector, by the
             // radius from both edges, at most four radii.
-            let incomingNormal = leftNormal(incoming)
-            let outgoingNormal = leftNormal(outgoing)
-            let bisector = incomingNormal + outgoingNormal
-            let bisectorLength = simd_length(bisector)
-            guard bisectorLength > 1e-4 else { continue }
             let miter = bisector / bisectorLength
             let cosineOfHalfTurn = max(simd_dot(miter, incomingNormal), 0.25)
             let inset = min(radius / cosineOfHalfTurn, radius * 4, shortest / 2)

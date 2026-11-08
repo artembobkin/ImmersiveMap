@@ -13,7 +13,7 @@ final class GlobeLightTests: XCTestCase {
         XCTAssertTrue(light.isEnabled)
         XCTAssertEqual(light.subsolarLatitudeDegrees, 10)
         XCTAssertEqual(light.subsolarLongitudeDegrees, -15)
-        XCTAssertEqual(light.strength, [4: 0.6, 6: 0.3])
+        XCTAssertEqual(light.strength, [0: 0.6, 1: 0])
         XCTAssertEqual(light.terminatorSoftness, 0.25)
         XCTAssertEqual(light.nightColor, SIMD3<Float>(0.05, 0.08, 0.18))
         XCTAssertEqual(ImmersiveMapSettings.default.scene.globeLight, light)

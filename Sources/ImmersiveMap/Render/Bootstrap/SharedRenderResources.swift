@@ -444,7 +444,9 @@ final class SharedRenderResources {
         var avatars: AvatarsRenderer.SharedResources?
         var textRenderer: TextRenderer?
 
-        let jobs: [() -> Void] = [
+        // Each job writes its own variable, so the jobs run side by side
+        // with nothing shared between them.
+        nonisolated(unsafe) let jobs: [() -> Void] = [
             // The heaviest groups go first so they overlap the whole batch.
             { textRenderer = TextRenderer(device: device,
                                           library: library,

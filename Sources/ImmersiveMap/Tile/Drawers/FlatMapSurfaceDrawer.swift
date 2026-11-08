@@ -225,6 +225,12 @@ enum FlatMapSurfaceDrawer {
         /// slope, so it stays over the ground where its triangles sample
         /// the terrain apart from the ground's.
         var depthBiased = false
+        func clearDepthBias() {
+            if depthBiased {
+                depthBiased = false
+                renderEncoder.setDepthBias(0, slopeScale: 0, clamp: 0)
+            }
+        }
         func selectPipeline(_ pipeline: GroundPipeline, for source: Source) {
             let relief = relief(of: source)
             let biased = relief != nil && pipeline != .opaqueFills
@@ -438,9 +444,7 @@ enum FlatMapSurfaceDrawer {
         if isWireframeEnabled {
             renderEncoder.setTriangleFillMode(.fill)
         }
-        if depthBiased {
-            renderEncoder.setDepthBias(0, slopeScale: 0, clamp: 0)
-        }
+        clearDepthBias()
         renderEncoder.setCullMode(.none)
         renderEncoder.setFrontFacing(.clockwise)
     }

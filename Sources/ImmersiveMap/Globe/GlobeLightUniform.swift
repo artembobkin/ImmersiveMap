@@ -91,9 +91,10 @@ struct GlobeLightUniform {
                 lightDirection: sunWorldDirection(settings: settings, globe: frameContext.globeRenderUniform),
                 renderSurfaceMode: frameContext.renderSurfaceMode,
                 transition: frameContext.transition,
-                // As the sky does: the globe's light follows the zoom the
-                // eye sees.
-                zoom: frameContext.animatedZoom)
+                // The camera's own zoom, not the one followed over time
+                // (`animatedZoom`): the light is where the zoom is, with
+                // no lag behind it.
+                zoom: frameContext.zoom)
     }
 
     /// Binds the light for every lit globe fragment shader the encoder

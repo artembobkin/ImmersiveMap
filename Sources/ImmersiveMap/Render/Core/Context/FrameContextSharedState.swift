@@ -36,7 +36,7 @@ struct BaseLabelDebugBox {
 /// list (one frame per glyph): they take part in the same collision solver
 /// but are drawn in their own color to stand apart from the base ones.
 struct BaseLabelDebugBoxesState {
-    nonisolated(unsafe) static let empty = BaseLabelDebugBoxesState(boxes: [], roadBoxes: [])
+    static let empty = BaseLabelDebugBoxesState(boxes: [], roadBoxes: [])
 
     let boxes: [BaseLabelDebugBox]
     let roadBoxes: [BaseLabelDebugBox]

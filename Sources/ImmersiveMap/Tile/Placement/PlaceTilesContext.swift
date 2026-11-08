@@ -26,5 +26,5 @@ struct PlaceTilesContext {
         return terrains
     }
 
-    nonisolated(unsafe) static let empty = PlaceTilesContext(tilePlacements: [])
+    static let empty = PlaceTilesContext(tilePlacements: [])
 }

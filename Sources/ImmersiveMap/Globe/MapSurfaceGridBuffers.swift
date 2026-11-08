@@ -16,10 +16,9 @@ struct MapSurfaceGridBuffers {
     static func make<Vertex>(metalDevice: MTLDevice,
                              vertices: [Vertex],
                              indices: [UInt32]) -> MapSurfaceGridBuffers {
-        let verticesBuffer = metalDevice.makeBuffer(
-            bytes: vertices,
-            length: MemoryLayout<Vertex>.stride * vertices.count
-        )!
+        let verticesBuffer = vertices.withUnsafeBytes { bytes in
+            metalDevice.makeBuffer(bytes: bytes.baseAddress!, length: bytes.count)
+        }!
         if let narrowedIndices = IndexStorageMath.narrowedIndices(indices, vertexCount: vertices.count) {
             return MapSurfaceGridBuffers(
                 verticesBuffer: verticesBuffer,

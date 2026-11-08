@@ -17,16 +17,18 @@ enum BuildingExtrusionMeshBuilder {
         baseHeight: Float,
         topHeight: Float,
         edgeRadius: Float = 0,
-        tileExtent: Float
+        tileExtent: Float,
+        quarter: Int? = nil
     ) -> ParsedExtrudedMesh? {
         guard topHeight > baseHeight else { return nil }
+        let cutSquare = cutSquare(tileExtent: tileExtent, quarter: quarter)
         if edgeRadius > 0,
            let rounded = buildRounded(clippedExterior: clippedExterior,
                                       clippedInteriors: clippedInteriors,
                                       baseHeight: baseHeight,
                                       topHeight: topHeight,
                                       edgeRadius: edgeRadius,
-                                      tileExtent: tileExtent) {
+                                      cutSquare: cutSquare) {
             return rounded
         }
 
@@ -35,7 +37,7 @@ enum BuildingExtrusionMeshBuilder {
         var nextLocalSurfaceID: UInt32 = 1
 
         func isBoundaryEdge(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Bool {
-            Self.isBoundaryEdge(a, b, tileExtent: tileExtent)
+            Self.isBoundaryEdge(a, b, cutSquare: cutSquare)
         }
         func sanitizeRing(_ ring: [SIMD2<Float>]) -> [SIMD2<Float>] {
             Self.sanitizeRing(ring)
@@ -121,19 +123,28 @@ enum BuildingExtrusionMeshBuilder {
         return indices.isEmpty ? nil : ParsedExtrudedMesh(vertices: vertices, indices: indices)
     }
 
-    /// Whether an edge runs along the tile's edge, where the footprint was
-    /// clipped: no wall stands there, the neighbouring tile's building
-    /// goes on.
-    static func isBoundaryEdge(_ a: SIMD2<Float>, _ b: SIMD2<Float>, tileExtent: Float) -> Bool {
+    /// The square the footprint was cut to, in render space (y north): the
+    /// tile's own, or the quarter's for a tile kept by quarters
+    /// (`TileQuarters`), whose edges cut it as a tile's edges do.
+    static func cutSquare(tileExtent: Float, quarter: Int?) -> ParsePolygon.ClipSquare {
+        guard let quarter else { return .tile(extent: tileExtent) }
+        let square = TileQuarters.square(of: quarter)
+        return ParsePolygon.ClipSquare(minimum: SIMD2<Float>(square.minimum.x, tileExtent - square.maximum.y),
+                                       maximum: SIMD2<Float>(square.maximum.x, tileExtent - square.minimum.y))
+    }
+
+    /// Whether an edge runs along an edge of the square the footprint was
+    /// cut to: no wall stands there, the building goes on in the next tile
+    /// or quarter. The clip also leaves edges there that double back on
+    /// themselves where a concave footprint crosses the square's edge, and
+    /// those stand as no wall either.
+    static func isBoundaryEdge(_ a: SIMD2<Float>, _ b: SIMD2<Float>, cutSquare: ParsePolygon.ClipSquare) -> Bool {
         let epsilon: Float = 0.001
-        func isOnBoundary(_ point: SIMD2<Float>) -> Bool {
-            abs(point.x) <= epsilon ||
-            abs(point.y) <= epsilon ||
-            abs(point.x - tileExtent) <= epsilon ||
-            abs(point.y - tileExtent) <= epsilon
+        func bothOn(_ value: Float, _ coordinate: (SIMD2<Float>) -> Float) -> Bool {
+            abs(coordinate(a) - value) <= epsilon && abs(coordinate(b) - value) <= epsilon
         }
-        guard isOnBoundary(a), isOnBoundary(b) else { return false }
-        return abs(a.x - b.x) <= epsilon || abs(a.y - b.y) <= epsilon
+        return bothOn(cutSquare.minimum.x, \.x) || bothOn(cutSquare.maximum.x, \.x)
+            || bothOn(cutSquare.minimum.y, \.y) || bothOn(cutSquare.maximum.y, \.y)
     }
 
     static func ringArea(_ ring: [SIMD2<Float>]) -> Float {

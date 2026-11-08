@@ -165,7 +165,6 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
         // The coverage: the frame's targets, every tile at the zoom its
         // place on screen wants (`TileCulling`).
         let visibleContent = frameContext.visibleContent
-        let center = visibleContent.center
         let targets = visibleContent.visibleTiles
         let tileZoomLevel = visibleContent.tileZoomLevel
 

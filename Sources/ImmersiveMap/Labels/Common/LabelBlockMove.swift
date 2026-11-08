@@ -70,7 +70,7 @@ struct LabelWorkingSetChange {
                         continue
                     }
                     let source = UnsafeBufferPointer(rebasing: oldBuffer[move.oldStart..<(move.oldStart + count)])
-                    UnsafeMutableBufferPointer(rebasing: nextBuffer[move.newStart..<(move.newStart + count)])
+                    _ = UnsafeMutableBufferPointer(rebasing: nextBuffer[move.newStart..<(move.newStart + count)])
                         .update(fromContentsOf: source)
                 }
             }

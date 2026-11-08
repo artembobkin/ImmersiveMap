@@ -170,7 +170,6 @@ enum GlobeTileCoverage {
         var drawsLines = true
         var drawsLabels = true
         var rasterSize: Int?
-        var zoomDrop = 0
         var finestWanted = Self.floorZoom
         for index in walk.bands.indices {
             let band = walk.bands[index]
@@ -181,7 +180,6 @@ enum GlobeTileCoverage {
                 drawsLines = band.drawsLines
                 drawsLabels = band.drawsLabels
                 rasterSize = band.rasterSize
-                zoomDrop = band.zoomDrop
                 if walk.placed.contains(tile) == false {
                     walk.bands[index].tileCount += 1
                 }
@@ -193,7 +191,6 @@ enum GlobeTileCoverage {
             drawsLines = walk.bands.last?.drawsLines ?? true
             drawsLabels = walk.bands.last?.drawsLabels ?? true
             rasterSize = walk.bands.last?.rasterSize
-            zoomDrop = walk.bands.last?.zoomDrop ?? 0
         }
         if placesTile {
             if walk.placed.contains(tile) == false {

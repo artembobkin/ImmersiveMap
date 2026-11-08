@@ -363,7 +363,7 @@ final class DebugOverlayGroundFogGroupTests: XCTestCase {
     func testTheMountainAirPresetKeepsTheStreetZooms() {
         let fog = ImmersiveMapSettings.GroundFogSettings()
         let preset = Planner.mountainAirPreset(from: fog)
-        XCTAssertEqual(preset.densityPerKilometer, [7: 0.02, 12: 0.02, 16: 17, 22: 6])
+        XCTAssertEqual(preset.densityPerKilometer, [7: 0.02, 12: 0.02, 16: 1.4, 22: 6])
         XCTAssertEqual(preset.startDistanceMeters, [7: 10, 12: 10, 16: 400, 22: 250])
         XCTAssertEqual(preset.heightMeters.value(atZoom: 10), 2500)
         XCTAssertEqual(preset.baseAltitudeMeters, 1500)

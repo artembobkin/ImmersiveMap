@@ -125,6 +125,43 @@ final class BuildingRoundedExtrusionTests: XCTestCase {
         XCTAssertFalse(rounded.vertices.contains { abs($0.normal.x + 1) < 0.01 }, "no wall faces the tile's edge")
     }
 
+    /// A tile kept by quarters cuts a footprint at its quarter's edge, and
+    /// there too no wall stands and nothing is rounded. The north-west
+    /// quarter's east edge is x 2048 in render space.
+    func testTheQuarterEdgeStaysSharp() throws {
+        let clipped: [SIMD2<Float>] = [SIMD2(1800, 3000), SIMD2(2048, 3000), SIMD2(2048, 3200), SIMD2(1800, 3200)]
+        func faceEast(_ mesh: ParsedExtrudedMesh) -> Bool {
+            mesh.vertices.contains { abs($0.normal.x - 1) < 0.01 }
+        }
+        XCTAssertTrue(faceEast(try XCTUnwrap(mesh(clipped, radius: 10))), "Within the tile, a wall stands at x 2048")
+
+        let cut = try XCTUnwrap(BuildingExtrusionMeshBuilder.build(clippedExterior: clipped,
+                                                                   clippedInteriors: [],
+                                                                   roof: ParsedPolygon(vertices: clipped, indices: [0, 1, 2, 0, 2, 3]),
+                                                                   baseHeight: 0,
+                                                                   topHeight: 80,
+                                                                   edgeRadius: 10,
+                                                                   tileExtent: 4096,
+                                                                   quarter: 0))
+        XCTAssertFalse(faceEast(cut), "No wall faces the quarter's edge")
+        let rimOnTheEdge = Set(cut.vertices
+            .filter { $0.position.z == 80 && $0.normal.z > 0.99 && $0.position.x == 2048 }
+            .map(\.position))
+        XCTAssertEqual(rimOnTheEdge, [SIMD3(2048, 3000, 80), SIMD3(2048, 3200, 80)],
+                       "The roof's corners on the quarter's edge stay on it")
+    }
+
+    /// A footprint that turns back on itself, a spike out of its side,
+    /// keeps that corner sharp: every normal is a number.
+    func testACornerThatTurnsBackStaysSharp() throws {
+        let spiked: [SIMD2<Float>] = [
+            SIMD2(1000, 1000), SIMD2(1300, 1000), SIMD2(1300, 1200),
+            SIMD2(1150, 1200), SIMD2(1150, 1260), SIMD2(1150, 1230), SIMD2(1000, 1200)
+        ]
+        let rounded = try XCTUnwrap(mesh(spiked, radius: 10))
+        XCTAssertFalse(rounded.vertices.contains { $0.normal.x.isNaN || $0.normal.y.isNaN || $0.normal.z.isNaN })
+    }
+
     /// An edge by its two ends, in either order.
     private struct EdgeKey: Hashable, CustomStringConvertible {
         let lower: SIMD3<Float>

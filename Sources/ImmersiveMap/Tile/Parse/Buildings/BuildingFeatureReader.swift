@@ -171,7 +171,8 @@ struct BuildingFeatureReader {
                                                                      baseHeight: candidate.baseHeight,
                                                                      topHeight: candidate.topHeight,
                                                                      edgeRadius: candidate.edgeRadius,
-                                                                     tileExtent: Float(tileExtent)) {
+                                                                     tileExtent: Float(tileExtent),
+                                                                     quarter: candidate.quarter) {
                 extrudedMesh.buildingID = candidate.buildingId
                 extrudedMesh.quarter = candidate.quarter
                 result.extrudedByStyle[candidate.styleKey, default: []].append(extrudedMesh)

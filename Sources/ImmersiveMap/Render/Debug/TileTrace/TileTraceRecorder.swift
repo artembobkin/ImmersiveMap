@@ -354,7 +354,9 @@ extension TileTraceEvent {
     }
 }
 
-package final class TileTraceRecorder {
+/// Its file is touched only on its queue and its flag only under its
+/// lock, so it can be called from any thread.
+package final class TileTraceRecorder: @unchecked Sendable {
     private let fileManager: FileManager
     private let directoryURL: URL
     private let now: () -> Date

@@ -588,14 +588,16 @@ final class RenderFrameEngine {
 
         let avatarSelectionSnapshot = frameContext.sharedState.avatarState.selectionSnapshot
         let sceneModelSelectionSnapshot = frameContext.sharedState.sceneModelState.selectionSnapshot
-        commandBuffer.addCompletedHandler { [weak self] completedBuffer in
+        // The handler runs on a Metal thread, so it takes the engine's
+        // thread-safe parts and never the engine itself.
+        commandBuffer.addCompletedHandler { [lastCompletedGPUFrameDuration, inFlightFramePool, eventSink] completedBuffer in
             // Read the timestamps before entering the lock: withLock takes a
             // @Sendable closure, and MTLCommandBuffer is not Sendable.
             let gpuFrameDuration = completedBuffer.gpuEndTime - completedBuffer.gpuStartTime
-            self?.lastCompletedGPUFrameDuration.withLock { $0 = gpuFrameDuration }
-            self?.inFlightFramePool.release(slot: frameSlotIndex)
-            self?.eventSink.updateAvatarSelectionSnapshot(avatarSelectionSnapshot)
-            self?.eventSink.updateSceneModelSelectionSnapshot(sceneModelSelectionSnapshot)
+            lastCompletedGPUFrameDuration.withLock { $0 = gpuFrameDuration }
+            inFlightFramePool.release(slot: frameSlotIndex)
+            eventSink.updateAvatarSelectionSnapshot(avatarSelectionSnapshot)
+            eventSink.updateSceneModelSelectionSnapshot(sceneModelSelectionSnapshot)
             onGPUComplete?(completedBuffer.error == nil)
         }
         if let drawable = target.drawable {
