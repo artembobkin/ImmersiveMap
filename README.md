@@ -89,13 +89,7 @@ The default map is built from open data, and three of its sources ask to be cred
 2. **RESOLVE Ecoregions 2017**: the biomes the engine paints under the land of the globe are under CC BY 4.0, so "Biomes © RESOLVE" is required while they are on screen.
 3. **Mapterhorn**: the terrain the ground relief rises by is Mapterhorn's open elevation data, so "© Mapterhorn" is required while the relief is on screen.
 
-The attribution badge shows each credit at the zooms its data is on screen, and a source switched off takes its credit with it.
-
-Otherwise the license is MIT and nothing here changes that. The badge opens with "Powered by ImmersiveMap" by default, a courtesy the license does not ask for, and it can be switched off. It would just be cool if you mention ImmersiveMap somewhere:
-
-```text
-Maps powered by ImmersiveMap (immersivemap.dev)
-```
+The map's badge shows these credits on its own. The engine is MIT licensed, and its "Powered by ImmersiveMap" credit is not required.
 
 ## Contributing
 
