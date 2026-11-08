@@ -47,11 +47,7 @@ The guides are in [Documentation](Documentation): [the tile source](Documentatio
 
 ## Map Data
 
-The map draws the Protomaps basemap, an OpenStreetMap planet in a single PMTiles archive that the engine reads with HTTP range requests, with no tile server in between. The archive hosted for this project is the default, and `.tileArchive(_:headers:)` points the map at any [Protomaps planet build](https://maps.protomaps.com/builds/) or a region cut from one.
-
-The 3D building models are a second PMTiles archive of the same kind, built for this project and hosted on Cloudflare's S3-compatible storage.
-
-The globe's overview (the biomes, the lakes and the road network of the low zooms) is baked from RESOLVE and Natural Earth data into the package resources, in this repository, so it ships with the engine and loads from no server.
+The map draws OpenStreetMap data from a single [PMTiles](https://docs.protomaps.com/pmtiles/) file, read straight from storage with no tile server. The 3D building models come from a second archive, and the globe's biomes ship inside the package. To use your own tiles, see [Setting up the tile source](Documentation/TileSource.md).
 
 ## Quick Start
 
