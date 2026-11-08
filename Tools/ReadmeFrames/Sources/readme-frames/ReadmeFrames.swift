@@ -197,9 +197,13 @@ enum Picture {
         print("compressed: \(compressed) pictures")
     }
 
+    /// Scaled to `width`, the height kept even: AVIF stores the colour at
+    /// half the resolution, and a picture of an odd side is written outside
+    /// the profile the browsers read (no `miaf` brand), which Chrome shows
+    /// as nothing.
     private static func scaledDown(_ image: CGImage, toWidth width: Int) throws -> CGImage {
         guard image.width > width else { return image }
-        let height = Int((Double(image.height) * Double(width) / Double(image.width)).rounded())
+        let height = Int((Double(image.height) * Double(width) / Double(image.width) / 2).rounded()) * 2
         guard let colorSpace = image.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB),
               let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
                                       space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
