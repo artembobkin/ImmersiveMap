@@ -147,10 +147,14 @@ struct ReadmeFrames {
 /// page's width, about 900 points, and keeps 2400 pixels. A `half` one
 /// stands at half of it and is scaled down to 1600, from the render at the
 /// frame's own size, so the framing and the labels are those of the render.
+///
+/// The AVIF is written by `avifenc` of libavif (`brew install libavif`),
+/// not by ImageIO: ImageIO cuts a picture into 512 pixel tiles joined by a
+/// grid, which Firefox shows as nothing, and `avifenc` writes one picture.
 enum Picture {
     static let fileExtension = "avif"
-    /// The encoder's quality, 0 to 1: small labels stay clean at 0.7.
-    static let quality = 0.7
+    /// The encoder's quality, 0 to 100: small labels stay clean at 70.
+    static let quality = 70
     static let fullWidth = 2400
     static let halfWidth = 1600
 
@@ -165,14 +169,40 @@ enum Picture {
     /// Writes `image` as AVIF, scaled down to `maximumWidth` when wider.
     static func write(_ image: CGImage, to url: URL, maximumWidth: Int) throws {
         let scaled = try scaledDown(image, toWidth: maximumWidth)
-        guard let destination = CGImageDestinationCreateWithURL(url as CFURL, "public.avif" as CFString, 1, nil) else {
-            throw ToolError("Cannot create \(url.path): this macOS writes no AVIF")
+        let encoder = try avifenc()
+        let png = FileManager.default.temporaryDirectory
+            .appendingPathComponent("readme-frames-\(UUID().uuidString).png")
+        defer { try? FileManager.default.removeItem(at: png) }
+        guard let destination = CGImageDestinationCreateWithURL(png as CFURL, UTType.png.identifier as CFString, 1, nil) else {
+            throw ToolError("Cannot create \(png.path)")
         }
-        CGImageDestinationAddImage(destination, scaled,
-                                   [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
+        CGImageDestinationAddImage(destination, scaled, nil)
         guard CGImageDestinationFinalize(destination) else {
-            throw ToolError("Cannot write \(url.path)")
+            throw ToolError("Cannot write \(png.path)")
         }
+        let process = Process()
+        process.executableURL = encoder
+        process.arguments = ["--qcolor", "\(quality)", "--speed", "4", "--yuv", "420",
+                             "--ignore-exif", "--ignore-xmp", png.path, url.path]
+        process.standardOutput = FileHandle.nullDevice
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw ToolError("avifenc could not write \(url.path)")
+        }
+    }
+
+    /// The `avifenc` of Homebrew, or the first one on the `PATH`.
+    private static func avifenc() throws -> URL {
+        let path = ProcessInfo.processInfo.environment["PATH"] ?? ""
+        let folders = ["/opt/homebrew/bin", "/usr/local/bin"] + path.split(separator: ":").map(String.init)
+        for folder in folders {
+            let candidate = URL(fileURLWithPath: folder).appendingPathComponent("avifenc")
+            if FileManager.default.isExecutableFile(atPath: candidate.path) {
+                return candidate
+            }
+        }
+        throw ToolError("No avifenc found: install it with `brew install libavif`")
     }
 
     /// Makes an AVIF of every frame's PNG in `directory` and removes the
