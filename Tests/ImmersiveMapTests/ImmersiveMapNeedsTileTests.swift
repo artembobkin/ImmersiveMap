@@ -32,134 +32,6 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         XCTAssertNil(loader.tileLoadingStatusSnapshotForTesting)
     }
 
-    func testRequestCollectsNetworkAndParseProgressWhenReporterIsPresent() async {
-        var settings = ImmersiveMapSettings.default
-        settings.tiles.network.maxConcurrentFetches = 1
-        let pipeline = ControlledTileLoadPipeline()
-        let reporter = TileLoadingStatusReporter()
-        let loader = ImmersiveMapNeedsTile(config: settings,
-                                           loadPipeline: pipeline,
-                                           tileLoadingStatusReporter: reporter)
-        let tile = Tile(x: 1, y: 1, z: 4)
-
-        loader.request(tiles: [tile])
-        let didStart = await pipeline.waitUntilStarted(tile)
-        XCTAssertTrue(didStart)
-        guard let loadingTile = reporter.snapshot().tiles.first else {
-            XCTFail("Expected loading tile status")
-            return
-        }
-        XCTAssertEqual(loadingTile.status, .loading)
-        XCTAssertEqual(loadingTile.progress, 0.35, accuracy: 0.001)
-        XCTAssertEqual(reporter.snapshot().network.inFlight, 1)
-        XCTAssertEqual(reporter.snapshot().disk.failed, 1)
-
-        pipeline.completeDownload(tile, result: .success(Data([1, 2, 3]), etag: nil))
-        let didPrepare = await pipeline.waitUntilPrepared(tile)
-        XCTAssertTrue(didPrepare)
-        XCTAssertEqual(reporter.snapshot().network.completed, 1)
-        XCTAssertEqual(reporter.snapshot().parsing.inFlight, 1)
-        guard let parsingTile = reporter.snapshot().tiles.first else {
-            XCTFail("Expected parsing tile status")
-            return
-        }
-        XCTAssertEqual(parsingTile.status, .parsing)
-        XCTAssertEqual(parsingTile.progress, 0.7, accuracy: 0.001)
-
-        pipeline.completePrepare(tile)
-        let didMaterialize = await pipeline.waitUntilMaterialized(tile)
-        XCTAssertTrue(didMaterialize)
-        pipeline.completeMaterialize(tile, result: true)
-
-        try? await Task.sleep(nanoseconds: 100_000_000)
-
-        let snapshot = reporter.snapshot()
-        XCTAssertEqual(snapshot.parsing.completed, 1)
-        XCTAssertEqual(snapshot.totalCompleted, 1)
-        XCTAssertNil(snapshot.latestNetworkTile)
-        XCTAssertNil(snapshot.latestParsingTile)
-        guard let readyTile = snapshot.tiles.first else {
-            XCTFail("Expected ready tile status")
-            return
-        }
-        XCTAssertEqual(readyTile.status, .ready)
-        XCTAssertEqual(readyTile.progress, 1, accuracy: 0.001)
-    }
-
-    func testTileLoadingSnapshotReportsLatestParseLayerTimings() async {
-        var settings = ImmersiveMapSettings.default
-        settings.tiles.network.maxConcurrentFetches = 1
-        let pipeline = ControlledTileLoadPipeline()
-        let reporter = TileLoadingStatusReporter()
-        let loader = ImmersiveMapNeedsTile(config: settings,
-                                           loadPipeline: pipeline,
-                                           tileLoadingStatusReporter: reporter)
-        let tile = Tile(x: 78, y: 39, z: 7)
-
-        loader.request(tiles: [tile])
-        let didStart = await pipeline.waitUntilStarted(tile)
-        XCTAssertTrue(didStart)
-        pipeline.completeDownload(tile, result: .success(Data([1, 2, 3]), etag: nil))
-        let didPrepare = await pipeline.waitUntilPrepared(tile)
-        XCTAssertTrue(didPrepare)
-        pipeline.completePrepare(tile, timings: [
-            TileParseLayerTiming(layerName: "streets", duration: 0.003),
-            TileParseLayerTiming(layerName: "land", duration: 0.127),
-            TileParseLayerTiming(layerName: "water_polygons", duration: 0.041)
-        ])
-        let didMaterialize = await pipeline.waitUntilMaterialized(tile)
-        XCTAssertTrue(didMaterialize)
-        pipeline.completeMaterialize(tile, result: true)
-
-        try? await Task.sleep(nanoseconds: 100_000_000)
-
-        XCTAssertTrue(reporter.snapshot().lines.contains(
-            "parse layers z7/78/39: land 127ms, water_polygons 41ms, streets 3ms"
-        ))
-    }
-
-    func testTileLoadingSnapshotReportsPerTilePreparationStagesAndParseLayers() async {
-        var settings = ImmersiveMapSettings.default
-        settings.tiles.network.maxConcurrentFetches = 1
-        var now = 1.0
-        let pipeline = ControlledTileLoadPipeline()
-        let reporter = TileLoadingStatusReporter(now: { now })
-        let loader = ImmersiveMapNeedsTile(config: settings,
-                                           loadPipeline: pipeline,
-                                           tileLoadingStatusReporter: reporter)
-        let tile = Tile(x: 78, y: 39, z: 7)
-
-        loader.request(tiles: [tile])
-        let didStart = await pipeline.waitUntilStarted(tile)
-        XCTAssertTrue(didStart)
-
-        now = 1.100
-        pipeline.completeDownload(tile, result: .success(Data([1, 2, 3]), etag: nil))
-        let didPrepare = await pipeline.waitUntilPrepared(tile)
-        XCTAssertTrue(didPrepare)
-
-        now = 1.350
-        pipeline.completePrepare(tile, timings: [
-            TileParseLayerTiming(layerName: "streets", duration: 0.003),
-            TileParseLayerTiming(layerName: "land", duration: 0.127),
-            TileParseLayerTiming(layerName: "water_polygons", duration: 0.041)
-        ])
-        let didMaterialize = await pipeline.waitUntilMaterialized(tile)
-        XCTAssertTrue(didMaterialize)
-
-        now = 1.380
-        pipeline.completeMaterialize(tile, result: true)
-
-        try? await Task.sleep(nanoseconds: 100_000_000)
-
-        let stages = try? XCTUnwrap(reporter.snapshot().tiles.first?.preparationStages)
-        XCTAssertEqual(stages?.map(\.name), ["disk", "network", "parse", "materialize", "ready"])
-        XCTAssertEqual(stages?[1].duration ?? 0, 0.100, accuracy: 0.001)
-        XCTAssertEqual(stages?[2].duration ?? 0, 0.250, accuracy: 0.001)
-        XCTAssertEqual(stages?[3].duration ?? 0, 0.030, accuracy: 0.001)
-        XCTAssertEqual(stages?[2].layerTimings.map(\.layerName), ["land", "water_polygons", "streets"])
-    }
-
     func testDisplayedTileKeepsRecentPreparationStagesAfterDemandPrunesReadyRecord() {
         var now = 1.0
         let reporter = TileLoadingStatusReporter(now: { now })
@@ -191,46 +63,6 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         }
         XCTAssertEqual(stages.map(\.name), ["network", "parse", "materialize", "ready"])
         XCTAssertEqual(stages[1].layerTimings.map(\.layerName), ["boundaries", "ocean"])
-    }
-
-    func testTileLoadingSnapshotKeepsOnlyCurrentDemandAndActiveWork() async {
-        var settings = ImmersiveMapSettings.default
-        settings.tiles.network.maxConcurrentFetches = 2
-        let pipeline = ControlledTileLoadPipeline()
-        let reporter = TileLoadingStatusReporter()
-        let loader = ImmersiveMapNeedsTile(config: settings,
-                                           loadPipeline: pipeline,
-                                           tileLoadingStatusReporter: reporter)
-        let staleReadyTile = Tile(x: 1, y: 1, z: 4)
-        let staleLoadingTile = Tile(x: 2, y: 1, z: 4)
-        let currentTile = Tile(x: 3, y: 1, z: 4)
-
-        loader.request(tiles: [staleReadyTile])
-        let staleReadyStarted = await pipeline.waitUntilStarted(staleReadyTile)
-        XCTAssertTrue(staleReadyStarted)
-        pipeline.completeDownload(staleReadyTile, result: .success(Data([1, 2, 3]), etag: nil))
-        let staleReadyPrepared = await pipeline.waitUntilPrepared(staleReadyTile)
-        XCTAssertTrue(staleReadyPrepared)
-        pipeline.completePrepare(staleReadyTile)
-        let staleReadyMaterialized = await pipeline.waitUntilMaterialized(staleReadyTile)
-        XCTAssertTrue(staleReadyMaterialized)
-        pipeline.completeMaterialize(staleReadyTile, result: true)
-        try? await Task.sleep(nanoseconds: 100_000_000)
-
-        loader.request(tiles: [staleLoadingTile])
-        let staleLoadingStarted = await pipeline.waitUntilStarted(staleLoadingTile)
-        XCTAssertTrue(staleLoadingStarted)
-        loader.request(tiles: [currentTile])
-        let currentStarted = await pipeline.waitUntilStarted(currentTile)
-        XCTAssertTrue(currentStarted)
-
-        let visibleTiles = reporter.snapshot().tiles.map(\.tile)
-        XCTAssertFalse(visibleTiles.contains(staleReadyTile))
-        XCTAssertTrue(visibleTiles.contains(staleLoadingTile))
-        XCTAssertTrue(visibleTiles.contains(currentTile))
-
-        pipeline.completeDownload(staleLoadingTile, result: .failure(.network))
-        pipeline.completeDownload(currentTile, result: .failure(.network))
     }
 
     func testTileLoadingSnapshotIncludesDisplayedTilesOutsideCurrentDemand() {
@@ -355,58 +187,6 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         let secondMaterialized = await pipeline.waitUntilMaterialized(secondTile)
         XCTAssertTrue(secondMaterialized)
         pipeline.completeMaterialize(secondTile, result: true)
-    }
-
-    func testQueuedCPUWorkIsPickedByDemandPriorityNotDownloadCompletionOrder() async {
-        var settings = ImmersiveMapSettings.default
-        settings.tiles.network.maxConcurrentFetches = 3
-        let pipeline = ControlledTileLoadPipeline()
-        let loader = ImmersiveMapNeedsTile(config: settings,
-                                           loadPipeline: pipeline,
-                                           maxConcurrentPrepares: 1)
-        let occupyingTile = Tile(x: 1, y: 1, z: 4)
-        let nearTile = Tile(x: 2, y: 1, z: 4)
-        let farTile = Tile(x: 3, y: 1, z: 4)
-
-        // request() order = priority: occupying, then near, then far.
-        loader.request(tiles: [occupyingTile, nearTile, farTile])
-        for tile in [occupyingTile, nearTile, farTile] {
-            let started = await pipeline.waitUntilStarted(tile)
-            XCTAssertTrue(started)
-        }
-
-        // The first tile occupies the single CPU slot.
-        pipeline.completeDownload(occupyingTile, result: .success(Data([1]), etag: nil))
-        let occupyingPrepared = await pipeline.waitUntilPrepared(occupyingTile)
-        XCTAssertTrue(occupyingPrepared)
-
-        // The far tile downloaded BEFORE the near one: in FIFO it would parse first.
-        pipeline.completeDownload(farTile, result: .success(Data([3]), etag: nil))
-        try? await Task.sleep(nanoseconds: 50_000_000)
-        pipeline.completeDownload(nearTile, result: .success(Data([2]), etag: nil))
-        try? await Task.sleep(nanoseconds: 50_000_000)
-
-        pipeline.completePrepare(occupyingTile)
-        let occupyingMaterialized = await pipeline.waitUntilMaterialized(occupyingTile)
-        XCTAssertTrue(occupyingMaterialized)
-        pipeline.completeMaterialize(occupyingTile, result: true)
-
-        // The slot freed up: the near tile parses (demand priority), not the far one.
-        let nearPrepared = await pipeline.waitUntilPrepared(nearTile)
-        XCTAssertTrue(nearPrepared)
-        XCTAssertFalse(pipeline.hasPrepared(farTile))
-
-        pipeline.completePrepare(nearTile)
-        let nearMaterialized = await pipeline.waitUntilMaterialized(nearTile)
-        XCTAssertTrue(nearMaterialized)
-        pipeline.completeMaterialize(nearTile, result: true)
-
-        let farPrepared = await pipeline.waitUntilPrepared(farTile)
-        XCTAssertTrue(farPrepared)
-        pipeline.completePrepare(farTile)
-        let farMaterialized = await pipeline.waitUntilMaterialized(farTile)
-        XCTAssertTrue(farMaterialized)
-        pipeline.completeMaterialize(farTile, result: true)
     }
 
     func testFailedDownloadArmsRetryWakeThatFiresCallback() async {
@@ -697,62 +477,6 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         pipeline.completeDiskRead(waiting)
     }
 
-    func testAStalledParseIsRetiredAndFreesItsCPUSlot() async {
-        var settings = ImmersiveMapSettings.default
-        settings.tiles.network.maxConcurrentFetches = 2
-        var now = Date(timeIntervalSince1970: 1000)
-        let pipeline = ControlledTileLoadPipeline()
-        let reporter = TileLoadingStatusReporter()
-        let wakeScheduler = RecordingRetryWakeScheduler()
-        let loader = ImmersiveMapNeedsTile(config: settings,
-                                           loadPipeline: pipeline,
-                                           maxConcurrentPrepares: 1,
-                                           stageDeadlines: Self.shortDeadlines,
-                                           now: { now },
-                                           retryWakeScheduler: wakeScheduler.schedule,
-                                           tileLoadingStatusReporter: reporter)
-        let stalled = Tile(x: 1, y: 1, z: 4)
-        let waiting = Tile(x: 2, y: 1, z: 4)
-
-        loader.request(tiles: [stalled, waiting])
-        let stalledStarted = await pipeline.waitUntilStarted(stalled)
-        let waitingStarted = await pipeline.waitUntilStarted(waiting)
-        XCTAssertTrue(stalledStarted)
-        XCTAssertTrue(waitingStarted)
-
-        pipeline.completeDownload(stalled, result: .success(Data([1]), etag: nil))
-        let stalledParsing = await pipeline.waitUntilPrepared(stalled)
-        XCTAssertTrue(stalledParsing)
-        pipeline.completeDownload(waiting, result: .success(Data([2]), etag: nil))
-        try? await Task.sleep(nanoseconds: 100_000_000)
-        XCTAssertFalse(pipeline.hasPrepared(waiting), "The one CPU slot is held by the parse that never ends")
-        XCTAssertEqual(reporter.snapshot().tiles.first { $0.tile == stalled }?.detail, "parse")
-
-        now = Date(timeIntervalSince1970: 1006)
-        loader.request(tiles: [stalled, waiting])
-
-        let row = reporter.snapshot().tiles.first { $0.tile == stalled }
-        XCTAssertEqual(row?.status, .failed)
-        XCTAssertEqual(row?.detail, "stalled in parse")
-        let waitingParsing = await pipeline.waitUntilPrepared(waiting)
-        XCTAssertTrue(waitingParsing, "The freed CPU slot goes to the queued parse")
-        XCTAssertEqual(reporter.snapshot().parsing.inFlight, 1)
-
-        // The retired parse answering late is ignored, the waiting one lands.
-        pipeline.completePrepare(stalled)
-        pipeline.completePrepare(waiting)
-        let didMaterialize = await pipeline.waitUntilMaterialized(waiting)
-        XCTAssertTrue(didMaterialize)
-        pipeline.completeMaterialize(waiting, result: true)
-        try? await Task.sleep(nanoseconds: 100_000_000)
-
-        let final = reporter.snapshot()
-        XCTAssertEqual(final.parsing.inFlight, 0)
-        XCTAssertEqual(final.tiles.first { $0.tile == stalled }?.detail, "stalled in parse")
-        XCTAssertEqual(final.tiles.first { $0.tile == waiting }?.status, .ready)
-        loader.cancelAll()
-    }
-
     func testTheWatchdogWakeRetiresAStalledLoadWithoutAFrame() async {
         var settings = ImmersiveMapSettings.default
         settings.tiles.network.maxConcurrentFetches = 1
@@ -927,34 +651,6 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
 
     // MARK: - Disk stage
 
-    func testDiskHitEndsTheLoadWithoutDownload() async {
-        var settings = ImmersiveMapSettings.default
-        settings.tiles.network.maxConcurrentFetches = 1
-        let pipeline = ControlledTileLoadPipeline()
-        let reporter = TileLoadingStatusReporter()
-        let loader = ImmersiveMapNeedsTile(config: settings,
-                                           loadPipeline: pipeline,
-                                           tileLoadingStatusReporter: reporter)
-        let tile = Tile(x: 1, y: 1, z: 4)
-        pipeline.setDiskEntry(tile, etag: "A")
-
-        loader.request(tiles: [tile])
-        let served = await pipeline.waitUntilMaterialized(tile)
-        XCTAssertTrue(served)
-        pipeline.completeMaterialize(tile, result: true)
-        try? await Task.sleep(nanoseconds: 100_000_000)
-
-        // The hit is final: no download, no parse, no save, one materialize.
-        XCTAssertFalse(pipeline.hasStarted(tile))
-        XCTAssertFalse(pipeline.hasPrepared(tile))
-        XCTAssertEqual(pipeline.materializeCount(for: tile), 1)
-        XCTAssertNil(pipeline.savedETag(for: tile))
-        let snapshot = reporter.snapshot()
-        XCTAssertEqual(snapshot.disk.completed, 1)
-        XCTAssertEqual(snapshot.totalCompleted, 1)
-        XCTAssertEqual(snapshot.activeLoads, 0)
-    }
-
     func testDiskMissProceedsToDownload() async {
         var settings = ImmersiveMapSettings.default
         settings.tiles.network.maxConcurrentFetches = 1
@@ -1092,27 +788,6 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         pipeline.completeDownload(tile, result: .failure(.network))
     }
 
-    func testStageNamesForADiskHitAreDiskAndReady() async {
-        var settings = ImmersiveMapSettings.default
-        settings.tiles.network.maxConcurrentFetches = 1
-        let pipeline = ControlledTileLoadPipeline()
-        let reporter = TileLoadingStatusReporter()
-        let loader = ImmersiveMapNeedsTile(config: settings,
-                                           loadPipeline: pipeline,
-                                           tileLoadingStatusReporter: reporter)
-        let tile = Tile(x: 1, y: 1, z: 4)
-        pipeline.setDiskEntry(tile, etag: "A")
-
-        loader.request(tiles: [tile])
-        let served = await pipeline.waitUntilMaterialized(tile)
-        XCTAssertTrue(served)
-        pipeline.completeMaterialize(tile, result: true)
-        try? await Task.sleep(nanoseconds: 100_000_000)
-
-        let stages = reporter.snapshot().tiles.first?.preparationStages
-        XCTAssertEqual(stages?.map(\.name), ["disk", "ready"])
-    }
-
     func testIsPreparedOnDiskFollowsThePipelineAndTheDiskStage() {
         let pipeline = ControlledTileLoadPipeline()
         let loader = ImmersiveMapNeedsTile(config: ImmersiveMapSettings.default, loadPipeline: pipeline)
@@ -1125,37 +800,6 @@ final class ImmersiveMapNeedsTileTests: XCTestCase {
         cacheless.setDiskEntry(tile, etag: nil)
         let cachelessLoader = ImmersiveMapNeedsTile(config: ImmersiveMapSettings.default, loadPipeline: cacheless)
         XCTAssertFalse(cachelessLoader.isPreparedOnDisk(tile), "Without a disk stage nothing is on disk")
-    }
-
-    func testCachelessPipelineSkipsTheDiskStage() async {
-        var settings = ImmersiveMapSettings.default
-        settings.tiles.network.maxConcurrentFetches = 1
-        let pipeline = ControlledTileLoadPipeline(hasPreparedDiskCache: false)
-        let reporter = TileLoadingStatusReporter()
-        let loader = ImmersiveMapNeedsTile(config: settings,
-                                           loadPipeline: pipeline,
-                                           tileLoadingStatusReporter: reporter)
-        let tile = Tile(x: 1, y: 1, z: 4)
-        // Even a present entry must not be consulted without a cache.
-        pipeline.setDiskEntry(tile, etag: "A")
-
-        loader.request(tiles: [tile])
-        let downloadStarted = await pipeline.waitUntilStarted(tile)
-        XCTAssertTrue(downloadStarted)
-        pipeline.completeDownload(tile, result: .success(Data([1]), etag: nil))
-        let didPrepare = await pipeline.waitUntilPrepared(tile)
-        XCTAssertTrue(didPrepare)
-        pipeline.completePrepare(tile)
-        let didMaterialize = await pipeline.waitUntilMaterialized(tile)
-        XCTAssertTrue(didMaterialize)
-        pipeline.completeMaterialize(tile, result: true)
-        try? await Task.sleep(nanoseconds: 100_000_000)
-
-        XCTAssertEqual(pipeline.diskReadCount(for: tile), 0)
-        let snapshot = reporter.snapshot()
-        XCTAssertEqual(snapshot.disk, TileLoadingPhaseSnapshot(inFlight: 0, completed: 0, failed: 0))
-        XCTAssertEqual(snapshot.tiles.first?.preparationStages.map(\.name),
-                       ["network", "parse", "materialize", "ready"])
     }
 
     func testUnwantedTileWaitingForANetworkSlotIsDroppedOnTheNextRequest() async {

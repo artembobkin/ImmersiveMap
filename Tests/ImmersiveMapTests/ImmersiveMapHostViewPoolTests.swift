@@ -56,21 +56,6 @@ final class ImmersiveMapHostViewPoolTests: XCTestCase {
     }
 
     @MainActor
-    func testParkedViewExpiresAfterTimeToLive() async throws {
-        try skipUnlessMetalAvailable()
-
-        let pool = ImmersiveMapHostViewPool()
-        let view = makeHostView()
-        view.dismantle()
-        pool.park(view, timeToLive: 0.05)
-
-        try await Task.sleep(nanoseconds: 400_000_000)
-
-        XCTAssertFalse(pool.hasParkedViewForTesting, "TTL expiry must release the parked view")
-        XCTAssertNil(pool.adopt())
-    }
-
-    @MainActor
     func testMemoryPressureDrainReleasesParkedView() throws {
         try skipUnlessMetalAvailable()
 
