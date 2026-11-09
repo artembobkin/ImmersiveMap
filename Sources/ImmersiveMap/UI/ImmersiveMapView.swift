@@ -311,14 +311,7 @@ public extension ImmersiveMapView {
     /// An omitted bound is left as configured.
     func zoomRange(minimum: Double? = nil, maximum: Double? = nil) -> ImmersiveMapView {
         var view = self
-        var camera = view.settings.camera
-        if let minimum {
-            camera.minimumZoom = minimum
-        }
-        if let maximum {
-            camera.maximumZoom = maximum
-        }
-        view.settings = view.settings.cameraSettings(camera)
+        view.settings = view.settings.zoomRange(minimum: minimum, maximum: maximum)
         return view
     }
 
@@ -354,14 +347,7 @@ public extension ImmersiveMapView {
     /// An omitted bound is left as configured.
     func pitchRange(minimum: Float? = nil, maximum: Float? = nil) -> ImmersiveMapView {
         var view = self
-        var camera = view.settings.camera
-        if let minimum {
-            camera.minimumPitch = minimum
-        }
-        if let maximum {
-            camera.maximumPitch = maximum
-        }
-        view.settings = view.settings.cameraSettings(camera)
+        view.settings = view.settings.pitchRange(minimum: minimum, maximum: maximum)
         return view
     }
 
@@ -375,9 +361,7 @@ public extension ImmersiveMapView {
     ///         .bearingLimit(nil)       // unbounded again
     func bearingLimit(_ maximumAbsoluteBearing: Float?) -> ImmersiveMapView {
         var view = self
-        var camera = view.settings.camera
-        camera.maximumAbsoluteBearing = maximumAbsoluteBearing
-        view.settings = view.settings.cameraSettings(camera)
+        view.settings = view.settings.bearingLimit(maximumAbsoluteBearing)
         return view
     }
 
@@ -396,9 +380,7 @@ public extension ImmersiveMapView {
     /// Sets or clears (`nil`) the globe's zoom-dependent rotation window.
     func globeBearingLimit(_ limit: ImmersiveMapSettings.CameraSettings.GlobeBearingLimit?) -> ImmersiveMapView {
         var view = self
-        var camera = view.settings.camera
-        camera.globeBearingLimit = limit
-        view.settings = view.settings.cameraSettings(camera)
+        view.settings = view.settings.globeBearingLimit(limit)
         return view
     }
 
@@ -426,9 +408,7 @@ public extension ImmersiveMapView {
     ///         .globeUprightPull(nil)
     func globeUprightPull(_ pull: ImmersiveMapSettings.CameraSettings.GlobeUprightPull?) -> ImmersiveMapView {
         var view = self
-        var camera = view.settings.camera
-        camera.globeUprightPull = pull
-        view.settings = view.settings.cameraSettings(camera)
+        view.settings = view.settings.globeUprightPull(pull)
         return view
     }
 
@@ -464,9 +444,7 @@ public extension ImmersiveMapView {
     /// Sets or clears (`nil`, the whole world) the region the camera is held to.
     func cameraBounds(_ bounds: ImmersiveMapSettings.CameraSettings.Bounds?) -> ImmersiveMapView {
         var view = self
-        var camera = view.settings.camera
-        camera.bounds = bounds
-        view.settings = view.settings.cameraSettings(camera)
+        view.settings = view.settings.cameraBounds(bounds)
         return view
     }
 
@@ -484,9 +462,7 @@ public extension ImmersiveMapView {
     ///         .tiltGestureSensitivity(0)    // tilt drags do nothing
     func tiltGestureSensitivity(_ sensitivity: Float) -> ImmersiveMapView {
         var view = self
-        var camera = view.settings.camera
-        camera.tiltGestureSensitivity = sensitivity
-        view.settings = view.settings.cameraSettings(camera)
+        view.settings = view.settings.tiltGestureSensitivity(sensitivity)
         return view
     }
 
@@ -501,8 +477,12 @@ public extension ImmersiveMapView {
     ///         .viewReuse(false)   // always build a fresh renderer
     func viewReuse(_ isEnabled: Bool = true) -> ImmersiveMapView {
         var view = self
-        var viewReuse = view.settings.viewReuse
-        viewReuse.isEnabled = isEnabled
+        view.settings = view.settings.viewReuse(isEnabled)
+        return view
+    }
+
+    func viewReuseSettings(_ viewReuse: ImmersiveMapSettings.ViewReuseSettings) -> ImmersiveMapView {
+        var view = self
         view.settings = view.settings.viewReuseSettings(viewReuse)
         return view
     }
@@ -522,10 +502,7 @@ public extension ImmersiveMapView {
     /// Pointer scroll zoom (trackpad, mouse wheel) is independent of these zones.
     func cameraControlZones(pitch: Bool = true, zoom: Bool = true) -> ImmersiveMapView {
         var view = self
-        var camera = view.settings.camera
-        camera.controlZones = ImmersiveMapSettings.CameraSettings.ControlZoneSettings(isPitchZoneEnabled: pitch,
-                                                                                      isZoomZoneEnabled: zoom)
-        view.settings = view.settings.cameraSettings(camera)
+        view.settings = view.settings.cameraControlZones(pitch: pitch, zoom: zoom)
         return view
     }
 
@@ -982,7 +959,9 @@ public extension ImmersiveMapView {
     /// `collapseZoom`, unless `collapsesWhereTerrainIsMissing` is false.
     /// The decoded terrain tiles
     /// live with the tiles they raise, and `maximumConcurrentLoads` of them
-    /// load at once, the frame's nearest first. Off by default:
+    /// load at once, the frame's nearest first. `releasedCacheBytes` of the
+    /// terrain the frame stops reading is kept for a zoom or a pan back,
+    /// 50 MB by default. Off by default:
     /// `isEnabled: true` raises the ground on the terrain of `terrain(_:)`,
     /// Mapterhorn's open terrain unless the map names another. An omitted
     /// value is left as configured:
@@ -1002,6 +981,7 @@ public extension ImmersiveMapView {
                       cameraTerrainZoom: Int? = nil,
                       displacementMaximumZoom: Int? = nil,
                       maximumConcurrentLoads: Int? = nil,
+                      releasedCacheBytes: Int? = nil,
                       cameraClearanceMetres: Float? = nil,
                       castsShadows: Bool? = nil) -> ImmersiveMapView {
         var view = self
@@ -1014,6 +994,7 @@ public extension ImmersiveMapView {
                                                    cameraTerrainZoom: cameraTerrainZoom,
                                                    displacementMaximumZoom: displacementMaximumZoom,
                                                    maximumConcurrentLoads: maximumConcurrentLoads,
+                                                   releasedCacheBytes: releasedCacheBytes,
                                                    cameraClearanceMetres: cameraClearanceMetres,
                                                    castsShadows: castsShadows)
         return view
@@ -1420,6 +1401,14 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// The flat map's ground fog as a whole (`ImmersiveMapSettings.GroundFogSettings`).
+    /// `groundFog(...)` sets single values of it.
+    func groundFogSettings(_ groundFog: ImmersiveMapSettings.GroundFogSettings) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.groundFogSettings(groundFog)
+        return view
+    }
+
     /// The flat map's sky on or off. On by default. Off leaves the sky the
     /// map's clear colour and keeps only a thin band at the horizon line
     /// that hides the seam between the far ground and the sky. The ground
@@ -1454,17 +1443,15 @@ public extension ImmersiveMapView {
                  softness: Float? = nil,
                  tint: SIMD3<Float>? = nil) -> ImmersiveMapView {
         var view = self
-        var shadows = view.settings.scene.shadows
-        shadows.isEnabled = isEnabled
-        if let strength { shadows.strength = strength }
-        if let mapResolution { shadows.mapResolution = mapResolution }
-        if let nearCoverageMeters { shadows.nearCoverageMeters = nearCoverageMeters }
-        if let farCoverageMeters { shadows.farCoverageMeters = farCoverageMeters }
-        if let maxCasterHeightMeters { shadows.maxCasterHeightMeters = maxCasterHeightMeters }
-        if let normalOffsetTexels { shadows.normalOffsetTexels = normalOffsetTexels }
-        if let softness { shadows.softness = softness }
-        if let tint { shadows.tint = tint }
-        view.settings = view.settings.shadowSettings(shadows)
+        view.settings = view.settings.shadows(isEnabled: isEnabled,
+                                              strength: strength,
+                                              mapResolution: mapResolution,
+                                              nearCoverageMeters: nearCoverageMeters,
+                                              farCoverageMeters: farCoverageMeters,
+                                              maxCasterHeightMeters: maxCasterHeightMeters,
+                                              normalOffsetTexels: normalOffsetTexels,
+                                              softness: softness,
+                                              tint: tint)
         return view
     }
 

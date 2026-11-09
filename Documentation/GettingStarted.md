@@ -42,12 +42,12 @@ A modifier sets only the values you pass. Everything you leave out keeps its def
 
 ## Settings in one place
 
-Most of the modifiers also exist on `ImmersiveMapSettings`, the value that holds the map's whole configuration. The camera, the markers and the controllers stay on the view. Build the value once when several maps share it, or when it comes from your app's own settings:
+Every modifier that configures the map also exists on `ImmersiveMapSettings`, the value that holds the map's whole configuration. Only the camera position, the markers and the controllers stay on the view. Build the value once when several maps share it, or when it comes from your app's own settings:
 
 ```swift
 let settings = ImmersiveMapSettings.default
     .night()
-    .trees(isEnabled: false)
+    .shadows(strength: 0.6)
 
 ImmersiveMapView(settings: settings)
     .cameraPosition(start)

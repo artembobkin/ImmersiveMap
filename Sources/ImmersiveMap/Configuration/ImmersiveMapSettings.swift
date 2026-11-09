@@ -2403,6 +2403,88 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
+    /// The zooms the camera may take. An omitted bound is left as
+    /// configured. See `ImmersiveMapView.zoomRange(minimum:maximum:)`.
+    func zoomRange(minimum: Double? = nil, maximum: Double? = nil) -> ImmersiveMapSettings {
+        var settings = self
+        if let minimum { settings.camera.minimumZoom = minimum }
+        if let maximum { settings.camera.maximumZoom = maximum }
+        return settings
+    }
+
+    /// The pitches the camera may take. An omitted bound is left as
+    /// configured. See `ImmersiveMapView.pitchRange(minimum:maximum:)`.
+    func pitchRange(minimum: Float? = nil, maximum: Float? = nil) -> ImmersiveMapSettings {
+        var settings = self
+        if let minimum { settings.camera.minimumPitch = minimum }
+        if let maximum { settings.camera.maximumPitch = maximum }
+        return settings
+    }
+
+    /// See `ImmersiveMapView.bearingLimit(_:)`.
+    func bearingLimit(_ maximumAbsoluteBearing: Float?) -> ImmersiveMapSettings {
+        var settings = self
+        settings.camera.maximumAbsoluteBearing = maximumAbsoluteBearing
+        return settings
+    }
+
+    /// See `ImmersiveMapView.globeBearingLimit(minimum:unlockZoom:)`.
+    func globeBearingLimit(minimum: Float, unlockZoom: Double) -> ImmersiveMapSettings {
+        globeBearingLimit(CameraSettings.GlobeBearingLimit(minimumAbsoluteBearing: minimum, unlockZoom: unlockZoom))
+    }
+
+    func globeBearingLimit(_ limit: CameraSettings.GlobeBearingLimit?) -> ImmersiveMapSettings {
+        var settings = self
+        settings.camera.globeBearingLimit = limit
+        return settings
+    }
+
+    /// See `ImmersiveMapView.globeUprightPull(zoomRange:halfLife:)`.
+    func globeUprightPull(zoomRange: ClosedRange<Double> = 3...6,
+                          halfLife: Double = 0.2) -> ImmersiveMapSettings {
+        globeUprightPull(CameraSettings.GlobeUprightPull(zoomRange: zoomRange, halfLife: halfLife))
+    }
+
+    func globeUprightPull(_ pull: CameraSettings.GlobeUprightPull?) -> ImmersiveMapSettings {
+        var settings = self
+        settings.camera.globeUprightPull = pull
+        return settings
+    }
+
+    /// See `ImmersiveMapView.cameraBounds(southWest:northEast:pullZoomRange:pullCurve:edgeBehavior:)`.
+    func cameraBounds(southWest: GeoCoordinate,
+                      northEast: GeoCoordinate,
+                      pullZoomRange: ClosedRange<Double> = 1...2,
+                      pullCurve: CameraSettings.Bounds.PullCurve = .easeInOut,
+                      edgeBehavior: CameraSettings.Bounds.EdgeBehavior = .elastic()) -> ImmersiveMapSettings {
+        cameraBounds(CameraSettings.Bounds(southWest: southWest,
+                                           northEast: northEast,
+                                           pullZoomRange: pullZoomRange,
+                                           pullCurve: pullCurve,
+                                           edgeBehavior: edgeBehavior))
+    }
+
+    func cameraBounds(_ bounds: CameraSettings.Bounds?) -> ImmersiveMapSettings {
+        var settings = self
+        settings.camera.bounds = bounds
+        return settings
+    }
+
+    /// See `ImmersiveMapView.tiltGestureSensitivity(_:)`.
+    func tiltGestureSensitivity(_ sensitivity: Float) -> ImmersiveMapSettings {
+        var settings = self
+        settings.camera.tiltGestureSensitivity = sensitivity
+        return settings
+    }
+
+    /// See `ImmersiveMapView.cameraControlZones(pitch:zoom:)`.
+    func cameraControlZones(pitch: Bool = true, zoom: Bool = true) -> ImmersiveMapSettings {
+        var settings = self
+        settings.camera.controlZones = CameraSettings.ControlZoneSettings(isPitchZoneEnabled: pitch,
+                                                                          isZoomZoneEnabled: zoom)
+        return settings
+    }
+
     /// The animated zoom's half-life (`CameraSettings.animatedZoomHalfLife`).
     func animatedZoom(halfLife: Double) -> ImmersiveMapSettings {
         var settings = self
@@ -2438,6 +2520,13 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
+    /// See `ImmersiveMapView.viewReuse(_:)`.
+    func viewReuse(_ isEnabled: Bool = true) -> ImmersiveMapSettings {
+        var settings = self
+        settings.viewReuse.isEnabled = isEnabled
+        return settings
+    }
+
     /// Points the tile loader at a PMTiles archive such as
     /// `https://tiles.example.com/planet.pmtiles`. `headers` are added to
     /// every archive request. The source is just bytes: how they are parsed
@@ -2453,6 +2542,14 @@ public extension ImmersiveMapSettings {
     }
 
     func mapStyle<S: ImmersiveMapMapStyle>(_ mapStyle: S) -> ImmersiveMapSettings {
+        self.mapStyle(AnyImmersiveMapMapStyle(mapStyle))
+    }
+
+    /// The built-in style, spelled without its type name:
+    /// `.mapStyle(.default.apply { theme in ... })`. A concrete overload, so
+    /// the leading dot resolves on the built-in style whatever the closure
+    /// body does.
+    func mapStyle(_ mapStyle: ProtomapsBasemapMapStyle) -> ImmersiveMapSettings {
         self.mapStyle(AnyImmersiveMapMapStyle(mapStyle))
     }
 
@@ -3011,9 +3108,27 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
-    func shadows(isEnabled: Bool = true) -> ImmersiveMapSettings {
+    /// See `ImmersiveMapView.shadows(isEnabled:strength:...)`. An omitted
+    /// value is left as configured.
+    func shadows(isEnabled: Bool = true,
+                 strength: ImmersiveMapZoomCurve? = nil,
+                 mapResolution: Int? = nil,
+                 nearCoverageMeters: ImmersiveMapZoomCurve? = nil,
+                 farCoverageMeters: ImmersiveMapZoomCurve? = nil,
+                 maxCasterHeightMeters: Float? = nil,
+                 normalOffsetTexels: Float? = nil,
+                 softness: Float? = nil,
+                 tint: SIMD3<Float>? = nil) -> ImmersiveMapSettings {
         var settings = self
         settings.scene.shadows.isEnabled = isEnabled
+        if let strength { settings.scene.shadows.strength = strength }
+        if let mapResolution { settings.scene.shadows.mapResolution = mapResolution }
+        if let nearCoverageMeters { settings.scene.shadows.nearCoverageMeters = nearCoverageMeters }
+        if let farCoverageMeters { settings.scene.shadows.farCoverageMeters = farCoverageMeters }
+        if let maxCasterHeightMeters { settings.scene.shadows.maxCasterHeightMeters = maxCasterHeightMeters }
+        if let normalOffsetTexels { settings.scene.shadows.normalOffsetTexels = normalOffsetTexels }
+        if let softness { settings.scene.shadows.softness = softness }
+        if let tint { settings.scene.shadows.tint = tint }
         return settings
     }
 
