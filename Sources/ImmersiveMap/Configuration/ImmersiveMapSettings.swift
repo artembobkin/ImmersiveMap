@@ -1981,7 +1981,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
     }
 
-    /// Attribution badge settings. The default text comes from the tile provider:
+    /// Attribution badge settings. The default text comes from the tile source:
     /// we credit whoever's data we display. Overriding it makes sense only when
     /// the app shows the source attribution elsewhere (its own "About" screen,
     /// a custom overlay) and the source's license permits that.

@@ -536,7 +536,7 @@ public extension ImmersiveMapView {
     }
 
     /// Attaches a tour video recorder to this map. The recorder exports camera
-    /// tours offline using the map's current configuration (tile provider,
+    /// tours offline using the map's current configuration (tile source,
     /// style, labels, avatars); see ``ImmersiveMapTourVideoRecorder``.
     func tourVideoRecorder(_ recorder: ImmersiveMapTourVideoRecorder?) -> ImmersiveMapView {
         var view = self

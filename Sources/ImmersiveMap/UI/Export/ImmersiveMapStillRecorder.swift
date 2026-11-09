@@ -58,7 +58,7 @@ public final class ImmersiveMapStillRecorder {
     ///
     /// - Parameters:
     ///   - settings: the map configuration to draw, including the tile
-    ///     provider and style. The debug panel is host-view chrome and is
+    ///     source and style. The debug panel is host-view chrome and is
     ///     forced off for the capture.
     ///   - camera: where to look from. `nil` uses the same default position an
     ///     untouched map starts at.

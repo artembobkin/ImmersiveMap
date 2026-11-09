@@ -17,7 +17,7 @@ struct ImmersiveMapVideoExportAttachContext {
 /// Exports a camera tour to a QuickTime video file by rendering it offline.
 ///
 /// Attach the recorder to a map with the ``ImmersiveMapView/tourVideoRecorder(_:)``
-/// modifier, which picks up the view's current configuration (tile provider,
+/// modifier, which picks up the view's current configuration (tile source,
 /// style, labels, avatars), then call ``export(shots:establish:configuration:to:)``
 /// with the same shots you would pass to `ImmersiveMapCameraTourController`.
 ///
