@@ -1,0 +1,27 @@
+# Tells the website that what it shows has changed. The landing page is this
+# repository's README and the documentation pages are its Documentation folder,
+# so a push to either starts the follow-readme workflow in ImmersiveMapWebPage,
+# which copies them over and publishes the site.
+#
+# The workflow's own token cannot reach another repository, so this needs the
+# WEBSITE_DISPATCH_TOKEN secret: a fine-grained token limited to
+# ImmersiveMapWebPage, with read and write access to its contents.
+name: Notify the website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - README.md
+      - Documentation/**
+
+permissions: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send the event
+        env:
+          GH_TOKEN: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
+        run: gh api repos/artembobkin/ImmersiveMapWebPage/dispatches -f event_type=immersivemap-pushed
