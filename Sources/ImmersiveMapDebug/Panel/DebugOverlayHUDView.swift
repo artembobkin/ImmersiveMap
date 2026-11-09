@@ -82,9 +82,6 @@ final class DebugOverlayHUDView: UIView {
             setNeedsLayout()
         }
     }
-    #if DEBUG
-    private var textUpdateCountForTestingStorage = 0
-    #endif
 
     var onAxesEnabledChanged: ((Bool) -> Void)?
     /// The content the selected tab shows, for the frame to build only
@@ -547,9 +544,6 @@ final class DebugOverlayHUDView: UIView {
     }
 
     private func updateText() {
-        #if DEBUG
-        textUpdateCountForTestingStorage += 1
-        #endif
 
         guard let snapshot else {
             zoomLabel.attributedText = nil
@@ -893,15 +887,6 @@ final class DebugOverlayHUDView: UIView {
     }
 }
 
-#if DEBUG
-/// Where a card's title lands, for the tests: inside its card, in the
-/// title's font.
-struct DebugOverlayTileCardMetrics {
-    let cardRect: CGRect
-    let titleRect: CGRect
-    let titleFontSize: CGFloat
-}
-#endif
 
 private final class DebugOverlayTilesStatusListView: UIView {
     private typealias CardLayout = DebugOverlayTileCardLayout
@@ -1036,22 +1021,6 @@ private final class DebugOverlayTilesStatusListView: UIView {
         }
     }
 
-    #if DEBUG
-    var cardLinesForTesting: [[String]] {
-        cards.map(\.lines)
-    }
-
-    /// The first card's metrics at the list's width.
-    var firstCardMetricsForTesting: DebugOverlayTileCardMetrics? {
-        guard let card = cards.first else { return nil }
-        let frame = cardFrame(at: 0, width: bounds.width)
-        let detailFont = UIFont.monospacedSystemFont(ofSize: CardLayout.detailFontSize, weight: .bold)
-        let statusWidth = (card.statusText as NSString).size(withAttributes: [.font: detailFont]).width
-        return DebugOverlayTileCardMetrics(cardRect: frame,
-                                           titleRect: Self.titleRect(in: frame, statusWidth: statusWidth),
-                                           titleFontSize: CardLayout.titleFontSize)
-    }
-    #endif
 }
 
 /// The coverage map of the Tiles tab: the frame's placements from above
@@ -1256,164 +1225,5 @@ private final class DebugOverlayReliefCoverageView: UIView {
         UIColor(red: CGFloat(rgb.x), green: CGFloat(rgb.y), blue: CGFloat(rgb.z), alpha: 1)
     }
 }
-
-#if DEBUG
-extension DebugOverlayHUDView {
-    func simulateSurfaceModeSwitchForTesting() {
-        surfaceModeButtonTapped()
-    }
-
-    func simulateTileTraceRecordingToggleForTesting() {
-        tileTraceButtonTapped()
-    }
-
-    func simulateBaseLabelsTraceRecordingToggleForTesting() {
-        baseLabelTraceButtonTapped()
-    }
-
-    func simulateControlsTabSelectionForTesting() {
-        tabControl.selectedSegmentIndex = SelectedTab.controls.rawValue
-        tabControlChanged()
-    }
-
-    func simulateTilesTabSelectionForTesting() {
-        tabControl.selectedSegmentIndex = SelectedTab.tiles.rawValue
-        tabControlChanged()
-    }
-
-    func simulateBaseLabelsTabSelectionForTesting() {
-        tabControl.selectedSegmentIndex = SelectedTab.baseLabels.rawValue
-        tabControlChanged()
-    }
-
-
-    func simulateRoadLabelTilesSwitchChangeForTesting(_ isOn: Bool) {
-        roadLabelTilesSwitch.setOn(isOn, animated: false)
-        roadLabelTilesSwitchChanged()
-    }
-
-    func simulateTileGridSwitchChangeForTesting(_ isOn: Bool) {
-        tileGridSwitch.setOn(isOn, animated: false)
-        tileGridSwitchChanged()
-    }
-
-    func simulateTileGridDensitySelectionForTesting(_ density: Int) {
-        tileGridDensityControl.selectedSegmentIndex = DebugOverlayHUDTextComposer.tileGridDensityIndex(for: density)
-        tileGridDensityControlChanged()
-    }
-
-    var isTileGridSwitchOnForTesting: Bool {
-        tileGridSwitch.isOn
-    }
-
-    var tileGridDensityForTesting: Int {
-        DebugOverlayHUDTextComposer.tileGridDensity(atIndex: tileGridDensityControl.selectedSegmentIndex)
-    }
-
-    var isControlsTabSelectedForTesting: Bool {
-        selectedTab == .controls
-    }
-
-    var isTilesTabSelectedForTesting: Bool {
-        selectedTab == .tiles
-    }
-
-    var isBaseLabelsTabSelectedForTesting: Bool {
-        selectedTab == .baseLabels
-    }
-
-    var areDebugControlsVisibleForTesting: Bool {
-        [axesLabel, axesSwitch, tileLayersLabel, tileLayersSwitch,
-         tileGridLabel, tileGridSwitch, tileGridDensityControl, wireframeLabel, wireframeSwitch,
-         surfaceModeButton]
-            .allSatisfy { $0.isHidden == false }
-    }
-
-    var isRoadLabelTilesSwitchOnForTesting: Bool {
-        roadLabelTilesSwitch.isOn
-    }
-
-    var isStatsContentVisibleForTesting: Bool {
-        [zoomLabel, latLonLabel, diagnosticsLabel].allSatisfy { $0.isHidden == false }
-    }
-
-    var isTilesContentVisibleForTesting: Bool {
-        tilesStatusLabel.isHidden == false
-    }
-
-    var isTileTraceControlVisibleForTesting: Bool {
-        tileTraceButton.isHidden == false
-            && tileTraceStatusLabel.isHidden == false
-    }
-
-    var isBaseLabelTraceControlVisibleForTesting: Bool {
-        baseLabelTraceButton.isHidden == false
-            && baseLabelTraceStatusLabel.isHidden == false
-    }
-
-    var isRoadLabelTilesControlVisibleForTesting: Bool {
-        roadLabelTilesLabel.isHidden == false
-            && roadLabelTilesSwitch.isHidden == false
-    }
-
-    var baseLabelTraceButtonTitleForTesting: String? {
-        if #available(iOS 15.0, *) {
-            return baseLabelTraceButton.configuration?.title
-        }
-        return baseLabelTraceButton.title(for: .normal)
-    }
-
-    var baseLabelTraceStatusTextForTesting: String? {
-        baseLabelTraceStatusLabel.text
-    }
-
-    var baseLabelTraceStatusTextColorForTesting: UIColor? {
-        baseLabelTraceStatusLabel.textColor
-    }
-
-    var baseLabelTraceStatusFontPointSizeForTesting: CGFloat {
-        baseLabelTraceStatusLabel.font.pointSize
-    }
-
-    var tilesStatusTextForTesting: String? {
-        tilesStatusLabel.text
-    }
-
-    var tilesStatusRowCountForTesting: Int {
-        tilesStatusListView.rowCount
-    }
-
-    var tilesStatusCardLinesForTesting: [[String]] {
-        tilesStatusListView.cardLinesForTesting
-    }
-
-    var tilesStatusFirstCardMetricsForTesting: DebugOverlayTileCardMetrics? {
-        tilesStatusListView.firstCardMetricsForTesting
-    }
-
-    var isTilesScrollEnabledForTesting: Bool {
-        tilesScrollView.isScrollEnabled
-    }
-
-    var debugPanelFrameForTesting: CGRect {
-        containerView.frame
-    }
-
-    var tileTraceButtonTitleForTesting: String? {
-        if #available(iOS 15.0, *) {
-            return tileTraceButton.configuration?.title
-        }
-        return tileTraceButton.title(for: .normal)
-    }
-
-    var tileTraceStatusTextForTesting: String? {
-        tileTraceStatusLabel.text
-    }
-
-    var textUpdateCountForTesting: Int {
-        textUpdateCountForTestingStorage
-    }
-}
-#endif
 
 #endif
