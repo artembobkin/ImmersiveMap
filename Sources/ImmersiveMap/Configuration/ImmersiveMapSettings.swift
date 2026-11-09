@@ -11,6 +11,13 @@ import simd
 // parsing or label decisions. Defaults here are safe to publish.
 
 public struct ImmersiveMapSettings: Equatable, Sendable {
+    /// The language the map's names are shown in, by its code (`"en"`,
+    /// `"pl"`, `"pt-BR"`). The tiles' names are looked up by the code's
+    /// language part (`pt` of `pt-BR`).
+    /// The built-in font has Latin and Cyrillic letters only: a name in
+    /// another alphabet (Japanese, Chinese, Arabic, Greek and the rest)
+    /// cannot be drawn, so the label falls back as `LabelFallbackPolicy`
+    /// says, to the English name on an international map.
     public struct LabelLanguage: Hashable, Codable, Sendable {
         public let code: String
 

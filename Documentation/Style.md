@@ -59,7 +59,7 @@ ImmersiveMapView()
     .labelSettings(language: .russian)
 ```
 
-The language is any code the tiles carry names in: `.english`, `.russian`, `.french`, `.german`, `.spanish`, and more, or `ImmersiveMapSettings.LabelLanguage("ja")`. Where a place has no name in that language, the map shows its English name, then its local one. `fallbackPolicy: .localFirst` shows the local name first.
+The language is any code the tiles carry names in: `.english`, `.russian`, `.french`, `.german`, `.spanish`, and more, or `ImmersiveMapSettings.LabelLanguage("pl")`. The built-in font has Latin and Cyrillic letters only, so a language written in another alphabet, such as Japanese, Chinese, Arabic or Greek, shows the English names. Where a place has no name in that language, the map shows its English name, then its local one. `fallbackPolicy: .localFirst` shows the local name first.
 
 `.labels(isEnabled: false)` hides every name.
 
