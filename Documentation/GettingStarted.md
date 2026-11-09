@@ -10,6 +10,8 @@ https://github.com/artembobkin/ImmersiveMap.git
 
 Add the `ImmersiveMap` library to your app's target. The map runs on iOS 18 and macOS 15 with Xcode 16.3 or later. The package compiles its Metal shaders with a build plugin, so Xcode asks you to trust the plugin on the first build. On the command line, pass `-skipPackagePluginValidation` to `xcodebuild`.
 
+**On macOS, allow the network.** A new Mac app in Xcode is sandboxed, and the sandbox blocks the tile downloads. The map then shows the stars, the atmosphere and the badge around a black globe, with no error. Turn on Outgoing Connections (Client) under Signing & Capabilities → App Sandbox. A map that reads its tiles from a file in the bundle needs no network (see [Setting up the tile source](TileSource.md)).
+
 ## The first map
 
 ```swift
