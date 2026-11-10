@@ -59,84 +59,14 @@ enum ImmersiveMapGeoJSON {
         guard let root = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) else {
             throw ImmersiveMapGeoJSONError.invalidJSON
         }
-        var reader = Reader(base: base)
-        try reader.read(object: root, style: SimpleStyle(), path: "")
-        return reader.shapes
+        var context = GeoJSONReadContext(base: base)
+        try context.read(object: root, style: SimpleStyle(), path: "")
+        return context.shapes
     }
 
-    private struct Reader {
-        let base: BaseStyles
-        var shapes = Shapes()
+    // MARK: - Coordinates
 
-        mutating func read(object: Any, style: SimpleStyle, path: String) throws {
-            guard let dictionary = object as? [String: Any], let type = dictionary["type"] as? String else {
-                throw ImmersiveMapGeoJSONError.unknownType(path.isEmpty ? "root" : path)
-            }
-            switch type {
-            case "FeatureCollection":
-                guard let features = dictionary["features"] as? [Any] else {
-                    throw ImmersiveMapGeoJSONError.invalidCoordinates("\(path)features")
-                }
-                for (index, feature) in features.enumerated() {
-                    try read(object: feature, style: style, path: "\(path)features[\(index)].")
-                }
-            case "Feature":
-                let properties = dictionary["properties"] as? [String: Any] ?? [:]
-                let featureStyle = ImmersiveMapGeoJSON.simpleStyle(of: properties)
-                guard let geometry = dictionary["geometry"], (geometry is NSNull) == false else { return }
-                try read(object: geometry, style: featureStyle, path: "\(path)geometry.")
-            case "GeometryCollection":
-                guard let geometries = dictionary["geometries"] as? [Any] else {
-                    throw ImmersiveMapGeoJSONError.invalidCoordinates("\(path)geometries")
-                }
-                for (index, geometry) in geometries.enumerated() {
-                    try read(object: geometry, style: style, path: "\(path)geometries[\(index)].")
-                }
-            case "Point", "MultiPoint", "LineString", "MultiLineString", "Polygon", "MultiPolygon":
-                let coordinatesPath = "\(path)coordinates"
-                guard let coordinates = dictionary["coordinates"] else {
-                    throw ImmersiveMapGeoJSONError.invalidCoordinates(coordinatesPath)
-                }
-                try readGeometry(type: type, coordinates: coordinates, style: style, path: coordinatesPath)
-            default:
-                throw ImmersiveMapGeoJSONError.unknownType(type)
-            }
-        }
-
-        mutating func readGeometry(type: String, coordinates: Any, style: SimpleStyle, path: String) throws {
-            switch type {
-            case "Point":
-                let pointStyle = ImmersiveMapGeoJSON.pointStyle(style, base: base.point)
-                shapes.points.append(ImmersiveMapPoint(coordinate: try ImmersiveMapGeoJSON.position(coordinates, path: path),
-                                                       style: pointStyle))
-            case "MultiPoint":
-                let pointStyle = ImmersiveMapGeoJSON.pointStyle(style, base: base.point)
-                for coordinate in try ImmersiveMapGeoJSON.positions(coordinates, path: path) {
-                    shapes.points.append(ImmersiveMapPoint(coordinate: coordinate, style: pointStyle))
-                }
-            case "LineString":
-                shapes.polylines.append(ImmersiveMapPolyline(coordinates: try ImmersiveMapGeoJSON.positions(coordinates, path: path),
-                                                             style: ImmersiveMapGeoJSON.polylineStyle(style, base: base.polyline)))
-            case "MultiLineString":
-                for (index, line) in try ImmersiveMapGeoJSON.array(coordinates, path: path).enumerated() {
-                    shapes.polylines.append(ImmersiveMapPolyline(coordinates: try ImmersiveMapGeoJSON.positions(line, path: "\(path)[\(index)]"),
-                                                                 style: ImmersiveMapGeoJSON.polylineStyle(style, base: base.polyline)))
-                }
-            case "Polygon":
-                let polygonStyle = ImmersiveMapGeoJSON.polygonStyle(style, base: base.polygon)
-                shapes.polygons.append(try ImmersiveMapGeoJSON.polygon(coordinates, style: polygonStyle, path: path))
-            case "MultiPolygon":
-                let polygonStyle = ImmersiveMapGeoJSON.polygonStyle(style, base: base.polygon)
-                for (index, rings) in try ImmersiveMapGeoJSON.array(coordinates, path: path).enumerated() {
-                    shapes.polygons.append(try ImmersiveMapGeoJSON.polygon(rings, style: polygonStyle, path: "\(path)[\(index)]"))
-                }
-            default:
-                throw ImmersiveMapGeoJSONError.unknownType(type)
-            }
-        }
-    }
-
-    private static func polygon(_ value: Any, style: ImmersiveMapPolygonStyle?, path: String) throws -> ImmersiveMapPolygon {
+    static func polygon(_ value: Any, style: ImmersiveMapPolygonStyle?, path: String) throws -> ImmersiveMapPolygon {
         let rings = try array(value, path: path)
         guard let exterior = rings.first else {
             throw ImmersiveMapGeoJSONError.invalidCoordinates(path)
@@ -149,20 +79,20 @@ enum ImmersiveMapGeoJSON {
                                    style: style)
     }
 
-    private static func array(_ value: Any, path: String) throws -> [Any] {
+    static func array(_ value: Any, path: String) throws -> [Any] {
         guard let array = value as? [Any] else {
             throw ImmersiveMapGeoJSONError.invalidCoordinates(path)
         }
         return array
     }
 
-    private static func positions(_ value: Any, path: String) throws -> [GeoCoordinate] {
+    static func positions(_ value: Any, path: String) throws -> [GeoCoordinate] {
         try array(value, path: path).enumerated().map { index, item in
             try position(item, path: "\(path)[\(index)]")
         }
     }
 
-    private static func position(_ value: Any, path: String) throws -> GeoCoordinate {
+    static func position(_ value: Any, path: String) throws -> GeoCoordinate {
         guard let numbers = value as? [Any], numbers.count >= 2,
               let longitude = (numbers[0] as? NSNumber)?.doubleValue,
               let latitude = (numbers[1] as? NSNumber)?.doubleValue,
@@ -220,7 +150,7 @@ enum ImmersiveMapGeoJSON {
 
     /// The overrides over the layer's styles, nil when the feature states
     /// none, so the shape takes the layer's style whole.
-    private static func polygonStyle(_ style: SimpleStyle, base: ImmersiveMapPolygonStyle) -> ImmersiveMapPolygonStyle? {
+    static func polygonStyle(_ style: SimpleStyle, base: ImmersiveMapPolygonStyle) -> ImmersiveMapPolygonStyle? {
         guard style.fill != nil || style.fillOpacity != nil || style.stroke != nil
                 || style.strokeOpacity != nil || style.strokeWidth != nil else { return nil }
         return ImmersiveMapPolygonStyle(fillColor: color(style.fill, opacity: style.fillOpacity, base: base.fillColor),
@@ -228,13 +158,13 @@ enum ImmersiveMapGeoJSON {
                                         strokeWidthPoints: style.strokeWidth ?? base.strokeWidthPoints)
     }
 
-    private static func polylineStyle(_ style: SimpleStyle, base: ImmersiveMapPolylineStyle) -> ImmersiveMapPolylineStyle? {
+    static func polylineStyle(_ style: SimpleStyle, base: ImmersiveMapPolylineStyle) -> ImmersiveMapPolylineStyle? {
         guard style.stroke != nil || style.strokeOpacity != nil || style.strokeWidth != nil else { return nil }
         return ImmersiveMapPolylineStyle(color: color(style.stroke, opacity: style.strokeOpacity, base: base.color),
                                          widthPoints: style.strokeWidth ?? base.widthPoints)
     }
 
-    private static func pointStyle(_ style: SimpleStyle, base: ImmersiveMapPointStyle) -> ImmersiveMapPointStyle? {
+    static func pointStyle(_ style: SimpleStyle, base: ImmersiveMapPointStyle) -> ImmersiveMapPointStyle? {
         guard style.markerColor != nil || style.markerRadius != nil else { return nil }
         var resolved = base
         resolved.color = color(style.markerColor, opacity: nil, base: base.color)
