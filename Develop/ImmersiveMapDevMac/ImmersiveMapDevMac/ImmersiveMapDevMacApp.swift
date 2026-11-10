@@ -19,8 +19,18 @@ struct ImmersiveMapDevMacApp: App {
 }
 
 private struct MapScreen: View {
+    /// The layers of `LayersTest.geojson`, every kind of shape the layers
+    /// draw, read once.
+    private let layers: [ImmersiveMapLayer] = {
+        guard let url = Bundle.main.url(forResource: "LayersTest", withExtension: "geojson"),
+              let data = try? Data(contentsOf: url),
+              let layer = try? ImmersiveMapLayer(id: "test", geoJSON: data) else { return [] }
+        return [layer]
+    }()
+
     var body: some View {
         ImmersiveMapView()
-            .debugPanel(.hud)
+            .modelArchive(ImmersiveMapTilesService.modelArchiveURL)
+            .layers(layers)
     }
 }

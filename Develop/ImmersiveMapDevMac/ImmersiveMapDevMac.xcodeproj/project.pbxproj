@@ -10,11 +10,13 @@
 		B10000000000000000000021 /* ImmersiveMapDevMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000020 /* ImmersiveMapDevMacApp.swift */; };
 		B10000000000000000000003 /* ImmersiveMap in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000004 /* ImmersiveMap */; };
 		B10000000000000000000031 /* ImmersiveMapDebug in Frameworks */ = {isa = PBXBuildFile; productRef = B10000000000000000000030 /* ImmersiveMapDebug */; };
+		B10000000000000000000041 /* LayersTest.geojson in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000040 /* LayersTest.geojson */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		B10000000000000000000020 /* ImmersiveMapDevMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImmersiveMapDevMacApp.swift; sourceTree = "<group>"; };
 		B10000000000000000000005 /* ImmersiveMapDevMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ImmersiveMapDevMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000000000000000000040 /* LayersTest.geojson */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = LayersTest.geojson; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -42,6 +44,7 @@
 			isa = PBXGroup;
 			children = (
 				B10000000000000000000020 /* ImmersiveMapDevMacApp.swift */,
+				B10000000000000000000040 /* LayersTest.geojson */,
 			);
 			path = ImmersiveMapDevMac;
 			sourceTree = "<group>";
@@ -119,7 +122,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-
+				B10000000000000000000041 /* LayersTest.geojson in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
