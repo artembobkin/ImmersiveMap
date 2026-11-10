@@ -217,3 +217,71 @@ final class LayerMeshBuilderTests: XCTestCase {
         }
     }
 }
+
+final class LayerChunkCullingTests: XCTestCase {
+    private let viewport = SIMD2<Float>(1000, 1000)
+
+    private func isVisible(minimum: SIMD2<Float>, maximum: SIMD2<Float>,
+                           matrix: matrix_float4x4 = matrix_identity_float4x4,
+                           reachPx: Float = 0) -> Bool {
+        LayerChunkCulling.isVisible(boundsMinimum: minimum, boundsMaximum: maximum,
+                                    clipFromLocal: matrix, reachPx: reachPx, viewportSizePx: viewport)
+    }
+
+    /// Under the identity matrix the view is the square from -1 to 1.
+    func testABoxInsideOrAcrossTheViewIsDrawn() {
+        XCTAssertTrue(isVisible(minimum: SIMD2(-0.5, -0.5), maximum: SIMD2(0.5, 0.5)))
+        XCTAssertTrue(isVisible(minimum: SIMD2(0.9, 0.9), maximum: SIMD2(3, 3)))
+        // Round the whole view, every corner outside it.
+        XCTAssertTrue(isVisible(minimum: SIMD2(-5, -5), maximum: SIMD2(5, 5)))
+    }
+
+    func testABoxBeyondOneEdgeIsLeftOut() {
+        XCTAssertFalse(isVisible(minimum: SIMD2(1.5, -0.5), maximum: SIMD2(2, 0.5)))
+        XCTAssertFalse(isVisible(minimum: SIMD2(-2, -0.5), maximum: SIMD2(-1.5, 0.5)))
+        XCTAssertFalse(isVisible(minimum: SIMD2(-0.5, 1.5), maximum: SIMD2(0.5, 2)))
+        XCTAssertFalse(isVisible(minimum: SIMD2(-0.5, -2), maximum: SIMD2(0.5, -1.5)))
+    }
+
+    /// A line 100 pixels wide reaches 50 pixels past its position, a tenth
+    /// of the view's half width here.
+    func testAShapesReachOnScreenKeepsItsChunk() {
+        let minimum = SIMD2<Float>(1.05, -0.5)
+        let maximum = SIMD2<Float>(1.2, 0.5)
+        XCTAssertFalse(isVisible(minimum: minimum, maximum: maximum))
+        XCTAssertTrue(isVisible(minimum: minimum, maximum: maximum, reachPx: 50))
+    }
+
+    func testABoxBehindTheCameraIsLeftOut() {
+        var behind = matrix_identity_float4x4
+        behind.columns.3.w = -1
+        XCTAssertFalse(isVisible(minimum: SIMD2(-0.5, -0.5), maximum: SIMD2(0.5, 0.5), matrix: behind))
+    }
+
+    /// A chunk with no position has no box to test, and is not left out.
+    func testAnEmptyBoxIsDrawn() {
+        XCTAssertTrue(isVisible(minimum: SIMD2(repeating: .infinity), maximum: SIMD2(repeating: -.infinity)))
+    }
+
+    /// The chunk's box holds every position of its fills, lines and points,
+    /// and its reach is the widest of what they add on screen.
+    func testAChunkKnowsItsBoundsAndItsReach() {
+        let ring = [GeoCoordinate(latitude: 55.7, longitude: 37.5), GeoCoordinate(latitude: 55.7, longitude: 37.7),
+                    GeoCoordinate(latitude: 55.8, longitude: 37.7), GeoCoordinate(latitude: 55.8, longitude: 37.5)]
+        let layer = ImmersiveMapLayer(id: "z",
+                                      polygons: [ImmersiveMapPolygon(exterior: ring)],
+                                      points: [ImmersiveMapPoint(coordinate: GeoCoordinate(latitude: 55.75, longitude: 37.6))],
+                                      polygonStyle: ImmersiveMapPolygonStyle(strokeWidthPoints: 6),
+                                      pointStyle: ImmersiveMapPointStyle(radiusPoints: 10, strokeWidthPoints: 2))
+        let data = LayerMeshBuilder.build(layer: layer)
+        XCTAssertEqual(data.chunks.count, 1)
+        let chunk = try! XCTUnwrap(data.chunks.first)
+        for position in data.fillVertices.map(\.position) + data.lineVertices.flatMap({ [$0.start, $0.end] })
+            + data.discs.map(\.position) {
+            XCTAssertTrue((chunk.boundsMinimum.x ... chunk.boundsMaximum.x).contains(position.x))
+            XCTAssertTrue((chunk.boundsMinimum.y ... chunk.boundsMaximum.y).contains(position.y))
+        }
+        XCTAssertLessThan(chunk.boundsMinimum.x, chunk.boundsMaximum.x)
+        XCTAssertEqual(chunk.maximumReachPoints, 12)
+    }
+}

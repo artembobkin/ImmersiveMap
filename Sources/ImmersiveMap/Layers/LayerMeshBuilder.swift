@@ -51,6 +51,15 @@ struct LayerMeshChunk: Equatable {
     let joinCount: Int
     let pointStart: Int
     let pointCount: Int
+    /// The box round every position of the chunk, in its render units. A
+    /// frame leaves out a chunk whose box is outside the view
+    /// (`LayerChunkCulling`).
+    let boundsMinimum: SIMD2<Float>
+    let boundsMaximum: SIMD2<Float>
+    /// How far past its position a line or a point of the chunk reaches on
+    /// screen, in points: the widest line's half width, the largest disc's
+    /// radius with its ring.
+    let maximumReachPoints: Float
 }
 
 /// A layer on the CPU, ready for its buffers (`LayerMeshStore`).
@@ -141,7 +150,7 @@ enum LayerMeshBuilder {
         // The joins of every chunk first, then the points: the lines'
         // joins draw with the lines, before the points.
         var pointsByChunk: [[LayerPointInstance]] = []
-        var pendingChunks: [(tile: Tile, fillStart: Int, fillCount: Int, lineStart: Int, lineCount: Int,
+        var pendingChunks: [(builder: ChunkBuilder, fillStart: Int, fillCount: Int, lineStart: Int, lineCount: Int,
                              joinStart: Int, joinCount: Int)] = []
         for tile in order {
             guard let builder = chunks[tile] else { continue }
@@ -155,14 +164,14 @@ enum LayerMeshBuilder {
             data.lineIndices += builder.lineIndices.map { $0 + lineBase }
             let joinStart = data.discs.count
             data.discs += builder.joins
-            pendingChunks.append((tile, fillStart, builder.fillIndices.count, lineStart, builder.lineIndices.count,
+            pendingChunks.append((builder, fillStart, builder.fillIndices.count, lineStart, builder.lineIndices.count,
                                   joinStart, builder.joins.count))
             pointsByChunk.append(builder.points)
         }
         for (pending, points) in zip(pendingChunks, pointsByChunk) {
             let pointStart = data.discs.count
             data.discs += points
-            data.chunks.append(LayerMeshChunk(tile: pending.tile,
+            data.chunks.append(LayerMeshChunk(tile: pending.builder.tile,
                                               fillIndexStart: pending.fillStart,
                                               fillIndexCount: pending.fillCount,
                                               lineIndexStart: pending.lineStart,
@@ -170,7 +179,10 @@ enum LayerMeshBuilder {
                                               joinStart: pending.joinStart,
                                               joinCount: pending.joinCount,
                                               pointStart: pointStart,
-                                              pointCount: points.count))
+                                              pointCount: points.count,
+                                              boundsMinimum: pending.builder.boundsMinimum,
+                                              boundsMaximum: pending.builder.boundsMaximum,
+                                              maximumReachPoints: pending.builder.maximumReachPoints))
         }
         return data
     }
@@ -250,6 +262,10 @@ enum LayerMeshBuilder {
         var lineIndices: [UInt32] = []
         var joins: [LayerPointInstance] = []
         var points: [LayerPointInstance] = []
+        /// The box round every position `local` has given out.
+        private(set) var boundsMinimum = SIMD2<Float>(repeating: .infinity)
+        private(set) var boundsMaximum = SIMD2<Float>(repeating: -.infinity)
+        private(set) var maximumReachPoints: Float = 0
         private let tileOrigin: SIMD2<Double>
         private let unitsPerWorld: Double
 
@@ -263,7 +279,10 @@ enum LayerMeshBuilder {
         /// A world point in the chunk's render units, y north.
         func local(_ world: SIMD2<Double>) -> SIMD2<Float> {
             let tileSpace = (world - tileOrigin) * unitsPerWorld
-            return SIMD2<Float>(Float(tileSpace.x), Float(TileCoordinateSpace.tileExtentDouble - tileSpace.y))
+            let position = SIMD2<Float>(Float(tileSpace.x), Float(TileCoordinateSpace.tileExtentDouble - tileSpace.y))
+            boundsMinimum = simd_min(boundsMinimum, position)
+            boundsMaximum = simd_max(boundsMaximum, position)
+            return position
         }
 
         func appendFill(exterior: [SIMD2<Double>], holes: [[SIMD2<Double>]], color: SIMD4<Float>) {
@@ -314,6 +333,7 @@ enum LayerMeshBuilder {
 
         func appendLine(_ points: [SIMD2<Double>], closed: Bool, widthPoints: Float, color: SIMD4<Float>) {
             let packed = LayerMeshBuilder.packedColor(color)
+            maximumReachPoints = max(maximumReachPoints, widthPoints / 2)
             // A round join at every vertex the shape states, and a round
             // end at both ends of an open line.
             for point in points {
@@ -349,6 +369,7 @@ enum LayerMeshBuilder {
         }
 
         func appendPoint(_ world: SIMD2<Double>, style: ImmersiveMapPointStyle) {
+            maximumReachPoints = max(maximumReachPoints, style.radiusPoints + style.strokeWidthPoints)
             points.append(LayerPointInstance(position: local(world),
                                              radiusPoints: style.radiusPoints,
                                              strokeWidthPoints: style.strokeWidthPoints,

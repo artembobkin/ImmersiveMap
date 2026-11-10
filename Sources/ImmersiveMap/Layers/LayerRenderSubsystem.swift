@@ -17,7 +17,9 @@ import simd
 /// the map come over them on both. A layer draws its zones, then its lines
 /// and their joins, then its points, the layers in the order they are set.
 /// On the flat map a chunk draws in the copy of the world nearest the
-/// camera, and in its neighbours too at the zooms that show more than one.
+/// camera, and in its neighbours too at the zooms that show more than one,
+/// and a chunk outside the view is not drawn (`LayerChunkCulling`). On the
+/// globe every chunk is drawn, and the far side is cut on the GPU.
 /// A layer is not tested against the ground's depth unless it asks to be
 /// (`ImmersiveMapLayer.hidesBehindTerrain`): the buildings, the models and
 /// the trees cover it through the surface mask bit they raise in the
@@ -91,13 +93,20 @@ final class LayerRenderSubsystem: RenderSubsystem {
         let placements = chunkPlacements(frameContext: frameContext, surface: surface)
         let states = pipeline.states(for: surface)
         for (mesh, hidesBehindTerrain) in drawn {
+            // Each chunk with its draws of this frame, none for a chunk
+            // outside the view.
+            let chunks = mesh.chunks.compactMap { chunk -> (chunk: LayerMeshChunk, draws: [LayerDrawUniform])? in
+                let draws = placements(chunk)
+                return draws.isEmpty ? nil : (chunk, draws)
+            }
+            guard chunks.isEmpty == false else { continue }
             encoder.setDepthStencilState(hidesBehindTerrain ? pipeline.behindTerrainState : pipeline.overGroundState)
             if let vertices = mesh.fillVertices, let indices = mesh.fillIndices {
                 encoder.setCullMode(.back)
                 encoder.setRenderPipelineState(states.fill)
                 encoder.setVertexBuffer(vertices, offset: 0, index: 0)
-                for chunk in mesh.chunks where chunk.fillIndexCount > 0 {
-                    for var draw in placements(chunk) {
+                for (chunk, draws) in chunks where chunk.fillIndexCount > 0 {
+                    for var draw in draws {
                         encoder.setVertexBytes(&draw, length: MemoryLayout<LayerDrawUniform>.stride, index: 2)
                         encoder.drawIndexedPrimitives(type: .triangle,
                                                       indexCount: chunk.fillIndexCount,
@@ -111,8 +120,8 @@ final class LayerRenderSubsystem: RenderSubsystem {
             if let vertices = mesh.lineVertices, let indices = mesh.lineIndices {
                 encoder.setRenderPipelineState(states.line)
                 encoder.setVertexBuffer(vertices, offset: 0, index: 0)
-                for chunk in mesh.chunks where chunk.lineIndexCount > 0 {
-                    for var draw in placements(chunk) {
+                for (chunk, draws) in chunks where chunk.lineIndexCount > 0 {
+                    for var draw in draws {
                         encoder.setVertexBytes(&draw, length: MemoryLayout<LayerDrawUniform>.stride, index: 2)
                         encoder.drawIndexedPrimitives(type: .triangle,
                                                       indexCount: chunk.lineIndexCount,
@@ -127,11 +136,11 @@ final class LayerRenderSubsystem: RenderSubsystem {
                 encoder.setVertexBuffer(discs, offset: 0, index: 0)
                 // The lines' joins with the lines, then the points over them.
                 for pass in 0 ..< 2 {
-                    for chunk in mesh.chunks {
+                    for (chunk, draws) in chunks {
                         let start = pass == 0 ? chunk.joinStart : chunk.pointStart
                         let count = pass == 0 ? chunk.joinCount : chunk.pointCount
                         guard count > 0 else { continue }
-                        for var draw in placements(chunk) {
+                        for var draw in draws {
                             encoder.setVertexBytes(&draw, length: MemoryLayout<LayerDrawUniform>.stride, index: 2)
                             encoder.drawPrimitives(type: .triangle,
                                                    vertexStart: 0,
@@ -151,7 +160,8 @@ final class LayerRenderSubsystem: RenderSubsystem {
     }
 
     /// The draw states of a chunk this frame: one per copy of the world it
-    /// draws in on the flat map, one on the globe.
+    /// draws in on the flat map and shows in (`LayerChunkCulling`), one on
+    /// the globe.
     private func chunkPlacements(frameContext: FrameContext,
                                  surface: LayerPipeline.Surface) -> (LayerMeshChunk) -> [LayerDrawUniform] {
         let viewport = SIMD2<Float>(Float(frameContext.drawSize.width), Float(frameContext.drawSize.height))
@@ -171,11 +181,12 @@ final class LayerRenderSubsystem: RenderSubsystem {
         let flatRenderState = frameContext.resolvedPresentation.flatRenderState
         let cameraX = frameContext.mapCameraState.centerWorldMercator.x
         let copies: [Int] = frameContext.planningZoom < Self.wrappedCopiesBelowZoom ? [-1, 0, 1] : [0]
+        let cameraMatrix = frameContext.cameraUniform.matrix
         return { chunk in
             let count = Double(1 << chunk.tile.z)
             let centreX = (Double(chunk.tile.x) + 0.5) / count
             let nearest = Int((cameraX - centreX).rounded())
-            return copies.map { offset in
+            return copies.compactMap { offset in
                 let originAndSize = ImmersiveMapProjection.flatTileOriginAndSize(x: chunk.tile.x,
                                                                                  y: chunk.tile.y,
                                                                                  z: chunk.tile.z,
@@ -183,8 +194,16 @@ final class LayerRenderSubsystem: RenderSubsystem {
                                                                                  flatRenderPan: flatRenderState.pan,
                                                                                  renderMapSize: flatRenderState.renderMapSize)
                 let scale = originAndSize.z / Float(TileCoordinateSpace.tileExtent)
-                return LayerDrawUniform(modelMatrix: Matrix.translationMatrix(x: originAndSize.x, y: originAndSize.y, z: 0)
-                                            * Matrix.scaleMatrix(sx: scale, sy: scale, sz: 1),
+                let modelMatrix = Matrix.translationMatrix(x: originAndSize.x, y: originAndSize.y, z: 0)
+                    * Matrix.scaleMatrix(sx: scale, sy: scale, sz: 1)
+                guard LayerChunkCulling.isVisible(boundsMinimum: chunk.boundsMinimum,
+                                                  boundsMaximum: chunk.boundsMaximum,
+                                                  clipFromLocal: cameraMatrix * modelMatrix,
+                                                  reachPx: chunk.maximumReachPoints * pixelsPerPoint,
+                                                  viewportSizePx: viewport) else {
+                    return nil
+                }
+                return LayerDrawUniform(modelMatrix: modelMatrix,
                                         uvOrigin: .zero,
                                         uvScale: 0,
                                         referenceWorldX: 0,
