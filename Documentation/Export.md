@@ -41,6 +41,10 @@ try await recorder.export(
 
 The recorder takes the map's current look when the export starts. It renders frame by frame, waiting for each frame's tiles, so the video never shows a missing tile, whatever the network does.
 
+- **The first frame.** The video starts from where the map's camera is when the export begins, and flies to the first shot from there. Pass `establish:` to start from a position of your own, so the video opens the same way on every run:
+  ```swift
+  try await recorder.export(shots: shots, establish: overview, to: outputURL)
+  ```
 - **Format.** HEVC by default, or `codec: .h264` for wider compatibility.
 - **Content.** Avatars and SwiftUI markers are drawn in. `includesAvatars: false` and `includesMarkers: false` leave them out.
 - **Progress.** `recorder.onProgress` reports the phase and `fractionCompleted`, and `recorder.cancel()` stops the export and deletes the partial file.

@@ -1,5 +1,7 @@
 # Getting started
 
+ImmersiveMap is a map for SwiftUI apps on iOS and macOS: a globe that unrolls into a flat map, with buildings, relief, your own data and 3D models. This page takes you from adding the package to the first map on screen.
+
 ## Adding the package
 
 In Xcode, choose File > Add Package Dependencies and enter:

@@ -54,7 +54,11 @@ Then:
       // false when a gesture or another command interrupted it
   }
   ```
-- **Follow a path.** `camera.follow(path:duration:)` carries the camera along an `ImmersiveMapGeoPath`, turned to the direction of travel by default.
+- **Follow a path.** `camera.follow(path:duration:)` carries the camera along an `ImmersiveMapGeoPath`, turned to the direction of travel by default:
+  ```swift
+  camera.follow(path: path, duration: 20, curve: .linear)
+  ```
+  `curve` sets the pace. `.easeOut`, the default, leaves at full speed and settles onto the end, and `.linear` keeps one speed. A model can fly the same path with the camera on it (see [3D content](3DContent.md)).
 - **Stop.** `camera.cancelFlight()` and `camera.cancelFollow()`.
 
 The controller also tells you where the camera is: `currentCameraPosition()`, and `onCameraPositionChanged` as it moves. `onUserInteractionBegan` reports that the user took the camera.
@@ -70,6 +74,8 @@ tour.start(shots: [
     ImmersiveMapCameraTourShot(position: louvre, options: CameraFlightOptions(duration: 3)),
 ], loop: true)
 ```
+
+The tour flies to the first shot from wherever the camera is. Pass `establish:` to jump to a starting position first. The same shots can be recorded into a video (see [Export](Export.md)).
 
 ## On-screen buttons
 

@@ -13,6 +13,7 @@ ImmersiveMapView()
     .tileArchive(URL(string: "https://tiles.example.com/planet.pmtiles")!)
 ```
 
+- **Schema.** The built-in style reads tiles in the Protomaps basemap schema, the one the hosted archive uses. An archive in another schema needs a style and a schema of your own (see [Custom style](CustomStyle.md)).
 - **Keys.** A query string is sent as written, so a key can live in the URL. Credentials sent as headers go in `headers`, which are added to every request:
   ```swift
   .tileArchive(url, headers: ["Authorization": "Bearer …"])
