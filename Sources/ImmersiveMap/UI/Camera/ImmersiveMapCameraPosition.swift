@@ -34,6 +34,30 @@ public struct ImmersiveMapCameraPosition: Equatable, Sendable {
     }
 }
 
+public extension ImmersiveMapCameraPosition {
+    /// The zoom a city is seen whole from, `city(_:zoom:bearing:pitch:)`'s
+    /// default.
+    static let cityZoom: Double = 11
+
+    /// The camera over a city's centre (`ImmersiveMapCity`), from straight
+    /// above and north up unless a bearing and a pitch are given. The
+    /// default zoom shows the city whole. Raise it to open on its centre's
+    /// streets.
+    ///
+    ///     ImmersiveMapView()
+    ///         .cameraPosition(.city(.newYork))
+    static func city(_ city: ImmersiveMapCity,
+                     zoom: Double = ImmersiveMapCameraPosition.cityZoom,
+                     bearing: Float = 0,
+                     pitch: Float = 0) -> ImmersiveMapCameraPosition {
+        ImmersiveMapCameraPosition(latitudeDegrees: city.coordinate.latitude,
+                                   longitudeDegrees: city.coordinate.longitude,
+                                   zoom: zoom,
+                                   bearing: bearing,
+                                   pitch: pitch)
+    }
+}
+
 public enum CameraFlightRouteStyle: Sendable, Equatable {
     case automatic
     case mercatorShortestPath

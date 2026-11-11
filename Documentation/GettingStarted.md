@@ -36,7 +36,7 @@ Everything about the map is set by modifiers on the view:
 
 ```swift
 ImmersiveMapView()
-    .cameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: 48.858, longitudeDegrees: 2.294, zoom: 15))
+    .cameraPosition(.city(.paris, zoom: 15))
     .night()
     .shadows(strength: 0.6)
     .trees(isEnabled: false)

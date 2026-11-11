@@ -31,6 +31,34 @@ ImmersiveMapView()
                                                pitch: 1.0))
 ```
 
+### Cities
+
+For a well-known city, `ImmersiveMapCity` holds the coordinates, so the app keeps none:
+
+```swift
+ImmersiveMapView()
+    .cameraPosition(.city(.paris))
+```
+
+The camera stands over the city's centre at zoom 11, where the city shows whole, looking straight down with north up. Set the rest when you need it:
+
+```swift
+.cameraPosition(.city(.tokyo, zoom: 13, bearing: 0.5, pitch: 1.0))
+```
+
+The same value works wherever a camera position does, such as `camera.fly(to: .city(.sydney))` or a tour's shot. `ImmersiveMapCity.allCases` lists the cities for a picker, each with its English `name` and its `coordinate`.
+
+The cities:
+
+- **North America:** `newYork`, `losAngeles`, `sanFrancisco`, `chicago`, `washington`, `boston`, `miami`, `seattle`, `lasVegas`, `toronto`, `vancouver`, `montreal`, `mexicoCity`.
+- **South America:** `rioDeJaneiro`, `saoPaulo`, `buenosAires`, `lima`, `bogota`, `santiago`.
+- **Europe:** `london`, `paris`, `berlin`, `madrid`, `barcelona`, `rome`, `milan`, `amsterdam`, `vienna`, `prague`, `lisbon`, `athens`, `stockholm`, `copenhagen`, `oslo`, `helsinki`, `dublin`, `brussels`, `zurich`, `munich`, `warsaw`, `budapest`, `istanbul`, `moscow`, `saintPetersburg`, `kyiv`.
+- **Africa and the Middle East:** `dubai`, `telAviv`, `cairo`, `capeTown`, `johannesburg`, `nairobi`, `lagos`, `marrakesh`.
+- **Asia:** `tokyo`, `osaka`, `seoul`, `beijing`, `shanghai`, `hongKong`, `taipei`, `singapore`, `bangkok`, `kualaLumpur`, `jakarta`, `manila`, `hanoi`, `mumbai`, `delhi`.
+- **Oceania:** `sydney`, `melbourne`, `auckland`.
+
+A place that is not in the list takes an `ImmersiveMapCameraPosition` with its own coordinates, as above.
+
 ## Moving the camera from code
 
 Keep an `ImmersiveMapCameraController` and attach it to the map:
