@@ -48,13 +48,13 @@ constant float kLayerRealDepthScale = 1.0 - 1536.0 * 3.2e-6;
 // A vertex nearer the camera than this in clip w is behind it.
 constant float kLayerNearW = 1.0e-4;
 
-/// Mirrors LayerFillVertex.swift.
+/// Mirrors LayerFillVertex in LayerMeshBuilder.swift.
 struct LayerFillVertex {
     float2 position;
     uchar4 color;
 };
 
-/// Mirrors LayerLineVertex.swift.
+/// Mirrors LayerLineVertex in LayerMeshBuilder.swift.
 struct LayerLineVertex {
     float2 start;
     float2 end;
@@ -63,7 +63,7 @@ struct LayerLineVertex {
     uchar4 color;
 };
 
-/// Mirrors LayerPointInstance.swift.
+/// Mirrors LayerPointInstance in LayerMeshBuilder.swift.
 struct LayerPointInstance {
     float2 position;
     float radiusPoints;
@@ -72,7 +72,7 @@ struct LayerPointInstance {
     uchar4 strokeColor;
 };
 
-/// Per-chunk draw state; mirrors LayerDrawUniform.swift.
+/// Per-chunk draw state. Mirrors LayerDrawUniform in LayerPipeline.swift.
 struct LayerDraw {
     /// The chunk's flat model matrix (the flat surface).
     float4x4 modelMatrix;
