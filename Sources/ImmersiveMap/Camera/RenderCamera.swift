@@ -38,7 +38,7 @@ class RenderCamera {
     /// with (the coverage, the horizon, the shadows, the picking) stay
     /// the projection's own, since an NDC depth of 1 unprojected through
     /// the scaled matrix is past the far plane.
-    static let realDepthScale: Float = 1 - 1536 * GlobeSurfaceDepthRank.layerDepthStep
+    static let realDepthScale: Float = 1 - GlobeSurfaceDepthRank.realGeometryRank * GlobeSurfaceDepthRank.layerDepthStep
 
     /// The map from the CPU projection's clip z to the GPU's: the far
     /// plane moved to `gpuFarPlane` and the z scaled by `realDepthScale`,

@@ -24,4 +24,23 @@ enum GlobeSurfaceDepthRank {
     /// ground bands, so they pass the depth test over the opaque ground's
     /// writes. The roads' own ranks start here (`RoadRankDepth`).
     static let flatRoadsDepthOffset: Float = 600 * layerDepthStep
+
+    // MARK: - Over the ground
+
+    // What draws over the ground and its roads, each at one depth of its
+    // own: so many rank steps nearer than the far plane. A higher rank is
+    // nearer, so the list reads from what lies lowest to what stands over
+    // everything. The three are stated here, in one place, because their
+    // order is the contract between the features that draw by them, and
+    // `RoadRankDepthContractTests` holds it: every road under the layers,
+    // the layers under the labels, the labels under the real geometry.
+
+    /// The layers of the app's data (`LayerDepth`).
+    static let appLayersRank: Float = 1_210
+    /// The labels painted on the map (`SurfaceLabelDepth`).
+    static let surfaceLabelsRank: Float = 1_220
+    /// The buildings, the models and the trees, by the scale the camera's
+    /// matrix carries (`RenderCamera.realDepthScale`). The shaders that
+    /// divide it back out repeat it as a literal, pinned by the tests.
+    static let realGeometryRank: Float = 1_536
 }

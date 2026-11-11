@@ -107,5 +107,5 @@ struct LayerDrawUniform {
 /// over them, and nearer than the ground and the roads, so a layer lies
 /// over those and every building and model stays in front of it.
 enum LayerDepth {
-    static let depth: Float = 1 - 1_210 * GlobeSurfaceDepthRank.layerDepthStep
+    static let depth: Float = 1 - GlobeSurfaceDepthRank.appLayersRank * GlobeSurfaceDepthRank.layerDepthStep
 }

@@ -71,6 +71,29 @@ final class RoadRankDepthContractTests: XCTestCase {
         XCTAssertTrue(labelSource.contains("constant float kSurfaceLabelRealDepthScale = 1.0 - 1536.0 * 3.2e-6;"))
     }
 
+    /// The layers of the app's data lie over every road and under the
+    /// labels painted on the map, and all of it under the real geometry:
+    /// the order of the ranks `GlobeSurfaceDepthRank` states.
+    func testTheAppsLayersLieBetweenTheRoadsAndTheLabels() throws {
+        let step = GlobeSurfaceDepthRank.layerDepthStep
+        XCTAssertLessThan(GlobeSurfaceDepthRank.appLayersRank, GlobeSurfaceDepthRank.surfaceLabelsRank)
+        XCTAssertLessThan(GlobeSurfaceDepthRank.surfaceLabelsRank, GlobeSurfaceDepthRank.realGeometryRank)
+        // Over every road, even a baked layer or the bridge overlay with
+        // 256 styles, whose ranks are not clamped to a band.
+        let deepestRoad = RoadRankDepth.depthOffset(band: RoadRankDepth.bandCount)
+        XCTAssertLessThan(LayerDepth.depth, 1 - deepestRoad - 257 * step)
+        // Under the labels, and under every wall, by at least a step.
+        XCTAssertLessThan(SurfaceLabelDepth.depth, LayerDepth.depth - step)
+        XCTAssertLessThan(RenderCamera.realDepthScale, LayerDepth.depth - step)
+        // The shader divides the real geometry's scale back out of the
+        // projection's depth, and repeats it as a literal.
+        XCTAssertEqual(RenderCamera.realDepthScale, 1 - 1536 * 3.2e-6)
+        let layerSource = try shaderSource("Layers/Shaders/Layers.metal")
+        XCTAssertTrue(layerSource.contains("constant float kLayerRealDepthScale = 1.0 - 1536.0 * 3.2e-6;"))
+        XCTAssertTrue(layerSource.contains("clip.position.z *= draw.depth / kLayerRealDepthScale;"))
+        XCTAssertTrue(layerSource.contains("clip.position.z = draw.depth * clip.position.w;"))
+    }
+
     func testTheShaderClampsAStyleToTheBand() throws {
         let source = try shaderSource("Tile/Shaders/Tile.metal")
         XCTAssertTrue(source.contains("constant float kTileRoadBandRanks = \(RoadRankDepth.ranksPerBand).0;"))
