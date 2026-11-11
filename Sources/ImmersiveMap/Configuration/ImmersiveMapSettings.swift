@@ -2155,10 +2155,10 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
 
         /// The archive, over HTTP(S) range requests or from disk for a file
         /// URL. A query string is sent as written, so a key can live there.
-        /// Nil for a map without models, the default: the models are a
-        /// download of their own, and a map takes it on by pointing here,
-        /// at the hosted archive (`ImmersiveMapTilesService.modelArchiveURL`)
-        /// or its own.
+        /// The hosted archive by default
+        /// (`ImmersiveMapTilesService.modelArchiveURL`), and nil for a map
+        /// without models: the models are a download of their own, and a
+        /// map that does not want it sets nil.
         public var archiveURL: URL?
         /// HTTP header fields added to every archive request, for
         /// credentials that travel as headers.
@@ -2200,7 +2200,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// this says.
         public var minimumZoom: Double
 
-        public init(archiveURL: URL? = nil,
+        public init(archiveURL: URL? = ImmersiveMapTilesService.modelArchiveURL,
                     requestHeaders: [String: String] = [:],
                     memoryBudgetInBytes: Int = ModelArchiveSettings.defaultMemoryBudgetInBytes,
                     diskCacheSizeInBytes: Int = ModelArchiveSettings.defaultDiskCacheSizeInBytes,

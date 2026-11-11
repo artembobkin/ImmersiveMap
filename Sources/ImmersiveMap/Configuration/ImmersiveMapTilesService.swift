@@ -5,10 +5,9 @@ import Foundation
 
 /// The hosted ImmersiveMap archives: one PMTiles file of vector tiles built
 /// from OpenStreetMap data, under ODbL, and one of building models, both
-/// read over HTTP range requests. The tile archive is what a bare
-/// `ImmersiveMapView()` renders with. The model archive is off until a map
-/// asks for it, with `.modelArchive(ImmersiveMapTilesService.modelArchiveURL)`,
-/// and so is the ground relief on Mapterhorn's open terrain
+/// read over HTTP range requests. A bare `ImmersiveMapView()` renders with
+/// both, and `.modelArchive(nil)` leaves the models out. The ground relief
+/// on Mapterhorn's open terrain is off until a map asks for it
 /// (`.groundRelief(isEnabled: true)`, `ImmersiveMapTerrainSource.mapterhorn`).
 /// Pointing the map elsewhere is one `.tileArchive(_:headers:)` or
 /// `.modelArchive(_:headers:)` call.

@@ -4,14 +4,21 @@ The map can show two kinds of 3D models: detailed buildings from a model archive
 
 ## Building models
 
-The map raises every building from its footprint. A model archive replaces some of them with detailed models, such as the Kremlin or a skyscraper. The models are off by default. Turn them on with the hosted archive:
+The map raises every building from its footprint. A model archive replaces some of them with detailed models, such as the Kremlin or a skyscraper. A bare `ImmersiveMapView()` shows the models of the hosted archive, `ImmersiveMapTilesService.modelArchiveURL`. They are a download of their own, so a map that does not need them turns them off:
 
 ```swift
 ImmersiveMapView()
-    .modelArchive(ImmersiveMapTilesService.modelArchiveURL)
+    .modelArchive(nil)
 ```
 
-The archive is a PMTiles file read like the [tile source](TileSource.md): over HTTP range requests, or from disk for a file URL, with `headers` for credentials. The models of the area in view load as the camera moves and are kept on disk. A building stays drawn until its model has loaded, so the map never shows a gap. `.modelArchive(nil)` turns them off again.
+To show your own models, point the map at your archive:
+
+```swift
+ImmersiveMapView()
+    .modelArchive(URL(string: "https://tiles.example.com/models.pmtiles")!)
+```
+
+The archive is a PMTiles file read like the [tile source](TileSource.md): over HTTP range requests, or from disk for a file URL, with `headers` for credentials. The models of the area in view load as the camera moves and are kept on disk. A building stays drawn until its model has loaded, so the map never shows a gap.
 
 How they load and draw:
 

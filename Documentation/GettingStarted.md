@@ -28,7 +28,7 @@ struct ContentView: View {
 }
 ```
 
-This is the whole planet from the hosted tiles, with the built-in style, the globe at low zooms, buildings, trees and the attribution badge. Nothing needs a key or an account.
+This is the whole planet from the hosted tiles, with the built-in style, the globe at low zooms, buildings with detailed models of the landmarks (see [3D content](3DContent.md)), trees and the attribution badge. Nothing needs a key or an account.
 
 ## Modifiers
 
