@@ -61,7 +61,7 @@ The modifiers on the view apply over the value you pass. The same value configur
 
 ## Changing the settings
 
-Pass new values whenever your state changes, and the map follows. Most changes apply on the next frame: the camera, the light and the shadows, the fog, the layers, the attribution.
+Pass new values whenever your state changes, and the map follows. Most changes apply on the next frame: the camera, the light and the shadows, the fog, the attribution.
 
 A few change how the tiles are prepared, so the map is built again and reloads what it shows, from the disk cache where it can: the tile source, the style (`.night()` included), the labels, the caches, the avatar settings, the model archive, and `.msaa()`. Change them when the user asks for it, not on every frame.
 

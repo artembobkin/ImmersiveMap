@@ -15,7 +15,6 @@ public enum ImmersiveMapSettingsChangeDomain: String, CaseIterable, Equatable {
     case debug
     case controls
     case modelArchive
-    case layers
 }
 
 public enum ImmersiveMapSettingsApplyAction: String, CaseIterable, Equatable {
@@ -144,11 +143,6 @@ public enum ImmersiveMapSettingsApplicationPlanner {
             }
         }
 
-        // The layers of the app's data are read per frame and prepared
-        // for the GPU off the main thread (`LayerMeshStore`).
-        if oldValue.layers != newValue.layers {
-            mark(.layers, actions: [.liveApply])
-        }
         // The archive client, the disk cache and the memory budget are
         // built with the renderer. The map's own tiles are untouched: they
         // do not depend on the models. The depth bias alone is read per

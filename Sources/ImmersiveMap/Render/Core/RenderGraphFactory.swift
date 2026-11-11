@@ -104,7 +104,8 @@ enum RenderGraphFactory {
                                                 depthDisabledState: context.depthDisabledState,
                                                 settings: settings.scene.trees,
                                                 riseSeconds: settings.scene.extrusion.riseSeconds)
-        let layerSubsystem = LayerRenderSubsystem(store: context.layerMeshStore,
+        let layerSubsystem = LayerRenderSubsystem(source: context.layerSource,
+                                                  store: context.layerMeshStore,
                                                   pipeline: context.layerPipeline,
                                                   depthDisabledState: context.depthDisabledState)
         let reliefShadowCasterSubsystem = GroundReliefShadowCasterSubsystem(device: context.metalContext.device,

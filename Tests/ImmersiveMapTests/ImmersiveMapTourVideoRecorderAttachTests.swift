@@ -15,6 +15,7 @@ final class ImmersiveMapTourVideoRecorderAttachTests: XCTestCase {
         ImmersiveMapVideoExportAttachContext(currentSettings: { FixtureTiles.tilelessSettings() },
                                              currentCameraPosition: { nil },
                                              currentAvatarsController: { nil },
+                                             currentLayers: { [] },
                                              currentMarkerContent: { nil })
     }
 

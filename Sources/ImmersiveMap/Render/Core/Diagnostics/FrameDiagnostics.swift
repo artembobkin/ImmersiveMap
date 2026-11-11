@@ -26,6 +26,13 @@ final class FrameDiagnostics: FrameDiagnosticsService {
         /// is on its way shows no ground where it waits, and nothing else
         /// in the counters says so, since the map tiles may all be in.
         case pendingTerrainTiles
+        /// The layers of the app's data whose mesh is not built yet, or is
+        /// still the mesh of what the layer was before a change
+        /// (`LayerMeshStore`). A mesh is built off the main thread and
+        /// raises no animation activity, so without this counter a still
+        /// capture cannot tell "all the layers are drawn" from "some are
+        /// on their way".
+        case pendingLayerMeshes
         case baseLabelCount
         /// The base labels the frame worked on (`LabelActiveSpans`), out
         /// of `baseLabelCount`.

@@ -8,20 +8,20 @@ import simd
 /// paths as lines, and points, as many as the data has. A layer lies on
 /// the ground, over the map's fills and roads and under its names and
 /// buildings, on the globe, on the flat map and through the morph between
-/// them. Set on the view with `ImmersiveMapView.layers(_:)`:
+/// them. A map draws the layers its controller holds
+/// (`ImmersiveMapLayersController`, `ImmersiveMapView.layers(_:)`):
 ///
 ///     let zones = try ImmersiveMapLayer(id: "zones", geoJSON: data,
 ///                                       polygonStyle: ImmersiveMapPolygonStyle(fillColor: [0.9, 0.3, 0.2, 0.3]))
 ///     let stations = ImmersiveMapLayer(id: "stations",
 ///                                      points: coordinates.map { ImmersiveMapPoint(coordinate: $0) })
-///     ImmersiveMapView()
-///         .layers([zones, stations])
+///     layers.set([zones, stations])
 ///
 /// Every shape draws in the layer's style for its kind unless it carries
 /// its own. The data is read once, when the layer is made: two layers made
-/// from the same data compare equal, so a view that rebuilds its layers on
-/// every update redraws nothing. A changed layer is prepared for the GPU
-/// off the main thread and replaces the old one when it is ready.
+/// from the same data compare equal, so setting the same layers again
+/// redraws nothing. A changed layer is prepared for the GPU off the main
+/// thread and replaces the old one when it is ready.
 public struct ImmersiveMapLayer: Identifiable, Equatable, Sendable {
     /// The layer's identity among the map's layers.
     public let id: String

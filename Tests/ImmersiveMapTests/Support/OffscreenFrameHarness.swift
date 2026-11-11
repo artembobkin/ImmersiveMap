@@ -62,6 +62,10 @@ final class OffscreenFrameHarness {
         var currentSceneModelsController: ImmersiveMapSceneModelsController? { controller }
     }
 
+    private final class HarnessLayerSource: LayerRenderSource {
+        var currentLayers: [ImmersiveMapLayer] = []
+    }
+
     // MARK: - Contents
 
     let engine: RenderFrameEngine
@@ -76,9 +80,15 @@ final class OffscreenFrameHarness {
     private let avatarSource: HarnessAvatarSource
     private let markerSource: HarnessMarkerSource
     private let sceneModelSource: HarnessSceneModelSource
+    private let layerSource: HarnessLayerSource
 
     var avatars: ImmersiveMapAvatarsController { avatarSource.controller }
     var sceneModels: ImmersiveMapSceneModelsController { sceneModelSource.controller }
+    /// The layers of the app's data the frames draw, none until set.
+    var layers: [ImmersiveMapLayer] {
+        get { layerSource.currentLayers }
+        set { layerSource.currentLayers = newValue }
+    }
 
     /// SwiftUI markers projected into the frame. Empty unless a test sets it.
     var markerInput: MarkerProjectionInput {
@@ -158,12 +168,15 @@ final class OffscreenFrameHarness {
         self.avatarSource = avatarSource
         self.markerSource = markerSource
         self.sceneModelSource = sceneModelSource
+        let layerSource = HarnessLayerSource()
+        self.layerSource = layerSource
 
         let layer = CAMetalLayer()
         self.engine = try RenderFrameEngine(layer: layer,
                                             avatarSource: avatarSource,
                                             markerSource: markerSource,
                                             sceneModelSource: sceneModelSource,
+                                            layerSource: layerSource,
                                             styleRuntime: MapStyleRuntime(settings: settings),
                                             settings: settings,
                                             renderCamera: camera,

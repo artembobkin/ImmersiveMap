@@ -60,10 +60,13 @@ final class LayerMeshStore: @unchecked Sendable {
     }
 
     /// The meshes of `layers`, index-aligned with them, nil for a layer not
-    /// yet built. Starts the builds the layers need and lets go of the
-    /// meshes of the layers no longer among them.
-    func meshes(for layers: [ImmersiveMapLayer]) -> [LayerMesh?] {
+    /// yet built, and how many of the layers are still on their way: not
+    /// built yet, or drawn from the mesh of what they were before a
+    /// change. Starts the builds the layers need and lets go of the meshes
+    /// of the layers no longer among them.
+    func meshes(for layers: [ImmersiveMapLayer]) -> (meshes: [LayerMesh?], pendingCount: Int) {
         var toBuild: [ImmersiveMapLayer] = []
+        var pendingCount = 0
         let result: [LayerMesh?] = queue.sync {
             let ids = Set(layers.map(\.id))
             meshes = meshes.filter { ids.contains($0.key) }
@@ -71,9 +74,12 @@ final class LayerMeshStore: @unchecked Sendable {
             return layers.map { layer in
                 let key = layer.meshKey
                 let mesh = meshes[layer.id]
-                if mesh?.key != key, building[layer.id] != key {
-                    building[layer.id] = key
-                    toBuild.append(layer)
+                if mesh?.key != key {
+                    pendingCount += 1
+                    if building[layer.id] != key {
+                        building[layer.id] = key
+                        toBuild.append(layer)
+                    }
                 }
                 return mesh
             }
@@ -81,7 +87,7 @@ final class LayerMeshStore: @unchecked Sendable {
         for layer in toBuild {
             build(layer)
         }
-        return result
+        return (result, pendingCount)
     }
 
     private func build(_ layer: ImmersiveMapLayer) {

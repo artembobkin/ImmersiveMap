@@ -60,6 +60,7 @@ final class ImmersiveMapVideoExportRuntime {
     private let renderCamera: FrameCameraStateResolver
     private let presentationStateResolver: MapPresentationStateController
     private let avatarSource: VideoExportAvatarSource
+    private let layerSource: FixedLayerRenderSource
     private let markerSource: VideoExportMarkerSource
     private let markerOverlay: VideoExportMarkerOverlay?
     private let metalLayer: CAMetalLayer
@@ -75,6 +76,7 @@ final class ImmersiveMapVideoExportRuntime {
     init(settings: ImmersiveMapSettings,
          initialPosition: ImmersiveMapCameraPosition?,
          avatarsController: ImmersiveMapAvatarsController?,
+         layers: [ImmersiveMapLayer] = [],
          markerContent: MarkerViewContent?,
          configuration: ImmersiveMapVideoExportConfiguration,
          outputURL: URL) throws {
@@ -106,6 +108,8 @@ final class ImmersiveMapVideoExportRuntime {
         self.presentationStateResolver = presentationStateResolver
         let avatarSource = VideoExportAvatarSource(controller: avatarsController)
         self.avatarSource = avatarSource
+        let layerSource = FixedLayerRenderSource(layers)
+        self.layerSource = layerSource
         let markerSource = VideoExportMarkerSource(input: markerOverlay?.projectionInput ?? .empty)
         self.markerSource = markerSource
 
@@ -118,6 +122,7 @@ final class ImmersiveMapVideoExportRuntime {
                                                 avatarSource: avatarSource,
                                                 markerSource: markerSource,
                                                 sceneModelSource: VideoExportSceneModelSource(),
+                                                layerSource: layerSource,
                                                 styleRuntime: MapStyleRuntime(settings: settings),
                                                 settings: settings,
                                                 debugOverlayControls: DebugOverlayControlState(),
@@ -221,7 +226,9 @@ final class ImmersiveMapVideoExportRuntime {
             advanceSceneTime()
             try await renderOnce(into: scratchTexture)
 
-            let hasPendingTiles = requestedTilesCount > 0
+            // The layers are built before the first frame is written, so
+            // none appears partway through the video.
+            let hasPendingTiles = requestedTilesCount > 0 || pendingLayerMeshCount > 0
             let activity = eventSink.activityState
             let isSettled = hasPendingTiles == false
                 && activity.labelFadeRenderingActive == false
@@ -300,6 +307,10 @@ final class ImmersiveMapVideoExportRuntime {
                 try await Task.sleep(for: .milliseconds(10))
             }
         }
+    }
+
+    private var pendingLayerMeshCount: Int {
+        engine.currentDiagnostics?.counterValue(.pendingLayerMeshes) ?? 0
     }
 
     private var requestedTilesCount: Int {

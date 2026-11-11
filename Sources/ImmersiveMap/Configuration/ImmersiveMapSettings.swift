@@ -2258,10 +2258,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     /// (`ModelArchiveSettings.archiveURL`), and then no models. See
     /// `ModelArchiveSettings`.
     public var modelArchive: ModelArchiveSettings
-    /// The layers of the app's own data drawn over the map, in the order
-    /// they draw: zones, lines and points (`ImmersiveMapLayer`). Applies
-    /// live.
-    public var layers: [ImmersiveMapLayer]
 
     public init(renderLoop: RenderLoopSettings,
                 camera: CameraSettings,
@@ -2276,8 +2272,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                 viewReuse: ViewReuseSettings = ViewReuseSettings(),
                 debug: DebugSettings,
                 controls: ControlsSettings = ControlsSettings(),
-                modelArchive: ModelArchiveSettings = ModelArchiveSettings(),
-                layers: [ImmersiveMapLayer] = []) {
+                modelArchive: ModelArchiveSettings = ModelArchiveSettings()) {
         self.renderLoop = renderLoop
         self.camera = camera
         self.presentation = presentation
@@ -2292,7 +2287,6 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         self.debug = debug
         self.controls = controls
         self.modelArchive = modelArchive
-        self.layers = layers
     }
 
     public static let `default` = ImmersiveMapSettings(
@@ -2563,12 +2557,6 @@ public extension ImmersiveMapSettings {
     func mapStyle(_ mapStyle: AnyImmersiveMapMapStyle) -> ImmersiveMapSettings {
         var settings = self
         settings.mapStyle = mapStyle
-        return settings
-    }
-
-    func layers(_ layers: [ImmersiveMapLayer]) -> ImmersiveMapSettings {
-        var settings = self
-        settings.layers = layers
         return settings
     }
 

@@ -114,14 +114,69 @@ final class ImmersiveMapLayerTests: XCTestCase {
         XCTAssertEqual(first.meshKey, behindTerrain.meshKey, "How the terrain hides a layer does not build it again")
     }
 
-    /// A change of the layers applies live.
-    func testAChangeOfTheLayersAppliesLive() {
-        let settings = ImmersiveMapSettings.default
-        let plan = ImmersiveMapSettingsApplicationPlanner.makePlan(
-            from: settings,
-            to: settings.layers([ImmersiveMapLayer(id: "zones", polygons: [square])]))
-        XCTAssertEqual(plan.changedDomains, [.layers])
-        XCTAssertEqual(plan.actions, [.liveApply])
+    // MARK: - The controller
+
+    private func layer(_ id: String, isVisible: Bool = true) -> ImmersiveMapLayer {
+        ImmersiveMapLayer(id: id, polygons: [square], isVisible: isVisible)
+    }
+
+    /// The controller keeps the layers in the order they draw, one to an id.
+    func testTheControllerKeepsTheOrderAndOneLayerToAnId() {
+        let controller = ImmersiveMapLayersController([layer("a"), layer("b")])
+        XCTAssertEqual(controller.layers.map(\.id), ["a", "b"])
+
+        controller.upsert(layer("c"))
+        controller.upsert(layer("a", isVisible: false))
+        XCTAssertEqual(controller.layers.map(\.id), ["a", "b", "c"], "A layer set again keeps its place")
+        XCTAssertEqual(controller.layer(id: "a")?.isVisible, false)
+
+        controller.remove(id: "b")
+        XCTAssertEqual(controller.layers.map(\.id), ["a", "c"])
+        XCTAssertNil(controller.layer(id: "b"))
+
+        controller.set([layer("x"), layer("y"), layer("x", isVisible: false)])
+        XCTAssertEqual(controller.layers.map(\.id), ["x", "y"], "The last layer given under an id, in the place of the first")
+        XCTAssertEqual(controller.layer(id: "x")?.isVisible, false)
+
+        controller.setVisible(id: "x", true)
+        XCTAssertEqual(controller.layer(id: "x")?.isVisible, true)
+
+        controller.clear()
+        XCTAssertTrue(controller.layers.isEmpty)
+    }
+
+    /// The map is told of a change, and of nothing when the layers are set
+    /// to what they are.
+    func testTheControllerTellsTheMapOfAChangeAlone() {
+        let controller = ImmersiveMapLayersController()
+        let owner = NSObject()
+        var changes = 0
+        controller.setChangeHandler({ changes += 1 }, owner: owner)
+
+        controller.set([layer("a")])
+        XCTAssertEqual(changes, 1)
+        controller.set([layer("a")])
+        controller.upsert(layer("a"))
+        controller.setVisible(id: "a", true)
+        controller.remove(id: "missing")
+        XCTAssertEqual(changes, 1, "The same layers again ask for no frame")
+
+        controller.setVisible(id: "a", false)
+        XCTAssertEqual(changes, 2)
+
+        // A stale owner's detach leaves the handler of the one that holds it.
+        controller.clearChangeHandler(ownedBy: NSObject())
+        controller.clear()
+        XCTAssertEqual(changes, 3)
+        controller.clearChangeHandler(ownedBy: owner)
+        controller.set([layer("b")])
+        XCTAssertEqual(changes, 3)
+    }
+
+    /// A fixed source hands the frames the layers it was made with.
+    func testAFixedSourceHoldsItsLayers() {
+        XCTAssertTrue(FixedLayerRenderSource().currentLayers.isEmpty)
+        XCTAssertEqual(FixedLayerRenderSource([layer("a")]).currentLayers.map(\.id), ["a"])
     }
 
     /// The GPU structs match the shader's layouts byte for byte.

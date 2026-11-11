@@ -7,9 +7,11 @@ import simd
 /// The `Layers` folder: the layers of the app's own data drawn over the map
 /// (`ImmersiveMapLayer`), from the public model and its GeoJSON reading to
 /// the meshes (`LayerMeshBuilder`, `LayerMeshStore`), the pipelines and
-/// the shaders, and this subsystem. The data comes in with the settings
-/// (`ImmersiveMapSettings.layers`), read every frame. Nothing here knows the
-/// map's tiles, its schema or its style.
+/// the shaders, and this subsystem. The data comes in through one seam,
+/// `LayerRenderSource`, read every frame: the app's controller behind the
+/// map view (`ImmersiveMapLayersController`), fixed layers behind an export.
+/// Nothing here knows the map's tiles, its schema or its style, and nothing
+/// of the layers is configuration: `ImmersiveMapSettings` holds none of it.
 ///
 /// Draws the layers on the ground of whichever surface the frame shows: in
 /// the flat map's roads layer, after the roads and the trees' shadows, and
@@ -27,6 +29,7 @@ import simd
 final class LayerRenderSubsystem: RenderSubsystem {
     let name: String = "Layers"
 
+    private let source: LayerRenderSource
     private let store: LayerMeshStore
     private let pipeline: LayerPipeline
     private let depthDisabledState: MTLDepthStencilState
@@ -37,19 +40,25 @@ final class LayerRenderSubsystem: RenderSubsystem {
     /// of the world across the view.
     static let wrappedCopiesBelowZoom: Double = 4
 
-    init(store: LayerMeshStore,
+    init(source: LayerRenderSource,
+         store: LayerMeshStore,
          pipeline: LayerPipeline,
          depthDisabledState: MTLDepthStencilState) {
+        self.source = source
         self.store = store
         self.pipeline = pipeline
         self.depthDisabledState = depthDisabledState
     }
 
     func update(frameContext: FrameContext) {
-        let layers = frameContext.services.settings.layers
+        let layers = source.currentLayers
         // Every layer is kept built, a hidden one too, so showing it again
         // is immediate.
-        let meshes = store.meshes(for: layers)
+        let (meshes, pendingCount) = store.meshes(for: layers)
+        // For whoever waits for a settled scene (a still capture): a mesh
+        // is built off the main thread and raises no activity, so nothing
+        // else says the layers are not all drawn as they were set.
+        frameContext.services.diagnostics.incrementCounter(.pendingLayerMeshes, by: pendingCount)
         let zoom = frameContext.planningZoom
         drawn = zip(layers, meshes).compactMap { layer, mesh in
             guard layer.isVisible, layer.zoomRange.contains(zoom), let mesh, mesh.chunks.isEmpty == false else {

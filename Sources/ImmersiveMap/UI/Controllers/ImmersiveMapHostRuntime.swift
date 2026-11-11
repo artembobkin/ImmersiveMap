@@ -130,6 +130,7 @@ final class ImmersiveMapHostRuntime {
     func update(settings: ImmersiveMapSettings,
                 avatarsController: ImmersiveMapAvatarsController?,
                 sceneModelsController: ImmersiveMapSceneModelsController? = nil,
+                layersController: ImmersiveMapLayersController? = nil,
                 cameraController: ImmersiveMapCameraController?,
                 selectionController: ImmersiveMapSelectionController?,
                 avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
@@ -152,9 +153,17 @@ final class ImmersiveMapHostRuntime {
                         sceneModelTapAction: sceneModelTapAction,
                         frameRenderedAction: frameRenderedAction,
                         terrainSurroundingsAction: terrainSurroundingsAction)
+        syncLayersController(layersController)
         syncTourVideoRecorder(tourVideoRecorder)
         updateMarkerContent(markerContent)
         runtimeGraph.cameraCommandHandler.applyCameraPosition(cameraPosition)
+    }
+
+    /// Attaches the app's layers (`ImmersiveMapLayersController`), nil for
+    /// a map that draws none.
+    func syncLayersController(_ layersController: ImmersiveMapLayersController?) {
+        runtimeGraph.layerRuntime.attachController(layersController,
+                                                   renderRuntime: runtimeGraph.renderRuntime)
     }
 
     func updateMarkerContent(_ markerContent: MarkerViewContent?) {
@@ -190,6 +199,7 @@ final class ImmersiveMapHostRuntime {
                         sceneModelTapAction: nil,
                         frameRenderedAction: nil,
                         terrainSurroundingsAction: nil)
+        syncLayersController(nil)
         syncTourVideoRecorder(nil)
         updateMarkerContent(nil)
     }
@@ -292,6 +302,7 @@ final class ImmersiveMapHostRuntime {
                 currentSettings: { runtimeGraph.cameraRuntime.currentSettings },
                 currentCameraPosition: { runtimeGraph.cameraRuntime.currentCameraPosition() },
                 currentAvatarsController: { runtimeGraph.avatarRuntime.currentAvatarController },
+                currentLayers: { runtimeGraph.layerRuntime.currentLayers },
                 currentMarkerContent: { [weak self] in self?.currentMarkerContent }
             )
         )
@@ -407,6 +418,7 @@ final class ImmersiveMapHostRuntime {
             detachedGraph.avatarRuntime.detachController()
             detachedGraph.sceneModelRuntime.cancelAllPathAnimations()
             detachedGraph.sceneModelRuntime.detachController()
+            detachedGraph.layerRuntime.detachController()
             detachedGraph.cameraRuntime.detachController()
             detachedGraph.selectionHandler.syncController(nil)
             detachedGraph.renderRuntime.stop()

@@ -30,7 +30,7 @@ final class LayerOffscreenRenderTests: XCTestCase {
         pixel.green > 200 && pixel.red < 60 && pixel.blue < 60
     }
 
-    private static func settings(layers: [ImmersiveMapLayer]) -> ImmersiveMapSettings {
+    private static func settings() -> ImmersiveMapSettings {
         var settings = ImmersiveMapSettings.default
         settings.scene.starfield.starCount = 0
         // Under the globe's sun a colour is shaded by the time of day: the
@@ -39,7 +39,7 @@ final class LayerOffscreenRenderTests: XCTestCase {
         settings.scene.atmosphere.isEnabled = false
         settings.scene.groundFog.isEnabled = false
         settings.scene.mountainGroundFog = nil
-        return settings.layers(layers)
+        return settings
     }
 
     /// Renders until `isDone` holds for a frame (the layer is built off the
@@ -63,7 +63,8 @@ final class LayerOffscreenRenderTests: XCTestCase {
         let point = ImmersiveMapLayer(id: "point",
                                       points: [ImmersiveMapPoint(coordinate: GeoCoordinate(latitude: 30, longitude: 20))],
                                       pointStyle: ImmersiveMapPointStyle(color: Self.green, radiusPoints: 6, strokeWidthPoints: 0))
-        let harness = try OffscreenFrameHarness.makeOrSkip(settings: Self.settings(layers: [zone, point]))
+        let harness = try OffscreenFrameHarness.makeOrSkip(settings: Self.settings())
+        harness.layers = [zone, point]
         harness.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: Self.centre.latitude,
                                                              longitudeDegrees: Self.centre.longitude,
                                                              zoom: 1))
@@ -85,7 +86,8 @@ final class LayerOffscreenRenderTests: XCTestCase {
                                      polygonStyle: ImmersiveMapPolygonStyle(fillColor: Self.red, strokeColor: Self.red),
                                      polylineStyle: ImmersiveMapPolylineStyle(color: Self.red, widthPoints: 8),
                                      pointStyle: ImmersiveMapPointStyle(color: Self.red, radiusPoints: 20))
-        let harness = try OffscreenFrameHarness.makeOrSkip(settings: Self.settings(layers: [zone]))
+        let harness = try OffscreenFrameHarness.makeOrSkip(settings: Self.settings())
+        harness.layers = [zone]
         harness.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: Self.centre.latitude,
                                                              longitudeDegrees: Self.centre.longitude,
                                                              zoom: 1))
@@ -107,7 +109,8 @@ final class LayerOffscreenRenderTests: XCTestCase {
                                       points: [ImmersiveMapPoint(coordinate: GeoCoordinate(latitude: Self.centre.latitude + 0.004,
                                                                                            longitude: Self.centre.longitude))],
                                       pointStyle: ImmersiveMapPointStyle(color: Self.green, radiusPoints: 6, strokeWidthPoints: 0))
-        let harness = try OffscreenFrameHarness.makeOrSkip(settings: Self.settings(layers: [zone, point]))
+        let harness = try OffscreenFrameHarness.makeOrSkip(settings: Self.settings())
+        harness.layers = [zone, point]
         harness.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: Self.centre.latitude,
                                                              longitudeDegrees: Self.centre.longitude,
                                                              zoom: 14))

@@ -11,6 +11,7 @@ final class ImmersiveMapRendererBuilder {
     private let avatarRuntime: ImmersiveMapAvatarRuntime
     private let markerRuntime: ImmersiveMapMarkerRuntime
     private let sceneModelRuntime: ImmersiveMapSceneModelRuntime
+    private let layerRuntime: ImmersiveMapLayerRuntime
     private let renderRuntime: ImmersiveMapRenderRuntime
     private let selectionHandler: ImmersiveMapSelectionHandler
     private let debugOverlayControls: DebugOverlayControlState
@@ -22,6 +23,7 @@ final class ImmersiveMapRendererBuilder {
          avatarRuntime: ImmersiveMapAvatarRuntime,
          markerRuntime: ImmersiveMapMarkerRuntime,
          sceneModelRuntime: ImmersiveMapSceneModelRuntime,
+         layerRuntime: ImmersiveMapLayerRuntime,
          renderRuntime: ImmersiveMapRenderRuntime,
          selectionHandler: ImmersiveMapSelectionHandler,
          debugOverlayControls: DebugOverlayControlState,
@@ -32,6 +34,7 @@ final class ImmersiveMapRendererBuilder {
         self.avatarRuntime = avatarRuntime
         self.markerRuntime = markerRuntime
         self.sceneModelRuntime = sceneModelRuntime
+        self.layerRuntime = layerRuntime
         self.renderRuntime = renderRuntime
         self.selectionHandler = selectionHandler
         self.debugOverlayControls = debugOverlayControls
@@ -55,6 +58,7 @@ final class ImmersiveMapRendererBuilder {
                                      avatarSource: avatarRuntime,
                                      markerSource: markerRuntime,
                                      sceneModelSource: sceneModelRuntime,
+                                     layerSource: layerRuntime,
                                      styleRuntime: styleRuntime,
                                      settings: settings,
                                      debugOverlayControls: debugOverlayControls,

@@ -23,6 +23,7 @@ public struct ImmersiveMapView: View {
     private var cameraPosition: ImmersiveMapCameraPosition?
     private var avatarsController: ImmersiveMapAvatarsController?
     private var sceneModelsController: ImmersiveMapSceneModelsController?
+    private var layersController: ImmersiveMapLayersController?
     private var cameraController: ImmersiveMapCameraController?
     private var cameraUIControls: CameraUIControls?
     /// The controller the camera buttons drive when the app attaches none:
@@ -56,6 +57,7 @@ public struct ImmersiveMapView: View {
         return ImmersiveMapUIViewRepresentable(settings: settings,
                                         avatarsController: avatarsController,
                                         sceneModelsController: sceneModelsController,
+                                        layersController: layersController,
                                         cameraPosition: cameraPosition,
                                         cameraController: cameraController,
                                         selectionController: selectionController,
@@ -93,6 +95,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
     let settings: ImmersiveMapSettings
     let avatarsController: ImmersiveMapAvatarsController?
     let sceneModelsController: ImmersiveMapSceneModelsController?
+    let layersController: ImmersiveMapLayersController?
     let cameraPosition: ImmersiveMapCameraPosition?
     let cameraController: ImmersiveMapCameraController?
     let selectionController: ImmersiveMapSelectionController?
@@ -141,6 +144,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
         uiView.update(settings: settings,
                       avatarsController: avatarsController,
                       sceneModelsController: sceneModelsController,
+                      layersController: layersController,
                       cameraController: cameraController,
                       selectionController: selectionController,
                       avatarTapAction: avatarTapAction,
@@ -162,6 +166,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
     let settings: ImmersiveMapSettings
     let avatarsController: ImmersiveMapAvatarsController?
     let sceneModelsController: ImmersiveMapSceneModelsController?
+    let layersController: ImmersiveMapLayersController?
     let cameraPosition: ImmersiveMapCameraPosition?
     let cameraController: ImmersiveMapCameraController?
     let selectionController: ImmersiveMapSelectionController?
@@ -210,6 +215,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
         nsView.update(settings: settings,
                       avatarsController: avatarsController,
                       sceneModelsController: sceneModelsController,
+                      layersController: layersController,
                       cameraController: cameraController,
                       selectionController: selectionController,
                       avatarTapAction: avatarTapAction,
@@ -736,25 +742,31 @@ public extension ImmersiveMapView {
         return view
     }
 
-    /// Layers of the app's own data drawn over the map, in the order given:
-    /// zones (polygons), lines and points, from Swift values or a GeoJSON
-    /// document. They lie on the ground of the globe and the flat map,
-    /// over the roads and under the names painted on the map and the
-    /// buildings. A later call replaces the layers of an earlier one. A
-    /// change applies in place: a layer whose data changed is prepared
-    /// off the main thread and replaces the old one when ready.
+    /// Attaches the layers of the app's own data drawn over the map
+    /// (`ImmersiveMapLayersController`): zones (polygons), lines and points,
+    /// from Swift values or a GeoJSON document. They lie on the ground of
+    /// the globe and the flat map, over the roads and under the names
+    /// painted on the map and the buildings. The app changes them through
+    /// the controller, from any thread, and a layer whose data changed is
+    /// prepared off the main thread and replaces the old one when ready.
+    ///
+    ///     @State private var layers = ImmersiveMapLayersController()
     ///
     ///     ImmersiveMapView()
-    ///         .layers([
-    ///             try ImmersiveMapLayer(id: "districts", geoJSON: districts),
-    ///             ImmersiveMapLayer(id: "sensors", points: sensors.map { ImmersiveMapPoint(coordinate: $0) },
-    ///                               pointStyle: ImmersiveMapPointStyle(radiusPoints: 3))
-    ///         ])
+    ///         .layers(layers)
+    ///         .task {
+    ///             layers.set([
+    ///                 try ImmersiveMapLayer(id: "districts", geoJSON: districts),
+    ///                 ImmersiveMapLayer(id: "sensors", points: sensors.map { ImmersiveMapPoint(coordinate: $0) },
+    ///                                   pointStyle: ImmersiveMapPointStyle(radiusPoints: 3))
+    ///             ])
+    ///         }
     ///
-    /// See ``ImmersiveMapLayer``.
-    func layers(_ layers: [ImmersiveMapLayer]) -> ImmersiveMapView {
+    /// Nil detaches the controller, and the map draws no layer. See
+    /// ``ImmersiveMapLayer``.
+    func layers(_ controller: ImmersiveMapLayersController?) -> ImmersiveMapView {
         var view = self
-        view.settings = view.settings.layers(layers)
+        view.layersController = controller
         return view
     }
 

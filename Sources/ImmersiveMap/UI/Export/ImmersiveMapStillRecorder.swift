@@ -64,12 +64,15 @@ public final class ImmersiveMapStillRecorder {
     ///     untouched map starts at.
     ///   - avatars: avatar markers to draw.
     ///   - sceneModels: scene models to draw.
+    ///   - layers: layers of the app's own data to draw, in the order
+    ///     given. The capture waits for them to be prepared.
     ///   - configuration: output geometry and timing.
     /// - Throws: ``ImmersiveMapStillCaptureError``.
     public func capture(settings: ImmersiveMapSettings = .default,
                         camera: ImmersiveMapCameraPosition? = nil,
                         avatars: [AvatarMarker] = [],
                         sceneModels: [ImmersiveMapSceneModel] = [],
+                        layers: [ImmersiveMapLayer] = [],
                         configuration: ImmersiveMapStillConfiguration = .default) async throws -> CGImage {
         guard isCapturing == false else {
             throw ImmersiveMapStillCaptureError.captureAlreadyInProgress
@@ -83,6 +86,7 @@ public final class ImmersiveMapStillRecorder {
                                                    camera: camera,
                                                    avatars: avatars,
                                                    sceneModels: sceneModels,
+                                                   layers: layers,
                                                    configuration: configuration)
         return try await runtime.captureImage()
     }
@@ -155,6 +159,7 @@ final class ImmersiveMapStillRuntime {
     private let avatarSource: StillAvatarSource
     private let markerSource: StillMarkerSource
     private let sceneModelSource: StillSceneModelSource
+    private let layerSource: FixedLayerRenderSource
     private let renderCamera: FrameCameraStateResolver
     private let presentationStateResolver: MapPresentationStateController
     private let metalLayer: CAMetalLayer
@@ -166,6 +171,7 @@ final class ImmersiveMapStillRuntime {
          camera: ImmersiveMapCameraPosition?,
          avatars: [AvatarMarker],
          sceneModels: [ImmersiveMapSceneModel],
+         layers: [ImmersiveMapLayer] = [],
          configuration: ImmersiveMapStillConfiguration) throws {
         // Planned by the archive's depth as last read (`TileArchiveDepths`).
         let settings = settings.resolvingArchiveDepth()
@@ -223,6 +229,8 @@ final class ImmersiveMapStillRuntime {
         self.avatarSource = avatarSource
         self.markerSource = markerSource
         self.sceneModelSource = sceneModelSource
+        let layerSource = FixedLayerRenderSource(layers)
+        self.layerSource = layerSource
 
         // Device and pixel-format carrier only: the offscreen path never asks
         // this layer for a drawable.
@@ -233,6 +241,7 @@ final class ImmersiveMapStillRuntime {
                                                 avatarSource: avatarSource,
                                                 markerSource: markerSource,
                                                 sceneModelSource: sceneModelSource,
+                                                layerSource: layerSource,
                                                 styleRuntime: MapStyleRuntime(settings: settings),
                                                 settings: settings,
                                                 debugOverlayControls: DebugOverlayControlState(),
@@ -305,6 +314,7 @@ final class ImmersiveMapStillRuntime {
             let hasPendingWork = requestedTilesCount > 0
                 || pendingSceneModelMeshCount > 0
                 || pendingTerrainTileCount > 0
+                || pendingLayerMeshCount > 0
             let activity = eventSink.activityState
             let isSettled = hasPendingWork == false
                 && activity.labelFadeRenderingActive == false
@@ -405,6 +415,14 @@ final class ImmersiveMapStillRuntime {
     /// tiles alone, which may all be in, would say the scene is settled.
     private var pendingTerrainTileCount: Int {
         engine.currentDiagnostics?.counterValue(.pendingTerrainTiles) ?? 0
+    }
+
+    /// Layers whose mesh is not built yet. A mesh is built on a detached
+    /// task and raises no animation activity, so nothing else in the
+    /// settle condition would notice it missing: the capture would return
+    /// the map without the layers it was asked to draw.
+    private var pendingLayerMeshCount: Int {
+        engine.currentDiagnostics?.counterValue(.pendingLayerMeshes) ?? 0
     }
 
     private func checkCancelled() throws {

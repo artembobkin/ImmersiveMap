@@ -11,6 +11,7 @@ struct ImmersiveMapVideoExportAttachContext {
     let currentSettings: @MainActor () -> ImmersiveMapSettings
     let currentCameraPosition: @MainActor () -> ImmersiveMapCameraPosition?
     let currentAvatarsController: @MainActor () -> ImmersiveMapAvatarsController?
+    let currentLayers: @MainActor () -> [ImmersiveMapLayer]
     let currentMarkerContent: @MainActor () -> MarkerViewContent?
 }
 
@@ -26,7 +27,9 @@ struct ImmersiveMapVideoExportAttachContext {
 /// exact, and the on-screen map stays interactive. Avatar markers render
 /// normally from a copy of the avatar state taken at export start, and SwiftUI
 /// markers are rasterized and composited at their projected positions; both
-/// can be excluded via ``ImmersiveMapVideoExportConfiguration``. The
+/// can be excluded via ``ImmersiveMapVideoExportConfiguration``. The layers
+/// of the app's data (`ImmersiveMapLayersController`) are drawn as they are
+/// at export start. The
 /// attribution badge is host-view chrome and does not appear in the exported
 /// video; add attribution before publishing exported footage.
 @MainActor
@@ -81,6 +84,9 @@ public final class ImmersiveMapTourVideoRecorder {
         let markerContent = configuration.includesMarkers
             ? attachContext.currentMarkerContent()
             : nil
+        // The layers as they are now: values, so later changes to the
+        // app's controller do not reach the export.
+        let layers = attachContext.currentLayers()
 
         isExporting = true
         defer {
@@ -91,6 +97,7 @@ public final class ImmersiveMapTourVideoRecorder {
         let runtime = try ImmersiveMapVideoExportRuntime(settings: exportSettings,
                                                          initialPosition: initialPosition,
                                                          avatarsController: avatarsController,
+                                                         layers: layers,
                                                          markerContent: markerContent,
                                                          configuration: configuration,
                                                          outputURL: url)

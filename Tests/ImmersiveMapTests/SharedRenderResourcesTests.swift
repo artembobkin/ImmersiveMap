@@ -67,6 +67,7 @@ final class SharedRenderResourcesTests: XCTestCase {
                                            avatarSource: StubAvatarSource(),
                                            markerSource: StubMarkerSource(),
                                            sceneModelSource: StubSceneModelSource(),
+                                           layerSource: FixedLayerRenderSource(),
                                            styleRuntime: MapStyleRuntime(settings: settings),
                                            config: settings,
                                            eventSink: VideoExportRenderEventSink(),

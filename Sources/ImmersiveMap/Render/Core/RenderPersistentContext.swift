@@ -104,8 +104,9 @@ final class RenderPersistentContext {
     /// How opaque the names and the POIs are by the zoom, the style's
     /// (`ImmersiveMapLabelOpacity`), which the frame reads at its zoom.
     let labelOpacity: ImmersiveMapLabelOpacity
-    /// The layers of the app's data on the GPU and their pipelines
-    /// (`LayerRenderSubsystem`).
+    /// The layers of the app's data: where the frame reads them from, what
+    /// they are on the GPU and their pipelines (`LayerRenderSubsystem`).
+    let layerSource: LayerRenderSource
     let layerMeshStore: LayerMeshStore
     let layerPipeline: LayerPipeline
 
@@ -126,6 +127,7 @@ final class RenderPersistentContext {
          avatarSource: AvatarRenderSource,
          markerSource: MarkerRenderSource,
          sceneModelSource: SceneModelRenderSource,
+         layerSource: LayerRenderSource,
          styleRuntime: MapStyleRuntime,
          config: ImmersiveMapSettings,
          eventSink: RenderFrameEventSink,
@@ -221,6 +223,7 @@ final class RenderPersistentContext {
         self.labelOpacity = styleRuntime.labelOpacity
         self.treeModelStore = TreeModelStore(device: metal.device)
         self.treeModelStore.eventSink = eventSink
+        self.layerSource = layerSource
         self.layerPipeline = shared.layerPipeline
         self.layerMeshStore = LayerMeshStore(device: metal.device)
         self.layerMeshStore.eventSink = eventSink

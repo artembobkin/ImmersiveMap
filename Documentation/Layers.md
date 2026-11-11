@@ -2,18 +2,27 @@
 
 Layers draw your app's data on the map: zones as polygons, routes as lines, and places as points. They lie on the ground, over the roads and under the names and the buildings, on the globe and on the flat map alike.
 
+Keep an `ImmersiveMapLayersController`, attach it to the map, and give it the layers:
+
 ```swift
-ImmersiveMapView()
-    .layers([
-        ImmersiveMapLayer(id: "route",
-                          polylines: [ImmersiveMapPolyline(coordinates: route)],
-                          polylineStyle: ImmersiveMapPolylineStyle(color: SIMD4(0.9, 0.2, 0.2, 1), widthPoints: 4)),
-        ImmersiveMapLayer(id: "stops",
-                          points: stops.map { ImmersiveMapPoint(coordinate: $0) })
-    ])
+@State private var layers = ImmersiveMapLayersController()
+
+var body: some View {
+    ImmersiveMapView()
+        .layers(layers)
+        .onAppear {
+            layers.set([
+                ImmersiveMapLayer(id: "route",
+                                  polylines: [ImmersiveMapPolyline(coordinates: route)],
+                                  polylineStyle: ImmersiveMapPolylineStyle(color: SIMD4(0.9, 0.2, 0.2, 1), widthPoints: 4)),
+                ImmersiveMapLayer(id: "stops",
+                                  points: stops.map { ImmersiveMapPoint(coordinate: $0) })
+            ])
+        }
+}
 ```
 
-The layers draw in the order given, so a later one covers an earlier one. A later `.layers(...)` call replaces the layers of an earlier one.
+The layers draw in the order the controller holds them, so a later one covers an earlier one. An id names one layer.
 
 ## Shapes
 
@@ -46,7 +55,7 @@ A layer can be made from a GeoJSON document: a FeatureCollection, a Feature or a
 let districts = try ImmersiveMapLayer(id: "districts", geoJSON: data)
 ```
 
-Polygons become zones, LineStrings lines and Points points. A feature's own [simplestyle](https://github.com/mapbox/simplestyle-spec) properties (`fill`, `fill-opacity`, `stroke`, `stroke-opacity`, `stroke-width`, `marker-color`, `marker-size`) style it, over the layer's styles. A document that is not GeoJSON throws `ImmersiveMapGeoJSONError`.
+Polygons become zones, LineStrings lines and Points points. A feature's own [simplestyle](https://github.com/mapbox/simplestyle-spec) properties (`fill`, `fill-opacity`, `stroke`, `stroke-opacity`, `stroke-width`, `marker-color`, `marker-size`, and `marker-radius` in points) style it, over the layer's styles. A document that is not GeoJSON throws `ImmersiveMapGeoJSONError`.
 
 ## Showing and hiding
 
@@ -57,10 +66,28 @@ ImmersiveMapLayer(id: "zones", polygons: zones,
                   hidesBehindTerrain: true)
 ```
 
-- `isVisible`: a hidden layer keeps its data ready, so showing it again is immediate.
+- `isVisible`: a hidden layer keeps its data ready, so showing it again is immediate. `layers.setVisible(id: "zones", false)` hides a layer the controller holds.
 - `zoomRange`: the camera zooms the layer draws at.
 - `hidesBehindTerrain`: lets a mountain in front of the layer cover it. Off by default, so a layer shows over the relief everywhere.
 
 ## Updates
 
-Change the data and pass the layers again: the map prepares a changed layer in the background and swaps it in when it is ready. Two layers built from the same data are equal, so a view that rebuilds its layers on every update costs nothing until the data really changes.
+Change the layers through the controller:
+
+- `set(_:)` replaces every layer, and a layer left out is let go.
+- `upsert(_:)` puts a layer in the place of the one with its id, or adds it after the last one.
+- `remove(id:)`, `remove(ids:)` and `clear()` take layers away.
+- `layers` and `layer(id:)` read what the controller holds.
+
+The map prepares a changed layer in the background and goes on drawing the old one until the new one is ready. Two layers built from the same data are equal, so setting the same layers again costs nothing.
+
+The controller is thread-safe. A layer reads its GeoJSON where it is made, so read a large file off the main thread and hand the layer over from there:
+
+```swift
+.task {
+    let layer = await Task.detached { try? ImmersiveMapLayer(id: "districts", geoJSON: Data(contentsOf: url)) }.value
+    if let layer { layers.upsert(layer) }
+}
+```
+
+To switch between files, upsert the next one under the same id: the previous file stays on screen until the next is ready.
