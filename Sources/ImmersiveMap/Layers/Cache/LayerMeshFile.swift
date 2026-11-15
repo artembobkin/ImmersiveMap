@@ -8,23 +8,26 @@ import Foundation
 /// them, so a file is loaded straight into the buffers with nothing to
 /// parse. Little-endian, as every device the engine runs on.
 ///
-/// The layout, `version` 1:
+/// The layout, `version` 4:
 ///
 ///     magic "IMLM"            4 bytes
 ///     version                 UInt32
 ///     chunk count             UInt32
-///     5 x (offset, size)      UInt64 each: fill vertices, fill indices,
-///                             line vertices, line indices, discs
+///     4 x (offset, size)      UInt64 each: fill vertices, fill indices,
+///                             line segments, discs
 ///     chunks                  `chunkStride` bytes each
 ///     blocks                  each at a multiple of 16 bytes
 ///
 /// A change to this layout, to a GPU struct or to what `LayerMeshBuilder`
 /// makes of a shape is a new `version`: the files of an older one are then
-/// misses and are written anew.
+/// misses and are written anew. Version 2 made every line solid, version 3
+/// gave a segment round ends in place of a disc at each join, and version
+/// 4 keeps a line as one instance per segment.
 enum LayerMeshFile {
-    static let version: UInt32 = 1
+    static let version: UInt32 = 4
     static let magic: [UInt8] = Array("IMLM".utf8)
-    static let headerSize = 12 + 5 * 16
+    static let blockCount = 4
+    static let headerSize = 12 + blockCount * 16
     static let chunkStride = 3 * 4 + 8 * 4 + 5 * 4
 
     /// Where the blocks lie in a file, and the chunks that draw from them.
@@ -32,19 +35,17 @@ enum LayerMeshFile {
         var chunks: [LayerMeshChunk]
         var fillVertices: Range<Int>
         var fillIndices: Range<Int>
-        var lineVertices: Range<Int>
-        var lineIndices: Range<Int>
+        var lineSegments: Range<Int>
         var discs: Range<Int>
 
-        var blocks: [Range<Int>] { [fillVertices, fillIndices, lineVertices, lineIndices, discs] }
+        var blocks: [Range<Int>] { [fillVertices, fillIndices, lineSegments, discs] }
     }
 
     static func encode(_ mesh: LayerMeshData) -> Data {
         func bytes<Element>(_ values: [Element]) -> Data {
             values.withUnsafeBytes { Data($0) }
         }
-        let blocks = [bytes(mesh.fillVertices), bytes(mesh.fillIndices), bytes(mesh.lineVertices),
-                      bytes(mesh.lineIndices), bytes(mesh.discs)]
+        let blocks = [bytes(mesh.fillVertices), bytes(mesh.fillIndices), bytes(mesh.lineSegments), bytes(mesh.discs)]
         var offset = headerSize + mesh.chunks.count * chunkStride
         var ranges: [Range<Int>] = []
         for block in blocks {
@@ -65,7 +66,7 @@ enum LayerMeshFile {
             for value in [chunk.tile.x, chunk.tile.y, chunk.tile.z] {
                 data.append(Int32(value))
             }
-            for value in [chunk.fillIndexStart, chunk.fillIndexCount, chunk.lineIndexStart, chunk.lineIndexCount,
+            for value in [chunk.fillIndexStart, chunk.fillIndexCount, chunk.lineStart, chunk.lineCount,
                           chunk.joinStart, chunk.joinCount, chunk.pointStart, chunk.pointCount] {
                 data.append(UInt32(value))
             }
@@ -92,7 +93,7 @@ enum LayerMeshFile {
             return nil
         }
         var ranges: [Range<Int>] = []
-        for _ in 0 ..< 5 {
+        for _ in 0 ..< blockCount {
             guard let offset = reader.read(UInt64.self), let size = reader.read(UInt64.self),
                   offset <= UInt64(fileSize), size <= UInt64(fileSize) - offset else {
                 return nil
@@ -117,7 +118,7 @@ enum LayerMeshFile {
             }
             chunks.append(LayerMeshChunk(tile: Tile(x: Int(x), y: Int(y), z: Int(z)),
                                          fillIndexStart: counts[0], fillIndexCount: counts[1],
-                                         lineIndexStart: counts[2], lineIndexCount: counts[3],
+                                         lineStart: counts[2], lineCount: counts[3],
                                          joinStart: counts[4], joinCount: counts[5],
                                          pointStart: counts[6], pointCount: counts[7],
                                          boundsMinimum: SIMD2(floats[0], floats[1]),
@@ -125,15 +126,15 @@ enum LayerMeshFile {
                                          maximumReachPoints: floats[4]))
         }
         let contents = Contents(chunks: chunks, fillVertices: ranges[0], fillIndices: ranges[1],
-                                lineVertices: ranges[2], lineIndices: ranges[3], discs: ranges[4])
+                                lineSegments: ranges[2], discs: ranges[3])
         // A chunk never draws past the end of a block: a damaged file must
         // not send the GPU out of its buffers.
         let fillIndexCount = contents.fillIndices.count / MemoryLayout<UInt32>.stride
-        let lineIndexCount = contents.lineIndices.count / MemoryLayout<UInt32>.stride
+        let lineCount = contents.lineSegments.count / MemoryLayout<LayerLineSegment>.stride
         let discCount = contents.discs.count / MemoryLayout<LayerPointInstance>.stride
         for chunk in chunks {
             guard chunk.fillIndexStart + chunk.fillIndexCount <= fillIndexCount,
-                  chunk.lineIndexStart + chunk.lineIndexCount <= lineIndexCount,
+                  chunk.lineStart + chunk.lineCount <= lineCount,
                   chunk.joinStart + chunk.joinCount <= discCount,
                   chunk.pointStart + chunk.pointCount <= discCount else {
                 return nil

@@ -37,7 +37,9 @@ private struct MapScreen: View {
 /// name, and a layer draws it with a style and a zoom range. A file is read
 /// when its layer first draws, off the main thread, so the neighbourhoods
 /// and the bike routes cost nothing until the camera is near enough to
-/// show them. The subway's lines take their colours from the `stroke`
+/// show them. The boroughs and the subway's lines draw from the globe on,
+/// which also shows what a layer costs when the whole city is a dot. The
+/// subway's lines take their colours from the `stroke`
 /// property the files state for each service.
 private enum NewYorkLayers {
     static func makeController() -> ImmersiveMapLayersController {
@@ -49,7 +51,7 @@ private enum NewYorkLayers {
         let layers = [
             ImmersiveMapLayer(source: "neighborhoods",
                               polygonStyle: ImmersiveMapPolygonStyle(fillColor: SIMD4(0.95, 0.75, 0.20, 0.10),
-                                                                     strokeColor: SIMD4(0.55, 0.40, 0.10, 0.8),
+                                                                     strokeColor: SIMD4(0.55, 0.40, 0.10, 1),
                                                                      strokeWidthPoints: 1),
                               zoomRange: 10.5 ... 30),
             ImmersiveMapLayer(source: "boroughs",
@@ -63,7 +65,7 @@ private enum NewYorkLayers {
                                                                      strokeWidthPoints: 0),
                               zoomRange: 11 ... 30),
             ImmersiveMapLayer(source: "bike_routes",
-                              polylineStyle: ImmersiveMapPolylineStyle(color: SIMD4(0.10, 0.55, 0.30, 0.9), widthPoints: 1.5),
+                              polylineStyle: ImmersiveMapPolylineStyle(color: SIMD4(0.10, 0.55, 0.30, 1), widthPoints: 1.5),
                               zoomRange: 12.5 ... 30),
             ImmersiveMapLayer(source: "subway_lines",
                               polylineStyle: ImmersiveMapPolylineStyle(color: SIMD4(0.5, 0.5, 0.5, 1), widthPoints: 3)),
@@ -72,7 +74,7 @@ private enum NewYorkLayers {
                                                                  radiusPoints: 3,
                                                                  strokeColor: SIMD4(0.10, 0.10, 0.10, 1),
                                                                  strokeWidthPoints: 1.5),
-                              zoomRange: 12 ... 30)
+                              zoomRange: 14 ... 30)
         ]
         for layer in layers {
             guard let url = Bundle.main.url(forResource: layer.source, withExtension: "geojson", subdirectory: "NYC") else {

@@ -17,13 +17,11 @@ final class LayerMesh: @unchecked Sendable {
     let key: LayerMeshKey
     let fillVertices: MTLBuffer?
     let fillIndices: MTLBuffer?
-    let lineVertices: MTLBuffer?
-    let lineIndices: MTLBuffer?
+    let lineSegments: MTLBuffer?
     let discs: MTLBuffer?
     let chunks: [LayerMeshChunk]
 
-    private static let labels = ["Layer fill vertices", "Layer fill indices", "Layer line vertices",
-                                 "Layer line indices", "Layer discs"]
+    private static let labels = ["Layer fill vertices", "Layer fill indices", "Layer line segments", "Layer discs"]
 
     init?(key: LayerMeshKey, data: LayerMeshData, device: MTLDevice) {
         func buffer<Element>(_ values: [Element], label: String) -> MTLBuffer? {
@@ -37,12 +35,11 @@ final class LayerMesh: @unchecked Sendable {
         self.key = key
         fillVertices = buffer(data.fillVertices, label: Self.labels[0])
         fillIndices = buffer(data.fillIndices, label: Self.labels[1])
-        lineVertices = buffer(data.lineVertices, label: Self.labels[2])
-        lineIndices = buffer(data.lineIndices, label: Self.labels[3])
-        discs = buffer(data.discs, label: Self.labels[4])
+        lineSegments = buffer(data.lineSegments, label: Self.labels[2])
+        discs = buffer(data.discs, label: Self.labels[3])
         chunks = data.chunks
         let complete = (data.fillIndices.isEmpty || (fillVertices != nil && fillIndices != nil))
-            && (data.lineIndices.isEmpty || (lineVertices != nil && lineIndices != nil))
+            && (data.lineSegments.isEmpty || lineSegments != nil)
             && (data.discs.isEmpty || discs != nil)
         guard complete else { return nil }
     }
@@ -52,9 +49,8 @@ final class LayerMesh: @unchecked Sendable {
         self.chunks = chunks
         fillVertices = buffers[0]
         fillIndices = buffers[1]
-        lineVertices = buffers[2]
-        lineIndices = buffers[3]
-        discs = buffers[4]
+        lineSegments = buffers[2]
+        discs = buffers[3]
     }
 
     /// A mesh from its file on disk (`LayerMeshFile`): the blocks go

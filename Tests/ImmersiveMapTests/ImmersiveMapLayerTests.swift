@@ -193,9 +193,9 @@ final class ImmersiveMapLayerTests: XCTestCase {
     /// The GPU structs match the shader's layouts byte for byte.
     func testTheVertexLayoutsMatchTheShaders() {
         XCTAssertEqual(MemoryLayout<LayerFillVertex>.stride, 16)
-        XCTAssertEqual(MemoryLayout<LayerLineVertex>.stride, 32)
-        XCTAssertEqual(MemoryLayout<LayerLineVertex>.offset(of: \.widthPoints), 24)
-        XCTAssertEqual(MemoryLayout<LayerLineVertex>.offset(of: \.color), 28)
+        XCTAssertEqual(MemoryLayout<LayerLineSegment>.stride, 24)
+        XCTAssertEqual(MemoryLayout<LayerLineSegment>.offset(of: \.widthPoints), 16)
+        XCTAssertEqual(MemoryLayout<LayerLineSegment>.offset(of: \.color), 20)
         XCTAssertEqual(MemoryLayout<LayerPointInstance>.stride, 24)
         XCTAssertEqual(MemoryLayout<LayerPointInstance>.offset(of: \.color), 16)
         XCTAssertEqual(MemoryLayout<LayerDrawUniform>.stride, 96)
@@ -248,11 +248,54 @@ final class LayerMeshBuilderTests: XCTestCase {
             }
             start += 3
         }
-        for vertex in data.lineVertices {
+        for vertex in data.lineSegments {
             XCTAssertLessThanOrEqual(simd_distance(vertex.start, vertex.end), longest)
         }
-        // The outline's four corners are its joins.
-        XCTAssertEqual(chunk.joinCount, 4)
+        // The outline is round at its four corners alone, and flat where a
+        // side was only cut to follow the sphere. A join has no disc.
+        XCTAssertEqual(chunk.joinCount, 0)
+        let rounding = data.lineSegments.map(\.color.w)
+        XCTAssertEqual(chunk.lineCount, rounding.count)
+        XCTAssertGreaterThan(rounding.count, 4, "Each side is cut into pieces")
+        XCTAssertEqual(rounding.count { $0 == LayerLineSegment.roundStart }, 4)
+        XCTAssertEqual(rounding.count { $0 == LayerLineSegment.roundEnd }, 4)
+        XCTAssertEqual(rounding.count { $0 == 0 }, rounding.count - 8, "A piece in the middle of a side is flat at both ends")
+    }
+
+    /// A line is always solid: a translucent colour draws it opaque, and
+    /// only a zero alpha leaves it out. The fill keeps its alpha.
+    func testALineIsSolidWhateverItsColoursAlpha() {
+        let ring = [GeoCoordinate(latitude: 0, longitude: 0), GeoCoordinate(latitude: 0, longitude: 1),
+                    GeoCoordinate(latitude: 1, longitude: 1), GeoCoordinate(latitude: 1, longitude: 0)]
+        let content = LayerSourceContent(polygons: [ImmersiveMapPolygon(exterior: ring)],
+                                         polylines: [ImmersiveMapPolyline(coordinates: ring)],
+                                         points: [])
+        func mesh(lineAlpha: Float) -> LayerMeshData {
+            let layer = ImmersiveMapLayer(source: "shapes",
+                                          polygonStyle: ImmersiveMapPolygonStyle(fillColor: SIMD4(1, 0, 0, 0.5),
+                                                                                 strokeColor: SIMD4(0, 1, 0, lineAlpha)),
+                                          polylineStyle: ImmersiveMapPolylineStyle(color: SIMD4(0, 0, 1, lineAlpha)))
+            return LayerMeshBuilder.build(layer: layer, content: content)
+        }
+
+        // The fourth byte of a segment's colour is not an alpha: it says
+        // which of its ends are round, and the line draws without blending.
+        let translucent = mesh(lineAlpha: 0.25)
+        XCTAssertFalse(translucent.lineSegments.isEmpty)
+        XCTAssertEqual(translucent.lineSegments, mesh(lineAlpha: 1).lineSegments, "The alpha changes nothing of a line")
+        XCTAssertTrue(translucent.lineSegments.allSatisfy { $0.color.w == LayerLineSegment.roundStart | LayerLineSegment.roundEnd })
+        XCTAssertTrue(translucent.discs.isEmpty, "A join is the round ends of its segments, not a disc")
+        XCTAssertTrue(translucent.fillVertices.allSatisfy { $0.color.w == 128 }, "A fill may be translucent")
+
+        let hidden = mesh(lineAlpha: 0)
+        XCTAssertTrue(hidden.lineSegments.isEmpty)
+        XCTAssertTrue(hidden.discs.isEmpty)
+    }
+
+    /// The triangles of a segment's shape name its ten corners alone.
+    func testASegmentsTemplateDrawsItsTenCorners() {
+        XCTAssertEqual(LayerPipeline.lineTemplate.count % 3, 0)
+        XCTAssertEqual(Set(LayerPipeline.lineTemplate), Set(0 ..< 10))
     }
 
     /// A zone across the 180th meridian stays whole: its longitudes run on
@@ -350,7 +393,7 @@ final class LayerChunkCullingTests: XCTestCase {
         let data = LayerMeshBuilder.build(layer: layer, content: content)
         XCTAssertEqual(data.chunks.count, 1)
         let chunk = try! XCTUnwrap(data.chunks.first)
-        for position in data.fillVertices.map(\.position) + data.lineVertices.flatMap({ [$0.start, $0.end] })
+        for position in data.fillVertices.map(\.position) + data.lineSegments.flatMap({ [$0.start, $0.end] })
             + data.discs.map(\.position) {
             XCTAssertTrue((chunk.boundsMinimum.x ... chunk.boundsMaximum.x).contains(position.x))
             XCTAssertTrue((chunk.boundsMinimum.y ... chunk.boundsMaximum.y).contains(position.y))

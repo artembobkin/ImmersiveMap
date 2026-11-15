@@ -12,21 +12,27 @@ struct LayerFillVertex: Equatable {
     var color: SIMD4<UInt8>
 }
 
-/// One corner of a line segment's quad: both ends of the segment in its
-/// chunk's render units, which end the corner is at (`corner.x`, 0 or 1)
-/// and which side (`corner.y`, -1 or 1), the line's width in points and
-/// its colour. The vertex stage widens the segment on screen. Mirrors
-/// `LayerLineVertex` in Layers.metal, 32 bytes.
-struct LayerLineVertex: Equatable {
+/// One segment of a line: its ends in its chunk's render units, the line's
+/// width in points and its colour. The vertex stage draws the segment as
+/// a shape of the screen, as wide as the line, with a round end where
+/// `color.w` says so (`roundStart`, `roundEnd`): a line is always solid,
+/// so the fourth byte of its colour is not an alpha. Two segments that
+/// meet with round ends are joined by the disc those ends share. An
+/// instance, not a vertex: every segment is the same ten corners
+/// (`LayerPipeline.lineTemplateIndices`). Mirrors `LayerLineSegment` in
+/// Layers.metal, 24 bytes.
+struct LayerLineSegment: Equatable {
+    static let roundStart: UInt8 = 1
+    static let roundEnd: UInt8 = 2
+
     var start: SIMD2<Float>
     var end: SIMD2<Float>
-    var corner: SIMD2<Float>
     var widthPoints: Float
     var color: SIMD4<UInt8>
 }
 
-/// A disc on screen: a point of the layer, or the round join of a line at
-/// one of its vertices. Mirrors `LayerPointInstance` in Layers.metal, 24
+/// A disc on screen: a point of the layer, or a line of a single vertex,
+/// which has no segment to round. Mirrors `LayerPointInstance` in Layers.metal, 24
 /// bytes.
 struct LayerPointInstance: Equatable {
     var position: SIMD2<Float>
@@ -45,8 +51,8 @@ struct LayerMeshChunk: Equatable {
     let tile: Tile
     let fillIndexStart: Int
     let fillIndexCount: Int
-    let lineIndexStart: Int
-    let lineIndexCount: Int
+    let lineStart: Int
+    let lineCount: Int
     let joinStart: Int
     let joinCount: Int
     let pointStart: Int
@@ -66,9 +72,8 @@ struct LayerMeshChunk: Equatable {
 struct LayerMeshData {
     var fillVertices: [LayerFillVertex] = []
     var fillIndices: [UInt32] = []
-    var lineVertices: [LayerLineVertex] = []
-    var lineIndices: [UInt32] = []
-    /// The lines' joins first, then the points.
+    var lineSegments: [LayerLineSegment] = []
+    /// The lines of a single vertex first, then the points.
     var discs: [LayerPointInstance] = []
     var chunks: [LayerMeshChunk] = []
 
@@ -159,13 +164,11 @@ enum LayerMeshBuilder {
             let fillStart = data.fillIndices.count
             data.fillVertices += builder.fillVertices
             data.fillIndices += builder.fillIndices.map { $0 + fillBase }
-            let lineBase = UInt32(data.lineVertices.count)
-            let lineStart = data.lineIndices.count
-            data.lineVertices += builder.lineVertices
-            data.lineIndices += builder.lineIndices.map { $0 + lineBase }
+            let lineStart = data.lineSegments.count
+            data.lineSegments += builder.lineSegments
             let joinStart = data.discs.count
             data.discs += builder.joins
-            pendingChunks.append((builder, fillStart, builder.fillIndices.count, lineStart, builder.lineIndices.count,
+            pendingChunks.append((builder, fillStart, builder.fillIndices.count, lineStart, builder.lineSegments.count,
                                   joinStart, builder.joins.count))
             pointsByChunk.append(builder.points)
         }
@@ -175,8 +178,8 @@ enum LayerMeshBuilder {
             data.chunks.append(LayerMeshChunk(tile: pending.builder.tile,
                                               fillIndexStart: pending.fillStart,
                                               fillIndexCount: pending.fillCount,
-                                              lineIndexStart: pending.lineStart,
-                                              lineIndexCount: pending.lineCount,
+                                              lineStart: pending.lineStart,
+                                              lineCount: pending.lineCount,
                                               joinStart: pending.joinStart,
                                               joinCount: pending.joinCount,
                                               pointStart: pointStart,
@@ -259,8 +262,7 @@ enum LayerMeshBuilder {
         let tile: Tile
         var fillVertices: [LayerFillVertex] = []
         var fillIndices: [UInt32] = []
-        var lineVertices: [LayerLineVertex] = []
-        var lineIndices: [UInt32] = []
+        var lineSegments: [LayerLineSegment] = []
         var joins: [LayerPointInstance] = []
         var points: [LayerPointInstance] = []
         /// The box round every position `local` has given out.
@@ -332,19 +334,26 @@ enum LayerMeshBuilder {
             }
         }
 
+        /// A line of the layer, always solid: its colour's alpha only
+        /// says whether it draws (`ImmersiveMapPolylineStyle.color`). A
+        /// line is drawn in parts that overlap, its segments at their
+        /// round ends, so a translucent one would darken itself at every
+        /// vertex.
         func appendLine(_ points: [SIMD2<Double>], closed: Bool, widthPoints: Float, color: SIMD4<Float>) {
-            let packed = LayerMeshBuilder.packedColor(color)
+            let packed = LayerMeshBuilder.packedColor(SIMD4<Float>(color.x, color.y, color.z, 1))
             maximumReachPoints = max(maximumReachPoints, widthPoints / 2)
-            // A round join at every vertex the shape states, and a round
-            // end at both ends of an open line.
-            for point in points {
-                joins.append(LayerPointInstance(position: local(point),
-                                                radiusPoints: widthPoints / 2,
-                                                strokeWidthPoints: 0,
-                                                color: packed,
-                                                strokeColor: packed))
+            guard points.count >= 2 else {
+                // A line of one vertex is a dot: there is no segment to
+                // round, so it is a disc.
+                for point in points {
+                    joins.append(LayerPointInstance(position: local(point),
+                                                    radiusPoints: widthPoints / 2,
+                                                    strokeWidthPoints: 0,
+                                                    color: packed,
+                                                    strokeColor: packed))
+                }
+                return
             }
-            guard points.count >= 2 else { return }
             var segments = Array(zip(points, points.dropFirst()))
             if closed, let first = points.first, let last = points.last {
                 segments.append((last, first))
@@ -354,19 +363,28 @@ enum LayerMeshBuilder {
                 var previous = start
                 for piece in 1 ... pieces {
                     let next = piece == pieces ? end : start + (end - start) * (Double(piece) / Double(pieces))
-                    appendSegment(local(previous), local(next), widthPoints: widthPoints, color: packed)
+                    // Round at every vertex the shape states, which joins
+                    // the segments and ends an open line, and flat where a
+                    // long segment was only cut to follow the sphere.
+                    appendSegment(local(previous), local(next),
+                                  roundStart: piece == 1, roundEnd: piece == pieces,
+                                  widthPoints: widthPoints, color: packed)
                     previous = next
                 }
             }
         }
 
-        private func appendSegment(_ start: SIMD2<Float>, _ end: SIMD2<Float>, widthPoints: Float, color: SIMD4<UInt8>) {
-            let base = UInt32(lineVertices.count)
-            for corner in [SIMD2<Float>(0, -1), SIMD2<Float>(0, 1), SIMD2<Float>(1, -1), SIMD2<Float>(1, 1)] {
-                lineVertices.append(LayerLineVertex(start: start, end: end, corner: corner,
-                                                    widthPoints: widthPoints, color: color))
-            }
-            lineIndices += [base, base + 1, base + 2, base + 2, base + 1, base + 3]
+        private func appendSegment(_ start: SIMD2<Float>,
+                                   _ end: SIMD2<Float>,
+                                   roundStart: Bool,
+                                   roundEnd: Bool,
+                                   widthPoints: Float,
+                                   color: SIMD4<UInt8>) {
+            let rounding = (roundStart ? LayerLineSegment.roundStart : 0) | (roundEnd ? LayerLineSegment.roundEnd : 0)
+            lineSegments.append(LayerLineSegment(start: start,
+                                                 end: end,
+                                                 widthPoints: widthPoints,
+                                                 color: SIMD4(color.x, color.y, color.z, rounding)))
         }
 
         func appendPoint(_ world: SIMD2<Double>, style: ImmersiveMapPointStyle) {

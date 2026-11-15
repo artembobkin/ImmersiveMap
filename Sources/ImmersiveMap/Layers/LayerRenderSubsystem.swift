@@ -155,24 +155,28 @@ final class LayerRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProvide
                 }
             }
             encoder.setCullMode(.none)
-            if let vertices = mesh.lineVertices, let indices = mesh.lineIndices {
+            if let segments = mesh.lineSegments {
                 encoder.setRenderPipelineState(states.line)
-                encoder.setVertexBuffer(vertices, offset: 0, index: 0)
-                for (chunk, draws) in chunks where chunk.lineIndexCount > 0 {
+                encoder.setVertexBuffer(segments, offset: 0, index: 0)
+                for (chunk, draws) in chunks where chunk.lineCount > 0 {
                     for var draw in draws {
                         encoder.setVertexBytes(&draw, length: MemoryLayout<LayerDrawUniform>.stride, index: 2)
                         encoder.drawIndexedPrimitives(type: .triangle,
-                                                      indexCount: chunk.lineIndexCount,
-                                                      indexType: .uint32,
-                                                      indexBuffer: indices,
-                                                      indexBufferOffset: chunk.lineIndexStart * MemoryLayout<UInt32>.stride)
+                                                      indexCount: LayerPipeline.lineTemplate.count,
+                                                      indexType: .uint16,
+                                                      indexBuffer: pipeline.lineTemplateIndices,
+                                                      indexBufferOffset: 0,
+                                                      instanceCount: chunk.lineCount,
+                                                      baseVertex: 0,
+                                                      baseInstance: chunk.lineStart)
                     }
                 }
             }
             if let discs = mesh.discs {
                 encoder.setRenderPipelineState(states.point)
                 encoder.setVertexBuffer(discs, offset: 0, index: 0)
-                // The lines' joins with the lines, then the points over them.
+                // The lines of a single vertex with the lines, then the
+                // points over them.
                 for pass in 0 ..< 2 {
                     for (chunk, draws) in chunks {
                         let start = pass == 0 ? chunk.joinStart : chunk.pointStart

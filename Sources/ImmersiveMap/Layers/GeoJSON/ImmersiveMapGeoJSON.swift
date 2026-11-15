@@ -22,7 +22,9 @@ public enum ImmersiveMapGeoJSONError: Error, Equatable, Sendable {
 /// `stroke-opacity`, `stroke-width`, `marker-color`, `marker-size`,
 /// `marker-radius`) are kept with the shapes of its geometry and laid over
 /// the style of each layer that draws them: a property the feature does not
-/// state takes the layer's value. A feature with a null geometry is skipped.
+/// state takes the layer's value. A line is always solid, so of
+/// `stroke-opacity` only zero is kept, which leaves the line out. A feature
+/// with a null geometry is skipped.
 enum ImmersiveMapGeoJSON {
     struct Shapes {
         var polygons: [ImmersiveMapPolygon] = []

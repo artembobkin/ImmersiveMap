@@ -51,7 +51,8 @@ final class LayerPipeline {
         descriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
         descriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
 
-        func makeState(vertex: String, fragment: String, surface: Surface) -> MTLRenderPipelineState {
+        func makeState(vertex: String, fragment: String, surface: Surface, blends: Bool = true) -> MTLRenderPipelineState {
+            descriptor.colorAttachments[0].isBlendingEnabled = blends
             let values = MTLFunctionConstantValues()
             var surfaceValue = Int32(surface.rawValue)
             values.setConstantValue(&surfaceValue, type: .int, index: 0)
@@ -62,10 +63,17 @@ final class LayerPipeline {
         var states: [Surface: States] = [:]
         for surface in Surface.allCases {
             states[surface] = States(fill: makeState(vertex: "layerFillVertex", fragment: "layerFillFragment", surface: surface),
-                                     line: makeState(vertex: "layerLineVertex", fragment: "layerLineFragment", surface: surface),
+                                     // A line is solid and its shape is its geometry, so
+                                     // it draws without blending (`layerLineFragment`).
+                                     line: makeState(vertex: "layerLineVertex", fragment: "layerLineFragment", surface: surface,
+                                                     blends: false),
                                      point: makeState(vertex: "layerPointVertex", fragment: "layerPointFragment", surface: surface))
         }
         statesBySurface = states
+        lineTemplateIndices = Self.lineTemplate.withUnsafeBytes { bytes in
+            metalDevice.makeBuffer(bytes: bytes.baseAddress!, length: bytes.count, options: .storageModeShared)!
+        }
+        lineTemplateIndices.label = "Layer line template"
 
         func makeDepthState(testsDepth: Bool) -> MTLDepthStencilState {
             let stencil = MTLStencilDescriptor()
@@ -85,6 +93,15 @@ final class LayerPipeline {
         overGroundState = makeDepthState(testsDepth: false)
         behindTerrainState = makeDepthState(testsDepth: true)
     }
+
+    /// The triangles of one segment's shape, over the ten corners the
+    /// vertex stage places (`kLayerLineCorners` in Layers.metal): the body,
+    /// then half an octagon at the start and one at the end.
+    static let lineTemplate: [UInt16] = [0, 1, 5, 5, 1, 6,
+                                         0, 2, 4, 0, 4, 3, 0, 3, 1,
+                                         5, 7, 9, 5, 9, 8, 5, 8, 6]
+    /// `lineTemplate` on the GPU, the index buffer every segment draws by.
+    let lineTemplateIndices: MTLBuffer
 
     func states(for surface: Surface) -> States {
         statesBySurface[surface]!

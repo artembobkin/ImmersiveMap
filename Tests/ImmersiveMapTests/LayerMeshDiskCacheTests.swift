@@ -31,8 +31,8 @@ final class LayerMeshFileTests: XCTestCase {
         XCTAssertEqual(contents.chunks.count, 2)
         XCTAssertEqual(file.subdata(in: contents.fillVertices), Self.bytes(mesh.fillVertices))
         XCTAssertEqual(file.subdata(in: contents.fillIndices), Self.bytes(mesh.fillIndices))
-        XCTAssertEqual(file.subdata(in: contents.lineVertices), Self.bytes(mesh.lineVertices))
-        XCTAssertEqual(file.subdata(in: contents.lineIndices), Self.bytes(mesh.lineIndices))
+        XCTAssertEqual(file.subdata(in: contents.lineSegments), Self.bytes(mesh.lineSegments))
+        XCTAssertFalse(mesh.lineSegments.isEmpty)
         XCTAssertEqual(file.subdata(in: contents.discs), Self.bytes(mesh.discs))
         for block in contents.blocks {
             XCTAssertEqual(block.lowerBound % 16, 0)

@@ -103,6 +103,10 @@ Each layer has one style per kind of shape, and a shape can carry its own, which
 
 Colours are RGBA from 0 to 1. Widths and radii are in screen points, so they stay the same size at every zoom. A zero alpha or a zero width leaves that part out.
 
+Lines and outlines are always solid. A fill and a point can be translucent, but for a line the alpha only says whether it draws: zero leaves it out, and anything else draws it opaque. A GeoJSON feature's `stroke-opacity` is treated the same way.
+
+A line's edge is not softened, which lets the map draw even hundreds of thousands of segments cheaply. For smooth edges, turn on `.msaa()`.
+
 ## Showing and hiding
 
 ```swift

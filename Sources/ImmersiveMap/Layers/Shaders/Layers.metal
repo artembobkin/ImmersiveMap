@@ -16,10 +16,12 @@
 //    sphere matrix,
 //  - the unfurl, the sphere-to-plane unroll with its cut.
 //
-//  A zone is its triangles. A line is a quad per segment, widened on
-//  screen to the line's width in points, with a disc at every vertex for
-//  its joins and its ends. A point is a disc with a ring round it, a quad
-//  on screen. Everything is blended and never written to depth. What
+//  A zone is its triangles. A line is an instance per segment, a shape
+//  of the screen as wide as the line in points, with round ends: two
+//  segments that meet are joined by the disc their ends share, and no
+//  geometry of its own is drawn for a join. A line is solid and is the
+//  one thing here drawn without blending, so its overlaps cost nothing. A
+//  point is a disc with a ring round it, a quad on screen. Everything is blended and never written to depth. What
 //  stands in front of a layer (a building, a model, a tree) covers it by
 //  the surface mask bit it raised in the stencil; the ground's depth hides
 //  it only on a layer that asks (LayerPipeline.behindTerrainState), for
@@ -54,13 +56,28 @@ struct LayerFillVertex {
     uchar4 color;
 };
 
-/// Mirrors LayerLineVertex in LayerMeshBuilder.swift.
-struct LayerLineVertex {
+/// Mirrors LayerLineSegment in LayerMeshBuilder.swift. `color.a` is not
+/// an alpha, a line is always solid: it states which ends are round, 1
+/// for the start and 2 for the end.
+struct LayerLineSegment {
     float2 start;
     float2 end;
-    float2 corner;
     float widthPoints;
     uchar4 color;
+};
+
+/// The corners of a segment's shape, the same for every segment
+/// (`LayerPipeline.lineTemplateIndices` joins them into triangles): which
+/// end of the segment the corner is at, then how far it stands from that
+/// end along the segment (outward is positive) and across it, in half
+/// widths. Each end is half an octagon, which stands for a half disc at
+/// the widths a line has: its body corners, the tip and the two corners
+/// between.
+static constant float3 kLayerLineCorners[10] = {
+    float3(0.0, 0.0, -1.0), float3(0.0, 0.0, 1.0),
+    float3(0.0, 0.70710678, -0.70710678), float3(0.0, 0.70710678, 0.70710678), float3(0.0, 1.0, 0.0),
+    float3(1.0, 0.0, -1.0), float3(1.0, 0.0, 1.0),
+    float3(1.0, 0.70710678, -0.70710678), float3(1.0, 0.70710678, 0.70710678), float3(1.0, 1.0, 0.0)
 };
 
 /// Mirrors LayerPointInstance in LayerMeshBuilder.swift.
@@ -202,10 +219,6 @@ struct LayerLineOut {
     float3 worldPosition;
     float3 sphereNormal;
     half4 color;
-    /// The signed distance from the centreline across the quad, in
-    /// pixels, and the line's half width in pixels.
-    float edgePx;
-    float halfWidthPx [[flat]];
 };
 
 struct LayerLineIn {
@@ -213,21 +226,20 @@ struct LayerLineIn {
     float3 worldPosition;
     float3 sphereNormal;
     half4 color;
-    float edgePx;
-    float halfWidthPx [[flat]];
 };
 
 vertex LayerLineOut layerLineVertex(uint vertexID [[vertex_id]],
-                                    constant LayerLineVertex* vertices [[buffer(0)]],
+                                    uint instanceID [[instance_id]],
+                                    constant LayerLineSegment* segments [[buffer(0)]],
                                     constant Camera& camera [[buffer(1)]],
                                     constant LayerDraw& draw [[buffer(2)]],
                                     constant Globe& globe [[buffer(8)]],
                                     constant GlobeFrameConstants& globeFrame [[buffer(10)]]) {
-    LayerLineVertex vertexIn = vertices[vertexID];
-    LayerClip start = layerProject(vertexIn.start, camera, draw, globe, globeFrame);
-    LayerClip end = layerProject(vertexIn.end, camera, draw, globe, globeFrame);
+    LayerLineSegment segment = segments[instanceID];
+    LayerClip start = layerProject(segment.start, camera, draw, globe, globeFrame);
+    LayerClip end = layerProject(segment.end, camera, draw, globe, globeFrame);
     // An end behind the camera is pulled to just before it along the
-    // segment, so the quad's direction on screen stays the segment's.
+    // segment, so the shape's direction on screen stays the segment's.
     float4 startClip = start.position;
     float4 endClip = end.position;
     if (startClip.w < kLayerNearW && endClip.w > kLayerNearW) {
@@ -243,34 +255,42 @@ vertex LayerLineOut layerLineVertex(uint vertexID [[vertex_id]],
     direction = length2 > 1.0e-8 ? direction * rsqrt(length2) : float2(1.0, 0.0);
     float2 normal = float2(-direction.y, direction.x);
 
-    float halfWidthPx = vertexIn.widthPoints * draw.pixelsPerPoint * 0.5;
-    // A pixel of margin for the edge's antialiasing.
-    float extentPx = halfWidthPx + 1.0;
-    bool atEnd = vertexIn.corner.x > 0.5;
+    float3 corner = kLayerLineCorners[vertexID % 10u];
+    bool atEnd = corner.x > 0.5;
+    uint rounding = uint(segment.color.a);
+    bool isRound = (rounding & (atEnd ? 2u : 1u)) != 0u;
+    // A round end reaches past the segment's end by the line's half
+    // width, and two segments that meet with round ends overlap in a disc,
+    // which is their join. A flat end stops at the segment's end: its
+    // corners fall onto the end's edge and its triangles are empty.
+    float outwardPx = isRound ? corner.y : 0.0;
+    float halfWidthPx = segment.widthPoints * draw.pixelsPerPoint * 0.5;
+    float2 offsetPx = (normal * corner.z + direction * (atEnd ? outwardPx : -outwardPx)) * halfWidthPx;
     LayerClip at = atEnd ? end : start;
     float4 position = atEnd ? endClip : startClip;
-    position.xy += normal * (vertexIn.corner.y * extentPx) / halfViewport * position.w;
+    position.xy += offsetPx / halfViewport * position.w;
 
     LayerLineOut out;
     out.position = position;
     out.clipDistance[0] = (startClip.w < kLayerNearW && endClip.w < kLayerNearW) ? -1.0 : at.clipDistance;
     out.worldPosition = at.worldPosition;
     out.sphereNormal = at.sphereNormal;
-    out.color = half4(float4(vertexIn.color) / 255.0);
-    out.edgePx = vertexIn.corner.y * extentPx;
-    out.halfWidthPx = halfWidthPx;
+    out.color = half4(half3(float3(segment.color.rgb) / 255.0), 1.0h);
     return out;
 }
 
+/// A line's fragment is whole: the shape is its geometry, with no edge to
+/// soften and nothing to discard, and the pass does not blend
+/// (`LayerPipeline`). So where the parts of a line overlap, or lines lie
+/// over each other, a tile-based GPU shades each pixel once, for the part
+/// drawn last, and skips the ones under it.
 fragment half4 layerLineFragment(LayerLineIn in [[stage_in]],
                                  constant GlobeLight& globeLight [[buffer(kGlobeLightBufferIndex)]],
                                  constant GroundFog& groundFog [[buffer(kGroundFogBufferIndex)]]) {
-    half4 color = in.color;
-    color.a *= half(saturate(in.halfWidthPx + 0.5 - abs(in.edgePx)));
-    return layerShade(color, in.worldPosition, in.sphereNormal, globeLight, groundFog);
+    return layerShade(in.color, in.worldPosition, in.sphereNormal, globeLight, groundFog);
 }
 
-// MARK: - Points and joins
+// MARK: - Points
 
 struct LayerPointOut {
     float4 position [[position]];
@@ -336,10 +356,11 @@ fragment half4 layerPointFragment(LayerPointIn in [[stage_in]],
     // The disc, then the ring outside it, each with a pixel of
     // antialiasing at its edge.
     half inside = half(saturate(in.radiusPx + 0.5 - distance));
+    // Outside the ring the coverage is zero, and so is the alpha: the pass
+    // blends and writes neither depth nor stencil (`LayerPipeline`), so a
+    // corner of the quad changes nothing without a discard, which would
+    // cost the GPU its early rejection of these pixels.
     half covered = half(saturate(in.radiusPx + in.strokeWidthPx + 0.5 - distance));
-    if (covered <= 0.0h) {
-        discard_fragment();
-    }
     half4 color = in.strokeWidthPx > 0.0 ? mix(in.strokeColor, in.color, inside) : in.color;
     color.a *= covered;
     return layerShade(color, in.worldPosition, in.sphereNormal, globeLight, groundFog);

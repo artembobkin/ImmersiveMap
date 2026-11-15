@@ -173,7 +173,9 @@ public struct ImmersiveMapPoint: Hashable, Sendable {
 
 /// How a zone draws: its fill and the line round it. Colours are RGBA in
 /// 0...1, the alpha straight; a zero alpha or a zero width leaves the part
-/// out.
+/// out. The fill may be translucent. The line round it is always solid:
+/// any alpha of `strokeColor` above zero draws it opaque, as a line is
+/// (`ImmersiveMapPolylineStyle`).
 public struct ImmersiveMapPolygonStyle: Hashable, Sendable {
     public var fillColor: SIMD4<Float>
     public var strokeColor: SIMD4<Float>
@@ -189,7 +191,12 @@ public struct ImmersiveMapPolygonStyle: Hashable, Sendable {
     }
 }
 
-/// How a line draws. Its joins and its ends are round.
+/// How a line draws. Its joins and its ends are round. A line is always
+/// solid: the alpha of `color` only says whether the line draws, zero
+/// leaving it out and any other value drawing it opaque. A line is drawn
+/// in parts that overlap, so a translucent one would darken itself at
+/// every vertex, and a solid one costs the GPU nothing where its parts
+/// overlap. Its edge is not softened: turn on `.msaa()` for smooth edges.
 public struct ImmersiveMapPolylineStyle: Hashable, Sendable {
     public var color: SIMD4<Float>
     /// The width on screen, in points.
