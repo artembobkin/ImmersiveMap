@@ -52,9 +52,7 @@ final class VideoExportRenderEventSink: RenderFrameEventSink, @unchecked Sendabl
     /// Scene models are excluded from export, so no animation can finish here.
     func completeSceneModelPathAnimations(_: [SceneModelPathAnimationResult]) {}
 
-    func updateAvatarSelectionSnapshot(_ snapshot: AvatarSelectionSnapshot) {}
-
-    func updateSceneModelSelectionSnapshot(_ snapshot: SceneModelSelectionSnapshot) {}
+    func updateSelectionPickData(_ pickData: [any SelectionPickData]) {}
 
     func updateDebugOverlayHUDSnapshot(_ snapshot: DebugOverlayHUDSnapshot?) {}
 

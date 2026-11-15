@@ -31,7 +31,7 @@ final class TourVideoExportEndToEndTests: XCTestCase {
                                    currentSettings: { FixtureTiles.settings() },
                                    currentCameraPosition: { nil },
                                    currentAvatarsController: { nil },
-                                   currentLayers: { [] },
+                                   currentLayersController: { nil },
                                    currentMarkerContent: { nil }))
 
         let url = FileManager.default.temporaryDirectory
@@ -127,7 +127,7 @@ final class TourVideoExportEndToEndTests: XCTestCase {
                                        currentSettings: { FixtureTiles.tilelessSettings() },
                                        currentCameraPosition: { nil },
                                        currentAvatarsController: { avatarsController },
-                                       currentLayers: { [] },
+                                       currentLayersController: { nil },
                                        currentMarkerContent: { markerContent }))
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("immersive-map-overlay-export-\(UUID().uuidString).mov")

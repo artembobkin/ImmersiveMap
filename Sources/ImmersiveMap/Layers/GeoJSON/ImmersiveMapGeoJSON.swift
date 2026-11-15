@@ -15,14 +15,14 @@ public enum ImmersiveMapGeoJSONError: Error, Equatable, Sendable {
     case invalidCoordinates(String)
 }
 
-/// GeoJSON (RFC 7946) read into the shapes of a layer
-/// (`ImmersiveMapLayer.init(id:geoJSON:)`). Positions are longitude,
-/// latitude, an altitude after them is ignored. A feature's simplestyle
-/// properties (`fill`, `fill-opacity`, `stroke`, `stroke-opacity`,
-/// `stroke-width`, `marker-color`, `marker-size`, `marker-radius`) give the
-/// shapes of its geometry a style of their own, laid over the layer's when
-/// the document is read: a property the feature does not state keeps the
-/// layer's value of that moment. A feature with a null geometry is skipped.
+/// GeoJSON (RFC 7946) read into the shapes of a source
+/// (`ImmersiveMapLayersController.register(_:geoJSON:)`). Positions are
+/// longitude, latitude, an altitude after them is ignored. A feature's
+/// simplestyle properties (`fill`, `fill-opacity`, `stroke`,
+/// `stroke-opacity`, `stroke-width`, `marker-color`, `marker-size`,
+/// `marker-radius`) are kept with the shapes of its geometry and laid over
+/// the style of each layer that draws them: a property the feature does not
+/// state takes the layer's value. A feature with a null geometry is skipped.
 enum ImmersiveMapGeoJSON {
     struct Shapes {
         var polygons: [ImmersiveMapPolygon] = []
@@ -32,7 +32,7 @@ enum ImmersiveMapGeoJSON {
 
     /// The overrides a feature's simplestyle properties state, each nil
     /// where the feature states nothing.
-    struct SimpleStyle {
+    struct SimpleStyle: Hashable, Sendable {
         var fill: SIMD3<Float>?
         var fillOpacity: Float?
         var stroke: SIMD3<Float>?
@@ -47,26 +47,18 @@ enum ImmersiveMapGeoJSON {
         }
     }
 
-    /// The layer's styles a feature's simplestyle properties are laid
-    /// over: a property the feature leaves out keeps the base's value.
-    struct BaseStyles {
-        var polygon = ImmersiveMapPolygonStyle()
-        var polyline = ImmersiveMapPolylineStyle()
-        var point = ImmersiveMapPointStyle()
-    }
-
-    static func decode(_ data: Data, base: BaseStyles = BaseStyles()) throws -> Shapes {
+    static func decode(_ data: Data) throws -> Shapes {
         guard let root = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]) else {
             throw ImmersiveMapGeoJSONError.invalidJSON
         }
-        var context = GeoJSONReadContext(base: base)
+        var context = GeoJSONReadContext()
         try context.read(object: root, style: SimpleStyle(), path: "")
         return context.shapes
     }
 
     // MARK: - Coordinates
 
-    static func polygon(_ value: Any, style: ImmersiveMapPolygonStyle?, path: String) throws -> ImmersiveMapPolygon {
+    static func polygon(_ value: Any, id: UInt64?, style: SimpleStyle?, path: String) throws -> ImmersiveMapPolygon {
         let rings = try array(value, path: path)
         guard let exterior = rings.first else {
             throw ImmersiveMapGeoJSONError.invalidCoordinates(path)
@@ -74,9 +66,9 @@ enum ImmersiveMapGeoJSON {
         let holes = try rings.dropFirst().enumerated().map { index, ring in
             try positions(ring, path: "\(path)[\(index + 1)]")
         }
-        return ImmersiveMapPolygon(exterior: try positions(exterior, path: "\(path)[0]"),
-                                   holes: holes,
-                                   style: style)
+        var polygon = ImmersiveMapPolygon(id: id, exterior: try positions(exterior, path: "\(path)[0]"), holes: holes)
+        polygon.simpleStyle = style
+        return polygon
     }
 
     static func array(_ value: Any, path: String) throws -> [Any] {
@@ -100,6 +92,15 @@ enum ImmersiveMapGeoJSON {
             throw ImmersiveMapGeoJSONError.invalidCoordinates(path)
         }
         return GeoCoordinate(latitude: latitude, longitude: longitude)
+    }
+
+    /// A feature's `id` as a shape's id: a whole number that is not
+    /// negative. A string id, a fraction or none gives nil.
+    static func featureID(_ value: Any?) -> UInt64? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        let double = number.doubleValue
+        guard double >= 0, double < 18_446_744_073_709_551_615.0, double.rounded() == double else { return nil }
+        return number.uint64Value
     }
 
     // MARK: - simplestyle
@@ -146,6 +147,20 @@ enum ImmersiveMapGeoJSON {
         }
         guard text.count == 6, let value = UInt32(text, radix: 16) else { return nil }
         return SIMD3<Float>(Float((value >> 16) & 0xFF), Float((value >> 8) & 0xFF), Float(value & 0xFF)) / 255
+    }
+
+    /// The part of a feature's style a zone, a line or a point reads, nil
+    /// when the feature states none of it, so the shape keeps nothing.
+    static func polygonPart(_ style: SimpleStyle) -> SimpleStyle? {
+        polygonStyle(style, base: ImmersiveMapPolygonStyle()) == nil ? nil : style
+    }
+
+    static func polylinePart(_ style: SimpleStyle) -> SimpleStyle? {
+        polylineStyle(style, base: ImmersiveMapPolylineStyle()) == nil ? nil : style
+    }
+
+    static func pointPart(_ style: SimpleStyle) -> SimpleStyle? {
+        pointStyle(style, base: ImmersiveMapPointStyle()) == nil ? nil : style
     }
 
     /// The overrides over the layer's styles, nil when the feature states

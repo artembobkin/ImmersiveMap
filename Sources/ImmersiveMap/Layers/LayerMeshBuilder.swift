@@ -97,7 +97,8 @@ enum LayerMeshBuilder {
     /// bring every edge under `maximumEdgeLength`.
     static let maximumSplitDepth = 20
 
-    static func build(layer: ImmersiveMapLayer) -> LayerMeshData {
+    /// The mesh of `layer` drawing `content`, the shapes of its source.
+    static func build(layer: ImmersiveMapLayer, content: LayerSourceContent) -> LayerMeshData {
         var chunks: [Tile: ChunkBuilder] = [:]
         var order: [Tile] = []
         func chunk(_ tile: Tile) -> ChunkBuilder {
@@ -108,8 +109,8 @@ enum LayerMeshBuilder {
             return builder
         }
 
-        for polygon in layer.polygons {
-            let style = polygon.style ?? layer.polygonStyle
+        for polygon in content.polygons {
+            let style = layer.style(of: polygon)
             var exterior = unwrappedWorld(polygon.exterior, reference: nil)
             guard exterior.count >= 3 else { continue }
             var holes = polygon.holes.map { unwrappedWorld($0, reference: exterior.first) }.filter { $0.count >= 3 }
@@ -127,8 +128,8 @@ enum LayerMeshBuilder {
             }
         }
 
-        for polyline in layer.polylines {
-            let style = polyline.style ?? layer.polylineStyle
+        for polyline in content.polylines {
+            let style = layer.style(of: polyline)
             guard style.color.w > 0, style.widthPoints > 0 else { continue }
             var line = unwrappedWorld(polyline.coordinates, reference: nil)
             guard line.count >= 1 else { continue }
@@ -137,8 +138,8 @@ enum LayerMeshBuilder {
             chunk(chunkTile(of: line)).appendLine(line, closed: false, widthPoints: style.widthPoints, color: style.color)
         }
 
-        for point in layer.points {
-            let style = point.style ?? layer.pointStyle
+        for point in content.points {
+            let style = layer.style(of: point)
             guard style.radiusPoints + style.strokeWidthPoints > 0,
                   style.color.w > 0 || style.strokeColor.w > 0 else { continue }
             var world = self.world(point.coordinate)

@@ -85,6 +85,7 @@ public class ImmersiveMapNSView: NSView {
          selectionController: ImmersiveMapSelectionController?,
          avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
          sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)? = nil,
+         layerTapAction: ((ImmersiveMapLayerTapEvent) -> Void)? = nil,
          frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)? = nil,
          terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)? = nil,
          markerContent: MarkerViewContent? = nil) {
@@ -97,6 +98,7 @@ public class ImmersiveMapNSView: NSView {
                                     selectionController: selectionController,
                                     avatarTapAction: avatarTapAction,
                                     sceneModelTapAction: sceneModelTapAction,
+                                    layerTapAction: layerTapAction,
                                     frameRenderedAction: frameRenderedAction,
                                     terrainSurroundingsAction: terrainSurroundingsAction)
         hostRuntime.updateMarkerContent(markerContent)
@@ -215,6 +217,7 @@ public class ImmersiveMapNSView: NSView {
                 selectionController: ImmersiveMapSelectionController?,
                 avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
                 sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)? = nil,
+                layerTapAction: ((ImmersiveMapLayerTapEvent) -> Void)? = nil,
                 frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)? = nil,
                 terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)? = nil,
                 markerContent: MarkerViewContent?,
@@ -229,6 +232,7 @@ public class ImmersiveMapNSView: NSView {
                            selectionController: selectionController,
                            avatarTapAction: avatarTapAction,
                            sceneModelTapAction: sceneModelTapAction,
+                           layerTapAction: layerTapAction,
                            frameRenderedAction: frameRenderedAction,
                            terrainSurroundingsAction: terrainSurroundingsAction,
                            markerContent: markerContent,
@@ -276,6 +280,7 @@ public class ImmersiveMapNSView: NSView {
                             selectionController: ImmersiveMapSelectionController?,
                             avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
                             sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)? = nil,
+                            layerTapAction: ((ImmersiveMapLayerTapEvent) -> Void)? = nil,
                             frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)? = nil,
                             terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)? = nil,
                             markerContent: MarkerViewContent?) {
@@ -286,6 +291,7 @@ public class ImmersiveMapNSView: NSView {
                            selectionController: selectionController,
                            avatarTapAction: avatarTapAction,
                            sceneModelTapAction: sceneModelTapAction,
+                           layerTapAction: layerTapAction,
                            frameRenderedAction: frameRenderedAction,
                            terrainSurroundingsAction: terrainSurroundingsAction,
                            markerContent: markerContent,

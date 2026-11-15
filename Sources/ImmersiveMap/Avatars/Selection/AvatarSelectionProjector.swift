@@ -47,7 +47,9 @@ struct AvatarSelectionEntry {
     }
 }
 
-struct AvatarSelectionSnapshot {
+struct AvatarSelectionSnapshot: SelectionPickData {
+    var kind: ImmersiveMapSelection.Kind { .avatar }
+
     static let empty = AvatarSelectionSnapshot(frameIndex: 0,
                                                drawSize: .zero,
                                                entries: [])

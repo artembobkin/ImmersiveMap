@@ -31,7 +31,13 @@ struct GeoJSONFeatureReader: GeoJSONObjectReader {
               into context: inout GeoJSONReadContext) throws {
         let properties = object["properties"] as? [String: Any] ?? [:]
         let featureStyle = ImmersiveMapGeoJSON.simpleStyle(of: properties)
+        // The shapes of a feature go by its id when it is a whole number,
+        // and by the feature's place in the document otherwise.
+        let index = UInt64(context.featureCount)
+        context.featureCount += 1
         guard let geometry = object["geometry"], (geometry is NSNull) == false else { return }
+        context.featureID = ImmersiveMapGeoJSON.featureID(object["id"]) ?? index
+        defer { context.featureID = nil }
         try context.read(object: geometry, style: featureStyle, path: "\(path)geometry.")
     }
 }

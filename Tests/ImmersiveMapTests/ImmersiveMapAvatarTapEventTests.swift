@@ -17,7 +17,7 @@ final class ImmersiveMapAvatarTapEventTests: XCTestCase {
     func testAvatarTapActionReceivesTappedMarkerWithoutSelectionController() throws {
         let environment = try makeEnvironment()
         var receivedEvents: [ImmersiveMapAvatarTapEvent] = []
-        environment.selectionHandler.setAvatarTapAction { event in
+        environment.avatarSelection.tapAction = { event in
             receivedEvents.append(event)
         }
 
@@ -46,7 +46,7 @@ final class ImmersiveMapAvatarTapEventTests: XCTestCase {
 
         var tapEventCount = 0
         var selectionChangeCount = 0
-        environment.selectionHandler.setAvatarTapAction { _ in
+        environment.avatarSelection.tapAction = { _ in
             tapEventCount += 1
         }
         selectionController.onSelectionChanged = { _ in
@@ -67,7 +67,7 @@ final class ImmersiveMapAvatarTapEventTests: XCTestCase {
     func testBackgroundTapDoesNotFireAvatarTapAction() throws {
         let environment = try makeEnvironment()
         var tapEventCount = 0
-        environment.selectionHandler.setAvatarTapAction { _ in
+        environment.avatarSelection.tapAction = { _ in
             tapEventCount += 1
         }
 
@@ -80,6 +80,7 @@ final class ImmersiveMapAvatarTapEventTests: XCTestCase {
     @MainActor
     private struct Environment {
         let selectionHandler: ImmersiveMapSelectionHandler
+        let avatarSelection: AvatarSelection
         let avatarsController: ImmersiveMapAvatarsController
     }
 
@@ -90,10 +91,11 @@ final class ImmersiveMapAvatarTapEventTests: XCTestCase {
         let avatarRuntime = ImmersiveMapAvatarRuntime()
         let viewportRuntime = ImmersiveMapViewportRuntime()
         let renderRuntime = ImmersiveMapRenderRuntime(configuration: ImmersiveMapSettings.default.renderLoop)
-        let selectionHandler = ImmersiveMapSelectionHandler(avatarRuntime: avatarRuntime,
-                                                            sceneModelRuntime: ImmersiveMapSceneModelRuntime(),
-                                                            viewportRuntime: viewportRuntime,
-                                                            renderRuntime: renderRuntime)
+        let avatarSelection = AvatarSelection(source: avatarRuntime)
+        let selectionHandler = ImmersiveMapSelectionHandler(
+            host: ImmersiveMapSelectionHost(viewportRuntime: viewportRuntime,
+                                            renderRuntime: renderRuntime),
+            features: [avatarSelection])
 
         let avatarsController = ImmersiveMapAvatarsController()
         avatarsController.add(AvatarMarker(id: markerID,
@@ -110,15 +112,16 @@ final class ImmersiveMapAvatarTapEventTests: XCTestCase {
                             y: anchorPoint.y,
                             width: 100,
                             height: 100)
-        selectionHandler.updateAvatarSelectionSnapshot(
+        selectionHandler.updatePickData([
             AvatarSelectionSnapshot(frameIndex: 1,
                                     drawSize: drawSize,
                                     entries: [AvatarSelectionEntry(markerID: markerID,
                                                                    bounds: bounds,
                                                                    anchorPoint: anchorPoint,
                                                                    drawOrder: 0)])
-        )
+        ])
         return Environment(selectionHandler: selectionHandler,
+                           avatarSelection: avatarSelection,
                            avatarsController: avatarsController)
     }
 

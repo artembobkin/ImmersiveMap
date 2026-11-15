@@ -4,33 +4,36 @@
 import Foundation
 import simd
 
-/// A layer of the app's own data drawn over the map: zones as polygons,
-/// paths as lines, and points, as many as the data has. A layer lies on
-/// the ground, over the map's fills and roads and under its names and
-/// buildings, on the globe, on the flat map and through the morph between
-/// them. A map draws the layers its controller holds
-/// (`ImmersiveMapLayersController`, `ImmersiveMapView.layers(_:)`):
+/// A layer of the app's own data drawn over the map: how one registered
+/// source is drawn. The data is registered with the map's controller under
+/// a name (`ImmersiveMapLayersController.register`), and a layer names the
+/// source it draws and gives the styles, the zooms and the visibility:
 ///
-///     let zones = try ImmersiveMapLayer(id: "zones", geoJSON: data,
-///                                       polygonStyle: ImmersiveMapPolygonStyle(fillColor: [0.9, 0.3, 0.2, 0.3]))
-///     let stations = ImmersiveMapLayer(id: "stations",
-///                                      points: coordinates.map { ImmersiveMapPoint(coordinate: $0) })
-///     layers.set([zones, stations])
+///     layers.register("zones", geoJSONFile: zonesURL)
+///     layers.register("stations", identity: "v1", points: coordinates.map { ImmersiveMapPoint(coordinate: $0) })
+///     layers.set([
+///         ImmersiveMapLayer(source: "zones",
+///                           polygonStyle: ImmersiveMapPolygonStyle(fillColor: [0.9, 0.3, 0.2, 0.3])),
+///         ImmersiveMapLayer(source: "stations", zoomRange: 12 ... 30)
+///     ])
 ///
-/// Every shape draws in the layer's style for its kind unless it carries
-/// its own. The data is read once, when the layer is made: two layers made
-/// from the same data compare equal, so setting the same layers again
-/// redraws nothing. A changed layer is prepared for the GPU off the main
-/// thread and replaces the old one when it is ready.
+/// A layer lies on the ground, over the map's fills and roads and under its
+/// names and buildings, on the globe, on the flat map and through the morph
+/// between them. Every shape draws in the layer's style for its kind unless
+/// it carries its own. Several layers can draw one source, each its own
+/// way. A layer is a small value: making the same layers again on every
+/// view update redraws nothing.
 public struct ImmersiveMapLayer: Identifiable, Equatable, Sendable {
     /// The layer's identity among the map's layers.
     public let id: String
+    /// The name of the registered source the layer draws.
+    public var source: String
     /// How the shapes of each kind draw when they carry no style of their own.
     public var polygonStyle: ImmersiveMapPolygonStyle
     public var polylineStyle: ImmersiveMapPolylineStyle
     public var pointStyle: ImmersiveMapPointStyle
-    /// Whether the layer draws. A hidden layer keeps its data on the GPU,
-    /// so showing it again is immediate.
+    /// Whether the layer draws. A hidden layer keeps what the map prepared
+    /// of it while memory allows, so showing it again is immediate.
     public var isVisible: Bool
     /// The camera zooms the layer draws at.
     public var zoomRange: ClosedRange<Double>
@@ -42,83 +45,57 @@ public struct ImmersiveMapLayer: Identifiable, Equatable, Sendable {
     /// cover it. Applies live.
     public var hidesBehindTerrain: Bool
 
-    let content: ImmersiveMapLayerContent
-
-    /// The layer's zones.
-    public var polygons: [ImmersiveMapPolygon] { content.polygons }
-    /// The layer's lines.
-    public var polylines: [ImmersiveMapPolyline] { content.polylines }
-    /// The layer's points.
-    public var points: [ImmersiveMapPoint] { content.points }
-
-    public init(id: String,
-                polygons: [ImmersiveMapPolygon] = [],
-                polylines: [ImmersiveMapPolyline] = [],
-                points: [ImmersiveMapPoint] = [],
+    /// A layer that draws `source`. Its `id` is the source's name unless
+    /// one is given, which several layers of one source need.
+    public init(id: String? = nil,
+                source: String,
                 polygonStyle: ImmersiveMapPolygonStyle = ImmersiveMapPolygonStyle(),
                 polylineStyle: ImmersiveMapPolylineStyle = ImmersiveMapPolylineStyle(),
                 pointStyle: ImmersiveMapPointStyle = ImmersiveMapPointStyle(),
                 isVisible: Bool = true,
                 zoomRange: ClosedRange<Double> = 0 ... 30,
                 hidesBehindTerrain: Bool = false) {
-        self.id = id
+        self.id = id ?? source
+        self.source = source
         self.hidesBehindTerrain = hidesBehindTerrain
         self.polygonStyle = polygonStyle
         self.polylineStyle = polylineStyle
         self.pointStyle = pointStyle
         self.isVisible = isVisible
         self.zoomRange = zoomRange
-        self.content = ImmersiveMapLayerContent(polygons: polygons, polylines: polylines, points: points)
     }
 
-    /// A layer of a GeoJSON document (RFC 7946): a FeatureCollection, a
-    /// Feature, a GeometryCollection or a bare geometry. Polygons and
-    /// MultiPolygons are zones, LineStrings and MultiLineStrings lines,
-    /// Points and MultiPoints points. A feature's simplestyle properties
-    /// (`fill`, `fill-opacity`, `stroke`, `stroke-opacity`, `stroke-width`,
-    /// `marker-color`, `marker-size`, `marker-radius`) give it a style of
-    /// its own, laid over the styles given here: a later change of the
-    /// layer's style reaches the features that state none. Throws `ImmersiveMapGeoJSONError` for a document that is not
-    /// GeoJSON.
-    public init(id: String,
-                geoJSON: Data,
-                polygonStyle: ImmersiveMapPolygonStyle = ImmersiveMapPolygonStyle(),
-                polylineStyle: ImmersiveMapPolylineStyle = ImmersiveMapPolylineStyle(),
-                pointStyle: ImmersiveMapPointStyle = ImmersiveMapPointStyle(),
-                isVisible: Bool = true,
-                zoomRange: ClosedRange<Double> = 0 ... 30,
-                hidesBehindTerrain: Bool = false) throws {
-        let shapes = try ImmersiveMapGeoJSON.decode(geoJSON, base: ImmersiveMapGeoJSON.BaseStyles(polygon: polygonStyle,
-                                                                                                 polyline: polylineStyle,
-                                                                                                 point: pointStyle))
-        self.init(id: id,
-                  polygons: shapes.polygons,
-                  polylines: shapes.polylines,
-                  points: shapes.points,
-                  polygonStyle: polygonStyle,
-                  polylineStyle: polylineStyle,
-                  pointStyle: pointStyle,
-                  isVisible: isVisible,
-                  zoomRange: zoomRange,
-                  hidesBehindTerrain: hidesBehindTerrain)
+    /// Whether the layer draws at the camera's `zoom`.
+    func draws(atZoom zoom: Double) -> Bool {
+        isVisible && zoomRange.contains(zoom)
     }
 
-    public static func == (lhs: ImmersiveMapLayer, rhs: ImmersiveMapLayer) -> Bool {
-        lhs.id == rhs.id
-            && lhs.polygonStyle == rhs.polygonStyle
-            && lhs.polylineStyle == rhs.polylineStyle
-            && lhs.pointStyle == rhs.pointStyle
-            && lhs.isVisible == rhs.isVisible
-            && lhs.zoomRange == rhs.zoomRange
-            && lhs.hidesBehindTerrain == rhs.hidesBehindTerrain
-            && lhs.content.fingerprint == rhs.content.fingerprint
+    /// The style a shape of the layer's source draws in: its own, or what
+    /// its GeoJSON feature states laid over the layer's, or the layer's.
+    func style(of polygon: ImmersiveMapPolygon) -> ImmersiveMapPolygonStyle {
+        polygon.style
+            ?? polygon.simpleStyle.flatMap { ImmersiveMapGeoJSON.polygonStyle($0, base: polygonStyle) }
+            ?? polygonStyle
     }
 
-    /// What the GPU form of the layer depends on: its data and the styles
-    /// baked into it. A change of visibility, zoom range or how the
-    /// terrain hides it is not one.
-    var meshKey: LayerMeshKey {
-        LayerMeshKey(contentFingerprint: content.fingerprint,
+    func style(of polyline: ImmersiveMapPolyline) -> ImmersiveMapPolylineStyle {
+        polyline.style
+            ?? polyline.simpleStyle.flatMap { ImmersiveMapGeoJSON.polylineStyle($0, base: polylineStyle) }
+            ?? polylineStyle
+    }
+
+    func style(of point: ImmersiveMapPoint) -> ImmersiveMapPointStyle {
+        point.style
+            ?? point.simpleStyle.flatMap { ImmersiveMapGeoJSON.pointStyle($0, base: pointStyle) }
+            ?? pointStyle
+    }
+
+    /// What the GPU form of the layer depends on: its source's data as of
+    /// `sourceRevision` and the styles baked into it. A change of
+    /// visibility, zoom range or how the terrain hides it is not one.
+    func meshKey(sourceRevision: UInt64) -> LayerMeshKey {
+        LayerMeshKey(source: source,
+                     sourceRevision: sourceRevision,
                      polygonStyle: polygonStyle,
                      polylineStyle: polylineStyle,
                      pointStyle: pointStyle)
@@ -131,12 +108,23 @@ public struct ImmersiveMapLayer: Identifiable, Equatable, Sendable {
 /// meridian is drawn whole when its longitudes run on past ±180 instead of
 /// jumping back.
 public struct ImmersiveMapPolygon: Hashable, Sendable {
+    /// Names the zone in a selection and in a tap event, within its
+    /// source. Left nil, the zone goes by its place among the source's
+    /// shapes (`ImmersiveMapLayersController.register`).
+    public var id: UInt64?
     public var exterior: [GeoCoordinate]
     public var holes: [[GeoCoordinate]]
     /// The zone's own style, nil for the layer's.
     public var style: ImmersiveMapPolygonStyle?
+    /// What a GeoJSON feature states of its style, laid over the style of
+    /// the layer that draws it.
+    var simpleStyle: ImmersiveMapGeoJSON.SimpleStyle?
 
-    public init(exterior: [GeoCoordinate], holes: [[GeoCoordinate]] = [], style: ImmersiveMapPolygonStyle? = nil) {
+    public init(id: UInt64? = nil,
+                exterior: [GeoCoordinate],
+                holes: [[GeoCoordinate]] = [],
+                style: ImmersiveMapPolygonStyle? = nil) {
+        self.id = id
         self.exterior = exterior
         self.holes = holes
         self.style = style
@@ -145,11 +133,19 @@ public struct ImmersiveMapPolygon: Hashable, Sendable {
 
 /// A line through its coordinates: a path, a track, a border.
 public struct ImmersiveMapPolyline: Hashable, Sendable {
+    /// Names the line in a selection and in a tap event, within its
+    /// source. Left nil, the line goes by its place among the source's
+    /// shapes.
+    public var id: UInt64?
     public var coordinates: [GeoCoordinate]
     /// The line's own style, nil for the layer's.
     public var style: ImmersiveMapPolylineStyle?
+    /// What a GeoJSON feature states of its style, laid over the style of
+    /// the layer that draws it.
+    var simpleStyle: ImmersiveMapGeoJSON.SimpleStyle?
 
-    public init(coordinates: [GeoCoordinate], style: ImmersiveMapPolylineStyle? = nil) {
+    public init(id: UInt64? = nil, coordinates: [GeoCoordinate], style: ImmersiveMapPolylineStyle? = nil) {
+        self.id = id
         self.coordinates = coordinates
         self.style = style
     }
@@ -157,11 +153,19 @@ public struct ImmersiveMapPolyline: Hashable, Sendable {
 
 /// A point: a dot of a size on screen, whatever the zoom.
 public struct ImmersiveMapPoint: Hashable, Sendable {
+    /// Names the point in a selection and in a tap event, within its
+    /// source. Left nil, the point goes by its place among the source's
+    /// shapes.
+    public var id: UInt64?
     public var coordinate: GeoCoordinate
     /// The point's own style, nil for the layer's.
     public var style: ImmersiveMapPointStyle?
+    /// What a GeoJSON feature states of its style, laid over the style of
+    /// the layer that draws it.
+    var simpleStyle: ImmersiveMapGeoJSON.SimpleStyle?
 
-    public init(coordinate: GeoCoordinate, style: ImmersiveMapPointStyle? = nil) {
+    public init(id: UInt64? = nil, coordinate: GeoCoordinate, style: ImmersiveMapPointStyle? = nil) {
+        self.id = id
         self.coordinate = coordinate
         self.style = style
     }
@@ -216,79 +220,10 @@ public struct ImmersiveMapPointStyle: Hashable, Sendable {
     }
 }
 
-/// A layer's data, read once: shared by every copy of the layer, and
-/// compared by a fingerprint of every coordinate and style it holds, so a
-/// layer rebuilt from the same data on every view update is the same layer.
-final class ImmersiveMapLayerContent: Sendable {
-    let polygons: [ImmersiveMapPolygon]
-    let polylines: [ImmersiveMapPolyline]
-    let points: [ImmersiveMapPoint]
-    let fingerprint: UInt64
-
-    init(polygons: [ImmersiveMapPolygon], polylines: [ImmersiveMapPolyline], points: [ImmersiveMapPoint]) {
-        self.polygons = polygons
-        self.polylines = polylines
-        self.points = points
-        var hasher = StableFNV1aHasher()
-        func add(_ coordinate: GeoCoordinate) {
-            hasher.combine(coordinate.latitude.bitPattern)
-            hasher.combine(coordinate.longitude.bitPattern)
-        }
-        func add(_ color: SIMD4<Float>) {
-            for index in 0 ..< 4 {
-                hasher.combine(UInt64(color[index].bitPattern))
-            }
-        }
-        func add(_ value: Float) {
-            hasher.combine(UInt64(value.bitPattern))
-        }
-        hasher.combine(UInt64(polygons.count))
-        for polygon in polygons {
-            hasher.combine(UInt64(polygon.exterior.count))
-            polygon.exterior.forEach(add)
-            hasher.combine(UInt64(polygon.holes.count))
-            for hole in polygon.holes {
-                hasher.combine(UInt64(hole.count))
-                hole.forEach(add)
-            }
-            if let style = polygon.style {
-                add(style.fillColor)
-                add(style.strokeColor)
-                add(style.strokeWidthPoints)
-            } else {
-                hasher.combine(0)
-            }
-        }
-        hasher.combine(UInt64(polylines.count))
-        for polyline in polylines {
-            hasher.combine(UInt64(polyline.coordinates.count))
-            polyline.coordinates.forEach(add)
-            if let style = polyline.style {
-                add(style.color)
-                add(style.widthPoints)
-            } else {
-                hasher.combine(0)
-            }
-        }
-        hasher.combine(UInt64(points.count))
-        for point in points {
-            add(point.coordinate)
-            if let style = point.style {
-                add(style.color)
-                add(style.radiusPoints)
-                add(style.strokeColor)
-                add(style.strokeWidthPoints)
-            } else {
-                hasher.combine(0)
-            }
-        }
-        fingerprint = hasher.finalize()
-    }
-}
-
 /// What a layer's GPU form is made of (`LayerMeshStore`).
 struct LayerMeshKey: Hashable, Sendable {
-    let contentFingerprint: UInt64
+    let source: String
+    let sourceRevision: UInt64
     let polygonStyle: ImmersiveMapPolygonStyle
     let polylineStyle: ImmersiveMapPolylineStyle
     let pointStyle: ImmersiveMapPointStyle

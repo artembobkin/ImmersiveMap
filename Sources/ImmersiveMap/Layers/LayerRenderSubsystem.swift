@@ -6,17 +6,19 @@ import simd
 
 /// The `Layers` folder: the layers of the app's own data drawn over the map
 /// (`ImmersiveMapLayer`), from the public model and its GeoJSON reading to
-/// the meshes (`LayerMeshBuilder`, `LayerMeshStore`), the pipelines and
-/// the shaders, and this subsystem. The data comes in through one seam,
+/// the registered sources (`Sources/`, `LayerSourceLibrary`), the meshes
+/// (`LayerMeshBuilder`, `LayerMeshStore`), the pipelines and the shaders,
+/// and this subsystem. The data comes in through one seam,
 /// `LayerRenderSource`, read every frame: the app's controller behind the
 /// map view (`ImmersiveMapLayersController`), fixed layers behind an export.
 /// Nothing here knows the map's tiles, its schema or its style, and nothing
 /// of the layers is configuration: `ImmersiveMapSettings` holds none of it.
 ///
-/// Draws the layers on the ground of whichever surface the frame shows: in
-/// the flat map's roads layer, after the roads and the trees' shadows, and
-/// in the globe's surface layer, after its ground, so the labels painted on
-/// the map come over them on both. A layer draws its zones, then its lines
+/// Draws the layers on the ground of whichever surface the frame shows, in
+/// a render layer of their own (`RenderLayer.appLayers`): after the flat
+/// map's roads and the trees' shadows, after the globe's ground, so the
+/// labels painted on the map come over them on both. A frame with no layer
+/// to draw leaves the render layer out. A layer draws its zones, then its lines
 /// and their joins, then its points, the layers in the order they are set.
 /// On the flat map a chunk draws in the copy of the world nearest the
 /// camera, and in its neighbours too at the zooms that show more than one,
@@ -26,7 +28,7 @@ import simd
 /// (`ImmersiveMapLayer.hidesBehindTerrain`): the buildings, the models and
 /// the trees cover it through the surface mask bit they raise in the
 /// stencil (`LayerPipeline.overGroundState`).
-final class LayerRenderSubsystem: RenderSubsystem {
+final class LayerRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProvider {
     let name: String = "Layers"
 
     private let source: LayerRenderSource
@@ -52,36 +54,63 @@ final class LayerRenderSubsystem: RenderSubsystem {
 
     func update(frameContext: FrameContext) {
         let layers = source.currentLayers
-        // Every layer is kept built, a hidden one too, so showing it again
-        // is immediate.
-        let (meshes, pendingCount) = store.meshes(for: layers)
-        // For whoever waits for a settled scene (a still capture): a mesh
-        // is built off the main thread and raises no activity, so nothing
-        // else says the layers are not all drawn as they were set.
-        frameContext.services.diagnostics.incrementCounter(.pendingLayerMeshes, by: pendingCount)
         let zoom = frameContext.planningZoom
+        let (meshes, contents, pendingCount) = store.meshes(for: layers, zoom: zoom, library: source.sourceLibrary)
+        // For whoever waits for a settled scene (a still capture): a source
+        // is read and a mesh is built off the main thread and neither
+        // raises an activity, so nothing else says the layers are not all
+        // drawn as they were set.
+        frameContext.services.diagnostics.incrementCounter(.pendingLayerMeshes, by: pendingCount)
         drawn = zip(layers, meshes).compactMap { layer, mesh in
-            guard layer.isVisible, layer.zoomRange.contains(zoom), let mesh, mesh.chunks.isEmpty == false else {
+            guard layer.draws(atZoom: zoom), let mesh, mesh.chunks.isEmpty == false else {
                 return nil
             }
             return (mesh, layer.hidesBehindTerrain)
         }
+        publishPickData(layers: layers, meshes: meshes, contents: contents, zoom: zoom, frameContext: frameContext)
+    }
+
+    /// What a tap can land on: the layers this frame draws whose shapes
+    /// are at hand, with the projection it draws them by.
+    private func publishPickData(layers: [ImmersiveMapLayer],
+                                 meshes: [LayerMesh?],
+                                 contents: [LayerSourceContent?],
+                                 zoom: Double,
+                                 frameContext: FrameContext) {
+        var entries: [LayerSelectionSnapshot.Entry] = []
+        for (index, layer) in layers.enumerated() {
+            guard layer.draws(atZoom: zoom), meshes[index] != nil, let content = contents[index] else { continue }
+            entries.append(LayerSelectionSnapshot.Entry(layer: layer, content: content))
+        }
+        let projection = entries.isEmpty ? nil : GeoScreenProjectionMath.FrameConstants(
+            drawSize: frameContext.drawSize,
+            cameraUniform: frameContext.cameraUniform,
+            resolvedPresentation: frameContext.resolvedPresentation)
+        // An empty snapshot too: a layer that stops being drawn stops
+        // being tappable.
+        frameContext.sharedState.selectionPickData.append(LayerSelectionSnapshot(frameIndex: frameContext.frameIndex,
+                                                                                drawSize: frameContext.drawSize,
+                                                                                projection: projection,
+                                                                                entries: entries))
     }
 
     func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
 
+    func contributePassAvailability(settings _: ImmersiveMapSettings,
+                                    builder: inout RenderPassAvailabilityBuilder) {
+        builder.appLayersEnabled = builder.appLayersEnabled || drawn.isEmpty == false
+    }
+
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
-        guard drawn.isEmpty == false else { return }
+        guard layer == .appLayers, drawn.isEmpty == false else { return }
         let surface: LayerPipeline.Surface
-        switch (layer, frameContext.renderSurfaceMode) {
-        case (.flatMapRoads, .flat):
+        switch frameContext.renderSurfaceMode {
+        case .flat:
             surface = .flat
-        case (.globeVectorSurface, .spherical):
+        case .spherical:
             let globe = frameContext.globeRenderUniform
             surface = GlobeSphereVertexPath.isPureSphere(renderSurfaceMode: frameContext.renderSurfaceMode,
                                                           transition: globe.transition) ? .sphere : .morph
-        default:
-            return
         }
 
         encoder.pushDebugGroup("layers")
@@ -223,7 +252,13 @@ final class LayerRenderSubsystem: RenderSubsystem {
         }
     }
 
-    func handleMemoryWarning() {}
+    /// The layers that are not drawn give back their meshes and their
+    /// sources' shapes.
+    func handleMemoryWarning() {
+        store.releaseUndrawn()
+    }
 
-    func evict() {}
+    func evict() {
+        store.releaseAll()
+    }
 }

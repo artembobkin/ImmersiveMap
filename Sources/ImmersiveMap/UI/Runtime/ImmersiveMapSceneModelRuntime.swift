@@ -6,7 +6,7 @@ import Foundation
 /// Owns the scene models controller attached to a single map view runtime.
 /// Bridges model mutations to the render runtime and feeds model data to the renderer.
 @MainActor
-final class ImmersiveMapSceneModelRuntime: @preconcurrency SceneModelRenderSource {
+final class ImmersiveMapSceneModelRuntime: @preconcurrency SceneModelRenderSource, SceneModelSelectionSource {
     private weak var controller: ImmersiveMapSceneModelsController?
 
     var currentSceneModelsController: ImmersiveMapSceneModelsController? {
@@ -27,11 +27,11 @@ final class ImmersiveMapSceneModelRuntime: @preconcurrency SceneModelRenderSourc
         controller?.clearChangeHandler(ownedBy: self)
         controller = newController
         newController?.setChangeHandler({ [weak selectionHandler, weak renderRuntime] in
-            selectionHandler?.handleSceneModelControllerDidChange()
+            selectionHandler?.handleFeatureDidChange()
             renderRuntime?.requestFrame()
         }, owner: self)
         newController?.markSnapshotDirty()
-        selectionHandler.syncSelectionWithAvailableMapObjects()
+        selectionHandler.syncSelectionWithAvailableObjects()
         renderRuntime.requestFrame()
     }
 

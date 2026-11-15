@@ -63,11 +63,11 @@ extension ImmersiveMapHostView {
     }
 
     func setAvatarSelectionSnapshotForTesting(_ snapshot: AvatarSelectionSnapshot) {
-        selectionHandler.updateAvatarSelectionSnapshot(snapshot)
+        selectionHandler.updatePickData([snapshot])
     }
 
     func setSceneModelSelectionSnapshotForTesting(_ snapshot: SceneModelSelectionSnapshot) {
-        selectionHandler.updateSceneModelSelectionSnapshot(snapshot)
+        selectionHandler.updatePickData([snapshot])
     }
 
     var rendererForTesting: RenderFrameEngine? {

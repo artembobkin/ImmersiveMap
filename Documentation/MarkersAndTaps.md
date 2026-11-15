@@ -75,8 +75,10 @@ ImmersiveMapView()
     .selection(selection)
 ```
 
-A tap selects an avatar or a model, and a tap on the empty map clears the selection. `onSelectionChanged` and `onSelectionCleared` report it, and `select(_:)` and `clearSelection()` change it from code:
+A tap selects an avatar, a model or a shape of a layer, and a tap on the empty map clears the selection. `onSelectionChanged` and `onSelectionCleared` report it, and `select(_:)` and `clearSelection()` change it from code:
 
 ```swift
 selection.select(ImmersiveMapSelection(kind: .avatar, objectID: 1))
 ```
+
+A selection names its object by a `kind` and the object's id: `.avatar`, `.sceneModel`, or `.layer("zones")` for a shape of a layer (see [Your own data](Layers.md)). The kinds are an open set, so a `switch` over one needs a `default`.

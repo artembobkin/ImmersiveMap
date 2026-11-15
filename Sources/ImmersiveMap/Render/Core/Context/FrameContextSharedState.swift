@@ -59,11 +59,9 @@ struct RoadLabelState {
 }
 
 struct AvatarState {
-    static let empty = AvatarState(hasActiveAnimations: false,
-                                   selectionSnapshot: .empty)
+    static let empty = AvatarState(hasActiveAnimations: false)
 
     var hasActiveAnimations: Bool
-    var selectionSnapshot: AvatarSelectionSnapshot
 }
 
 /// One model tile that casts into the frame's shadow map: the loaded tile
@@ -119,7 +117,6 @@ struct SceneModelFrameState {
     static let empty = SceneModelFrameState(hasActiveAnimations: false,
                                             hasShadowCasters: false,
                                             hasDrawnModels: false,
-                                            selectionSnapshot: .empty,
                                             pathAnimationResults: [])
 
     var hasActiveAnimations: Bool
@@ -141,9 +138,6 @@ struct SceneModelFrameState {
     var replacedBuildings = ReplacedBuildings.none
     /// At least one model draws in the world pass this frame.
     var hasDrawnModels: Bool
-    /// Hit volumes of the models this frame drew, published after the frame
-    /// reaches the screen so taps are tested against what is visible.
-    var selectionSnapshot: SceneModelSelectionSnapshot
     /// Path animations that ended on this frame, with the transform they left
     /// the model at; the engine forwards them so the controller's descriptor
     /// stays truthful and the app's completion fires exactly once.
@@ -167,6 +161,11 @@ final class FrameContextSharedState {
     var avatarState: AvatarState = .empty
     var sceneModelState: SceneModelFrameState = .empty
     var markerState: MarkerFrameState = .empty
+    /// What the frame drew that a tap can land on, one entry from each
+    /// feature that drew something selectable (`SelectionPickData`). The
+    /// engine hands it on once the frame reaches the screen, so taps are
+    /// tested against what is visible.
+    var selectionPickData: [any SelectionPickData] = []
     /// The model tiles (`ModelTileStore.tileZoom`) still on their way this
     /// frame, set in `update` by `ModelTileRenderSubsystem`: the buildings
     /// under them wait, so the ones a model stands in for are left out

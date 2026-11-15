@@ -23,7 +23,7 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
     func testSceneModelTapActionReceivesTheModelWithoutSelectionController() throws {
         let environment = makeEnvironment()
         var receivedEvents: [ImmersiveMapSceneModelTapEvent] = []
-        environment.selectionHandler.setSceneModelTapAction { receivedEvents.append($0) }
+        environment.sceneModelSelection.tapAction = { receivedEvents.append($0) }
 
         let result = environment.selectionHandler.handleMapTap(at: modelTapPoint)
 
@@ -41,7 +41,7 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
     func testTapEventReportsTheDrawnCoordinateRatherThanTheDescriptorDestination() throws {
         let environment = makeEnvironment()
         var receivedEvent: ImmersiveMapSceneModelTapEvent?
-        environment.selectionHandler.setSceneModelTapAction { receivedEvent = $0 }
+        environment.sceneModelSelection.tapAction = { receivedEvent = $0 }
 
         _ = environment.selectionHandler.handleMapTap(at: modelTapPoint)
 
@@ -61,7 +61,7 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
     func testBackgroundTapDoesNotFireSceneModelTapAction() {
         let environment = makeEnvironment()
         var tapEventCount = 0
-        environment.selectionHandler.setSceneModelTapAction { _ in tapEventCount += 1 }
+        environment.sceneModelSelection.tapAction = { _ in tapEventCount += 1 }
 
         XCTAssertEqual(environment.selectionHandler.handleMapTap(at: backgroundTapPoint), .background)
         XCTAssertEqual(tapEventCount, 0)
@@ -75,7 +75,7 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
 
         var tapEventCount = 0
         var selectionChangeCount = 0
-        environment.selectionHandler.setSceneModelTapAction { _ in tapEventCount += 1 }
+        environment.sceneModelSelection.tapAction = { _ in tapEventCount += 1 }
         selectionController.onSelectionChanged = { _ in selectionChangeCount += 1 }
 
         XCTAssertEqual(environment.selectionHandler.handleMapTap(at: modelTapPoint), .consumed)
@@ -114,8 +114,8 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
 
         var avatarTapCount = 0
         var sceneModelTapCount = 0
-        environment.selectionHandler.setAvatarTapAction { _ in avatarTapCount += 1 }
-        environment.selectionHandler.setSceneModelTapAction { _ in sceneModelTapCount += 1 }
+        environment.avatarSelection.tapAction = { _ in avatarTapCount += 1 }
+        environment.sceneModelSelection.tapAction = { _ in sceneModelTapCount += 1 }
 
         XCTAssertEqual(environment.selectionHandler.handleMapTap(at: modelTapPoint), .consumed)
         XCTAssertEqual(avatarTapCount, 1)
@@ -129,7 +129,7 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
         let environment = makeEnvironment()
         try environment.addAvatar(id: 5, covering: modelTapPoint)
         var sceneModelTapCount = 0
-        environment.selectionHandler.setSceneModelTapAction { _ in sceneModelTapCount += 1 }
+        environment.sceneModelSelection.tapAction = { _ in sceneModelTapCount += 1 }
 
         XCTAssertEqual(environment.selectionHandler.handleMapTap(at: modelTapPoint), .consumed)
         XCTAssertEqual(sceneModelTapCount, 1)
@@ -140,7 +140,7 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
         let environment = makeEnvironment()
         let selectionController = ImmersiveMapSelectionController()
         environment.selectionHandler.syncController(selectionController)
-        environment.selectionHandler.setSceneModelTapAction { _ in }
+        environment.sceneModelSelection.tapAction = { _ in }
         XCTAssertEqual(environment.selectionHandler.handleMapTap(at: modelTapPoint), .consumed)
 
         environment.sceneModelsController.remove(id: modelID)
@@ -153,14 +153,14 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
     @MainActor
     func testOlderSnapshotDoesNotReplaceTheCurrentOne() {
         let environment = makeEnvironment()
-        environment.selectionHandler.setSceneModelTapAction { _ in }
+        environment.sceneModelSelection.tapAction = { _ in }
 
-        environment.selectionHandler.updateSceneModelSelectionSnapshot(
+        environment.selectionHandler.updatePickData([
             SceneModelSelectionSnapshot(frameIndex: 1,
                                         drawSize: camera.drawSize,
                                         projectionView: camera.projectionView,
                                         cameraEye: camera.eye,
-                                        entries: []))
+                                        entries: [])])
 
         XCTAssertEqual(environment.selectionHandler.handleMapTap(at: modelTapPoint), .consumed,
                        "An older frame's snapshot must not displace the current one")
@@ -171,6 +171,8 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
     @MainActor
     private struct Environment {
         let selectionHandler: ImmersiveMapSelectionHandler
+        let avatarSelection: AvatarSelection
+        let sceneModelSelection: SceneModelSelection
         let sceneModelsController: ImmersiveMapSceneModelsController
         let avatarsController: ImmersiveMapAvatarsController
         let drawSize: CGSize
@@ -182,7 +184,7 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
                                                coordinate: GeoCoordinate(latitude: 0, longitude: 0),
                                                image: try Environment.makeTestImage()))
             let anchorPoint = CGPoint(x: point.x, y: drawSize.height - point.y - 50)
-            selectionHandler.updateAvatarSelectionSnapshot(
+            selectionHandler.updatePickData([
                 AvatarSelectionSnapshot(frameIndex: 1,
                                         drawSize: drawSize,
                                         entries: [AvatarSelectionEntry(markerID: id,
@@ -192,7 +194,7 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
                                                                                       height: 100),
                                                                        anchorPoint: anchorPoint,
                                                                        drawOrder: 0)])
-            )
+            ])
         }
 
         private static func makeTestImage() throws -> CGImage {
@@ -223,10 +225,12 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
         let sceneModelRuntime = ImmersiveMapSceneModelRuntime()
         let viewportRuntime = ImmersiveMapViewportRuntime()
         let renderRuntime = ImmersiveMapRenderRuntime(configuration: ImmersiveMapSettings.default.renderLoop)
-        let selectionHandler = ImmersiveMapSelectionHandler(avatarRuntime: avatarRuntime,
-                                                            sceneModelRuntime: sceneModelRuntime,
-                                                            viewportRuntime: viewportRuntime,
-                                                            renderRuntime: renderRuntime)
+        let avatarSelection = AvatarSelection(source: avatarRuntime)
+        let sceneModelSelection = SceneModelSelection(source: sceneModelRuntime)
+        let selectionHandler = ImmersiveMapSelectionHandler(
+            host: ImmersiveMapSelectionHost(viewportRuntime: viewportRuntime,
+                                            renderRuntime: renderRuntime),
+            features: [avatarSelection, sceneModelSelection])
 
         let avatarsController = ImmersiveMapAvatarsController()
         avatarRuntime.attachController(avatarsController,
@@ -242,7 +246,7 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
                                            selectionHandler: selectionHandler,
                                            renderRuntime: renderRuntime)
 
-        selectionHandler.updateSceneModelSelectionSnapshot(
+        selectionHandler.updatePickData([
             SceneModelSelectionSnapshot(frameIndex: 2,
                                         drawSize: camera.drawSize,
                                         projectionView: camera.projectionView,
@@ -252,9 +256,11 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
                                                                            modelMatrix: matrix_identity_float4x4,
                                                                            boundsMin: SIMD3<Float>(repeating: -1),
                                                                            boundsMax: SIMD3<Float>(repeating: 1))])
-        )
+        ])
 
         return Environment(selectionHandler: selectionHandler,
+                           avatarSelection: avatarSelection,
+                           sceneModelSelection: sceneModelSelection,
                            sceneModelsController: sceneModelsController,
                            avatarsController: avatarsController,
                            drawSize: camera.drawSize)

@@ -56,15 +56,15 @@ final class LayerOffscreenRenderTests: XCTestCase {
 
     @MainActor
     func testAZoneAndAPointShowOnTheGlobe() async throws {
-        let zone = ImmersiveMapLayer(id: "zone",
-                                     polygons: [Self.square(around: Self.centre, halfSide: 15)],
+        let zone = ImmersiveMapLayer(source: "zone",
                                      polygonStyle: ImmersiveMapPolygonStyle(fillColor: Self.red, strokeWidthPoints: 0))
-        // A point a little off the centre, so it does not hide the zone.
-        let point = ImmersiveMapLayer(id: "point",
-                                      points: [ImmersiveMapPoint(coordinate: GeoCoordinate(latitude: 30, longitude: 20))],
+        let point = ImmersiveMapLayer(source: "point",
                                       pointStyle: ImmersiveMapPointStyle(color: Self.green, radiusPoints: 6, strokeWidthPoints: 0))
         let harness = try OffscreenFrameHarness.makeOrSkip(settings: Self.settings())
-        harness.layers = [zone, point]
+        harness.layers.register("zone", identity: "test", polygons: [Self.square(around: Self.centre, halfSide: 15)])
+        // A point a little off the centre, so it does not hide the zone.
+        harness.layers.register("point", identity: "test", points: [ImmersiveMapPoint(coordinate: GeoCoordinate(latitude: 30, longitude: 20))])
+        harness.layers.set([zone, point])
         harness.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: Self.centre.latitude,
                                                              longitudeDegrees: Self.centre.longitude,
                                                              zoom: 1))
@@ -77,17 +77,19 @@ final class LayerOffscreenRenderTests: XCTestCase {
     @MainActor
     func testAZoneOnTheFarSideOfTheGlobeDoesNotShow() async throws {
         let antipode = GeoCoordinate(latitude: -Self.centre.latitude, longitude: Self.centre.longitude - 180)
-        let zone = ImmersiveMapLayer(id: "zone",
-                                     polygons: [Self.square(around: antipode, halfSide: 30)],
-                                     polylines: [ImmersiveMapPolyline(coordinates: [
-                                         GeoCoordinate(latitude: antipode.latitude, longitude: antipode.longitude - 40),
-                                         GeoCoordinate(latitude: antipode.latitude, longitude: antipode.longitude + 40)])],
-                                     points: [ImmersiveMapPoint(coordinate: antipode)],
+        let zone = ImmersiveMapLayer(source: "zone",
                                      polygonStyle: ImmersiveMapPolygonStyle(fillColor: Self.red, strokeColor: Self.red),
                                      polylineStyle: ImmersiveMapPolylineStyle(color: Self.red, widthPoints: 8),
                                      pointStyle: ImmersiveMapPointStyle(color: Self.red, radiusPoints: 20))
         let harness = try OffscreenFrameHarness.makeOrSkip(settings: Self.settings())
-        harness.layers = [zone]
+        harness.layers.register("zone",
+                                identity: "test",
+                                polygons: [Self.square(around: antipode, halfSide: 30)],
+                                polylines: [ImmersiveMapPolyline(coordinates: [
+                                    GeoCoordinate(latitude: antipode.latitude, longitude: antipode.longitude - 40),
+                                    GeoCoordinate(latitude: antipode.latitude, longitude: antipode.longitude + 40)])],
+                                points: [ImmersiveMapPoint(coordinate: antipode)])
+        harness.layers.set([zone])
         harness.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: Self.centre.latitude,
                                                              longitudeDegrees: Self.centre.longitude,
                                                              zoom: 1))
@@ -102,15 +104,15 @@ final class LayerOffscreenRenderTests: XCTestCase {
 
     @MainActor
     func testAZoneAndAPointShowOnTheFlatMap() async throws {
-        let zone = ImmersiveMapLayer(id: "zone",
-                                     polygons: [Self.square(around: Self.centre, halfSide: 0.002)],
+        let zone = ImmersiveMapLayer(source: "zone",
                                      polygonStyle: ImmersiveMapPolygonStyle(fillColor: Self.red, strokeWidthPoints: 0))
-        let point = ImmersiveMapLayer(id: "point",
-                                      points: [ImmersiveMapPoint(coordinate: GeoCoordinate(latitude: Self.centre.latitude + 0.004,
-                                                                                           longitude: Self.centre.longitude))],
+        let point = ImmersiveMapLayer(source: "point",
                                       pointStyle: ImmersiveMapPointStyle(color: Self.green, radiusPoints: 6, strokeWidthPoints: 0))
         let harness = try OffscreenFrameHarness.makeOrSkip(settings: Self.settings())
-        harness.layers = [zone, point]
+        harness.layers.register("zone", identity: "test", polygons: [Self.square(around: Self.centre, halfSide: 0.002)])
+        harness.layers.register("point", identity: "test", points: [ImmersiveMapPoint(coordinate: GeoCoordinate(latitude: Self.centre.latitude + 0.004,
+                                                                                               longitude: Self.centre.longitude))])
+        harness.layers.set([zone, point])
         harness.setCameraPosition(ImmersiveMapCameraPosition(latitudeDegrees: Self.centre.latitude,
                                                              longitudeDegrees: Self.centre.longitude,
                                                              zoom: 14))

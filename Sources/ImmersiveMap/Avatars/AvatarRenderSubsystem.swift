@@ -51,8 +51,8 @@ final class AvatarRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProvid
                                 commandBuffer: commandBuffer,
                                 frameSlotIndex: frameContext.frameSlotIndex)
         frameContext.sharedState.avatarState.hasActiveAnimations = avatarsRenderer.hasActiveAnimations
-        frameContext.sharedState.avatarState.selectionSnapshot = avatarsRenderer.selectionSnapshot
-            .withFrameIndex(frameContext.frameIndex)
+        frameContext.sharedState.selectionPickData.append(
+            avatarsRenderer.selectionSnapshot.withFrameIndex(frameContext.frameIndex))
     }
 
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {

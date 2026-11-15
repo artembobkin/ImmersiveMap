@@ -64,15 +64,16 @@ public final class ImmersiveMapStillRecorder {
     ///     untouched map starts at.
     ///   - avatars: avatar markers to draw.
     ///   - sceneModels: scene models to draw.
-    ///   - layers: layers of the app's own data to draw, in the order
-    ///     given. The capture waits for them to be prepared.
+    ///   - layers: the controller whose layers of the app's own data to
+    ///     draw, as they are when the capture starts. The capture waits
+    ///     for their sources to be read and for them to be prepared.
     ///   - configuration: output geometry and timing.
     /// - Throws: ``ImmersiveMapStillCaptureError``.
     public func capture(settings: ImmersiveMapSettings = .default,
                         camera: ImmersiveMapCameraPosition? = nil,
                         avatars: [AvatarMarker] = [],
                         sceneModels: [ImmersiveMapSceneModel] = [],
-                        layers: [ImmersiveMapLayer] = [],
+                        layers: ImmersiveMapLayersController? = nil,
                         configuration: ImmersiveMapStillConfiguration = .default) async throws -> CGImage {
         guard isCapturing == false else {
             throw ImmersiveMapStillCaptureError.captureAlreadyInProgress
@@ -171,7 +172,7 @@ final class ImmersiveMapStillRuntime {
          camera: ImmersiveMapCameraPosition?,
          avatars: [AvatarMarker],
          sceneModels: [ImmersiveMapSceneModel],
-         layers: [ImmersiveMapLayer] = [],
+         layers: ImmersiveMapLayersController? = nil,
          configuration: ImmersiveMapStillConfiguration) throws {
         // Planned by the archive's depth as last read (`TileArchiveDepths`).
         let settings = settings.resolvingArchiveDepth()

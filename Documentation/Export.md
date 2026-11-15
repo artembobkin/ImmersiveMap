@@ -15,7 +15,7 @@ let image = try await recorder.capture(
 You get a `CGImage`. No map has to be on screen, so this suits thumbnails and share images.
 
 - **Settings.** Pass the same `ImmersiveMapSettings` as your map, with your tile source and style, to get the same look.
-- **Content.** Avatars, 3D models and layers are passed as values, with `avatars:`, `sceneModels:` and `layers:` (the layers of a controller are `controller.layers`). The capture waits for the layers to be prepared. SwiftUI markers can't be drawn into a picture.
+- **Content.** Avatars and 3D models are passed as values, with `avatars:` and `sceneModels:`. Layers are passed as their controller, with `layers:`, and are drawn as they are when the capture starts. The capture waits for their data to be read and prepared. SwiftUI markers can't be drawn into a picture.
 - **Waiting.** The capture waits for the tiles it needs, up to `settleTimeout` (10 seconds by default), so the picture is complete.
 - **Repeatability.** Set `sceneDate` to get the same sun and the same picture on every run.
 

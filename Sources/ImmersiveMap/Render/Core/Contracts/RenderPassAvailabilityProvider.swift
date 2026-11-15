@@ -17,6 +17,8 @@ struct RenderPassAvailabilityBuilder {
     var starfieldEnabled: Bool = true
     /// Content-driven: on once a frame has scene models to draw.
     var sceneModelsEnabled: Bool = false
+    /// Content-driven: on once a frame has layers of the app's data to draw.
+    var appLayersEnabled: Bool = false
 
     func build() -> RenderPassAvailability {
         RenderPassAvailability(renderSurfaceMode: renderSurfaceMode,
@@ -24,6 +26,7 @@ struct RenderPassAvailabilityBuilder {
                                avatarsEnabled: avatarsEnabled,
                                debugOverlayEnabled: debugOverlayEnabled,
                                starfieldEnabled: starfieldEnabled,
-                               sceneModelsEnabled: sceneModelsEnabled)
+                               sceneModelsEnabled: sceneModelsEnabled,
+                               appLayersEnabled: appLayersEnabled)
     }
 }

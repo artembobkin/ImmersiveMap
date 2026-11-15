@@ -10,9 +10,12 @@ import AppKit
 
 // The `UI` folder: the public SwiftUI surface, the platform host views
 // (`ImmersiveMapUIView` on iOS, `ImmersiveMapNSView` on macOS, unified as
-// `ImmersiveMapHostView`) and the runtime controllers that connect gestures,
-// camera commands, selection, settings, tiles and the render driver to the
-// engine. Platform code lives in per-platform files under `#if
+// `ImmersiveMapHostView`) and, under `Runtime`, the runtimes that connect
+// gestures, camera commands, selection, settings, tiles and the render
+// driver to the engine. A feature's public handle (the avatars', the scene
+// models' and the layers' controllers, the selection's) lives in that
+// feature's folder, and `Runtime` holds only the view's side of it: the
+// runtime that attaches the controller to this view. Platform code lives in per-platform files under `#if
 // canImport(UIKit)` and `#if os(macOS)`, never `targetEnvironment(macCatalyst)`.
 // No Metal pipelines or render graph internals (`Render`), no tile parsing,
 // styling or caching, no label policy, no host-app delegates or
@@ -34,6 +37,7 @@ public struct ImmersiveMapView: View {
     private var selectionController: ImmersiveMapSelectionController?
     private var avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
     private var sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)?
+    private var layerTapAction: ((ImmersiveMapLayerTapEvent) -> Void)?
     private var frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)?
     private var terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)?
     private var markerContent: MarkerViewContent?
@@ -63,6 +67,7 @@ public struct ImmersiveMapView: View {
                                         selectionController: selectionController,
                                         avatarTapAction: avatarTapAction,
                                         sceneModelTapAction: sceneModelTapAction,
+                                        layerTapAction: layerTapAction,
                                         frameRenderedAction: frameRenderedAction,
                                         terrainSurroundingsAction: terrainSurroundingsAction,
                                         markerContent: markerContent,
@@ -101,6 +106,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
     let selectionController: ImmersiveMapSelectionController?
     let avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
     let sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)?
+    let layerTapAction: ((ImmersiveMapLayerTapEvent) -> Void)?
     let frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)?
     let terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)?
     let markerContent: MarkerViewContent?
@@ -120,6 +126,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                                        selectionController: selectionController,
                                        avatarTapAction: avatarTapAction,
                                        sceneModelTapAction: sceneModelTapAction,
+                                       layerTapAction: layerTapAction,
                                        frameRenderedAction: frameRenderedAction,
                                        terrainSurroundingsAction: terrainSurroundingsAction,
                                        markerContent: markerContent)
@@ -134,6 +141,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                                         selectionController: selectionController,
                                         avatarTapAction: avatarTapAction,
                                         sceneModelTapAction: sceneModelTapAction,
+                                        layerTapAction: layerTapAction,
                                         frameRenderedAction: frameRenderedAction,
                                         terrainSurroundingsAction: terrainSurroundingsAction,
                                         markerContent: markerContent)
@@ -149,6 +157,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                       selectionController: selectionController,
                       avatarTapAction: avatarTapAction,
                       sceneModelTapAction: sceneModelTapAction,
+                      layerTapAction: layerTapAction,
                       frameRenderedAction: frameRenderedAction,
                       terrainSurroundingsAction: terrainSurroundingsAction,
                       markerContent: markerContent,
@@ -172,6 +181,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
     let selectionController: ImmersiveMapSelectionController?
     let avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
     let sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)?
+    let layerTapAction: ((ImmersiveMapLayerTapEvent) -> Void)?
     let frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)?
     let terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)?
     let markerContent: MarkerViewContent?
@@ -191,6 +201,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                                        selectionController: selectionController,
                                        avatarTapAction: avatarTapAction,
                                        sceneModelTapAction: sceneModelTapAction,
+                                       layerTapAction: layerTapAction,
                                        frameRenderedAction: frameRenderedAction,
                                        terrainSurroundingsAction: terrainSurroundingsAction,
                                        markerContent: markerContent)
@@ -205,6 +216,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                                         selectionController: selectionController,
                                         avatarTapAction: avatarTapAction,
                                         sceneModelTapAction: sceneModelTapAction,
+                                        layerTapAction: layerTapAction,
                                         frameRenderedAction: frameRenderedAction,
                                         terrainSurroundingsAction: terrainSurroundingsAction,
                                         markerContent: markerContent)
@@ -220,6 +232,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                       selectionController: selectionController,
                       avatarTapAction: avatarTapAction,
                       sceneModelTapAction: sceneModelTapAction,
+                      layerTapAction: layerTapAction,
                       frameRenderedAction: frameRenderedAction,
                       terrainSurroundingsAction: terrainSurroundingsAction,
                       markerContent: markerContent,
@@ -553,6 +566,22 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Called on every tap that lands on a shape of a layer of the app's
+    /// data (`ImmersiveMapLayersController`), with the layer, the shape's
+    /// id and the place under the tap. The shapes of the layer drawn last
+    /// come first, and within a layer its points, then its lines, then its
+    /// zones. A zone is hit in its fill, or on its outline when it has no
+    /// fill. A thin line and a small point grow to a touch target. An
+    /// avatar or a model over a shape takes the tap first.
+    ///
+    /// Works without ``ImmersiveMapSelectionController``: the event arrives even
+    /// when selection is not used, and again on a tap on an already selected shape.
+    func onLayerTap(_ action: @escaping (ImmersiveMapLayerTapEvent) -> Void) -> ImmersiveMapView {
+        var view = self
+        view.layerTapAction = action
+        return view
+    }
+
     /// Calls `action` on the main thread once per frame the map draws on
     /// screen, right after the frame's command buffer was committed to the
     /// GPU; see ``ImmersiveMapRenderedFrame`` for what the event carries and
@@ -742,23 +771,26 @@ public extension ImmersiveMapView {
         return view
     }
 
-    /// Attaches the layers of the app's own data drawn over the map
+    /// Attaches the app's own data drawn over the map
     /// (`ImmersiveMapLayersController`): zones (polygons), lines and points,
-    /// from Swift values or a GeoJSON document. They lie on the ground of
-    /// the globe and the flat map, over the roads and under the names
-    /// painted on the map and the buildings. The app changes them through
-    /// the controller, from any thread, and a layer whose data changed is
-    /// prepared off the main thread and replaces the old one when ready.
+    /// from GeoJSON files or Swift values. The data is registered with the
+    /// controller under a name, and its layers say which of it to draw and
+    /// how. They lie on the ground of the globe and the flat map, over the
+    /// roads and under the names painted on the map and the buildings. The
+    /// app changes them through the controller, from any thread. A source
+    /// is read when a layer first draws it, and a layer is prepared, both
+    /// off the main thread.
     ///
     ///     @State private var layers = ImmersiveMapLayersController()
     ///
     ///     ImmersiveMapView()
     ///         .layers(layers)
     ///         .task {
+    ///             layers.register("districts", geoJSONFile: districtsURL)
+    ///             layers.register("sensors", identity: "v1", points: sensors.map { ImmersiveMapPoint(coordinate: $0) })
     ///             layers.set([
-    ///                 try ImmersiveMapLayer(id: "districts", geoJSON: districts),
-    ///                 ImmersiveMapLayer(id: "sensors", points: sensors.map { ImmersiveMapPoint(coordinate: $0) },
-    ///                                   pointStyle: ImmersiveMapPointStyle(radiusPoints: 3))
+    ///                 ImmersiveMapLayer(source: "districts"),
+    ///                 ImmersiveMapLayer(source: "sensors", pointStyle: ImmersiveMapPointStyle(radiusPoints: 3))
     ///             ])
     ///         }
     ///

@@ -11,9 +11,9 @@ struct GeoJSONPointReader: GeoJSONGeometryReader {
               style: ImmersiveMapGeoJSON.SimpleStyle,
               path: String,
               into context: inout GeoJSONReadContext) throws {
-        let pointStyle = ImmersiveMapGeoJSON.pointStyle(style, base: context.base.point)
-        context.shapes.points.append(ImmersiveMapPoint(coordinate: try ImmersiveMapGeoJSON.position(coordinates, path: path),
-                                                       style: pointStyle))
+        var point = ImmersiveMapPoint(id: context.featureID, coordinate: try ImmersiveMapGeoJSON.position(coordinates, path: path))
+        point.simpleStyle = ImmersiveMapGeoJSON.pointPart(style)
+        context.shapes.points.append(point)
     }
 }
 
@@ -25,9 +25,11 @@ struct GeoJSONMultiPointReader: GeoJSONGeometryReader {
               style: ImmersiveMapGeoJSON.SimpleStyle,
               path: String,
               into context: inout GeoJSONReadContext) throws {
-        let pointStyle = ImmersiveMapGeoJSON.pointStyle(style, base: context.base.point)
+        let pointStyle = ImmersiveMapGeoJSON.pointPart(style)
         for coordinate in try ImmersiveMapGeoJSON.positions(coordinates, path: path) {
-            context.shapes.points.append(ImmersiveMapPoint(coordinate: coordinate, style: pointStyle))
+            var point = ImmersiveMapPoint(id: context.featureID, coordinate: coordinate)
+            point.simpleStyle = pointStyle
+            context.shapes.points.append(point)
         }
     }
 }
@@ -40,9 +42,9 @@ struct GeoJSONLineStringReader: GeoJSONGeometryReader {
               style: ImmersiveMapGeoJSON.SimpleStyle,
               path: String,
               into context: inout GeoJSONReadContext) throws {
-        let polylineStyle = ImmersiveMapGeoJSON.polylineStyle(style, base: context.base.polyline)
-        context.shapes.polylines.append(ImmersiveMapPolyline(coordinates: try ImmersiveMapGeoJSON.positions(coordinates, path: path),
-                                                             style: polylineStyle))
+        var polyline = ImmersiveMapPolyline(id: context.featureID, coordinates: try ImmersiveMapGeoJSON.positions(coordinates, path: path))
+        polyline.simpleStyle = ImmersiveMapGeoJSON.polylinePart(style)
+        context.shapes.polylines.append(polyline)
     }
 }
 
@@ -54,10 +56,11 @@ struct GeoJSONMultiLineStringReader: GeoJSONGeometryReader {
               style: ImmersiveMapGeoJSON.SimpleStyle,
               path: String,
               into context: inout GeoJSONReadContext) throws {
-        let polylineStyle = ImmersiveMapGeoJSON.polylineStyle(style, base: context.base.polyline)
+        let polylineStyle = ImmersiveMapGeoJSON.polylinePart(style)
         for (index, line) in try ImmersiveMapGeoJSON.array(coordinates, path: path).enumerated() {
-            context.shapes.polylines.append(ImmersiveMapPolyline(coordinates: try ImmersiveMapGeoJSON.positions(line, path: "\(path)[\(index)]"),
-                                                                 style: polylineStyle))
+            var polyline = ImmersiveMapPolyline(id: context.featureID, coordinates: try ImmersiveMapGeoJSON.positions(line, path: "\(path)[\(index)]"))
+            polyline.simpleStyle = polylineStyle
+            context.shapes.polylines.append(polyline)
         }
     }
 }
@@ -71,8 +74,8 @@ struct GeoJSONPolygonReader: GeoJSONGeometryReader {
               style: ImmersiveMapGeoJSON.SimpleStyle,
               path: String,
               into context: inout GeoJSONReadContext) throws {
-        let polygonStyle = ImmersiveMapGeoJSON.polygonStyle(style, base: context.base.polygon)
-        context.shapes.polygons.append(try ImmersiveMapGeoJSON.polygon(coordinates, style: polygonStyle, path: path))
+        let polygonStyle = ImmersiveMapGeoJSON.polygonPart(style)
+        context.shapes.polygons.append(try ImmersiveMapGeoJSON.polygon(coordinates, id: context.featureID, style: polygonStyle, path: path))
     }
 }
 
@@ -84,9 +87,9 @@ struct GeoJSONMultiPolygonReader: GeoJSONGeometryReader {
               style: ImmersiveMapGeoJSON.SimpleStyle,
               path: String,
               into context: inout GeoJSONReadContext) throws {
-        let polygonStyle = ImmersiveMapGeoJSON.polygonStyle(style, base: context.base.polygon)
+        let polygonStyle = ImmersiveMapGeoJSON.polygonPart(style)
         for (index, rings) in try ImmersiveMapGeoJSON.array(coordinates, path: path).enumerated() {
-            context.shapes.polygons.append(try ImmersiveMapGeoJSON.polygon(rings, style: polygonStyle, path: "\(path)[\(index)]"))
+            context.shapes.polygons.append(try ImmersiveMapGeoJSON.polygon(rings, id: context.featureID, style: polygonStyle, path: "\(path)[\(index)]"))
         }
     }
 }

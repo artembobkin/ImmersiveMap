@@ -9,13 +9,22 @@
 import CoreGraphics
 import Foundation
 
-public struct ImmersiveMapSelection: Equatable {
-    public enum Kind: String {
-        case avatar
-        case sceneModel
+/// An object of the map the app or a tap selected: the feature it belongs
+/// to and its id within that feature.
+public struct ImmersiveMapSelection: Hashable, Sendable {
+    /// The feature a selected object belongs to. An open set: each
+    /// selectable feature declares its own value (`.avatar`, `.sceneModel`),
+    /// so a `switch` over a kind needs a `default`.
+    public struct Kind: RawRepresentable, Hashable, Sendable {
+        public let rawValue: String
+
+        public init(rawValue: String) {
+            self.rawValue = rawValue
+        }
     }
 
     public let kind: Kind
+    /// The object's id within its feature, such as `AvatarMarker.id`.
     public let objectID: UInt64
 
     public init(kind: Kind, objectID: UInt64) {

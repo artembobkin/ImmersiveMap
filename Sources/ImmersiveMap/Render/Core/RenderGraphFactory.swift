@@ -174,9 +174,8 @@ enum RenderGraphFactory {
             reliefShadowCasterSubsystem,
             starfieldSubsystem,
             globeVectorSurfaceSubsystem,
-            // The layers of the app's data over the ground of either
-            // surface: after the flat map's roads and the trees' shadows,
-            // after the globe's ground, before the labels painted on both.
+            // The layers of the app's data, in a layer of their own
+            // (`RenderLayer.appLayers`).
             layerSubsystem,
             surfaceLabelSubsystem,
             globeCapSubsystem,
@@ -190,6 +189,7 @@ enum RenderGraphFactory {
             avatarSubsystem,
             sceneModelSubsystem,
             modelTileSubsystem,
+            layerSubsystem,
             starfieldSubsystem,
             debugSubsystem
         ]

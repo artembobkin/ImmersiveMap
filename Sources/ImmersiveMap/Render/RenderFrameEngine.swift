@@ -253,7 +253,7 @@ final class RenderFrameEngine {
         persistentContext.tileRenderStore.cancelLoading()
         eventSink.attachTileLoadingStatus(provider: nil)
         persistentContext.tileLoadingStatusReporter?.onChange = nil
-        (eventSink as? ImmersiveMapRenderEventSink)?.invalidateDelivery()
+        eventSink.invalidateDelivery()
     }
 
     // MARK: - Memory
@@ -588,8 +588,7 @@ final class RenderFrameEngine {
             return false
         }
 
-        let avatarSelectionSnapshot = frameContext.sharedState.avatarState.selectionSnapshot
-        let sceneModelSelectionSnapshot = frameContext.sharedState.sceneModelState.selectionSnapshot
+        let selectionPickData = frameContext.sharedState.selectionPickData
         // The handler runs on a Metal thread, so it takes the engine's
         // thread-safe parts and never the engine itself.
         commandBuffer.addCompletedHandler { [lastCompletedGPUFrameDuration, inFlightFramePool, eventSink] completedBuffer in
@@ -598,8 +597,7 @@ final class RenderFrameEngine {
             let gpuFrameDuration = completedBuffer.gpuEndTime - completedBuffer.gpuStartTime
             lastCompletedGPUFrameDuration.withLock { $0 = gpuFrameDuration }
             inFlightFramePool.release(slot: frameSlotIndex)
-            eventSink.updateAvatarSelectionSnapshot(avatarSelectionSnapshot)
-            eventSink.updateSceneModelSelectionSnapshot(sceneModelSelectionSnapshot)
+            eventSink.updateSelectionPickData(selectionPickData)
             onGPUComplete?(completedBuffer.error == nil)
         }
         if let drawable = target.drawable {

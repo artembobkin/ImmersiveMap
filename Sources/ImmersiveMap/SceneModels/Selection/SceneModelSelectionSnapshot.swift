@@ -26,7 +26,9 @@ struct SceneModelSelectionEntry {
 /// culling and the globe horizon gate, with the camera that drew them. What is
 /// on screen is what can be tapped, and a model the frame skipped is not
 /// tappable by construction.
-struct SceneModelSelectionSnapshot {
+struct SceneModelSelectionSnapshot: SelectionPickData {
+    var kind: ImmersiveMapSelection.Kind { .sceneModel }
+
     /// A model smaller than a fingertip cannot be aimed at. Below this size its
     /// hit area grows to a touch target, the platform minimum (HIG 44 pt).
     static let minimumTouchSizePoints: CGFloat = 44

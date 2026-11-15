@@ -76,7 +76,7 @@ final class ImmersiveMapVideoExportRuntime {
     init(settings: ImmersiveMapSettings,
          initialPosition: ImmersiveMapCameraPosition?,
          avatarsController: ImmersiveMapAvatarsController?,
-         layers: [ImmersiveMapLayer] = [],
+         layers: ImmersiveMapLayersController? = nil,
          markerContent: MarkerViewContent?,
          configuration: ImmersiveMapVideoExportConfiguration,
          outputURL: URL) throws {

@@ -20,6 +20,9 @@ final class ImmersiveMapRuntimeGraph {
     let cameraAnimationRuntime: ImmersiveMapCameraAnimationRuntime
     let cameraCommandHandler: ImmersiveMapCameraCommandHandler
     let selectionHandler: ImmersiveMapSelectionHandler
+    let avatarSelection: AvatarSelection
+    let sceneModelSelection: SceneModelSelection
+    let layerSelection: LayerSelection
     /// The debug panel over the map, once one is installed
     /// (`installDebugPanel`): nil in an app that links no panel.
     private(set) var debugPanelRuntime: (any ImmersiveMapDebugPanelRuntime)?
@@ -70,10 +73,16 @@ final class ImmersiveMapRuntimeGraph {
                                                                         renderRuntime: renderRuntime)
         let cameraCommandHandler = ImmersiveMapCameraCommandHandler(cameraRuntime: cameraRuntime,
                                                                     cameraAnimationRuntime: cameraAnimationRuntime)
-        let selectionHandler = ImmersiveMapSelectionHandler(avatarRuntime: avatarRuntime,
-                                                            sceneModelRuntime: sceneModelRuntime,
-                                                            viewportRuntime: viewportRuntime,
-                                                            renderRuntime: renderRuntime)
+        let avatarSelection = AvatarSelection(source: avatarRuntime)
+        let sceneModelSelection = SceneModelSelection(source: sceneModelRuntime)
+        let layerSelection = LayerSelection(source: layerRuntime)
+        // The order is the order of a tap: the avatars are drawn over the
+        // world, so an avatar that covers a model takes the tap, and the
+        // layers lie on the ground under both.
+        let selectionHandler = ImmersiveMapSelectionHandler(
+            host: ImmersiveMapSelectionHost(viewportRuntime: viewportRuntime,
+                                            renderRuntime: renderRuntime),
+            features: [avatarSelection, sceneModelSelection, layerSelection])
         let debugOverlayControls = DebugOverlayControlState()
         let debugOverlayHUDSnapshotStore = DebugOverlayHUDSnapshotStore()
         let tileTraceRecorder = TileTraceRecorder()
@@ -110,6 +119,9 @@ final class ImmersiveMapRuntimeGraph {
         self.cameraAnimationRuntime = cameraAnimationRuntime
         self.cameraCommandHandler = cameraCommandHandler
         self.selectionHandler = selectionHandler
+        self.avatarSelection = avatarSelection
+        self.sceneModelSelection = sceneModelSelection
+        self.layerSelection = layerSelection
         self.debugOverlayControls = debugOverlayControls
         self.debugOverlayHUDSnapshotStore = debugOverlayHUDSnapshotStore
         self.tileTraceRecorder = tileTraceRecorder

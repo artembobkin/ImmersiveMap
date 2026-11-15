@@ -6,7 +6,7 @@ import Foundation
 /// Owns the avatar controller attached to a single map view runtime.
 /// Bridges avatar mutations to the selection/render runtimes and feeds avatar data to the renderer.
 @MainActor
-final class ImmersiveMapAvatarRuntime: @preconcurrency AvatarRenderSource {
+final class ImmersiveMapAvatarRuntime: @preconcurrency AvatarRenderSource, AvatarSelectionSource {
     private weak var controller: ImmersiveMapAvatarsController?
 
     var currentAvatarController: ImmersiveMapAvatarsController? {
@@ -27,11 +27,11 @@ final class ImmersiveMapAvatarRuntime: @preconcurrency AvatarRenderSource {
         controller?.clearChangeHandler(ownedBy: self)
         controller = newController
         newController?.setChangeHandler({ [weak selectionHandler, weak renderRuntime] in
-            selectionHandler?.handleAvatarControllerDidChange()
+            selectionHandler?.handleFeatureDidChange()
             renderRuntime?.requestFrame()
         }, owner: self)
         newController?.markSnapshotDirty()
-        selectionHandler.syncSelectionWithAvailableMapObjects()
+        selectionHandler.syncSelectionWithAvailableObjects()
         renderRuntime.requestFrame()
     }
 

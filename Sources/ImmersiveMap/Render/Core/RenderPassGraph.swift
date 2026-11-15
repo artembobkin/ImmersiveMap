@@ -8,8 +8,8 @@ final class RenderPassGraph {
     static func isWorldLayer(_ layer: RenderLayer) -> Bool {
         switch layer {
         case .starfield, .globeVectorSurface, .globeCap,
-             .placementStencil, .flatMapSurface, .flatMapRoads, .surfaceLabels, .buildingExtrusion, .sceneModels,
-             .horizon:
+             .placementStencil, .flatMapSurface, .flatMapRoads, .appLayers, .surfaceLabels, .buildingExtrusion,
+             .sceneModels, .horizon:
             return true
         case .shadowCasters, .farShadowCasters, .groundShadowMask, .postProcessing,
              .labels, .avatars, .debugOverlay:
@@ -22,8 +22,8 @@ final class RenderPassGraph {
         case .labels, .avatars, .debugOverlay:
             return true
         case .shadowCasters, .farShadowCasters, .groundShadowMask, .starfield,
-             .globeVectorSurface, .globeCap, .placementStencil, .flatMapSurface, .flatMapRoads, .surfaceLabels,
-             .buildingExtrusion, .sceneModels, .horizon, .postProcessing:
+             .globeVectorSurface, .globeCap, .placementStencil, .flatMapSurface, .flatMapRoads, .appLayers,
+             .surfaceLabels, .buildingExtrusion, .sceneModels, .horizon, .postProcessing:
             return false
         }
     }

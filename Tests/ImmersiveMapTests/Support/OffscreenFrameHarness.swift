@@ -63,7 +63,13 @@ final class OffscreenFrameHarness {
     }
 
     private final class HarnessLayerSource: LayerRenderSource {
-        var currentLayers: [ImmersiveMapLayer] = []
+        /// Nothing is kept on disk: a test's layers must not be found
+        /// again by the next test, or by the next run.
+        let controller = ImmersiveMapLayersController([],
+                                                      inputLimitBytes: ImmersiveMapLayersController.defaultInputLimitBytes,
+                                                      meshCache: LayerMeshDiskCache(limitBytes: 0))
+        var currentLayers: [ImmersiveMapLayer] { controller.layers }
+        var sourceLibrary: LayerSourceLibrary? { controller.library }
     }
 
     // MARK: - Contents
@@ -84,11 +90,9 @@ final class OffscreenFrameHarness {
 
     var avatars: ImmersiveMapAvatarsController { avatarSource.controller }
     var sceneModels: ImmersiveMapSceneModelsController { sceneModelSource.controller }
-    /// The layers of the app's data the frames draw, none until set.
-    var layers: [ImmersiveMapLayer] {
-        get { layerSource.currentLayers }
-        set { layerSource.currentLayers = newValue }
-    }
+    /// The app's data the frames draw: no source and no layer until a test
+    /// registers and sets them.
+    var layers: ImmersiveMapLayersController { layerSource.controller }
 
     /// SwiftUI markers projected into the frame. Empty unless a test sets it.
     var markerInput: MarkerProjectionInput {

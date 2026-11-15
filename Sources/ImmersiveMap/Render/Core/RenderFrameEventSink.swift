@@ -26,8 +26,10 @@ struct RenderActivityState {
 protocol RenderFrameEventSink: AnyObject, Sendable {
     func invalidate(_ reason: RenderInvalidationReason)
     func applyActivityState(_ state: RenderActivityState)
-    func updateAvatarSelectionSnapshot(_ snapshot: AvatarSelectionSnapshot)
-    func updateSceneModelSelectionSnapshot(_ snapshot: SceneModelSelectionSnapshot)
+    /// What a frame that reached the screen drew that a tap can land on,
+    /// one entry from each feature that drew something selectable. Called
+    /// from the command buffer's completion handler, off the main thread.
+    func updateSelectionPickData(_ pickData: [any SelectionPickData])
     /// Path animations that ended on the last frame, with where they left the
     /// model.
     func completeSceneModelPathAnimations(_ results: [SceneModelPathAnimationResult])
@@ -42,14 +44,20 @@ protocol RenderFrameEventSink: AnyObject, Sendable {
     /// What the panel shows, for the frame to build only that. A sink with
     /// no HUD answers everything.
     func debugOverlayHUDContentRequest() -> DebugOverlayHUDContentRequest
-    /// Unlike `updateAvatarSelectionSnapshot` (completion handler, off-main),
+    /// Unlike `updateSelectionPickData` (completion handler, off-main),
     /// this is called synchronously from the render loop on the main thread so
     /// that marker positions apply in the same CA transaction as the frame.
     func updateMarkerProjectionSnapshot(_ snapshot: MarkerProjectionSnapshot)
+    /// The engine feeding this sink is being discarded: what a frame still
+    /// in flight on the GPU delivers from here on is dropped, so it cannot
+    /// bring back state a successor has just reset. Called on the main
+    /// thread. A sink that hands nothing on later ignores it.
+    func invalidateDelivery()
 }
 
 extension RenderFrameEventSink {
     func attachTileLoadingStatus(provider: (@Sendable () -> TileLoadingStatusSnapshot?)?) {}
     func tileLoadingStatusDidChange() {}
     func debugOverlayHUDContentRequest() -> DebugOverlayHUDContentRequest { .all }
+    func invalidateDelivery() {}
 }

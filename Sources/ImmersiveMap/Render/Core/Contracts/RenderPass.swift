@@ -42,6 +42,12 @@ enum RenderLayer: String, CaseIterable {
     /// layer paints over a building or a model, whatever the depth says
     /// over a relief, see `FlatMapSurfaceRenderSubsystem`.
     case flatMapRoads
+    /// The layers of the app's own data, on the ground of either surface:
+    /// after the flat map's roads and the trees' shadows, after the globe's
+    /// ground, and before the labels painted on the map, which come over
+    /// them. Left out of a frame that draws no layer, see
+    /// `LayerRenderSubsystem`.
+    case appLayers
     /// The labels painted on the map, after the ground and the roads on
     /// either surface: over them, under the buildings and the models, see
     /// `SurfaceLabelRenderSubsystem`.
@@ -70,6 +76,7 @@ enum RenderSkipReason: String, CaseIterable, Hashable {
     case noLabelContent
     case noAvatarContent
     case noSceneModelContent
+    case noAppLayerContent
     case debugOverlayDisabled
     /// Extruded buildings are switched off in the style: the tiles carry no
     /// building geometry, so the building layer and the ownership prepass
@@ -90,6 +97,8 @@ struct RenderPassAvailability {
     /// True when the frame has scene models to draw; without any the model
     /// layer is left out of the world pass instead of encoding nothing.
     var sceneModelsEnabled: Bool = true
+    /// True when the frame has layers of the app's data to draw.
+    var appLayersEnabled: Bool = true
 }
 
 struct RenderLayerPlanItem {
@@ -109,14 +118,14 @@ struct RenderLayerPlanner {
             // horizon last: the fog band hazes everything painted near the
             // horizon line, buildings and models included, and the labels,
             // which come after, stay crisp.
-            [.placementStencil, .flatMapSurface, .buildingExtrusion, .sceneModels, .flatMapRoads, .surfaceLabels, .horizon]
+            [.placementStencil, .flatMapSurface, .buildingExtrusion, .sceneModels, .flatMapRoads, .appLayers, .surfaceLabels, .horizon]
         case .spherical:
             // Sky first: nothing writes surface depth any more (the
             // placeholder grid is gone), so the space background and the
             // stars paint the whole frame and the tile geometry blends over
             // them, opaque where its background quad lands. The horizon last,
             // over the models near the limb.
-            [.starfield, .placementStencil, .globeVectorSurface, .surfaceLabels, .globeCap, .sceneModels, .horizon]
+            [.starfield, .placementStencil, .globeVectorSurface, .appLayers, .surfaceLabels, .globeCap, .sceneModels, .horizon]
         }
 
         return worldLayers.map { layer in
@@ -125,6 +134,8 @@ struct RenderLayerPlanner {
                 return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .transparentSpace)
             case .sceneModels where availability.sceneModelsEnabled == false:
                 return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .noSceneModelContent)
+            case .appLayers where availability.appLayersEnabled == false:
+                return RenderLayerPlanItem(layer: layer, enabled: false, skipReason: .noAppLayerContent)
             default:
                 return RenderLayerPlanItem(layer: layer, enabled: true, skipReason: nil)
             }

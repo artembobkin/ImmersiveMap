@@ -6,9 +6,8 @@ import simd
 import XCTest
 
 final class ImmersiveMapGeoJSONTests: XCTestCase {
-    private func layer(_ json: String,
-                       polygonStyle: ImmersiveMapPolygonStyle = ImmersiveMapPolygonStyle()) throws -> ImmersiveMapLayer {
-        try ImmersiveMapLayer(id: "test", geoJSON: Data(json.utf8), polygonStyle: polygonStyle)
+    private func layer(_ json: String) throws -> ImmersiveMapGeoJSON.Shapes {
+        try ImmersiveMapGeoJSON.decode(Data(json.utf8))
     }
 
     /// Every geometry type lands as its kind of shape, the positions read
@@ -39,7 +38,8 @@ final class ImmersiveMapGeoJSONTests: XCTestCase {
         XCTAssertEqual(layer.polygons.count, 3)
         XCTAssertEqual(layer.polygons[0].exterior.count, 5)
         XCTAssertEqual(layer.polygons[0].holes.count, 1)
-        XCTAssertNil(layer.polygons[0].style, "A feature that states no style takes the layer's")
+        XCTAssertNil(layer.polygons[0].style)
+        XCTAssertNil(layer.polygons[0].simpleStyle, "A feature that states no style takes the layer's")
     }
 
     /// A bare geometry is a document of its own.
@@ -59,7 +59,10 @@ final class ImmersiveMapGeoJSONTests: XCTestCase {
          "properties": {"fill": "#f00", "stroke-width": 5},
          "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}}
         """
-        let style = try XCTUnwrap(try layer(json, polygonStyle: base).polygons.first?.style)
+        // The feature's part is kept with the shape and laid over whichever
+        // layer draws it.
+        let stated = try XCTUnwrap(try layer(json).polygons.first?.simpleStyle)
+        let style = try XCTUnwrap(ImmersiveMapGeoJSON.polygonStyle(stated, base: base))
         XCTAssertEqual(style.fillColor, SIMD4<Float>(1, 0, 0, 0.5), "The fill's colour is the feature's, its opacity the layer's")
         XCTAssertEqual(style.strokeColor, base.strokeColor)
         XCTAssertEqual(style.strokeWidthPoints, 5)
@@ -91,33 +94,36 @@ final class ImmersiveMapLayerTests: XCTestCase {
                                                         GeoCoordinate(latitude: 10, longitude: 10),
                                                         GeoCoordinate(latitude: 10, longitude: 0)])
 
-    /// Two layers made from the same data are equal, so a view that makes
-    /// its layers anew on every update changes nothing, and a change of a
-    /// coordinate is a change.
-    func testLayersCompareByTheirData() {
-        let first = ImmersiveMapLayer(id: "zones", polygons: [square])
-        let second = ImmersiveMapLayer(id: "zones", polygons: [square])
-        XCTAssertEqual(first, second)
-
-        var moved = square
-        moved.exterior[0].latitude = 0.000001
-        XCTAssertNotEqual(first, ImmersiveMapLayer(id: "zones", polygons: [moved]))
+    /// A layer is a small value compared by what it states, and only its
+    /// source and styles are baked into its mesh.
+    func testALayersMeshDependsOnItsSourceAndStylesAlone() {
+        let first = ImmersiveMapLayer(source: "zones")
+        XCTAssertEqual(first, ImmersiveMapLayer(source: "zones"))
+        XCTAssertEqual(first.id, "zones", "A layer goes by its source's name unless it is given an id")
+        XCTAssertEqual(ImmersiveMapLayer(id: "outline", source: "zones").id, "outline")
 
         var hidden = first
         hidden.isVisible = false
         XCTAssertNotEqual(first, hidden)
-        XCTAssertEqual(first.meshKey, hidden.meshKey, "Hiding a layer does not build it again")
+        XCTAssertEqual(first.meshKey(sourceRevision: 1), hidden.meshKey(sourceRevision: 1),
+                       "Hiding a layer does not build it again")
 
         var behindTerrain = first
         behindTerrain.hidesBehindTerrain = true
-        XCTAssertNotEqual(first, behindTerrain)
-        XCTAssertEqual(first.meshKey, behindTerrain.meshKey, "How the terrain hides a layer does not build it again")
+        XCTAssertEqual(first.meshKey(sourceRevision: 1), behindTerrain.meshKey(sourceRevision: 1),
+                       "How the terrain hides a layer does not build it again")
+
+        var restyled = first
+        restyled.polygonStyle.strokeWidthPoints = 9
+        XCTAssertNotEqual(first.meshKey(sourceRevision: 1), restyled.meshKey(sourceRevision: 1))
+        XCTAssertNotEqual(first.meshKey(sourceRevision: 1), first.meshKey(sourceRevision: 2),
+                          "A source registered with other data builds its layers again")
     }
 
     // MARK: - The controller
 
     private func layer(_ id: String, isVisible: Bool = true) -> ImmersiveMapLayer {
-        ImmersiveMapLayer(id: id, polygons: [square], isVisible: isVisible)
+        ImmersiveMapLayer(id: id, source: "squares", isVisible: isVisible)
     }
 
     /// The controller keeps the layers in the order they draw, one to an id.
@@ -176,7 +182,12 @@ final class ImmersiveMapLayerTests: XCTestCase {
     /// A fixed source hands the frames the layers it was made with.
     func testAFixedSourceHoldsItsLayers() {
         XCTAssertTrue(FixedLayerRenderSource().currentLayers.isEmpty)
-        XCTAssertEqual(FixedLayerRenderSource([layer("a")]).currentLayers.map(\.id), ["a"])
+        XCTAssertNil(FixedLayerRenderSource().sourceLibrary)
+        let controller = ImmersiveMapLayersController([layer("a")])
+        let source = FixedLayerRenderSource(controller)
+        controller.set([layer("b")])
+        XCTAssertEqual(source.currentLayers.map(\.id), ["a"], "The layers are the controller's as they were")
+        XCTAssertTrue(source.sourceLibrary === controller.library)
     }
 
     /// The GPU structs match the shader's layouts byte for byte.
@@ -192,6 +203,13 @@ final class ImmersiveMapLayerTests: XCTestCase {
 }
 
 final class LayerMeshBuilderTests: XCTestCase {
+    /// The mesh of a layer drawing the shapes given, in the default styles.
+    private static func build(polygons: [ImmersiveMapPolygon] = [],
+                              points: [ImmersiveMapPoint] = []) -> LayerMeshData {
+        LayerMeshBuilder.build(layer: ImmersiveMapLayer(source: "shapes"),
+                               content: LayerSourceContent(polygons: polygons, polylines: [], points: points))
+    }
+
     /// Every triangle of a zone is counter-clockwise in render space (y
     /// north), the front face the sphere's culling keeps, whichever way
     /// the ring runs.
@@ -199,7 +217,7 @@ final class LayerMeshBuilderTests: XCTestCase {
         let ring = [GeoCoordinate(latitude: 0, longitude: 0), GeoCoordinate(latitude: 0, longitude: 1),
                     GeoCoordinate(latitude: 1, longitude: 1), GeoCoordinate(latitude: 1, longitude: 0)]
         for exterior in [ring, ring.reversed()] {
-            let data = LayerMeshBuilder.build(layer: ImmersiveMapLayer(id: "z", polygons: [ImmersiveMapPolygon(exterior: exterior)]))
+            let data = Self.build(polygons: [ImmersiveMapPolygon(exterior: exterior)])
             XCTAssertFalse(data.fillIndices.isEmpty)
             var start = 0
             while start + 2 < data.fillIndices.count {
@@ -218,7 +236,7 @@ final class LayerMeshBuilderTests: XCTestCase {
     func testALargeZoneIsCutIntoShortEdges() {
         let ring = [GeoCoordinate(latitude: -20, longitude: -20), GeoCoordinate(latitude: -20, longitude: 20),
                     GeoCoordinate(latitude: 20, longitude: 20), GeoCoordinate(latitude: 20, longitude: -20)]
-        let data = LayerMeshBuilder.build(layer: ImmersiveMapLayer(id: "z", polygons: [ImmersiveMapPolygon(exterior: ring)]))
+        let data = Self.build(polygons: [ImmersiveMapPolygon(exterior: ring)])
         let chunk = try! XCTUnwrap(data.chunks.first)
         let unitsPerWorld = Float(1 << chunk.tile.z) * TileCoordinateSpace.tileExtent
         let longest = Float(LayerMeshBuilder.maximumEdgeLength) * unitsPerWorld * 1.0001
@@ -242,7 +260,7 @@ final class LayerMeshBuilderTests: XCTestCase {
     func testAZoneAcrossTheAntimeridianStaysWhole() {
         let ring = [GeoCoordinate(latitude: 0, longitude: 170), GeoCoordinate(latitude: 0, longitude: -170),
                     GeoCoordinate(latitude: 10, longitude: -170), GeoCoordinate(latitude: 10, longitude: 170)]
-        let data = LayerMeshBuilder.build(layer: ImmersiveMapLayer(id: "z", polygons: [ImmersiveMapPolygon(exterior: ring)]))
+        let data = Self.build(polygons: [ImmersiveMapPolygon(exterior: ring)])
         let chunk = try! XCTUnwrap(data.chunks.first)
         let unitsPerWorld = Float(1 << chunk.tile.z) * TileCoordinateSpace.tileExtent
         let xs = data.fillVertices.map(\.position.x)
@@ -259,7 +277,7 @@ final class LayerMeshBuilderTests: XCTestCase {
                       ImmersiveMapPoint(coordinate: GeoCoordinate(latitude: -33.9, longitude: 151.2)),
                       ImmersiveMapPoint(coordinate: GeoCoordinate(latitude: 0, longitude: 0),
                                         style: ImmersiveMapPointStyle(radiusPoints: 0, strokeWidthPoints: 0))]
-        let data = LayerMeshBuilder.build(layer: ImmersiveMapLayer(id: "p", points: points))
+        let data = Self.build(points: points)
         XCTAssertEqual(data.chunks.count, 2)
         XCTAssertEqual(data.chunks.map(\.pointCount).reduce(0, +), 3)
         XCTAssertEqual(data.discs.count, 3)
@@ -323,12 +341,13 @@ final class LayerChunkCullingTests: XCTestCase {
     func testAChunkKnowsItsBoundsAndItsReach() {
         let ring = [GeoCoordinate(latitude: 55.7, longitude: 37.5), GeoCoordinate(latitude: 55.7, longitude: 37.7),
                     GeoCoordinate(latitude: 55.8, longitude: 37.7), GeoCoordinate(latitude: 55.8, longitude: 37.5)]
-        let layer = ImmersiveMapLayer(id: "z",
-                                      polygons: [ImmersiveMapPolygon(exterior: ring)],
-                                      points: [ImmersiveMapPoint(coordinate: GeoCoordinate(latitude: 55.75, longitude: 37.6))],
+        let layer = ImmersiveMapLayer(source: "z",
                                       polygonStyle: ImmersiveMapPolygonStyle(strokeWidthPoints: 6),
                                       pointStyle: ImmersiveMapPointStyle(radiusPoints: 10, strokeWidthPoints: 2))
-        let data = LayerMeshBuilder.build(layer: layer)
+        let content = LayerSourceContent(polygons: [ImmersiveMapPolygon(exterior: ring)],
+                                         polylines: [],
+                                         points: [ImmersiveMapPoint(coordinate: GeoCoordinate(latitude: 55.75, longitude: 37.6))])
+        let data = LayerMeshBuilder.build(layer: layer, content: content)
         XCTAssertEqual(data.chunks.count, 1)
         let chunk = try! XCTUnwrap(data.chunks.first)
         for position in data.fillVertices.map(\.position) + data.lineVertices.flatMap({ [$0.start, $0.end] })

@@ -23,8 +23,7 @@ final class ModelTileStoreTests: XCTestCase {
 
         func applyActivityState(_ state: RenderActivityState) {}
         func completeSceneModelPathAnimations(_: [SceneModelPathAnimationResult]) {}
-        func updateAvatarSelectionSnapshot(_ snapshot: AvatarSelectionSnapshot) {}
-        func updateSceneModelSelectionSnapshot(_ snapshot: SceneModelSelectionSnapshot) {}
+        func updateSelectionPickData(_ pickData: [any SelectionPickData]) {}
         func updateDebugOverlayHUDSnapshot(_ snapshot: DebugOverlayHUDSnapshot?) {}
         func updateMarkerProjectionSnapshot(_ snapshot: MarkerProjectionSnapshot) {}
     }

@@ -11,7 +11,7 @@ struct ImmersiveMapVideoExportAttachContext {
     let currentSettings: @MainActor () -> ImmersiveMapSettings
     let currentCameraPosition: @MainActor () -> ImmersiveMapCameraPosition?
     let currentAvatarsController: @MainActor () -> ImmersiveMapAvatarsController?
-    let currentLayers: @MainActor () -> [ImmersiveMapLayer]
+    let currentLayersController: @MainActor () -> ImmersiveMapLayersController?
     let currentMarkerContent: @MainActor () -> MarkerViewContent?
 }
 
@@ -84,9 +84,10 @@ public final class ImmersiveMapTourVideoRecorder {
         let markerContent = configuration.includesMarkers
             ? attachContext.currentMarkerContent()
             : nil
-        // The layers as they are now: values, so later changes to the
-        // app's controller do not reach the export.
-        let layers = attachContext.currentLayers()
+        // The export takes the controller's layers as they are when it
+        // starts (`FixedLayerRenderSource`), so later changes to them do
+        // not reach it.
+        let layers = attachContext.currentLayersController()
 
         isExporting = true
         defer {
