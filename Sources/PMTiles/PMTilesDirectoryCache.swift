@@ -1,4 +1,4 @@
-// Copyright (c) 2025-2026 ImmersiveMap contributors.
+// Copyright (c) 2025-2026 Artem Bobkin.
 // SPDX-License-Identifier: MIT
 
 /// The leaf directories an archive client has read, held up to a cost

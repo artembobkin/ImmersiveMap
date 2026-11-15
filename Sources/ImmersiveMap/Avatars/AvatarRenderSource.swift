@@ -1,4 +1,4 @@
-// Copyright (c) 2025-2026 ImmersiveMap contributors.
+// Copyright (c) 2025-2026 Artem Bobkin.
 // SPDX-License-Identifier: MIT
 
 /// The `Avatars` folder: the engine-side model and CPU presentation of avatar

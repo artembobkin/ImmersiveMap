@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2025-2026 ImmersiveMap contributors.
+# Copyright (c) 2025-2026 Artem Bobkin.
 # SPDX-License-Identifier: MIT
 #
 # Runs the package test suite through Xcode, the way an app built in Xcode

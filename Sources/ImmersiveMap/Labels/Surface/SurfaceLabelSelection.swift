@@ -1,4 +1,4 @@
-// Copyright (c) 2025-2026 ImmersiveMap contributors.
+// Copyright (c) 2025-2026 Artem Bobkin.
 // SPDX-License-Identifier: MIT
 
 /// Which copy of each label painted on the map draws this frame.

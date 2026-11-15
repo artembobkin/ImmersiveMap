@@ -1,4 +1,4 @@
-// Copyright (c) 2025-2026 ImmersiveMap contributors.
+// Copyright (c) 2025-2026 Artem Bobkin.
 // SPDX-License-Identifier: MIT
 
 /// Stateless narrowing of 32-bit index arrays to 16 bits when the referenced

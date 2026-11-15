@@ -64,7 +64,7 @@ The code shows how things are wired. These are the decisions behind it, which th
 
 - Every hand-written `.swift`, `.metal`, `.h` file starts with:
   ```text
-  // Copyright (c) 2025-2026 ImmersiveMap contributors.
+  // Copyright (c) 2025-2026 Artem Bobkin.
   // SPDX-License-Identifier: MIT
   ```
 - The engine reads its resources through `ImmersiveMapResourceBundle.bundle()`, never `Bundle.module` directly. The resources travel with the engine in its one bundle, and in an app that bundle is in the app's `Contents/Resources`: an app looks there and nowhere else, and only a program that is no app (the tests, a command-line tool) takes `Bundle.module`. SwiftPM's command-line accessor looks beside an app's `Contents`, where code signing allows nothing, and then at the build folder compiled into the binary, so an app must never reach it. An app without the bundle gets an error: the map view shows it in place of the map (`RendererUnavailableView`), an export throws it, nothing stops the process. A new resource file or directory is registered under `resources:` in `Package.swift`, otherwise it silently doesn't ship.

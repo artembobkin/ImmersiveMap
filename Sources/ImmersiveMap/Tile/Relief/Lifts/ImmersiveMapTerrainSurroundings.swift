@@ -1,4 +1,4 @@
-// Copyright (c) 2025-2026 ImmersiveMap contributors.
+// Copyright (c) 2025-2026 Artem Bobkin.
 // SPDX-License-Identifier: MIT
 
 /// What the country around the point the camera looks at is like, read

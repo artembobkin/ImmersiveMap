@@ -1,4 +1,4 @@
-// Copyright (c) 2025-2026 ImmersiveMap contributors.
+// Copyright (c) 2025-2026 Artem Bobkin.
 // SPDX-License-Identifier: MIT
 //
 // Port of mapbox/earcut (https://github.com/mapbox/earcut) v3.2.3, ISC license:

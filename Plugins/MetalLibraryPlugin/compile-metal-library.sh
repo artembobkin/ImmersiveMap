@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2025-2026 ImmersiveMap contributors.
+# Copyright (c) 2025-2026 Artem Bobkin.
 # SPDX-License-Identifier: MIT
 #
 # Compiles the engine's shaders into one Metal library, for the platform the
