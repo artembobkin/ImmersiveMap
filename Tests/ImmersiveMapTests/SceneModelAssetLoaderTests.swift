@@ -109,7 +109,7 @@ final class SceneModelMeshStoreTests: XCTestCase {
 
         func updateSelectionPickData(_ pickData: [any SelectionPickData]) {}
         func updateDebugOverlayHUDSnapshot(_ snapshot: DebugOverlayHUDSnapshot?) {}
-        func updateMarkerProjectionSnapshot(_ snapshot: MarkerProjectionSnapshot) {}
+        func updateAnnotationProjectionSnapshot(_ snapshot: AnnotationProjectionSnapshot) {}
     }
 
     private final class LoadCounter: @unchecked Sendable {

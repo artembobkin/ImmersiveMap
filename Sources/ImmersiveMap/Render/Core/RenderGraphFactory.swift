@@ -32,10 +32,10 @@ enum RenderGraphFactory {
                                                             fallbackDepthTexture: context.sceneDepthFallbackTexture,
                                                             hidesBehindBuildingsFromZoom: settings.labels.road.hidesBehindBuildingsFromZoom,
                                                             metalDevice: context.metalContext.device)
-        let avatarSubsystem = AvatarRenderSubsystem(avatarsRenderer: context.avatarsRenderer,
-                                                    avatarSource: context.avatarSource,
+        let pinSubsystem = PinRenderSubsystem(pinsRenderer: context.pinsRenderer,
+                                                    pinSource: context.pinSource,
                                                     depthDisabledState: context.depthDisabledState)
-        let markerSubsystem = MarkerRenderSubsystem(markerSource: context.markerSource)
+        let annotationSubsystem = AnnotationRenderSubsystem(annotationSource: context.annotationSource)
         let sceneModelSubsystem = SceneModelRenderSubsystem(sceneModelSource: context.sceneModelSource,
                                                             meshStore: context.sceneModelMeshStore,
                                                             pipeline: context.sceneModelPipeline,
@@ -153,8 +153,8 @@ enum RenderGraphFactory {
             baseLabelSubsystem,
             baseLabelDrawSubsystem,
             roadLabelDrawSubsystem,
-            avatarSubsystem,
-            markerSubsystem,
+            pinSubsystem,
+            annotationSubsystem,
             groundShadowMaskSubsystem,
             // Before the ground of either surface: the planner's decision
             // in the stencil, the placements' marks
@@ -186,7 +186,7 @@ enum RenderGraphFactory {
         let availabilityProviders: [any RenderPassAvailabilityProvider] = [
             baseLabelDrawSubsystem,
             roadLabelDrawSubsystem,
-            avatarSubsystem,
+            pinSubsystem,
             sceneModelSubsystem,
             modelTileSubsystem,
             layerSubsystem,

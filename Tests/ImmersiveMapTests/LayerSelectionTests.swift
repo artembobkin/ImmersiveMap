@@ -171,7 +171,7 @@ final class LayerSelectionSnapshotTests: XCTestCase {
     func testALayersKindNamesItsLayer() {
         let kind = ImmersiveMapSelection.Kind.layer("zones")
         XCTAssertEqual(kind.layerID, "zones")
-        XCTAssertNil(ImmersiveMapSelection.Kind.avatar.layerID)
+        XCTAssertNil(ImmersiveMapSelection.Kind.pin.layerID)
         XCTAssertNotEqual(kind, .layer("parks"))
     }
 }

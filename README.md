@@ -31,17 +31,17 @@ ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps
 </p>
 <p align="center">
   <img src="Assets/readme-berlin-night.avif" width="49%" alt="Berlin Mitte in the dark palette">
-  <img src="Assets/readme-avatars-shibuya.avif" width="49%" alt="Avatar markers with badges over Shibuya">
+  <img src="Assets/readme-avatars-shibuya.avif" width="49%" alt="Pins over Shibuya, making room for each other">
 </p>
 <p align="center">
   <img src="Assets/readme-scene-models-paris.avif" width="49%" alt="A 3D scene model by the Eiffel Tower">
-  <img src="Assets/readme-avatars-globe.avif" width="49%" alt="Avatar markers on the globe">
+  <img src="Assets/readme-avatars-globe.avif" width="49%" alt="Pins on the globe">
 </p>
 <!-- gallery:end -->
 
 ## Features
 
-Built-in Protomaps vector tiles, native iOS (UIKit host), native macOS, SwiftUI integration, map styling and colors, SwiftUI markers, avatars, 3D scene models, 3D building models from a model archive, tour video export.
+Built-in Protomaps vector tiles, native iOS (UIKit host), native macOS, SwiftUI integration, map styling and colors, your own data as layers (GeoJSON zones, lines and points), SwiftUI annotations, pins that make room for each other, 3D scene models, 3D building models from a model archive, tour video export.
 
 ## Documentation
 
@@ -50,6 +50,8 @@ The guides are on the website: **[immersivemap.dev/documentation](https://immers
 ## Map Data
 
 The map draws OpenStreetMap data from a single [PMTiles](https://docs.protomaps.com/pmtiles/) file, read straight from storage with no tile server. The 3D building models come from a second archive, and the globe's biomes ship inside the package. To use your own tiles, see [Setting up the tile source](Documentation/TileSource.md).
+
+The map also works offline: a file URL reads the archive from disk, so an app can ship its map in the bundle.
 
 ## Quick Start
 
@@ -95,11 +97,11 @@ The map's badge shows these credits on its own. The engine is MIT licensed, and 
 
 ## Contributing
 
-ImmersiveMap is currently maintained as a single-maintainer project. Pull requests are accepted.
+ImmersiveMap is made and maintained by Artem Bobkin, as a single-maintainer project. Pull requests are accepted.
 
 ## License
 
-ImmersiveMap is available under the MIT license. See [LICENSE](LICENSE). The internal earcut triangulator is a port of ISC-licensed Mapbox code, and its notice heads [EarcutCore.swift](Sources/Earcut/EarcutCore.swift).
+ImmersiveMap is © Artem Bobkin, available under the MIT license. See [LICENSE](LICENSE). The internal earcut triangulator is a port of ISC-licensed Mapbox code, and its notice heads [EarcutCore.swift](Sources/Earcut/EarcutCore.swift).
 
 ## Support
 

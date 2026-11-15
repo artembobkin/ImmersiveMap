@@ -391,7 +391,7 @@ final class DebugOverlayRendererTests: XCTestCase {
         diagnostics.setCounter(.globeCullingAcceptedWholeSubtrees, value: 0)
         diagnostics.setMeasurement(.globeCullingDurationMs, value: 0.07)
         diagnostics.recordSkipReason(.debugOverlayDisabled)
-        diagnostics.recordSkipReason(.noAvatarContent)
+        diagnostics.recordSkipReason(.noPinContent)
 
         let lines = DebugOverlayRenderer.makeOverlayDiagnosticsTextLines(
             cameraDebugLines: [
@@ -439,7 +439,7 @@ final class DebugOverlayRendererTests: XCTestCase {
             "subtree:0",
             "",
             "[Skip]",
-            "debugOverlayDisabled,noAvatarContent"
+            "debugOverlayDisabled,noPinContent"
         ])
     }
 
@@ -449,7 +449,7 @@ final class DebugOverlayRendererTests: XCTestCase {
             "frame:73 dt:3.55ms fps:281.9",
             "",
             "[Skip]",
-            "debugOverlayDisabled,noAvatarContent"
+            "debugOverlayDisabled,noPinContent"
         ].joined(separator: "\n")
 
         let runs = DebugOverlayDiagnosticsTextStylePlanner.makeRuns(for: text)
@@ -471,7 +471,7 @@ final class DebugOverlayRendererTests: XCTestCase {
             style: .section("Skip")
         )))
         XCTAssertTrue(runs.contains(DebugOverlayDiagnosticsTextStyleRun(
-            range: (text as NSString).range(of: "debugOverlayDisabled,noAvatarContent"),
+            range: (text as NSString).range(of: "debugOverlayDisabled,noPinContent"),
             style: .warningValue
         )))
         XCTAssertFalse(runs.contains { run in

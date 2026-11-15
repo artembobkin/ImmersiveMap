@@ -10,12 +10,12 @@ import XCTest
 /// a plain BGRA texture. Requires the compiled Metal library, so it skips
 /// under `swift test` and runs in the xcodebuild workspace suite.
 final class RenderFrameOffscreenTargetTests: XCTestCase {
-    private final class StubAvatarSource: AvatarRenderSource {
-        var currentAvatarController: ImmersiveMapAvatarsController? { nil }
+    private final class StubPinSource: PinRenderSource {
+        var currentPinController: ImmersiveMapPinsController? { nil }
     }
 
-    private final class StubMarkerSource: MarkerRenderSource {
-        var currentMarkerProjectionInput: MarkerProjectionInput { .empty }
+    private final class StubAnnotationSource: AnnotationRenderSource {
+        var currentAnnotationProjectionInput: AnnotationProjectionInput { .empty }
     }
 
     private final class StubSceneModelSource: SceneModelRenderSource {
@@ -41,8 +41,8 @@ final class RenderFrameOffscreenTargetTests: XCTestCase {
         let presentation = MapPresentationStateController(settings: settings)
         let layer = CAMetalLayer()
         let engine = try RenderFrameEngine(layer: layer,
-                                           avatarSource: StubAvatarSource(),
-                                           markerSource: StubMarkerSource(),
+                                           pinSource: StubPinSource(),
+                                           annotationSource: StubAnnotationSource(),
                                            sceneModelSource: StubSceneModelSource(),
                                            styleRuntime: MapStyleRuntime(settings: settings),
                                            settings: settings,

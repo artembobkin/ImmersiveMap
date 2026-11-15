@@ -14,7 +14,7 @@ import QuartzCore
 /// screen at all, which is what generating thumbnails, share images or a batch
 /// of reference renders needs.
 ///
-/// Content is passed as values (scene models, avatar markers) rather
+/// Content is passed as values (scene models, pins) rather
 /// than as controllers. A controller hands its state to a renderer as a
 /// one-shot diff, so sharing one with a capture would drain the diff a live map
 /// had not consumed yet, and a second capture from the same controller would
@@ -36,7 +36,7 @@ import QuartzCore
 ///     configuration: ImmersiveMapStillConfiguration(width: 1280, height: 720))
 /// ```
 ///
-/// SwiftUI markers are platform views above the Metal layer and never draw in
+/// SwiftUI annotations are platform views above the Metal layer and never draw in
 /// Metal, so a capture cannot contain them. The attribution badge is host-view
 /// chrome and does not appear either; add attribution before publishing
 /// captured imagery.
@@ -62,7 +62,7 @@ public final class ImmersiveMapStillRecorder {
     ///     forced off for the capture.
     ///   - camera: where to look from. `nil` uses the same default position an
     ///     untouched map starts at.
-    ///   - avatars: avatar markers to draw.
+    ///   - pins: pins to draw.
     ///   - sceneModels: scene models to draw.
     ///   - layers: the controller whose layers of the app's own data to
     ///     draw, as they are when the capture starts. The capture waits
@@ -71,7 +71,7 @@ public final class ImmersiveMapStillRecorder {
     /// - Throws: ``ImmersiveMapStillCaptureError``.
     public func capture(settings: ImmersiveMapSettings = .default,
                         camera: ImmersiveMapCameraPosition? = nil,
-                        avatars: [AvatarMarker] = [],
+                        pins: [ImmersiveMapPin] = [],
                         sceneModels: [ImmersiveMapSceneModel] = [],
                         layers: ImmersiveMapLayersController? = nil,
                         configuration: ImmersiveMapStillConfiguration = .default) async throws -> CGImage {
@@ -85,7 +85,7 @@ public final class ImmersiveMapStillRecorder {
 
         let runtime = try ImmersiveMapStillRuntime(settings: settings.debugPanel(false),
                                                    camera: camera,
-                                                   avatars: avatars,
+                                                   pins: pins,
                                                    sceneModels: sceneModels,
                                                    layers: layers,
                                                    configuration: configuration)
@@ -129,14 +129,14 @@ final class ImmersiveMapStillRuntime {
     /// scripted clock only moves forward.
     private static let finalSceneTime: TimeInterval = 60
 
-    private final class StillAvatarSource: AvatarRenderSource {
-        private let controller: ImmersiveMapAvatarsController?
+    private final class StillPinSource: PinRenderSource {
+        private let controller: ImmersiveMapPinsController?
 
-        init(controller: ImmersiveMapAvatarsController?) {
+        init(controller: ImmersiveMapPinsController?) {
             self.controller = controller
         }
 
-        var currentAvatarController: ImmersiveMapAvatarsController? { controller }
+        var currentPinController: ImmersiveMapPinsController? { controller }
     }
 
     private final class StillSceneModelSource: SceneModelRenderSource {
@@ -149,16 +149,16 @@ final class ImmersiveMapStillRuntime {
         var currentSceneModelsController: ImmersiveMapSceneModelsController? { controller }
     }
 
-    private final class StillMarkerSource: MarkerRenderSource {
-        var currentMarkerProjectionInput: MarkerProjectionInput { .empty }
+    private final class StillAnnotationSource: AnnotationRenderSource {
+        var currentAnnotationProjectionInput: AnnotationProjectionInput { .empty }
     }
 
     private let configuration: ImmersiveMapStillConfiguration
     private let drawSize: CGSize
     private let clock: RenderFrameScriptedClock
     private let eventSink: VideoExportRenderEventSink
-    private let avatarSource: StillAvatarSource
-    private let markerSource: StillMarkerSource
+    private let pinSource: StillPinSource
+    private let annotationSource: StillAnnotationSource
     private let sceneModelSource: StillSceneModelSource
     private let layerSource: FixedLayerRenderSource
     private let renderCamera: FrameCameraStateResolver
@@ -170,7 +170,7 @@ final class ImmersiveMapStillRuntime {
 
     init(settings: ImmersiveMapSettings,
          camera: ImmersiveMapCameraPosition?,
-         avatars: [AvatarMarker],
+         pins: [ImmersiveMapPin],
          sceneModels: [ImmersiveMapSceneModel],
          layers: ImmersiveMapLayersController? = nil,
          configuration: ImmersiveMapStillConfiguration) throws {
@@ -207,13 +207,13 @@ final class ImmersiveMapStillRuntime {
         // Controllers built here and owned by this capture alone: their
         // snapshots are one-shot diffs, and sharing one with a live map would
         // take the state that map had not read yet.
-        let avatarsController: ImmersiveMapAvatarsController?
-        if avatars.isEmpty {
-            avatarsController = nil
+        let pinsController: ImmersiveMapPinsController?
+        if pins.isEmpty {
+            pinsController = nil
         } else {
-            let controller = ImmersiveMapAvatarsController()
-            avatars.forEach { controller.add($0) }
-            avatarsController = controller
+            let controller = ImmersiveMapPinsController()
+            pins.forEach { controller.add($0) }
+            pinsController = controller
         }
         let sceneModelsController: ImmersiveMapSceneModelsController?
         if sceneModels.isEmpty {
@@ -224,11 +224,11 @@ final class ImmersiveMapStillRuntime {
             sceneModelsController = controller
         }
 
-        let avatarSource = StillAvatarSource(controller: avatarsController)
-        let markerSource = StillMarkerSource()
+        let pinSource = StillPinSource(controller: pinsController)
+        let annotationSource = StillAnnotationSource()
         let sceneModelSource = StillSceneModelSource(controller: sceneModelsController)
-        self.avatarSource = avatarSource
-        self.markerSource = markerSource
+        self.pinSource = pinSource
+        self.annotationSource = annotationSource
         self.sceneModelSource = sceneModelSource
         let layerSource = FixedLayerRenderSource(layers)
         self.layerSource = layerSource
@@ -239,8 +239,8 @@ final class ImmersiveMapStillRuntime {
         self.metalLayer = metalLayer
         do {
             self.engine = try RenderFrameEngine(layer: metalLayer,
-                                                avatarSource: avatarSource,
-                                                markerSource: markerSource,
+                                                pinSource: pinSource,
+                                                annotationSource: annotationSource,
                                                 sceneModelSource: sceneModelSource,
                                                 layerSource: layerSource,
                                                 styleRuntime: MapStyleRuntime(settings: settings),
@@ -319,7 +319,7 @@ final class ImmersiveMapStillRuntime {
             let activity = eventSink.activityState
             let isSettled = hasPendingWork == false
                 && activity.labelFadeRenderingActive == false
-                && activity.avatarAnimationRenderingActive == false
+                && activity.pinAnimationRenderingActive == false
                 && activity.extrusionRiseRenderingActive == false
                 && activity.animatedZoomRenderingActive == false
             if isSettled {

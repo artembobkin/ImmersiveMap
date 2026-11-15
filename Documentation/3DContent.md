@@ -72,4 +72,4 @@ models.animate(id: 1,
 
 The model turns to its direction of travel. To have the camera fly with it, start `camera.follow(path:duration:)` (see [Camera](Camera.md)) with the same path, duration and curve.
 
-Taps on models arrive in `.onSceneModelTap` (see [Markers and taps](MarkersAndTaps.md)).
+Taps on models arrive in `.onSceneModelTap` (see [Annotations, pins and taps](AnnotationsAndPins.md)).

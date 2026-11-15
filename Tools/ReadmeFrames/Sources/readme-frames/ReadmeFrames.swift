@@ -38,8 +38,8 @@ import UniformTypeIdentifiers
 /// a camera is placed as the picture already in `Assets/`: a picture taken
 /// by hand, until it gets a camera, made an AVIF from its PNG by
 /// `--compress`. A frame may name a `theme` (`night`,
-/// the dark palette of the settings example), carry `avatars` (markers
-/// with a portrait from a URL or a file, a battery or a speed badge) and
+/// the dark palette of the settings example), carry `pins` (each with a
+/// portrait from a URL or a file) and
 /// `sceneModels` (a USDZ file of the repository placed on the map), all
 /// drawn into the capture. The map is the Develop app's: the hosted tiles
 /// (or the local copy at `LocalTiles/`, or `IMMERSIVEMAP_DEV_TILE_ARCHIVE`),
@@ -73,7 +73,7 @@ struct ReadmeFrames {
                     print("\(frame.name): \(frame.width ?? Frame.defaultWidth)x\(frame.height ?? Frame.defaultHeight) at z\(frame.zoom ?? 0) \(frame.latitude ?? 0), \(frame.longitude ?? 0)")
                     let image = try await recorder.capture(settings: Self.mapSettings(theme: frame.theme),
                                                            camera: camera,
-                                                           avatars: try frame.avatarMarkers(),
+                                                           pins: try frame.pinMarkers(),
                                                            sceneModels: try frame.sceneModelValues(),
                                                            configuration: frame.configuration(settleTimeout: options.settleTimeout))
                     let url = Picture.url(of: frame, in: options.outputDirectory)
@@ -289,34 +289,30 @@ struct Frame: Decodable {
     /// The palette the frame is drawn in: `day` by default, `night` for the
     /// dark one.
     let theme: Palette?
-    /// Avatar markers drawn into the frame.
-    let avatars: [Avatar]?
+    /// Pin markers drawn into the frame.
+    let pins: [Pin]?
     /// 3D models placed on the map and drawn into the frame.
     let sceneModels: [SceneModel]?
 
-    /// An avatar marker: a portrait from a URL (fetched before the capture,
-    /// so the frame never shows the placeholder) or a file, and the badges.
-    struct Avatar: Decodable {
+    /// A pin: a portrait from a URL (fetched before the capture,
+    /// so the frame never shows the placeholder) or a file.
+    struct Pin: Decodable {
         let id: UInt64
         let latitude: Double
         let longitude: Double
         /// A URL or a path, relative to the repository's root.
         let image: String
-        let battery: Int?
-        let speed: Int?
 
-        func marker() throws -> AvatarMarker {
+        func marker() throws -> ImmersiveMapPin {
             let url = image.contains("://") ? URL(string: image) : ReadmeFrames.repositoryRoot.appendingPathComponent(image)
             guard let url, let data = try? Data(contentsOf: url),
                   let source = CGImageSourceCreateWithData(data as CFData, nil),
                   let portrait = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-                throw ToolError("Cannot load the portrait \(image) of avatar \(id)")
+                throw ToolError("Cannot load the portrait \(image) of pin \(id)")
             }
-            return AvatarMarker(id: id,
+            return ImmersiveMapPin(id: id,
                                 coordinate: GeoCoordinate(latitude: latitude, longitude: longitude),
-                                image: portrait,
-                                batteryBadge: battery.map { AvatarBatteryBadge(levelPct: $0) },
-                                speedBadge: speed.map { AvatarSpeedBadge(kilometersPerHour: $0) })
+                                image: portrait)
         }
     }
 
@@ -347,8 +343,8 @@ struct Frame: Decodable {
         }
     }
 
-    func avatarMarkers() throws -> [AvatarMarker] {
-        try (avatars ?? []).map { try $0.marker() }
+    func pinMarkers() throws -> [ImmersiveMapPin] {
+        try (pins ?? []).map { try $0.marker() }
     }
 
     func sceneModelValues() throws -> [ImmersiveMapSceneModel] {

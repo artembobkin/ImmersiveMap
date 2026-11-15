@@ -157,9 +157,9 @@ ImmersiveMapView()
     }
 ```
 
-A tap lands on the shape the map shows under it: of the layer drawn last first, and within a layer its points, then its lines, then its zones. A zone is hit in its fill, or on its outline when it has no fill. A thin line and a small point grow to a touch target. An avatar or a model over a shape takes the tap first.
+A tap lands on the shape the map shows under it: of the layer drawn last first, and within a layer its points, then its lines, then its zones. A zone is hit in its fill, or on its outline when it has no fill. A thin line and a small point grow to a touch target. A pin or a model over a shape takes the tap first.
 
-With an `ImmersiveMapSelectionController` (see [Markers and taps](MarkersAndTaps.md)), a tap also selects the shape:
+With an `ImmersiveMapSelectionController` (see [Annotations, pins and taps](AnnotationsAndPins.md)), a tap also selects the shape:
 
 ```swift
 selection.onSelectionChanged = { event in

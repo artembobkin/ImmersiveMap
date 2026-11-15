@@ -9,7 +9,7 @@ public enum ImmersiveMapSettingsChangeDomain: String, CaseIterable, Equatable {
     case labels
     case scene
     case style
-    case avatars
+    case pins
     case attribution
     case postProcessing
     case debug
@@ -120,8 +120,8 @@ public enum ImmersiveMapSettingsApplicationPlanner {
         if oldValue.labels != newValue.labels {
             mark(.labels, actions: [.invalidateCaches, .rebuildPreparedData, .recreateRenderer])
         }
-        if oldValue.avatars != newValue.avatars {
-            mark(.avatars, actions: [.rebuildGPUResources, .recreateRenderer])
+        if oldValue.pins != newValue.pins {
+            mark(.pins, actions: [.rebuildGPUResources, .recreateRenderer])
         }
         // The badge shows the resolved attribution, which the overview's
         // credit is part of: its zoom is badge text, applied in place.

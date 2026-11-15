@@ -14,14 +14,14 @@ import QuartzCore
 /// the engine's GPU resources and caches.
 @MainActor
 final class ImmersiveMapVideoExportRuntime {
-    private final class VideoExportAvatarSource: AvatarRenderSource {
-        private let controller: ImmersiveMapAvatarsController?
+    private final class VideoExportPinSource: PinRenderSource {
+        private let controller: ImmersiveMapPinsController?
 
-        init(controller: ImmersiveMapAvatarsController?) {
+        init(controller: ImmersiveMapPinsController?) {
             self.controller = controller
         }
 
-        var currentAvatarController: ImmersiveMapAvatarsController? {
+        var currentPinController: ImmersiveMapPinsController? {
             controller
         }
     }
@@ -34,15 +34,15 @@ final class ImmersiveMapVideoExportRuntime {
         }
     }
 
-    /// SwiftUI marker views are platform overlays above the Metal layer and
+    /// SwiftUI annotation views are platform overlays above the Metal layer and
     /// never draw in Metal. The engine still projects their coordinates every
     /// frame from this input, and the export compositor draws the rasterized
     /// views onto finished frames at the projected positions.
-    private final class VideoExportMarkerSource: MarkerRenderSource {
-        let currentMarkerProjectionInput: MarkerProjectionInput
+    private final class VideoExportAnnotationSource: AnnotationRenderSource {
+        let currentAnnotationProjectionInput: AnnotationProjectionInput
 
-        init(input: MarkerProjectionInput) {
-            self.currentMarkerProjectionInput = input
+        init(input: AnnotationProjectionInput) {
+            self.currentAnnotationProjectionInput = input
         }
     }
 
@@ -59,10 +59,10 @@ final class ImmersiveMapVideoExportRuntime {
     private let eventSink: VideoExportRenderEventSink
     private let renderCamera: FrameCameraStateResolver
     private let presentationStateResolver: MapPresentationStateController
-    private let avatarSource: VideoExportAvatarSource
+    private let pinSource: VideoExportPinSource
     private let layerSource: FixedLayerRenderSource
-    private let markerSource: VideoExportMarkerSource
-    private let markerOverlay: VideoExportMarkerOverlay?
+    private let annotationSource: VideoExportAnnotationSource
+    private let annotationOverlay: VideoExportAnnotationOverlay?
     private let metalLayer: CAMetalLayer
     private let engine: RenderFrameEngine
     private let textureCache: VideoExportPixelBufferTextureCache
@@ -75,9 +75,9 @@ final class ImmersiveMapVideoExportRuntime {
 
     init(settings: ImmersiveMapSettings,
          initialPosition: ImmersiveMapCameraPosition?,
-         avatarsController: ImmersiveMapAvatarsController?,
+         pinsController: ImmersiveMapPinsController?,
          layers: ImmersiveMapLayersController? = nil,
-         markerContent: MarkerViewContent?,
+         annotationContent: AnnotationViewContent?,
          configuration: ImmersiveMapVideoExportConfiguration,
          outputURL: URL) throws {
         // Planned by the archive's depth as last read (`TileArchiveDepths`).
@@ -89,10 +89,10 @@ final class ImmersiveMapVideoExportRuntime {
         self.writer = try VideoExportAssetWriter(url: outputURL, configuration: configuration)
         // Local rather than the computed property: the markers rasterize here,
         // before the rest of `self` exists.
-        let markerScale = ExportScreenScaleMath.markerRasterizationScale(markerScale: configuration.markerScale,
+        let annotationScale = ExportScreenScaleMath.annotationRasterizationScale(annotationScale: configuration.annotationScale,
                                                                          outputSize: drawSize)
-        self.markerOverlay = markerContent.flatMap {
-            VideoExportMarkerOverlay(content: $0, scale: markerScale)
+        self.annotationOverlay = annotationContent.flatMap {
+            VideoExportAnnotationOverlay(content: $0, scale: annotationScale)
         }
 
         let clock = RenderFrameScriptedClock(date: configuration.sceneDate ?? Date())
@@ -106,12 +106,12 @@ final class ImmersiveMapVideoExportRuntime {
         self.initialPosition = initialPosition ?? renderCamera.currentCameraPosition()
         let presentationStateResolver = MapPresentationStateController(settings: settings)
         self.presentationStateResolver = presentationStateResolver
-        let avatarSource = VideoExportAvatarSource(controller: avatarsController)
-        self.avatarSource = avatarSource
+        let pinSource = VideoExportPinSource(controller: pinsController)
+        self.pinSource = pinSource
         let layerSource = FixedLayerRenderSource(layers)
         self.layerSource = layerSource
-        let markerSource = VideoExportMarkerSource(input: markerOverlay?.projectionInput ?? .empty)
-        self.markerSource = markerSource
+        let annotationSource = VideoExportAnnotationSource(input: annotationOverlay?.projectionInput ?? .empty)
+        self.annotationSource = annotationSource
 
         // Device and pixel-format carrier only: the offscreen path never asks
         // this layer for a drawable.
@@ -119,8 +119,8 @@ final class ImmersiveMapVideoExportRuntime {
         self.metalLayer = metalLayer
         do {
             self.engine = try RenderFrameEngine(layer: metalLayer,
-                                                avatarSource: avatarSource,
-                                                markerSource: markerSource,
+                                                pinSource: pinSource,
+                                                annotationSource: annotationSource,
                                                 sceneModelSource: VideoExportSceneModelSource(),
                                                 layerSource: layerSource,
                                                 styleRuntime: MapStyleRuntime(settings: settings),
@@ -184,10 +184,10 @@ final class ImmersiveMapVideoExportRuntime {
                     throw ImmersiveMapVideoExportError.pixelBufferUnavailable
                 }
                 try await renderSettledFrame(into: frame.texture)
-                if let markerOverlay, let markerSnapshot = eventSink.markerProjectionSnapshot {
+                if let annotationOverlay, let annotationSnapshot = eventSink.annotationProjectionSnapshot {
                     // GPU work for this frame is complete (awaited above), so
                     // the CPU compositor can draw over the finished pixels.
-                    markerOverlay.composite(into: frame.pixelBuffer, snapshot: markerSnapshot)
+                    annotationOverlay.composite(into: frame.pixelBuffer, snapshot: annotationSnapshot)
                 }
                 try await writer.append(frame.pixelBuffer, frameIndex: frameIndex)
                 // The CoreVideo texture binding must survive until the GPU
@@ -210,10 +210,10 @@ final class ImmersiveMapVideoExportRuntime {
     }
 
     /// Settles the scene before the first captured frame: renders discarded
-    /// frames with advancing scene time (label fades and avatar appear-fades
+    /// frames with advancing scene time (label fades and pin appear-fades
     /// need time to converge) until tiles, fades, the label visibility cycle,
-    /// and avatar animations are quiet, or the readiness timeout expires.
-    /// Avatar state is a detached copy, so its animations are finite by
+    /// and pin animations are quiet, or the readiness timeout expires.
+    /// Pin state is a detached copy, so its animations are finite by
     /// construction and cannot stall the pre-roll.
     private func preroll(driver: TourVideoTimelineDriver) async throws {
         driver.advance(to: 0)
@@ -232,7 +232,7 @@ final class ImmersiveMapVideoExportRuntime {
             let activity = eventSink.activityState
             let isSettled = hasPendingTiles == false
                 && activity.labelFadeRenderingActive == false
-                && activity.avatarAnimationRenderingActive == false
+                && activity.pinAnimationRenderingActive == false
                 && activity.extrusionRiseRenderingActive == false
             if isSettled {
                 break

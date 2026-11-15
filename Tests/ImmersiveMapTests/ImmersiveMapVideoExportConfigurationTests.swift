@@ -15,19 +15,19 @@ final class ImmersiveMapVideoExportConfigurationTests: XCTestCase {
         XCTAssertNil(configuration.averageBitRate)
         XCTAssertEqual(configuration.tileReadinessTimeout, 10)
         XCTAssertNil(configuration.sceneDate)
-        XCTAssertTrue(configuration.includesAvatars)
-        XCTAssertTrue(configuration.includesMarkers)
-        XCTAssertEqual(configuration.markerScale, 2.0)
+        XCTAssertTrue(configuration.includesPins)
+        XCTAssertTrue(configuration.includesAnnotations)
+        XCTAssertEqual(configuration.annotationScale, 2.0)
         XCTAssertNoThrow(try configuration.validate())
     }
 
     func testOutOfRangeMarkerScaleIsRejected() {
         var tooSmall = ImmersiveMapVideoExportConfiguration.default
-        tooSmall.markerScale = 0.4
+        tooSmall.annotationScale = 0.4
         XCTAssertThrowsError(try tooSmall.validate())
 
         var tooLarge = ImmersiveMapVideoExportConfiguration.default
-        tooLarge.markerScale = 9
+        tooLarge.annotationScale = 9
         XCTAssertThrowsError(try tooLarge.validate())
     }
 

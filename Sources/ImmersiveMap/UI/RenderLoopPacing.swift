@@ -10,7 +10,7 @@ final class RenderLoopPacing {
         case interaction = "interaction"
         case labelFade = "label fade"
         case cameraAnimation = "camera animation"
-        case avatarAnimation = "avatar animation"
+        case pinAnimation = "pin animation"
         case sceneModelAnimation = "scene model animation"
         /// The buildings or the models rising out of the ground.
         case extrusionRise = "extrusion rise"
@@ -29,7 +29,7 @@ final class RenderLoopPacing {
             switch self {
             case .interaction,
                  .cameraAnimation,
-                 .avatarAnimation,
+                 .pinAnimation,
                  .sceneModelAnimation,
                  .extrusionRise,
                  .animatedZoom,

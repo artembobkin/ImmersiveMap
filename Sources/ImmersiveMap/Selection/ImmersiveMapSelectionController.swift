@@ -13,7 +13,7 @@ import Foundation
 /// to and its id within that feature.
 public struct ImmersiveMapSelection: Hashable, Sendable {
     /// The feature a selected object belongs to. An open set: each
-    /// selectable feature declares its own value (`.avatar`, `.sceneModel`),
+    /// selectable feature declares its own value (`.pin`, `.sceneModel`),
     /// so a `switch` over a kind needs a `default`.
     public struct Kind: RawRepresentable, Hashable, Sendable {
         public let rawValue: String
@@ -24,7 +24,7 @@ public struct ImmersiveMapSelection: Hashable, Sendable {
     }
 
     public let kind: Kind
-    /// The object's id within its feature, such as `AvatarMarker.id`.
+    /// The object's id within its feature, such as `ImmersiveMapPin.id`.
     public let objectID: UInt64
 
     public init(kind: Kind, objectID: UInt64) {

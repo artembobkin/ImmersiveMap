@@ -24,7 +24,7 @@ final class SceneModelOffscreenRenderTests: XCTestCase {
         func applyActivityState(_ state: RenderActivityState) {}
         func completeSceneModelPathAnimations(_: [SceneModelPathAnimationResult]) {}
         func updateDebugOverlayHUDSnapshot(_ snapshot: DebugOverlayHUDSnapshot?) {}
-        func updateMarkerProjectionSnapshot(_ snapshot: MarkerProjectionSnapshot) {}
+        func updateAnnotationProjectionSnapshot(_ snapshot: AnnotationProjectionSnapshot) {}
 
         func updateSelectionPickData(_ pickData: [any SelectionPickData]) {
             // A frame that drew no model hands none on, and the last one

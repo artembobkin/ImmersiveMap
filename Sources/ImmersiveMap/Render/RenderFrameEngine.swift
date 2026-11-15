@@ -96,8 +96,8 @@ final class RenderFrameEngine {
     /// already runs on the main actor.
     @MainActor
     init(layer: CAMetalLayer,
-         avatarSource: AvatarRenderSource,
-         markerSource: MarkerRenderSource,
+         pinSource: PinRenderSource,
+         annotationSource: AnnotationRenderSource,
          sceneModelSource: SceneModelRenderSource,
          layerSource: LayerRenderSource = FixedLayerRenderSource(),
          styleRuntime: MapStyleRuntime,
@@ -110,8 +110,8 @@ final class RenderFrameEngine {
          baseLabelTraceRecorder: BaseLabelTraceRecorder,
          clock: RenderFrameClock = RenderFrameWallClock()) throws {
         let persistentContext = try RenderPersistentContext(layer: layer,
-                                                            avatarSource: avatarSource,
-                                                            markerSource: markerSource,
+                                                            pinSource: pinSource,
+                                                            annotationSource: annotationSource,
                                                             sceneModelSource: sceneModelSource,
                                                             layerSource: layerSource,
                                                             styleRuntime: styleRuntime,
@@ -198,7 +198,7 @@ final class RenderFrameEngine {
         return didSchedule
     }
 
-    /// SwiftUI markers are platform views above the Metal layer: their frames
+    /// SwiftUI annotations are platform views above the Metal layer: their frames
     /// commit with the main-thread CATransaction, while a free-running drawable
     /// presents on its own once the GPU finishes, typically one vsync apart, so
     /// markers visibly detach from their geo points while the camera moves.
@@ -206,8 +206,8 @@ final class RenderFrameEngine {
     /// (see `presentFrame`) so map and markers reach the screen in the same
     /// commit; without markers the cheaper free-running present stays.
     private func updatePresentationSyncMode(layer: CAMetalLayer) {
-        let needsTransactionSync = persistentContext.markerSource
-            .currentMarkerProjectionInput.entries.isEmpty == false
+        let needsTransactionSync = persistentContext.annotationSource
+            .currentAnnotationProjectionInput.entries.isEmpty == false
         if layer.presentsWithTransaction != needsTransactionSync {
             layer.presentsWithTransaction = needsTransactionSync
         }
@@ -316,10 +316,10 @@ final class RenderFrameEngine {
                                             value: persistentContext.groundRelief?.pendingTerrainTileCount ?? 0)
         let hasActiveLabelFadeAnimations = frameContext.sharedState.baseLabelState.hasActiveFadeAnimations
             || frameContext.sharedState.roadLabelState.hasActiveFadeAnimations
-        let hasActiveAvatarAnimations = frameContext.sharedState.avatarState.hasActiveAnimations
+        let hasActivePinAnimations = frameContext.sharedState.pinState.hasActiveAnimations
         let hasActiveSceneModelAnimations = frameContext.sharedState.sceneModelState.hasActiveAnimations
         eventSink.applyActivityState(RenderActivityState(labelFadeRenderingActive: hasActiveLabelFadeAnimations,
-                                                         avatarAnimationRenderingActive: hasActiveAvatarAnimations,
+                                                         pinAnimationRenderingActive: hasActivePinAnimations,
                                                          sceneModelAnimationRenderingActive: hasActiveSceneModelAnimations,
                                                          extrusionRiseRenderingActive: frameContext.sharedState.isExtrusionRising,
                                                          animatedZoomRenderingActive: animatedZoom.isSettling
@@ -330,11 +330,11 @@ final class RenderFrameEngine {
         if pathAnimationResults.isEmpty == false {
             eventSink.completeSceneModelPathAnimations(pathAnimationResults)
         }
-        // Synchronously and within the same frame: SwiftUI marker positions must
+        // Synchronously and within the same frame: SwiftUI annotation positions must
         // land in the same CA transaction as this frame's present. When didSchedule
         // == false the screen shows the old frame and there is nothing to publish.
-        if didSchedule, let markerProjectionSnapshot = frameContext.sharedState.markerState.snapshot {
-            eventSink.updateMarkerProjectionSnapshot(markerProjectionSnapshot)
+        if didSchedule, let annotationProjectionSnapshot = frameContext.sharedState.annotationState.snapshot {
+            eventSink.updateAnnotationProjectionSnapshot(annotationProjectionSnapshot)
         }
         publishDebugOverlayHUDSnapshot(frameContext: frameContext)
 

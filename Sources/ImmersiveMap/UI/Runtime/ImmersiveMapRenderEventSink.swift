@@ -11,7 +11,7 @@ import Foundation
 final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendable {
     private weak var renderRuntime: ImmersiveMapRenderRuntime?
     private weak var selectionHandler: ImmersiveMapSelectionHandler?
-    private weak var markerRuntime: ImmersiveMapMarkerRuntime?
+    private weak var annotationRuntime: ImmersiveMapAnnotationRuntime?
     private weak var sceneModelRuntime: ImmersiveMapSceneModelRuntime?
     private let debugOverlayHUDSnapshotStore: DebugOverlayHUDSnapshotStore
     // Written and read on the main actor only (invalidateDelivery from the
@@ -20,12 +20,12 @@ final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendab
 
     init(renderRuntime: ImmersiveMapRenderRuntime,
          selectionHandler: ImmersiveMapSelectionHandler,
-         markerRuntime: ImmersiveMapMarkerRuntime,
+         annotationRuntime: ImmersiveMapAnnotationRuntime,
          sceneModelRuntime: ImmersiveMapSceneModelRuntime,
          debugOverlayHUDSnapshotStore: DebugOverlayHUDSnapshotStore) {
         self.renderRuntime = renderRuntime
         self.selectionHandler = selectionHandler
-        self.markerRuntime = markerRuntime
+        self.annotationRuntime = annotationRuntime
         self.sceneModelRuntime = sceneModelRuntime
         self.debugOverlayHUDSnapshotStore = debugOverlayHUDSnapshotStore
     }
@@ -95,12 +95,12 @@ final class ImmersiveMapRenderEventSink: RenderFrameEventSink, @unchecked Sendab
         debugOverlayHUDSnapshotStore.requestedContent
     }
 
-    func updateMarkerProjectionSnapshot(_ snapshot: MarkerProjectionSnapshot) {
+    func updateAnnotationProjectionSnapshot(_ snapshot: AnnotationProjectionSnapshot) {
         // The only caller: RenderFrameEngine.renderFrame on the main thread
         // (display link in the main runloop). No hop: the snapshot must apply
         // in the same CA transaction as this frame's present.
         MainActor.assumeIsolated {
-            markerRuntime?.apply(snapshot)
+            annotationRuntime?.apply(snapshot)
         }
     }
 }

@@ -223,7 +223,7 @@ final class ZoomAnchorMathTests: XCTestCase {
     }
 
     /// Spherical position of a globe point: the `GlobeProjectionConstants` formulas
-    /// from AvatarSelectionProjector at transition 0.
+    /// from PinSelectionProjector at transition 0.
     private func sphereWorldPosition(latitudeRadians: Double,
                                      longitudeRadians: Double,
                                      globeRenderState: GlobeRenderState) -> SIMD3<Float> {

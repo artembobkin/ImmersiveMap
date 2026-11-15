@@ -12,7 +12,7 @@ package enum RenderInvalidationReason {
 
 struct RenderActivityState {
     let labelFadeRenderingActive: Bool
-    let avatarAnimationRenderingActive: Bool
+    let pinAnimationRenderingActive: Bool
     let sceneModelAnimationRenderingActive: Bool
     /// The buildings or the models rising out of the ground
     /// (`ExtrusionRise`).
@@ -47,7 +47,7 @@ protocol RenderFrameEventSink: AnyObject, Sendable {
     /// Unlike `updateSelectionPickData` (completion handler, off-main),
     /// this is called synchronously from the render loop on the main thread so
     /// that marker positions apply in the same CA transaction as the frame.
-    func updateMarkerProjectionSnapshot(_ snapshot: MarkerProjectionSnapshot)
+    func updateAnnotationProjectionSnapshot(_ snapshot: AnnotationProjectionSnapshot)
     /// The engine feeding this sink is being discarded: what a frame still
     /// in flight on the GPU delivers from here on is dropped, so it cannot
     /// bring back state a successor has just reset. Called on the main

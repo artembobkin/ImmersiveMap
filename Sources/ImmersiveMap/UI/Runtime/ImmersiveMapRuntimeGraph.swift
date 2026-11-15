@@ -10,8 +10,8 @@ final class ImmersiveMapRuntimeGraph {
     let gestureController: MapGestureController
     let renderRuntime: ImmersiveMapRenderRuntime
     let viewportRuntime: ImmersiveMapViewportRuntime
-    let avatarRuntime: ImmersiveMapAvatarRuntime
-    let markerRuntime: ImmersiveMapMarkerRuntime
+    let pinRuntime: ImmersiveMapPinRuntime
+    let annotationRuntime: ImmersiveMapAnnotationRuntime
     let sceneModelRuntime: ImmersiveMapSceneModelRuntime
     let layerRuntime: ImmersiveMapLayerRuntime
     let controlsRuntime: ImmersiveMapControlsRuntime
@@ -20,7 +20,7 @@ final class ImmersiveMapRuntimeGraph {
     let cameraAnimationRuntime: ImmersiveMapCameraAnimationRuntime
     let cameraCommandHandler: ImmersiveMapCameraCommandHandler
     let selectionHandler: ImmersiveMapSelectionHandler
-    let avatarSelection: AvatarSelection
+    let pinSelection: PinSelection
     let sceneModelSelection: SceneModelSelection
     let layerSelection: LayerSelection
     /// The debug panel over the map, once one is installed
@@ -47,12 +47,12 @@ final class ImmersiveMapRuntimeGraph {
         let gestureController = MapGestureController(mapView: mapView)
         let renderRuntime = ImmersiveMapRenderRuntime(configuration: settings.renderLoop)
         let viewportRuntime = ImmersiveMapViewportRuntime()
-        let avatarRuntime = ImmersiveMapAvatarRuntime()
+        let pinRuntime = ImmersiveMapPinRuntime()
         let sceneModelRuntime = ImmersiveMapSceneModelRuntime()
         let layerRuntime = ImmersiveMapLayerRuntime()
-        let markerRuntime = ImmersiveMapMarkerRuntime(viewportRuntime: viewportRuntime,
+        let annotationRuntime = ImmersiveMapAnnotationRuntime(viewportRuntime: viewportRuntime,
                                                       renderRuntime: renderRuntime)
-        markerRuntime.attach(hostView: mapView)
+        annotationRuntime.attach(hostView: mapView)
         #if canImport(UIKit)
         let controlsRuntime = ImmersiveMapControlsRuntime(mapView: mapView,
                                                           mapPanGesture: gestureController.panGesture,
@@ -73,16 +73,16 @@ final class ImmersiveMapRuntimeGraph {
                                                                         renderRuntime: renderRuntime)
         let cameraCommandHandler = ImmersiveMapCameraCommandHandler(cameraRuntime: cameraRuntime,
                                                                     cameraAnimationRuntime: cameraAnimationRuntime)
-        let avatarSelection = AvatarSelection(source: avatarRuntime)
+        let pinSelection = PinSelection(source: pinRuntime)
         let sceneModelSelection = SceneModelSelection(source: sceneModelRuntime)
         let layerSelection = LayerSelection(source: layerRuntime)
-        // The order is the order of a tap: the avatars are drawn over the
-        // world, so an avatar that covers a model takes the tap, and the
+        // The order is the order of a tap: the pins are drawn over the
+        // world, so a pin that covers a model takes the tap, and the
         // layers lie on the ground under both.
         let selectionHandler = ImmersiveMapSelectionHandler(
             host: ImmersiveMapSelectionHost(viewportRuntime: viewportRuntime,
                                             renderRuntime: renderRuntime),
-            features: [avatarSelection, sceneModelSelection, layerSelection])
+            features: [pinSelection, sceneModelSelection, layerSelection])
         let debugOverlayControls = DebugOverlayControlState()
         let debugOverlayHUDSnapshotStore = DebugOverlayHUDSnapshotStore()
         let tileTraceRecorder = TileTraceRecorder()
@@ -91,8 +91,8 @@ final class ImmersiveMapRuntimeGraph {
                                                 selectionHandler: selectionHandler,
                                                 cameraRuntime: cameraRuntime)
         let rendererBuilder = ImmersiveMapRendererBuilder(cameraRuntime: cameraRuntime,
-                                                          avatarRuntime: avatarRuntime,
-                                                          markerRuntime: markerRuntime,
+                                                          pinRuntime: pinRuntime,
+                                                          annotationRuntime: annotationRuntime,
                                                           sceneModelRuntime: sceneModelRuntime,
                                                           layerRuntime: layerRuntime,
                                                           renderRuntime: renderRuntime,
@@ -109,8 +109,8 @@ final class ImmersiveMapRuntimeGraph {
         self.gestureController = gestureController
         self.renderRuntime = renderRuntime
         self.viewportRuntime = viewportRuntime
-        self.avatarRuntime = avatarRuntime
-        self.markerRuntime = markerRuntime
+        self.pinRuntime = pinRuntime
+        self.annotationRuntime = annotationRuntime
         self.sceneModelRuntime = sceneModelRuntime
         self.layerRuntime = layerRuntime
         self.controlsRuntime = controlsRuntime
@@ -119,7 +119,7 @@ final class ImmersiveMapRuntimeGraph {
         self.cameraAnimationRuntime = cameraAnimationRuntime
         self.cameraCommandHandler = cameraCommandHandler
         self.selectionHandler = selectionHandler
-        self.avatarSelection = avatarSelection
+        self.pinSelection = pinSelection
         self.sceneModelSelection = sceneModelSelection
         self.layerSelection = layerSelection
         self.debugOverlayControls = debugOverlayControls

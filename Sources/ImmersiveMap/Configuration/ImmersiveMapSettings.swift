@@ -1976,7 +1976,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// the whole world pass, which cleans geometry silhouettes
         /// (buildings, models) while the tile shaders still run once per
         /// pixel; the frame costs more in memory bandwidth and the overlay
-        /// (labels, avatars) takes its own pass over the resolved image.
+        /// (labels, pins) takes its own pass over the resolved image.
         /// Every pipeline state depends on it, so changing it recreates the
         /// renderer.
         public var multisampleCount: Int
@@ -2031,7 +2031,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// side safe areas are always kept.
         public var respectsBottomSafeArea: Bool
         /// Badge text color as RGBA in `0...1` (same convention as
-        /// `AvatarSettings.borderColor`); `nil` keeps the default white.
+        /// `PinSettings.borderColor`); `nil` keeps the default white.
         /// The line renders at the given alpha, so a translucent badge is
         /// a colour with an alpha under 1.
         public var textColor: SIMD4<Float>?
@@ -2075,7 +2075,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
     }
 
-    public struct AvatarSettings: Equatable, Sendable {
+    public struct PinSettings: Equatable, Sendable {
         public enum Size: Int, Equatable, Sendable {
             case px64 = 64
             case px128 = 128
@@ -2092,6 +2092,10 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var atlasPagesMax: Int
         public var borderWidthPx: Float
         public var borderColor: SIMD4<Float>
+        /// The color of the beam, the cone of light that runs from a pin
+        /// pushed off its place to the point on the map it belongs to. The
+        /// beam is densest at the pin and dissolves toward the point, and
+        /// the alpha sets how dense it is at the pin.
         public var beamColor: SIMD4<Float>
         public var collisionPaddingPx: Float
         public var groupingThreshold: Int
@@ -2099,6 +2103,13 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var collisionIterations: Int
         public var springK: Float
         public var smoothing: Float
+        /// Whether pins that would overlap push each other apart. A pin
+        /// pushed off its place stays tied to it by a beam, like a pin on
+        /// a rubber band, and comes back when there is room. Off, every
+        /// pin stands exactly on its coordinate and pins may cover each
+        /// other. On by default. Turn it off for pins whose exact place
+        /// matters more than being seen whole.
+        public var spreadsApart: Bool
 
         public init(size: Size,
                     sizeScale: Float,
@@ -2113,7 +2124,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     maxOffsetPx: Float,
                     collisionIterations: Int,
                     springK: Float,
-                    smoothing: Float) {
+                    smoothing: Float,
+                    spreadsApart: Bool = true) {
             self.size = size
             self.sizeScale = sizeScale
             self.compressedScale = compressedScale
@@ -2128,6 +2140,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.collisionIterations = collisionIterations
             self.springK = springK
             self.smoothing = smoothing
+            self.spreadsApart = spreadsApart
         }
     }
 
@@ -2246,7 +2259,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     public var tiles: TileSettings
     public var labels: LabelSettings
     public var scene: SceneSettings
-    public var avatars: AvatarSettings
+    public var pins: PinSettings
     public var attribution: AttributionSettings
     public var postProcessing: PostProcessingSettings
     public var viewReuse: ViewReuseSettings
@@ -2266,7 +2279,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                 tiles: TileSettings,
                 labels: LabelSettings,
                 scene: SceneSettings,
-                avatars: AvatarSettings,
+                pins: PinSettings,
                 attribution: AttributionSettings = AttributionSettings(),
                 postProcessing: PostProcessingSettings = PostProcessingSettings(),
                 viewReuse: ViewReuseSettings = ViewReuseSettings(),
@@ -2280,7 +2293,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         self.tiles = tiles
         self.labels = labels
         self.scene = scene
-        self.avatars = avatars
+        self.pins = pins
         self.attribution = attribution
         self.postProcessing = postProcessing
         self.viewReuse = viewReuse
@@ -2364,14 +2377,14 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                                           near: 0.1,
                                                           far: 6000.0,
                                                           radiusScale: 10.5)),
-        avatars: AvatarSettings(size: .px64,
+        pins: PinSettings(size: .px64,
                                 sizeScale: 1.7,
                                 compressedScale: 0.55,
                                 atlasSizePx: 4096,
                                 atlasPagesMax: 1,
                                 borderWidthPx: 3.0,
                                 borderColor: SIMD4<Float>(1.0, 1.0, 1.0, 1.0),
-                                beamColor: SIMD4<Float>(0.65, 0.75, 1.0, 0.7),
+                                beamColor: SIMD4<Float>(0.65, 0.75, 1.0, 1.0),
                                 collisionPaddingPx: 0.0,
                                 groupingThreshold: 5,
                                 maxOffsetPx: 220.0,
@@ -3127,13 +3140,13 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
-    func avatarSettings(_ avatars: AvatarSettings) -> ImmersiveMapSettings {
+    func pinSettings(_ pins: PinSettings) -> ImmersiveMapSettings {
         var settings = self
-        settings.avatars = avatars
+        settings.pins = pins
         return settings
     }
 
-    func avatarSettings(size: AvatarSettings.Size? = nil,
+    func pinSettings(size: PinSettings.Size? = nil,
                         sizeScale: Float? = nil,
                         compressedScale: Float? = nil,
                         atlasSizePx: Int? = nil,
@@ -3146,51 +3159,55 @@ public extension ImmersiveMapSettings {
                         maxOffsetPx: Float? = nil,
                         collisionIterations: Int? = nil,
                         springK: Float? = nil,
-                        smoothing: Float? = nil) -> ImmersiveMapSettings {
-        var avatars = self.avatars
+                        smoothing: Float? = nil,
+                        spreadsApart: Bool? = nil) -> ImmersiveMapSettings {
+        var pins = self.pins
         if let size {
-            avatars.size = size
+            pins.size = size
         }
         if let sizeScale {
-            avatars.sizeScale = sizeScale
+            pins.sizeScale = sizeScale
         }
         if let compressedScale {
-            avatars.compressedScale = compressedScale
+            pins.compressedScale = compressedScale
         }
         if let atlasSizePx {
-            avatars.atlasSizePx = atlasSizePx
+            pins.atlasSizePx = atlasSizePx
         }
         if let atlasPagesMax {
-            avatars.atlasPagesMax = atlasPagesMax
+            pins.atlasPagesMax = atlasPagesMax
         }
         if let borderWidthPx {
-            avatars.borderWidthPx = borderWidthPx
+            pins.borderWidthPx = borderWidthPx
         }
         if let borderColor {
-            avatars.borderColor = borderColor
+            pins.borderColor = borderColor
         }
         if let beamColor {
-            avatars.beamColor = beamColor
+            pins.beamColor = beamColor
         }
         if let collisionPaddingPx {
-            avatars.collisionPaddingPx = collisionPaddingPx
+            pins.collisionPaddingPx = collisionPaddingPx
         }
         if let groupingThreshold {
-            avatars.groupingThreshold = groupingThreshold
+            pins.groupingThreshold = groupingThreshold
         }
         if let maxOffsetPx {
-            avatars.maxOffsetPx = maxOffsetPx
+            pins.maxOffsetPx = maxOffsetPx
         }
         if let collisionIterations {
-            avatars.collisionIterations = collisionIterations
+            pins.collisionIterations = collisionIterations
         }
         if let springK {
-            avatars.springK = springK
+            pins.springK = springK
         }
         if let smoothing {
-            avatars.smoothing = smoothing
+            pins.smoothing = smoothing
         }
-        return avatarSettings(avatars)
+        if let spreadsApart {
+            pins.spreadsApart = spreadsApart
+        }
+        return pinSettings(pins)
     }
 
     func attributionSettings(_ attribution: AttributionSettings) -> ImmersiveMapSettings {

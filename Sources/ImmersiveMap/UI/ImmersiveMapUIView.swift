@@ -40,8 +40,8 @@ public class ImmersiveMapUIView: UIView {
     var gestureController: MapGestureController { runtimeGraph.gestureController }
     var renderRuntime: ImmersiveMapRenderRuntime { runtimeGraph.renderRuntime }
     var viewportRuntime: ImmersiveMapViewportRuntime { runtimeGraph.viewportRuntime }
-    var avatarRuntime: ImmersiveMapAvatarRuntime { runtimeGraph.avatarRuntime }
-    var markerRuntime: ImmersiveMapMarkerRuntime { runtimeGraph.markerRuntime }
+    var pinRuntime: ImmersiveMapPinRuntime { runtimeGraph.pinRuntime }
+    var annotationRuntime: ImmersiveMapAnnotationRuntime { runtimeGraph.annotationRuntime }
     var controlsRuntime: ImmersiveMapControlsRuntime { runtimeGraph.controlsRuntime }
     var cameraRuntime: ImmersiveMapCameraRuntime { runtimeGraph.cameraRuntime }
     var cameraCommandHandler: ImmersiveMapCameraCommandHandler { runtimeGraph.cameraCommandHandler }
@@ -67,43 +67,43 @@ public class ImmersiveMapUIView: UIView {
 
     public convenience init(frame: CGRect,
                             settings: ImmersiveMapSettings,
-                            avatarsController: ImmersiveMapAvatarsController? = nil,
+                            pinsController: ImmersiveMapPinsController? = nil,
                             cameraPosition: ImmersiveMapCameraPosition? = nil) {
         self.init(frame: frame,
                   settings: settings,
-                  avatarsController: avatarsController,
+                  pinsController: pinsController,
                   cameraPosition: cameraPosition,
                   cameraController: nil,
                   selectionController: nil,
-                  avatarTapAction: nil)
+                  pinTapAction: nil)
     }
 
     init(frame: CGRect,
          settings: ImmersiveMapSettings,
-         avatarsController: ImmersiveMapAvatarsController?,
+         pinsController: ImmersiveMapPinsController?,
          sceneModelsController: ImmersiveMapSceneModelsController? = nil,
          cameraPosition: ImmersiveMapCameraPosition?,
          cameraController: ImmersiveMapCameraController?,
          selectionController: ImmersiveMapSelectionController?,
-         avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
+         pinTapAction: ((ImmersiveMapPinTapEvent) -> Void)?,
          sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)? = nil,
          layerTapAction: ((ImmersiveMapLayerTapEvent) -> Void)? = nil,
          frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)? = nil,
          terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)? = nil,
-         markerContent: MarkerViewContent? = nil) {
+         annotationContent: AnnotationViewContent? = nil) {
         super.init(frame: frame)
         setup(settings: settings,
               initialCameraPosition: cameraPosition)
-        hostRuntime.syncControllers(avatarsController: avatarsController,
+        hostRuntime.syncControllers(pinsController: pinsController,
                                     sceneModelsController: sceneModelsController,
                                     cameraController: cameraController,
                                     selectionController: selectionController,
-                                    avatarTapAction: avatarTapAction,
+                                    pinTapAction: pinTapAction,
                                     sceneModelTapAction: sceneModelTapAction,
                                     layerTapAction: layerTapAction,
                                     frameRenderedAction: frameRenderedAction,
                                     terrainSurroundingsAction: terrainSurroundingsAction)
-        hostRuntime.updateMarkerContent(markerContent)
+        hostRuntime.updateAnnotationContent(annotationContent)
     }
 
     private func setup(settings: ImmersiveMapSettings,
@@ -145,39 +145,39 @@ public class ImmersiveMapUIView: UIView {
                                safeAreaInsets: safeAreaInsets)
         runtimeGraph.debugPanelRuntime?.layout(in: bounds,
                                                safeAreaTopInset: safeAreaInsets.top)
-        markerRuntime.layout(in: bounds)
+        annotationRuntime.layout(in: bounds)
     }
 
     // MARK: - Updates
 
     /// Synchronizes fresh parameters from SwiftUI `updateUIView` with the already created UIKit/Metal view.
     func update(settings: ImmersiveMapSettings,
-                avatarsController: ImmersiveMapAvatarsController?,
+                pinsController: ImmersiveMapPinsController?,
                 sceneModelsController: ImmersiveMapSceneModelsController? = nil,
                 layersController: ImmersiveMapLayersController? = nil,
                 cameraController: ImmersiveMapCameraController?,
                 selectionController: ImmersiveMapSelectionController?,
-                avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
+                pinTapAction: ((ImmersiveMapPinTapEvent) -> Void)?,
                 sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)? = nil,
                 layerTapAction: ((ImmersiveMapLayerTapEvent) -> Void)? = nil,
                 frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)? = nil,
                 terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)? = nil,
-                markerContent: MarkerViewContent?,
+                annotationContent: AnnotationViewContent?,
                 cameraPosition: ImmersiveMapCameraPosition?,
                 tourVideoRecorder: ImmersiveMapTourVideoRecorder? = nil,
                 debugPanel: ImmersiveMapDebugPanel? = nil) {
         hostRuntime.update(settings: settings,
-                           avatarsController: avatarsController,
+                           pinsController: pinsController,
                            sceneModelsController: sceneModelsController,
                            layersController: layersController,
                            cameraController: cameraController,
                            selectionController: selectionController,
-                           avatarTapAction: avatarTapAction,
+                           pinTapAction: pinTapAction,
                            sceneModelTapAction: sceneModelTapAction,
                            layerTapAction: layerTapAction,
                            frameRenderedAction: frameRenderedAction,
                            terrainSurroundingsAction: terrainSurroundingsAction,
-                           markerContent: markerContent,
+                           annotationContent: annotationContent,
                            cameraPosition: cameraPosition,
                            tourVideoRecorder: tourVideoRecorder,
                            debugPanel: debugPanel)
@@ -215,28 +215,28 @@ public class ImmersiveMapUIView: UIView {
     /// the regular update path reconciles settings and controllers, so adoption
     /// behaves like an update of a live view rather than a fresh build.
     func prepareForAdoption(settings: ImmersiveMapSettings,
-                            avatarsController: ImmersiveMapAvatarsController?,
+                            pinsController: ImmersiveMapPinsController?,
                             sceneModelsController: ImmersiveMapSceneModelsController?,
                             cameraPosition: ImmersiveMapCameraPosition?,
                             cameraController: ImmersiveMapCameraController?,
                             selectionController: ImmersiveMapSelectionController?,
-                            avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
+                            pinTapAction: ((ImmersiveMapPinTapEvent) -> Void)?,
                             sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)? = nil,
                             layerTapAction: ((ImmersiveMapLayerTapEvent) -> Void)? = nil,
                             frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)? = nil,
                             terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)? = nil,
-                            markerContent: MarkerViewContent?) {
+                            annotationContent: AnnotationViewContent?) {
         hostRuntime.update(settings: settings,
-                           avatarsController: avatarsController,
+                           pinsController: pinsController,
                            sceneModelsController: sceneModelsController,
                            cameraController: cameraController,
                            selectionController: selectionController,
-                           avatarTapAction: avatarTapAction,
+                           pinTapAction: pinTapAction,
                            sceneModelTapAction: sceneModelTapAction,
                            layerTapAction: layerTapAction,
                            frameRenderedAction: frameRenderedAction,
                            terrainSurroundingsAction: terrainSurroundingsAction,
-                           markerContent: markerContent,
+                           annotationContent: annotationContent,
                            cameraPosition: cameraPosition)
         renderRuntime.setParked(false)
         setNeedsLayout()

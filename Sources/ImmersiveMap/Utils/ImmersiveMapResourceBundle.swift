@@ -4,7 +4,7 @@
 import Foundation
 
 /// The engine's resource bundle, `ImmersiveMap_ImmersiveMap.bundle`: the
-/// shader library (`default.metallib`), the text atlases, the avatar marker,
+/// shader library (`default.metallib`), the text atlases, the pin,
 /// the overview archive and the tree model. Every read of an engine resource
 /// goes through `bundle()`, never through `Bundle.module` directly.
 ///

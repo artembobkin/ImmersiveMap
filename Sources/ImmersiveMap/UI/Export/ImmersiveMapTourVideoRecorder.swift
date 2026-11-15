@@ -10,22 +10,22 @@ import Metal
 struct ImmersiveMapVideoExportAttachContext {
     let currentSettings: @MainActor () -> ImmersiveMapSettings
     let currentCameraPosition: @MainActor () -> ImmersiveMapCameraPosition?
-    let currentAvatarsController: @MainActor () -> ImmersiveMapAvatarsController?
+    let currentPinsController: @MainActor () -> ImmersiveMapPinsController?
     let currentLayersController: @MainActor () -> ImmersiveMapLayersController?
-    let currentMarkerContent: @MainActor () -> MarkerViewContent?
+    let currentAnnotationContent: @MainActor () -> AnnotationViewContent?
 }
 
 /// Exports a camera tour to a QuickTime video file by rendering it offline.
 ///
 /// Attach the recorder to a map with the ``ImmersiveMapView/tourVideoRecorder(_:)``
 /// modifier, which picks up the view's current configuration (tile source,
-/// style, labels, avatars), then call ``export(shots:establish:configuration:to:)``
+/// style, labels, pins), then call ``export(shots:establish:configuration:to:)``
 /// with the same shots you would pass to `ImmersiveMapCameraTourController`.
 ///
 /// The export renders frame by frame at a fixed timestep into a second,
 /// headless render engine: every frame waits for its tiles, the frame rate is
-/// exact, and the on-screen map stays interactive. Avatar markers render
-/// normally from a copy of the avatar state taken at export start, and SwiftUI
+/// exact, and the on-screen map stays interactive. Pin markers render
+/// normally from a copy of the pin state taken at export start, and SwiftUI
 /// markers are rasterized and composited at their projected positions; both
 /// can be excluded via ``ImmersiveMapVideoExportConfiguration``. The layers
 /// of the app's data (`ImmersiveMapLayersController`) are drawn as they are
@@ -73,16 +73,16 @@ public final class ImmersiveMapTourVideoRecorder {
 
         // Snapshot of the view's configuration: the export is independent of
         // later settings changes and of live-renderer recreation. The debug
-        // panel is host-view chrome and is force-disabled offscreen. Avatars
+        // panel is host-view chrome and is force-disabled offscreen. Pins
         // are a detached copy: the live engine and the export engine must not
         // consume snapshot diffs from the same controller.
         let exportSettings = attachContext.currentSettings().debugPanel(false)
         let initialPosition = establish ?? attachContext.currentCameraPosition()
-        let avatarsController = configuration.includesAvatars
-            ? attachContext.currentAvatarsController()?.makeDetachedCopyForExport()
+        let pinsController = configuration.includesPins
+            ? attachContext.currentPinsController()?.makeDetachedCopyForExport()
             : nil
-        let markerContent = configuration.includesMarkers
-            ? attachContext.currentMarkerContent()
+        let annotationContent = configuration.includesAnnotations
+            ? attachContext.currentAnnotationContent()
             : nil
         // The export takes the controller's layers as they are when it
         // starts (`FixedLayerRenderSource`), so later changes to them do
@@ -97,9 +97,9 @@ public final class ImmersiveMapTourVideoRecorder {
 
         let runtime = try ImmersiveMapVideoExportRuntime(settings: exportSettings,
                                                          initialPosition: initialPosition,
-                                                         avatarsController: avatarsController,
+                                                         pinsController: pinsController,
                                                          layers: layers,
-                                                         markerContent: markerContent,
+                                                         annotationContent: annotationContent,
                                                          configuration: configuration,
                                                          outputURL: url)
         activeRuntime = runtime

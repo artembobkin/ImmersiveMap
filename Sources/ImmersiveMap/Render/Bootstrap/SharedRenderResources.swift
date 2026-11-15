@@ -151,7 +151,7 @@ final class SharedRenderResources {
     // MARK: - Geometry and atlases
 
     let globeCap: GlobeCapRenderer.SharedResources
-    let avatars: AvatarsRenderer.SharedResources
+    let pins: PinsRenderer.SharedResources
     let textRenderer: TextRenderer
     let poiSpriteAtlas: PoiSpriteAtlas
 
@@ -293,7 +293,7 @@ final class SharedRenderResources {
     }
 
     private nonisolated static func build(device: MTLDevice, renderSampleCount: Int) throws -> Built {
-        // The bundle first: the text atlases and the avatar marker are read
+        // The bundle first: the text atlases and the pin are read
         // from it whichever library the shaders come from.
         let resourceBundle = try ImmersiveMapResourceBundle.bundle()
         let library = try RendererSetup.makeLibrary(metalDevice: device, bundle: resourceBundle)
@@ -377,7 +377,7 @@ final class SharedRenderResources {
         self.layerPipeline = compiled.layerPipeline
         self.placementStencilPipeline = compiled.placementStencilPipeline
         self.globeCap = compiled.globeCap
-        self.avatars = compiled.avatars
+        self.pins = compiled.pins
         self.textRenderer = compiled.textRenderer
 
         // SF Symbol rasterization goes through UIImage/NSImage and stays on
@@ -406,7 +406,7 @@ final class SharedRenderResources {
         let layerPipeline: LayerPipeline
         let placementStencilPipeline: PlacementStencilPipeline
         let globeCap: GlobeCapRenderer.SharedResources
-        let avatars: AvatarsRenderer.SharedResources
+        let pins: PinsRenderer.SharedResources
         let textRenderer: TextRenderer
     }
 
@@ -441,7 +441,7 @@ final class SharedRenderResources {
         var layerPipeline: LayerPipeline?
         var placementStencilPipeline: PlacementStencilPipeline?
         var globeCap: GlobeCapRenderer.SharedResources?
-        var avatars: AvatarsRenderer.SharedResources?
+        var pins: PinsRenderer.SharedResources?
         var textRenderer: TextRenderer?
 
         // Each job writes its own variable, so the jobs run side by side
@@ -452,7 +452,7 @@ final class SharedRenderResources {
                                           library: library,
                                           resourceBundle: resourceBundle,
                                           sampleCount: 1) },
-            { avatars = AvatarsRenderer.SharedResources.make(metalDevice: device,
+            { pins = PinsRenderer.SharedResources.make(metalDevice: device,
                                                              pixelFormat: pixelFormat,
                                                              library: library,
                                                              resourceBundle: resourceBundle,
@@ -539,7 +539,7 @@ final class SharedRenderResources {
             layerPipeline: layerPipeline!,
             placementStencilPipeline: placementStencilPipeline!,
             globeCap: globeCap!,
-            avatars: avatars!,
+            pins: pins!,
             textRenderer: textRenderer!
         )
     }

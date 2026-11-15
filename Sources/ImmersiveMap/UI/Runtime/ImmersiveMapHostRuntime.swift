@@ -19,7 +19,7 @@ final class ImmersiveMapHostRuntime {
     private weak var attachedTourVideoRecorder: ImmersiveMapTourVideoRecorder?
     /// Kept for the tour video recorder: the export rasterizes the current
     /// marker views into the video.
-    private var currentMarkerContent: MarkerViewContent?
+    private var currentAnnotationContent: AnnotationViewContent?
     private var powerStateObservers: NotificationObserverBag?
     /// Watches for the archive's depth turning out other than the one the
     /// map was planned by (`TileArchiveDepths.didChange`).
@@ -128,17 +128,17 @@ final class ImmersiveMapHostRuntime {
 
     /// Syncs new parameters from the SwiftUI update hook with the already created host view.
     func update(settings: ImmersiveMapSettings,
-                avatarsController: ImmersiveMapAvatarsController?,
+                pinsController: ImmersiveMapPinsController?,
                 sceneModelsController: ImmersiveMapSceneModelsController? = nil,
                 layersController: ImmersiveMapLayersController? = nil,
                 cameraController: ImmersiveMapCameraController?,
                 selectionController: ImmersiveMapSelectionController?,
-                avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
+                pinTapAction: ((ImmersiveMapPinTapEvent) -> Void)?,
                 sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)? = nil,
                 layerTapAction: ((ImmersiveMapLayerTapEvent) -> Void)? = nil,
                 frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)? = nil,
                 terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)? = nil,
-                markerContent: MarkerViewContent?,
+                annotationContent: AnnotationViewContent?,
                 cameraPosition: ImmersiveMapCameraPosition?,
                 tourVideoRecorder: ImmersiveMapTourVideoRecorder? = nil,
                 debugPanel: ImmersiveMapDebugPanel? = nil) {
@@ -146,18 +146,18 @@ final class ImmersiveMapHostRuntime {
             installDebugPanel(debugPanel)
         }
         applySettings(settings)
-        syncControllers(avatarsController: avatarsController,
+        syncControllers(pinsController: pinsController,
                         sceneModelsController: sceneModelsController,
                         cameraController: cameraController,
                         selectionController: selectionController,
-                        avatarTapAction: avatarTapAction,
+                        pinTapAction: pinTapAction,
                         sceneModelTapAction: sceneModelTapAction,
                         layerTapAction: layerTapAction,
                         frameRenderedAction: frameRenderedAction,
                         terrainSurroundingsAction: terrainSurroundingsAction)
         syncLayersController(layersController)
         syncTourVideoRecorder(tourVideoRecorder)
-        updateMarkerContent(markerContent)
+        updateAnnotationContent(annotationContent)
         runtimeGraph.cameraCommandHandler.applyCameraPosition(cameraPosition)
     }
 
@@ -169,9 +169,9 @@ final class ImmersiveMapHostRuntime {
                                                    renderRuntime: runtimeGraph.renderRuntime)
     }
 
-    func updateMarkerContent(_ markerContent: MarkerViewContent?) {
-        currentMarkerContent = markerContent
-        runtimeGraph.markerRuntime.update(content: markerContent)
+    func updateAnnotationContent(_ annotationContent: AnnotationViewContent?) {
+        currentAnnotationContent = annotationContent
+        runtimeGraph.annotationRuntime.update(content: annotationContent)
     }
 
     /// Installs the debug panel over the map, the first time one is given
@@ -194,18 +194,18 @@ final class ImmersiveMapHostRuntime {
         // view either: its completion resolves here instead of hanging until the
         // parked view is finally dropped.
         runtimeGraph.sceneModelRuntime.cancelAllPathAnimations()
-        syncControllers(avatarsController: nil,
+        syncControllers(pinsController: nil,
                         sceneModelsController: nil,
                         cameraController: nil,
                         selectionController: nil,
-                        avatarTapAction: nil,
+                        pinTapAction: nil,
                         sceneModelTapAction: nil,
                         layerTapAction: nil,
                         frameRenderedAction: nil,
                         terrainSurroundingsAction: nil)
         syncLayersController(nil)
         syncTourVideoRecorder(nil)
-        updateMarkerContent(nil)
+        updateAnnotationContent(nil)
     }
 
 
@@ -248,33 +248,33 @@ final class ImmersiveMapHostRuntime {
         requestFrame()
     }
 
-    func syncControllers(avatarsController newAvatarsController: ImmersiveMapAvatarsController?,
+    func syncControllers(pinsController newPinsController: ImmersiveMapPinsController?,
                          sceneModelsController newSceneModelsController: ImmersiveMapSceneModelsController? = nil,
                          cameraController newCameraController: ImmersiveMapCameraController?,
                          selectionController newSelectionController: ImmersiveMapSelectionController?,
-                         avatarTapAction newAvatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?,
+                         pinTapAction newPinTapAction: ((ImmersiveMapPinTapEvent) -> Void)?,
                          sceneModelTapAction newSceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)? = nil,
                          layerTapAction newLayerTapAction: ((ImmersiveMapLayerTapEvent) -> Void)? = nil,
                          frameRenderedAction newFrameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)? = nil,
                          terrainSurroundingsAction newTerrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)? = nil) {
-        runtimeGraph.avatarSelection.tapAction = newAvatarTapAction
+        runtimeGraph.pinSelection.tapAction = newPinTapAction
         runtimeGraph.sceneModelSelection.tapAction = newSceneModelTapAction
         runtimeGraph.layerSelection.tapAction = newLayerTapAction
         runtimeGraph.layerRuntime.shapesWanted = newLayerTapAction != nil || newSelectionController != nil
         runtimeGraph.renderRuntime.setFrameRenderedAction(newFrameRenderedAction)
         runtimeGraph.renderRuntime.setTerrainSurroundingsAction(newTerrainSurroundingsAction)
-        let shouldUpdateAvatarsController = runtimeGraph.avatarRuntime.isAttachedController(newAvatarsController) == false
+        let shouldUpdatePinsController = runtimeGraph.pinRuntime.isAttachedController(newPinsController) == false
         let shouldUpdateSceneModelsController = runtimeGraph.sceneModelRuntime.isAttachedController(newSceneModelsController) == false
         let shouldUpdateCameraController = runtimeGraph.cameraRuntime.isAttachedController(newCameraController) == false
-        guard shouldUpdateAvatarsController
+        guard shouldUpdatePinsController
             || shouldUpdateSceneModelsController
             || shouldUpdateCameraController else {
             runtimeGraph.selectionHandler.syncController(newSelectionController)
             return
         }
 
-        if shouldUpdateAvatarsController {
-            runtimeGraph.avatarRuntime.attachController(newAvatarsController,
+        if shouldUpdatePinsController {
+            runtimeGraph.pinRuntime.attachController(newPinsController,
                                                         selectionHandler: runtimeGraph.selectionHandler,
                                                         renderRuntime: runtimeGraph.renderRuntime)
         }
@@ -308,9 +308,9 @@ final class ImmersiveMapHostRuntime {
             context: ImmersiveMapVideoExportAttachContext(
                 currentSettings: { runtimeGraph.cameraRuntime.currentSettings },
                 currentCameraPosition: { runtimeGraph.cameraRuntime.currentCameraPosition() },
-                currentAvatarsController: { runtimeGraph.avatarRuntime.currentAvatarController },
+                currentPinsController: { runtimeGraph.pinRuntime.currentPinController },
                 currentLayersController: { runtimeGraph.layerRuntime.currentLayersController },
-                currentMarkerContent: { [weak self] in self?.currentMarkerContent }
+                currentAnnotationContent: { [weak self] in self?.currentAnnotationContent }
             )
         )
     }
@@ -375,7 +375,7 @@ final class ImmersiveMapHostRuntime {
         hideRendererUnavailable()
         self.renderer = renderer
         runtimeGraph.renderRuntime.attachRenderer(renderer)
-        runtimeGraph.avatarRuntime.markSnapshotDirty()
+        runtimeGraph.pinRuntime.markSnapshotDirty()
         runtimeGraph.sceneModelRuntime.markSnapshotDirty()
         requestFrame()
     }
@@ -422,7 +422,7 @@ final class ImmersiveMapHostRuntime {
         let detachedGraph = runtimeGraph
         Task { @MainActor in
             detachedGraph.cameraAnimationRuntime.reset()
-            detachedGraph.avatarRuntime.detachController()
+            detachedGraph.pinRuntime.detachController()
             detachedGraph.sceneModelRuntime.cancelAllPathAnimations()
             detachedGraph.sceneModelRuntime.detachController()
             detachedGraph.layerRuntime.detachController()

@@ -89,12 +89,12 @@ final class ImmersiveMapFrameRenderedCallbackTests: XCTestCase {
     private func install(on view: ImmersiveMapHostView,
                          action: @escaping (ImmersiveMapRenderedFrame) -> Void) {
         view.update(settings: FixtureTiles.tilelessSettings(),
-                    avatarsController: nil,
+                    pinsController: nil,
                     cameraController: nil,
                     selectionController: nil,
-                    avatarTapAction: nil,
+                    pinTapAction: nil,
                     frameRenderedAction: action,
-                    markerContent: nil,
+                    annotationContent: nil,
                     cameraPosition: nil)
     }
 

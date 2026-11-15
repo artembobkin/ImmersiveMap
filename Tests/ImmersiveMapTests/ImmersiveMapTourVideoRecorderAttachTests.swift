@@ -14,9 +14,9 @@ final class ImmersiveMapTourVideoRecorderAttachTests: XCTestCase {
     private func makeContext() -> ImmersiveMapVideoExportAttachContext {
         ImmersiveMapVideoExportAttachContext(currentSettings: { FixtureTiles.tilelessSettings() },
                                              currentCameraPosition: { nil },
-                                             currentAvatarsController: { nil },
+                                             currentPinsController: { nil },
                                              currentLayersController: { nil },
-                                             currentMarkerContent: { nil })
+                                             currentAnnotationContent: { nil })
     }
 
     private func makeTemporaryURL() -> URL {

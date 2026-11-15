@@ -30,9 +30,9 @@ final class TourVideoExportEndToEndTests: XCTestCase {
                                context: ImmersiveMapVideoExportAttachContext(
                                    currentSettings: { FixtureTiles.settings() },
                                    currentCameraPosition: { nil },
-                                   currentAvatarsController: { nil },
+                                   currentPinsController: { nil },
                                    currentLayersController: { nil },
-                                   currentMarkerContent: { nil }))
+                                   currentAnnotationContent: { nil }))
 
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("immersive-map-e2e-export-\(UUID().uuidString).mov")
@@ -79,11 +79,11 @@ final class TourVideoExportEndToEndTests: XCTestCase {
         XCTAssertEqual(summary.codec, kCMVideoCodecType_HEVC)
     }
 
-    /// Exports the same single-frame scene twice (once with an avatar and a
-    /// SwiftUI marker included, once with both excluded) and asserts the
+    /// Exports the same single-frame scene twice (once with a pin and a
+    /// SwiftUI annotation included, once with both excluded) and asserts the
     /// decoded frames differ, proving the overlays actually reach the video.
     @MainActor
-    func testMarkersAndAvatarsAppearInExportedFrames() async throws {
+    func testAnnotationsAndPinsAppearInExportedFrames() async throws {
         guard let device = MTLCreateSystemDefaultDevice() else {
             throw XCTSkip("Metal device is unavailable")
         }
@@ -103,14 +103,14 @@ final class TourVideoExportEndToEndTests: XCTestCase {
                                                                            routeStyle: .automatic,
                                                                            altitudeStyle: .direct))
 
-        let avatarsController = ImmersiveMapAvatarsController()
-        avatarsController.add(AvatarMarker(id: 1, coordinate: coordinate, image: makeSolidImage()))
+        let pinsController = ImmersiveMapPinsController()
+        pinsController.add(ImmersiveMapPin(id: 1, coordinate: coordinate, image: makeSolidImage()))
         // The live engine has already drained the diff: the regression this
         // feature fixes.
-        _ = avatarsController.consumeSnapshot()
+        _ = pinsController.consumeSnapshot()
 
-        let markerContent = MarkerViewContent(anchor: .center,
-                                              items: [MarkerViewItem(id: AnyHashable(1),
+        let annotationContent = AnnotationViewContent(anchor: .center,
+                                              items: [AnnotationViewItem(id: AnyHashable(1),
                                                                      coordinate: coordinate,
                                                                      content: AnyView(Color.red.frame(width: 40,
                                                                                                       height: 40)))])
@@ -126,9 +126,9 @@ final class TourVideoExportEndToEndTests: XCTestCase {
                                        // would read as an overlay.
                                        currentSettings: { FixtureTiles.tilelessSettings() },
                                        currentCameraPosition: { nil },
-                                       currentAvatarsController: { avatarsController },
+                                       currentPinsController: { pinsController },
                                        currentLayersController: { nil },
-                                       currentMarkerContent: { markerContent }))
+                                       currentAnnotationContent: { annotationContent }))
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent("immersive-map-overlay-export-\(UUID().uuidString).mov")
             defer { try? FileManager.default.removeItem(at: url) }
@@ -137,8 +137,8 @@ final class TourVideoExportEndToEndTests: XCTestCase {
                                                                      framesPerSecond: 30,
                                                                      codec: .hevc,
                                                                      tileReadinessTimeout: 1,
-                                                                     includesAvatars: includesOverlays,
-                                                                     includesMarkers: includesOverlays)
+                                                                     includesPins: includesOverlays,
+                                                                     includesAnnotations: includesOverlays)
             try await recorder.export(shots: [shot],
                                       establish: establish,
                                       configuration: configuration,
@@ -151,7 +151,7 @@ final class TourVideoExportEndToEndTests: XCTestCase {
 
         let differingBytes = zip(withOverlays, withoutOverlays).count { $0 != $1 }
         XCTAssertGreaterThan(differingBytes, 1_000,
-                             "The avatar and the marker must visibly change the exported frame")
+                             "The pin and the marker must visibly change the exported frame")
     }
 
     private func makeSolidImage() -> CGImage {

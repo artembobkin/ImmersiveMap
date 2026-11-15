@@ -27,8 +27,8 @@ final class MultisampleRenderTests: XCTestCase {
     /// order fill over halo through the overlay's own depth, and the overlay
     /// pipelines are single-sample anyway.
     func testTheOverlayAlwaysKeepsItsOwnPass() {
-        XCTAssertFalse(RenderPassGraph.mergesOverlayIntoWorld(overlayLayers: [.labels, .avatars], renderSampleCount: 1))
-        XCTAssertFalse(RenderPassGraph.mergesOverlayIntoWorld(overlayLayers: [.labels, .avatars], renderSampleCount: 4))
+        XCTAssertFalse(RenderPassGraph.mergesOverlayIntoWorld(overlayLayers: [.labels, .pins], renderSampleCount: 1))
+        XCTAssertFalse(RenderPassGraph.mergesOverlayIntoWorld(overlayLayers: [.labels, .pins], renderSampleCount: 4))
     }
 
     /// One shared set per sample count, and the same set for two requests

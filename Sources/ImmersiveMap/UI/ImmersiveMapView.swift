@@ -12,7 +12,7 @@ import AppKit
 // (`ImmersiveMapUIView` on iOS, `ImmersiveMapNSView` on macOS, unified as
 // `ImmersiveMapHostView`) and, under `Runtime`, the runtimes that connect
 // gestures, camera commands, selection, settings, tiles and the render
-// driver to the engine. A feature's public handle (the avatars', the scene
+// driver to the engine. A feature's public handle (the pins', the scene
 // models' and the layers' controllers, the selection's) lives in that
 // feature's folder, and `Runtime` holds only the view's side of it: the
 // runtime that attaches the controller to this view. Platform code lives in per-platform files under `#if
@@ -24,7 +24,7 @@ import AppKit
 public struct ImmersiveMapView: View {
     var settings: ImmersiveMapSettings
     private var cameraPosition: ImmersiveMapCameraPosition?
-    private var avatarsController: ImmersiveMapAvatarsController?
+    private var pinsController: ImmersiveMapPinsController?
     private var sceneModelsController: ImmersiveMapSceneModelsController?
     private var layersController: ImmersiveMapLayersController?
     private var cameraController: ImmersiveMapCameraController?
@@ -35,19 +35,19 @@ public struct ImmersiveMapView: View {
     /// one must not need the other.
     @State private var builtInCameraController = ImmersiveMapCameraController()
     private var selectionController: ImmersiveMapSelectionController?
-    private var avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
+    private var pinTapAction: ((ImmersiveMapPinTapEvent) -> Void)?
     private var sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)?
     private var layerTapAction: ((ImmersiveMapLayerTapEvent) -> Void)?
     private var frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)?
     private var terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)?
-    private var markerContent: MarkerViewContent?
+    private var annotationContent: AnnotationViewContent?
     private var tourVideoRecorder: ImmersiveMapTourVideoRecorder?
     /// The debug panel to install over the map (`debugPanel(_:zoomBadge:)`).
     private var debugPanel: ImmersiveMapDebugPanel?
 
     /// A map with `settings`. Everything else is a modifier: the camera
-    /// (`cameraPosition(_:)`, `cameraController(_:)`), the avatars
-    /// (`avatars(_:)`) and the selection (`selection(_:)`) among them.
+    /// (`cameraPosition(_:)`, `cameraController(_:)`), the pins
+    /// (`pins(_:)`) and the selection (`selection(_:)`) among them.
     public init(settings: ImmersiveMapSettings = .default) {
         self.settings = settings
     }
@@ -59,18 +59,18 @@ public struct ImmersiveMapView: View {
     public var body: some View {
         let cameraController = resolvedCameraController
         return ImmersiveMapUIViewRepresentable(settings: settings,
-                                        avatarsController: avatarsController,
+                                        pinsController: pinsController,
                                         sceneModelsController: sceneModelsController,
                                         layersController: layersController,
                                         cameraPosition: cameraPosition,
                                         cameraController: cameraController,
                                         selectionController: selectionController,
-                                        avatarTapAction: avatarTapAction,
+                                        pinTapAction: pinTapAction,
                                         sceneModelTapAction: sceneModelTapAction,
                                         layerTapAction: layerTapAction,
                                         frameRenderedAction: frameRenderedAction,
                                         terrainSurroundingsAction: terrainSurroundingsAction,
-                                        markerContent: markerContent,
+                                        annotationContent: annotationContent,
                                         tourVideoRecorder: tourVideoRecorder,
                                         debugPanel: debugPanel)
             .immersiveMapCameraControlsOverlay(
@@ -98,18 +98,18 @@ public struct ImmersiveMapView: View {
 #if canImport(UIKit)
 private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
     let settings: ImmersiveMapSettings
-    let avatarsController: ImmersiveMapAvatarsController?
+    let pinsController: ImmersiveMapPinsController?
     let sceneModelsController: ImmersiveMapSceneModelsController?
     let layersController: ImmersiveMapLayersController?
     let cameraPosition: ImmersiveMapCameraPosition?
     let cameraController: ImmersiveMapCameraController?
     let selectionController: ImmersiveMapSelectionController?
-    let avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
+    let pinTapAction: ((ImmersiveMapPinTapEvent) -> Void)?
     let sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)?
     let layerTapAction: ((ImmersiveMapLayerTapEvent) -> Void)?
     let frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)?
     let terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)?
-    let markerContent: MarkerViewContent?
+    let annotationContent: AnnotationViewContent?
     let tourVideoRecorder: ImmersiveMapTourVideoRecorder?
     let debugPanel: ImmersiveMapDebugPanel?
 
@@ -119,48 +119,48 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
         if settings.viewReuse.isEnabled,
            let adopted = ImmersiveMapHostViewPool.shared.adopt() {
             adopted.prepareForAdoption(settings: settings,
-                                       avatarsController: avatarsController,
+                                       pinsController: pinsController,
                                        sceneModelsController: sceneModelsController,
                                        cameraPosition: cameraPosition,
                                        cameraController: cameraController,
                                        selectionController: selectionController,
-                                       avatarTapAction: avatarTapAction,
+                                       pinTapAction: pinTapAction,
                                        sceneModelTapAction: sceneModelTapAction,
                                        layerTapAction: layerTapAction,
                                        frameRenderedAction: frameRenderedAction,
                                        terrainSurroundingsAction: terrainSurroundingsAction,
-                                       markerContent: markerContent)
+                                       annotationContent: annotationContent)
             return adopted
         }
         let uiView = ImmersiveMapUIView(frame: .zero,
                                         settings: settings,
-                                        avatarsController: avatarsController,
+                                        pinsController: pinsController,
                                         sceneModelsController: sceneModelsController,
                                         cameraPosition: cameraPosition,
                                         cameraController: cameraController,
                                         selectionController: selectionController,
-                                        avatarTapAction: avatarTapAction,
+                                        pinTapAction: pinTapAction,
                                         sceneModelTapAction: sceneModelTapAction,
                                         layerTapAction: layerTapAction,
                                         frameRenderedAction: frameRenderedAction,
                                         terrainSurroundingsAction: terrainSurroundingsAction,
-                                        markerContent: markerContent)
+                                        annotationContent: annotationContent)
         return uiView
     }
 
     public func updateUIView(_ uiView: ImmersiveMapUIView, context: Context) {
         uiView.update(settings: settings,
-                      avatarsController: avatarsController,
+                      pinsController: pinsController,
                       sceneModelsController: sceneModelsController,
                       layersController: layersController,
                       cameraController: cameraController,
                       selectionController: selectionController,
-                      avatarTapAction: avatarTapAction,
+                      pinTapAction: pinTapAction,
                       sceneModelTapAction: sceneModelTapAction,
                       layerTapAction: layerTapAction,
                       frameRenderedAction: frameRenderedAction,
                       terrainSurroundingsAction: terrainSurroundingsAction,
-                      markerContent: markerContent,
+                      annotationContent: annotationContent,
                       cameraPosition: cameraPosition,
                       tourVideoRecorder: tourVideoRecorder,
                       debugPanel: debugPanel)
@@ -173,18 +173,18 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
 #elseif canImport(AppKit)
 private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
     let settings: ImmersiveMapSettings
-    let avatarsController: ImmersiveMapAvatarsController?
+    let pinsController: ImmersiveMapPinsController?
     let sceneModelsController: ImmersiveMapSceneModelsController?
     let layersController: ImmersiveMapLayersController?
     let cameraPosition: ImmersiveMapCameraPosition?
     let cameraController: ImmersiveMapCameraController?
     let selectionController: ImmersiveMapSelectionController?
-    let avatarTapAction: ((ImmersiveMapAvatarTapEvent) -> Void)?
+    let pinTapAction: ((ImmersiveMapPinTapEvent) -> Void)?
     let sceneModelTapAction: ((ImmersiveMapSceneModelTapEvent) -> Void)?
     let layerTapAction: ((ImmersiveMapLayerTapEvent) -> Void)?
     let frameRenderedAction: ((ImmersiveMapRenderedFrame) -> Void)?
     let terrainSurroundingsAction: ((ImmersiveMapTerrainSurroundings?) -> Void)?
-    let markerContent: MarkerViewContent?
+    let annotationContent: AnnotationViewContent?
     let tourVideoRecorder: ImmersiveMapTourVideoRecorder?
     let debugPanel: ImmersiveMapDebugPanel?
 
@@ -194,48 +194,48 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
         if settings.viewReuse.isEnabled,
            let adopted = ImmersiveMapHostViewPool.shared.adopt() {
             adopted.prepareForAdoption(settings: settings,
-                                       avatarsController: avatarsController,
+                                       pinsController: pinsController,
                                        sceneModelsController: sceneModelsController,
                                        cameraPosition: cameraPosition,
                                        cameraController: cameraController,
                                        selectionController: selectionController,
-                                       avatarTapAction: avatarTapAction,
+                                       pinTapAction: pinTapAction,
                                        sceneModelTapAction: sceneModelTapAction,
                                        layerTapAction: layerTapAction,
                                        frameRenderedAction: frameRenderedAction,
                                        terrainSurroundingsAction: terrainSurroundingsAction,
-                                       markerContent: markerContent)
+                                       annotationContent: annotationContent)
             return adopted
         }
         let nsView = ImmersiveMapNSView(frame: .zero,
                                         settings: settings,
-                                        avatarsController: avatarsController,
+                                        pinsController: pinsController,
                                         sceneModelsController: sceneModelsController,
                                         cameraPosition: cameraPosition,
                                         cameraController: cameraController,
                                         selectionController: selectionController,
-                                        avatarTapAction: avatarTapAction,
+                                        pinTapAction: pinTapAction,
                                         sceneModelTapAction: sceneModelTapAction,
                                         layerTapAction: layerTapAction,
                                         frameRenderedAction: frameRenderedAction,
                                         terrainSurroundingsAction: terrainSurroundingsAction,
-                                        markerContent: markerContent)
+                                        annotationContent: annotationContent)
         return nsView
     }
 
     public func updateNSView(_ nsView: ImmersiveMapNSView, context: Context) {
         nsView.update(settings: settings,
-                      avatarsController: avatarsController,
+                      pinsController: pinsController,
                       sceneModelsController: sceneModelsController,
                       layersController: layersController,
                       cameraController: cameraController,
                       selectionController: selectionController,
-                      avatarTapAction: avatarTapAction,
+                      pinTapAction: pinTapAction,
                       sceneModelTapAction: sceneModelTapAction,
                       layerTapAction: layerTapAction,
                       frameRenderedAction: frameRenderedAction,
                       terrainSurroundingsAction: terrainSurroundingsAction,
-                      markerContent: markerContent,
+                      annotationContent: annotationContent,
                       cameraPosition: cameraPosition,
                       tourVideoRecorder: tourVideoRecorder,
                       debugPanel: debugPanel)
@@ -269,9 +269,9 @@ public extension ImmersiveMapView {
         await SharedRenderResources.prewarm(sampleCount: settings.postProcessing.multisampleCount)
     }
 
-    func avatars(_ controller: ImmersiveMapAvatarsController?) -> ImmersiveMapView {
+    func pins(_ controller: ImmersiveMapPinsController?) -> ImmersiveMapView {
         var view = self
-        view.avatarsController = controller
+        view.pinsController = controller
         return view
     }
 
@@ -533,19 +533,19 @@ public extension ImmersiveMapView {
 
     /// Attaches a tour video recorder to this map. The recorder exports camera
     /// tours offline using the map's current configuration (tile source,
-    /// style, labels, avatars); see ``ImmersiveMapTourVideoRecorder``.
+    /// style, labels, pins); see ``ImmersiveMapTourVideoRecorder``.
     func tourVideoRecorder(_ recorder: ImmersiveMapTourVideoRecorder?) -> ImmersiveMapView {
         var view = self
         view.tourVideoRecorder = recorder
         return view
     }
 
-    /// Calls `action` on every tap on an avatar marker.
+    /// Calls `action` on every tap on a pin.
     /// Works without ``ImmersiveMapSelectionController``: the event arrives even
     /// when selection is not used, and again on a tap on an already selected marker.
-    func onAvatarTap(_ action: @escaping (ImmersiveMapAvatarTapEvent) -> Void) -> ImmersiveMapView {
+    func onPinTap(_ action: @escaping (ImmersiveMapPinTapEvent) -> Void) -> ImmersiveMapView {
         var view = self
-        view.avatarTapAction = action
+        view.pinTapAction = action
         return view
     }
 
@@ -555,7 +555,7 @@ public extension ImmersiveMapView {
     /// frame drew it, so it follows the model through flat mode, the globe, the
     /// morph between them, and any animation; a model hidden behind the globe
     /// horizon is not hittable. When models overlap, the one nearest the camera
-    /// wins, and an avatar marker over a model takes the tap first. A model too
+    /// wins, and a pin over a model takes the tap first. A model too
     /// small to aim at grows to a 44 pt touch target.
     ///
     /// Works without ``ImmersiveMapSelectionController``: the event arrives even
@@ -572,7 +572,7 @@ public extension ImmersiveMapView {
     /// come first, and within a layer its points, then its lines, then its
     /// zones. A zone is hit in its fill, or on its outline when it has no
     /// fill. A thin line and a small point grow to a touch target. An
-    /// avatar or a model over a shape takes the tap first.
+    /// pin or a model over a shape takes the tap first.
     ///
     /// Works without ``ImmersiveMapSelectionController``: the event arrives even
     /// when selection is not used, and again on a tap on an already selected shape.
@@ -623,26 +623,53 @@ public extension ImmersiveMapView {
         return view
     }
 
-    /// Declarative SwiftUI markers bound to geo coordinates.
+    /// Declarative SwiftUI annotations bound to geo coordinates.
     /// The content is repositioned on every rendered frame (flat, globe and
     /// the morph between them); beyond the globe's horizon the marker fades
     /// out by alpha. Touches inside a marker are handled by the content itself
     /// (Button, onTapGesture); touches outside the markers go to the map.
     /// A repeated call replaces the previous set entirely. Z-order equals the
     /// collection order: the last element is on top.
-    func markers<Items: RandomAccessCollection, Content: View>(
+    func annotations<Items: RandomAccessCollection, Content: View>(
         _ items: Items,
         coordinate: (Items.Element) -> GeoCoordinate,
         anchor: UnitPoint = .center,
         @ViewBuilder content: (Items.Element) -> Content
     ) -> ImmersiveMapView where Items.Element: Identifiable {
         var view = self
-        view.markerContent = MarkerViewContent(
+        view.annotationContent = AnnotationViewContent(
             anchor: anchor,
             items: items.map { item in
-                MarkerViewItem(id: AnyHashable(item.id),
+                AnnotationViewItem(id: AnyHashable(item.id),
                                coordinate: coordinate(item),
                                content: AnyView(content(item)))
+            }
+        )
+        return view
+    }
+
+    /// SwiftUI annotations whose items can be compared. A marker whose item
+    /// is equal to what it was keeps its view untouched, so an update that
+    /// adds or removes a few markers costs those few, however many stay.
+    /// Prefer it for many markers or a set that changes often.
+    ///
+    /// The view is made from the item alone: when it also reads state the
+    /// item does not hold, a change of that state does not reach a marker
+    /// whose item stayed equal. Put what the view shows into the item.
+    func annotations<Items: RandomAccessCollection, Content: View>(
+        _ items: Items,
+        coordinate: (Items.Element) -> GeoCoordinate,
+        anchor: UnitPoint = .center,
+        @ViewBuilder content: (Items.Element) -> Content
+    ) -> ImmersiveMapView where Items.Element: Identifiable & Equatable {
+        var view = self
+        view.annotationContent = AnnotationViewContent(
+            anchor: anchor,
+            items: items.map { item in
+                AnnotationViewItem(id: AnyHashable(item.id),
+                               coordinate: coordinate(item),
+                               content: AnyView(content(item)),
+                               element: AnnotationElement(item))
             }
         )
         return view
@@ -1502,13 +1529,13 @@ public extension ImmersiveMapView {
 
 
 
-    func avatarSettings(_ avatars: ImmersiveMapSettings.AvatarSettings) -> ImmersiveMapView {
+    func pinSettings(_ pins: ImmersiveMapSettings.PinSettings) -> ImmersiveMapView {
         var view = self
-        view.settings = view.settings.avatarSettings(avatars)
+        view.settings = view.settings.pinSettings(pins)
         return view
     }
 
-    func avatarSettings(size: ImmersiveMapSettings.AvatarSettings.Size? = nil,
+    func pinSettings(size: ImmersiveMapSettings.PinSettings.Size? = nil,
                         sizeScale: Float? = nil,
                         compressedScale: Float? = nil,
                         atlasSizePx: Int? = nil,
@@ -1521,9 +1548,10 @@ public extension ImmersiveMapView {
                         maxOffsetPx: Float? = nil,
                         collisionIterations: Int? = nil,
                         springK: Float? = nil,
-                        smoothing: Float? = nil) -> ImmersiveMapView {
+                        smoothing: Float? = nil,
+                        spreadsApart: Bool? = nil) -> ImmersiveMapView {
         var view = self
-        view.settings = view.settings.avatarSettings(size: size,
+        view.settings = view.settings.pinSettings(size: size,
                                                      sizeScale: sizeScale,
                                                      compressedScale: compressedScale,
                                                      atlasSizePx: atlasSizePx,
@@ -1536,7 +1564,8 @@ public extension ImmersiveMapView {
                                                      maxOffsetPx: maxOffsetPx,
                                                      collisionIterations: collisionIterations,
                                                      springK: springK,
-                                                     smoothing: smoothing)
+                                                     smoothing: smoothing,
+                                                     spreadsApart: spreadsApart)
         return view
     }
 

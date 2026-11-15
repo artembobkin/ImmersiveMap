@@ -5,7 +5,7 @@ import CoreGraphics
 
 /// A map feature whose objects a tap or the app can select. The one way
 /// into the selection: a feature conforms in its own folder
-/// (`AvatarSelection`, `SceneModelSelection`, `LayerSelection`), declares
+/// (`PinSelection`, `SceneModelSelection`, `LayerSelection`), declares
 /// its `ImmersiveMapSelection.Kind` there, and is handed to
 /// `ImmersiveMapSelectionHandler`, which names no feature. A new selectable
 /// feature is a new conformance and one more entry in the handler's list.

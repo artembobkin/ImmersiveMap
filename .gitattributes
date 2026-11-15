@@ -2,5 +2,5 @@
 # sources and compiled by the Metal compiler. Linguist classifies a bare .h
 # by heuristics and lands on C++, which misreports the engine as partly C++
 # when there is no C++ in it. Every .h in the repository is a Metal header,
-# wherever it sits (Tile, Globe, Labels, Avatars, Render).
+# wherever it sits (Tile, Globe, Labels, Pins, Render).
 *.h linguist-language=Metal

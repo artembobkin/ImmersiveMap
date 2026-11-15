@@ -40,17 +40,17 @@ final class SharedRenderResourcesTests: XCTestCase {
         // Mutable state must stay per view.
         XCTAssertFalse(first.tileRenderStore === second.tileRenderStore)
         XCTAssertFalse(first.baseLabelCache === second.baseLabelCache)
-        XCTAssertFalse(first.avatarsRenderer === second.avatarsRenderer)
+        XCTAssertFalse(first.pinsRenderer === second.pinsRenderer)
         XCTAssertFalse(first.starfieldRenderer === second.starfieldRenderer)
         XCTAssertFalse(first.metalContext.commandQueue === second.metalContext.commandQueue)
     }
 
-    private final class StubAvatarSource: AvatarRenderSource {
-        var currentAvatarController: ImmersiveMapAvatarsController? { nil }
+    private final class StubPinSource: PinRenderSource {
+        var currentPinController: ImmersiveMapPinsController? { nil }
     }
 
-    private final class StubMarkerSource: MarkerRenderSource {
-        var currentMarkerProjectionInput: MarkerProjectionInput { .empty }
+    private final class StubAnnotationSource: AnnotationRenderSource {
+        var currentAnnotationProjectionInput: AnnotationProjectionInput { .empty }
     }
 
     private final class StubSceneModelSource: SceneModelRenderSource {
@@ -64,8 +64,8 @@ final class SharedRenderResourcesTests: XCTestCase {
         // tile service before a frame is asked for.
         let settings = FixtureTiles.tilelessSettings()
         return try RenderPersistentContext(layer: CAMetalLayer(),
-                                           avatarSource: StubAvatarSource(),
-                                           markerSource: StubMarkerSource(),
+                                           pinSource: StubPinSource(),
+                                           annotationSource: StubAnnotationSource(),
                                            sceneModelSource: StubSceneModelSource(),
                                            layerSource: FixedLayerRenderSource(),
                                            styleRuntime: MapStyleRuntime(settings: settings),

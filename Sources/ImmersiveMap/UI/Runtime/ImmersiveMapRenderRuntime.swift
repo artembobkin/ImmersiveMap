@@ -89,8 +89,8 @@ package final class ImmersiveMapRenderRuntime {
                            active: isActive)
     }
 
-    func setAvatarAnimationRenderingActive(_ isActive: Bool) {
-        driver.setActivity(.avatarAnimation,
+    func setPinAnimationRenderingActive(_ isActive: Bool) {
+        driver.setActivity(.pinAnimation,
                            active: isActive)
     }
 
@@ -121,7 +121,7 @@ package final class ImmersiveMapRenderRuntime {
 
     func applyRenderActivityState(_ state: RenderActivityState) {
         setLabelFadeRenderingActive(state.labelFadeRenderingActive)
-        setAvatarAnimationRenderingActive(state.avatarAnimationRenderingActive)
+        setPinAnimationRenderingActive(state.pinAnimationRenderingActive)
         setSceneModelAnimationRenderingActive(state.sceneModelAnimationRenderingActive)
         setExtrusionRiseRenderingActive(state.extrusionRiseRenderingActive)
         setAnimatedZoomRenderingActive(state.animatedZoomRenderingActive)

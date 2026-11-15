@@ -8,8 +8,8 @@ import QuartzCore
 @MainActor
 final class ImmersiveMapRendererBuilder {
     private let cameraRuntime: ImmersiveMapCameraRuntime
-    private let avatarRuntime: ImmersiveMapAvatarRuntime
-    private let markerRuntime: ImmersiveMapMarkerRuntime
+    private let pinRuntime: ImmersiveMapPinRuntime
+    private let annotationRuntime: ImmersiveMapAnnotationRuntime
     private let sceneModelRuntime: ImmersiveMapSceneModelRuntime
     private let layerRuntime: ImmersiveMapLayerRuntime
     private let renderRuntime: ImmersiveMapRenderRuntime
@@ -20,8 +20,8 @@ final class ImmersiveMapRendererBuilder {
     private let baseLabelTraceRecorder: BaseLabelTraceRecorder
 
     init(cameraRuntime: ImmersiveMapCameraRuntime,
-         avatarRuntime: ImmersiveMapAvatarRuntime,
-         markerRuntime: ImmersiveMapMarkerRuntime,
+         pinRuntime: ImmersiveMapPinRuntime,
+         annotationRuntime: ImmersiveMapAnnotationRuntime,
          sceneModelRuntime: ImmersiveMapSceneModelRuntime,
          layerRuntime: ImmersiveMapLayerRuntime,
          renderRuntime: ImmersiveMapRenderRuntime,
@@ -31,8 +31,8 @@ final class ImmersiveMapRendererBuilder {
          tileTraceRecorder: TileTraceRecorder,
          baseLabelTraceRecorder: BaseLabelTraceRecorder) {
         self.cameraRuntime = cameraRuntime
-        self.avatarRuntime = avatarRuntime
-        self.markerRuntime = markerRuntime
+        self.pinRuntime = pinRuntime
+        self.annotationRuntime = annotationRuntime
         self.sceneModelRuntime = sceneModelRuntime
         self.layerRuntime = layerRuntime
         self.renderRuntime = renderRuntime
@@ -50,13 +50,13 @@ final class ImmersiveMapRendererBuilder {
                                                           cameraPosition: cameraPosition)
         let eventSink = ImmersiveMapRenderEventSink(renderRuntime: renderRuntime,
                                                     selectionHandler: selectionHandler,
-                                                    markerRuntime: markerRuntime,
+                                                    annotationRuntime: annotationRuntime,
                                                     sceneModelRuntime: sceneModelRuntime,
                                                     debugOverlayHUDSnapshotStore: debugOverlayHUDSnapshotStore)
         let styleRuntime = MapStyleRuntime(settings: settings)
         return try RenderFrameEngine(layer: layer,
-                                     avatarSource: avatarRuntime,
-                                     markerSource: markerRuntime,
+                                     pinSource: pinRuntime,
+                                     annotationSource: annotationRuntime,
                                      sceneModelSource: sceneModelRuntime,
                                      layerSource: layerRuntime,
                                      styleRuntime: styleRuntime,

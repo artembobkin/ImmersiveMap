@@ -70,7 +70,7 @@ let package = Package(
             // default.metallib of the resource bundle, under Xcode and under
             // `swift build` alike. A new shader folder goes here.
             exclude: [
-                "Avatars/Shaders",
+                "Pins/Shaders",
                 "Globe/Shaders",
                 "Horizon/Shaders",
                 "Labels/Shaders",
@@ -86,8 +86,8 @@ let package = Package(
                 "Tile/Shaders",
             ],
             resources: [
-                .process("Avatars/Resources/avatar_marker_sdf.json"),
-                .process("Avatars/Resources/avatar_marker_sdf.png"),
+                .process("Pins/Resources/pin_sdf.json"),
+                .process("Pins/Resources/pin_sdf.png"),
                 .process("Text/Resources"),
                 // The overview of the globe laid into the tiles of zooms 0 to 5
                 // (`OverviewTileSource`): copied whole, a PMTiles archive.

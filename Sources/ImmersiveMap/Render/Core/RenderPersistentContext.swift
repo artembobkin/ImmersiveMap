@@ -110,11 +110,11 @@ final class RenderPersistentContext {
     let layerMeshStore: LayerMeshStore
     let layerPipeline: LayerPipeline
 
-    // MARK: - Avatar and Debug Resources
+    // MARK: - Pin and Debug Resources
 
-    let avatarSource: AvatarRenderSource
-    let markerSource: MarkerRenderSource
-    let avatarsRenderer: AvatarsRenderer
+    let pinSource: PinRenderSource
+    let annotationSource: AnnotationRenderSource
+    let pinsRenderer: PinsRenderer
     let debugOverlayRenderer: DebugOverlayRenderer
     let tileTraceRecorder: TileTraceRecorder
     let baseLabelTraceRecorder: BaseLabelTraceRecorder
@@ -124,8 +124,8 @@ final class RenderPersistentContext {
 
     @MainActor
     init(layer: CAMetalLayer,
-         avatarSource: AvatarRenderSource,
-         markerSource: MarkerRenderSource,
+         pinSource: PinRenderSource,
+         annotationSource: AnnotationRenderSource,
          sceneModelSource: SceneModelRenderSource,
          layerSource: LayerRenderSource,
          styleRuntime: MapStyleRuntime,
@@ -228,11 +228,11 @@ final class RenderPersistentContext {
         self.layerMeshStore = LayerMeshStore(device: metal.device)
         self.layerMeshStore.eventSink = eventSink
 
-        self.avatarSource = avatarSource
-        self.markerSource = markerSource
-        self.avatarsRenderer = AvatarsRenderer(metalDevice: metal.device,
-                                               sharedResources: shared.avatars,
-                                               config: config.avatars)
+        self.pinSource = pinSource
+        self.annotationSource = annotationSource
+        self.pinsRenderer = PinsRenderer(metalDevice: metal.device,
+                                               sharedResources: shared.pins,
+                                               config: config.pins)
         self.debugOverlayRenderer = DebugOverlayRenderer(metalDevice: metal.device, settings: config.debug)
     }
 

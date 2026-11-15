@@ -85,18 +85,18 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
         return false
     }
 
-    /// A touch that starts on an interactive SwiftUI marker goes entirely to
+    /// A touch that starts on an interactive SwiftUI annotation goes entirely to
     /// its content: the map gestures (pan/pinch/rotation/tap/doubleTap) never
     /// receive such a touch. The recognizers are attached to the host view and
     /// without this filter would see touches on all subviews.
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                            shouldReceive touch: UITouch) -> Bool {
         guard let mapView,
-              let markerContainer = mapView.markerRuntime.markerContainerViewIfLoaded,
+              let annotationContainer = mapView.annotationRuntime.annotationContainerViewIfLoaded,
               let touchView = touch.view else {
             return true
         }
-        return touchView.isDescendant(of: markerContainer) == false
+        return touchView.isDescendant(of: annotationContainer) == false
     }
 
     private func configureGestures(in mapView: ImmersiveMapUIView) {

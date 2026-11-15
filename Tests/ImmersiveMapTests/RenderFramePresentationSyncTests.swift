@@ -9,19 +9,19 @@ import XCTest
 /// Renders live frames through `RenderFrameEngine.render(to:drawable:)` with
 /// drawables acquired from a headless `CAMetalLayer` (standing in for the
 /// ones a `CAMetalDisplayLink` update delivers) and asserts the marker-driven
-/// presentation sync: while SwiftUI markers exist the layer must present
+/// presentation sync: while SwiftUI annotations exist the layer must present
 /// within the CATransaction (otherwise marker views trail the map by a frame
 /// during camera motion), and without markers the free-running present must
 /// come back. Requires the compiled Metal library, so it skips under
 /// `swift test` and runs in the xcodebuild workspace suite.
 final class RenderFramePresentationSyncTests: XCTestCase {
-    private final class StubAvatarSource: AvatarRenderSource {
-        var currentAvatarController: ImmersiveMapAvatarsController? { nil }
+    private final class StubPinSource: PinRenderSource {
+        var currentPinController: ImmersiveMapPinsController? { nil }
     }
 
-    private final class MutableMarkerSource: MarkerRenderSource {
-        var input: MarkerProjectionInput = .empty
-        var currentMarkerProjectionInput: MarkerProjectionInput { input }
+    private final class MutableAnnotationSource: AnnotationRenderSource {
+        var input: AnnotationProjectionInput = .empty
+        var currentAnnotationProjectionInput: AnnotationProjectionInput { input }
     }
 
     private final class StubSceneModelSource: SceneModelRenderSource {
@@ -40,11 +40,11 @@ final class RenderFramePresentationSyncTests: XCTestCase {
         let settings = FixtureTiles.tilelessSettings()
         let clock = RenderFrameScriptedClock()
         let eventSink = VideoExportRenderEventSink()
-        let markerSource = MutableMarkerSource()
+        let annotationSource = MutableAnnotationSource()
         let layer = CAMetalLayer()
         let engine = try RenderFrameEngine(layer: layer,
-                                           avatarSource: StubAvatarSource(),
-                                           markerSource: markerSource,
+                                           pinSource: StubPinSource(),
+                                           annotationSource: annotationSource,
                                            sceneModelSource: StubSceneModelSource(),
                                            styleRuntime: MapStyleRuntime(settings: settings),
                                            settings: settings,
@@ -58,28 +58,28 @@ final class RenderFramePresentationSyncTests: XCTestCase {
         XCTAssertFalse(layer.presentsWithTransaction,
                        "A fresh layer starts in free-running presentation")
 
-        markerSource.input = MarkerProjectionInput(entries: [
-            MarkerProjectionEntry(id: 1,
+        annotationSource.input = AnnotationProjectionInput(entries: [
+            AnnotationProjectionEntry(id: 1,
                                   basis: GeoProjectionBasis(coordinate: GeoCoordinate(latitude: 40.7,
                                                                                       longitude: -74.0)))
         ])
         clock.setTime(0)
-        let markerDrawable = try XCTUnwrap(layer.nextDrawable())
-        XCTAssertTrue(engine.render(to: layer, drawable: markerDrawable),
+        let annotationDrawable = try XCTUnwrap(layer.nextDrawable())
+        XCTAssertTrue(engine.render(to: layer, drawable: annotationDrawable),
                       "The marker frame must schedule")
         XCTAssertTrue(layer.presentsWithTransaction,
                       "With markers the drawable must present inside the CATransaction")
-        let markerSnapshot = try XCTUnwrap(eventSink.markerProjectionSnapshot,
+        let annotationSnapshot = try XCTUnwrap(eventSink.annotationProjectionSnapshot,
                                            "The marker snapshot publishes synchronously with the scheduled frame")
-        XCTAssertEqual(markerSnapshot.drawSize,
-                       CGSize(width: markerDrawable.texture.width,
-                              height: markerDrawable.texture.height),
+        XCTAssertEqual(annotationSnapshot.drawSize,
+                       CGSize(width: annotationDrawable.texture.width,
+                              height: annotationDrawable.texture.height),
                        "The frame must measure itself against the drawable it renders into")
 
-        markerSource.input = .empty
+        annotationSource.input = .empty
         clock.setTime(1.0 / 60.0)
-        let markerFreeDrawable = try XCTUnwrap(layer.nextDrawable())
-        XCTAssertTrue(engine.render(to: layer, drawable: markerFreeDrawable),
+        let annotationFreeDrawable = try XCTUnwrap(layer.nextDrawable())
+        XCTAssertTrue(engine.render(to: layer, drawable: annotationFreeDrawable),
                       "The marker-free frame must schedule")
         XCTAssertFalse(layer.presentsWithTransaction,
                        "Without markers the layer returns to free-running presentation")

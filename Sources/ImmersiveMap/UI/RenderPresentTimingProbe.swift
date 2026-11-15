@@ -14,7 +14,7 @@ import QuartzCore
 /// Measures where the two halves of a frame actually land on screen.
 ///
 /// A frame is drawn by the GPU into a display-link drawable, while anything
-/// positioned by the main thread in the same turn (the SwiftUI marker views)
+/// positioned by the main thread in the same turn (the SwiftUI annotation views)
 /// reaches the screen through the CATransaction that commits at the end of
 /// that turn. Those are two different paths, and the gap between them is what
 /// makes markers drift from their geo points while the camera moves. The size

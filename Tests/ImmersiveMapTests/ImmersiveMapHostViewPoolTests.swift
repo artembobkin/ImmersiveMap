@@ -44,13 +44,13 @@ final class ImmersiveMapHostViewPoolTests: XCTestCase {
         settings.camera.minimumZoom = 3
         let adopted = try XCTUnwrap(pool.adopt())
         adopted.prepareForAdoption(settings: settings,
-                                   avatarsController: nil,
+                                   pinsController: nil,
                                    sceneModelsController: nil,
                                    cameraPosition: nil,
                                    cameraController: nil,
                                    selectionController: nil,
-                                   avatarTapAction: nil,
-                                   markerContent: nil)
+                                   pinTapAction: nil,
+                                   annotationContent: nil)
 
         XCTAssertEqual(adopted.cameraRuntime.currentSettings.camera.minimumZoom, 3)
     }
@@ -144,11 +144,11 @@ final class ImmersiveMapHostViewPoolTests: XCTestCase {
                                                    zoom: 9)
         let view = makeHostView()
         view.update(settings: FixtureTiles.tilelessSettings(),
-                    avatarsController: nil,
+                    pinsController: nil,
                     cameraController: nil,
                     selectionController: nil,
-                    avatarTapAction: nil,
-                    markerContent: nil,
+                    pinTapAction: nil,
+                    annotationContent: nil,
                     cameraPosition: declared)
 
         // The user "pans away": complete a flight to another city.
@@ -161,13 +161,13 @@ final class ImmersiveMapHostViewPoolTests: XCTestCase {
         view.dismantleForReuse()
         let adopted = try XCTUnwrap(ImmersiveMapHostViewPool.shared.adopt())
         adopted.prepareForAdoption(settings: FixtureTiles.tilelessSettings(),
-                                   avatarsController: nil,
+                                   pinsController: nil,
                                    sceneModelsController: nil,
                                    cameraPosition: declared,
                                    cameraController: nil,
                                    selectionController: nil,
-                                   avatarTapAction: nil,
-                                   markerContent: nil)
+                                   pinTapAction: nil,
+                                   annotationContent: nil)
 
         let position = try XCTUnwrap(adopted.cameraRuntime.currentCameraPosition())
         XCTAssertEqual(position.latitudeDegrees, declared.latitudeDegrees, accuracy: 0.01)

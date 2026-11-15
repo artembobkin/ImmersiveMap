@@ -384,11 +384,11 @@ final class CameraPathFollowControllerTests: XCTestCase {
         } ?? overview
         let view = ImmersiveMapNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 240),
                                       settings: FixtureTiles.tilelessSettings(),
-                                      avatarsController: nil,
+                                      pinsController: nil,
                                       cameraPosition: position,
                                       cameraController: camera,
                                       selectionController: nil,
-                                      avatarTapAction: nil)
+                                      pinTapAction: nil)
         view.needsLayout = true
         view.layoutSubtreeIfNeeded()
         return view

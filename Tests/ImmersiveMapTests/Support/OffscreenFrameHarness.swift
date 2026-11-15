@@ -12,7 +12,7 @@ import XCTest
 /// Everything below the engine is the real thing (shaders, subsystem graph,
 /// passes, tile store); only the four render sources are stand-ins, and they
 /// are stand-ins that own real controllers, so a test adds content by talking
-/// to `sceneModels` or `avatars` exactly as an app would.
+/// to `sceneModels` or `pins` exactly as an app would.
 ///
 /// Time comes from `RenderFrameScriptedClock` rather than the wall clock: a
 /// frame rendered at a named instant is reproducible, which is what lets these
@@ -47,14 +47,14 @@ final class OffscreenFrameHarness {
 
     // MARK: - Render sources
 
-    private final class HarnessAvatarSource: AvatarRenderSource {
-        let controller = ImmersiveMapAvatarsController()
-        var currentAvatarController: ImmersiveMapAvatarsController? { controller }
+    private final class HarnessPinSource: PinRenderSource {
+        let controller = ImmersiveMapPinsController()
+        var currentPinController: ImmersiveMapPinsController? { controller }
     }
 
-    private final class HarnessMarkerSource: MarkerRenderSource {
-        var input: MarkerProjectionInput = .empty
-        var currentMarkerProjectionInput: MarkerProjectionInput { input }
+    private final class HarnessAnnotationSource: AnnotationRenderSource {
+        var input: AnnotationProjectionInput = .empty
+        var currentAnnotationProjectionInput: AnnotationProjectionInput { input }
     }
 
     private final class HarnessSceneModelSource: SceneModelRenderSource {
@@ -83,21 +83,21 @@ final class OffscreenFrameHarness {
     let size: Int
 
     private let texture: MTLTexture
-    private let avatarSource: HarnessAvatarSource
-    private let markerSource: HarnessMarkerSource
+    private let pinSource: HarnessPinSource
+    private let annotationSource: HarnessAnnotationSource
     private let sceneModelSource: HarnessSceneModelSource
     private let layerSource: HarnessLayerSource
 
-    var avatars: ImmersiveMapAvatarsController { avatarSource.controller }
+    var pins: ImmersiveMapPinsController { pinSource.controller }
     var sceneModels: ImmersiveMapSceneModelsController { sceneModelSource.controller }
     /// The app's data the frames draw: no source and no layer until a test
     /// registers and sets them.
     var layers: ImmersiveMapLayersController { layerSource.controller }
 
-    /// SwiftUI markers projected into the frame. Empty unless a test sets it.
-    var markerInput: MarkerProjectionInput {
-        get { markerSource.input }
-        set { markerSource.input = newValue }
+    /// SwiftUI annotations projected into the frame. Empty unless a test sets it.
+    var annotationInput: AnnotationProjectionInput {
+        get { annotationSource.input }
+        set { annotationSource.input = newValue }
     }
 
     /// The tile store behind the engine, for tests that feed it tile bytes
@@ -166,19 +166,19 @@ final class OffscreenFrameHarness {
         self.camera = FrameCameraStateResolver(settings: settings)
         self.tileTraceRecorder = TileTraceRecorder()
 
-        let avatarSource = HarnessAvatarSource()
-        let markerSource = HarnessMarkerSource()
+        let pinSource = HarnessPinSource()
+        let annotationSource = HarnessAnnotationSource()
         let sceneModelSource = HarnessSceneModelSource()
-        self.avatarSource = avatarSource
-        self.markerSource = markerSource
+        self.pinSource = pinSource
+        self.annotationSource = annotationSource
         self.sceneModelSource = sceneModelSource
         let layerSource = HarnessLayerSource()
         self.layerSource = layerSource
 
         let layer = CAMetalLayer()
         self.engine = try RenderFrameEngine(layer: layer,
-                                            avatarSource: avatarSource,
-                                            markerSource: markerSource,
+                                            pinSource: pinSource,
+                                            annotationSource: annotationSource,
                                             sceneModelSource: sceneModelSource,
                                             layerSource: layerSource,
                                             styleRuntime: MapStyleRuntime(settings: settings),

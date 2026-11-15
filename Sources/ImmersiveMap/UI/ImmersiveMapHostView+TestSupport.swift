@@ -62,7 +62,7 @@ extension ImmersiveMapHostView {
         tapHandler.handleMapTap(at: point)
     }
 
-    func setAvatarSelectionSnapshotForTesting(_ snapshot: AvatarSelectionSnapshot) {
+    func setPinSelectionSnapshotForTesting(_ snapshot: PinSelectionSnapshot) {
         selectionHandler.updatePickData([snapshot])
     }
 

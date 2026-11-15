@@ -6,7 +6,7 @@ import CoreGraphics
 import XCTest
 
 /// SwiftUI first creates the new representable, then dismantles the old one.
-/// Controller detachment (camera, avatars, selection) must be strictly by
+/// Controller detachment (camera, pins, selection) must be strictly by
 /// owner: dismantling a stale host view must not erase the attachment the new
 /// view has already established for the same controller.
 @MainActor
@@ -57,35 +57,35 @@ final class ImmersiveMapControllerReattachTests: XCTestCase {
         XCTAssertEqual(replayed, 1, "Reattaching replays the queued commands")
     }
 
-    // MARK: - Avatars
+    // MARK: - Pins
 
-    func testStaleAvatarDetachKeepsNewChangeHandler() throws {
-        let avatars = ImmersiveMapAvatarsController()
+    func testStalePinDetachKeepsNewChangeHandler() throws {
+        let pins = ImmersiveMapPinsController()
         let oldOwner = Owner()
         let newOwner = Owner()
         var oldFired = 0
         var newFired = 0
-        avatars.setChangeHandler({ oldFired += 1 }, owner: oldOwner)
-        avatars.setChangeHandler({ newFired += 1 }, owner: newOwner)
+        pins.setChangeHandler({ oldFired += 1 }, owner: oldOwner)
+        pins.setChangeHandler({ newFired += 1 }, owner: newOwner)
 
-        avatars.clearChangeHandler(ownedBy: oldOwner)
+        pins.clearChangeHandler(ownedBy: oldOwner)
 
-        avatars.add(AvatarMarker(id: 1,
+        pins.add(ImmersiveMapPin(id: 1,
                                  coordinate: GeoCoordinate(latitude: 0, longitude: 0),
                                  image: try Self.makeTestImage()))
         XCTAssertGreaterThan(newFired, 0, "Changes must reach the new owner")
         XCTAssertEqual(oldFired, 0)
     }
 
-    func testOwnedAvatarDetachClearsHandler() throws {
-        let avatars = ImmersiveMapAvatarsController()
+    func testOwnedPinDetachClearsHandler() throws {
+        let pins = ImmersiveMapPinsController()
         let owner = Owner()
         var fired = 0
-        avatars.setChangeHandler({ fired += 1 }, owner: owner)
+        pins.setChangeHandler({ fired += 1 }, owner: owner)
 
-        avatars.clearChangeHandler(ownedBy: owner)
+        pins.clearChangeHandler(ownedBy: owner)
 
-        avatars.add(AvatarMarker(id: 1,
+        pins.add(ImmersiveMapPin(id: 1,
                                  coordinate: GeoCoordinate(latitude: 0, longitude: 0),
                                  image: try Self.makeTestImage()))
         XCTAssertEqual(fired, 0)
@@ -106,11 +106,11 @@ final class ImmersiveMapControllerReattachTests: XCTestCase {
             newReceived += 1
             return true
         }
-        selection.updateCurrentSelection(ImmersiveMapSelection(kind: .avatar, objectID: 7))
+        selection.updateCurrentSelection(ImmersiveMapSelection(kind: .pin, objectID: 7))
 
         selection.detachHandler(ownedBy: oldOwner)
 
-        XCTAssertTrue(selection.select(ImmersiveMapSelection(kind: .avatar, objectID: 7)))
+        XCTAssertTrue(selection.select(ImmersiveMapSelection(kind: .pin, objectID: 7)))
         XCTAssertEqual(newReceived, 1)
         XCTAssertNotNil(selection.currentSelection(),
                         "Dismantling a stale view must not clear the cached selection")
@@ -120,11 +120,11 @@ final class ImmersiveMapControllerReattachTests: XCTestCase {
         let selection = ImmersiveMapSelectionController()
         let owner = Owner()
         selection.attachHandler(owner: owner) { _ in true }
-        selection.updateCurrentSelection(ImmersiveMapSelection(kind: .avatar, objectID: 7))
+        selection.updateCurrentSelection(ImmersiveMapSelection(kind: .pin, objectID: 7))
 
         selection.detachHandler(ownedBy: owner)
 
-        XCTAssertFalse(selection.select(ImmersiveMapSelection(kind: .avatar, objectID: 7)))
+        XCTAssertFalse(selection.select(ImmersiveMapSelection(kind: .pin, objectID: 7)))
         XCTAssertNil(selection.currentSelection())
     }
 

@@ -7,7 +7,7 @@ import simd
 /// Conversion between layout points and device pixels.
 ///
 /// Points are the engine's screen-space unit for everything with a perceived
-/// physical size: label text, halos, POI icons, collision grid cells, avatar
+/// physical size: label text, halos, POI icons, collision grid cells, pin
 /// markers. A point subtends roughly the same visual angle on a phone held at
 /// reading distance as on a desktop display at desk distance, so a value
 /// expressed in points reads the same on both, while the same value expressed
@@ -22,10 +22,10 @@ import simd
 /// texture atlas texel math, MSAA and FXAA sampling, and the signed-distance
 /// range derived from screen-space derivatives in the text shader.
 ///
-/// Labels, POI icons and collision grids are converted. Avatar
+/// Labels, POI icons and collision grids are converted. Pin
 /// markers and their badges are not yet: their on-screen size is currently the
 /// same number as the resolution of the atlas cell they sample
-/// (`AvatarsRenderer.markerSizePx`), so giving them a unit means decoupling
+/// (`PinsRenderer.markerSizePx`), so giving them a unit means decoupling
 /// those two and re-rasterizing three lazily built atlases whenever the scale
 /// changes, which is its own change rather than a rename.
 struct ScreenScale: Equatable, Sendable {

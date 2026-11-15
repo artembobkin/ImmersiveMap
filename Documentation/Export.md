@@ -15,7 +15,7 @@ let image = try await recorder.capture(
 You get a `CGImage`. No map has to be on screen, so this suits thumbnails and share images.
 
 - **Settings.** Pass the same `ImmersiveMapSettings` as your map, with your tile source and style, to get the same look.
-- **Content.** Avatars and 3D models are passed as values, with `avatars:` and `sceneModels:`. Layers are passed as their controller, with `layers:`, and are drawn as they are when the capture starts. The capture waits for their data to be read and prepared. SwiftUI markers can't be drawn into a picture.
+- **Content.** Pins and 3D models are passed as values, with `pins:` and `sceneModels:`. Layers are passed as their controller, with `layers:`, and are drawn as they are when the capture starts. The capture waits for their data to be read and prepared. SwiftUI annotations can't be drawn into a picture.
 - **Waiting.** The capture waits for the tiles it needs, up to `settleTimeout` (10 seconds by default), so the picture is complete.
 - **Repeatability.** Set `sceneDate` to get the same sun and the same picture on every run.
 
@@ -46,7 +46,7 @@ The recorder takes the map's current look when the export starts. It renders fra
   try await recorder.export(shots: shots, establish: overview, to: outputURL)
   ```
 - **Format.** HEVC by default, or `codec: .h264` for wider compatibility.
-- **Content.** Avatars and SwiftUI markers are drawn in. `includesAvatars: false` and `includesMarkers: false` leave them out. The layers of the map's `ImmersiveMapLayersController` are drawn as they are when the export starts.
+- **Content.** Pins and SwiftUI annotations are drawn in. `includesPins: false` and `includesAnnotations: false` leave them out. The layers of the map's `ImmersiveMapLayersController` are drawn as they are when the export starts.
 - **Progress.** `recorder.onProgress` reports the phase and `fractionCompleted`, and `recorder.cancel()` stops the export and deletes the partial file.
 
 ## Credit

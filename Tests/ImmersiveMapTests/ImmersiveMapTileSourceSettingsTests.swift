@@ -9,7 +9,7 @@ import XCTest
 final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
     @MainActor
     func testImmersiveMapViewModifiersAttachControllersAndInitialCameraPosition() {
-        let avatars = ImmersiveMapAvatarsController()
+        let pins = ImmersiveMapPinsController()
         let camera = ImmersiveMapCameraController()
         let selection = ImmersiveMapSelectionController()
         let cameraPosition = ImmersiveMapCameraPosition(latitudeDegrees: 55.7558,
@@ -19,16 +19,16 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
                                                         pitch: .pi / 5)
 
         let view = ImmersiveMapView()
-            .avatars(avatars)
+            .pins(pins)
             .cameraController(camera)
             .cameraPosition(cameraPosition)
             .selection(selection)
 
-        let reflectedAvatars: ImmersiveMapAvatarsController? = reflectedObject("avatarsController", in: view)
+        let reflectedPins: ImmersiveMapPinsController? = reflectedObject("pinsController", in: view)
         let reflectedCamera: ImmersiveMapCameraController? = reflectedObject("cameraController", in: view)
         let reflectedSelection: ImmersiveMapSelectionController? = reflectedObject("selectionController", in: view)
 
-        XCTAssertTrue(reflectedAvatars === avatars)
+        XCTAssertTrue(reflectedPins === pins)
         XCTAssertTrue(reflectedCamera === camera)
         XCTAssertTrue(reflectedSelection === selection)
         XCTAssertEqual(reflectedValue("cameraPosition", in: view), cameraPosition)
@@ -177,27 +177,27 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertLessThan(ImmersiveMapByteCount.megabytes(1_023), .gigabytes(1))
     }
 
-    func testAvatarSettingsModifierUpdatesOnlyProvidedAvatarValues() {
+    func testPinSettingsModifierUpdatesOnlyProvidedPinValues() {
         let settings = ImmersiveMapSettings.default
-            .avatarSettings(size: .px128,
+            .pinSettings(size: .px128,
                             sizeScale: 2.0,
                             borderWidthPx: 4.0)
 
-        XCTAssertEqual(settings.avatars.size, .px128)
-        XCTAssertEqual(settings.avatars.sizeScale, 2.0)
-        XCTAssertEqual(settings.avatars.borderWidthPx, 4.0)
-        XCTAssertEqual(settings.avatars.compressedScale, ImmersiveMapSettings.default.avatars.compressedScale)
-        XCTAssertEqual(settings.avatars.groupingThreshold, ImmersiveMapSettings.default.avatars.groupingThreshold)
-        XCTAssertEqual(settings.avatars.collisionPaddingPx, ImmersiveMapSettings.default.avatars.collisionPaddingPx)
+        XCTAssertEqual(settings.pins.size, .px128)
+        XCTAssertEqual(settings.pins.sizeScale, 2.0)
+        XCTAssertEqual(settings.pins.borderWidthPx, 4.0)
+        XCTAssertEqual(settings.pins.compressedScale, ImmersiveMapSettings.default.pins.compressedScale)
+        XCTAssertEqual(settings.pins.groupingThreshold, ImmersiveMapSettings.default.pins.groupingThreshold)
+        XCTAssertEqual(settings.pins.collisionPaddingPx, ImmersiveMapSettings.default.pins.collisionPaddingPx)
     }
 
-    func testAvatarSettingsSizeSupportsLargeTextureGrid() {
-        XCTAssertEqual(ImmersiveMapSettings.AvatarSettings.Size.px64.rawValue, 64)
-        XCTAssertEqual(ImmersiveMapSettings.AvatarSettings.Size.px128.rawValue, 128)
-        XCTAssertEqual(ImmersiveMapSettings.AvatarSettings.Size.px256.rawValue, 256)
-        XCTAssertEqual(ImmersiveMapSettings.AvatarSettings.Size.px512.rawValue, 512)
-        XCTAssertEqual(ImmersiveMapSettings.AvatarSettings.Size.px1024.rawValue, 1024)
-        XCTAssertEqual(ImmersiveMapSettings.AvatarSettings.Size.px2048.rawValue, 2048)
+    func testPinSettingsSizeSupportsLargeTextureGrid() {
+        XCTAssertEqual(ImmersiveMapSettings.PinSettings.Size.px64.rawValue, 64)
+        XCTAssertEqual(ImmersiveMapSettings.PinSettings.Size.px128.rawValue, 128)
+        XCTAssertEqual(ImmersiveMapSettings.PinSettings.Size.px256.rawValue, 256)
+        XCTAssertEqual(ImmersiveMapSettings.PinSettings.Size.px512.rawValue, 512)
+        XCTAssertEqual(ImmersiveMapSettings.PinSettings.Size.px1024.rawValue, 1024)
+        XCTAssertEqual(ImmersiveMapSettings.PinSettings.Size.px2048.rawValue, 2048)
     }
 
     func testImmersiveMapViewTileCacheSettingsModifierUpdatesOnlyProvidedCacheValues() {
@@ -213,21 +213,21 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
                        ImmersiveMapSettings.default.tiles.cache.preparedDiskTimeToLive)
     }
 
-    func testImmersiveMapViewAvatarSettingsModifierUpdatesOnlyProvidedAvatarValues() throws {
+    func testImmersiveMapViewPinSettingsModifierUpdatesOnlyProvidedPinValues() throws {
         let view = ImmersiveMapView()
-            .avatarSettings(size: .px128,
+            .pinSettings(size: .px128,
                             sizeScale: 2.0,
                             borderWidthPx: 4.0)
 
         let settings: ImmersiveMapSettings? = reflectedValue("settings", in: view)
-        let avatars = try XCTUnwrap(settings?.avatars)
+        let pins = try XCTUnwrap(settings?.pins)
 
-        XCTAssertEqual(avatars.size, .px128)
-        XCTAssertEqual(avatars.sizeScale, 2.0)
-        XCTAssertEqual(avatars.borderWidthPx, 4.0)
-        XCTAssertEqual(avatars.compressedScale, ImmersiveMapSettings.default.avatars.compressedScale)
-        XCTAssertEqual(avatars.groupingThreshold, ImmersiveMapSettings.default.avatars.groupingThreshold)
-        XCTAssertEqual(avatars.collisionPaddingPx, ImmersiveMapSettings.default.avatars.collisionPaddingPx)
+        XCTAssertEqual(pins.size, .px128)
+        XCTAssertEqual(pins.sizeScale, 2.0)
+        XCTAssertEqual(pins.borderWidthPx, 4.0)
+        XCTAssertEqual(pins.compressedScale, ImmersiveMapSettings.default.pins.compressedScale)
+        XCTAssertEqual(pins.groupingThreshold, ImmersiveMapSettings.default.pins.groupingThreshold)
+        XCTAssertEqual(pins.collisionPaddingPx, ImmersiveMapSettings.default.pins.collisionPaddingPx)
     }
 
 
@@ -256,7 +256,7 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         let tiles = ImmersiveMapSettings.default.tiles
         let labels = ImmersiveMapSettings.default.labels
         let scene = ImmersiveMapSettings.default.scene
-        let avatars = ImmersiveMapSettings.default.avatars
+        let pins = ImmersiveMapSettings.default.pins
         let attribution = ImmersiveMapSettings.AttributionSettings(
             isVisible: false,
             size: .large,
@@ -281,7 +281,7 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
             .tileSettings(tiles)
             .labelSettings(labels)
             .sceneSettings(scene)
-            .avatarSettings(avatars)
+            .pinSettings(pins)
             .attributionSettings(attribution)
             .postProcessingSettings(postProcessing)
             .debugSettings(debug)
@@ -292,7 +292,7 @@ final class ImmersiveMapTileSourceSettingsTests: XCTestCase {
         XCTAssertEqual(settings.tiles, tiles)
         XCTAssertEqual(settings.labels, labels)
         XCTAssertEqual(settings.scene, scene)
-        XCTAssertEqual(settings.avatars, avatars)
+        XCTAssertEqual(settings.pins, pins)
         XCTAssertEqual(settings.attribution, attribution)
         XCTAssertEqual(settings.postProcessing, postProcessing)
         XCTAssertEqual(settings.debug, debug)

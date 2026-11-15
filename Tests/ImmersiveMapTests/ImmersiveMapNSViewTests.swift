@@ -26,11 +26,11 @@ final class ImmersiveMapNSViewTests: XCTestCase {
                                                         zoom: 3)
         let view = ImmersiveMapNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 240),
                                       settings: FixtureTiles.tilelessSettings(),
-                                      avatarsController: nil,
+                                      pinsController: nil,
                                       cameraPosition: cameraPosition,
                                       cameraController: camera,
                                       selectionController: nil,
-                                      avatarTapAction: nil)
+                                      pinTapAction: nil)
 
         XCTAssertTrue(view.layer is CAMetalLayer)
         XCTAssertTrue(view.isFlipped)

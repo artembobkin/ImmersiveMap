@@ -8,7 +8,7 @@ import XCTest
 import simd
 
 /// A tap on a 3D model must deliver `ImmersiveMapSceneModelTapEvent` and, with a
-/// selection controller attached, select the model; an avatar drawn over it
+/// selection controller attached, select the model; a pin drawn over it
 /// keeps taking the tap, and a removed model stops being selected.
 final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
     private let modelID: UInt64 = 11
@@ -104,30 +104,30 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
         XCTAssertEqual(clearedEvents.first?.source, .tap)
     }
 
-    /// Avatars are screen-space overlays drawn over the world pass, so one
+    /// Pins are screen-space overlays drawn over the world pass, so one
     /// covering a model takes the tap.
     @MainActor
-    func testAvatarOverTheModelWinsTheTap() throws {
-        let avatarID: UInt64 = 5
+    func testPinOverTheModelWinsTheTap() throws {
+        let pinID: UInt64 = 5
         let environment = makeEnvironment()
-        try environment.addAvatar(id: avatarID, covering: modelTapPoint)
+        try environment.addPin(id: pinID, covering: modelTapPoint)
 
-        var avatarTapCount = 0
+        var pinTapCount = 0
         var sceneModelTapCount = 0
-        environment.avatarSelection.tapAction = { _ in avatarTapCount += 1 }
+        environment.pinSelection.tapAction = { _ in pinTapCount += 1 }
         environment.sceneModelSelection.tapAction = { _ in sceneModelTapCount += 1 }
 
         XCTAssertEqual(environment.selectionHandler.handleMapTap(at: modelTapPoint), .consumed)
-        XCTAssertEqual(avatarTapCount, 1)
+        XCTAssertEqual(pinTapCount, 1)
         XCTAssertEqual(sceneModelTapCount, 0)
     }
 
-    /// An avatar nothing listens to is not interactive at all, and the model
+    /// A pin nothing listens to is not interactive at all, and the model
     /// underneath still gets the tap.
     @MainActor
-    func testAvatarWithoutHandlersFallsThroughToTheModel() throws {
+    func testPinWithoutHandlersFallsThroughToTheModel() throws {
         let environment = makeEnvironment()
-        try environment.addAvatar(id: 5, covering: modelTapPoint)
+        try environment.addPin(id: 5, covering: modelTapPoint)
         var sceneModelTapCount = 0
         environment.sceneModelSelection.tapAction = { _ in sceneModelTapCount += 1 }
 
@@ -171,23 +171,23 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
     @MainActor
     private struct Environment {
         let selectionHandler: ImmersiveMapSelectionHandler
-        let avatarSelection: AvatarSelection
+        let pinSelection: PinSelection
         let sceneModelSelection: SceneModelSelection
         let sceneModelsController: ImmersiveMapSceneModelsController
-        let avatarsController: ImmersiveMapAvatarsController
+        let pinsController: ImmersiveMapPinsController
         let drawSize: CGSize
 
-        /// Places an avatar whose hit zone covers `point` (contents scale 1,
+        /// Places a pin whose hit zone covers `point` (contents scale 1,
         /// snapshot y up).
-        func addAvatar(id: UInt64, covering point: CGPoint) throws {
-            avatarsController.add(AvatarMarker(id: id,
+        func addPin(id: UInt64, covering point: CGPoint) throws {
+            pinsController.add(ImmersiveMapPin(id: id,
                                                coordinate: GeoCoordinate(latitude: 0, longitude: 0),
                                                image: try Environment.makeTestImage()))
             let anchorPoint = CGPoint(x: point.x, y: drawSize.height - point.y - 50)
             selectionHandler.updatePickData([
-                AvatarSelectionSnapshot(frameIndex: 1,
+                PinSelectionSnapshot(frameIndex: 1,
                                         drawSize: drawSize,
-                                        entries: [AvatarSelectionEntry(markerID: id,
+                                        entries: [PinSelectionEntry(pinID: id,
                                                                        bounds: CGRect(x: anchorPoint.x - 50,
                                                                                       y: anchorPoint.y,
                                                                                       width: 100,
@@ -221,19 +221,19 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
     /// two can be told apart.
     @MainActor
     private func makeEnvironment() -> Environment {
-        let avatarRuntime = ImmersiveMapAvatarRuntime()
+        let pinRuntime = ImmersiveMapPinRuntime()
         let sceneModelRuntime = ImmersiveMapSceneModelRuntime()
         let viewportRuntime = ImmersiveMapViewportRuntime()
         let renderRuntime = ImmersiveMapRenderRuntime(configuration: ImmersiveMapSettings.default.renderLoop)
-        let avatarSelection = AvatarSelection(source: avatarRuntime)
+        let pinSelection = PinSelection(source: pinRuntime)
         let sceneModelSelection = SceneModelSelection(source: sceneModelRuntime)
         let selectionHandler = ImmersiveMapSelectionHandler(
             host: ImmersiveMapSelectionHost(viewportRuntime: viewportRuntime,
                                             renderRuntime: renderRuntime),
-            features: [avatarSelection, sceneModelSelection])
+            features: [pinSelection, sceneModelSelection])
 
-        let avatarsController = ImmersiveMapAvatarsController()
-        avatarRuntime.attachController(avatarsController,
+        let pinsController = ImmersiveMapPinsController()
+        pinRuntime.attachController(pinsController,
                                        selectionHandler: selectionHandler,
                                        renderRuntime: renderRuntime)
 
@@ -259,10 +259,10 @@ final class ImmersiveMapSceneModelTapEventTests: XCTestCase {
         ])
 
         return Environment(selectionHandler: selectionHandler,
-                           avatarSelection: avatarSelection,
+                           pinSelection: pinSelection,
                            sceneModelSelection: sceneModelSelection,
                            sceneModelsController: sceneModelsController,
-                           avatarsController: avatarsController,
+                           pinsController: pinsController,
                            drawSize: camera.drawSize)
     }
 }

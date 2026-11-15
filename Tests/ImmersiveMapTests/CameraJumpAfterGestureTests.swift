@@ -46,22 +46,22 @@ final class CameraJumpAfterGestureTests: XCTestCase {
         let view = makeHostView(cameraController: nil)
         defer { view.dismantle() }
         view.update(settings: FixtureTiles.tilelessSettings(),
-                    avatarsController: nil,
+                    pinsController: nil,
                     cameraController: nil,
                     selectionController: nil,
-                    avatarTapAction: nil,
-                    markerContent: nil,
+                    pinTapAction: nil,
+                    annotationContent: nil,
                     cameraPosition: home)
         view.cameraRuntime.panCamera(deltaX: 200, deltaY: 120)
         let panned = try XCTUnwrap(view.cameraRuntime.currentCameraPosition())
 
         // SwiftUI re-declares the same position on its next update.
         view.update(settings: FixtureTiles.tilelessSettings(),
-                    avatarsController: nil,
+                    pinsController: nil,
                     cameraController: nil,
                     selectionController: nil,
-                    avatarTapAction: nil,
-                    markerContent: nil,
+                    pinTapAction: nil,
+                    annotationContent: nil,
                     cameraPosition: home)
 
         let after = try XCTUnwrap(view.cameraRuntime.currentCameraPosition())
@@ -72,11 +72,11 @@ final class CameraJumpAfterGestureTests: XCTestCase {
     private func makeHostView(cameraController: ImmersiveMapCameraController?) -> ImmersiveMapNSView {
         ImmersiveMapNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 240),
                            settings: FixtureTiles.tilelessSettings(),
-                           avatarsController: nil,
+                           pinsController: nil,
                            cameraPosition: nil,
                            cameraController: cameraController,
                            selectionController: nil,
-                           avatarTapAction: nil)
+                           pinTapAction: nil)
     }
 
     private func skipUnlessMetalAvailable() throws {

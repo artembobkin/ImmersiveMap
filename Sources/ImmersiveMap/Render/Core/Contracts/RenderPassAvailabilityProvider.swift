@@ -10,7 +10,7 @@ struct RenderPassAvailabilityBuilder {
     let renderSurfaceMode: ViewMode
 
     var labelsEnabled: Bool = false
-    var avatarsEnabled: Bool = false
+    var pinsEnabled: Bool = false
     var debugOverlayEnabled: Bool = false
     /// Unlike the content-driven flags above, the starfield is on by default and
     /// is turned off by settings, so it starts enabled instead of accumulating.
@@ -23,7 +23,7 @@ struct RenderPassAvailabilityBuilder {
     func build() -> RenderPassAvailability {
         RenderPassAvailability(renderSurfaceMode: renderSurfaceMode,
                                labelsEnabled: labelsEnabled,
-                               avatarsEnabled: avatarsEnabled,
+                               pinsEnabled: pinsEnabled,
                                debugOverlayEnabled: debugOverlayEnabled,
                                starfieldEnabled: starfieldEnabled,
                                sceneModelsEnabled: sceneModelsEnabled,

@@ -66,11 +66,11 @@ final class ImmersiveMapHostViewRecreationTests: XCTestCase {
         XCTAssertTrue(view.hasActiveCameraFlightForTesting)
 
         view.update(settings: FixtureTiles.tilelessSettings().debugPanel(true),
-                    avatarsController: nil,
+                    pinsController: nil,
                     cameraController: camera,
                     selectionController: nil,
-                    avatarTapAction: nil,
-                    markerContent: nil,
+                    pinTapAction: nil,
+                    annotationContent: nil,
                     cameraPosition: overview)
 
         XCTAssertEqual(firstCompleted, false,
@@ -93,11 +93,11 @@ final class ImmersiveMapHostViewRecreationTests: XCTestCase {
     private func makeHostView(camera: ImmersiveMapCameraController) -> ImmersiveMapNSView {
         let view = ImmersiveMapNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 240),
                                       settings: FixtureTiles.tilelessSettings(),
-                                      avatarsController: nil,
+                                      pinsController: nil,
                                       cameraPosition: overview,
                                       cameraController: camera,
                                       selectionController: nil,
-                                      avatarTapAction: nil)
+                                      pinTapAction: nil)
         view.needsLayout = true
         view.layoutSubtreeIfNeeded()
         return view

@@ -7,16 +7,16 @@ import Foundation
 ///
 /// Instead of driving a display link, it records what the export loop polls
 /// between renders: a "new tiles materialized" flag and the latest scene
-/// activity state. Snapshot events (markers, avatar selection, debug HUD) have
+/// activity state. Snapshot events (markers, pin selection, debug HUD) have
 /// no meaning offscreen and are dropped. Events arrive from background tile
 /// tasks and the Metal completion thread, hence the lock.
 final class VideoExportRenderEventSink: RenderFrameEventSink, @unchecked Sendable {
     private let lock = NSLock()
     private var pendingInvalidation = false
     private var latestActivityState = RenderActivityState(labelFadeRenderingActive: false,
-                                                          avatarAnimationRenderingActive: false,
+                                                          pinAnimationRenderingActive: false,
                                                           sceneModelAnimationRenderingActive: false)
-    private var latestMarkerProjectionSnapshot: MarkerProjectionSnapshot?
+    private var latestAnnotationProjectionSnapshot: AnnotationProjectionSnapshot?
 
     /// Latest per-frame activity flags published by the engine.
     var activityState: RenderActivityState {
@@ -24,9 +24,9 @@ final class VideoExportRenderEventSink: RenderFrameEventSink, @unchecked Sendabl
     }
 
     /// Latest marker projection published by the engine, the positions the
-    /// export compositor draws SwiftUI markers at.
-    var markerProjectionSnapshot: MarkerProjectionSnapshot? {
-        lock.withLock { latestMarkerProjectionSnapshot }
+    /// export compositor draws SwiftUI annotations at.
+    var annotationProjectionSnapshot: AnnotationProjectionSnapshot? {
+        lock.withLock { latestAnnotationProjectionSnapshot }
     }
 
     /// Returns whether an invalidation arrived since the last call, clearing
@@ -56,7 +56,7 @@ final class VideoExportRenderEventSink: RenderFrameEventSink, @unchecked Sendabl
 
     func updateDebugOverlayHUDSnapshot(_ snapshot: DebugOverlayHUDSnapshot?) {}
 
-    func updateMarkerProjectionSnapshot(_ snapshot: MarkerProjectionSnapshot) {
-        lock.withLock { latestMarkerProjectionSnapshot = snapshot }
+    func updateAnnotationProjectionSnapshot(_ snapshot: AnnotationProjectionSnapshot) {
+        lock.withLock { latestAnnotationProjectionSnapshot = snapshot }
     }
 }

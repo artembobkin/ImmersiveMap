@@ -58,8 +58,8 @@ struct RoadLabelState {
     var hasActiveFadeAnimations: Bool
 }
 
-struct AvatarState {
-    static let empty = AvatarState(hasActiveAnimations: false)
+struct PinState {
+    static let empty = PinState(hasActiveAnimations: false)
 
     var hasActiveAnimations: Bool
 }
@@ -144,12 +144,12 @@ struct SceneModelFrameState {
     var pathAnimationResults: [SceneModelPathAnimationResult]
 }
 
-struct MarkerFrameState {
-    static let empty = MarkerFrameState(snapshot: nil)
+struct AnnotationFrameState {
+    static let empty = AnnotationFrameState(snapshot: nil)
 
     /// nil: no markers, nothing to publish. Empty snapshot: markers exist,
     /// but all are hidden, and the UI must hide the views.
-    var snapshot: MarkerProjectionSnapshot?
+    var snapshot: AnnotationProjectionSnapshot?
 }
 
 final class FrameContextSharedState {
@@ -158,9 +158,9 @@ final class FrameContextSharedState {
     var baseLabelState: BaseLabelState = .empty
     var baseLabelDebugBoxesState: BaseLabelDebugBoxesState = .empty
     var roadLabelState: RoadLabelState = .empty
-    var avatarState: AvatarState = .empty
+    var pinState: PinState = .empty
     var sceneModelState: SceneModelFrameState = .empty
-    var markerState: MarkerFrameState = .empty
+    var annotationState: AnnotationFrameState = .empty
     /// What the frame drew that a tap can land on, one entry from each
     /// feature that drew something selectable (`SelectionPickData`). The
     /// engine hands it on once the frame reaches the screen, so taps are

@@ -63,12 +63,12 @@ The modifiers on the view apply over the value you pass. The same value configur
 
 Pass new values whenever your state changes, and the map follows. Most changes apply on the next frame: the camera, the light and the shadows, the fog, the attribution.
 
-A few change how the tiles are prepared, so the map is built again and reloads what it shows, from the disk cache where it can: the tile source, the style (`.night()` included), the labels, the caches, the avatar settings, the model archive, and `.msaa()`. Change them when the user asks for it, not on every frame.
+A few change how the tiles are prepared, so the map is built again and reloads what it shows, from the disk cache where it can: the tile source, the style (`.night()` included), the labels, the caches, the pin settings, the model archive, and `.msaa()`. Change them when the user asks for it, not on every frame.
 
 ## Next
 
 - [Setting up the tile source](TileSource.md) and [Attribution](Attribution.md): the data the map draws and its credit.
 - [Camera](Camera.md): where the map looks, and how the user moves it.
 - [Style](Style.md), [Custom styles](CustomStyle.md), [Relief](Relief.md) and [The scene](Scene.md): how the map looks.
-- [Your own data](Layers.md), [Markers and taps](MarkersAndTaps.md) and [3D content](3DContent.md): what you put on the map.
+- [Your own data](Layers.md), [Annotations, pins and taps](AnnotationsAndPins.md) and [3D content](3DContent.md): what you put on the map.
 - [Export](Export.md): pictures and videos of the map.

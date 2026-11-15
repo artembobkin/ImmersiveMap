@@ -61,7 +61,7 @@ enum RenderLayer: String, CaseIterable {
     case horizon
     case postProcessing
     case labels
-    case avatars
+    case pins
     case debugOverlay
 }
 
@@ -74,7 +74,7 @@ enum RenderSkipReason: String, CaseIterable, Hashable {
     case missingCommandBuffer
     case flatTileOriginUnavailable
     case noLabelContent
-    case noAvatarContent
+    case noPinContent
     case noSceneModelContent
     case noAppLayerContent
     case debugOverlayDisabled
@@ -89,7 +89,7 @@ enum RenderSkipReason: String, CaseIterable, Hashable {
 struct RenderPassAvailability {
     let renderSurfaceMode: ViewMode
     let labelsEnabled: Bool
-    let avatarsEnabled: Bool
+    let pinsEnabled: Bool
     let debugOverlayEnabled: Bool
     /// False when space is configured transparent: nothing outside the globe is
     /// painted, so the space background and the stars are skipped.
@@ -143,9 +143,9 @@ struct RenderLayerPlanner {
             RenderLayerPlanItem(layer: .labels,
                                 enabled: availability.labelsEnabled,
                                 skipReason: availability.labelsEnabled ? nil : .noLabelContent),
-            RenderLayerPlanItem(layer: .avatars,
-                                enabled: availability.avatarsEnabled,
-                                skipReason: availability.avatarsEnabled ? nil : .noAvatarContent),
+            RenderLayerPlanItem(layer: .pins,
+                                enabled: availability.pinsEnabled,
+                                skipReason: availability.pinsEnabled ? nil : .noPinContent),
             RenderLayerPlanItem(layer: .debugOverlay,
                                 enabled: availability.debugOverlayEnabled,
                                 skipReason: availability.debugOverlayEnabled ? nil : .debugOverlayDisabled)

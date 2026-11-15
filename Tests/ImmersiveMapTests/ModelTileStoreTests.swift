@@ -25,7 +25,7 @@ final class ModelTileStoreTests: XCTestCase {
         func completeSceneModelPathAnimations(_: [SceneModelPathAnimationResult]) {}
         func updateSelectionPickData(_ pickData: [any SelectionPickData]) {}
         func updateDebugOverlayHUDSnapshot(_ snapshot: DebugOverlayHUDSnapshot?) {}
-        func updateMarkerProjectionSnapshot(_ snapshot: MarkerProjectionSnapshot) {}
+        func updateAnnotationProjectionSnapshot(_ snapshot: AnnotationProjectionSnapshot) {}
     }
 
     private static let tileA = Tile(x: 9904, y: 5121, z: 14)

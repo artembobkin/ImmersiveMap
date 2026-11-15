@@ -9,7 +9,7 @@ import Foundation
 // presentation times, BT.709). The rendering side (offscreen targets, the
 // scripted clock, pixel-buffer textures) is `Render`, the recorder and the
 // export frame loop are `UI`. No Metal here, no views, no camera, tile, label
-// or avatar state, no networking.
+// or pin state, no networking.
 
 /// Configuration of an offline tour video export: output dimensions, frame
 /// rate, codec, and readiness policy.
@@ -44,16 +44,16 @@ public struct ImmersiveMapVideoExportConfiguration: Sendable, Equatable {
     /// Wall date used for the earth scene (sun position) across the whole
     /// export. `nil` fixes it to the moment the export starts.
     public var sceneDate: Date?
-    /// Whether avatar markers are rendered into the exported video. The export
-    /// uses a detached copy of the avatar state taken at export start, so live
-    /// avatar updates during the export are not captured.
-    public var includesAvatars: Bool
-    /// Whether SwiftUI markers (`.markers(...)`) are composited into the
+    /// Whether pins are rendered into the exported video. The export
+    /// uses a detached copy of the pin state taken at export start, so live
+    /// pin updates during the export are not captured.
+    public var includesPins: Bool
+    /// Whether SwiftUI annotations (`.annotations(...)`) are composited into the
     /// exported video. Marker views are rasterized once at export start and
     /// follow the same per-frame projection (including the globe-horizon fade)
     /// as on screen.
-    public var includesMarkers: Bool
-    /// Rasterization scale of SwiftUI markers, in pixels per point, against the
+    public var includesAnnotations: Bool
+    /// Rasterization scale of SwiftUI annotations, in pixels per point, against the
     /// export's own reference canvas rather than against its pixel dimensions.
     ///
     /// A marker view is laid out in points, exactly like a label, so it has to
@@ -63,7 +63,7 @@ public struct ImmersiveMapVideoExportConfiguration: Sendable, Equatable {
     /// map renders at, and keeps its size relative to the labels beside it in a
     /// 1080p and a 4K export alike. Raise it to oversample a marker whose
     /// artwork needs more resolution than the map. Allowed range 0.5...8.
-    public var markerScale: Double
+    public var annotationScale: Double
 
     public static let `default` = ImmersiveMapVideoExportConfiguration()
 
@@ -74,9 +74,9 @@ public struct ImmersiveMapVideoExportConfiguration: Sendable, Equatable {
                 averageBitRate: Int? = nil,
                 tileReadinessTimeout: TimeInterval = 10,
                 sceneDate: Date? = nil,
-                includesAvatars: Bool = true,
-                includesMarkers: Bool = true,
-                markerScale: Double = 2.0) {
+                includesPins: Bool = true,
+                includesAnnotations: Bool = true,
+                annotationScale: Double = 2.0) {
         self.width = width
         self.height = height
         self.framesPerSecond = framesPerSecond
@@ -84,9 +84,9 @@ public struct ImmersiveMapVideoExportConfiguration: Sendable, Equatable {
         self.averageBitRate = averageBitRate
         self.tileReadinessTimeout = tileReadinessTimeout
         self.sceneDate = sceneDate
-        self.includesAvatars = includesAvatars
-        self.includesMarkers = includesMarkers
-        self.markerScale = markerScale
+        self.includesPins = includesPins
+        self.includesAnnotations = includesAnnotations
+        self.annotationScale = annotationScale
     }
 
     var resolvedAverageBitRate: Int {
@@ -119,9 +119,9 @@ public struct ImmersiveMapVideoExportConfiguration: Sendable, Equatable {
             throw ImmersiveMapVideoExportError.invalidConfiguration(
                 "tileReadinessTimeout must be positive, got \(tileReadinessTimeout)")
         }
-        guard (0.5...8).contains(markerScale) else {
+        guard (0.5...8).contains(annotationScale) else {
             throw ImmersiveMapVideoExportError.invalidConfiguration(
-                "markerScale must be within 0.5...8, got \(markerScale)")
+                "annotationScale must be within 0.5...8, got \(annotationScale)")
         }
     }
 }
