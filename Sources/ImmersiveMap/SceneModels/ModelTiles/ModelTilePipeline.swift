@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import Metal
+import ModelTileFormat
 
 /// The pipelines the models of the model tiles draw with (ModelTile.metal):
 /// the opaque world-pass pipeline, its variant that drops the fragments
@@ -22,7 +23,9 @@ final class ModelTilePipeline {
          sampleCount: Int = 1) {
         // The vertex of a model tile, as the baker wrote it.
         let vertexDescriptor = MTLVertexDescriptor()
-        vertexDescriptor.attributes[0].format = .float3
+        // A place in the tile's bounding box: the tile's draw puts it into
+        // tile space (`ModelTileContents.positionMatrix`).
+        vertexDescriptor.attributes[0].format = .ushort3Normalized
         vertexDescriptor.attributes[0].offset = 0
         vertexDescriptor.attributes[0].bufferIndex = 0
         vertexDescriptor.attributes[1].format = .char3Normalized

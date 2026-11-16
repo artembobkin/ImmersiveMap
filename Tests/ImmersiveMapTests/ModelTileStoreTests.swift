@@ -3,6 +3,8 @@
 
 @testable import ImmersiveMap
 import Metal
+import ModelTileFormat
+import ModelTileFormatTestSupport
 import XCTest
 
 /// The model tile store: a wanted tile loads and is answered on a later

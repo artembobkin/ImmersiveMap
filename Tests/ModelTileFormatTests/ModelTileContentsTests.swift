@@ -1,7 +1,9 @@
 // Copyright (c) 2025-2026 Artem Bobkin.
 // SPDX-License-Identifier: MIT
 
-@testable import ImmersiveMap
+import ModelTileFormat
+import ModelTileFormatTestSupport
+import simd
 import XCTest
 
 /// The model tile's decoder: what a written tile reads back as, and what it
@@ -24,7 +26,7 @@ final class ModelTileContentsTests: XCTestCase {
         ]
         let contents = try ModelTileContents(decoding: fixture.serialized())
 
-        XCTAssertEqual(contents.tile, Tile(x: 9904, y: 5121, z: 14))
+        XCTAssertEqual([contents.zoom, contents.x, contents.y], [14, 9904, 5121])
         XCTAssertEqual(contents.vertexCount, 9)
         XCTAssertEqual(contents.indexCount, 9)
         XCTAssertEqual(contents.boundsMinimum, SIMD3(0, 0, -5))
@@ -72,15 +74,35 @@ final class ModelTileContentsTests: XCTestCase {
     }
 
     /// A tile of an earlier version of the format is not read: its archive
-    /// is baked again. Version 4 carried a flag on the models that cut into
-    /// the ground, drawn apart, and a count of the indices drawn in one
-    /// call, in a model record four bytes longer.
+    /// is baked again. Version 5 kept a vertex's position as three floats
+    /// in tile space, in a vertex of 20 bytes.
     func testAnEarlierVersionIsTurnedAway() {
         var tile = ModelTileFixture().serialized()
-        tile[4] = 4
+        tile[4] = 5
         XCTAssertThrowsError(try ModelTileContents(decoding: tile)) { error in
-            XCTAssertEqual(error as? ModelTileFormatError, .unsupportedVersion(4))
+            XCTAssertEqual(error as? ModelTileFormatError, .unsupportedVersion(5))
         }
+    }
+
+    /// A vertex keeps its position as a place in the tile's bounding box,
+    /// and the tile's matrix takes it into tile space: the box's corners
+    /// are the stored 0 and 1.
+    func testTheStoredPositionsSpanTheTilesBounds() throws {
+        let contents = try ModelTileContents(decoding: ModelTileFixture().serialized())
+        let matrix = contents.positionMatrix
+
+        XCTAssertEqual(matrix * SIMD4<Float>(0, 0, 0, 1), SIMD4<Float>(contents.boundsMinimum, 1))
+        XCTAssertEqual(matrix * SIMD4<Float>(1, 1, 1, 1), SIMD4<Float>(contents.boundsMaximum, 1))
+        // The fixture's first vertex is the model's first corner.
+        let stored = ModelTileFixture().serialized().withUnsafeBytes { bytes in
+            SIMD3<Float>(Float(UInt16(littleEndian: bytes.loadUnaligned(fromByteOffset: contents.vertexRange.lowerBound, as: UInt16.self))),
+                         Float(UInt16(littleEndian: bytes.loadUnaligned(fromByteOffset: contents.vertexRange.lowerBound + 2, as: UInt16.self))),
+                         Float(UInt16(littleEndian: bytes.loadUnaligned(fromByteOffset: contents.vertexRange.lowerBound + 4, as: UInt16.self)))) / 65_535
+        }
+        let position = matrix * SIMD4<Float>(stored, 1)
+        XCTAssertEqual(position.x, 0, accuracy: 1e-3)
+        XCTAssertEqual(position.y, 0, accuracy: 1e-3)
+        XCTAssertEqual(position.z, 0, accuracy: 1e-3)
     }
 
     /// Every model of a tile is in the one draw: the models partition the
@@ -120,9 +142,9 @@ final class ModelTileContentsTests: XCTestCase {
 
     func testAnotherVersionIsTurnedAway() {
         var tile = ModelTileFixture().serialized()
-        tile[4] = 6
+        tile[4] = 7
         XCTAssertThrowsError(try ModelTileContents(decoding: tile)) { error in
-            XCTAssertEqual(error as? ModelTileFormatError, .unsupportedVersion(6))
+            XCTAssertEqual(error as? ModelTileFormatError, .unsupportedVersion(7))
         }
     }
 

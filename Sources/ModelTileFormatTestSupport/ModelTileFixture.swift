@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 
 import Foundation
-@testable import ImmersiveMap
 import simd
 
 /// Writes a model tile the way the format describes it, so a test states a
@@ -10,43 +9,61 @@ import simd
 /// never sees this code: the fixture has its own writer, as the PMTiles
 /// fixtures do, so the round trip checks the decoder against the format and
 /// not against itself.
-struct ModelTileFixture {
-    struct Model {
-        var id: String
-        var latitude: Double = 55.7558
-        var longitude: Double = 37.6173
-        var altitudeMeters: Float = 0
+package struct ModelTileFixture {
+    package struct Model {
+        package var id: String
+        package var latitude: Double = 55.7558
+        package var longitude: Double = 37.6173
+        package var altitudeMeters: Float = 0
         /// The map features the model replaces: the kind (1 node, 2 way,
         /// 3 relation) and the id of each, and the zoom of the map tiles
         /// the entry is for.
-        var replaced: [(kind: UInt64, id: UInt64, zoom: UInt32)] = []
+        package var replaced: [(kind: UInt64, id: UInt64, zoom: UInt32)] = []
         /// The model's triangles: three vertices each, a position in tile
         /// space and the texture layer.
-        var triangles: [[SIMD3<Float>]] = [[SIMD3(0, 0, 0), SIMD3(10, 0, 0), SIMD3(0, 20, -5)]]
-        var layer: UInt8 = 0
+        package var triangles: [[SIMD3<Float>]]
+        package var layer: UInt8 = 0
+
+        package init(id: String,
+                     latitude: Double = 55.7558,
+                     longitude: Double = 37.6173,
+                     altitudeMeters: Float = 0,
+                     replaced: [(kind: UInt64, id: UInt64, zoom: UInt32)] = [],
+                     triangles: [[SIMD3<Float>]] = [[SIMD3(0, 0, 0), SIMD3(10, 0, 0), SIMD3(0, 20, -5)]],
+                     layer: UInt8 = 0) {
+            self.id = id
+            self.latitude = latitude
+            self.longitude = longitude
+            self.altitudeMeters = altitudeMeters
+            self.replaced = replaced
+            self.triangles = triangles
+            self.layer = layer
+        }
     }
 
-    var zoom = 14
-    var x = 9904
-    var y = 5121
-    var models: [Model] = [Model(id: "model")]
-    var layerCount = 1
-    var textureSize = 16
-    var blockEdge = 8
+    package var zoom = 14
+    package var x = 9904
+    package var y = 5121
+    package var models: [Model] = [Model(id: "model")]
+    package var layerCount = 1
+    package var textureSize = 16
+    package var blockEdge = 8
     /// The alignment of the GPU blocks. The baker uses a page, and a test
     /// keeps its tiles small.
-    var blockAlignment = 256
+    package var blockAlignment = 256
+
+    package init() {}
 
     /// The ASTC block of one opaque colour: a void extent block, the
     /// simplest block the format has.
-    static let solidBlock: [UInt8] = [0xFC, 0xFD, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    package static let solidBlock: [UInt8] = [0xFC, 0xFD, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
                                       0x00, 0x80, 0x00, 0x60, 0x00, 0x40, 0xFF, 0xFF]
 
-    var mipLevelCount: Int {
+    package var mipLevelCount: Int {
         Int(log2(Double(textureSize))) + 1
     }
 
-    func serialized() -> Data {
+    package func serialized() -> Data {
         var strings = Data()
         var replaced = Data()
         var table = Data()
@@ -54,8 +71,15 @@ struct ModelTileFixture {
         var indices = Data()
         var vertexCount: UInt32 = 0
         var indexCount: UInt32 = 0
+        // The tile's bounding box first: a vertex keeps its position as a
+        // place in it.
         var tileMinimum = SIMD3<Float>(repeating: .infinity)
         var tileMaximum = SIMD3<Float>(repeating: -.infinity)
+        for position in models.flatMap(\.triangles).joined() {
+            tileMinimum = simd_min(tileMinimum, position)
+            tileMaximum = simd_max(tileMaximum, position)
+        }
+        let tileSize = tileMaximum - tileMinimum
         for model in models {
             let firstVertex = vertexCount
             let firstIndex = indexCount
@@ -65,13 +89,15 @@ struct ModelTileFixture {
                 for position in triangle {
                     minimum = simd_min(minimum, position)
                     maximum = simd_max(maximum, position)
-                    append(position.x, to: &vertices)
-                    append(position.y, to: &vertices)
-                    append(position.z, to: &vertices)
-                    // The normal straight up, then the layer.
-                    vertices.append(contentsOf: [0, 127, 0, model.layer])
+                    for axis in 0..<3 {
+                        let share = tileSize[axis] > 0 ? (position[axis] - tileMinimum[axis]) / tileSize[axis] : 0
+                        append(UInt16((share * 65_535).rounded()), to: &vertices)
+                    }
                     append(UInt16(0), to: &vertices)
                     append(UInt16(65_535), to: &vertices)
+                    // The normal straight up, then the layer and the
+                    // reserved bytes.
+                    vertices.append(contentsOf: [0, 127, 0, model.layer, 0, 0])
                     append(vertexCount, to: &indices)
                     vertexCount += 1
                     indexCount += 1
@@ -89,8 +115,6 @@ struct ModelTileFixture {
                 append(UInt32(0), to: &replaced)
             }
             append(UInt32(0), to: &table)
-            tileMinimum = simd_min(tileMinimum, minimum)
-            tileMaximum = simd_max(tileMaximum, maximum)
             append(UInt32(strings.count), to: &table)
             append(UInt32(id.count), to: &table)
             append(firstIndex, to: &table)
@@ -124,7 +148,7 @@ struct ModelTileFixture {
         let textureOffset = aligned(indicesOffset + indices.count)
 
         var tile = Data("IMMT".utf8)
-        for value in [5, zoom, x, y, models.count, Int(vertexCount), Int(indexCount), 20,
+        for value in [6, zoom, x, y, models.count, Int(vertexCount), Int(indexCount), 16,
                       layerCount, textureSize, textureSize, mipLevelCount, blockEdge,
                       tableOffset, table.count, stringsOffset, strings.count,
                       verticesOffset, vertices.count, indicesOffset, indices.count,

@@ -19,6 +19,14 @@ let package = Package(
         .library(
             name: "ImmersiveMapDebug",
             targets: ["ImmersiveMapDebug"]
+        ),
+        // The model tile's format, read and written. The engine links it,
+        // and so does the baker of a model archive, which lives in the
+        // project the models are made in: the layout, its version and its
+        // reference are in one place for both.
+        .library(
+            name: "ModelTileFormat",
+            targets: ["ModelTileFormat"]
         )
     ],
     targets: [
@@ -61,9 +69,20 @@ let package = Package(
         .target(
             name: "TileFlattening"
         ),
+        // The model tile as bytes: the decoder the engine reads a tile
+        // with and the writer a baker makes one with, on Foundation and
+        // simd alone. A product, so its API is public: the baker is another
+        // package. The test support target is the independent writer of
+        // fixture tiles both test targets share.
+        .target(
+            name: "ModelTileFormat"
+        ),
+        .target(
+            name: "ModelTileFormatTestSupport"
+        ),
         .target(
             name: "ImmersiveMap",
-            dependencies: ["Earcut", "Mvt", "PMTiles", "TileFlattening"],
+            dependencies: ["Earcut", "Mvt", "PMTiles", "TileFlattening", "ModelTileFormat"],
             // The shaders and their headers: not resources, so no build
             // system makes a library of its own from them. `MetalLibraryPlugin`
             // compiles every .metal file of the target into the one
@@ -132,8 +151,13 @@ let package = Package(
             dependencies: ["PMTiles", "PMTilesTestSupport"]
         ),
         .testTarget(
+            name: "ModelTileFormatTests",
+            dependencies: ["ModelTileFormat", "ModelTileFormatTestSupport"]
+        ),
+        .testTarget(
             name: "ImmersiveMapTests",
-            dependencies: ["ImmersiveMap", "ImmersiveMapDebug", "Mvt", "MvtTestSupport", "PMTilesTestSupport"]
+            dependencies: ["ImmersiveMap", "ImmersiveMapDebug", "Mvt", "MvtTestSupport", "PMTilesTestSupport",
+                           "ModelTileFormat", "ModelTileFormatTestSupport"]
         )
     ],
     swiftLanguageModes: [.v6]

@@ -3,6 +3,7 @@
 
 import Foundation
 import Metal
+import ModelTileFormat
 import simd
 
 enum ModelTileMeshError: Error, Equatable {
@@ -28,6 +29,10 @@ final class ModelTileMesh: @unchecked Sendable {
     /// The bounds of the whole tile, in tile space.
     let boundsMinimum: SIMD3<Float>
     let boundsMaximum: SIMD3<Float>
+    /// The vertices' stored positions into tile space
+    /// (`ModelTileContents.positionMatrix`): the first matrix a vertex of
+    /// the tile takes.
+    let positionMatrix: matrix_float4x4
     let vertexBuffer: MTLBuffer
     let indexBuffer: MTLBuffer
     /// The array of the tile's textures, one layer per source atlas.
@@ -133,10 +138,11 @@ final class ModelTileMesh: @unchecked Sendable {
         self.indexCount = contents.indexCount
         self.boundsMinimum = contents.boundsMinimum
         self.boundsMaximum = contents.boundsMaximum
+        self.positionMatrix = contents.positionMatrix
         var replaced: [Int: Set<UInt64>] = [:]
         for model in contents.models {
             for entry in model.replacedBuildings {
-                if let featureID = schema.tileFeatureID(of: entry.element) {
+                if let featureID = schema.tileFeatureID(of: ImmersiveMapOSMElement(entry.element)) {
                     replaced[entry.mapTileZoom, default: []].insert(featureID)
                 }
             }

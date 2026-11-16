@@ -7,9 +7,10 @@ import simd
 /// One model tile, placed for the frame and ready to encode.
 struct ModelTileDrawItem {
     let mesh: ModelTileMesh
-    /// Tile space into the frame's flat world: the matrix the map's own
-    /// buildings of the same tile take, lowered while the tile comes up
-    /// out of the ground (`ExtrusionRise`).
+    /// The tile's stored positions into the frame's flat world: the mesh's
+    /// own matrix into tile space (`ModelTileMesh.positionMatrix`), then
+    /// the matrix the map's own buildings of the same tile take, lowered
+    /// while the tile comes up out of the ground (`ExtrusionRise`).
     let modelMatrix: matrix_float4x4
     /// Whether the tile is still partly under the ground, coming up: what
     /// is below the ground is not drawn.

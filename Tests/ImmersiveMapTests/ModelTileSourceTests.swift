@@ -4,6 +4,7 @@
 import Foundation
 @testable import ImmersiveMap
 import PMTiles
+import ModelTileFormatTestSupport
 import PMTilesTestSupport
 import XCTest
 

@@ -12,8 +12,10 @@ using namespace metal;
 // texture is, so the whole tile draws in one call under one matrix, the
 // tile's, with no bind between its models.
 //
-// Tile space is the flat map's: X east, Y north, Z up from the ground. The
-// model matrix is a translation and a uniform scale, the one the map's own
+// Tile space is the flat map's: X east, Y north, Z up from the ground. A
+// vertex keeps its position as a place in the tile's bounding box, and the
+// model matrix takes it from there: the box's size and minimum into tile
+// space, then a translation and a uniform scale, the ones the map's own
 // buildings of the same tile take, so the models lie on the flat map as the
 // buildings do. They draw on the flat map only, as the buildings do: at the
 // zooms that show them the map is flat.
@@ -35,6 +37,8 @@ using namespace metal;
 constant bool kModelTileClipsBelowGround [[function_constant(0)]];
 
 struct ModelTileVertexIn {
+    // Unsigned normalized shorts in the tile: 0...1 across the tile's
+    // bounding box on each axis.
     float3 position [[attribute(0)]];
     // Signed normalized bytes in the tile.
     float3 normal [[attribute(1)]];
@@ -63,7 +67,8 @@ vertex ModelTileVertexOut modelTileVertexShader(ModelTileVertexIn vertexIn [[sta
     ModelTileVertexOut out;
     out.position = camera.matrix * float4(drawnPosition, 1.0);
     out.worldPosition = worldPosition.xyz;
-    // A translation and a uniform scale leave a direction as it is.
+    // The normal is in tile space already, apart from the position's box,
+    // and a translation and a uniform scale leave a direction as it is.
     out.worldNormal = normalize(vertexIn.normal);
     out.uv = vertexIn.uv;
     out.layer = vertexIn.layer;

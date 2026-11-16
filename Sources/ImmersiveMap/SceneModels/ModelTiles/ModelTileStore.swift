@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 import Foundation
+import ModelTileFormat
 import Metal
 import os
 import PMTiles
