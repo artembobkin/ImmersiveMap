@@ -41,7 +41,7 @@ ImmersiveMap is a **pure Swift + Metal map** rendering engine for **SwiftUI apps
 
 ## Features
 
-Built-in Protomaps vector tiles, native iOS (UIKit host), native macOS, SwiftUI integration, map styling and colors, your own data as layers (GeoJSON zones, lines and points), SwiftUI annotations, pins that make room for each other, 3D scene models, 3D building models from a model archive, tour video export.
+Built-in Protomaps vector tiles from a PMTiles archive, offline maps from a local PMTiles file, native iOS (UIKit host), native macOS, SwiftUI integration, map styling and colors, your own data as layers (GeoJSON zones, lines and points), SwiftUI annotations, pins that make room for each other, 3D scene models, 3D building models from a PMTiles model archive, tour video export.
 
 ## Documentation
 
@@ -49,9 +49,9 @@ The guides are on the website: **[immersivemap.dev/documentation](https://immers
 
 ## Map Data
 
-The map draws OpenStreetMap data from a single [PMTiles](https://docs.protomaps.com/pmtiles/) file, read straight from storage with no tile server. The 3D building models come from a second archive, and the globe's biomes ship inside the package. To use your own tiles, see [Setting up the tile source](Documentation/TileSource.md).
+The map draws OpenStreetMap data from a single [PMTiles](https://docs.protomaps.com/pmtiles/) file, read straight from storage with no tile server. The 3D building models come from a second PMTiles archive, and the globe's biomes ship inside the package. To use your own tiles, see [Setting up the tile source](Documentation/TileSource.md).
 
-The map also works offline: a file URL reads the archive from disk, so an app can ship its map in the bundle.
+The map also works offline: put a `.pmtiles` file in the app's bundle and the map reads it from disk with no network (see [Offline maps](Documentation/TileSource.md#offline-maps)).
 
 ## Quick Start
 

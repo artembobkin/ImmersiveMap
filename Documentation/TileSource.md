@@ -18,12 +18,25 @@ ImmersiveMapView()
   ```swift
   .tileArchive(url, headers: ["Authorization": "Bearer …"])
   ```
-- **Offline.** A file URL reads the archive from disk, so an app can ship its map in the bundle:
-  ```swift
-  .tileArchive(Bundle.main.url(forResource: "city", withExtension: "pmtiles")!)
-  ```
+- **Offline.** A file URL reads the archive from disk (see [Offline maps](#offline-maps)).
 - **Depth.** The map reads how deep the archive goes from its header, and never asks for a deeper tile. Past that zoom, the deepest tiles are stretched. To read less, cap it with `.tileMaximumZoomLevel(14)`.
 - **Updates.** You can upload a new archive under the same URL. The map notices by the ETag the host sends, and parses the changed tiles again. A host that sends no ETag needs a new URL for each upload.
+
+## Offline maps
+
+The map works offline from a PMTiles file on the device. Put a `.pmtiles` file in the app's bundle, or download one to disk, and give the map its file URL:
+
+```swift
+ImmersiveMapView()
+    .tileArchive(Bundle.main.url(forResource: "city", withExtension: "pmtiles")!)
+    .modelArchive(nil)
+```
+
+- **No network.** The tiles are read from the file, so the map needs no connection and no tile server. On macOS a sandboxed app needs no Outgoing Connections for it.
+- **3D building models.** They come from a hosted archive of their own, so an offline map turns them off with `.modelArchive(nil)`, or reads a local PMTiles file of models the same way (see [3D content](3DContent.md)).
+- **Relief.** The relief is off by default. Turned on, it loads its heights from the network unless `.terrain(_:)` names a file URL template (see [Relief](Relief.md)).
+- **The globe.** The biomes and the roads of the far zooms ship inside the package, and need nothing.
+- **The file.** Any PMTiles v3 archive of vector tiles in the Protomaps basemap schema works. One city at full depth is tens of megabytes, and the whole planet is over a hundred gigabytes, so cut the area an app ships (the `pmtiles extract` command of the [PMTiles tool](https://docs.protomaps.com/pmtiles/cli) does it).
 
 ## Caching
 
