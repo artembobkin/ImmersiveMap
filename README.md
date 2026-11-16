@@ -49,7 +49,7 @@ The guides are on the website: **[immersivemap.dev/documentation](https://immers
 
 ## Map Data
 
-The map draws OpenStreetMap data from a single [PMTiles](https://docs.protomaps.com/pmtiles/) file with no tile server. Out of the box it works online: the map streams a hosted archive of the whole planet over HTTP, loading only the tiles in view. The 3D building models come from a second PMTiles archive, and the globe's biomes ship inside the package. To use your own tiles, see [Setting up the tile source](Documentation/TileSource.md).
+The map draws OpenStreetMap data from a single [PMTiles](https://docs.protomaps.com/pmtiles/) file with no tile server. Out of the box it works online: the map streams a hosted archive of the whole planet over HTTP, loading only the tiles in view. I host that archive on Cloudflare R2 as a public source for this library, so that you can see the map right away. You are free to host an archive yourself, wherever you like: any storage that serves HTTP range requests will do (R2, S3, a CDN, your own server). The 3D building models come from a second PMTiles archive, and the globe's biomes ship inside the package. To point the map at an archive you host, or to draw tiles of another schema, see [Setting up the tile source](Documentation/TileSource.md).
 
 The same map works offline: put a `.pmtiles` file in the app's bundle and the map reads it from disk with no network (see [Offline maps](Documentation/TileSource.md#offline-maps)).
 
