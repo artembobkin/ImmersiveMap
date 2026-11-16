@@ -27,6 +27,13 @@ let package = Package(
         .library(
             name: "ModelTileFormat",
             targets: ["ModelTileFormat"]
+        ),
+        // The PMTiles module, for its writer (`PMTilesWriter`), the one
+        // public thing in it: the same baker writes its archive with it,
+        // on the header, the tile id and the limits the reader goes by.
+        .library(
+            name: "PMTiles",
+            targets: ["PMTiles"]
         )
     ],
     targets: [
@@ -53,8 +60,11 @@ let package = Package(
         // the Hilbert tile id and the gzip step, pure functions over bytes)
         // and the HTTP range client that reads an archive with them. Its own
         // module for the same reason as `Earcut`: a tool that knows nothing
-        // of the engine, reached at `package` access. The test support target
-        // is the independent archive writer both test targets share.
+        // of the engine, reached at `package` access. Its writer alone
+        // (`PMTilesWriter`) is public and the module a product, for the
+        // baker of a model archive, which is another package. The test
+        // support target is the independent archive writer both test
+        // targets share.
         .target(
             name: "PMTiles"
         ),

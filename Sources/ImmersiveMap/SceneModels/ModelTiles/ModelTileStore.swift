@@ -29,7 +29,7 @@ import PMTiles
 final class ModelTileStore: @unchecked Sendable {
     /// The zoom of the tiles a model archive holds. Its models are grouped
     /// by the map tile of this zoom their origin lies in.
-    static let tileZoom = 14
+    static let tileZoom = ModelTileContents.tileZoom
     static let maximumConcurrentLoads = 4
     static let retryBaseDelay: TimeInterval = 5
     static let retryMaximumDelay: TimeInterval = 60

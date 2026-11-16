@@ -126,6 +126,10 @@ public enum ModelTileFormatError: Error, Equatable, Sendable {
 /// first, then the next level. A level of `w` by `h` pixels takes
 /// `ceil(w / edge) * ceil(h / edge) * 16` bytes per layer.
 public struct ModelTileContents: Equatable, Sendable {
+    /// The zoom of the map tiles a model archive holds: a map asks for
+    /// model tiles of this zoom alone, whatever zoom it is at, and a baker
+    /// writes these.
+    public static let tileZoom = 14
     public static let magic: [UInt8] = Array("IMMT".utf8)
     public static let version: UInt32 = 6
     public static let replacedBuildingEntryByteCount = 16

@@ -26,6 +26,36 @@ package enum PMTilesGzip {
         }
     }
 
+    /// `data` as one gzip member, at zlib's best compression: what a writer
+    /// puts in an archive for `decompress` to read back.
+    package static func deflate(_ data: Data) throws -> Data {
+        var stream = z_stream()
+        guard deflateInit2_(&stream, Z_BEST_COMPRESSION, Z_DEFLATED, 15 + 16, 9, Z_DEFAULT_STRATEGY,
+                            ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)) == Z_OK else {
+            throw PMTilesWriterError.compressionFailed
+        }
+        defer { deflateEnd(&stream) }
+
+        var input = [UInt8](data)
+        var output = [UInt8](repeating: 0, count: Int(deflateBound(&stream, UInt(input.count))) + 64)
+        var produced = 0
+        var finished = false
+        input.withUnsafeMutableBufferPointer { inputBuffer in
+            output.withUnsafeMutableBufferPointer { outputBuffer in
+                stream.next_in = inputBuffer.baseAddress
+                stream.avail_in = UInt32(inputBuffer.count)
+                stream.next_out = outputBuffer.baseAddress
+                stream.avail_out = UInt32(outputBuffer.count)
+                finished = zlib.deflate(&stream, Z_FINISH) == Z_STREAM_END
+                produced = outputBuffer.count - Int(stream.avail_out)
+            }
+        }
+        guard finished else {
+            throw PMTilesWriterError.compressionFailed
+        }
+        return Data(output[0..<produced])
+    }
+
     package static func inflate(_ data: Data, expectedByteCount: Int? = nil) throws -> Data {
         guard data.isEmpty == false else {
             return Data()

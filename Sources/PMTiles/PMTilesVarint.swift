@@ -39,3 +39,15 @@ package struct PMTilesVarintReader {
         }
     }
 }
+
+/// The writing of the same integers, for an archive's directory.
+package enum PMTilesVarint {
+    package static func append(_ value: UInt64, to data: inout Data) {
+        var remaining = value
+        while remaining >= 0x80 {
+            data.append(UInt8(remaining & 0x7F) | 0x80)
+            remaining >>= 7
+        }
+        data.append(UInt8(remaining))
+    }
+}
