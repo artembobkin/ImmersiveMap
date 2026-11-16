@@ -32,6 +32,8 @@ private struct MapScreen: View {
     /// Whether pins that overlap push each other apart, switched from the
     /// panel in the corner.
     @State private var pinsSpreadApart = true
+    /// The frame the pins are drawn in, picked in the panel.
+    @State private var pinShape = PinShapeChoice.bubble
     /// The landmark tapped last, shown in the panel.
     @State private var tappedLandmark: String?
 
@@ -47,7 +49,10 @@ private struct MapScreen: View {
             // tied to its place by a beam. Off, they stand on their places
             // and cover each other.
             .pins(pins)
-            .pinSettings(size: .px128, sizeScale: 0.85, spreadsApart: pinsSpreadApart)
+            .pinSettings(shape: pinShape.shape,
+                         size: .px128,
+                         sizeScale: 0.85,
+                         spreadsApart: pinsSpreadApart)
             .onPinTap { event in
                 tappedLandmark = Landmark.all.first { $0.id == event.pin.id }?.name
             }
@@ -62,6 +67,12 @@ private struct MapScreen: View {
             .overlay(alignment: .topLeading) {
                 VStack(alignment: .leading, spacing: 6) {
                     Toggle("Pins make room for each other", isOn: $pinsSpreadApart)
+                    Picker("Pin shape", selection: $pinShape) {
+                        ForEach(PinShapeChoice.allCases) { choice in
+                            Text(choice.rawValue).tag(choice)
+                        }
+                    }
+                    .frame(width: 260)
                     Text(tappedLandmark.map { "Tapped: \($0)" } ?? "Tap a pin")
                         .foregroundStyle(.secondary)
                 }
@@ -82,6 +93,86 @@ private struct MapScreen: View {
                 }
             }
     }
+}
+
+/// The frames the panel offers for the pins: the built-in ones, a path of
+/// the app's own and no frame at all.
+private enum PinShapeChoice: String, CaseIterable, Identifiable {
+    case bubble = "Bubble"
+    case circle = "Circle"
+    case square = "Rounded square"
+    case drop = "Drop (custom path)"
+    case hexagon = "Hexagon (mask picture)"
+    case picture = "No frame"
+
+    var id: String { rawValue }
+
+    var shape: PinShape {
+        switch self {
+        case .bubble: .bubble
+        case .circle: .circle
+        case .square: .roundedRectangle(cornerRadius: 0.12)
+        case .drop: Self.dropShape
+        case .hexagon: Self.hexagonShape
+        case .picture: .picture()
+        }
+    }
+
+    /// A hexagon given as a picture of it, the way an app would give a PNG
+    /// drawn in an editor: white where the pin is, transparent elsewhere.
+    /// Here the picture is drawn in code so that the app carries no file.
+    private static let hexagonShape: PinShape = {
+        let side = 256
+        guard let context = CGContext(data: nil,
+                                      width: side,
+                                      height: side,
+                                      bitsPerComponent: 8,
+                                      bytesPerRow: side * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            return .circle
+        }
+        let center = Double(side) / 2
+        context.move(to: CGPoint(x: center, y: Double(side)))
+        for corner in 1..<6 {
+            let angle = Double.pi / 2 + Double(corner) * Double.pi / 3
+            context.addLine(to: CGPoint(x: center + center * cos(angle),
+                                        y: center + center * sin(angle)))
+        }
+        context.closePath()
+        context.setFillColor(red: 1, green: 1, blue: 1, alpha: 1)
+        context.fillPath()
+        guard let mask = context.makeImage() else {
+            return .circle
+        }
+        return .mask(mask, anchor: CGPoint(x: 0.5, y: 0.5))
+    }()
+
+    /// A map drop: a circle whose sides run down to a tip. The path is in a
+    /// unit square with y down, the tip is the anchor, and the picture goes
+    /// into the circle.
+    private static let dropShape: PinShape = {
+        let center = CGPoint(x: 0.5, y: 0.4)
+        let radius = 0.4
+        let tip = CGPoint(x: 0.5, y: 1.0)
+        // The sides touch the circle where the lines from the tip are
+        // tangent to it.
+        let reach = acos(radius / (tip.y - center.y))
+        let start = Double.pi / 2 - reach
+        let end = Double.pi / 2 + reach - 2 * Double.pi
+        let path = CGMutablePath()
+        path.move(to: tip)
+        let steps = 64
+        for step in 0...steps {
+            let angle = start + (end - start) * Double(step) / Double(steps)
+            path.addLine(to: CGPoint(x: center.x + radius * cos(angle),
+                                     y: center.y + radius * sin(angle)))
+        }
+        path.closeSubpath()
+        return .path(path,
+                     anchor: tip,
+                     pictureArea: CGRect(x: 0.1, y: 0.0, width: 0.8, height: 0.8))
+    }()
 }
 
 /// A landmark of New York, shown as a pin: its picture is a SwiftUI view
@@ -129,7 +220,6 @@ private struct Landmark {
         let picture = Text(symbol)
             .font(.system(size: Self.imageSide * 0.6))
             .frame(width: Self.imageSide, height: Self.imageSide)
-            .background(Color(white: 0.97))
         let renderer = ImageRenderer(content: picture)
         renderer.scale = 1
         guard let image = renderer.cgImage else {

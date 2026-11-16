@@ -14,7 +14,7 @@ final class PinPerformanceTests: XCTestCase {
     private static let geometry = PinCollisionGeometry(pinSizePx: 128.0,
                                                           bodyRadiusPx: 64.0,
                                                           circleBodyRadiusPx: 59.0,
-                                                          bodyCenterOffsetPx: 70.0)
+                                                          bodyCenterOffsetPx: SIMD2<Float>(0.0, 70.0))
 
     // MARK: - Solver scenarios
 

@@ -2090,8 +2090,27 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var compressedScale: Float
         public var atlasSizePx: Int
         public var atlasPagesMax: Int
+        /// The shape of the frame every pin is drawn in: a built-in one
+        /// (`.bubble`, `.circle`, `.roundedRectangle(cornerRadius:tail:)`),
+        /// one of the app's own, from a picture of it
+        /// (`.mask(_:anchor:pictureArea:)`) or from a path
+        /// (`.path(_:anchor:pictureArea:)`), or no frame at all
+        /// (`.picture(anchor:)`). The bubble by default.
+        public var shape: PinShape
+        /// The width of the frame's outline, in pixels. Zero draws no
+        /// outline.
         public var borderWidthPx: Float
+        /// The color of the frame's outline. A pin's own `borderColor`
+        /// takes its place for that pin.
         public var borderColor: SIMD4<Float>
+        /// The color of the frame under and around the picture. It shows in
+        /// the band between the outline and the picture, and through the
+        /// transparent parts of a picture. White by default.
+        public var fillColor: SIMD4<Float>
+        /// How far the picture is set in from the frame's edge, as a part of
+        /// the pin's size. The picture never reaches into the outline. Zero
+        /// lays the picture right up to the outline.
+        public var contentInset: Float
         /// The color of the beam, the cone of light that runs from a pin
         /// pushed off its place to the point on the map it belongs to. The
         /// beam is densest at the pin and dissolves toward the point, and
@@ -2125,7 +2144,10 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     collisionIterations: Int,
                     springK: Float,
                     smoothing: Float,
-                    spreadsApart: Bool = true) {
+                    spreadsApart: Bool = true,
+                    shape: PinShape = .bubble,
+                    fillColor: SIMD4<Float> = SIMD4<Float>(1.0, 1.0, 1.0, 1.0),
+                    contentInset: Float = 0.06) {
             self.size = size
             self.sizeScale = sizeScale
             self.compressedScale = compressedScale
@@ -2141,6 +2163,9 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.springK = springK
             self.smoothing = smoothing
             self.spreadsApart = spreadsApart
+            self.shape = shape
+            self.fillColor = fillColor
+            self.contentInset = contentInset
         }
     }
 
@@ -2383,7 +2408,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                 atlasSizePx: 4096,
                                 atlasPagesMax: 1,
                                 borderWidthPx: 3.0,
-                                borderColor: SIMD4<Float>(1.0, 1.0, 1.0, 1.0),
+                                borderColor: SIMD4<Float>(0.0, 0.0, 0.0, 1.0),
                                 beamColor: SIMD4<Float>(0.65, 0.75, 1.0, 1.0),
                                 collisionPaddingPx: 0.0,
                                 groupingThreshold: 5,
@@ -3146,13 +3171,16 @@ public extension ImmersiveMapSettings {
         return settings
     }
 
-    func pinSettings(size: PinSettings.Size? = nil,
+    func pinSettings(shape: PinShape? = nil,
+                        size: PinSettings.Size? = nil,
                         sizeScale: Float? = nil,
                         compressedScale: Float? = nil,
                         atlasSizePx: Int? = nil,
                         atlasPagesMax: Int? = nil,
                         borderWidthPx: Float? = nil,
                         borderColor: SIMD4<Float>? = nil,
+                        fillColor: SIMD4<Float>? = nil,
+                        contentInset: Float? = nil,
                         beamColor: SIMD4<Float>? = nil,
                         collisionPaddingPx: Float? = nil,
                         groupingThreshold: Int? = nil,
@@ -3162,6 +3190,15 @@ public extension ImmersiveMapSettings {
                         smoothing: Float? = nil,
                         spreadsApart: Bool? = nil) -> ImmersiveMapSettings {
         var pins = self.pins
+        if let shape {
+            pins.shape = shape
+        }
+        if let fillColor {
+            pins.fillColor = fillColor
+        }
+        if let contentInset {
+            pins.contentInset = contentInset
+        }
         if let size {
             pins.size = size
         }

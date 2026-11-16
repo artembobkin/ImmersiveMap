@@ -1535,13 +1535,16 @@ public extension ImmersiveMapView {
         return view
     }
 
-    func pinSettings(size: ImmersiveMapSettings.PinSettings.Size? = nil,
+    func pinSettings(shape: PinShape? = nil,
+                        size: ImmersiveMapSettings.PinSettings.Size? = nil,
                         sizeScale: Float? = nil,
                         compressedScale: Float? = nil,
                         atlasSizePx: Int? = nil,
                         atlasPagesMax: Int? = nil,
                         borderWidthPx: Float? = nil,
                         borderColor: SIMD4<Float>? = nil,
+                        fillColor: SIMD4<Float>? = nil,
+                        contentInset: Float? = nil,
                         beamColor: SIMD4<Float>? = nil,
                         collisionPaddingPx: Float? = nil,
                         groupingThreshold: Int? = nil,
@@ -1551,13 +1554,16 @@ public extension ImmersiveMapView {
                         smoothing: Float? = nil,
                         spreadsApart: Bool? = nil) -> ImmersiveMapView {
         var view = self
-        view.settings = view.settings.pinSettings(size: size,
+        view.settings = view.settings.pinSettings(shape: shape,
+                                                     size: size,
                                                      sizeScale: sizeScale,
                                                      compressedScale: compressedScale,
                                                      atlasSizePx: atlasSizePx,
                                                      atlasPagesMax: atlasPagesMax,
                                                      borderWidthPx: borderWidthPx,
                                                      borderColor: borderColor,
+                                                     fillColor: fillColor,
+                                                     contentInset: contentInset,
                                                      beamColor: beamColor,
                                                      collisionPaddingPx: collisionPaddingPx,
                                                      groupingThreshold: groupingThreshold,

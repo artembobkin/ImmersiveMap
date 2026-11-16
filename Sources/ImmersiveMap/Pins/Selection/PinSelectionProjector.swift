@@ -134,6 +134,7 @@ struct PinSelectionProjector {
 
         let width = CGFloat(pinStyle.totalSizePx.x)
         let height = CGFloat(pinStyle.totalSizePx.y)
+        let origin = pinStyle.quadOriginPx
         var entries: [PinSelectionEntry] = []
         entries.reserveCapacity(pinItems.count)
 
@@ -144,6 +145,8 @@ struct PinSelectionProjector {
             appendEntryIfVisible(target: .pin(pinItem.pin.id),
                                  screenPoint: pinItem.screenPoint,
                                  drawOrder: pinItem.drawOrder,
+                                 pinOrigin: CGPoint(x: CGFloat(origin.x) * displayScale,
+                                                    y: CGFloat(origin.y) * displayScale),
                                  pinWidth: width * displayScale,
                                  pinHeight: height * displayScale,
                                  entries: &entries)
@@ -174,6 +177,7 @@ struct PinSelectionProjector {
     private func appendEntryIfVisible(target: PinSelectionTarget,
                                       screenPoint: ScreenPointOutput,
                                       drawOrder: Int,
+                                      pinOrigin: CGPoint,
                                       pinWidth: CGFloat,
                                       pinHeight: CGFloat,
                                       entries: inout [PinSelectionEntry]) {
@@ -187,6 +191,7 @@ struct PinSelectionProjector {
         let anchorPoint = CGPoint(x: CGFloat(screenPoint.position.x),
                                   y: CGFloat(screenPoint.position.y))
         let bounds = selectionBounds(anchorPoint: anchorPoint,
+                                     pinOrigin: pinOrigin,
                                      pinWidth: pinWidth,
                                      pinHeight: pinHeight)
         entries.append(PinSelectionEntry(target: target,
@@ -195,11 +200,14 @@ struct PinSelectionProjector {
                                             drawOrder: drawOrder))
     }
 
+    /// The pin's quad on the screen: `pinOrigin` is its lower left corner
+    /// from the anchor, which depends on where the shape's anchor is.
     func selectionBounds(anchorPoint: CGPoint,
+                         pinOrigin: CGPoint,
                          pinWidth: CGFloat,
                          pinHeight: CGFloat) -> CGRect {
-        CGRect(x: anchorPoint.x - pinWidth * 0.5,
-               y: anchorPoint.y,
+        CGRect(x: anchorPoint.x + pinOrigin.x,
+               y: anchorPoint.y + pinOrigin.y,
                width: pinWidth,
                height: pinHeight)
     }

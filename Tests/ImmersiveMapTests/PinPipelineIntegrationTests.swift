@@ -24,7 +24,7 @@ final class PinPipelineIntegrationTests: XCTestCase {
     private static let geometry = PinCollisionGeometry(pinSizePx: 128.0,
                                                           bodyRadiusPx: 64.0,
                                                           circleBodyRadiusPx: 59.0,
-                                                          bodyCenterOffsetPx: 70.0)
+                                                          bodyCenterOffsetPx: SIMD2<Float>(0.0, 70.0))
 
     /// Flat mode: a pile near the center of Moscow is projected and collapses
     /// into flowers; pins scattered across Europe are viewport-culled and

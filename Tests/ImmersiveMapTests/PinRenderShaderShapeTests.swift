@@ -7,8 +7,9 @@ final class PinRenderShaderShapeTests: XCTestCase {
     func testPinFragmentMorphsBetweenPinSDFAndBodyCircle() throws {
         let source = try shaderSource(named: "PinRender.metal")
 
-        // The shape always starts from the MTSDF pin and morphs into the
-        // analytic body circle by per-instance morph; the masks below read only the blended SDF.
+        // The shape always starts from the baked distance field and morphs
+        // into the analytic body circle by per-instance morph. The masks
+        // below read only the blended distance.
         XCTAssertTrue(source.contains("decodeSignedDistanceTexels"))
         XCTAssertTrue(source.contains("sdfTexture.sample"))
         XCTAssertTrue(source.contains("float circleDistanceTexels"))
@@ -35,7 +36,8 @@ final class PinRenderShaderShapeTests: XCTestCase {
         let source = try shaderSource(named: "PinRender.metal")
 
         XCTAssertTrue(source.contains("out.visibilityAlpha = point.visibilityAlpha"))
-        XCTAssertTrue(source.contains("color.a = alpha * half(in.visibilityAlpha)"))
+        XCTAssertTrue(source.contains("color.a * half(in.visibilityAlpha)"))
+        XCTAssertTrue(source.contains("picture.a * half(in.visibilityAlpha)"))
     }
 
     func testBeamShaderStartsAtTrueAnchorAndFollowsCompression() throws {

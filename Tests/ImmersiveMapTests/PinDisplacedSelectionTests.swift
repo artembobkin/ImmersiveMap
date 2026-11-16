@@ -49,8 +49,7 @@ final class PinDisplacedSelectionTests: XCTestCase {
     private func makeSnapshot(items: [PinCollisionItem]) throws -> PinSelectionSnapshot {
         let projector = PinSelectionProjector()
         let pinStyle = PinStyle(sizePx: pinSizePx,
-                                            outlineWidthPx: 3.0,
-                                            pointerHeightRatio: 0.15)
+                                outlineWidthPx: 3.0)
         return projector.makeSnapshot(pinItems: items,
                                       drawSize: CGSize(width: 800, height: 600),
                                       pinStyle: pinStyle)

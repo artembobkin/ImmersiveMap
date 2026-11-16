@@ -20,8 +20,8 @@ struct PinVertexOut {
 
 
 static inline float decodeSignedDistanceTexels(float encodedDistance,
-                                               constant PinSDFParams& sdfParams) {
-    return (0.5 - encodedDistance) * (2.0 * sdfParams.distanceRangeTexels);
+                                               constant PinStyleGPU& style) {
+    return (0.5 - encodedDistance) * (2.0 * style.distanceRangeTexels);
 }
 
 vertex PinVertexOut pinVertex(uint vid [[vertex_id]],
@@ -49,9 +49,9 @@ vertex PinVertexOut pinVertex(uint vid [[vertex_id]],
         out.flags = 0;
         return out;
     }
+    // The quad is laid so that the shape's anchor stands on the pin's point.
     float2 uv = quad[vid];
-    float2 local = float2((uv.x - 0.5) * style.totalSizePx.x,
-                          uv.y * style.totalSizePx.y) * instance.squashScale;
+    float2 local = (uv - style.anchorUv) * style.sizePx * instance.squashScale;
     float2 pixelPosition = point.position + local;
 
     out.position = screenMatrix * float4(pixelPosition, 0.0, 1.0);
@@ -67,27 +67,36 @@ vertex PinVertexOut pinVertex(uint vid [[vertex_id]],
 
 // The texel-space SDF math stays float: squared texel distances overflow
 // half's range. Sampling and the unit-range mask composition run in half.
+// The pipeline blends by the source's alpha, so the color leaves the shader
+// not multiplied by it.
 fragment half4 pinFragment(PinVertexOut in [[stage_in]],
                               constant PinStyleGPU& style [[buffer(0)]],
-                              constant PinSDFParams& sdfParams [[buffer(1)]],
                               texture2d_array<half> atlasTexture [[texture(0)]],
                               texture2d<half> sdfTexture [[texture(1)]]) {
     constexpr sampler atlasSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
     constexpr sampler sdfSampler(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
+
+    // A pin without a frame is its picture alone, cut by the picture's alpha.
+    if (style.frameless != 0u) {
+        float2 pictureUv = mix(in.uvRect.xy, in.uvRect.zw, in.uvLocal);
+        half4 picture = atlasTexture.sample(atlasSampler, pictureUv, in.atlasIndex);
+        return half4(picture.rgb / max(picture.a, 0.0001h), picture.a * half(in.visibilityAlpha));
+    }
 
     float fillMask;
     float borderMask;
     float interiorMask;
     float imageMask;
     float2 sdfUv = float2(in.uvLocal.x, 1.0 - in.uvLocal.y);
-    half4 mtsdfSample = sdfTexture.sample(sdfSampler, sdfUv);
-    float encodedDistance = float(mtsdfSample.a);
-    float pinDistanceTexels = decodeSignedDistanceTexels(encodedDistance, sdfParams);
+    // A baked shape keeps its distance in red, the built-in bubble in alpha.
+    half4 sdfSample = sdfTexture.sample(sdfSampler, sdfUv);
+    float encodedDistance = float(style.distanceInAlpha != 0u ? sdfSample.a : sdfSample.r);
+    float pinDistanceTexels = decodeSignedDistanceTexels(encodedDistance, style);
     float2 sdfTextureSize = float2(float(sdfTexture.get_width()), float(sdfTexture.get_height()));
-    // Pin -> circle morph: an analytic SDF of the body circle (without the tail)
-    // in the same texels as the MTSDF sample, so the masks below stay unchanged.
-    float2 circleCenter = float2(0.5, (style.pointerHeightPx + style.bodySizePx.y * 0.5) / max(style.totalSizePx.y, 1.0));
-    float circleRadiusTexels = 0.5 * min(style.bodySizePx.x, style.bodySizePx.y) / max(style.totalSizePx.x, 1.0) * sdfTextureSize.x;
+    // Pin -> circle morph: an analytic SDF of the body circle in the same
+    // texels as the shape's sample, so the masks below stay unchanged.
+    float2 circleCenter = style.bodyCenterUv;
+    float circleRadiusTexels = style.circleRadiusUv * sdfTextureSize.x;
     float circleDistanceTexels = length((in.uvLocal - circleCenter) * sdfTextureSize) - circleRadiusTexels;
     float shapeDistanceTexels = mix(pinDistanceTexels, circleDistanceTexels, saturate(in.morph));
     float texelsPerPixelX = length(dfdx(in.uvLocal) * sdfTextureSize);
@@ -96,35 +105,36 @@ fragment half4 pinFragment(PinVertexOut in [[stage_in]],
     float edgeWidthTexels = max(0.75 * texelsPerPixel, 0.75);
     float outlineWidthTexels = max(style.outlineWidthPx * texelsPerPixel, edgeWidthTexels);
     fillMask = 1.0 - smoothstep(-edgeWidthTexels, edgeWidthTexels, shapeDistanceTexels);
-    borderMask = smoothstep(-outlineWidthTexels - edgeWidthTexels, -edgeWidthTexels, shapeDistanceTexels) * fillMask;
+    // An outline of no width is no outline, not a hairline.
+    borderMask = style.outlineWidthPx > 0.0
+        ? smoothstep(-outlineWidthTexels - edgeWidthTexels, -edgeWidthTexels, shapeDistanceTexels) * fillMask
+        : 0.0;
     interiorMask = max(fillMask - borderMask, 0.0);
-    float contentInsetTexels = max(style.contentInsetPx * texelsPerPixel, outlineWidthTexels + edgeWidthTexels);
+    float contentInsetTexels = max(style.contentInsetPx * texelsPerPixel,
+                                   style.outlineWidthPx > 0.0 ? outlineWidthTexels + edgeWidthTexels : 0.0);
     imageMask = 1.0 - smoothstep(-contentInsetTexels - edgeWidthTexels,
                                  -contentInsetTexels + edgeWidthTexels,
                                  shapeDistanceTexels);
     imageMask *= interiorMask;
 
-    // The image is centered on the body/circle center (circleCenter), not on the
-    // center of the whole quad: the pin has a pointer tail of height
-    // pointerHeightPx at the bottom, which pushes the quad center below the body
-    // center and used to make the image drift downward.
-    float2 insetUv = float2(style.contentInsetPx) / max(style.totalSizePx, float2(1.0));
-    float2 bodyHalfUv = 0.5 * style.bodySizePx / max(style.totalSizePx, float2(1.0));
-    float2 contentHalfUv = max(bodyHalfUv - insetUv, float2(0.0001));
+    // The picture is laid into the picture area, set in by the inset, and is
+    // centered on the circle a pushed pin turns into.
+    float2 insetUv = float2(style.contentInsetPx) / max(style.sizePx, float2(1.0));
+    float2 contentHalfUv = max(style.bodyHalfUv - insetUv, float2(0.0001));
     float2 imageUv = clamp((in.uvLocal - (circleCenter - contentHalfUv)) / (2.0 * contentHalfUv), 0.0, 1.0);
     float2 atlasUv = mix(in.uvRect.xy, in.uvRect.zw, imageUv);
     half4 tex = atlasTexture.sample(atlasSampler, atlasUv, in.atlasIndex);
 
+    // Everything below is multiplied by its own alpha until the last line.
+    half4 fill = half4(half3(style.fillColor.rgb) * half(style.fillColor.a), half(style.fillColor.a));
+    half4 outline = half4(half3(in.borderColor.rgb) * half(in.borderColor.a), half(in.borderColor.a));
+    // A picture with transparent parts lies on the fill, not on the map.
+    half4 pictureOnFill = tex + fill * (1.0h - tex.a);
     half hImageMask = half(imageMask);
     half hBorderMask = half(borderMask);
-    half whiteFillMask = half(max(interiorMask - imageMask, 0.0));
-    half4 imageColor = tex * hImageMask;
-    half4 whiteFillColor = half4(1.0h) * whiteFillMask;
-    half4 outlineColor = half4(0.0h, 0.0h, 0.0h, 1.0h) * hBorderMask;
-    half4 color = imageColor + whiteFillColor + outlineColor;
-    half alpha = tex.a * hImageMask + whiteFillMask + hBorderMask;
-    color.a = alpha * half(in.visibilityAlpha);
-    return color;
+    half fillBandMask = half(max(interiorMask - imageMask, 0.0));
+    half4 color = pictureOnFill * hImageMask + fill * fillBandMask + outline * hBorderMask;
+    return half4(color.rgb / max(color.a, 0.0001h), color.a * half(in.visibilityAlpha));
 }
 
 

@@ -52,7 +52,7 @@ final class PinCollisionLayoutSolverTests: XCTestCase {
     private static let geometry = PinCollisionGeometry(pinSizePx: 100.0,
                                                           bodyRadiusPx: 50.0,
                                                           circleBodyRadiusPx: 46.0,
-                                                          bodyCenterOffsetPx: 55.0)
+                                                          bodyCenterOffsetPx: SIMD2<Float>(0.0, 55.0))
 
     // MARK: - Displacement and shape
 
@@ -317,9 +317,9 @@ final class PinCollisionLayoutSolverTests: XCTestCase {
         for item in layout.pinItems {
             let displacedCenter = Self.bodyCenter(of: item)
             let restingCenter = item.anchorScreenPoint.position
-                + SIMD2<Float>(0.0, Self.geometry.bodyCenterOffsetPx * item.pin.screenSizeScale)
+                + Self.geometry.bodyCenterOffsetPx * item.pin.screenSizeScale
             XCTAssertLessThanOrEqual(simd_length(displacedCenter - restingCenter),
-                                     config.maxOffsetPx + Self.geometry.bodyCenterOffsetPx + 1.0)
+                                     config.maxOffsetPx + Self.geometry.bodyCenterOffsetPx.y + 1.0)
         }
     }
 
@@ -925,7 +925,7 @@ final class PinCollisionLayoutSolverTests: XCTestCase {
 
     private static func bodyCenter(of item: PinCollisionItem) -> SIMD2<Float> {
         item.screenPoint.position
-            + SIMD2<Float>(0.0, geometry.bodyCenterOffsetPx * item.displayScale * item.pin.screenSizeScale)
+            + geometry.bodyCenterOffsetPx * (item.displayScale * item.pin.screenSizeScale)
     }
 
     private static func solveUntilSettled(solver: PinCollisionLayoutSolver,

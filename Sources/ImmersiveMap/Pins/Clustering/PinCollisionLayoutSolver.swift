@@ -72,8 +72,8 @@ struct PinCollisionGeometry {
     let bodyRadiusPx: Float
     /// Visible circle radius (morph 1) at scale 1: the body's inscribed circle.
     let circleBodyRadiusPx: Float
-    /// Vertical shift of the body center from the anchor at scale 1.
-    let bodyCenterOffsetPx: Float
+    /// Shift of the body center from the anchor at scale 1.
+    let bodyCenterOffsetPx: SIMD2<Float>
 
     /// Nominal body radius for the current shape: the pin is wider than the
     /// circle, and computing from the pin radius would leave a visible gap
@@ -326,7 +326,7 @@ final class PinCollisionLayoutSolver {
                 }
                 let screenSizeScale = projected.pin.screenSizeScale
                 let fullBodyCenter = projected.screenPoint.position
-                    + SIMD2<Float>(0.0, geometry.bodyCenterOffsetPx * screenSizeScale)
+                    + geometry.bodyCenterOffsetPx * (screenSizeScale)
                 let fullBodyRadius = geometry.bodyRadiusPx * screenSizeScale
                 var maxOverlapDepth: Float = 0.0
                 touchGrid.collectCandidates(around: fullBodyCenter, into: &touchCandidates)
@@ -591,7 +591,7 @@ final class PinCollisionLayoutSolver {
             let bodyCenterLift = geometry.bodyCenterOffsetPx * projected.pin.screenSizeScale
                 * (nodeScale - state.scale)
             var position = projected.screenPoint.position + state.offset
-                + SIMD2<Float>(0.0, bodyCenterLift)
+                + bodyCenterLift
             var alphaFactor: Float = 1.0
             if state.clusterBlend > 0.0 {
                 if let clusterKey = state.lastClusterKey,
@@ -662,7 +662,7 @@ final class PinCollisionLayoutSolver {
         for item in pinItems {
             let bodyScale = item.displayScale * item.pin.screenSizeScale
             centers.append(item.screenPoint.position
-                + SIMD2<Float>(0.0, geometry.bodyCenterOffsetPx * bodyScale))
+                + geometry.bodyCenterOffsetPx * (bodyScale))
             // Fading members of the cluster crossfade fly through the others:
             // a zero radius excludes them from the correction.
             let isFadingThrough = item.screenPoint.visibilityAlpha
@@ -815,7 +815,7 @@ final class PinCollisionLayoutSolver {
             let item = pinItems[index]
             let bodyScale = item.displayScale * item.pin.screenSizeScale
             let correctedPosition = centers[index]
-                - SIMD2<Float>(0.0, geometry.bodyCenterOffsetPx * bodyScale)
+                - geometry.bodyCenterOffsetPx * (bodyScale)
             guard simd_length(correctedPosition - item.screenPoint.position) > 0.01 else { continue }
             var screenPoint = item.screenPoint
             screenPoint.position = correctedPosition
@@ -851,7 +851,7 @@ final class PinCollisionLayoutSolver {
         let screenSizeScale = member.pin.screenSizeScale
         // The target offset puts the petal's body center exactly into the slot.
         let targetOffset = slotCenter - member.screenPoint.position
-            - SIMD2<Float>(0.0, geometry.bodyCenterOffsetPx * screenSizeScale * compressedScale)
+            - geometry.bodyCenterOffsetPx * (screenSizeScale * compressedScale)
         // A stationarily hidden member has no state (it was reset); promotion
         // to a petal starts with blend 1, a fade-in appearance, just like the
         // earlier "live" hidden state.
@@ -1381,7 +1381,7 @@ final class PinCollisionLayoutSolver {
             let projected = input[pinIndex]
             let screenSizeScale = projected.pin.screenSizeScale
             let bodyCenter = projected.screenPoint.position
-                + SIMD2<Float>(0.0, geometry.bodyCenterOffsetPx * screenSizeScale)
+                + geometry.bodyCenterOffsetPx * (screenSizeScale)
             // The smallest possible body: if even a maximally compressed circle
             // touches petals of two or more flowers, the pin is wedged in a
             // pocket of the mosaic with nowhere to retreat, and the overlap
@@ -1497,7 +1497,7 @@ final class PinCollisionLayoutSolver {
             let shape = nodeShapeForPin(projected, index)
             let screenSizeScale = projected.pin.screenSizeScale
             let bodyCenter = projected.screenPoint.position
-                + SIMD2<Float>(0.0, geometry.bodyCenterOffsetPx * shape.scale * screenSizeScale)
+                + geometry.bodyCenterOffsetPx * (shape.scale * screenSizeScale)
             let radius = shape.bodyRadius * shape.scale * screenSizeScale + config.collisionPaddingPx
             let isRigid = projected.pin.isSelected || dominantIDs.contains(projected.pin.id)
             nodes.append(SolverNode(anchor: bodyCenter,
@@ -1543,7 +1543,7 @@ final class PinCollisionLayoutSolver {
 
         func bodyCenter(_ projected: ProjectedPin) -> SIMD2<Float> {
             projected.screenPoint.position
-                + SIMD2<Float>(0.0, geometry.bodyCenterOffsetPx * projected.pin.screenSizeScale)
+                + geometry.bodyCenterOffsetPx * (projected.pin.screenSizeScale)
         }
         func bodyRadius(_ projected: ProjectedPin) -> Float {
             geometry.bodyRadiusPx * projected.pin.screenSizeScale + config.collisionPaddingPx

@@ -31,19 +31,29 @@ struct PinOffset {
 }
 
 struct PinBeamStyleGPU {
-    var pinCenterOffsetPx: Float
+    /// From the pin's anchor to the center of its circle, at scale 1.
+    var pinCenterOffsetPx: SIMD2<Float>
     var pinBodyHalfMinPx: Float
-    var _padding: SIMD2<Float> = .zero
+    var _padding: Float = 0.0
 }
 
+/// Mirrors `PinStyleGPU` in PinCommon.h. The fractions are of the pin's quad,
+/// origin in the bottom left corner, y up.
 struct PinStyleGPU {
-    var bodySizePx: SIMD2<Float>
-    var totalSizePx: SIMD2<Float>
-    var cornerRadiusPx: Float
-    var pointerHeightPx: Float
-    var pointerHalfWidthPx: Float
+    var sizePx: SIMD2<Float>
+    var anchorUv: SIMD2<Float>
+    var bodyCenterUv: SIMD2<Float>
+    var bodyHalfUv: SIMD2<Float>
+    var circleRadiusUv: Float
     var outlineWidthPx: Float
     var contentInsetPx: Float
+    var distanceRangeTexels: Float
+    var fillColor: SIMD4<Float>
+    var frameless: UInt32
+    /// The distance is in the texture's alpha, as in the built-in bubble's,
+    /// and not in its red, as in a baked one.
+    var distanceInAlpha: UInt32
+    var _pad1: SIMD2<Float> = .zero
 }
 
 
@@ -54,65 +64,60 @@ struct PinCountBadgeStyleGPU {
     var originYPx: Float
 }
 
+/// The sizes of a map's pins on the screen, worked out once from the pin
+/// settings and the shape.
 struct PinStyle {
-    static let pointerHalfWidthRatio: Float = 0.16666667
-    static let cornerRadiusRatio: Float = 0.22222222
-    static let contentInsetRatio: Float = 0.06
-
     let gpu: PinStyleGPU
 
     init(sizePx: Float,
          outlineWidthPx: Float,
-         pointerHeightRatio: Float) {
-        let totalWidthPx = sizePx
-        let totalHeightPx = sizePx
-        let pointerHeightPx = max(sizePx * pointerHeightRatio, 0.0)
-        let bodyWidthPx = totalWidthPx
-        let bodyHeightPx = max(totalHeightPx - pointerHeightPx, 0.0)
-        let pointerHalfWidthPx = max(sizePx * Self.pointerHalfWidthRatio, outlineWidthPx * 1.5)
-        let cornerRadiusPx = min(bodyWidthPx, bodyHeightPx) * Self.cornerRadiusRatio
-        let contentInsetPx = max(sizePx * Self.contentInsetRatio, outlineWidthPx + 4.0)
-
-        self.gpu = PinStyleGPU(bodySizePx: SIMD2<Float>(bodyWidthPx, bodyHeightPx),
-                                        totalSizePx: SIMD2<Float>(totalWidthPx, totalHeightPx),
-                                        cornerRadiusPx: cornerRadiusPx,
-                                        pointerHeightPx: pointerHeightPx,
-                                        pointerHalfWidthPx: pointerHalfWidthPx,
-                                        outlineWidthPx: outlineWidthPx,
-                                        contentInsetPx: contentInsetPx)
+         contentInset: Float = 0.06,
+         fillColor: SIMD4<Float> = SIMD4<Float>(1.0, 1.0, 1.0, 1.0),
+         metrics: PinShapeMetrics = PinShapeMetrics(shape: .bubble),
+         distanceRangeTexels: Float = PinShapeDistanceField.distanceRangeTexels,
+         distanceInAlpha: Bool = false) {
+        self.gpu = PinStyleGPU(sizePx: SIMD2<Float>(repeating: sizePx),
+                               anchorUv: metrics.anchor,
+                               bodyCenterUv: metrics.bodyCenter,
+                               bodyHalfUv: metrics.bodyHalfSize,
+                               circleRadiusUv: metrics.circleRadius,
+                               outlineWidthPx: max(outlineWidthPx, 0.0),
+                               contentInsetPx: max(sizePx * contentInset, 0.0),
+                               distanceRangeTexels: distanceRangeTexels,
+                               fillColor: fillColor,
+                               frameless: metrics.isFrameless ? 1 : 0,
+                               distanceInAlpha: distanceInAlpha ? 1 : 0)
     }
 
-    var bodySizePx: SIMD2<Float> {
-        gpu.bodySizePx
-    }
-
+    /// The side of the pin's quad.
     var totalSizePx: SIMD2<Float> {
-        gpu.totalSizePx
+        gpu.sizePx
     }
 
-    var pointerHeightPx: Float {
-        gpu.pointerHeightPx
+    /// The lower left corner of the quad, from the pin's anchor.
+    var quadOriginPx: SIMD2<Float> {
+        -gpu.anchorUv * gpu.sizePx
     }
 
-    var pointerHalfWidthPx: Float {
-        gpu.pointerHalfWidthPx
+    /// The center of the picture area, and of the circle a pushed pin turns
+    /// into, from the pin's anchor.
+    var bodyCenterOffsetPx: SIMD2<Float> {
+        (gpu.bodyCenterUv - gpu.anchorUv) * gpu.sizePx
     }
 
-    var cornerRadiusPx: Float {
-        gpu.cornerRadiusPx
+    /// The upper right corner of the picture area, from the pin's anchor.
+    var bodyTopRightPx: SIMD2<Float> {
+        (gpu.bodyCenterUv + gpu.bodyHalfUv - gpu.anchorUv) * gpu.sizePx
     }
 
-    var outlineWidthPx: Float {
-        gpu.outlineWidthPx
+    /// Half the longer side of the picture area.
+    var bodyRadiusPx: Float {
+        max(gpu.bodyHalfUv.x, gpu.bodyHalfUv.y) * gpu.sizePx.x
     }
 
-    var contentInsetPx: Float {
-        gpu.contentInsetPx
-    }
-
-    func localPosition(for uv: SIMD2<Float>) -> SIMD2<Float> {
-        SIMD2<Float>((uv.x - 0.5) * totalSizePx.x,
-                     uv.y * totalSizePx.y)
+    /// The radius of the circle a pushed pin turns into.
+    var circleRadiusPx: Float {
+        gpu.circleRadiusUv * gpu.sizePx.x
     }
 }
 
@@ -131,8 +136,8 @@ struct PinCountBadgeStyle {
 
     init(sizePx: Float, pinStyle: PinStyle) {
         let diameterPx = max(sizePx * Self.sizeRatio, Self.minimumSizePx)
-        let centerXPx = pinStyle.bodySizePx.x * 0.5 - diameterPx * Self.horizontalInsetRatio
-        let centerYPx = pinStyle.pointerHeightPx + pinStyle.bodySizePx.y - diameterPx * Self.verticalInsetRatio
+        let centerXPx = pinStyle.bodyTopRightPx.x - diameterPx * Self.horizontalInsetRatio
+        let centerYPx = pinStyle.bodyTopRightPx.y - diameterPx * Self.verticalInsetRatio
 
         self.gpu = PinCountBadgeStyleGPU(sizePx: SIMD2<Float>(repeating: diameterPx),
                                             originXPx: centerXPx - diameterPx * 0.5,

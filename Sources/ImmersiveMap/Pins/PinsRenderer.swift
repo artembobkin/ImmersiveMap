@@ -22,7 +22,7 @@ final class PinsRenderer {
     private let countBadgePipeline: PinCountBadgePipeline
     private let pinAtlasResource: LazyPinRenderResource<PinTextureAtlas>
     private let countBadgeAtlasResource: LazyPinRenderResource<PinCountBadgeAtlas>
-    private let pinSDF: PinSDFResource
+    private let shapeTextureResource: LazyPinRenderResource<MTLTexture?>
     private let pinStyle: PinStyle
     private let countBadgeStyle: PinCountBadgeStyle
     private let beamStyle: PinBeamStyleGPU
@@ -58,16 +58,17 @@ final class PinsRenderer {
     private var fadeInSeconds: TimeInterval { ImmersiveMapSettings.default.labels.base.fadeInSeconds }
     private var fadeOutSeconds: TimeInterval { ImmersiveMapSettings.default.labels.base.fadeOutSeconds }
 
-    /// The device-only pin drawing resources: five pipeline states and the
-    /// pin SDF texture/metrics. One set serves every map view in the
-    /// process; everything mutable stays in the per-view renderer.
+    /// The device-only pin drawing resources: the pipeline states and the
+    /// built-in bubble's distance field. One set serves every map view in
+    /// the process. Everything mutable, and the distance field baked for a
+    /// map's own pin shape, stays in the per-view renderer.
     struct SharedResources {
         let pinPipeline: PinPipeline
         let beamPipeline: PinBeamPipeline
         let countBadgePipeline: PinCountBadgePipeline
         let pinSDF: PinSDFResource
 
-        /// `resourceBundle` holds the pin's distance field
+        /// `resourceBundle` holds the bubble's distance field
         /// (`ImmersiveMapResourceBundle`).
         static func make(metalDevice: MTLDevice,
                          pixelFormat: MTLPixelFormat,
@@ -121,22 +122,38 @@ final class PinsRenderer {
                                cellSize: config.size.rawValue,
                                pagesMax: config.atlasPagesMax)
         }
+        // The built-in bubble has its distance field in the resources. Any
+        // other shape's is baked when the first pin is drawn, so a map
+        // without pins never pays for it.
+        let shape = config.shape
         let pinSDF = sharedResources.pinSDF
-        self.pinSDF = pinSDF
+        let isBuiltInBubble = shape.outline == .bubble
+        self.shapeTextureResource = LazyPinRenderResource {
+            isBuiltInBubble
+                ? pinSDF.texture
+                : PinShapeDistanceField.makeTexture(device: metalDevice, shape: shape)
+        }
         let pinSizePx = Float(config.size.rawValue) * config.sizeScale
         let pinStyle = PinStyle(sizePx: pinSizePx,
-                                            outlineWidthPx: config.borderWidthPx,
-                                            pointerHeightRatio: pinSDF.shapeMetrics.pointerHeightRatio)
+                                outlineWidthPx: config.borderWidthPx,
+                                contentInset: config.contentInset,
+                                fillColor: config.fillColor,
+                                metrics: PinShapeMetrics(shape: shape,
+                                                         bubbleTailHeight: pinSDF.shapeMetrics.pointerHeightRatio),
+                                distanceRangeTexels: isBuiltInBubble
+                                    ? pinSDF.params.distanceRangeTexels
+                                    : PinShapeDistanceField.distanceRangeTexels,
+                                distanceInAlpha: isBuiltInBubble)
         self.pinStyle = pinStyle
         let countBadgeStyle = PinCountBadgeStyle(sizePx: pinSizePx,
                                                     pinStyle: pinStyle)
         self.countBadgeStyle = countBadgeStyle
-        self.beamStyle = PinBeamStyleGPU(pinCenterOffsetPx: pinStyle.pointerHeightPx + pinStyle.bodySizePx.y * 0.5,
-                                            pinBodyHalfMinPx: min(pinStyle.bodySizePx.x, pinStyle.bodySizePx.y) * 0.5)
+        self.beamStyle = PinBeamStyleGPU(pinCenterOffsetPx: pinStyle.bodyCenterOffsetPx,
+                                         pinBodyHalfMinPx: pinStyle.circleRadiusPx)
         self.collisionGeometry = PinCollisionGeometry(pinSizePx: pinSizePx,
-                                                         bodyRadiusPx: max(pinStyle.bodySizePx.x, pinStyle.bodySizePx.y) * 0.5,
-                                                         circleBodyRadiusPx: min(pinStyle.bodySizePx.x, pinStyle.bodySizePx.y) * 0.5,
-                                                         bodyCenterOffsetPx: pinStyle.pointerHeightPx + pinStyle.bodySizePx.y * 0.5)
+                                                         bodyRadiusPx: pinStyle.bodyRadiusPx,
+                                                         circleBodyRadiusPx: pinStyle.circleRadiusPx,
+                                                         bodyCenterOffsetPx: pinStyle.bodyCenterOffsetPx)
         self.countBadgeAtlasResource = LazyPinRenderResource {
             PinCountBadgeAtlas(
                 device: metalDevice,
@@ -380,7 +397,6 @@ final class PinsRenderer {
         guard pinCount > 0 else { return }
         var matrix = screenMatrix
         var style = pinStyle.gpu
-        var sdfParams = pinSDF.params
         let passes = Self.drawPassSequence(hasVisibleCountBadges: hasVisibleCountBadges)
 
         if hasVisibleBeams {
@@ -398,9 +414,8 @@ final class PinsRenderer {
                 renderEncoder.setVertexBuffer(instanceBufferStore.buffer(for: frameSlotIndex), offset: 0, index: 2)
                 renderEncoder.setVertexBytes(&style, length: MemoryLayout<PinStyleGPU>.stride, index: 3)
                 renderEncoder.setFragmentBytes(&style, length: MemoryLayout<PinStyleGPU>.stride, index: 0)
-                renderEncoder.setFragmentBytes(&sdfParams, length: MemoryLayout<PinSDFParams>.stride, index: 1)
                 renderEncoder.setFragmentTexture(pinAtlasResource.value.textureArray, index: 0)
-                renderEncoder.setFragmentTexture(pinSDF.texture, index: 1)
+                renderEncoder.setFragmentTexture(shapeTextureResource.value, index: 1)
                 renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: pinCount)
             case .countBadge:
                 countBadgePipeline.selectPipeline(renderEncoder: renderEncoder)

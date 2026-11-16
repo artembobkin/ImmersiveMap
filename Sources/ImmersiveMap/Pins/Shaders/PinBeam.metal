@@ -45,7 +45,7 @@ vertex BeamVertexOut pinBeamVertex(uint vid [[vertex_id]],
     }
 
     float2 anchor = point.position;
-    float2 bubbleCenter = anchor + offset.value + float2(0.0, style.pinCenterOffsetPx * offset.scale);
+    float2 bubbleCenter = anchor + offset.value + style.pinCenterOffsetPx * offset.scale;
     float2 direction = bubbleCenter - anchor;
     float len = length(direction);
     float radius = max(style.pinBodyHalfMinPx * offset.scale, 1.0);

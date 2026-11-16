@@ -35,19 +35,26 @@ struct PinOffset {
 };
 
 struct PinBeamStyleGPU {
-    float pinCenterOffsetPx;
+    float2 pinCenterOffsetPx;
     float pinBodyHalfMinPx;
-    float2 _padding;
+    float _padding;
 };
 
+// Mirrors PinStyleGPU in PinTypes.swift. The fractions are of the pin's quad,
+// origin in the bottom left corner, y up.
 struct PinStyleGPU {
-    float2 bodySizePx;
-    float2 totalSizePx;
-    float cornerRadiusPx;
-    float pointerHeightPx;
-    float pointerHalfWidthPx;
+    float2 sizePx;
+    float2 anchorUv;
+    float2 bodyCenterUv;
+    float2 bodyHalfUv;
+    float circleRadiusUv;
     float outlineWidthPx;
     float contentInsetPx;
+    float distanceRangeTexels;
+    float4 fillColor;
+    uint frameless;
+    uint distanceInAlpha;
+    float2 _pad1;
 };
 
 
@@ -56,10 +63,6 @@ struct PinCountBadgeStyleGPU {
     float2 sizePx;
     float originXPx;
     float originYPx;
-};
-
-struct PinSDFParams {
-    float distanceRangeTexels;
 };
 
 #endif
