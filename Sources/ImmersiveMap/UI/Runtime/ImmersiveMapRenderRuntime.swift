@@ -152,9 +152,16 @@ package final class ImmersiveMapRenderRuntime {
         guard didSchedule, let frameRenderedAction else {
             return didSchedule
         }
-        let frame = ImmersiveMapRenderedFrame(frameIndex: renderer?.currentDiagnostics?.frameIndex ?? 0,
-                                              cpuDuration: max(0, CACurrentMediaTime() - frameStartTime),
-                                              targetPresentationTimestamp: targetPresentationTimestamp)
+        let diagnostics = renderer?.currentDiagnostics
+        let frame = ImmersiveMapRenderedFrame(
+            frameIndex: diagnostics?.frameIndex ?? 0,
+            cpuDuration: max(0, CACurrentMediaTime() - frameStartTime),
+            targetPresentationTimestamp: targetPresentationTimestamp,
+            visibleTileCount: diagnostics?.counterValue(.visibleTiles) ?? 0,
+            pendingTileCount: diagnostics?.counterValue(.requestedTiles) ?? 0,
+            pendingTerrainTileCount: diagnostics?.counterValue(.pendingTerrainTiles) ?? 0,
+            pendingSceneModelMeshCount: diagnostics?.counterValue(.pendingSceneModelMeshes) ?? 0,
+            pendingLayerMeshCount: diagnostics?.counterValue(.pendingLayerMeshes) ?? 0)
         frameRenderedAction(frame)
         return didSchedule
     }
