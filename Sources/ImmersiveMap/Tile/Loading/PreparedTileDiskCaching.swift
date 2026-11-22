@@ -1045,7 +1045,11 @@ final class PreparedTileDiskCaching {
     // keeps its corners there sharp, as at a tile's edge
     // (`BuildingExtrusionMeshBuilder.isBoundaryEdge`). A v165 zoom 14 tile
     // has walls and rounded corners along its quarters' edges.
-    static let preparedFormatVersion: UInt32 = 166
+    // 167: a building's vertices are written once each
+    // (`ExtrudedVertexMerger`): the corners its faces share are one vertex,
+    // and the indices name it. A v166 tile holds a vertex per corner of
+    // every face, close to three times as many.
+    static let preparedFormatVersion: UInt32 = 167
 
     private let cacheDirectory: URL
     private let cacheIdentity: PreparedTileCacheIdentity

@@ -389,19 +389,16 @@ enum TileUnificationStage {
         var unifiedExtrudedIndices: [UInt32] = []
         var buildingRanges: [TileBuildingRange] = []
         var buildingAnchors: [SIMD2<Float>] = []
-        var currentExtrudedVertexOffset: UInt32 = 0
-        let totalExtrudedVertexCount = extrudedByStyle.values.reduce(0) { partial, meshes in
-            partial + meshes.reduce(0) { meshPartial, mesh in
-                meshPartial + mesh.vertices.count
-            }
-        }
+        var extrudedVertexMerger = ExtrudedVertexMerger()
         let totalExtrudedIndexCount = extrudedByStyle.values.reduce(0) { partial, meshes in
             partial + meshes.reduce(0) { meshPartial, mesh in
                 meshPartial + mesh.indices.count
             }
         }
 
-        unifiedExtrudedVertices.reserveCapacity(totalExtrudedVertexCount)
+        // No room is kept for the vertices ahead: the merge leaves about a
+        // third of what the meshes hold, and room for all of them would
+        // stay with the tile.
         unifiedExtrudedIndices.reserveCapacity(totalExtrudedIndexCount)
 
         let styleKeys = extrudedByStyle.keys
@@ -456,24 +453,20 @@ enum TileUnificationStage {
                             }
                             buildingAnchors.append((minimum + maximum) * 0.5)
                         }
-                        for vertex in extrudedMesh.vertices {
-                            unifiedExtrudedVertices.append(ExtrudedVertexIn(position: vertex.position,
-                                                                            normal: vertex.normal,
-                                                                            styleIndex: styleBufferIndex,
-                                                                            buildingOrdinal: ordinal))
-                        }
                         // A mesh is one building's volume and its indices go
                         // in as one run: the run is that building's place.
+                        // Its vertices go in once each (`ExtrudedVertexMerger`).
                         let indexStart = UInt32(unifiedExtrudedIndices.count)
-                        for index in extrudedMesh.indices {
-                            unifiedExtrudedIndices.append(index + currentExtrudedVertexOffset)
-                        }
+                        extrudedVertexMerger.append(extrudedMesh,
+                                                    styleIndex: styleBufferIndex,
+                                                    buildingOrdinal: ordinal,
+                                                    vertices: &unifiedExtrudedVertices,
+                                                    indices: &unifiedExtrudedIndices)
                         if extrudedMesh.buildingID != 0, extrudedMesh.indices.isEmpty == false {
                             buildingRanges.append(TileBuildingRange(featureID: extrudedMesh.buildingID,
                                                                     indexStart: indexStart,
                                                                     indexCount: UInt32(extrudedMesh.indices.count)))
                         }
-                        currentExtrudedVertexOffset += UInt32(extrudedMesh.vertices.count)
                     }
                 }
             }
