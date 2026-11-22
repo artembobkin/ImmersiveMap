@@ -298,6 +298,12 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var dragZoomFactor: Double
         public var dragZoomVelocityFactor: Double
         public var dragZoomVelocityLimit: Double
+        /// How fast the two-finger rotation turns the map, and which way: the
+        /// radians of bearing per radian the fingers turn. Applies to the
+        /// rotation gesture on touch screens and on the macOS trackpad.
+        /// Positive turns the map with the fingers, as the system maps do,
+        /// negative inverts it, and zero leaves the gesture without effect.
+        /// The default is 0.6.
         public var rotationGestureSensitivity: Float
         /// How fast a tilt drag tilts: the multiple of the full pitch range
         /// that a drag across the whole view height sweeps. Applies to the
@@ -2364,7 +2370,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                                dragZoomFactor: 2.0,
                                dragZoomVelocityFactor: 0.35,
                                dragZoomVelocityLimit: 5.0,
-                               rotationGestureSensitivity: -0.6,
+                               rotationGestureSensitivity: 0.6,
                                tiltGestureSensitivity: 2.0,
                                globePanInertiaEnabled: true,
                                globePanInertiaHalfLife: 0.28,
@@ -2513,6 +2519,13 @@ public extension ImmersiveMapSettings {
     func tiltGestureSensitivity(_ sensitivity: Float) -> ImmersiveMapSettings {
         var settings = self
         settings.camera.tiltGestureSensitivity = sensitivity
+        return settings
+    }
+
+    /// See `ImmersiveMapView.rotationGestureSensitivity(_:)`.
+    func rotationGestureSensitivity(_ sensitivity: Float) -> ImmersiveMapSettings {
+        var settings = self
+        settings.camera.rotationGestureSensitivity = sensitivity
         return settings
     }
 

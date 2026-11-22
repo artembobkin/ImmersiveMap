@@ -485,6 +485,23 @@ public extension ImmersiveMapView {
         return view
     }
 
+    /// Sets how fast the two-finger rotation turns the map, and which way:
+    /// the radians of bearing per radian the fingers turn. Applies to the
+    /// rotation gesture on touch screens and on the macOS trackpad. Positive
+    /// turns the map with the fingers, as the system maps do, negative
+    /// inverts it so the map turns against them, and zero leaves the gesture
+    /// without effect. The default is 0.6.
+    ///
+    ///     ImmersiveMapView()
+    ///         .rotationGestureSensitivity(1)      // map follows the fingers exactly
+    ///         .rotationGestureSensitivity(-0.6)   // inverted, default speed
+    ///         .rotationGestureSensitivity(0)      // rotation gesture does nothing
+    func rotationGestureSensitivity(_ sensitivity: Float) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.rotationGestureSensitivity(sensitivity)
+        return view
+    }
+
     /// Controls reuse of dismantled map views (on by default). When the screen
     /// with this map goes away, the platform view (renderer, GPU tile cache,
     /// text atlases) is parked briefly and the next `ImmersiveMapView` adopts

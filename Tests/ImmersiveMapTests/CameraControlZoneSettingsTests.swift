@@ -72,6 +72,22 @@ final class CameraControlZoneSettingsTests: XCTestCase {
         XCTAssertEqual(camera.tiltGestureSensitivity, -3)
     }
 
+    func testRotationGestureSensitivityModifierWritesTheSetting() {
+        let camera = ImmersiveMapView()
+            .rotationGestureSensitivity(-0.6)
+            .settings
+            .camera
+
+        XCTAssertEqual(camera.rotationGestureSensitivity, -0.6)
+    }
+
+    func testDefaultRotationGestureTurnsTheMapWithTheFingers() {
+        // The gesture adds its rotation (UIKit: clockwise positive) times the
+        // sensitivity to the bearing, and a growing bearing turns the map
+        // clockwise on the screen, so a positive default follows the fingers.
+        XCTAssertGreaterThan(ImmersiveMapSettings.default.camera.rotationGestureSensitivity, 0)
+    }
+
     func testCameraModifiersDoNotOverwriteEachOther() {
         // All of these rewrite CameraSettings, so a later one must not silently
         // undo an earlier one.
@@ -81,6 +97,7 @@ final class CameraControlZoneSettingsTests: XCTestCase {
             .pitchRange(minimum: 0.1, maximum: 1.2)
             .bearingLimit(.pi / 3)
             .tiltGestureSensitivity(2.5)
+            .rotationGestureSensitivity(0.8)
             .settings
             .camera
 
@@ -90,6 +107,7 @@ final class CameraControlZoneSettingsTests: XCTestCase {
         XCTAssertEqual(camera.maximumPitch, 1.2)
         XCTAssertEqual(camera.maximumAbsoluteBearing, .pi / 3)
         XCTAssertEqual(camera.tiltGestureSensitivity, 2.5)
+        XCTAssertEqual(camera.rotationGestureSensitivity, 0.8)
         XCTAssertTrue(camera.controlZones.isZoomZoneEnabled)
         XCTAssertFalse(camera.controlZones.isPitchZoneEnabled)
     }
