@@ -89,6 +89,45 @@ public struct ImmersiveMapVideoExportConfiguration: Sendable, Equatable {
         self.annotationScale = annotationScale
     }
 
+    /// A video of `format`'s size, `.instagramReels` for 1080 × 1920. The
+    /// encoder takes even sides only, so an odd side is one pixel smaller:
+    /// `.linkedInLink`, 1200 × 627, is exported at 1200 × 626.
+    public init(format: ImmersiveMapFrameFormat,
+                framesPerSecond: Int = 60,
+                codec: Codec = .hevc,
+                averageBitRate: Int? = nil,
+                tileReadinessTimeout: TimeInterval = 10,
+                sceneDate: Date? = nil,
+                includesPins: Bool = true,
+                includesAnnotations: Bool = true,
+                annotationScale: Double = 2.0) {
+        self.init(width: Self.evenSide(format.pixelWidth),
+                  height: Self.evenSide(format.pixelHeight),
+                  framesPerSecond: framesPerSecond,
+                  codec: codec,
+                  averageBitRate: averageBitRate,
+                  tileReadinessTimeout: tileReadinessTimeout,
+                  sceneDate: sceneDate,
+                  includesPins: includesPins,
+                  includesAnnotations: includesAnnotations,
+                  annotationScale: annotationScale)
+    }
+
+    /// The output size as a frame format. Setting it sets `width` and
+    /// `height`, an odd side one pixel smaller, as `init(format:)` does.
+    public var format: ImmersiveMapFrameFormat {
+        get { ImmersiveMapFrameFormat(pixelWidth: width, pixelHeight: height) }
+        set {
+            width = Self.evenSide(newValue.pixelWidth)
+            height = Self.evenSide(newValue.pixelHeight)
+        }
+    }
+
+    /// A side the encoder takes: even, one pixel smaller when odd.
+    private static func evenSide(_ side: Int) -> Int {
+        side.isMultiple(of: 2) ? side : side - 1
+    }
+
     var resolvedAverageBitRate: Int {
         if let averageBitRate {
             return averageBitRate

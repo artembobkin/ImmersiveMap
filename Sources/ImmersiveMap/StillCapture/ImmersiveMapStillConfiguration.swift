@@ -60,6 +60,28 @@ public struct ImmersiveMapStillConfiguration: Equatable, Sendable {
         self.sceneDate = sceneDate
     }
 
+    /// A still of `format`'s size, `.threadsPost` for 1080 × 1350.
+    public init(format: ImmersiveMapFrameFormat,
+                pixelsPerPoint: CGFloat = 2,
+                settleTimeout: TimeInterval = 10,
+                sceneDate: Date? = nil) {
+        self.init(width: format.pixelWidth,
+                  height: format.pixelHeight,
+                  pixelsPerPoint: pixelsPerPoint,
+                  settleTimeout: settleTimeout,
+                  sceneDate: sceneDate)
+    }
+
+    /// The output size as a frame format. Setting it sets `width` and
+    /// `height`.
+    public var format: ImmersiveMapFrameFormat {
+        get { ImmersiveMapFrameFormat(pixelWidth: width, pixelHeight: height) }
+        set {
+            width = newValue.pixelWidth
+            height = newValue.pixelHeight
+        }
+    }
+
     /// - Throws: ``ImmersiveMapStillCaptureError/invalidConfiguration(_:)``
     ///   naming the first field that is out of range.
     public func validate() throws {
