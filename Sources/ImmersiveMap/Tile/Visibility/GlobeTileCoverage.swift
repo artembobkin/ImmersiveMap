@@ -75,7 +75,7 @@ enum GlobeTileCoverage {
     /// ground past the last rule is asked for.
     static let floorZoom = TileWorkingSetStore.pinnedWorldCoverMaxZoomLevel
 
-    private static let transitionLowZoomFallbackLimit = 3
+    static let transitionLowZoomFallbackLimit = 3
 
     /// One rule as the walk reads it: the rings it owns and the zoom it
     /// draws them at.
@@ -239,10 +239,13 @@ enum GlobeTileCoverage {
                 Tile(x: x, y: y + 1, z: z), Tile(x: x + 1, y: y + 1, z: z)]
     }
 
-    private static func evaluateVisibility(for tile: Tile,
-                                    targetZoom: Int,
-                                    frustum: Frustum,
-                                    inputs: GlobeVisibilityInputs) -> GlobeNodeVisibilityEvaluation {
+    /// Whether a tile of the walk toward `targetZoom` shows. The tile
+    /// grid's own walk asks it too (`TileGridCoverage`), so the two never
+    /// disagree about what the sphere shows.
+    static func evaluateVisibility(for tile: Tile,
+                                   targetZoom: Int,
+                                   frustum: Frustum,
+                                   inputs: GlobeVisibilityInputs) -> GlobeNodeVisibilityEvaluation {
 
         let shouldRejectAtZoom = tile.z >= minimumRejectZoom(targetZoom: targetZoom,
                                                              transition: inputs.transition)

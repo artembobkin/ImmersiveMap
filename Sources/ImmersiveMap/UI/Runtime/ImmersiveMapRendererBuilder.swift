@@ -12,6 +12,7 @@ final class ImmersiveMapRendererBuilder {
     private let annotationRuntime: ImmersiveMapAnnotationRuntime
     private let sceneModelRuntime: ImmersiveMapSceneModelRuntime
     private let layerRuntime: ImmersiveMapLayerRuntime
+    private let tileGridRuntime: ImmersiveMapTileGridRuntime
     private let renderRuntime: ImmersiveMapRenderRuntime
     private let selectionHandler: ImmersiveMapSelectionHandler
     private let debugOverlayControls: DebugOverlayControlState
@@ -24,6 +25,7 @@ final class ImmersiveMapRendererBuilder {
          annotationRuntime: ImmersiveMapAnnotationRuntime,
          sceneModelRuntime: ImmersiveMapSceneModelRuntime,
          layerRuntime: ImmersiveMapLayerRuntime,
+         tileGridRuntime: ImmersiveMapTileGridRuntime,
          renderRuntime: ImmersiveMapRenderRuntime,
          selectionHandler: ImmersiveMapSelectionHandler,
          debugOverlayControls: DebugOverlayControlState,
@@ -35,6 +37,7 @@ final class ImmersiveMapRendererBuilder {
         self.annotationRuntime = annotationRuntime
         self.sceneModelRuntime = sceneModelRuntime
         self.layerRuntime = layerRuntime
+        self.tileGridRuntime = tileGridRuntime
         self.renderRuntime = renderRuntime
         self.selectionHandler = selectionHandler
         self.debugOverlayControls = debugOverlayControls
@@ -59,6 +62,7 @@ final class ImmersiveMapRendererBuilder {
                                      annotationSource: annotationRuntime,
                                      sceneModelSource: sceneModelRuntime,
                                      layerSource: layerRuntime,
+                                     tileGridSource: tileGridRuntime,
                                      styleRuntime: styleRuntime,
                                      settings: settings,
                                      debugOverlayControls: debugOverlayControls,

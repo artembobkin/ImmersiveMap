@@ -14,6 +14,7 @@ final class ImmersiveMapRuntimeGraph {
     let annotationRuntime: ImmersiveMapAnnotationRuntime
     let sceneModelRuntime: ImmersiveMapSceneModelRuntime
     let layerRuntime: ImmersiveMapLayerRuntime
+    let tileGridRuntime: ImmersiveMapTileGridRuntime
     let controlsRuntime: ImmersiveMapControlsRuntime
     let cameraRuntime: ImmersiveMapCameraRuntime
     let interactionRuntime: ImmersiveMapInteractionRuntime
@@ -50,6 +51,7 @@ final class ImmersiveMapRuntimeGraph {
         let pinRuntime = ImmersiveMapPinRuntime()
         let sceneModelRuntime = ImmersiveMapSceneModelRuntime()
         let layerRuntime = ImmersiveMapLayerRuntime()
+        let tileGridRuntime = ImmersiveMapTileGridRuntime()
         let annotationRuntime = ImmersiveMapAnnotationRuntime(viewportRuntime: viewportRuntime,
                                                       renderRuntime: renderRuntime)
         annotationRuntime.attach(hostView: mapView)
@@ -76,13 +78,15 @@ final class ImmersiveMapRuntimeGraph {
         let pinSelection = PinSelection(source: pinRuntime)
         let sceneModelSelection = SceneModelSelection(source: sceneModelRuntime)
         let layerSelection = LayerSelection(source: layerRuntime)
+        let tileGridSelection = TileGridSelection(source: tileGridRuntime)
         // The order is the order of a tap: the pins are drawn over the
         // world, so a pin that covers a model takes the tap, and the
-        // layers lie on the ground under both.
+        // layers lie on the ground under both. The tile grid covers the
+        // whole ground, so it is asked last, for a tap nothing else took.
         let selectionHandler = ImmersiveMapSelectionHandler(
             host: ImmersiveMapSelectionHost(viewportRuntime: viewportRuntime,
                                             renderRuntime: renderRuntime),
-            features: [pinSelection, sceneModelSelection, layerSelection])
+            features: [pinSelection, sceneModelSelection, layerSelection, tileGridSelection])
         let debugOverlayControls = DebugOverlayControlState()
         let debugOverlayHUDSnapshotStore = DebugOverlayHUDSnapshotStore()
         let tileTraceRecorder = TileTraceRecorder()
@@ -95,6 +99,7 @@ final class ImmersiveMapRuntimeGraph {
                                                           annotationRuntime: annotationRuntime,
                                                           sceneModelRuntime: sceneModelRuntime,
                                                           layerRuntime: layerRuntime,
+                                                          tileGridRuntime: tileGridRuntime,
                                                           renderRuntime: renderRuntime,
                                                           selectionHandler: selectionHandler,
                                                           debugOverlayControls: debugOverlayControls,
@@ -113,6 +118,7 @@ final class ImmersiveMapRuntimeGraph {
         self.annotationRuntime = annotationRuntime
         self.sceneModelRuntime = sceneModelRuntime
         self.layerRuntime = layerRuntime
+        self.tileGridRuntime = tileGridRuntime
         self.controlsRuntime = controlsRuntime
         self.cameraRuntime = cameraRuntime
         self.interactionRuntime = interactionRuntime

@@ -41,10 +41,46 @@ protocol SelectableMapFeature: AnyObject {
     /// Delivers the feature's own tap event for a hit. True when an action
     /// of the app took it.
     func deliverTap(_ hit: SelectionHit, at point: CGPoint) -> Bool
+
+    /// The gesture the feature's objects are picked by now, a single tap
+    /// for every feature but one that states another (the tile grid, by
+    /// its settings). The handler asks a feature only about its own
+    /// gesture.
+    var tapKind: MapTapKind { get }
+
+    /// Whether the feature has anything a gesture of its kind could land
+    /// on now. While a feature claims the double tap this way, the double
+    /// tap is its own and does not zoom the map. Asked only of a feature
+    /// whose kind is not the single tap.
+    var claimsItsTapKind: Bool { get }
+
+    /// Whether a tap the feature took ends the map's selection, as a tap
+    /// on the bare map does. For a feature that covers the ground and
+    /// whose objects are never the selection themselves (the tile grid):
+    /// without it nothing under the grid would be a tap away from a
+    /// selected object. False for every other.
+    var clearsSelectionOnTap: Bool { get }
 }
 
 extension SelectableMapFeature {
     func setSelected(_ isSelected: Bool, _ selection: ImmersiveMapSelection) {}
+
+    var clearsSelectionOnTap: Bool { false }
+
+    var tapKind: MapTapKind { .single }
+
+    var claimsItsTapKind: Bool { false }
+}
+
+/// The gestures that pick an object on the map, as the gesture recognizers
+/// of either platform tell them apart.
+enum MapTapKind: Equatable {
+    /// A tap, a click of the main button.
+    case single
+    /// A double tap, a double click.
+    case double
+    /// A click of the secondary button, a long press on a touch screen.
+    case secondary
 }
 
 /// The object a tap landed on.

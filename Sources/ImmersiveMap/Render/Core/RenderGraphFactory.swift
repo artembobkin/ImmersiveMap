@@ -108,6 +108,11 @@ enum RenderGraphFactory {
                                                   store: context.layerMeshStore,
                                                   pipeline: context.layerPipeline,
                                                   depthDisabledState: context.depthDisabledState)
+        let tileGridSubsystem = TileGridRenderSubsystem(source: context.tileGridSource,
+                                                        pipeline: context.tileGridPipeline,
+                                                        textRenderer: context.textRenderer,
+                                                        metalDevice: context.metalContext.device,
+                                                        depthDisabledState: context.depthDisabledState)
         let reliefShadowCasterSubsystem = GroundReliefShadowCasterSubsystem(device: context.metalContext.device,
                                                                             pipeline: context.rasterTilePipeline,
                                                                             depthState: context.extrudedDepthState,
@@ -177,6 +182,8 @@ enum RenderGraphFactory {
             // The layers of the app's data, in a layer of their own
             // (`RenderLayer.appLayers`).
             layerSubsystem,
+            // The tile grid, in the overlay pass (`RenderLayer.tileGrid`).
+            tileGridSubsystem,
             surfaceLabelSubsystem,
             globeCapSubsystem,
             horizonSubsystem,
@@ -190,6 +197,7 @@ enum RenderGraphFactory {
             sceneModelSubsystem,
             modelTileSubsystem,
             layerSubsystem,
+            tileGridSubsystem,
             starfieldSubsystem,
             debugSubsystem
         ]

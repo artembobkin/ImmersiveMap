@@ -19,6 +19,8 @@ struct RenderPassAvailabilityBuilder {
     var sceneModelsEnabled: Bool = false
     /// Content-driven: on once a frame has layers of the app's data to draw.
     var appLayersEnabled: Bool = false
+    /// Content-driven: on once a frame has tiles of the tile grid to draw.
+    var tileGridEnabled: Bool = false
 
     func build() -> RenderPassAvailability {
         RenderPassAvailability(renderSurfaceMode: renderSurfaceMode,
@@ -27,6 +29,7 @@ struct RenderPassAvailabilityBuilder {
                                debugOverlayEnabled: debugOverlayEnabled,
                                starfieldEnabled: starfieldEnabled,
                                sceneModelsEnabled: sceneModelsEnabled,
-                               appLayersEnabled: appLayersEnabled)
+                               appLayersEnabled: appLayersEnabled,
+                               tileGridEnabled: tileGridEnabled)
     }
 }

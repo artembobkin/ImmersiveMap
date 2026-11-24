@@ -145,6 +145,8 @@ final class SharedRenderResources {
     let treePipeline: TreePipeline
     /// The layers of the app's data, see `LayerRenderSubsystem`.
     let layerPipeline: LayerPipeline
+    /// The tile grid, see `TileGridRenderSubsystem`.
+    let tileGridPipeline: TileGridPipeline
     /// The flat map's placement prepass, see `PlacementStencilRenderSubsystem`.
     let placementStencilPipeline: PlacementStencilPipeline
 
@@ -375,6 +377,7 @@ final class SharedRenderResources {
         self.modelTilePipeline = compiled.modelTilePipeline
         self.treePipeline = compiled.treePipeline
         self.layerPipeline = compiled.layerPipeline
+        self.tileGridPipeline = compiled.tileGridPipeline
         self.placementStencilPipeline = compiled.placementStencilPipeline
         self.globeCap = compiled.globeCap
         self.pins = compiled.pins
@@ -404,6 +407,7 @@ final class SharedRenderResources {
         let modelTilePipeline: ModelTilePipeline
         let treePipeline: TreePipeline
         let layerPipeline: LayerPipeline
+        let tileGridPipeline: TileGridPipeline
         let placementStencilPipeline: PlacementStencilPipeline
         let globeCap: GlobeCapRenderer.SharedResources
         let pins: PinsRenderer.SharedResources
@@ -439,6 +443,7 @@ final class SharedRenderResources {
         var modelTilePipeline: ModelTilePipeline?
         var treePipeline: TreePipeline?
         var layerPipeline: LayerPipeline?
+        var tileGridPipeline: TileGridPipeline?
         var placementStencilPipeline: PlacementStencilPipeline?
         var globeCap: GlobeCapRenderer.SharedResources?
         var pins: PinsRenderer.SharedResources?
@@ -518,7 +523,12 @@ final class SharedRenderResources {
             { layerPipeline = LayerPipeline(metalDevice: device,
                                             pixelFormat: pixelFormat,
                                             library: library,
-                                            sampleCount: sampleCount) }
+                                            sampleCount: sampleCount) },
+            // The overlay pass has one sample.
+            { tileGridPipeline = TileGridPipeline(metalDevice: device,
+                                                  pixelFormat: pixelFormat,
+                                                  library: library,
+                                                  sampleCount: 1) }
         ]
         DispatchQueue.concurrentPerform(iterations: jobs.count) { jobs[$0]() }
 
@@ -537,6 +547,7 @@ final class SharedRenderResources {
             modelTilePipeline: modelTilePipeline!,
             treePipeline: treePipeline!,
             layerPipeline: layerPipeline!,
+            tileGridPipeline: tileGridPipeline!,
             placementStencilPipeline: placementStencilPipeline!,
             globeCap: globeCap!,
             pins: pins!,

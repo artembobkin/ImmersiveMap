@@ -31,18 +31,19 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
     private weak var mapView: ImmersiveMapNSView?
     let panGesture: NSPanGestureRecognizer
     private let tiltPanGesture: NSPanGestureRecognizer
-    private let clickGesture: NSClickGestureRecognizer
-    private let doubleClickGesture: NSClickGestureRecognizer
+    /// The presses of either button that are not drags: the clicks, the
+    /// double clicks and the secondary clicks all come from it.
+    private let clickObserver: MapClickObserver
+    private var clickSequence = MapClickSequence()
     private let rotationGesture: NSRotationGestureRecognizer
     private let magnificationGesture: NSMagnificationGestureRecognizer
     private var panMode: PanMode = .pan
 
     init(mapView: ImmersiveMapNSView) {
         self.mapView = mapView
-        self.panGesture = NSPanGestureRecognizer()
-        self.tiltPanGesture = NSPanGestureRecognizer()
-        self.clickGesture = NSClickGestureRecognizer()
-        self.doubleClickGesture = NSClickGestureRecognizer()
+        self.panGesture = MapPanGestureRecognizer()
+        self.tiltPanGesture = MapPanGestureRecognizer()
+        self.clickObserver = MapClickObserver()
         self.rotationGesture = NSRotationGestureRecognizer()
         self.magnificationGesture = NSMagnificationGestureRecognizer()
         super.init()
@@ -64,11 +65,15 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
         return false
     }
 
-    /// A single click (selection) waits for the double click (anchored zoom) to fail:
-    /// the AppKit analog of UIKit's `require(toFail:)`.
-    func gestureRecognizer(_ gestureRecognizer: NSGestureRecognizer,
-                           shouldRequireFailureOf otherGestureRecognizer: NSGestureRecognizer) -> Bool {
-        gestureRecognizer === clickGesture && otherGestureRecognizer === doubleClickGesture
+    /// Whether the double click does anything: it zooms
+    /// (`CameraSettings.isDoubleTapZoomEnabled`), or a feature of the map
+    /// takes it as its own (the tile grid selecting by it). When it does
+    /// nothing the single click waits for nothing: it acts on the
+    /// mouse's release.
+    private var isDoubleClickWanted: Bool {
+        guard let mapView else { return true }
+        return mapView.cameraRuntime.currentSettings.camera.isDoubleTapZoomEnabled
+            || mapView.tapHandler.isClaimed(.double)
     }
 
     /// Map gestures are recognized only over the "bare" map surface. If the event
@@ -98,18 +103,19 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
         tiltPanGesture.delegate = self
         mapView.addGestureRecognizer(tiltPanGesture)
 
-        doubleClickGesture.target = self
-        doubleClickGesture.action = #selector(handleDoubleClick(_:))
-        doubleClickGesture.buttonMask = 0x1
-        doubleClickGesture.numberOfClicksRequired = 2
-        doubleClickGesture.delegate = self
-        mapView.addGestureRecognizer(doubleClickGesture)
-
-        clickGesture.target = self
-        clickGesture.action = #selector(handleClick(_:))
-        clickGesture.buttonMask = 0x1
-        clickGesture.delegate = self
-        mapView.addGestureRecognizer(clickGesture)
+        // A movement within the tolerance is a press, past it a drag:
+        // the pans and the observer read the one setting.
+        let tolerance: () -> CGFloat = { [weak mapView] in
+            CGFloat(mapView?.cameraRuntime.currentSettings.camera.tapMovementTolerancePoints ?? 4)
+        }
+        (panGesture as? MapPanGestureRecognizer)?.tolerance = tolerance
+        (tiltPanGesture as? MapPanGestureRecognizer)?.tolerance = tolerance
+        clickObserver.tolerance = tolerance
+        clickObserver.onPress = { [weak self] button, locationInWindow, time in
+            self?.handlePress(button, locationInWindow: locationInWindow, time: time)
+        }
+        clickObserver.delegate = self
+        mapView.addGestureRecognizer(clickObserver)
 
         rotationGesture.target = self
         rotationGesture.action = #selector(handleRotation(_:))
@@ -124,21 +130,58 @@ final class MapGestureController: NSObject, NSGestureRecognizerDelegate {
 
     // MARK: - Click
 
-    @objc private func handleClick(_ gesture: NSClickGestureRecognizer) {
+    /// A press of a button on the map (`MapClickObserver`). The secondary
+    /// button picks for a feature that picks by it (the tile grid, by its
+    /// settings). The main button is a click, or half of a double click
+    /// (`MapClickSequence`): while a double click means something, a
+    /// click waits the system's interval to learn it is not one.
+    private func handlePress(_ button: MapClickObserver.Button, locationInWindow: CGPoint, time: TimeInterval) {
         guard let mapView else { return }
+        let point = mapView.convert(locationInWindow, from: nil)
+        guard button == .primary else {
+            if mapView.tapHandler.isClaimed(.secondary) {
+                mapView.tapHandler.handleClaimedTap(.secondary, at: point)
+            }
+            return
+        }
 
-        mapView.tapHandler.handleMapTap(at: gesture.location(in: mapView))
+        let interval = NSEvent.doubleClickInterval
+        // The second press of a double click lands near the first, not on
+        // it: three times what a single press may move.
+        let reach = clickObserver.tolerance() * 3
+        switch clickSequence.press(at: point, time: time, interval: interval, reach: reach,
+                                   waitsForDouble: isDoubleClickWanted) {
+        case .click:
+            handleClick(at: point)
+        case .doubleClick:
+            handleDoubleClick(at: point)
+        case let .pending(flushed):
+            if let flushed { handleClick(at: flushed) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + interval) { [weak self] in
+                guard let self, let point = self.clickSequence.expire(pressedAt: time) else { return }
+                self.handleClick(at: point)
+            }
+        }
+    }
+
+    private func handleClick(at point: CGPoint) {
+        mapView?.tapHandler.handleMapTap(at: point)
     }
 
     /// A double click zooms the map in by one zoom level toward the click point:
     /// the world point under the cursor stays in place (see `zoomAnchorFactor`).
-    @objc private func handleDoubleClick(_ gesture: NSClickGestureRecognizer) {
+    private func handleDoubleClick(at anchorPoint: CGPoint) {
         guard let mapView,
               mapView.cameraRuntime.currentCameraState() != nil else {
             return
         }
+        // A feature that picks by the double click has it, and the map
+        // does not zoom.
+        if mapView.tapHandler.isClaimed(.double) {
+            mapView.tapHandler.handleClaimedTap(.double, at: anchorPoint)
+            return
+        }
 
-        let anchorPoint = gesture.location(in: mapView)
         guard let targetPosition = mapView.cameraRuntime.anchoredZoomTargetPosition(zoomDelta: 1.0,
                                                                                     anchorPoint: anchorPoint) else {
             return

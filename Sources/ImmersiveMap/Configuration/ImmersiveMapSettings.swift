@@ -305,6 +305,27 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         /// negative inverts it, and zero leaves the gesture without effect.
         /// The default is 0.6.
         public var rotationGestureSensitivity: Float
+        /// Whether a double tap (a double click on macOS) zooms the map in
+        /// by one level toward the point. On by default. While it is on, a
+        /// single tap is not known to be single until the system's double
+        /// tap interval has passed, so everything a tap does (a pin, a
+        /// shape of a layer, a tile of the tile grid) answers that much
+        /// later, and two quick taps on one place are the zoom and not two
+        /// taps. Turn it off where a tap must act at once and a second tap
+        /// on the same place must count, as when the user picks tiles on
+        /// the grid. The map still zooms by the pinch, the scroll and the
+        /// zoom control.
+        public var isDoubleTapZoomEnabled: Bool
+        /// How far the cursor may move between the press and the release
+        /// of a mouse button and still make a click, in points, on macOS.
+        /// A drag of the map begins only past it. A hand that clicks moves
+        /// the mouse a point or two, and without a tolerance such a click
+        /// is taken for a drag: the map shifts and nothing is picked. The
+        /// second click of a double click may land three times as far
+        /// from the first. 4 by default. Raise it for a mouse that slips
+        /// under a click, lower it for a drag that answers sooner. Touch
+        /// screens use the system's own tolerance.
+        public var tapMovementTolerancePoints: Float
         /// How fast a tilt drag tilts: the multiple of the full pitch range
         /// that a drag across the whole view height sweeps. Applies to the
         /// two-finger vertical drag on touch platforms and to the tilt drag
@@ -363,6 +384,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                     dragZoomVelocityFactor: Double,
                     dragZoomVelocityLimit: Double,
                     rotationGestureSensitivity: Float,
+                    isDoubleTapZoomEnabled: Bool = true,
+                    tapMovementTolerancePoints: Float = 4,
                     tiltGestureSensitivity: Float = 2.0,
                     globePanInertiaEnabled: Bool = true,
                     globePanInertiaHalfLife: Double = 0.28,
@@ -401,6 +424,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             self.dragZoomVelocityFactor = dragZoomVelocityFactor
             self.dragZoomVelocityLimit = dragZoomVelocityLimit
             self.rotationGestureSensitivity = rotationGestureSensitivity
+            self.isDoubleTapZoomEnabled = isDoubleTapZoomEnabled
+            self.tapMovementTolerancePoints = tapMovementTolerancePoints
             self.tiltGestureSensitivity = tiltGestureSensitivity
             self.globePanInertiaEnabled = globePanInertiaEnabled
             self.globePanInertiaHalfLife = globePanInertiaHalfLife
@@ -2283,6 +2308,162 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         }
     }
 
+    /// The tile grid: the borders of the XYZ tiles drawn over the map, the
+    /// buildings and the names included, with each tile's numbers written
+    /// inside it, for an app whose user
+    /// picks tiles on the map. The grid shows only while an
+    /// `ImmersiveMapTileGridController` is attached
+    /// (`ImmersiveMapView.tileGrid(_:)`), and these settings say which
+    /// tiles it shows, how it looks and what a tap may select.
+    public struct TileGridSettings: Equatable, Sendable {
+        /// What is written inside a tile.
+        public enum LabelFormat: String, CaseIterable, Equatable, Sendable {
+            /// `zoom/x/y`, the order of a tile URL.
+            case zxy
+            /// `x/y/zoom`.
+            case xyz
+            /// No text, the borders alone.
+            case hidden
+        }
+
+        /// The gesture that selects and deselects a tile.
+        public enum SelectionGesture: String, CaseIterable, Equatable, Sendable {
+            /// A tap, a click of the main button on macOS. The tile
+            /// answers at once only with the double tap zoom off
+            /// (`CameraSettings.isDoubleTapZoomEnabled`): with it on, a
+            /// tap waits to learn that it is not a double tap.
+            case tap
+            /// A double tap, a double click on macOS. While the grid takes
+            /// it, the double tap does not zoom the map, whatever
+            /// `CameraSettings.isDoubleTapZoomEnabled` says, and a single
+            /// tap stays what it is for the pins and the rest of the map.
+            case doubleTap
+            /// A click of the secondary (right) button on macOS, a long
+            /// press on a touch screen. The other gestures keep their
+            /// meaning: a tap for the pins, a double tap for the zoom, a
+            /// drag of the secondary button for the tilt.
+            case secondaryTap
+        }
+
+        /// How many tiles the gesture may hold selected.
+        public enum SelectionMode: String, CaseIterable, Equatable, Sendable {
+            /// Any number: the gesture adds a tile to the selection, or
+            /// takes a selected one out of it.
+            case multiple
+            /// One: the gesture on another tile moves the selection to it,
+            /// and on the selected tile takes the selection away.
+            /// `selectionLimit` has nothing to limit.
+            case single
+        }
+
+        /// The zooms whose tiles the grid shows. The grid shows the tiles
+        /// of the camera's zoom, clamped into this range: `12...15` follows
+        /// the camera between those zooms and stays at 12 above and at 15
+        /// below, and `15...15` shows the zoom 15 tiles alone, whatever the
+        /// camera's zoom. Every zoom by default.
+        public var zoomRange: ClosedRange<Int>
+        /// The grid hides while a tile is narrower on screen than this, in
+        /// points, so a deep zoom seen from far above is not a mesh of
+        /// lines. Under a tilted camera the far tiles fade by the same
+        /// width. Lower it to see the grid from farther, at the price of
+        /// more tiles drawn.
+        public var minimumTileScreenPoints: Float
+        /// The texts hide while a tile is narrower on screen than this, in
+        /// points: below it the numbers are too small to read.
+        public var labelMinimumTileScreenPoints: Float
+        /// The most tiles the grid draws in a frame, those nearest to
+        /// where the camera looks first. It bounds the work of a frame
+        /// under a camera tilted to the horizon.
+        public var maximumDrawnTiles: Int
+        /// The color of the borders.
+        public var lineColor: SIMD4<Float>
+        /// The width of a border, in points, the same at every zoom.
+        public var lineWidthPoints: Float
+        /// The color of the text.
+        public var labelColor: SIMD4<Float>
+        /// The color of the outline round the text, which keeps it
+        /// readable over any ground.
+        public var labelHaloColor: SIMD4<Float>
+        /// The width of the outline round the text, in points, 0 for none.
+        public var labelHaloWidthPoints: Float
+        /// The color laid over a selected tile.
+        public var selectedFillColor: SIMD4<Float>
+        /// What is written inside a tile. A
+        /// `ImmersiveMapTileGridController.labelProvider` takes its place.
+        public var labelFormat: LabelFormat
+        /// The widest the text may be, as a share of the tile's width. The
+        /// text is sized to the tile, so it grows and shrinks with it.
+        public var labelMaximumWidthShare: Float
+        /// The tallest the text may be, as a share of the tile's height.
+        public var labelMaximumHeightShare: Float
+        /// Whether the user can select and deselect tiles on the map, by
+        /// `selectionGesture`. Turn it off to show the grid and a
+        /// selection made from code without letting the user change it.
+        public var isTapSelectionEnabled: Bool
+        /// The gesture that selects and deselects a tile, a tap by
+        /// default. Change it when the tap or the double tap is wanted
+        /// for something else, or to keep a stray tap from changing the
+        /// selection.
+        public var selectionGesture: SelectionGesture
+        /// Whether the gesture may hold many tiles selected or one,
+        /// many by default. A selection made from code is not held to it.
+        public var selectionMode: SelectionMode
+        /// The most tiles taps may select, nil for no limit. A tap past
+        /// the limit selects nothing and is reported through
+        /// `ImmersiveMapTileGridController.onTapRejected`. A selection made
+        /// from code is not checked against it.
+        public var selectionLimit: Int?
+        /// The area a tap may select tiles in, nil for the whole map: a
+        /// tile is selectable when it shares an area with the box. A
+        /// selection made from code is not checked against it.
+        public var selectableBounds: ImmersiveMapGeoBounds?
+
+        public init(zoomRange: ClosedRange<Int> = 0 ... ImmersiveMapTileID.maximumZoom,
+                    minimumTileScreenPoints: Float = 48,
+                    labelMinimumTileScreenPoints: Float = 96,
+                    maximumDrawnTiles: Int = 512,
+                    lineColor: SIMD4<Float> = SIMD4<Float>(0.05, 0.07, 0.1, 0.75),
+                    lineWidthPoints: Float = 1,
+                    labelColor: SIMD4<Float> = SIMD4<Float>(0.05, 0.07, 0.1, 1),
+                    labelHaloColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 0.9),
+                    labelHaloWidthPoints: Float = 1.5,
+                    selectedFillColor: SIMD4<Float> = SIMD4<Float>(0.1, 0.45, 1, 0.35),
+                    labelFormat: LabelFormat = .zxy,
+                    labelMaximumWidthShare: Float = 0.7,
+                    labelMaximumHeightShare: Float = 0.12,
+                    isTapSelectionEnabled: Bool = true,
+                    selectionGesture: SelectionGesture = .tap,
+                    selectionMode: SelectionMode = .multiple,
+                    selectionLimit: Int? = nil,
+                    selectableBounds: ImmersiveMapGeoBounds? = nil) {
+            self.zoomRange = Self.clamped(zoomRange)
+            self.minimumTileScreenPoints = minimumTileScreenPoints
+            self.labelMinimumTileScreenPoints = labelMinimumTileScreenPoints
+            self.maximumDrawnTiles = maximumDrawnTiles
+            self.lineColor = lineColor
+            self.lineWidthPoints = lineWidthPoints
+            self.labelColor = labelColor
+            self.labelHaloColor = labelHaloColor
+            self.labelHaloWidthPoints = labelHaloWidthPoints
+            self.selectedFillColor = selectedFillColor
+            self.labelFormat = labelFormat
+            self.labelMaximumWidthShare = labelMaximumWidthShare
+            self.labelMaximumHeightShare = labelMaximumHeightShare
+            self.isTapSelectionEnabled = isTapSelectionEnabled
+            self.selectionGesture = selectionGesture
+            self.selectionMode = selectionMode
+            self.selectionLimit = selectionLimit
+            self.selectableBounds = selectableBounds
+        }
+
+        /// A range within the zooms a tile is named at.
+        static func clamped(_ range: ClosedRange<Int>) -> ClosedRange<Int> {
+            let lower = min(max(range.lowerBound, 0), ImmersiveMapTileID.maximumZoom)
+            let upper = min(max(range.upperBound, lower), ImmersiveMapTileID.maximumZoom)
+            return lower ... upper
+        }
+    }
+
     public var renderLoop: RenderLoopSettings
     public var camera: CameraSettings
     public var presentation: PresentationSettings
@@ -2302,6 +2483,10 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     /// (`ModelArchiveSettings.archiveURL`), and then no models. See
     /// `ModelArchiveSettings`.
     public var modelArchive: ModelArchiveSettings
+    /// The grid of tiles an app's user picks tiles on, shown while an
+    /// `ImmersiveMapTileGridController` is attached. See
+    /// `TileGridSettings`.
+    public var tileGrid: TileGridSettings
 
     public init(renderLoop: RenderLoopSettings,
                 camera: CameraSettings,
@@ -2316,7 +2501,8 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
                 viewReuse: ViewReuseSettings = ViewReuseSettings(),
                 debug: DebugSettings,
                 controls: ControlsSettings = ControlsSettings(),
-                modelArchive: ModelArchiveSettings = ModelArchiveSettings()) {
+                modelArchive: ModelArchiveSettings = ModelArchiveSettings(),
+                tileGrid: TileGridSettings = TileGridSettings()) {
         self.renderLoop = renderLoop
         self.camera = camera
         self.presentation = presentation
@@ -2331,6 +2517,7 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         self.debug = debug
         self.controls = controls
         self.modelArchive = modelArchive
+        self.tileGrid = tileGrid
     }
 
     public static let `default` = ImmersiveMapSettings(
@@ -2526,6 +2713,20 @@ public extension ImmersiveMapSettings {
     func rotationGestureSensitivity(_ sensitivity: Float) -> ImmersiveMapSettings {
         var settings = self
         settings.camera.rotationGestureSensitivity = sensitivity
+        return settings
+    }
+
+    /// See `ImmersiveMapView.doubleTapZoom(isEnabled:)`.
+    func doubleTapZoom(isEnabled: Bool) -> ImmersiveMapSettings {
+        var settings = self
+        settings.camera.isDoubleTapZoomEnabled = isEnabled
+        return settings
+    }
+
+    /// See `ImmersiveMapView.tapMovementTolerance(points:)`.
+    func tapMovementTolerance(points: Float) -> ImmersiveMapSettings {
+        var settings = self
+        settings.camera.tapMovementTolerancePoints = max(points, 0)
         return settings
     }
 
@@ -3258,6 +3459,66 @@ public extension ImmersiveMapSettings {
             pins.spreadsApart = spreadsApart
         }
         return pinSettings(pins)
+    }
+
+    func tileGridSettings(_ tileGrid: TileGridSettings) -> ImmersiveMapSettings {
+        var settings = self
+        settings.tileGrid = tileGrid
+        return settings
+    }
+
+    /// See `ImmersiveMapView.tileGridSettings(zoomRange:...)`. An omitted
+    /// value is left as configured.
+    func tileGridSettings(zoomRange: ClosedRange<Int>? = nil,
+                          minimumTileScreenPoints: Float? = nil,
+                          labelMinimumTileScreenPoints: Float? = nil,
+                          maximumDrawnTiles: Int? = nil,
+                          lineColor: SIMD4<Float>? = nil,
+                          lineWidthPoints: Float? = nil,
+                          labelColor: SIMD4<Float>? = nil,
+                          labelHaloColor: SIMD4<Float>? = nil,
+                          labelHaloWidthPoints: Float? = nil,
+                          selectedFillColor: SIMD4<Float>? = nil,
+                          labelFormat: TileGridSettings.LabelFormat? = nil,
+                          labelMaximumWidthShare: Float? = nil,
+                          labelMaximumHeightShare: Float? = nil,
+                          isTapSelectionEnabled: Bool? = nil,
+                          selectionGesture: TileGridSettings.SelectionGesture? = nil,
+                          selectionMode: TileGridSettings.SelectionMode? = nil) -> ImmersiveMapSettings {
+        var settings = self
+        if let zoomRange { settings.tileGrid.zoomRange = TileGridSettings.clamped(zoomRange) }
+        if let minimumTileScreenPoints { settings.tileGrid.minimumTileScreenPoints = max(minimumTileScreenPoints, 1) }
+        if let labelMinimumTileScreenPoints {
+            settings.tileGrid.labelMinimumTileScreenPoints = max(labelMinimumTileScreenPoints, 1)
+        }
+        if let maximumDrawnTiles { settings.tileGrid.maximumDrawnTiles = max(maximumDrawnTiles, 0) }
+        if let lineColor { settings.tileGrid.lineColor = lineColor }
+        if let lineWidthPoints { settings.tileGrid.lineWidthPoints = max(lineWidthPoints, 0) }
+        if let labelColor { settings.tileGrid.labelColor = labelColor }
+        if let labelHaloColor { settings.tileGrid.labelHaloColor = labelHaloColor }
+        if let labelHaloWidthPoints { settings.tileGrid.labelHaloWidthPoints = max(labelHaloWidthPoints, 0) }
+        if let selectedFillColor { settings.tileGrid.selectedFillColor = selectedFillColor }
+        if let labelFormat { settings.tileGrid.labelFormat = labelFormat }
+        if let labelMaximumWidthShare {
+            settings.tileGrid.labelMaximumWidthShare = min(max(labelMaximumWidthShare, 0), 1)
+        }
+        if let labelMaximumHeightShare {
+            settings.tileGrid.labelMaximumHeightShare = min(max(labelMaximumHeightShare, 0), 1)
+        }
+        if let isTapSelectionEnabled { settings.tileGrid.isTapSelectionEnabled = isTapSelectionEnabled }
+        if let selectionGesture { settings.tileGrid.selectionGesture = selectionGesture }
+        if let selectionMode { settings.tileGrid.selectionMode = selectionMode }
+        return settings
+    }
+
+    /// See `ImmersiveMapView.tileGridSelection(limit:selectableBounds:)`.
+    /// Both values are set as given: nil is a value here, no limit and the
+    /// whole map.
+    func tileGridSelection(limit: Int?, selectableBounds: ImmersiveMapGeoBounds?) -> ImmersiveMapSettings {
+        var settings = self
+        settings.tileGrid.selectionLimit = limit.map { max($0, 0) }
+        settings.tileGrid.selectableBounds = selectableBounds
+        return settings
     }
 
     func attributionSettings(_ attribution: AttributionSettings) -> ImmersiveMapSettings {

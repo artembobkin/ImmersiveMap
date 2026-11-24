@@ -61,6 +61,12 @@ enum RenderLayer: String, CaseIterable {
     case horizon
     case postProcessing
     case labels
+    /// The grid of tiles an app's user picks tiles on, in the overlay pass:
+    /// over the whole world and over the map's names, so the borders and
+    /// the tiles' numbers are never covered by what the map draws, and
+    /// under the pins, which are the app's own. Left out of a frame that
+    /// shows no grid, see `TileGridRenderSubsystem`.
+    case tileGrid
     case pins
     case debugOverlay
 }
@@ -77,6 +83,7 @@ enum RenderSkipReason: String, CaseIterable, Hashable {
     case noPinContent
     case noSceneModelContent
     case noAppLayerContent
+    case noTileGridContent
     case debugOverlayDisabled
     /// Extruded buildings are switched off in the style: the tiles carry no
     /// building geometry, so the building layer and the ownership prepass
@@ -99,6 +106,8 @@ struct RenderPassAvailability {
     var sceneModelsEnabled: Bool = true
     /// True when the frame has layers of the app's data to draw.
     var appLayersEnabled: Bool = true
+    /// True when the frame has tiles of the tile grid to draw.
+    var tileGridEnabled: Bool = true
 }
 
 struct RenderLayerPlanItem {
@@ -143,6 +152,9 @@ struct RenderLayerPlanner {
             RenderLayerPlanItem(layer: .labels,
                                 enabled: availability.labelsEnabled,
                                 skipReason: availability.labelsEnabled ? nil : .noLabelContent),
+            RenderLayerPlanItem(layer: .tileGrid,
+                                enabled: availability.tileGridEnabled,
+                                skipReason: availability.tileGridEnabled ? nil : .noTileGridContent),
             RenderLayerPlanItem(layer: .pins,
                                 enabled: availability.pinsEnabled,
                                 skipReason: availability.pinsEnabled ? nil : .noPinContent),

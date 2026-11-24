@@ -15,6 +15,7 @@ public enum ImmersiveMapSettingsChangeDomain: String, CaseIterable, Equatable {
     case debug
     case controls
     case modelArchive
+    case tileGrid
 }
 
 public enum ImmersiveMapSettingsApplyAction: String, CaseIterable, Equatable {
@@ -153,6 +154,11 @@ public enum ImmersiveMapSettingsApplicationPlanner {
             } else {
                 mark(.modelArchive, actions: [.recreateRenderer])
             }
+        }
+
+        // The grid is rebuilt from the settings every frame.
+        if oldValue.tileGrid != newValue.tileGrid {
+            mark(.tileGrid, actions: [.liveApply])
         }
 
         return ImmersiveMapSettingsApplicationPlan(changedDomains: changedDomains, actions: actions)

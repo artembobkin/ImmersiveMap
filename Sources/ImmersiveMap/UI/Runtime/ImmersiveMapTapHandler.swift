@@ -29,6 +29,22 @@ final class ImmersiveMapTapHandler {
         cameraRuntime.notifyMapBackgroundTap()
     }
 
+    /// Whether a feature of the map takes the double tap, or the
+    /// secondary tap, as its own now (the tile grid, by its settings). The
+    /// gesture recognizers ask before they treat the gesture as the
+    /// camera's.
+    func isClaimed(_ kind: MapTapKind) -> Bool {
+        selectionHandler.isClaimed(kind)
+    }
+
+    /// A double tap or a secondary tap a feature has claimed.
+    func handleClaimedTap(_ kind: MapTapKind, at point: CGPoint) {
+        guard controlsRuntime.containsControlPoint(point) == false else {
+            return
+        }
+        _ = selectionHandler.handleMapTap(at: point, kind: kind)
+    }
+
     func handleMapTap(at point: CGPoint) {
         guard controlsRuntime.containsControlPoint(point) == false else {
             return

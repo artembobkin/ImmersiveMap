@@ -24,6 +24,7 @@ final class RenderLayerPlannerTests: XCTestCase {
             .surfaceLabels,
             .horizon,
             .labels,
+            .tileGrid,
             .pins,
             .debugOverlay
         ])
@@ -50,11 +51,12 @@ final class RenderLayerPlannerTests: XCTestCase {
             .surfaceLabels,
             .horizon,
             .labels,
+            .tileGrid,
             .pins,
             .debugOverlay
         ])
         XCTAssertEqual(enabledLayers(in: plan),
-                       [.placementStencil, .flatMapSurface, .buildingExtrusion, .sceneModels, .flatMapRoads, .appLayers, .surfaceLabels, .horizon])
+                       [.placementStencil, .flatMapSurface, .buildingExtrusion, .sceneModels, .flatMapRoads, .appLayers, .surfaceLabels, .horizon, .tileGrid])
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .pins, in: plan), .noPinContent)
         XCTAssertEqual(skipReason(for: .debugOverlay, in: plan), .debugOverlayDisabled)
@@ -79,6 +81,7 @@ final class RenderLayerPlannerTests: XCTestCase {
             .sceneModels,
             .horizon,
             .labels,
+            .tileGrid,
             .pins,
             .debugOverlay
         ])
@@ -104,10 +107,11 @@ final class RenderLayerPlannerTests: XCTestCase {
             .sceneModels,
             .horizon,
             .labels,
+            .tileGrid,
             .pins,
             .debugOverlay
         ])
-        XCTAssertEqual(enabledLayers(in: plan), [.starfield, .placementStencil, .globeVectorSurface, .appLayers, .surfaceLabels, .globeCap, .sceneModels, .horizon])
+        XCTAssertEqual(enabledLayers(in: plan), [.starfield, .placementStencil, .globeVectorSurface, .appLayers, .surfaceLabels, .globeCap, .sceneModels, .horizon, .tileGrid])
         XCTAssertEqual(skipReason(for: .labels, in: plan), .noLabelContent)
         XCTAssertEqual(skipReason(for: .pins, in: plan), .noPinContent)
         XCTAssertEqual(skipReason(for: .debugOverlay, in: plan), .debugOverlayDisabled)
@@ -133,6 +137,7 @@ final class RenderLayerPlannerTests: XCTestCase {
             .sceneModels,
             .horizon,
             .labels,
+            .tileGrid,
             .pins,
             .debugOverlay
         ])

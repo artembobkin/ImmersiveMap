@@ -44,9 +44,7 @@ struct LayerSelectionSnapshot: SelectionPickData, @unchecked Sendable {
     func hitTest(point: CGPoint, pixelsPerPoint: CGFloat) -> LayerSelectionHit? {
         guard entries.isEmpty == false, let projection else { return nil }
         let pixel = SIMD2<Double>(Double(point.x), Double(point.y))
-        guard let place = LayerPickMath.place(under: pixel,
-                                              start: Self.centre(of: projection),
-                                              project: { Self.project($0, projection) }) else {
+        guard let place = GeoScreenPlaceMath.place(under: pixel, constants: projection) else {
             return nil
         }
         return Self.hit(in: entries, at: place, pixelsPerPoint: Double(pixelsPerPoint))
@@ -54,8 +52,8 @@ struct LayerSelectionSnapshot: SelectionPickData, @unchecked Sendable {
 
     /// The shape of `entries` at a place on the map, the entry drawn last
     /// first.
-    static func hit(in entries: [Entry], at place: LayerPickMath.Place, pixelsPerPoint: Double) -> LayerSelectionHit? {
-        let coordinate = LayerPickMath.coordinate(ofWorld: place.world)
+    static func hit(in entries: [Entry], at place: GeoScreenPlaceMath.Place, pixelsPerPoint: Double) -> LayerSelectionHit? {
+        let coordinate = GeoScreenPlaceMath.coordinate(ofWorld: place.world)
         for entry in entries.reversed() {
             if let shapeID = hitTest(entry, place: place, coordinate: coordinate, pixelsPerPoint: pixelsPerPoint) {
                 return LayerSelectionHit(layerID: entry.layer.id, shapeID: shapeID, coordinate: coordinate)
@@ -64,36 +62,10 @@ struct LayerSelectionSnapshot: SelectionPickData, @unchecked Sendable {
         return nil
     }
 
-    // MARK: - The projection
-
-    /// The world position the camera looks at, where the search for a
-    /// tap's place starts.
-    private static func centre(of projection: GeoScreenProjectionMath.FrameConstants) -> SIMD2<Double> {
-        switch projection.mode {
-        case .flat:
-            return ImmersiveMapProjection.centerWorldMercator(fromFlatPan: projection.flatPan)
-        case .globe:
-            return ImmersiveMapProjection.centerWorldMercator(fromGlobePan: SIMD2(Double(projection.globe.panX),
-                                                                                  Double(projection.globe.panY)))
-        }
-    }
-
-    private static func project(_ world: SIMD2<Double>,
-                                _ projection: GeoScreenProjectionMath.FrameConstants) -> SIMD2<Double>? {
-        let coordinate = LayerPickMath.coordinate(ofWorld: world)
-        let output = GeoScreenProjectionMath.project(basis: GeoProjectionBasis(coordinate: coordinate),
-                                                     constants: projection)
-        guard output.visible != 0, output.visibilityAlpha > 0,
-              output.position.x.isFinite, output.position.y.isFinite else {
-            return nil
-        }
-        return SIMD2(Double(output.position.x), Double(output.position.y))
-    }
-
     // MARK: - One layer
 
     private static func hitTest(_ entry: Entry,
-                                place: LayerPickMath.Place,
+                                place: GeoScreenPlaceMath.Place,
                                 coordinate: GeoCoordinate,
                                 pixelsPerPoint: Double) -> UInt64? {
         let layer = entry.layer
@@ -158,7 +130,7 @@ struct LayerSelectionSnapshot: SelectionPickData, @unchecked Sendable {
     private static func distance(toLine coordinates: [GeoCoordinate],
                                  closed: Bool,
                                  reach: Double,
-                                 place: LayerPickMath.Place,
+                                 place: GeoScreenPlaceMath.Place,
                                  coordinate: GeoCoordinate) -> Double? {
         let margin = place.worldReach(ofPixels: reach) * 360
         guard LayerPickMath.box(of: coordinates, holds: coordinate, margin: margin) else { return nil }
@@ -176,14 +148,14 @@ struct LayerSelectionSnapshot: SelectionPickData, @unchecked Sendable {
     /// A ring or a line in the world as the layer draws it
     /// (`LayerMeshBuilder.unwrappedWorld`), in the copy of the world the
     /// tap's place lies in.
-    private static func ring(_ coordinates: [GeoCoordinate], near place: LayerPickMath.Place) -> [SIMD2<Double>] {
+    private static func ring(_ coordinates: [GeoCoordinate], near place: GeoScreenPlaceMath.Place) -> [SIMD2<Double>] {
         let world = LayerMeshBuilder.unwrappedWorld(coordinates, reference: nil)
         guard let minimum = world.map(\.x).min(), let maximum = world.map(\.x).max() else { return [] }
         let shift = (place.world.x - (minimum + maximum) / 2).rounded()
         return shift == 0 ? world : world.map { $0 + SIMD2(shift, 0) }
     }
 
-    private static func near(_ world: SIMD2<Double>, _ place: LayerPickMath.Place) -> SIMD2<Double> {
+    private static func near(_ world: SIMD2<Double>, _ place: GeoScreenPlaceMath.Place) -> SIMD2<Double> {
         world + SIMD2((place.world.x - world.x).rounded(), 0)
     }
 }

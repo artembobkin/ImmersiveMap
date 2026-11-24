@@ -111,6 +111,7 @@ let package = Package(
                 "Shadows/Shaders",
                 "Starfield/Shaders",
                 "Text/Shaders",
+                "TileGrid/Shaders",
                 "Tile/Relief/Shaders",
                 "Tile/Shaders",
             ],

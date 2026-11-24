@@ -131,6 +131,7 @@ final class ImmersiveMapHostRuntime {
                 pinsController: ImmersiveMapPinsController?,
                 sceneModelsController: ImmersiveMapSceneModelsController? = nil,
                 layersController: ImmersiveMapLayersController? = nil,
+                tileGridController: ImmersiveMapTileGridController? = nil,
                 cameraController: ImmersiveMapCameraController?,
                 selectionController: ImmersiveMapSelectionController?,
                 pinTapAction: ((ImmersiveMapPinTapEvent) -> Void)?,
@@ -156,6 +157,7 @@ final class ImmersiveMapHostRuntime {
                         frameRenderedAction: frameRenderedAction,
                         terrainSurroundingsAction: terrainSurroundingsAction)
         syncLayersController(layersController)
+        syncTileGridController(tileGridController)
         syncTourVideoRecorder(tourVideoRecorder)
         updateAnnotationContent(annotationContent)
         runtimeGraph.cameraCommandHandler.applyCameraPosition(cameraPosition)
@@ -167,6 +169,14 @@ final class ImmersiveMapHostRuntime {
         runtimeGraph.layerRuntime.attachController(layersController,
                                                    selectionHandler: runtimeGraph.selectionHandler,
                                                    renderRuntime: runtimeGraph.renderRuntime)
+    }
+
+    /// Attaches the tile grid's controller
+    /// (`ImmersiveMapTileGridController`), nil for a map that shows no
+    /// grid.
+    func syncTileGridController(_ tileGridController: ImmersiveMapTileGridController?) {
+        runtimeGraph.tileGridRuntime.attachController(tileGridController,
+                                                      renderRuntime: runtimeGraph.renderRuntime)
     }
 
     func updateAnnotationContent(_ annotationContent: AnnotationViewContent?) {
@@ -204,6 +214,7 @@ final class ImmersiveMapHostRuntime {
                         frameRenderedAction: nil,
                         terrainSurroundingsAction: nil)
         syncLayersController(nil)
+        syncTileGridController(nil)
         syncTourVideoRecorder(nil)
         updateAnnotationContent(nil)
     }
@@ -426,6 +437,7 @@ final class ImmersiveMapHostRuntime {
             detachedGraph.sceneModelRuntime.cancelAllPathAnimations()
             detachedGraph.sceneModelRuntime.detachController()
             detachedGraph.layerRuntime.detachController()
+            detachedGraph.tileGridRuntime.detachController()
             detachedGraph.cameraRuntime.detachController()
             detachedGraph.selectionHandler.syncController(nil)
             detachedGraph.renderRuntime.stop()

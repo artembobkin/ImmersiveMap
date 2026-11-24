@@ -44,6 +44,9 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
     let panGesture: UIPanGestureRecognizer
     private let tapGesture: UITapGestureRecognizer
     private let doubleTapGesture: UITapGestureRecognizer
+    /// The touch screen's secondary tap: a long press, for a feature that
+    /// picks by it.
+    private let longPressGesture: UILongPressGestureRecognizer
     private let rotationGesture: UIRotationGestureRecognizer
     private let pinchGesture: UIPinchGestureRecognizer
     private let tiltGesture: UIPanGestureRecognizer
@@ -54,6 +57,7 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
         self.panGesture = UIPanGestureRecognizer()
         self.tapGesture = UITapGestureRecognizer()
         self.doubleTapGesture = UITapGestureRecognizer()
+        self.longPressGesture = UILongPressGestureRecognizer()
         self.rotationGesture = UIRotationGestureRecognizer()
         self.pinchGesture = UIPinchGestureRecognizer()
         self.tiltGesture = UIPanGestureRecognizer()
@@ -91,12 +95,38 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
     /// without this filter would see touches on all subviews.
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                            shouldReceive touch: UITouch) -> Bool {
+        if gestureRecognizer === doubleTapGesture, isDoubleTapWanted == false {
+            return false
+        }
+        // The long press exists only while a feature picks by it.
+        if gestureRecognizer === longPressGesture, mapView?.tapHandler.isClaimed(.secondary) != true {
+            return false
+        }
         guard let mapView,
               let annotationContainer = mapView.annotationRuntime.annotationContainerViewIfLoaded,
               let touchView = touch.view else {
             return true
         }
         return touchView.isDescendant(of: annotationContainer) == false
+    }
+
+    /// A single tap (selection) waits for the double tap (anchored zoom)
+    /// to fail, while the double tap zooms. Asked for every tap, so the
+    /// setting applies live.
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        gestureRecognizer === tapGesture && otherGestureRecognizer === doubleTapGesture && isDoubleTapWanted
+    }
+
+    /// Whether the double tap does anything: it zooms
+    /// (`CameraSettings.isDoubleTapZoomEnabled`), or a feature of the map
+    /// takes it as its own (the tile grid selecting by it). When it does
+    /// nothing it receives no touch, and the single tap waits for
+    /// nothing: it acts as the finger lifts.
+    private var isDoubleTapWanted: Bool {
+        guard let mapView else { return true }
+        return mapView.cameraRuntime.currentSettings.camera.isDoubleTapZoomEnabled
+            || mapView.tapHandler.isClaimed(.double)
     }
 
     private func configureGestures(in mapView: ImmersiveMapUIView) {
@@ -113,8 +143,11 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
         tapGesture.addTarget(self, action: #selector(handleTap(_:)))
         tapGesture.delegate = self
         tapGesture.numberOfTapsRequired = 1
-        tapGesture.require(toFail: doubleTapGesture)
         mapView.addGestureRecognizer(tapGesture)
+
+        longPressGesture.addTarget(self, action: #selector(handleLongPress(_:)))
+        longPressGesture.delegate = self
+        mapView.addGestureRecognizer(longPressGesture)
 
         rotationGesture.addTarget(self, action: #selector(handleRotation(_:)))
         rotationGesture.delegate = self
@@ -137,11 +170,25 @@ final class MapGestureController: NSObject, UIGestureRecognizerDelegate {
         mapView.tapHandler.handleMapTap(at: gesture.location(in: mapView))
     }
 
+    /// A long press picks for a feature that picks by the secondary tap
+    /// (the tile grid, by its settings), as the press is recognized.
+    @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+        guard let mapView, gesture.state == .began else { return }
+
+        mapView.tapHandler.handleClaimedTap(.secondary, at: gesture.location(in: mapView))
+    }
+
     /// Double tap zooms the map in by one zoom level toward the tap point:
     /// the world point under the finger stays put (see `zoomAnchorFactor`).
     @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
         guard let mapView,
               mapView.cameraRuntime.currentCameraState() != nil else {
+            return
+        }
+        // A feature that picks by the double tap has it, and the map does
+        // not zoom.
+        if mapView.tapHandler.isClaimed(.double) {
+            mapView.tapHandler.handleClaimedTap(.double, at: gesture.location(in: mapView))
             return
         }
 

@@ -27,6 +27,7 @@ public struct ImmersiveMapView: View {
     private var pinsController: ImmersiveMapPinsController?
     private var sceneModelsController: ImmersiveMapSceneModelsController?
     private var layersController: ImmersiveMapLayersController?
+    private var tileGridController: ImmersiveMapTileGridController?
     private var cameraController: ImmersiveMapCameraController?
     private var cameraUIControls: CameraUIControls?
     /// The controller the camera buttons drive when the app attaches none:
@@ -62,6 +63,7 @@ public struct ImmersiveMapView: View {
                                         pinsController: pinsController,
                                         sceneModelsController: sceneModelsController,
                                         layersController: layersController,
+                                        tileGridController: tileGridController,
                                         cameraPosition: cameraPosition,
                                         cameraController: cameraController,
                                         selectionController: selectionController,
@@ -101,6 +103,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
     let pinsController: ImmersiveMapPinsController?
     let sceneModelsController: ImmersiveMapSceneModelsController?
     let layersController: ImmersiveMapLayersController?
+    let tileGridController: ImmersiveMapTileGridController?
     let cameraPosition: ImmersiveMapCameraPosition?
     let cameraController: ImmersiveMapCameraController?
     let selectionController: ImmersiveMapSelectionController?
@@ -153,6 +156,7 @@ private struct ImmersiveMapUIViewRepresentable: UIViewRepresentable {
                       pinsController: pinsController,
                       sceneModelsController: sceneModelsController,
                       layersController: layersController,
+                      tileGridController: tileGridController,
                       cameraController: cameraController,
                       selectionController: selectionController,
                       pinTapAction: pinTapAction,
@@ -176,6 +180,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
     let pinsController: ImmersiveMapPinsController?
     let sceneModelsController: ImmersiveMapSceneModelsController?
     let layersController: ImmersiveMapLayersController?
+    let tileGridController: ImmersiveMapTileGridController?
     let cameraPosition: ImmersiveMapCameraPosition?
     let cameraController: ImmersiveMapCameraController?
     let selectionController: ImmersiveMapSelectionController?
@@ -228,6 +233,7 @@ private struct ImmersiveMapUIViewRepresentable: NSViewRepresentable {
                       pinsController: pinsController,
                       sceneModelsController: sceneModelsController,
                       layersController: layersController,
+                      tileGridController: tileGridController,
                       cameraController: cameraController,
                       selectionController: selectionController,
                       pinTapAction: pinTapAction,
@@ -499,6 +505,40 @@ public extension ImmersiveMapView {
     func rotationGestureSensitivity(_ sensitivity: Float) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.rotationGestureSensitivity(sensitivity)
+        return view
+    }
+
+    /// Turns the double tap zoom on or off: the double tap, or the double
+    /// click on macOS, that zooms the map in by one level toward the
+    /// point. On by default. While it is on, a single tap waits for the
+    /// system's double tap interval before it acts, and two quick taps on
+    /// one place are the zoom and not two taps. Turn it off where a tap
+    /// must act at once and a second tap on the same place must count: on
+    /// a tile grid, the first tap then selects a tile immediately and the
+    /// next deselects it.
+    ///
+    ///     ImmersiveMapView()
+    ///         .tileGrid(grid)
+    ///         .doubleTapZoom(isEnabled: false)
+    ///
+    /// The map still zooms by the pinch, the scroll and the zoom control.
+    /// Applies live.
+    func doubleTapZoom(isEnabled: Bool) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.doubleTapZoom(isEnabled: isEnabled)
+        return view
+    }
+
+    /// Sets how far the cursor may move between the press and the release
+    /// of a mouse button and still make a click, in points, on macOS. A
+    /// drag of the map begins only past it, so a click made with a moving
+    /// hand picks what is under it and does not shift the map. The
+    /// default is 4. Raise it for a mouse that slips under a click, lower
+    /// it for a drag that answers sooner. Touch screens use the system's
+    /// own tolerance. Applies live.
+    func tapMovementTolerance(points: Float) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.tapMovementTolerance(points: points)
         return view
     }
 
@@ -843,6 +883,149 @@ public extension ImmersiveMapView {
     func layers(_ controller: ImmersiveMapLayersController?) -> ImmersiveMapView {
         var view = self
         view.layersController = controller
+        return view
+    }
+
+    /// Shows the tile grid and attaches the app's handle on it: the
+    /// borders of the XYZ tiles over the ground, each tile's numbers
+    /// written inside it, drawn over everything the map draws, and a tap
+    /// on a tile selecting or deselecting it (or another gesture, and one
+    /// tile at a time, by `tileGridSettings(selectionGesture:selectionMode:)`).
+    /// The controller holds the selected tiles and reports every change:
+    ///
+    ///     @State private var grid = ImmersiveMapTileGridController()
+    ///
+    ///     ImmersiveMapView()
+    ///         .tileGrid(grid)
+    ///         .tileGridSettings(zoomRange: 15...15)
+    ///         .onAppear {
+    ///             grid.onSelectionChanged = { change in
+    ///                 print(change.selectedTiles)
+    ///             }
+    ///         }
+    ///
+    /// The grid names squares of the ground, not the tiles the map loads,
+    /// so it shows the tiles of any zoom whatever the archive holds. Which
+    /// tiles it shows and how it looks is `tileGridSettings(zoomRange:...)`,
+    /// and what a tap may select is
+    /// `tileGridSelection(limit:selectableBounds:)`. For a tap that selects
+    /// at once, and a second tap on the same tile that deselects it however
+    /// soon it comes, turn the double tap zoom off
+    /// (`doubleTapZoom(isEnabled:)`), or select by the double tap itself.
+    /// While the grid shows,
+    /// a tap on a tile is the grid's: it ends the selection of
+    /// `selection(_:)` as a tap on the bare map does, and the background
+    /// tap callbacks do not fire for it. Nil detaches the controller, and
+    /// the map shows no grid. See ``ImmersiveMapTileGridController``.
+    func tileGrid(_ controller: ImmersiveMapTileGridController?) -> ImmersiveMapView {
+        var view = self
+        view.tileGridController = controller
+        return view
+    }
+
+    /// Replaces the whole group of the tile grid's settings. See
+    /// ``ImmersiveMapSettings/TileGridSettings``.
+    func tileGridSettings(_ tileGrid: ImmersiveMapSettings.TileGridSettings) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.tileGridSettings(tileGrid)
+        return view
+    }
+
+    /// Which tiles the grid of `tileGrid(_:)` shows and how it looks. An
+    /// omitted value is left as configured, so a value set here never
+    /// resets the others:
+    ///
+    ///     ImmersiveMapView()
+    ///         .tileGrid(grid)
+    ///         .tileGridSettings(zoomRange: 12...15, lineWidthPoints: 2)
+    ///
+    /// - Parameters:
+    ///   - zoomRange: The zooms whose tiles the grid shows: the tiles of
+    ///     the camera's zoom clamped into the range, so `15...15` shows the
+    ///     zoom 15 tiles alone at any camera zoom. Every zoom by default.
+    ///   - minimumTileScreenPoints: The grid hides while a tile is narrower
+    ///     on screen than this, and the far tiles under a tilted camera
+    ///     fade by it. 48 by default.
+    ///   - labelMinimumTileScreenPoints: The texts hide while a tile is
+    ///     narrower on screen than this. 96 by default.
+    ///   - maximumDrawnTiles: The most tiles drawn in a frame, the nearest
+    ///     to where the camera looks first. 512 by default.
+    ///   - lineColor: The color of the borders.
+    ///   - lineWidthPoints: The width of a border, the same at every zoom.
+    ///   - labelColor: The color of the text.
+    ///   - labelHaloColor: The color of the outline round the text.
+    ///   - labelHaloWidthPoints: The width of that outline, 0 for none.
+    ///   - selectedFillColor: The color laid over a selected tile.
+    ///   - labelFormat: What is written inside a tile: `.zxy`, `.xyz` or
+    ///     `.hidden`. `ImmersiveMapTileGridController.labelProvider` takes
+    ///     its place.
+    ///   - labelMaximumWidthShare: The widest the text may be, as a share
+    ///     of the tile's width. The text is sized to the tile.
+    ///   - labelMaximumHeightShare: The tallest the text may be, as a
+    ///     share of the tile's height.
+    ///   - isTapSelectionEnabled: Whether the user can select and
+    ///     deselect tiles on the map at all.
+    ///   - selectionGesture: The gesture that selects and deselects a
+    ///     tile: `.tap`, `.doubleTap` (a double click on macOS, and the
+    ///     double tap then does not zoom the map) or `.secondaryTap` (the
+    ///     right button on macOS, a long press on a touch screen).
+    ///   - selectionMode: `.multiple` for any number of selected tiles,
+    ///     `.single` for one, which the gesture on another tile moves.
+    ///
+    /// Applies live.
+    func tileGridSettings(zoomRange: ClosedRange<Int>? = nil,
+                          minimumTileScreenPoints: Float? = nil,
+                          labelMinimumTileScreenPoints: Float? = nil,
+                          maximumDrawnTiles: Int? = nil,
+                          lineColor: SIMD4<Float>? = nil,
+                          lineWidthPoints: Float? = nil,
+                          labelColor: SIMD4<Float>? = nil,
+                          labelHaloColor: SIMD4<Float>? = nil,
+                          labelHaloWidthPoints: Float? = nil,
+                          selectedFillColor: SIMD4<Float>? = nil,
+                          labelFormat: ImmersiveMapSettings.TileGridSettings.LabelFormat? = nil,
+                          labelMaximumWidthShare: Float? = nil,
+                          labelMaximumHeightShare: Float? = nil,
+                          isTapSelectionEnabled: Bool? = nil,
+                          selectionGesture: ImmersiveMapSettings.TileGridSettings.SelectionGesture? = nil,
+                          selectionMode: ImmersiveMapSettings.TileGridSettings.SelectionMode? = nil) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.tileGridSettings(zoomRange: zoomRange,
+                                                       minimumTileScreenPoints: minimumTileScreenPoints,
+                                                       labelMinimumTileScreenPoints: labelMinimumTileScreenPoints,
+                                                       maximumDrawnTiles: maximumDrawnTiles,
+                                                       lineColor: lineColor,
+                                                       lineWidthPoints: lineWidthPoints,
+                                                       labelColor: labelColor,
+                                                       labelHaloColor: labelHaloColor,
+                                                       labelHaloWidthPoints: labelHaloWidthPoints,
+                                                       selectedFillColor: selectedFillColor,
+                                                       labelFormat: labelFormat,
+                                                       labelMaximumWidthShare: labelMaximumWidthShare,
+                                                       labelMaximumHeightShare: labelMaximumHeightShare,
+                                                       isTapSelectionEnabled: isTapSelectionEnabled,
+                                                       selectionGesture: selectionGesture,
+                                                       selectionMode: selectionMode)
+        return view
+    }
+
+    /// What a tap on the grid of `tileGrid(_:)` may select: at most
+    /// `limit` tiles, and only tiles that share an area with
+    /// `selectableBounds`. Both are set as given, since nil is a value
+    /// here: no limit, the whole map. A tap past the limit or outside the
+    /// area selects nothing and is reported to
+    /// `ImmersiveMapTileGridController.onTapRejected`. A selected tile can
+    /// always be deselected. A selection made from code is the app's own
+    /// and is held to neither rule.
+    ///
+    ///     ImmersiveMapView()
+    ///         .tileGrid(grid)
+    ///         .tileGridSelection(limit: 20, selectableBounds: city)
+    ///
+    /// Applies live.
+    func tileGridSelection(limit: Int?, selectableBounds: ImmersiveMapGeoBounds?) -> ImmersiveMapView {
+        var view = self
+        view.settings = view.settings.tileGridSelection(limit: limit, selectableBounds: selectableBounds)
         return view
     }
 

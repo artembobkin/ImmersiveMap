@@ -109,6 +109,10 @@ final class RenderPersistentContext {
     let layerSource: LayerRenderSource
     let layerMeshStore: LayerMeshStore
     let layerPipeline: LayerPipeline
+    /// The tile grid: where the frame reads the app's side of it from, and
+    /// its pipelines (`TileGridRenderSubsystem`).
+    let tileGridSource: TileGridRenderSource
+    let tileGridPipeline: TileGridPipeline
 
     // MARK: - Pin and Debug Resources
 
@@ -128,6 +132,7 @@ final class RenderPersistentContext {
          annotationSource: AnnotationRenderSource,
          sceneModelSource: SceneModelRenderSource,
          layerSource: LayerRenderSource,
+         tileGridSource: TileGridRenderSource = EmptyTileGridRenderSource(),
          styleRuntime: MapStyleRuntime,
          config: ImmersiveMapSettings,
          eventSink: RenderFrameEventSink,
@@ -225,6 +230,8 @@ final class RenderPersistentContext {
         self.treeModelStore.eventSink = eventSink
         self.layerSource = layerSource
         self.layerPipeline = shared.layerPipeline
+        self.tileGridSource = tileGridSource
+        self.tileGridPipeline = shared.tileGridPipeline
         self.layerMeshStore = LayerMeshStore(device: metal.device)
         self.layerMeshStore.eventSink = eventSink
 

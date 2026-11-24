@@ -33,7 +33,7 @@ public struct ImmersiveMapSelection: Hashable, Sendable {
     }
 }
 
-public enum ImmersiveMapSelectionSource: String {
+public enum ImmersiveMapSelectionSource: String, Sendable {
     case tap
     case programmatic
     case system

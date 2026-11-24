@@ -149,19 +149,33 @@ final class ImmersiveMapSelectionHandler {
     /// first. A hit nothing consumes (no tap action, no selection
     /// controller) is not interactive at all, and the feature underneath
     /// still gets its chance.
-    func handleMapTap(at point: CGPoint) -> MapTapResult {
+    ///
+    /// `kind`: the gesture. Only the features picked by it are asked. A
+    /// gesture other than the single tap that lands on nothing is not a
+    /// tap on the bare map: it ends no selection and reports nothing.
+    func handleMapTap(at point: CGPoint, kind: MapTapKind = .single) -> MapTapResult {
         let contentsScale = host.contentsScale
-        for feature in features {
+        for feature in features where feature.tapKind == kind {
             if let hit = feature.hitTest(at: point, contentsScale: contentsScale),
                consumeTap(hit, of: feature, at: point) {
+                if feature.clearsSelectionOnTap {
+                    _ = clear(source: .tap,
+                              screenPoint: point)
+                }
                 return .consumed
             }
         }
 
+        guard kind == .single else { return .background }
         selectionController?.notifyMapBackgroundTap(at: point)
         _ = clear(source: .tap,
                   screenPoint: point)
         return .background
+    }
+
+    /// Whether a feature takes the gesture `kind` as its own now.
+    func isClaimed(_ kind: MapTapKind) -> Bool {
+        features.contains { $0.tapKind == kind && $0.claimsItsTapKind }
     }
 
     /// The feature's tap event first, then the selection, as two separate

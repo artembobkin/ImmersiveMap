@@ -22,7 +22,7 @@ final class LayerPickMathTests: XCTestCase {
     }
 
     func testThePlaceUnderAPixelIsFoundOnAFlatMap() throws {
-        let place = try XCTUnwrap(LayerPickMath.place(under: SIMD2(250, 600),
+        let place = try XCTUnwrap(GeoScreenPlaceMath.place(under: SIMD2(250, 600),
                                                       start: SIMD2(0.9, 0.9),
                                                       project: Self.straightDown))
         XCTAssertEqual(place.world.x, 0.25, accuracy: 1e-6)
@@ -34,7 +34,7 @@ final class LayerPickMathTests: XCTestCase {
     func testThePlaceIsFoundUnderATiltedCameraFromFarAway() throws {
         let target = SIMD2<Double>(0.42, 0.15)
         let pixel = try XCTUnwrap(Self.tilted(target))
-        let place = try XCTUnwrap(LayerPickMath.place(under: pixel, start: SIMD2(0.5, 0.9), project: Self.tilted))
+        let place = try XCTUnwrap(GeoScreenPlaceMath.place(under: pixel, start: SIMD2(0.5, 0.9), project: Self.tilted))
         // Within the quarter of a pixel the search stops at.
         XCTAssertEqual(place.world.x, target.x, accuracy: 1e-4)
         XCTAssertEqual(place.world.y, target.y, accuracy: 1e-5)
@@ -42,12 +42,12 @@ final class LayerPickMathTests: XCTestCase {
 
     func testAPixelOffTheMapHasNoPlace() {
         // Nothing projects below the horizon's row of pixels.
-        XCTAssertNil(LayerPickMath.place(under: SIMD2(500, -50), start: SIMD2(0.5, 0.5), project: Self.tilted))
+        XCTAssertNil(GeoScreenPlaceMath.place(under: SIMD2(500, -50), start: SIMD2(0.5, 0.5), project: Self.tilted))
     }
 
     func testAWorldPositionIsItsCoordinate() {
         let world = LayerMeshBuilder.world(GeoCoordinate(latitude: 55.75, longitude: 37.6))
-        let coordinate = LayerPickMath.coordinate(ofWorld: world)
+        let coordinate = GeoScreenPlaceMath.coordinate(ofWorld: world)
         XCTAssertEqual(coordinate.latitude, 55.75, accuracy: 1e-9)
         XCTAssertEqual(coordinate.longitude, 37.6, accuracy: 1e-9)
     }
@@ -65,9 +65,9 @@ final class LayerPickMathTests: XCTestCase {
 final class LayerSelectionSnapshotTests: XCTestCase {
     /// The place of a coordinate on a map of `pixelsPerDegree` at the
     /// equator, seen straight down.
-    private static func place(latitude: Double, longitude: Double, pixelsPerDegree: Double = 100) -> LayerPickMath.Place {
+    private static func place(latitude: Double, longitude: Double, pixelsPerDegree: Double = 100) -> GeoScreenPlaceMath.Place {
         let scale = pixelsPerDegree * 360
-        return LayerPickMath.Place(world: LayerMeshBuilder.world(GeoCoordinate(latitude: latitude, longitude: longitude)),
+        return GeoScreenPlaceMath.Place(world: LayerMeshBuilder.world(GeoCoordinate(latitude: latitude, longitude: longitude)),
                                    pixelsPerWorld: simd_double2x2(diagonal: SIMD2(scale, -scale)))
     }
 
