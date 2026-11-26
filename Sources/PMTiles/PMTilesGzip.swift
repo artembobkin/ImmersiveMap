@@ -11,7 +11,9 @@ import zlib
 /// reads gzip and zlib wrapping alike and verifies the trailer.
 package enum PMTilesGzip {
     /// A directory or a tile larger than this is a corrupt length, not data.
-    package static let maximumOutputByteCount = 64 * 1024 * 1024
+    /// 120 MB: a model tile of a dense city centre, four built tiles under
+    /// one, came to 80 MB, past the 64 MB this was before (2026-11-26).
+    package static let maximumOutputByteCount = 120 * 1024 * 1024
 
     /// Returns `data` unchanged for `.none`, inflates it for `.gzip`. Any
     /// other compression was rejected by the header parser already.
