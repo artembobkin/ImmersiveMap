@@ -117,7 +117,7 @@ final class LazyPinRenderResourceTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let sourceURL = packageRootURL.appendingPathComponent("Sources/ImmersiveMap/Pins/PinsRenderer.swift")
+        let sourceURL = packageRootURL.appendingPathComponent("Sources/ImmersiveMap/Pins/Render/PinsRenderer.swift")
         return try String(contentsOf: sourceURL, encoding: .utf8)
     }
 }

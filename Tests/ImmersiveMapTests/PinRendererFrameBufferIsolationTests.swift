@@ -10,7 +10,7 @@ final class PinRendererFrameBufferIsolationTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Sources/ImmersiveMap/Pins/PinsRenderer.swift")
+            .appendingPathComponent("Sources/ImmersiveMap/Pins/Render/PinsRenderer.swift")
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
 
         let perFrameStores = [
