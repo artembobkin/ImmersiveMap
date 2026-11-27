@@ -13,16 +13,16 @@ final class DebugOverlayRenderSubsystem: RenderSubsystem, RenderPassAvailability
 
     private let polygonPipeline: PolygonsPipeline
     private let debugOverlayRenderer: DebugOverlayRenderer
-    private let textRenderer: TextRenderer
+    private let textAtlas: TextAtlas
     private let controls: DebugOverlayControlState
 
     init(polygonPipeline: PolygonsPipeline,
          debugOverlayRenderer: DebugOverlayRenderer,
-         textRenderer: TextRenderer,
+         textAtlas: TextAtlas,
          controls: DebugOverlayControlState) {
         self.polygonPipeline = polygonPipeline
         self.debugOverlayRenderer = debugOverlayRenderer
-        self.textRenderer = textRenderer
+        self.textAtlas = textAtlas
         self.controls = controls
     }
 
@@ -43,7 +43,7 @@ final class DebugOverlayRenderSubsystem: RenderSubsystem, RenderPassAvailability
                                         frameContext: frameContext,
                                         polygonPipeline: polygonPipeline,
                                         debugOverlayRenderer: debugOverlayRenderer,
-                                        textRenderer: textRenderer,
+                                        textAtlas: textAtlas,
                                         controls: controls.snapshot())
     }
 

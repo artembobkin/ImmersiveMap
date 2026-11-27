@@ -25,7 +25,7 @@ final class TileGridRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProv
 
     private let source: TileGridRenderSource
     private let pipeline: TileGridPipeline
-    private let textRenderer: TextRenderer
+    private let textAtlas: TextAtlas
     private let depthDisabledState: MTLDepthStencilState
     private let labels: TileGridLabels
     private let tileBuffers: FrameSlottedDynamicMetalBuffer<TileGridTileGPU>
@@ -44,15 +44,15 @@ final class TileGridRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProv
 
     init(source: TileGridRenderSource,
          pipeline: TileGridPipeline,
-         textRenderer: TextRenderer,
+         textAtlas: TextAtlas,
          metalDevice: MTLDevice,
          depthDisabledState: MTLDepthStencilState) {
         self.source = source
         self.pipeline = pipeline
-        self.textRenderer = textRenderer
+        self.textAtlas = textAtlas
         self.depthDisabledState = depthDisabledState
-        labels = TileGridLabels { [textRenderer] text in
-            textRenderer.collectLabelVertices(for: text, labelIndex: 0, scale: 1)
+        labels = TileGridLabels { [textLayout = textAtlas.layout] text in
+            textLayout.collectLabelVertices(for: text, labelIndex: 0, scale: 1)
         }
         tileBuffers = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
                                                      slotsCount: InFlightFramePool.inFlightFramesCount,
@@ -104,7 +104,7 @@ final class TileGridRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProv
                                    content: content,
                                    minimumTilePx: settings.labelMinimumTileScreenPoints * pixelsPerPoint)
         }
-        let atlas = textRenderer.atlasData.atlas
+        let atlas = textAtlas.metrics.bold.atlas
         frameUniform = TileGridFrameUniform(lineColor: settings.lineColor,
                                             selectedFillColor: settings.selectedFillColor,
                                             labelColor: settings.labelColor,
@@ -143,7 +143,7 @@ final class TileGridRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProv
             drawSize: frameContext.drawSize,
             cameraUniform: frameContext.cameraUniform,
             resolvedPresentation: frameContext.resolvedPresentation) : nil
-        frameContext.sharedState.selectionPickData.append(TileGridSelectionSnapshot(
+        frameContext.state[SelectionFrameState.self].pickData.append(TileGridSelectionSnapshot(
             frameIndex: frameContext.frameIndex,
             drawSize: frameContext.drawSize,
             projection: projection,
@@ -227,7 +227,7 @@ final class TileGridRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProv
             encoder.setRenderPipelineState(states.glyph)
             encoder.setVertexBuffer(glyphBuffers.buffer(for: slot), offset: 0, index: 0)
             encoder.setVertexBuffer(tileBuffer, offset: 0, index: 3)
-            encoder.setFragmentTexture(textRenderer.texture, index: 0)
+            encoder.setFragmentTexture(textAtlas.texture, index: 0)
             for haloPass in [true, false] where haloPass == false || frame.haloWidthPx > 0 {
                 frame.haloPass = haloPass ? 1 : 0
                 encoder.setFragmentBytes(&frame, length: MemoryLayout<TileGridFrameUniform>.stride, index: 0)

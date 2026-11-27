@@ -118,13 +118,13 @@ final class ShadowMapReuseController {
     /// must run this frame, and then also records the render, so the next
     /// frames can reuse it.
     func planShadowRender(frameContext: FrameContext, texture: MTLTexture, slot: ShadowCascadeSlot) -> Bool {
-        let sceneModelState = frameContext.sharedState.sceneModelState
-        return planShadowRender(casterKeys: Self.casterKeys(drawnPlacements: frameContext.sharedState.drawnBuildingPlacements),
+        let sceneModelState = frameContext.state[SceneModelFrameState.self]
+        return planShadowRender(casterKeys: Self.casterKeys(drawnPlacements: frameContext.state[BuildingFrameState.self].drawnPlacements),
                                 hasModelCasters: sceneModelState.hasMovingShadowCasters,
                                 staticModelCasters: sceneModelState.staticShadowCasters,
                                 hiddenBuildings: sceneModelState.replacedBuildings,
-                                heightScales: SIMD2<Float>(frameContext.sharedState.buildingRiseSignature,
-                                                           frameContext.sharedState.modelTileRiseSignature),
+                                heightScales: SIMD2<Float>(frameContext.state[BuildingFrameState.self].riseSignature,
+                                                           frameContext.state[ModelTileFrameState.self].riseSignature),
                                 terrain: frameContext.services.groundRelief?.shadowSignature,
                                 texture: texture,
                                 slot: slot)
@@ -169,7 +169,7 @@ final class ShadowMapReuseController {
     }
 
     /// Every building caster the frame rasterizes: the placements it draws
-    /// buildings for (`FrameContextSharedState.drawnBuildingPlacements`).
+    /// buildings for (`BuildingFrameState.drawnPlacements`).
     /// The rendered map is reused only while this set is unchanged.
     static func casterKeys(drawnPlacements: [PlaceTile]) -> Set<CasterKey> {
         var keys = Set<CasterKey>()

@@ -316,26 +316,26 @@ final class RenderFrameEngine {
         // for this frame, less the ones in.
         frameContext.diagnostics.setCounter(.pendingTerrainTiles,
                                             value: persistentContext.groundRelief?.pendingTerrainTileCount ?? 0)
-        let hasActiveLabelFadeAnimations = frameContext.sharedState.baseLabelState.hasActiveFadeAnimations
-            || frameContext.sharedState.roadLabelState.hasActiveFadeAnimations
-        let hasActivePinAnimations = frameContext.sharedState.pinState.hasActiveAnimations
-        let hasActiveSceneModelAnimations = frameContext.sharedState.sceneModelState.hasActiveAnimations
+        let hasActiveLabelFadeAnimations = frameContext.state[BaseLabelState.self].hasActiveFadeAnimations
+            || frameContext.state[RoadLabelState.self].hasActiveFadeAnimations
+        let hasActivePinAnimations = frameContext.state[PinState.self].hasActiveAnimations
+        let hasActiveSceneModelAnimations = frameContext.state[SceneModelFrameState.self].hasActiveAnimations
         eventSink.applyActivityState(RenderActivityState(labelFadeRenderingActive: hasActiveLabelFadeAnimations,
                                                          pinAnimationRenderingActive: hasActivePinAnimations,
                                                          sceneModelAnimationRenderingActive: hasActiveSceneModelAnimations,
-                                                         extrusionRiseRenderingActive: frameContext.sharedState.isExtrusionRising,
+                                                         extrusionRiseRenderingActive: frameContext.state[ExtrusionRiseFrameState.self].isRising,
                                                          animatedZoomRenderingActive: animatedZoom.isSettling
                                                              || (persistentContext.groundRelief?.isTransitioning ?? false)))
         // Independent of `didSchedule`: the animation advanced in `update`
         // whether or not this frame reached a drawable.
-        let pathAnimationResults = frameContext.sharedState.sceneModelState.pathAnimationResults
+        let pathAnimationResults = frameContext.state[SceneModelFrameState.self].pathAnimationResults
         if pathAnimationResults.isEmpty == false {
             eventSink.completeSceneModelPathAnimations(pathAnimationResults)
         }
         // Synchronously and within the same frame: SwiftUI annotation positions must
         // land in the same CA transaction as this frame's present. When didSchedule
         // == false the screen shows the old frame and there is nothing to publish.
-        if didSchedule, let annotationProjectionSnapshot = frameContext.sharedState.annotationState.snapshot {
+        if didSchedule, let annotationProjectionSnapshot = frameContext.state[AnnotationFrameState.self].snapshot {
             eventSink.updateAnnotationProjectionSnapshot(annotationProjectionSnapshot)
         }
         publishDebugOverlayHUDSnapshot(frameContext: frameContext)
@@ -525,11 +525,12 @@ final class RenderFrameEngine {
     private func publishStaticResources(frameIndex: UInt64) {
         let resourceRegistry = renderGraph.resourceRegistry
         resourceRegistry.beginFrame(frameIndex: frameIndex)
-        resourceRegistry.setPipeline(persistentContext.polygonPipeline.pipelineState, named: .polygonPipeline)
-        resourceRegistry.setPipeline(persistentContext.tilePipeline.pipelineState, named: .tilePipeline)
-        resourceRegistry.setPipeline(persistentContext.extrudedTilePipeline.pipelineState, named: .extrudedTilePipeline)
-        resourceRegistry.setTexture(persistentContext.textRenderer.texture, named: .labelGlyphAtlas)
-        resourceRegistry.setTexture(persistentContext.poiSpriteAtlas.texture, named: .poiSpriteAtlas)
+        let shared = persistentContext.shared
+        resourceRegistry.setPipeline(shared.get(PolygonsPipeline.self).pipelineState, named: .polygonPipeline)
+        resourceRegistry.setPipeline(shared.get(FlatGroundSharedResources.self).pipeline.pipelineState, named: .tilePipeline)
+        resourceRegistry.setPipeline(shared.get(ExtrudedTilePipeline.self).pipelineState, named: .extrudedTilePipeline)
+        resourceRegistry.setTexture(shared.get(TextAtlas.self).texture, named: .labelGlyphAtlas)
+        resourceRegistry.setTexture(shared.get(PoiSpriteAtlas.self).texture, named: .poiSpriteAtlas)
     }
 
     private func prepareGPU(frameContext: FrameContext) {
@@ -576,7 +577,7 @@ final class RenderFrameEngine {
         guard let tileLoadingStatusReporter = persistentContext.tileLoadingStatusReporter else {
             return
         }
-        let displayedTiles = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
+        let displayedTiles = frameContext.state[TilePlacementState.self].placeTilesContext.tilePlacements
             .map(\.metalTile.tile)
         tileLoadingStatusReporter.recordDisplayedTiles(displayedTiles)
     }
@@ -590,7 +591,7 @@ final class RenderFrameEngine {
             return false
         }
 
-        let selectionPickData = frameContext.sharedState.selectionPickData
+        let selectionPickData = frameContext.state[SelectionFrameState.self].pickData
         // The handler runs on a Metal thread, so it takes the engine's
         // thread-safe parts and never the engine itself.
         commandBuffer.addCompletedHandler { [lastCompletedGPUFrameDuration, inFlightFramePool, eventSink] completedBuffer in

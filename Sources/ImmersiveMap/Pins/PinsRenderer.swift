@@ -449,3 +449,14 @@ final class PinsRenderer {
     }
 
 }
+
+/// The pins draw in the overlay pass, which has one sample.
+extension PinsRenderer.SharedResources: SharedGPUResources {
+    static func make(_ build: SharedGPUResourceBuild) -> PinsRenderer.SharedResources {
+        make(metalDevice: build.device,
+             pixelFormat: build.pixelFormat,
+             library: build.library,
+             resourceBundle: build.resourceBundle,
+             sampleCount: 1)
+    }
+}

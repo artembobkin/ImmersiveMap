@@ -91,3 +91,13 @@ final class RasterTilePipeline {
         reliefShadowPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: shadow)
     }
 }
+
+/// Shared by every renderer of the process (`SharedRenderResources`).
+extension RasterTilePipeline: SharedGPUResources {
+    static func make(_ build: SharedGPUResourceBuild) -> RasterTilePipeline {
+        RasterTilePipeline(metalDevice: build.device,
+                           pixelFormat: build.pixelFormat,
+                           library: build.library,
+                           sampleCount: build.sampleCount)
+    }
+}

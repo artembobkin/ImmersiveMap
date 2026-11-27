@@ -33,7 +33,7 @@ final class ShadowMapAttachmentTests: XCTestCase {
         let texture = try XCTUnwrap(device.makeTexture(descriptor: descriptor))
 
         for slice in 0..<ShadowCascadeAtlas.sliceCount {
-            let passDescriptor = SharedRenderResources.makeShadowFallbackClearDescriptor(texture: texture, slice: slice)
+            let passDescriptor = FallbackDepthTexture.clearDescriptor(texture: texture, slice: slice)
 
             XCTAssertEqual(passDescriptor.renderTargetArrayLength, 0,
                            "Layered rendering is what fails validation and aborts the process")
@@ -52,7 +52,7 @@ final class ShadowMapAttachmentTests: XCTestCase {
             throw XCTSkip("Compiled Metal library is unavailable in this test environment")
         }
 
-        let fallback = try SharedRenderResources.shared(sampleCount: 1).shadowFallbackTexture
+        let fallback = try SharedRenderResources.shared(sampleCount: 1).get(ShadowSharedResources.self).shadowFallbackTexture
 
         XCTAssertEqual(fallback.textureType, .type2DArray)
         XCTAssertEqual(fallback.arrayLength, ShadowCascadeAtlas.sliceCount)

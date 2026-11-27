@@ -14,10 +14,10 @@ import simd
 /// placement's reference zoom, and grows with the zoom from there like the
 /// geometry around it.
 final class TileSurfaceLabelsBuilder {
-    private let textRenderer: TextRenderer
+    private let textLayout: TextLayout
 
-    init(textRenderer: TextRenderer) {
-        self.textRenderer = textRenderer
+    init(textLayout: TextLayout) {
+        self.textLayout = textLayout
     }
 
     /// A name wraps at this many ems to at most `wrapLineCount` lines,
@@ -49,7 +49,7 @@ final class TileSurfaceLabelsBuilder {
             let wrap = LabelWrapOptions(maxWidth: style.sizePoints * Self.wrapWidthEms * spacingWidening,
                                         maxLines: Self.wrapLineCount,
                                         alignment: .center)
-            let metrics = textRenderer.collectLabelVertices(for: label.text,
+            let metrics = textLayout.collectLabelVertices(for: label.text,
                                                             labelIndex: simd_int1(records.count),
                                                             scale: style.sizePoints,
                                                             wrap: wrap,

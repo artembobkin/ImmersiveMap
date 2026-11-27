@@ -99,7 +99,7 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
         // Coarse squares first: a finer placement inside a coarser one
         // (a descendant standing in, a child target under its parent)
         // marks over it.
-        let placements = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
+        let placements = frameContext.state[TilePlacementState.self].placeTilesContext.tilePlacements
             .sorted { $0.placeIn.z < $1.placeIn.z }
         guard placements.isEmpty == false else { return }
 

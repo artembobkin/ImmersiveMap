@@ -244,7 +244,7 @@ final class RenderPassGraph {
         let resourceRegistry = renderGraph.resourceRegistry
         // A label layer that reads the world's depth (the road names under
         // the buildings) keeps it past the world pass, on those frames only.
-        let keepsSceneDepth = frameContext.sharedState.sceneDepthForLabelsRequested
+        let keepsSceneDepth = frameContext.state[SceneDepthFrameState.self].isRequestedForLabels
             && attachments.supportsSceneDepth
         let depthTexture = attachments.ensureDepthTexture(drawSize: frameContext.drawSize,
                                                           keptForLabels: keepsSceneDepth)
@@ -257,7 +257,7 @@ final class RenderPassGraph {
                 ? attachments.ensureSceneDepthResolveTexture(drawSize: frameContext.drawSize)
                 : depthTexture
         }
-        frameContext.sharedState.sceneDepthTexture = sceneDepthTexture
+        frameContext.state[SceneDepthFrameState.self].texture = sceneDepthTexture
 
         let clearColor = RenderFrameClearColor.make(transition: frameContext.transition,
                                                     settings: settings,

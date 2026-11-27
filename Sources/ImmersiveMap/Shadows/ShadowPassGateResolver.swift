@@ -58,17 +58,17 @@ struct GroundShadowMaskBinding {
 /// identically by `RenderPassGraph.plan` (pass injection) and by the receiver
 /// bind sites, so the pass and the samplers can never disagree within a frame
 /// (the same trick as `RenderLayerPlanner`). Both call after
-/// subsystem updates, when `sharedState` is final for the frame.
+/// subsystem updates, when the frame's states (`FrameStateBoard`) are final.
 enum ShadowPassGateResolver {
     /// The buildings cast only where they draw
-    /// (`FrameContextSharedState.drawnBuildingPlacements`): planned but off
+    /// (`BuildingFrameState.drawnPlacements`): planned but off
     /// the buildings' zoom, or waiting for a model tile, they cast nothing.
     /// The mountains cast wherever the relief stands
     /// (`GroundReliefFrame.castsShadows`), with no building in sight.
     static func resolve(frameContext: FrameContext) -> ShadowFrameState? {
         resolve(shadowFrameState: frameContext.shadowFrameState,
-                hasBuildingCasters: frameContext.sharedState.drawnBuildingPlacements.isEmpty == false,
-                hasModelCasters: frameContext.sharedState.sceneModelState.hasShadowCasters,
+                hasBuildingCasters: frameContext.state[BuildingFrameState.self].drawnPlacements.isEmpty == false,
+                hasModelCasters: frameContext.state[SceneModelFrameState.self].hasShadowCasters,
                 hasTerrainCasters: frameContext.services.groundRelief?.castsShadows ?? false)
     }
 

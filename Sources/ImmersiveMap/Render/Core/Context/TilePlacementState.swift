@@ -22,7 +22,7 @@ struct TilePlacementState {
     /// field's resident tiles of the target zoom, each in its own place,
     /// with no overlaps (`BuildingCoveragePlanner`). The building subsystem
     /// draws those at the buildings' zoom and not waiting for a model tile
-    /// (`FrameContextSharedState.drawnBuildingPlacements`), by the depth
+    /// (`BuildingFrameState.drawnPlacements`), by the depth
     /// test alone. Empty on the globe.
     let buildingPlaceTilesContext: PlaceTilesContext
     let placementVersion: UInt64
@@ -30,4 +30,10 @@ struct TilePlacementState {
     let readyTilesCount: Int
     let requestedTilesCount: Int
     let renderedTilesCount: Int
+}
+
+extension TilePlacementState: FrameState {
+    init() {
+        self = .empty
+    }
 }

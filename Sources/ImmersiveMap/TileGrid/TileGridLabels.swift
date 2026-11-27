@@ -6,7 +6,7 @@ import simd
 
 /// The texts of the tile grid: what is written inside a tile, how large,
 /// and the glyphs of it as the GPU takes them. A text is laid out once by
-/// the engine's text layout (`TextRenderer`, handed in as a closure so
+/// the engine's text layout (`TextLayout`, handed in as a closure so
 /// this is testable without Metal) and kept, so a frame that moves the
 /// camera only places glyphs it already has.
 final class TileGridLabels {
@@ -35,7 +35,7 @@ final class TileGridLabels {
     private var key: Key?
 
     /// `layOut`: a text's glyphs at one em to the unit, their box's
-    /// south-west corner at the origin (`TextRenderer.collectLabelVertices`
+    /// south-west corner at the origin (`TextLayout.collectLabelVertices`
     /// at scale 1).
     init(layOut: @escaping (String) -> TextMetrics) {
         self.layOut = layOut

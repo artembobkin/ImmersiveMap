@@ -4,7 +4,7 @@
 import simd
 
 final class TileRoadLabelsBuilder {
-    private let textRenderer: TextRenderer
+    private let textLayout: TextLayout
     private let roadLabelRepeatDistancePoints: Float = 50.0
     private let tileExtent: Float = 4096.0
     /// Screen size of one tile at the reference scale, in layout points. Anchor
@@ -13,8 +13,8 @@ final class TileRoadLabelsBuilder {
     /// of the 512 device pixels a tile covers on a 2x display.
     private let tileScreenPointSize: Float = 256.0
     private let maxAnchorsPerPath: Int = 7
-    init(textRenderer: TextRenderer) {
-        self.textRenderer = textRenderer
+    init(textLayout: TextLayout) {
+        self.textLayout = textLayout
     }
 
     func build(roadTextLabels: [ParsedRoadTextLabel], tile: Tile) -> PreparedTileCPU.RoadLabels {
@@ -69,7 +69,7 @@ final class TileRoadLabelsBuilder {
             let atlasWeight = labelStyle?.weight ?? roadLabel.textStyle.weight
             assert(roadLabel.textStyle.weight == atlasWeight,
                    "Road labels in one tile must share a font weight: the tile binds a single atlas texture per draw.")
-            let textMetrics = textRenderer.collectLabelVertices(for: roadLabel.text,
+            let textMetrics = textLayout.collectLabelVertices(for: roadLabel.text,
                                                                 labelIndex: simd_int1(0),
                                                                 scale: roadLabel.textStyle.sizePoints,
                                                                 normalizeY: false,

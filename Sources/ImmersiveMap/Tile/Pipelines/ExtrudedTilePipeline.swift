@@ -3,7 +3,7 @@
 
 import MetalKit
 
-class ExtrudedTilePipeline {
+final class ExtrudedTilePipeline {
     /// Opaque building geometry, straight into the world pass.
     let pipelineState: MTLRenderPipelineState
     /// Depth-only replay of the same geometry from the light's camera into the
@@ -87,5 +87,15 @@ class ExtrudedTilePipeline {
 
     func selectShadowPipeline(renderEncoder: MTLRenderCommandEncoder, relief: Bool = false) {
         renderEncoder.setRenderPipelineState(relief ? reliefShadowPipelineState : shadowPipelineState)
+    }
+}
+
+/// Shared by every renderer of the process (`SharedRenderResources`).
+extension ExtrudedTilePipeline: SharedGPUResources {
+    static func make(_ build: SharedGPUResourceBuild) -> ExtrudedTilePipeline {
+        ExtrudedTilePipeline(metalDevice: build.device,
+                             pixelFormat: build.pixelFormat,
+                             library: build.library,
+                             sampleCount: build.sampleCount)
     }
 }

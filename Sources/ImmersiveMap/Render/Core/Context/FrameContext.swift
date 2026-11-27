@@ -30,7 +30,8 @@ struct FrameContext {
     let visibleContent: VisibleContentState
     let commandBuffer: MTLCommandBuffer?
     let services: FrameContextServices
-    let sharedState: FrameContextSharedState
+    /// What the subsystems leave for each other this frame.
+    let state: FrameStateBoard
     let diagnostics: FrameDiagnostics
     /// Directional-shadow state of the frame; nil when shadows are off or the
     /// frame cannot cast (globe mode, degenerate light or footprint).
@@ -156,7 +157,7 @@ struct FrameContext {
          terrainSurroundings: ImmersiveMapTerrainSurroundings? = nil,
          resolvedPresentation: ResolvedPresentationState? = nil,
          visibleContent: VisibleContentState = .empty,
-         sharedState: FrameContextSharedState = FrameContextSharedState(),
+         state: FrameStateBoard = FrameStateBoard(),
          shadowFrameState: ShadowFrameState? = nil,
          shadowMapReuse: ShadowMapReuseController = ShadowMapReuseController(),
          diagnostics: FrameDiagnostics) {
@@ -181,7 +182,7 @@ struct FrameContext {
         self.visibleContent = visibleContent
         self.commandBuffer = commandBuffer
         self.services = services
-        self.sharedState = sharedState
+        self.state = state
         self.shadowFrameState = shadowFrameState
         self.shadowMapReuse = shadowMapReuse
         self.diagnostics = diagnostics

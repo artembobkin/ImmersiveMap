@@ -59,15 +59,15 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
         }
 
         let presented = presentationStateStore.presentedEntries(at: frameContext.time)
-        frameContext.sharedState.sceneModelState.hasActiveAnimations = presentationStateStore.hasActiveAnimations
-        frameContext.sharedState.sceneModelState.hasShadowCasters = false
-        frameContext.sharedState.sceneModelState.hasMovingShadowCasters = false
-        frameContext.sharedState.sceneModelState.staticShadowCasters = []
+        frameContext.state[SceneModelFrameState.self].hasActiveAnimations = presentationStateStore.hasActiveAnimations
+        frameContext.state[SceneModelFrameState.self].hasShadowCasters = false
+        frameContext.state[SceneModelFrameState.self].hasMovingShadowCasters = false
+        frameContext.state[SceneModelFrameState.self].staticShadowCasters = []
         // The frame's replaced buildings start empty: the model tiles add
         // theirs (`ModelTileRenderSubsystem`).
-        frameContext.sharedState.sceneModelState.replacedBuildings = .none
-        frameContext.sharedState.sceneModelState.hasDrawnModels = false
-        frameContext.sharedState.sceneModelState.pathAnimationResults =
+        frameContext.state[SceneModelFrameState.self].replacedBuildings = .none
+        frameContext.state[SceneModelFrameState.self].hasDrawnModels = false
+        frameContext.state[SceneModelFrameState.self].pathAnimationResults =
             presentationStateStore.consumePathAnimationResults()
 
         guard presented.isEmpty == false else {
@@ -138,11 +138,11 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
         }
         drawItems = items
         shadowCasterItems = shadowItems
-        frameContext.sharedState.sceneModelState.hasShadowCasters = shadowItems.isEmpty == false
-        frameContext.sharedState.sceneModelState.hasMovingShadowCasters = shadowItems.isEmpty == false
-        frameContext.sharedState.sceneModelState.hasDrawnModels = items.isEmpty == false
+        frameContext.state[SceneModelFrameState.self].hasShadowCasters = shadowItems.isEmpty == false
+        frameContext.state[SceneModelFrameState.self].hasMovingShadowCasters = shadowItems.isEmpty == false
+        frameContext.state[SceneModelFrameState.self].hasDrawnModels = items.isEmpty == false
         // Hit volumes of the models this frame drew.
-        frameContext.sharedState.selectionPickData.append(SceneModelSelectionSnapshot(
+        frameContext.state[SelectionFrameState.self].pickData.append(SceneModelSelectionSnapshot(
             frameIndex: frameContext.frameIndex,
             drawSize: frameContext.drawSize,
             projectionView: frameContext.cameraMatrices.projectionView,

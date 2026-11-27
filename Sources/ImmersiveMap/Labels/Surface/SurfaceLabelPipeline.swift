@@ -104,3 +104,13 @@ enum SurfaceLabelScale {
 enum SurfaceLabelDepth {
     static let depth: Float = 1 - GlobeSurfaceDepthRank.surfaceLabelsRank * GlobeSurfaceDepthRank.layerDepthStep
 }
+
+/// Shared by every renderer of the process (`SharedRenderResources`).
+extension SurfaceLabelPipeline: SharedGPUResources {
+    static func make(_ build: SharedGPUResourceBuild) -> SurfaceLabelPipeline {
+        SurfaceLabelPipeline(metalDevice: build.device,
+                             pixelFormat: build.pixelFormat,
+                             library: build.library,
+                             sampleCount: build.sampleCount)
+    }
+}

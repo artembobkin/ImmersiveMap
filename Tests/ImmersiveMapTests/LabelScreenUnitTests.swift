@@ -255,13 +255,11 @@ final class LabelScreenUnitTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// The builder bakes through `TextRenderer`, which needs the compiled Metal
-    /// library for its pipelines, so these two skip under `swift test` and run
-    /// under the xcodebuild suite.
+    /// The builder bakes through `TextLayout`, which reads the atlases'
+    /// metrics from the resource bundle and needs no GPU.
     private func makeTextLabelsBuilder() throws -> TileTextLabelsBuilder {
-        let device = try MetalTestEnvironment.requireDevice()
-        let library = try device.makeDefaultLibrary(bundle: ImmersiveMapResourceBundle.bundle())
-        return try TileTextLabelsBuilder(textRenderer: TextRenderer(device: device, library: library, resourceBundle: ImmersiveMapResourceBundle.bundle()))
+        let metrics = try GlyphAtlasMetrics(bundle: ImmersiveMapResourceBundle.bundle())
+        return TileTextLabelsBuilder(textLayout: TextLayout(metrics: metrics))
     }
 
     private func labelSizePoints(builder: TileTextLabelsBuilder,

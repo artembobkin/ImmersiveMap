@@ -16,7 +16,7 @@ import Metal
 /// shows, the buildings' zoom and finer (`BuildingCoveragePlanner`), so
 /// they stand through a change of zoom as the ground does. A tile's
 /// buildings also wait for the model tile
-/// over them (`FrameContextSharedState.pendingModelTiles`), so the ones a
+/// over them (`ModelTileFrameState.pendingTiles`), so the ones a
 /// model stands in for are left out from their first frame. Each tile's
 /// buildings grow out of the flat map from the frame they first draw in
 /// (`ExtrusionRise`), their shadows with them: all of them when the camera
@@ -79,8 +79,8 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     func update(frameContext: FrameContext) {
         let isRaised = frameContext.renderSurfaceMode == .flat
             && frameContext.planningZoom >= extrusion.buildingsMinimumZoom
-        let placements = frameContext.sharedState.tilePlacementState.buildingPlaceTilesContext.tilePlacements
-        let pendingModelTiles = frameContext.sharedState.pendingModelTiles
+        let placements = frameContext.state[TilePlacementState.self].buildingPlaceTilesContext.tilePlacements
+        let pendingModelTiles = frameContext.state[ModelTileFrameState.self].pendingTiles
         // The placements that draw: the camera at the buildings' zoom, and
         // the model tile over the placement, if any, in hand.
         let drawnKeys: [VisibleTile?] = placements.map { placement in
@@ -118,10 +118,10 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
         }
         drawsAny = drawnPlacements.isEmpty == false
         updateLiftBuffers(placements: placements, drawnKeys: drawnKeys, frameContext: frameContext)
-        frameContext.sharedState.drawnBuildingPlacements = drawnPlacements
-        frameContext.sharedState.buildingRise = riseCoverage
-        frameContext.sharedState.buildingRiseSignature = signature
-        frameContext.sharedState.isExtrusionRising = frameContext.sharedState.isExtrusionRising || rise.isAnimating
+        frameContext.state[BuildingFrameState.self].drawnPlacements = drawnPlacements
+        frameContext.state[BuildingFrameState.self].rise = riseCoverage
+        frameContext.state[BuildingFrameState.self].riseSignature = signature
+        frameContext.state[ExtrusionRiseFrameState.self].isRising = frameContext.state[ExtrusionRiseFrameState.self].isRising || rise.isAnimating
     }
 
     func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
@@ -170,12 +170,12 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
             guard let lightProjectionView = frameContext.shadowFrameState?.lightProjectionView(for: slot) else { return }
             // The casters are the building coverage, the same partition the
             // world pass draws, so a building casts exactly once a window.
-            hiddenBuildingIndexBuffers.update(frameContext.sharedState.sceneModelState.replacedBuildings)
+            hiddenBuildingIndexBuffers.update(frameContext.state[SceneModelFrameState.self].replacedBuildings)
             let lift = Self.lift(frameContext)
             BuildingExtrusionDrawer.drawShadowCasters(
                 renderEncoder: encoder,
                 lightProjectionView: lightProjectionView,
-                placeTilesContext: frameContext.sharedState.tilePlacementState.buildingPlaceTilesContext,
+                placeTilesContext: frameContext.state[TilePlacementState.self].buildingPlaceTilesContext,
                 indexBuffers: hiddenBuildingIndexBuffers,
                 flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                 heightScales: heightScales,
@@ -204,13 +204,13 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
         let shadowBinding = ShadowReceiverBinding.resolve(frameContext: frameContext,
                                                           shadowMapTexture: shadowMapTextureProvider(),
                                                           fallbackTexture: shadowFallbackTexture)
-        hiddenBuildingIndexBuffers.update(frameContext.sharedState.sceneModelState.replacedBuildings)
+        hiddenBuildingIndexBuffers.update(frameContext.state[SceneModelFrameState.self].replacedBuildings)
         GroundFogUniform.bind(GroundFogUniform.resolveForBuildings(frameContext: frameContext), encoder: encoder)
         let lift = Self.lift(frameContext)
         BuildingExtrusionDrawer.drawBuildings(renderEncoder: encoder,
                                               cameraUniform: frameContext.cameraUniform,
                                               shadowBinding: shadowBinding,
-                                              placeTilesContext: frameContext.sharedState.tilePlacementState.buildingPlaceTilesContext,
+                                              placeTilesContext: frameContext.state[TilePlacementState.self].buildingPlaceTilesContext,
                                               indexBuffers: hiddenBuildingIndexBuffers,
                                               flatRenderState: frameContext.resolvedPresentation.flatRenderState,
                                               heightScales: heightScales,

@@ -75,7 +75,7 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         guard frameContext.renderSurfaceMode == .flat else {
             return
         }
-        let placeTilesContext = frameContext.sharedState.tilePlacementState.placeTilesContext
+        let placeTilesContext = frameContext.state[TilePlacementState.self].placeTilesContext
         guard placeTilesContext.tilePlacements.isEmpty == false else { return }
 
         let isWireframeEnabled = debugOverlayControls.snapshot().wireframeEnabled

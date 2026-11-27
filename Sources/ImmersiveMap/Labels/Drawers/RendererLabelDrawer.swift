@@ -32,7 +32,8 @@ final class RendererLabelDrawer {
     static func drawBaseLabels(renderEncoder: MTLRenderCommandEncoder,
                                screenMatrix: matrix_float4x4,
                                screenScale: ScreenScale,
-                               textRenderer: TextRenderer,
+                               textAtlas: TextAtlas,
+                               pipelines: LabelPipelines,
                                poiSpriteAtlas: PoiSpriteAtlas,
                                screenPositionsBuffer: MTLBuffer,
                                labelRuntimeMetaBuffer: MTLBuffer,
@@ -59,7 +60,7 @@ final class RendererLabelDrawer {
                 }
 
                 if bindings.isPoiPipelineBound == false {
-                    renderEncoder.setRenderPipelineState(textRenderer.poiIconPipelineState)
+                    renderEncoder.setRenderPipelineState(pipelines.poiIcon)
                     setFragmentTexture(poiSpriteAtlas.texture, renderEncoder: renderEncoder, bindings: &bindings)
                     bindings.isPoiPipelineBound = true
                 }
@@ -87,14 +88,14 @@ final class RendererLabelDrawer {
         }
 
         drawRouteShieldPlates(renderEncoder: renderEncoder,
-                              textRenderer: textRenderer,
+                              pipelines: pipelines,
                               baseLabelsDrawBatches: baseLabelsDrawBatches,
                               bindings: &bindings)
 
-        renderEncoder.setRenderPipelineState(textRenderer.labelPipelineState)
+        renderEncoder.setRenderPipelineState(pipelines.label)
         drawBaseLabelText(renderEncoder: renderEncoder,
                           screenScale: screenScale,
-                          textRenderer: textRenderer,
+                          textAtlas: textAtlas,
                           baseLabelsDrawBatches: baseLabelsDrawBatches,
                           handover: handover,
                           labelOpacity: labelOpacity,
@@ -107,7 +108,8 @@ final class RendererLabelDrawer {
     static func drawRoadLabels(renderEncoder: MTLRenderCommandEncoder,
                                screenMatrix: matrix_float4x4,
                                screenScale: ScreenScale,
-                               textRenderer: TextRenderer,
+                               textAtlas: TextAtlas,
+                               pipelines: LabelPipelines,
                                roadDrawLabels: [DrawRoadLabels],
                                sceneDepth: MTLTexture,
                                sceneDepthUniforms: RoadLabelSceneDepthUniforms,
@@ -116,7 +118,7 @@ final class RendererLabelDrawer {
             return
         }
 
-        renderEncoder.setRenderPipelineState(textRenderer.roadLabelPipelineState)
+        renderEncoder.setRenderPipelineState(pipelines.roadLabel)
         var sceneDepthUniformsValue = sceneDepthUniforms
         renderEncoder.setVertexBytes(&sceneDepthUniformsValue,
                                      length: MemoryLayout<RoadLabelSceneDepthUniforms>.stride,
@@ -149,7 +151,7 @@ final class RendererLabelDrawer {
             setVertexBuffer0(drawLabel.localGlyphVertices, renderEncoder: renderEncoder, bindings: &bindings)
 
             let style = drawLabel.labelStyle
-            let texture = style.weight == .bold ? textRenderer.texture : textRenderer.thinTexture
+            let texture = style.weight == .bold ? textAtlas.texture : textAtlas.thinTexture
             setFragmentTexture(texture, renderEncoder: renderEncoder, bindings: &bindings)
 
             // One draw: the fragment stage resolves the fill and the halo
@@ -173,7 +175,7 @@ final class RendererLabelDrawer {
     /// discs and under every label's text: a sign's number is a glyph run
     /// of its own and draws over its plate with the rest of the text.
     private static func drawRouteShieldPlates(renderEncoder: MTLRenderCommandEncoder,
-                                              textRenderer: TextRenderer,
+                                              pipelines: LabelPipelines,
                                               baseLabelsDrawBatches: [BaseLabelDrawBatch],
                                               bindings: inout EncoderBindings) {
         var isPipelineBound = false
@@ -183,7 +185,7 @@ final class RendererLabelDrawer {
                     continue
                 }
                 if isPipelineBound == false {
-                    renderEncoder.setRenderPipelineState(textRenderer.routeShieldPipelineState)
+                    renderEncoder.setRenderPipelineState(pipelines.routeShield)
                     isPipelineBound = true
                 }
                 let style = RouteShieldStyleUniform(run.style)
@@ -214,7 +216,7 @@ final class RendererLabelDrawer {
     /// rare and the halo width keeps small.
     private static func drawBaseLabelText(renderEncoder: MTLRenderCommandEncoder,
                                           screenScale: ScreenScale,
-                                          textRenderer: TextRenderer,
+                                          textAtlas: TextAtlas,
                                           baseLabelsDrawBatches: [BaseLabelDrawBatch],
                                           handover: Float,
                                           labelOpacity: LabelOpacityFrame,
@@ -227,7 +229,7 @@ final class RendererLabelDrawer {
                 }
 
                 let style = run.style
-                let texture = style.weight == .bold ? textRenderer.texture : textRenderer.thinTexture
+                let texture = style.weight == .bold ? textAtlas.texture : textAtlas.thinTexture
                 // The colours are the globe's look of the label handed over
                 // to the plane's with the air.
                 let textStyle = TextStyleUniform(textColor: style.fillColor(atHandover: handover),

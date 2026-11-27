@@ -143,3 +143,13 @@ final class GlobeCapRenderer {
                                             indexBufferOffset: 0)
     }
 }
+
+extension GlobeCapRenderer.SharedResources: SharedGPUResources {
+    static func make(_ build: SharedGPUResourceBuild) -> GlobeCapRenderer.SharedResources {
+        make(metalDevice: build.device,
+             pixelFormat: build.pixelFormat,
+             library: build.library,
+             sampleCount: build.sampleCount,
+             maxLatitude: WebMercatorMath.maxLatitudeRadians)
+    }
+}

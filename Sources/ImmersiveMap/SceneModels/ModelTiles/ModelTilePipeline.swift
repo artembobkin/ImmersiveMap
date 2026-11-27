@@ -89,3 +89,13 @@ final class ModelTilePipeline {
         self.baseColorSampler = metalDevice.makeSamplerState(descriptor: samplerDescriptor)!
     }
 }
+
+/// Shared by every renderer of the process (`SharedRenderResources`).
+extension ModelTilePipeline: SharedGPUResources {
+    static func make(_ build: SharedGPUResourceBuild) -> ModelTilePipeline {
+        ModelTilePipeline(metalDevice: build.device,
+                          pixelFormat: build.pixelFormat,
+                          library: build.library,
+                          sampleCount: build.sampleCount)
+    }
+}

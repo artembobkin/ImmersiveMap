@@ -26,7 +26,7 @@ final class TileProjectionIndexSubsystem: RenderSubsystem {
     }
 
     func update(frameContext: FrameContext) {
-        let placeTiles = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
+        let placeTiles = frameContext.state[TilePlacementState.self].placeTilesContext.tilePlacements
         let nextProjectionTiles = makeSourceProjectionTiles(from: placeTiles)
         let projectionHash = makeProjectionTilesHash(nextProjectionTiles)
         let shouldRebuildAllocator = sourceProjectionTracker.stage(projectionHash) || requiresAllocatorRebuildAfterReset
@@ -46,7 +46,7 @@ final class TileProjectionIndexSubsystem: RenderSubsystem {
             tileOriginDataBuffer = nil
         }
 
-        frameContext.sharedState.tileProjectionIndexState = TileProjectionIndexState(
+        frameContext.state[TileProjectionIndexState.self] = TileProjectionIndexState(
             sourceProjectionTiles: sourceProjectionTiles,
             tileIndexAllocator: tileIndexAllocator,
             tileOriginData: flatTileOriginCalculator.currentTileOriginData,

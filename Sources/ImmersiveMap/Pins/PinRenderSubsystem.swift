@@ -35,7 +35,7 @@ final class PinRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProvider 
     func update(frameContext: FrameContext) {
         pinsRenderer.update(controller: pinSource.currentPinController,
                                time: frameContext.time)
-        frameContext.sharedState.pinState.hasActiveAnimations = pinsRenderer.hasActiveAnimations
+        frameContext.state[PinState.self].hasActiveAnimations = pinsRenderer.hasActiveAnimations
     }
 
     func prepareGPU(frameContext: FrameContext, resourceRegistry _: RenderResourceRegistry) {
@@ -50,8 +50,8 @@ final class PinRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProvider 
                                 time: frameContext.time,
                                 commandBuffer: commandBuffer,
                                 frameSlotIndex: frameContext.frameSlotIndex)
-        frameContext.sharedState.pinState.hasActiveAnimations = pinsRenderer.hasActiveAnimations
-        frameContext.sharedState.selectionPickData.append(
+        frameContext.state[PinState.self].hasActiveAnimations = pinsRenderer.hasActiveAnimations
+        frameContext.state[SelectionFrameState.self].pickData.append(
             pinsRenderer.selectionSnapshot.withFrameIndex(frameContext.frameIndex))
     }
 

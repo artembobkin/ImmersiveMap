@@ -25,16 +25,25 @@ final class SharedRenderResourcesTests: XCTestCase {
         let first = try makePersistentContext()
         let second = try makePersistentContext()
 
-        // The heavyweight resources must be the very same objects.
-        XCTAssertTrue(first.textRenderer === second.textRenderer,
+        // The renderers read one set, so what it holds is the very same
+        // objects for both.
+        XCTAssertTrue(first.shared === second.shared)
+        XCTAssertTrue(first.shared.get(TextAtlas.self) === second.shared.get(TextAtlas.self),
                       "Text atlases and glyph tables must not be rebuilt per view")
-        XCTAssertTrue(first.poiSpriteAtlas === second.poiSpriteAtlas)
-        XCTAssertTrue(first.tilePipeline === second.tilePipeline)
-        XCTAssertTrue(first.globeVectorSurfacePipeline === second.globeVectorSurfacePipeline)
-        XCTAssertTrue(first.extrudedTilePipeline === second.extrudedTilePipeline)
-        XCTAssertTrue(first.sceneModelPipeline === second.sceneModelPipeline)
-        XCTAssertTrue(first.shadowFallbackTexture === second.shadowFallbackTexture)
-        XCTAssertTrue(first.extrudedDepthState === second.extrudedDepthState)
+        XCTAssertTrue(first.shared.get(PoiSpriteAtlas.self) === second.shared.get(PoiSpriteAtlas.self))
+        XCTAssertTrue(first.shared.get(FlatGroundSharedResources.self).pipeline
+                      === second.shared.get(FlatGroundSharedResources.self).pipeline)
+        XCTAssertTrue(first.shared.get(GlobeVectorSurfaceSharedResources.self).pipeline
+                      === second.shared.get(GlobeVectorSurfaceSharedResources.self).pipeline)
+        XCTAssertFalse(first.shared.get(FlatGroundSharedResources.self).pipeline
+                       === first.shared.get(GlobeVectorSurfaceSharedResources.self).pipeline,
+                       "The plane and the sphere build the tile pipeline each its own way")
+        XCTAssertTrue(first.shared.get(ExtrudedTilePipeline.self) === second.shared.get(ExtrudedTilePipeline.self))
+        XCTAssertTrue(first.shared.get(SceneModelSharedResources.self).pipeline
+                      === second.shared.get(SceneModelSharedResources.self).pipeline)
+        XCTAssertTrue(first.shared.get(ShadowSharedResources.self).shadowFallbackTexture
+                      === second.shared.get(ShadowSharedResources.self).shadowFallbackTexture)
+        XCTAssertTrue(first.shared.get(CommonDepthStates.self).scene === second.shared.get(CommonDepthStates.self).scene)
         XCTAssertTrue(first.metalContext.library === second.metalContext.library)
 
         // Mutable state must stay per view.

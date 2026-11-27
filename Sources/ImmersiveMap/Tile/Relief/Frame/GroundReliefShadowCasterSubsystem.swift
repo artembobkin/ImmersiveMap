@@ -75,7 +75,7 @@ final class GroundReliefShadowCasterSubsystem: RenderSubsystem {
               frameContext.renderSurfaceMode == .flat,
               let relief = frameContext.services.groundRelief, relief.castsShadows,
               let lightProjectionView = frameContext.shadowFrameState?.lightProjectionView(for: slot) else { return }
-        let placements = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
+        let placements = frameContext.state[TilePlacementState.self].placeTilesContext.tilePlacements
         // The horizon backdrop is no ground of the planner's and casts nothing.
         let casters = PlacementGroundSquare.squares(of: placements.filter { $0.isHorizonBackdrop == false })
         guard casters.isEmpty == false else { return }

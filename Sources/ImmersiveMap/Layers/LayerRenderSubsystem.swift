@@ -88,7 +88,7 @@ final class LayerRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProvide
             resolvedPresentation: frameContext.resolvedPresentation)
         // An empty snapshot too: a layer that stops being drawn stops
         // being tappable.
-        frameContext.sharedState.selectionPickData.append(LayerSelectionSnapshot(frameIndex: frameContext.frameIndex,
+        frameContext.state[SelectionFrameState.self].pickData.append(LayerSelectionSnapshot(frameIndex: frameContext.frameIndex,
                                                                                 drawSize: frameContext.drawSize,
                                                                                 projection: projection,
                                                                                 entries: entries))

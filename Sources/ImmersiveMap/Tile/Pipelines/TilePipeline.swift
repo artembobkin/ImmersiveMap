@@ -3,7 +3,7 @@
 
 import MetalKit
 
-class TilePipeline {
+final class TilePipeline {
     /// Which surface the pipeline draws tiles onto. The flat one projects
     /// through a model matrix into the plane (Tile.metal); the sphere one
     /// projects tile-local positions onto the globe through the surface

@@ -3,7 +3,7 @@
 
 import MetalKit
 
-class PolygonsPipeline {
+final class PolygonsPipeline {
     // Triangle vertices (NDC coordinates from -1 to 1)
     struct Vertex {
         var position: SIMD4<Float> // x, y, z, w
@@ -63,5 +63,14 @@ class PolygonsPipeline {
     
     func setPipelineState(renderEncoder: MTLRenderCommandEncoder) {
         renderEncoder.setRenderPipelineState(pipelineState)
+    }
+}
+
+/// Shared by every renderer of the process (`SharedRenderResources`).
+extension PolygonsPipeline: SharedGPUResources {
+    static func make(_ build: SharedGPUResourceBuild) -> PolygonsPipeline {
+        PolygonsPipeline(metalDevice: build.device,
+                         pixelFormat: build.pixelFormat,
+                         library: build.library)
     }
 }

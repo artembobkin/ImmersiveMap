@@ -64,7 +64,7 @@ final class TreeRenderSubsystem: RenderSubsystem {
         let isRaised = settings.isEnabled
             && frameContext.renderSurfaceMode == .flat
             && zoom >= settings.minimumZoom
-        let placements = frameContext.sharedState.tilePlacementState.buildingPlaceTilesContext.tilePlacements
+        let placements = frameContext.state[TilePlacementState.self].buildingPlaceTilesContext.tilePlacements
         let drawnKeys: [VisibleTile?] = placements.map { placement in
             guard isRaised, placement.metalTile.tileBuffers.treesCount > 0 else { return nil }
             return placement.placeIn
@@ -91,7 +91,7 @@ final class TreeRenderSubsystem: RenderSubsystem {
                                                         share: share)
             items.append(TreeDrawer.Item(placement: placement, instanceRanges: ranges, riseScale: scale))
         }
-        frameContext.sharedState.isExtrusionRising = frameContext.sharedState.isExtrusionRising || rise.isAnimating
+        frameContext.state[ExtrusionRiseFrameState.self].isRising = frameContext.state[ExtrusionRiseFrameState.self].isRising || rise.isAnimating
     }
 
     func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}

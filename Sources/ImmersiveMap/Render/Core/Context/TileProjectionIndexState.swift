@@ -21,3 +21,9 @@ struct TileProjectionIndexState {
     let tileOriginDataBuffer: MTLBuffer?
     let sourceIndexVersion: UInt64
 }
+
+extension TileProjectionIndexState: FrameState {
+    init() {
+        self = .empty
+    }
+}

@@ -24,7 +24,7 @@ final class TileRenderStore: @unchecked Sendable {
     init(
         styleRuntime: MapStyleRuntime,
         metalDevice: MTLDevice,
-        textRenderer: TextRenderer,
+        textLayout: TextLayout,
         config: ImmersiveMapSettings,
         tileTraceRecorder: TileTraceRecorder,
         tileLoadingStatusReporter: TileLoadingStatusReporter?
@@ -35,7 +35,7 @@ final class TileRenderStore: @unchecked Sendable {
             preparedFormatVersion: PreparedTileDiskCaching.preparedFormatVersion,
             styleRevision: styleRuntime.preparedTileStyleRevision,
             tileSourceRevision: PreparedTileCacheIdentity.tileSourceRevision(for: config.tiles.network),
-            textRevision: textRenderer.preparedTileTextRevision,
+            textRevision: textLayout.preparedTileTextRevision,
             labelLanguage: config.labels.language,
             labelFallbackPolicy: config.labels.fallbackPolicy,
             capitalMaximumZoom: UInt32(max(0, config.labels.settlementVisibility.capitalMaximumZoom)),
@@ -55,18 +55,18 @@ final class TileRenderStore: @unchecked Sendable {
             treeMaximumPerTile: parseOptions.treeMaximumPerTile
         )
         let labelDecisions = TileLabelDecisions(style: styleRuntime.style,
-                                                glyphCoverage: textRenderer.glyphCoverage,
+                                                glyphCoverage: textLayout.metrics.glyphCoverage,
                                                 language: config.labels.language,
                                                 fallbackPolicy: config.labels.fallbackPolicy)
         let tileParser = TileMvtParser(mapStyle: styleRuntime,
                                        labelDecisions: labelDecisions,
                                        options: parseOptions)
-        let textLabelsBuilder = TileTextLabelsBuilder(textRenderer: textRenderer)
-        let roadLabelsBuilder = TileRoadLabelsBuilder(textRenderer: textRenderer)
+        let textLabelsBuilder = TileTextLabelsBuilder(textLayout: textLayout)
+        let roadLabelsBuilder = TileRoadLabelsBuilder(textLayout: textLayout)
         self.preparedDataBuilder = TilePreparedDataBuilder(tileParser: tileParser,
                                                            textLabelsBuilder: textLabelsBuilder,
                                                            roadLabelsBuilder: roadLabelsBuilder,
-                                                           surfaceLabelsBuilder: TileSurfaceLabelsBuilder(textRenderer: textRenderer))
+                                                           surfaceLabelsBuilder: TileSurfaceLabelsBuilder(textLayout: textLayout))
         self.metalTileFactory = MetalTileFactory(metalDevice: metalDevice)
         workingSet = TileWorkingSetStore(tileTraceRecorder: tileTraceRecorder)
         // The factory owns the MTLIO capability decision: the transport that

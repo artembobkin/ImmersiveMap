@@ -175,3 +175,14 @@ struct TileGridFrameUniform {
 enum TileGridDepth {
     static let depth: Float = 1 - GlobeSurfaceDepthRank.realGeometryRank * GlobeSurfaceDepthRank.layerDepthStep
 }
+
+/// Shared by every renderer of the process (`SharedRenderResources`). The
+/// overlay pass has one sample.
+extension TileGridPipeline: SharedGPUResources {
+    static func make(_ build: SharedGPUResourceBuild) -> TileGridPipeline {
+        TileGridPipeline(metalDevice: build.device,
+                         pixelFormat: build.pixelFormat,
+                         library: build.library,
+                         sampleCount: 1)
+    }
+}

@@ -11,26 +11,29 @@ import Metal
 final class BaseLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvider {
     let name: String = "BaseLabelDraw"
 
-    private let textRenderer: TextRenderer
+    private let textAtlas: TextAtlas
+    private let pipelines: LabelPipelines
     private let poiSpriteAtlas: PoiSpriteAtlas
     private let labelDepthState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
 
     private(set) var hasRenderableLabels: Bool = false
 
-    init(textRenderer: TextRenderer,
+    init(textAtlas: TextAtlas,
+         pipelines: LabelPipelines,
          poiSpriteAtlas: PoiSpriteAtlas,
          labelDepthState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState,
          metalDevice _: MTLDevice) {
-        self.textRenderer = textRenderer
+        self.textAtlas = textAtlas
+        self.pipelines = pipelines
         self.poiSpriteAtlas = poiSpriteAtlas
         self.labelDepthState = labelDepthState
         self.depthDisabledState = depthDisabledState
     }
 
     func update(frameContext: FrameContext) {
-        hasRenderableLabels = frameContext.sharedState.baseLabelState.labelInputsCount > 0
+        hasRenderableLabels = frameContext.state[BaseLabelState.self].labelInputsCount > 0
     }
 
     func contributePassAvailability(settings _: ImmersiveMapSettings,
@@ -39,7 +42,7 @@ final class BaseLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
     }
 
     func prepareGPU(frameContext: FrameContext, resourceRegistry: RenderResourceRegistry) {
-        if let labelRuntimeMetaBuffer = frameContext.sharedState.baseLabelState.labelRuntimeMetaBuffer {
+        if let labelRuntimeMetaBuffer = frameContext.state[BaseLabelState.self].labelRuntimeMetaBuffer {
             resourceRegistry.setBuffer(labelRuntimeMetaBuffer, named: .baseLabelRuntimeBuffer)
         }
     }
@@ -49,7 +52,7 @@ final class BaseLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
             return
         }
 
-        let baseLabelState = frameContext.sharedState.baseLabelState
+        let baseLabelState = frameContext.state[BaseLabelState.self]
         guard baseLabelState.labelInputsCount > 0 else {
             return
         }
@@ -72,7 +75,8 @@ final class BaseLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
         RendererLabelDrawer.drawBaseLabels(renderEncoder: encoder,
                                            screenMatrix: frameContext.cameraMatrices.screen,
                                            screenScale: frameContext.screenScale,
-                                           textRenderer: textRenderer,
+                                           textAtlas: textAtlas,
+                                           pipelines: pipelines,
                                            poiSpriteAtlas: poiSpriteAtlas,
                                            screenPositionsBuffer: screenPositionsBuffer,
                                            labelRuntimeMetaBuffer: labelRuntimeMetaBuffer,

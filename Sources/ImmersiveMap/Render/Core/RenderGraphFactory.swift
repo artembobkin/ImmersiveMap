@@ -4,12 +4,62 @@
 import Metal
 
 enum RenderGraphFactory {
+    /// The shared GPU resources of the features, one set per type: what
+    /// `SharedRenderResources` builds once for the process, side by side,
+    /// and what `makeDefaultGraph` hands the subsystems. A feature with
+    /// shared resources adds its set here and nowhere else in `Render`.
+    /// The heaviest sets go first, so they overlap the whole batch.
+    static var sharedResourceTypes: [any SharedGPUResources.Type] {
+        [
+            TextAtlas.self,
+            LabelPipelines.self,
+            TextPipeline.self,
+            PinsRenderer.SharedResources.self,
+            GlobeCapRenderer.SharedResources.self,
+            ExtrudedTilePipeline.self,
+            PolygonsPipeline.self,
+            FlatGroundSharedResources.self,
+            ShadowSharedResources.self,
+            RasterTilePipeline.self,
+            GlobeVectorSurfaceSharedResources.self,
+            SurfaceLabelPipeline.self,
+            FXAAPipeline.self,
+            StarfieldPipeline.self,
+            HorizonSharedResources.self,
+            SceneModelSharedResources.self,
+            ModelTilePipeline.self,
+            PlacementStencilSharedResources.self,
+            TreePipeline.self,
+            LayerPipeline.self,
+            TileGridPipeline.self,
+            CommonDepthStates.self,
+            TilePriorityDepthStates.self,
+            RoadLabelSharedResources.self
+        ]
+    }
+
+    /// The shared sets that are made on the main thread, after the others.
+    static var mainThreadSharedResourceTypes: [any MainThreadSharedGPUResources.Type] {
+        [PoiSpriteAtlas.self]
+    }
+
     static func makeDefaultGraph(context: RenderPersistentContext,
                                  settings: ImmersiveMapSettings,
                                  debugOverlayControls: DebugOverlayControlState,
                                  postProcessingInputTextureProvider: @escaping () -> MTLTexture?,
                                  shadowMapTextureProvider: @escaping () -> MTLTexture?,
                                  groundShadowMaskTextureProvider: @escaping () -> MTLTexture?) -> RenderGraph {
+        // The sets of the process, each read once and handed to the
+        // subsystems that draw by it.
+        let shared = context.shared
+        let depth = shared.get(CommonDepthStates.self)
+        let tileDepth = shared.get(TilePriorityDepthStates.self)
+        let shadows = shared.get(ShadowSharedResources.self)
+        let sceneModels = shared.get(SceneModelSharedResources.self)
+        let placement = shared.get(PlacementStencilSharedResources.self)
+        let horizon = shared.get(HorizonSharedResources.self)
+        let textAtlas = shared.get(TextAtlas.self)
+        let labelPipelines = shared.get(LabelPipelines.self)
         let tileWorkingSetSubsystem = TileWorkingSetSubsystem(tileRenderStore: context.tileRenderStore,
                                                               tileTraceRecorder: context.tileTraceRecorder,
                                                               terrainDemand: context.groundRelief?.store,
@@ -21,127 +71,129 @@ enum RenderGraphFactory {
                                                            metalDevice: context.metalContext.device,
                                                            settings: settings.labels,
                                                            debugOverlayControls: debugOverlayControls)
-        let baseLabelDrawSubsystem = BaseLabelDrawSubsystem(textRenderer: context.textRenderer,
-                                                            poiSpriteAtlas: context.poiSpriteAtlas,
-                                                            labelDepthState: context.labelDepthState,
-                                                            depthDisabledState: context.depthDisabledState,
+        let baseLabelDrawSubsystem = BaseLabelDrawSubsystem(textAtlas: textAtlas,
+                                                            pipelines: labelPipelines,
+                                                            poiSpriteAtlas: shared.get(PoiSpriteAtlas.self),
+                                                            labelDepthState: depth.scene,
+                                                            depthDisabledState: depth.disabled,
                                                             metalDevice: context.metalContext.device)
-        let roadLabelDrawSubsystem = RoadLabelDrawSubsystem(textRenderer: context.textRenderer,
-                                                            labelDepthState: context.labelDepthState,
-                                                            depthDisabledState: context.depthDisabledState,
-                                                            fallbackDepthTexture: context.sceneDepthFallbackTexture,
+        let roadLabelDrawSubsystem = RoadLabelDrawSubsystem(textAtlas: textAtlas,
+                                                            pipelines: labelPipelines,
+                                                            labelDepthState: depth.scene,
+                                                            depthDisabledState: depth.disabled,
+                                                            fallbackDepthTexture: shared.get(RoadLabelSharedResources.self).sceneDepthFallbackTexture,
                                                             hidesBehindBuildingsFromZoom: settings.labels.road.hidesBehindBuildingsFromZoom,
                                                             metalDevice: context.metalContext.device)
         let pinSubsystem = PinRenderSubsystem(pinsRenderer: context.pinsRenderer,
                                                     pinSource: context.pinSource,
-                                                    depthDisabledState: context.depthDisabledState)
+                                                    depthDisabledState: depth.disabled)
         let annotationSubsystem = AnnotationRenderSubsystem(annotationSource: context.annotationSource)
         let sceneModelSubsystem = SceneModelRenderSubsystem(sceneModelSource: context.sceneModelSource,
                                                             meshStore: context.sceneModelMeshStore,
-                                                            pipeline: context.sceneModelPipeline,
-                                                            extrudedDepthState: context.extrudedDepthState,
-                                                            surfaceMaskState: context.sceneModelSurfaceMaskState,
-                                                            groundCutStates: context.sceneModelGroundCutStates,
-                                                            depthDisabledState: context.depthDisabledState,
+                                                            pipeline: sceneModels.pipeline,
+                                                            extrudedDepthState: depth.scene,
+                                                            surfaceMaskState: sceneModels.surfaceMaskState,
+                                                            groundCutStates: sceneModels.groundCutStates,
+                                                            depthDisabledState: depth.disabled,
                                                             shadowMapTextureProvider: shadowMapTextureProvider,
-                                                            shadowFallbackTexture: context.shadowFallbackTexture)
+                                                            shadowFallbackTexture: shadows.shadowFallbackTexture)
         let modelTileSubsystem = ModelTileRenderSubsystem(store: context.modelTileStore,
-                                                          pipeline: context.modelTilePipeline,
-                                                          extrudedDepthState: context.extrudedDepthState,
-                                                          surfaceMaskState: context.sceneModelSurfaceMaskState,
-                                                          depthDisabledState: context.depthDisabledState,
+                                                          pipeline: shared.get(ModelTilePipeline.self),
+                                                          extrudedDepthState: depth.scene,
+                                                          surfaceMaskState: sceneModels.surfaceMaskState,
+                                                          depthDisabledState: depth.disabled,
                                                           shadowMapTextureProvider: shadowMapTextureProvider,
-                                                          shadowFallbackTexture: context.shadowFallbackTexture,
+                                                          shadowFallbackTexture: shadows.shadowFallbackTexture,
                                                           minimumZoom: settings.modelArchive.minimumZoom,
                                                           riseSeconds: settings.scene.extrusion.riseSeconds)
-        let flatMapSurfaceSubsystem = FlatMapSurfaceRenderSubsystem(tilePipeline: context.tilePipeline,
-                                                                    groundOwnerState: context.groundOwnerState,
-                                                                    tileStencilTestState: context.tileStencilTestState,
-                                                                    roadRankState: context.roadRankState,
-                                                                    depthDisabledState: context.depthDisabledState,
+        let flatMapSurfaceSubsystem = FlatMapSurfaceRenderSubsystem(tilePipeline: shared.get(FlatGroundSharedResources.self).pipeline,
+                                                                    groundOwnerState: tileDepth.groundOwner,
+                                                                    tileStencilTestState: tileDepth.tileStencilTest,
+                                                                    roadRankState: tileDepth.roadRank,
+                                                                    depthDisabledState: depth.disabled,
                                                                     debugOverlayControls: debugOverlayControls,
                                                                     groundShadowMaskTextureProvider: groundShadowMaskTextureProvider,
-                                                                    groundShadowMaskFallbackTexture: context.groundShadowMaskFallbackTexture,
+                                                                    groundShadowMaskFallbackTexture: shadows.groundMaskFallbackTexture,
                                                                     shadowMapTextureProvider: shadowMapTextureProvider,
-                                                                    shadowFallbackTexture: context.shadowFallbackTexture,
+                                                                    shadowFallbackTexture: shadows.shadowFallbackTexture,
                                                                     groundFlatteningFromTileZoom: settings.tiles.resolvedGroundFlatteningFromTileZoom)
-        let groundShadowMaskSubsystem = GroundShadowMaskRenderSubsystem(pipeline: context.groundShadowMaskPipeline,
-                                                                        depthDisabledState: context.depthDisabledState,
+        let groundShadowMaskSubsystem = GroundShadowMaskRenderSubsystem(pipeline: shadows.groundMaskPipeline,
+                                                                        depthDisabledState: depth.disabled,
                                                                         shadowMapTextureProvider: shadowMapTextureProvider)
         let placementStencilSubsystem = PlacementStencilRenderSubsystem(device: context.metalContext.device,
-                                                                        pipeline: context.placementStencilPipeline,
-                                                                        placementStencilWriteState: context.placementStencilWriteState,
-                                                                        placementDepthWriteState: context.placementDepthWriteState,
-                                                                        placementStencilReliefWriteState: context.placementStencilReliefWriteState,
-                                                                        placementDepthResetState: context.placementDepthResetState,
-                                                                        depthDisabledState: context.depthDisabledState,
+                                                                        pipeline: placement.pipeline,
+                                                                        placementStencilWriteState: placement.stencilWrite,
+                                                                        placementDepthWriteState: placement.depthWrite,
+                                                                        placementStencilReliefWriteState: placement.stencilReliefWrite,
+                                                                        placementDepthResetState: placement.depthReset,
+                                                                        depthDisabledState: depth.disabled,
                                                                         groundFlattening: settings.tiles.groundFlattening)
         let rasterTileSubsystem = RasterTileRenderSubsystem(device: context.metalContext.device,
-                                                            pipeline: context.rasterTilePipeline,
+                                                            pipeline: shared.get(RasterTilePipeline.self),
                                                             settings: settings.tiles.rasterization,
-                                                            groundOwnerState: context.groundOwnerState,
-                                                            sphereOpaqueOwnerState: context.sphereOpaqueOwnerState,
-                                                            depthDisabledState: context.depthDisabledState,
+                                                            groundOwnerState: tileDepth.groundOwner,
+                                                            sphereOpaqueOwnerState: tileDepth.sphereOpaqueOwner,
+                                                            depthDisabledState: depth.disabled,
                                                             debugOverlayControls: debugOverlayControls,
                                                             groundShadowMaskTextureProvider: groundShadowMaskTextureProvider,
-                                                            groundShadowMaskFallbackTexture: context.groundShadowMaskFallbackTexture,
+                                                            groundShadowMaskFallbackTexture: shadows.groundMaskFallbackTexture,
                                                             shadowMapTextureProvider: shadowMapTextureProvider,
-                                                            shadowFallbackTexture: context.shadowFallbackTexture,
+                                                            shadowFallbackTexture: shadows.shadowFallbackTexture,
                                                             groundFlattening: settings.tiles.groundFlattening)
-        let buildingExtrusionSubsystem = BuildingExtrusionRenderSubsystem(extrudedTilePipeline: context.extrudedTilePipeline,
-                                                                          extrudedDepthState: context.extrudedDepthState,
-                                                                          extrudedStencilTestState: context.extrudedStencilTestState,
-                                                                          depthDisabledState: context.depthDisabledState,
+        let buildingExtrusionSubsystem = BuildingExtrusionRenderSubsystem(extrudedTilePipeline: shared.get(ExtrudedTilePipeline.self),
+                                                                          extrudedDepthState: depth.scene,
+                                                                          extrudedStencilTestState: tileDepth.extrudedSurfaceMask,
+                                                                          depthDisabledState: depth.disabled,
                                                                           shadowMapTextureProvider: shadowMapTextureProvider,
-                                                                          shadowFallbackTexture: context.shadowFallbackTexture,
+                                                                          shadowFallbackTexture: shadows.shadowFallbackTexture,
                                                                           extrusion: settings.scene.extrusion,
                                                                           debugOverlayControls: debugOverlayControls)
         let treeSubsystem = TreeRenderSubsystem(modelStore: context.treeModelStore,
-                                                pipeline: context.treePipeline,
+                                                pipeline: shared.get(TreePipeline.self),
                                                 palette: context.treePalette,
-                                                stencilTestState: context.extrudedStencilTestState,
-                                                groundDepthState: context.groundDepthState,
-                                                depthDisabledState: context.depthDisabledState,
+                                                stencilTestState: tileDepth.extrudedSurfaceMask,
+                                                groundDepthState: depth.ground,
+                                                depthDisabledState: depth.disabled,
                                                 settings: settings.scene.trees,
                                                 riseSeconds: settings.scene.extrusion.riseSeconds)
         let layerSubsystem = LayerRenderSubsystem(source: context.layerSource,
                                                   store: context.layerMeshStore,
-                                                  pipeline: context.layerPipeline,
-                                                  depthDisabledState: context.depthDisabledState)
+                                                  pipeline: shared.get(LayerPipeline.self),
+                                                  depthDisabledState: depth.disabled)
         let tileGridSubsystem = TileGridRenderSubsystem(source: context.tileGridSource,
-                                                        pipeline: context.tileGridPipeline,
-                                                        textRenderer: context.textRenderer,
+                                                        pipeline: shared.get(TileGridPipeline.self),
+                                                        textAtlas: textAtlas,
                                                         metalDevice: context.metalContext.device,
-                                                        depthDisabledState: context.depthDisabledState)
+                                                        depthDisabledState: depth.disabled)
         let reliefShadowCasterSubsystem = GroundReliefShadowCasterSubsystem(device: context.metalContext.device,
-                                                                            pipeline: context.rasterTilePipeline,
-                                                                            depthState: context.extrudedDepthState,
+                                                                            pipeline: shared.get(RasterTilePipeline.self),
+                                                                            depthState: depth.scene,
                                                                             groundFlattening: settings.tiles.groundFlattening)
         let starfieldSubsystem = StarfieldRenderSubsystem(starfieldRenderer: context.starfieldRenderer,
-                                                          skyBackdropDepthState: context.skyBackdropDepthState,
-                                                          depthDisabledState: context.depthDisabledState)
+                                                          skyBackdropDepthState: depth.sceneReadOnly,
+                                                          depthDisabledState: depth.disabled)
         let horizonSubsystem = HorizonRenderSubsystem(horizonRenderer: context.horizonRenderer,
-                                                      skyDepthState: context.skyBackdropDepthState,
-                                                      groundDepthState: context.horizonGroundDepthState,
-                                                      depthDisabledState: context.depthDisabledState)
-        let postProcessingSubsystem = PostProcessingRenderSubsystem(fxaaPipeline: context.fxaaPipeline,
+                                                      skyDepthState: depth.sceneReadOnly,
+                                                      groundDepthState: horizon.groundDepthState,
+                                                      depthDisabledState: depth.disabled)
+        let postProcessingSubsystem = PostProcessingRenderSubsystem(fxaaPipeline: shared.get(FXAAPipeline.self),
                                                                     inputTextureProvider: postProcessingInputTextureProvider)
-        let globeVectorSurfaceSubsystem = GlobeVectorSurfaceRenderSubsystem(pipeline: context.globeVectorSurfacePipeline,
-                                                                            depthDisabledState: context.depthDisabledState,
-                                                                            opaqueDepthState: context.sphereOpaqueOwnerState,
-                                                                            ribbonOwnerDepthState: context.sphereRibbonOwnerState,
-                                                                            translucentDepthState: context.tileStencilTestState,
+        let globeVectorSurfaceSubsystem = GlobeVectorSurfaceRenderSubsystem(pipeline: shared.get(GlobeVectorSurfaceSharedResources.self).pipeline,
+                                                                            depthDisabledState: depth.disabled,
+                                                                            opaqueDepthState: tileDepth.sphereOpaqueOwner,
+                                                                            ribbonOwnerDepthState: tileDepth.sphereRibbonOwner,
+                                                                            translucentDepthState: tileDepth.tileStencilTest,
                                                                             debugOverlayControls: debugOverlayControls)
-        let surfaceLabelSubsystem = SurfaceLabelRenderSubsystem(pipeline: context.surfaceLabelPipeline,
-                                                                textRenderer: context.textRenderer,
-                                                                depthState: context.groundDepthState,
-                                                                depthDisabledState: context.depthDisabledState)
-        let globeCapSubsystem = GlobeCapRenderSubsystem(globeCapDepthState: context.globeCapDepthState,
-                                                        depthDisabledState: context.depthDisabledState,
+        let surfaceLabelSubsystem = SurfaceLabelRenderSubsystem(pipeline: shared.get(SurfaceLabelPipeline.self),
+                                                                textAtlas: textAtlas,
+                                                                depthState: depth.ground,
+                                                                depthDisabledState: depth.disabled)
+        let globeCapSubsystem = GlobeCapRenderSubsystem(globeCapDepthState: depth.sceneReadOnly,
+                                                        depthDisabledState: depth.disabled,
                                                         globeCapRenderer: context.globeCapRenderer)
-        let debugSubsystem = DebugOverlayRenderSubsystem(polygonPipeline: context.polygonPipeline,
+        let debugSubsystem = DebugOverlayRenderSubsystem(polygonPipeline: shared.get(PolygonsPipeline.self),
                                                          debugOverlayRenderer: context.debugOverlayRenderer,
-                                                         textRenderer: context.textRenderer,
+                                                         textAtlas: textAtlas,
                                                          controls: debugOverlayControls)
 
         // The model tiles follow the scene models, which start the
@@ -152,7 +204,7 @@ enum RenderGraphFactory {
             sceneModelSubsystem,
             modelTileSubsystem,
             // Before the labels: the buildings' rise this frame
-            // (`FrameContextSharedState.buildingRise`) is the height
+            // (`BuildingFrameState.rise`) is the height
             // of the roofs the labels stand on.
             buildingExtrusionSubsystem,
             baseLabelSubsystem,

@@ -37,3 +37,12 @@ final class FXAAPipeline {
         renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
     }
 }
+
+/// Shared by every renderer of the process (`SharedRenderResources`).
+extension FXAAPipeline: SharedGPUResources {
+    static func make(_ build: SharedGPUResourceBuild) -> FXAAPipeline {
+        FXAAPipeline(metalDevice: build.device,
+                     pixelFormat: build.pixelFormat,
+                     library: build.library)
+    }
+}

@@ -159,7 +159,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
     /// source a pixel shows (`TileSourceStencilPriority`), and the sources
     /// are ordered finest first for the pipeline's sake alone.
     func update(frameContext: FrameContext) {
-        let placements = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
+        let placements = frameContext.state[TilePlacementState.self].placeTilesContext.tilePlacements
         sources.removeAll(keepingCapacity: true)
         pendingBakes.removeAll(keepingCapacity: true)
         guard placements.contains(where: { $0.rules.raster != nil }) else {

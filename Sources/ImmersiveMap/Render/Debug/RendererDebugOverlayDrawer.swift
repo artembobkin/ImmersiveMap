@@ -11,7 +11,7 @@ enum RendererDebugOverlayDrawer {
                      frameContext: FrameContext,
                      polygonPipeline: PolygonsPipeline,
                      debugOverlayRenderer: DebugOverlayRenderer,
-                     textRenderer: TextRenderer,
+                     textAtlas: TextAtlas,
                      controls: DebugOverlayControlSnapshot) {
         if controls.axesEnabled {
             debugOverlayRenderer.drawAxes(renderEncoder: renderEncoder,
@@ -23,21 +23,21 @@ enum RendererDebugOverlayDrawer {
         if controls.tileLayersEnabled {
             debugOverlayRenderer.drawTileOverlay(renderEncoder: renderEncoder,
                                                  polygonPipeline: polygonPipeline,
-                                                 textRenderer: textRenderer,
+                                                 textAtlas: textAtlas,
                                                  frameContext: frameContext,
-                                                 placeTiles: frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements)
+                                                 placeTiles: frameContext.state[TilePlacementState.self].placeTilesContext.tilePlacements)
         }
         if controls.tileGridEnabled {
             debugOverlayRenderer.drawTileGridOverlay(renderEncoder: renderEncoder,
                                                      polygonPipeline: polygonPipeline,
-                                                     textRenderer: textRenderer,
+                                                     textAtlas: textAtlas,
                                                      frameContext: frameContext,
-                                                     placeTiles: frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements,
+                                                     placeTiles: frameContext.state[TilePlacementState.self].placeTilesContext.tilePlacements,
                                                      density: controls.tileGridDensity)
         }
         if controls.roadLabelTilesEnabled {
-            let activeTiles = Set(frameContext.sharedState.roadLabelState.activeRoadLabelTiles)
-            let roadLabelPlaceTiles = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements.filter { placeTile in
+            let activeTiles = Set(frameContext.state[RoadLabelState.self].activeRoadLabelTiles)
+            let roadLabelPlaceTiles = frameContext.state[TilePlacementState.self].placeTilesContext.tilePlacements.filter { placeTile in
                 activeTiles.contains(placeTile.placeIn)
             }
             debugOverlayRenderer.drawRoadLabelTileOverlay(renderEncoder: renderEncoder,
@@ -49,7 +49,7 @@ enum RendererDebugOverlayDrawer {
             debugOverlayRenderer.drawLabelBoundsOverlay(renderEncoder: renderEncoder,
                                                         polygonPipeline: polygonPipeline,
                                                         frameContext: frameContext,
-                                                        boxesState: frameContext.sharedState.baseLabelDebugBoxesState)
+                                                        boxesState: frameContext.state[BaseLabelDebugBoxesState.self])
         }
     }
 }

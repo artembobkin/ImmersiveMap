@@ -9,7 +9,7 @@ import MetalKit
 /// fragments below the ground and the stencil-only footprint pipeline, the
 /// two the ground cut adds (see SceneModel.metal), and the shadow caster
 /// pipeline.
-class SceneModelPipeline {
+final class SceneModelPipeline {
     let pipelineState: MTLRenderPipelineState
     /// The opaque pipeline with `kSceneModelClipsBelowGround` on: the second
     /// draw of a model that cuts into the ground, outside its ground hole.

@@ -126,3 +126,13 @@ struct LayerDrawUniform {
 enum LayerDepth {
     static let depth: Float = 1 - GlobeSurfaceDepthRank.appLayersRank * GlobeSurfaceDepthRank.layerDepthStep
 }
+
+/// Shared by every renderer of the process (`SharedRenderResources`).
+extension LayerPipeline: SharedGPUResources {
+    static func make(_ build: SharedGPUResourceBuild) -> LayerPipeline {
+        LayerPipeline(metalDevice: build.device,
+                      pixelFormat: build.pixelFormat,
+                      library: build.library,
+                      sampleCount: build.sampleCount)
+    }
+}

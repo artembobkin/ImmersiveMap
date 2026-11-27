@@ -15,7 +15,7 @@ struct SceneModelDrawItem {
 }
 
 /// The depth and stencil states of the ground cut's four draws
-/// (SceneModel.metal), built by SharedRenderResources around
+/// (SceneModel.metal), built by `SceneModelSharedResources` around
 /// `TileSourceStencilPriority.groundHoleBit`.
 struct SceneModelGroundCutStates {
     /// The flattened footprint raising the hole bit: depth neither tested

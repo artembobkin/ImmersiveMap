@@ -6,7 +6,7 @@ import Metal
 import XCTest
 
 /// The text atlases ship as raw BGRA8 pixels next to their JSON metrics:
-/// the file is exactly the atlas the JSON describes, and the renderer
+/// the file is exactly the atlas the JSON describes, and `TextAtlas`
 /// uploads it byte for byte.
 final class TextAtlasRawResourceTests: XCTestCase {
     private let atlasNames = ["atlas", "atlas_thin"]
@@ -22,14 +22,13 @@ final class TextAtlasRawResourceTests: XCTestCase {
         }
     }
 
-    func testTheRendererUploadsTheFileByteForByte() throws {
+    func testTheAtlasUploadsTheFileByteForByte() throws {
         let device = try MetalTestEnvironment.requireDevice(needsReadback: true)
-        let library = try device.makeDefaultLibrary(bundle: ImmersiveMapResourceBundle.bundle())
-        let renderer = try TextRenderer(device: device, library: library, resourceBundle: ImmersiveMapResourceBundle.bundle())
+        let atlas = try TextAtlas(device: device, resourceBundle: ImmersiveMapResourceBundle.bundle())
         let pixelsURL = try XCTUnwrap(ImmersiveMapResourceBundle.bundle().url(forResource: "atlas", withExtension: "bgra"))
         let file = try Data(contentsOf: pixelsURL)
 
-        let texture = try XCTUnwrap(renderer.texture)
+        let texture = atlas.texture
         XCTAssertEqual(texture.pixelFormat, .bgra8Unorm)
         XCTAssertEqual(texture.storageMode, .private, "The atlas keeps no CPU copy")
         XCTAssertEqual(file.count, texture.width * texture.height * 4)

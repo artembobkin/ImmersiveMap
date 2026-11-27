@@ -231,9 +231,9 @@ struct TilePointScreenProjector {
         let halfViewport = viewport * 0.5
         // The roofs stand as high as the buildings drawn under the label
         // have risen, by the tile and the quarter that draw them
-        // (`FrameContextSharedState.buildingRise`): on the ground where
+        // (`BuildingFrameState.rise`): on the ground where
         // no buildings draw.
-        let buildingRise = frameContext.sharedState.buildingRise
+        let buildingRise = frameContext.state[BuildingFrameState.self].rise
         // The ground relief under each label, by its tile: the relief and
         // the world units a metre of it rises by, looked up once per tile
         // of the projection, nil for a tile whose terrain is not in.
@@ -241,7 +241,7 @@ struct TilePointScreenProjector {
         var reliefByTile: [Tile: GroundReliefTileLift?] = [:]
         // The terrain each source's ground rises by: its placements'.
         let displacementBySource = groundRelief == nil || liftsByRelief == false
-            ? [:] : frameContext.sharedState.tilePlacementState.placeTilesContext.displacementBySource()
+            ? [:] : frameContext.state[TilePlacementState.self].placeTilesContext.displacementBySource()
         func lift(tile: Tile, uv: SIMD2<Float>) -> Float {
             guard let groundRelief, liftsByRelief else { return 0 }
             let entry: GroundReliefTileLift?

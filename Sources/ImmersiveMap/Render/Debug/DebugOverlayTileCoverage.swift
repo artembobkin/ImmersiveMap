@@ -44,7 +44,7 @@ package struct DebugOverlayTileCoverage: Equatable {
     /// The frame's coverage: the flat map's footprint and eye, the globe's
     /// placements alone.
     static func make(frameContext: FrameContext) -> DebugOverlayTileCoverage {
-        let placements = placements(of: frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements)
+        let placements = placements(of: frameContext.state[TilePlacementState.self].placeTilesContext.tilePlacements)
         let center = frameContext.mapCameraState.centerWorldMercator
         guard frameContext.renderSurfaceMode == .flat else {
             return DebugOverlayTileCoverage(placements: placements, footprint: [], center: center, eye: nil)

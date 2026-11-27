@@ -87,8 +87,13 @@ final class DebugOverlayRenderer {
     private static let tileGridCellLineGapFraction: Float = 0.04
     private static let tileWatermarkUVs = makeTileWatermarkUVs()
 
+    /// The pipeline the overlay's lines of text draw by.
+    private let textPipeline: TextPipeline
+
     init(metalDevice: MTLDevice,
+         textPipeline: TextPipeline,
          settings: ImmersiveMapSettings.DebugSettings) {
+        self.textPipeline = textPipeline
         self.settings = settings
         self.tileTextVertexBufferStore = FrameSlottedDynamicMetalBuffer(metalDevice: metalDevice,
                                                                         slotsCount: InFlightFramePool.inFlightFramesCount,
@@ -112,10 +117,6 @@ final class DebugOverlayRenderer {
         axesVertexBuffer = metalDevice.makeBuffer(bytes: axesVertices,
                                                   length: axesVertices.count * MemoryLayout<PolygonsPipeline.Vertex>.stride,
                                                   options: [])!
-    }
-
-    convenience init(metalDevice: MTLDevice) {
-        self.init(metalDevice: metalDevice, settings: ImmersiveMapSettings.default.debug)
     }
 
     func apply(settings: ImmersiveMapSettings.DebugSettings) {
@@ -145,7 +146,7 @@ final class DebugOverlayRenderer {
 
     func drawTileOverlay(renderEncoder: MTLRenderCommandEncoder,
                          polygonPipeline: PolygonsPipeline,
-                         textRenderer: TextRenderer,
+                         textAtlas: TextAtlas,
                          frameContext: FrameContext,
                          placeTiles: [PlaceTile]) {
         guard placeTiles.isEmpty == false else { return }
@@ -176,7 +177,7 @@ final class DebugOverlayRenderer {
             appendTileLabel(placeTile: placeTile,
                             frameContext: frameContext,
                             scale: labelScale,
-                            textRenderer: textRenderer)
+                            textAtlas: textAtlas)
         }
 
         if lineVerticesScratch.isEmpty == false {
@@ -190,7 +191,7 @@ final class DebugOverlayRenderer {
         for zoom in tileWatermarkAddressEntriesScratch.keys.sorted() {
             guard let entries = tileWatermarkAddressEntriesScratch[zoom], entries.isEmpty == false else { continue }
             drawTextEntries(renderEncoder: renderEncoder,
-                            textRenderer: textRenderer,
+                            textAtlas: textAtlas,
                             screenMatrix: frameContext.cameraMatrices.screen,
                             frameSlotIndex: frameContext.frameSlotIndex,
                             frameIndex: frameContext.frameIndex,
@@ -204,7 +205,7 @@ final class DebugOverlayRenderer {
             let batch = tileWatermarkTerrainEntriesScratch.filter { ($0.text == Self.flatTerrainTag) == isFlat }
             guard batch.isEmpty == false else { continue }
             drawTextEntries(renderEncoder: renderEncoder,
-                            textRenderer: textRenderer,
+                            textAtlas: textAtlas,
                             screenMatrix: frameContext.cameraMatrices.screen,
                             frameSlotIndex: frameContext.frameSlotIndex,
                             frameIndex: frameContext.frameIndex,
@@ -222,7 +223,7 @@ final class DebugOverlayRenderer {
     /// would bury the map it is drawn over.
     func drawTileGridOverlay(renderEncoder: MTLRenderCommandEncoder,
                              polygonPipeline: PolygonsPipeline,
-                             textRenderer: TextRenderer,
+                             textAtlas: TextAtlas,
                              frameContext: FrameContext,
                              placeTiles: [PlaceTile],
                              density: Int) {
@@ -240,7 +241,7 @@ final class DebugOverlayRenderer {
                                   placeTile: centerPlaceTile,
                                   density: clampedDensity,
                                   frameContext: frameContext,
-                                  textRenderer: textRenderer)
+                                  textAtlas: textAtlas)
 
         // Plates first, so the grid lines draw over them and the text over both.
         lineVerticesScratch.removeAll(keepingCapacity: true)
@@ -268,7 +269,7 @@ final class DebugOverlayRenderer {
                                  frameContext: frameContext)
         if tileProjectedTextVerticesScratch.isEmpty == false {
             drawTextEntries(renderEncoder: renderEncoder,
-                            textRenderer: textRenderer,
+                            textAtlas: textAtlas,
                             screenMatrix: frameContext.cameraMatrices.screen,
                             frameSlotIndex: frameContext.frameSlotIndex,
                             frameIndex: frameContext.frameIndex,
@@ -363,7 +364,7 @@ final class DebugOverlayRenderer {
     }
 
     private func drawTextEntries(renderEncoder: MTLRenderCommandEncoder,
-                                 textRenderer: TextRenderer,
+                                 textAtlas: TextAtlas,
                                  screenMatrix: matrix_float4x4,
                                  frameSlotIndex: Int,
                                  frameIndex: UInt64,
@@ -371,19 +372,19 @@ final class DebugOverlayRenderer {
                                  projectedVertices: [TextVertex] = [],
                                  style: TextStyleUniform? = nil) {
         guard entries.isEmpty == false || projectedVertices.isEmpty == false else { return }
-        textRenderer.collectMultiTextVertices(into: &textVerticesScratch, for: entries)
+        textAtlas.layout.collectMultiTextVertices(into: &textVerticesScratch, for: entries)
         textVerticesScratch.append(contentsOf: projectedVertices)
         guard textVerticesScratch.isEmpty == false else { return }
 
         var textStyle = style ?? TextStyleUniform(textColor: settings.textColor)
         var matrix = screenMatrix
-        renderEncoder.setRenderPipelineState(textRenderer.pipelineState)
+        renderEncoder.setRenderPipelineState(textPipeline.pipelineState)
         setTileTextVertices(renderEncoder: renderEncoder,
                             vertices: textVerticesScratch,
                             frameSlotIndex: frameSlotIndex,
                             frameIndex: frameIndex)
         renderEncoder.setVertexBytes(&matrix, length: MemoryLayout<matrix_float4x4>.stride, index: 1)
-        renderEncoder.setFragmentTexture(textRenderer.texture, index: 0)
+        renderEncoder.setFragmentTexture(textAtlas.texture, index: 0)
         renderEncoder.setFragmentBytes(&textStyle, length: MemoryLayout<TextStyleUniform>.stride, index: 0)
         renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: textVerticesScratch.count)
     }
@@ -497,8 +498,8 @@ final class DebugOverlayRenderer {
         lines.append(contentsOf: body)
     }
 
-    private func makeLineAdvance(textRenderer: TextRenderer, scale: Float) -> Float {
-        let atlasLineHeight = Float(textRenderer.atlasData.metrics.lineHeight)
+    private func makeLineAdvance(textAtlas: TextAtlas, scale: Float) -> Float {
+        let atlasLineHeight = Float(textAtlas.metrics.bold.metrics.lineHeight)
         return max((atlasLineHeight * scale) + 4.0, scale + 4.0)
     }
 
@@ -867,7 +868,7 @@ final class DebugOverlayRenderer {
                                            placeTile: PlaceTile,
                                            density: Int,
                                            frameContext: FrameContext,
-                                           textRenderer: TextRenderer) {
+                                           textAtlas: TextAtlas) {
         let tileVector = SIMD3<Int32>(Int32(placeTile.placeIn.x),
                                       Int32(placeTile.placeIn.y),
                                       Int32(placeTile.placeIn.z))
@@ -916,7 +917,7 @@ final class DebugOverlayRenderer {
                                                                                             density: density),
                                                          cellSpanUV: cellSpanUV,
                                                          scale: scale,
-                                                         textRenderer: textRenderer)
+                                                         textAtlas: textAtlas)
                 if let plate {
                     plates.append(plate)
                 }
@@ -1011,7 +1012,7 @@ final class DebugOverlayRenderer {
                                               rect: (minU: Float, minV: Float, maxU: Float, maxV: Float),
                                               cellSpanUV: Float,
                                               scale: Float,
-                                              textRenderer: TextRenderer) -> TileGridUVRect? {
+                                              textAtlas: TextAtlas) -> TileGridUVRect? {
         let heightFractions = Self.cellLineHeightFractions(lineCount: lines.count)
         guard lines.isEmpty == false, heightFractions.count == lines.count else { return nil }
 
@@ -1029,7 +1030,7 @@ final class DebugOverlayRenderer {
         lineHalfSizes.reserveCapacity(lines.count)
         for index in lines.indices {
             let lineHeightUV = heightFractions[index] * cellSpanUV
-            let metrics = textRenderer.collectLabelVertices(for: lines[index],
+            let metrics = textAtlas.layout.collectLabelVertices(for: lines[index],
                                                             labelIndex: 0,
                                                             scale: scale)
             let anchorUV = SIMD2<Float>(centerU, lineTopV + lineHeightUV * 0.5)
@@ -1069,7 +1070,7 @@ final class DebugOverlayRenderer {
     private func appendTileLabel(placeTile: PlaceTile,
                                  frameContext: FrameContext,
                                  scale: Float,
-                                 textRenderer: TextRenderer) {
+                                 textAtlas: TextAtlas) {
         guard let anchor = Self.makeTileLabelAnchor(
             visiblePoints: projectTilePoints(Self.tileLabelAnchorUVs, placeTile: placeTile, frameContext: frameContext)
         ) else {
@@ -1087,7 +1088,7 @@ final class DebugOverlayRenderer {
         }
         let labelScale = max(scale * 0.6, 18.0)
         func width(_ text: String) -> Float {
-            textRenderer.collectLabelVertices(for: text, labelIndex: 0, scale: labelScale).size.width
+            textAtlas.layout.collectLabelVertices(for: text, labelIndex: 0, scale: labelScale).size.width
         }
         let addressWidth = width(addressText)
         let terrainWidth = terrainText.map(width)
@@ -1102,7 +1103,7 @@ final class DebugOverlayRenderer {
         }
         if placeTile.inOwnSlot == false {
             let sourceText = "src \(Self.formatTileAddress(placeTile.metalTile.tile))"
-            let lineAdvance = makeLineAdvance(textRenderer: textRenderer, scale: labelScale)
+            let lineAdvance = makeLineAdvance(textAtlas: textAtlas, scale: labelScale)
             tileWatermarkAddressEntriesScratch[placeTile.metalTile.tile.z, default: []]
                 .append(TextEntry(text: sourceText,
                                   position: SIMD2<Float>(anchor.x - width(sourceText) * 0.5, anchor.y - lineAdvance),

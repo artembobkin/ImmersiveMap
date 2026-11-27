@@ -143,9 +143,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         // A placement whose rules draw no labels (`TileDrawRules`) offers
         // none: a tile keeps its labels while any placement of it draws
         // them, as a tile keeps its lines.
-        let placeTiles = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
+        let placeTiles = frameContext.state[TilePlacementState.self].placeTilesContext.tilePlacements
             .filter(\.rules.drawsLabels)
-        let projectionIndexState = frameContext.sharedState.tileProjectionIndexState
+        let projectionIndexState = frameContext.state[TileProjectionIndexState.self]
         let sourceEntries = BaseLabelSourceEntry.build(from: placeTiles)
         latestCameraFingerprint = makeVisibilityCameraFingerprint(frameContext: frameContext)
 
@@ -225,8 +225,8 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         }
         // The solve depends on the pose, the set and the fades (a label fading out keeps its space): a frame with
         // none of them changing keeps the previous decision.
-        let fadesActive = frameContext.sharedState.baseLabelState.hasActiveFadeAnimations
-            || frameContext.sharedState.roadLabelState.hasActiveFadeAnimations
+        let fadesActive = frameContext.state[BaseLabelState.self].hasActiveFadeAnimations
+            || frameContext.state[RoadLabelState.self].hasActiveFadeAnimations
         let needsSolve = cameraChanged || topologyChanged || fadesActive || localDetailChanged
             || solvedCameraFingerprint == nil
         if needsSolve {
@@ -262,13 +262,13 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                       projectionChanged: projectionChanged,
                                       overviewFadeAlpha: overviewFadeAlpha)
         }
-        frameContext.sharedState.baseLabelDebugBoxesState = makeDebugBoxesState(cameraZoom: cameraZoom,
+        frameContext.state[BaseLabelDebugBoxesState.self] = makeDebugBoxesState(cameraZoom: cameraZoom,
                                                                                 screenScale: frameContext.screenScale)
         publishBaseLabelState(frameContext: frameContext,
                               hasActiveFadeAnimations: baseFadesActive)
 
         let roadState = buildRoadLabelState(frameContext: frameContext)
-        frameContext.sharedState.roadLabelState = roadState
+        frameContext.state[RoadLabelState.self] = roadState
 
         frameContext.services.diagnostics.setCounter(.baseLabelCount, value: baseLabelCache.labelInputsCount)
         frameContext.services.diagnostics.setCounter(.baseLabelActiveCount, value: activeSpans.count)
@@ -396,7 +396,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         guard baseLabelCache.labelInputsCount > 0 else {
             return
         }
-        let projectionIndexState = frameContext.sharedState.tileProjectionIndexState
+        let projectionIndexState = frameContext.state[TileProjectionIndexState.self]
         tilePointScreenProjector.projectWithHorizonVisibility(snapshot: baseLabelCache.tilePointSnapshot,
                                                               frameContext: frameContext,
                                                               tileOriginData: projectionIndexState.tileOriginData,
@@ -483,7 +483,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         let groundRelief = frameContext.services.groundRelief
         // The terrain each source's ground rises by: its placements'.
         let displacementBySource = groundRelief == nil
-            ? [:] : frameContext.sharedState.tilePlacementState.placeTilesContext.displacementBySource()
+            ? [:] : frameContext.state[TilePlacementState.self].placeTilesContext.displacementBySource()
         var culledPathCount = 0
 
         for (recordIndex, record) in records.enumerated() {
@@ -651,7 +651,7 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
         hasher.combine(globeUniform.panX.bitPattern)
         hasher.combine(globeUniform.panY.bitPattern)
         // The labels on the roofs rise with the buildings.
-        hasher.combine(frameContext.sharedState.buildingRiseSignature.bitPattern)
+        hasher.combine(frameContext.state[BuildingFrameState.self].riseSignature.bitPattern)
         // The labels on the relief are placed again when its terrain
         // arrives or leaves, and when the datum it is drawn from moves.
         hasher.combine(frameContext.services.groundRelief?.version ?? 0)
@@ -787,11 +787,11 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
             }
             screenPositionsBuffer = buffer
         }
-        frameContext.sharedState.baseLabelState.labelInputsCount = count
-        frameContext.sharedState.baseLabelState.labelRuntimeMetaBuffer = baseLabelCache.labelRuntimeMetaBuffer(frameSlotIndex: frameContext.frameSlotIndex)
-        frameContext.sharedState.baseLabelState.screenPositionsBuffer = screenPositionsBuffer
-        frameContext.sharedState.baseLabelState.baseLabelsDrawBatches = baseLabelCache.baseLabelsDrawBatches
-        frameContext.sharedState.baseLabelState.hasActiveFadeAnimations = hasActiveFadeAnimations
+        frameContext.state[BaseLabelState.self].labelInputsCount = count
+        frameContext.state[BaseLabelState.self].labelRuntimeMetaBuffer = baseLabelCache.labelRuntimeMetaBuffer(frameSlotIndex: frameContext.frameSlotIndex)
+        frameContext.state[BaseLabelState.self].screenPositionsBuffer = screenPositionsBuffer
+        frameContext.state[BaseLabelState.self].baseLabelsDrawBatches = baseLabelCache.baseLabelsDrawBatches
+        frameContext.state[BaseLabelState.self].hasActiveFadeAnimations = hasActiveFadeAnimations
     }
 
     /// Label frames for the debug overlay: collision AABBs with the frame's

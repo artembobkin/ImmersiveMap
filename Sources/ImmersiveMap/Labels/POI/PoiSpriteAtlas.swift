@@ -317,3 +317,13 @@ final class PoiSpriteAtlas {
                       height: fittedSize.height)
     }
 }
+
+/// Shared by every renderer of the process (`SharedRenderResources`). The SF
+/// Symbol rasterization goes through UIImage and NSImage, so the atlas is
+/// made on the main thread.
+extension PoiSpriteAtlas: MainThreadSharedGPUResources {
+    @MainActor
+    static func make(device: MTLDevice) -> PoiSpriteAtlas {
+        PoiSpriteAtlas(device: device)
+    }
+}

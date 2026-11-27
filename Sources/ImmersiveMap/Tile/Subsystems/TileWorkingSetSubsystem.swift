@@ -356,7 +356,7 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
                               readyTilesCount: Int,
                               requestedTilesCount: Int) {
         let renderedTilesCount = placeTilesContext.tilePlacements.count
-        frameContext.sharedState.tilePlacementState = TilePlacementState(
+        frameContext.state[TilePlacementState.self] = TilePlacementState(
             placeTilesContext: placeTilesContext,
             buildingPlaceTilesContext: buildingPlaceTilesContext,
             placementVersion: placementVersion,

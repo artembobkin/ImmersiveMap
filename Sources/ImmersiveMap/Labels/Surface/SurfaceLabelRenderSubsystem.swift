@@ -20,23 +20,23 @@ final class SurfaceLabelRenderSubsystem: RenderSubsystem {
     }
 
     private let pipeline: SurfaceLabelPipeline
-    private let textRenderer: TextRenderer
+    private let textAtlas: TextAtlas
     private let depthState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
     private var drawItems: [DrawItem] = []
 
     init(pipeline: SurfaceLabelPipeline,
-         textRenderer: TextRenderer,
+         textAtlas: TextAtlas,
          depthState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState) {
         self.pipeline = pipeline
-        self.textRenderer = textRenderer
+        self.textAtlas = textAtlas
         self.depthState = depthState
         self.depthDisabledState = depthDisabledState
     }
 
     func update(frameContext: FrameContext) {
-        let placements = frameContext.sharedState.tilePlacementState.placeTilesContext.tilePlacements
+        let placements = frameContext.state[TilePlacementState.self].placeTilesContext.tilePlacements
         // One source per tile and world copy. The sphere has one world, so
         // its placements' wrap is not part of a source there.
         let wrapsWorld = frameContext.renderSurfaceMode == .flat
@@ -160,7 +160,7 @@ final class SurfaceLabelRenderSubsystem: RenderSubsystem {
         guard record.vertexCount > 0,
               let vertices = item.metalTile.tileBuffers.surfaceLabels.vertices else { return }
         let style = record.style
-        let atlasEmTexels = Float(textRenderer.atlasEmTexels(for: style.weight))
+        let atlasEmTexels = Float(textAtlas.metrics.atlasEmTexels(for: style.weight))
         let haloAtlasTexels = style.haloEm * atlasEmTexels
         if haloPass, haloAtlasTexels <= 0 {
             return
@@ -208,7 +208,7 @@ final class SurfaceLabelRenderSubsystem: RenderSubsystem {
                                                   haloSoftness: style.haloSoftness)
         encoder.setVertexBytes(&drawUniform, length: MemoryLayout<SurfaceLabelDrawUniform>.stride, index: 4)
         encoder.setFragmentBytes(&drawUniform, length: MemoryLayout<SurfaceLabelDrawUniform>.stride, index: 0)
-        encoder.setFragmentTexture(style.weight == .thin ? textRenderer.thinTexture : textRenderer.texture, index: 0)
+        encoder.setFragmentTexture(style.weight == .thin ? textAtlas.thinTexture : textAtlas.texture, index: 0)
         encoder.setVertexBuffer(vertices.buffer, offset: vertices.offset, index: 0)
         encoder.drawPrimitives(type: .triangle, vertexStart: record.vertexStart, vertexCount: record.vertexCount)
     }

@@ -22,14 +22,15 @@ struct RoadLabelSceneDepthUniforms {
 /// Draws the road names in the overlay pass. From
 /// `RoadSettings.hidesBehindBuildingsFromZoom` on the flat map, the buildings
 /// and the models paint over them: the world pass keeps its depth for the
-/// frame (`FrameContextSharedState.sceneDepthForLabelsRequested`), and the
+/// frame (`SceneDepthFrameState.isRequestedForLabels`), and the
 /// glyph fragments behind a building are dropped, pixel by pixel. Nothing
 /// else about the names changes: they keep their place in the collisions
 /// and their fades.
 final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvider {
     let name: String = "RoadLabelDraw"
 
-    private let textRenderer: TextRenderer
+    private let textAtlas: TextAtlas
+    private let pipelines: LabelPipelines
     private let labelDepthState: MTLDepthStencilState
     private let depthDisabledState: MTLDepthStencilState
     /// Bound where the frame keeps no world depth: a depth texture of 1.0,
@@ -39,13 +40,15 @@ final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
 
     private(set) var hasRenderableLabels: Bool = false
 
-    init(textRenderer: TextRenderer,
+    init(textAtlas: TextAtlas,
+         pipelines: LabelPipelines,
          labelDepthState: MTLDepthStencilState,
          depthDisabledState: MTLDepthStencilState,
          fallbackDepthTexture: MTLTexture,
          hidesBehindBuildingsFromZoom: Float,
          metalDevice _: MTLDevice) {
-        self.textRenderer = textRenderer
+        self.textAtlas = textAtlas
+        self.pipelines = pipelines
         self.labelDepthState = labelDepthState
         self.depthDisabledState = depthDisabledState
         self.fallbackDepthTexture = fallbackDepthTexture
@@ -53,10 +56,10 @@ final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
     }
 
     func update(frameContext: FrameContext) {
-        hasRenderableLabels = frameContext.sharedState.roadLabelState.drawLabels.isEmpty == false
+        hasRenderableLabels = frameContext.state[RoadLabelState.self].drawLabels.isEmpty == false
         if hasRenderableLabels, Self.paintsOverNames(frameContext: frameContext,
                                                      fromZoom: hidesBehindBuildingsFromZoom) {
-            frameContext.sharedState.sceneDepthForLabelsRequested = true
+            frameContext.state[SceneDepthFrameState.self].isRequestedForLabels = true
         }
     }
 
@@ -74,7 +77,7 @@ final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
     }
 
     func prepareGPU(frameContext: FrameContext, resourceRegistry: RenderResourceRegistry) {
-        if let runtimeMetaBuffer = frameContext.sharedState.roadLabelState.runtimeMetaBuffer {
+        if let runtimeMetaBuffer = frameContext.state[RoadLabelState.self].runtimeMetaBuffer {
             resourceRegistry.setBuffer(runtimeMetaBuffer, named: .roadLabelRuntimeBuffer)
         }
     }
@@ -84,7 +87,7 @@ final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
             return
         }
 
-        let roadLabelState = frameContext.sharedState.roadLabelState
+        let roadLabelState = frameContext.state[RoadLabelState.self]
         guard roadLabelState.instanceCount > 0,
               roadLabelState.glyphCount > 0,
               roadLabelState.drawLabels.isEmpty == false else {
@@ -94,7 +97,7 @@ final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
         // Same depth as BaseLabelDrawSubsystem: the overlay pass's own
         // depth orders halo under fill.
         encoder.setDepthStencilState(labelDepthState)
-        let sceneDepth = frameContext.sharedState.sceneDepthTexture
+        let sceneDepth = frameContext.state[SceneDepthFrameState.self].texture
         // The eye ray through a pixel comes from the CPU's matrix, whose
         // inverse unprojects. The anchor's depth is compared with the
         // scene depth the GPU wrote, so it is projected with the uniform's
@@ -109,7 +112,8 @@ final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
         RendererLabelDrawer.drawRoadLabels(renderEncoder: encoder,
                                            screenMatrix: frameContext.cameraMatrices.screen,
                                            screenScale: frameContext.screenScale,
-                                           textRenderer: textRenderer,
+                                           textAtlas: textAtlas,
+                                           pipelines: pipelines,
                                            roadDrawLabels: roadLabelState.drawLabels,
                                            sceneDepth: sceneDepth ?? fallbackDepthTexture,
                                            sceneDepthUniforms: sceneDepthUniforms,

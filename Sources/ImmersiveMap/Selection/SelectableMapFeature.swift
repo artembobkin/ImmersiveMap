@@ -99,7 +99,7 @@ struct SelectionHit {
 }
 
 /// What one feature drew in one frame that a tap can land on. The frame
-/// collects these from the features that drew (`FrameContextSharedState`),
+/// collects these from the features that drew (`SelectionFrameState`),
 /// and the engine hands them on once the frame is on the screen, so a tap
 /// is tested against what is visible.
 protocol SelectionPickData: Sendable {

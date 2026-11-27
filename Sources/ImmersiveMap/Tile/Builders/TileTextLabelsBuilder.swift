@@ -17,11 +17,11 @@ final class TileTextLabelsBuilder {
         var routeShieldPlates: [(style: RouteShieldRunStyle, vertices: [LabelVertex])] = []
     }
 
-    private let textRenderer: TextRenderer
+    private let textLayout: TextLayout
     private let poiAtlasLayout: PoiSpriteAtlasLayout
 
-    init(textRenderer: TextRenderer) {
-        self.textRenderer = textRenderer
+    init(textLayout: TextLayout) {
+        self.textLayout = textLayout
         self.poiAtlasLayout = PoiSpriteAtlasLayout()
     }
 
@@ -52,13 +52,13 @@ final class TileTextLabelsBuilder {
                                     textScale: Float,
                                     weight: LabelFontWeight,
                                     letterSpacingEm: Float = 0,
-                                    textRenderer: TextRenderer) -> TextMetrics {
+                                    textLayout: TextLayout) -> TextMetrics {
         let spacingWidening = 1 + max(letterSpacingEm, 0) / averageAdvanceEms
         let baseWidth = textScale * baseLabelWrapWidthEms * spacingWidening
         let baseWrap = LabelWrapOptions(maxWidth: baseWidth,
                                         maxLines: baseLabelWrapLineCount,
                                         alignment: .left)
-        let baseMetrics = textRenderer.collectLabelVertices(for: text,
+        let baseMetrics = textLayout.collectLabelVertices(for: text,
                                                             labelIndex: labelIndex,
                                                             scale: textScale,
                                                             wrap: baseWrap,
@@ -72,7 +72,7 @@ final class TileTextLabelsBuilder {
         let extendedWrap = LabelWrapOptions(maxWidth: baseWidth * extendedLabelWrapWidthFactor,
                                             maxLines: extendedLabelWrapLineCount,
                                             alignment: .left)
-        return textRenderer.collectLabelVertices(for: text,
+        return textLayout.collectLabelVertices(for: text,
                                                  labelIndex: labelIndex,
                                                  scale: textScale,
                                                  wrap: extendedWrap,
@@ -162,7 +162,7 @@ final class TileTextLabelsBuilder {
                                                        textScale: textScale,
                                                        weight: weight,
                                                        letterSpacingEm: style.letterSpacingEm,
-                                                       textRenderer: textRenderer)
+                                                       textLayout: textLayout)
             let geometry = makeCombinedLabelGeometry(textMetrics: textMetrics,
                                                      poiIcon: label.poiIcon,
                                                      textStyle: style,
@@ -416,7 +416,7 @@ final class TileTextLabelsBuilder {
         }
         var signs: [Sign] = []
         for shield in style.shields {
-            let metrics = textRenderer.collectLabelVertices(for: shield.text,
+            let metrics = textLayout.collectLabelVertices(for: shield.text,
                                                             labelIndex: labelIndex,
                                                             scale: em,
                                                             weight: style.weight)

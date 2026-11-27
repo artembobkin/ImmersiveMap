@@ -102,7 +102,7 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
         frameContext.services.diagnostics.incrementCounter(.pendingSceneModelMeshes, by: pending.count)
         // The buildings of these tiles wait for them: a model may stand in
         // for some of them, and they are left out from their first frame.
-        frameContext.sharedState.pendingModelTiles = Set(pending)
+        frameContext.state[ModelTileFrameState.self].pendingTiles = Set(pending)
         // The tiles are in the flat map's space and draw there alone, as
         // the map's buildings do. Below their zoom they draw nothing and
         // stand in for no building: the buildings, if they draw there,
@@ -111,7 +111,7 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
             ? meshes.flatMap { mesh in (wrapsByTile[mesh.tile] ?? []).map { WantedTile(tile: mesh.tile, worldWrap: $0) } }
             : []
         rise.advance(keys: drawnTiles, time: time, seconds: riseSeconds)
-        frameContext.sharedState.isExtrusionRising = frameContext.sharedState.isExtrusionRising || rise.isAnimating
+        frameContext.state[ExtrusionRiseFrameState.self].isRising = frameContext.state[ExtrusionRiseFrameState.self].isRising || rise.isAnimating
         guard drawnTiles.isEmpty == false else { return }
         var riseSignature: Float = 0
 
@@ -124,7 +124,7 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
             Frustum(pv: state.casterCullingProjectionView)
         }
 
-        var state = frameContext.sharedState.sceneModelState
+        var state = frameContext.state[SceneModelFrameState.self]
         for mesh in meshes {
             // Loaded, so shown, in view or not: its buildings go.
             state.replacedBuildings.formUnion(byMapTileZoom: mesh.replacedBuildingIDs)
@@ -155,10 +155,10 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
                 drawItems.append(item)
             }
         }
-        frameContext.sharedState.modelTileRiseSignature = riseSignature
+        frameContext.state[ModelTileFrameState.self].riseSignature = riseSignature
         state.hasShadowCasters = state.hasShadowCasters || shadowCasterItems.isEmpty == false
         state.hasDrawnModels = state.hasDrawnModels || drawItems.isEmpty == false
-        frameContext.sharedState.sceneModelState = state
+        frameContext.state[SceneModelFrameState.self] = state
     }
 
     /// Where a model tile stands in the frame's flat world: the tile's

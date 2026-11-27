@@ -3,7 +3,7 @@
 
 import MetalKit
 
-class GlobeCapPipeline {
+final class GlobeCapPipeline {
     let pipelineState: MTLRenderPipelineState
     
     init(metalDevice: MTLDevice,

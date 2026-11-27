@@ -15,16 +15,10 @@ final class RenderPersistentContext {
 
     let metalContext: RenderMetalContext
 
-    // MARK: - Pipelines
-
-    let polygonPipeline: PolygonsPipeline
-    let tilePipeline: TilePipeline
-    let globeVectorSurfacePipeline: TilePipeline
-    let surfaceLabelPipeline: SurfaceLabelPipeline
-    let extrudedTilePipeline: ExtrudedTilePipeline
-    let rasterTilePipeline: RasterTilePipeline
-    let groundShadowMaskPipeline: GroundShadowMaskPipeline
-    let fxaaPipeline: FXAAPipeline
+    /// The immutable GPU resources of the process, each feature's set
+    /// under its own type (`SharedRenderResources.get`). Everything else
+    /// here is made per renderer.
+    let shared: SharedRenderResources
 
     // MARK: - Scene Resources
 
@@ -36,49 +30,10 @@ final class RenderPersistentContext {
     /// The horizon layer's drawer; its pipeline is shared.
     let horizonRenderer: HorizonRenderer
     let flatTileOriginCalculator: FlatTileOriginCalculator
-    let extrudedDepthState: MTLDepthStencilState
-    let labelDepthState: MTLDepthStencilState
-    let globeCapDepthState: MTLDepthStencilState
-    /// See `SharedRenderResources.skyBackdropDepthState`.
-    let skyBackdropDepthState: MTLDepthStencilState
-    /// See `SharedRenderResources.horizonGroundDepthState`.
-    let horizonGroundDepthState: MTLDepthStencilState
-    let depthDisabledState: MTLDepthStencilState
-    /// See `SharedRenderResources.groundDepthState`.
-    let groundDepthState: MTLDepthStencilState
-    /// The sphere's tile-priority stencil states and the flat ground's
-    /// slot states; see SharedRenderResources.
-    let sphereOpaqueOwnerState: MTLDepthStencilState
-    let sphereRibbonOwnerState: MTLDepthStencilState
-    let tileStencilTestState: MTLDepthStencilState
-    let groundOwnerState: MTLDepthStencilState
-    let roadRankState: MTLDepthStencilState
-    let extrudedStencilTestState: MTLDepthStencilState
-    let placementStencilWriteState: MTLDepthStencilState
-    /// See `SharedRenderResources.placementDepthWriteState`.
-    let placementDepthWriteState: MTLDepthStencilState
-    let placementStencilReliefWriteState: MTLDepthStencilState
-    let placementDepthResetState: MTLDepthStencilState
-    /// See `SharedRenderResources.sceneModelSurfaceMaskState`.
-    let sceneModelSurfaceMaskState: MTLDepthStencilState
-    /// See `SharedRenderResources.sceneModelGroundCutStates`.
-    let sceneModelGroundCutStates: SceneModelGroundCutStates
-    /// Bound at the shadow-map slot when the shadow pass is skipped: receiver
-    /// shaders reference the texture statically and Metal validation requires a
-    /// bound depth texture even though strength = 0 skips the sampling branch.
-    /// Depth textures cannot be filled from the CPU, so a one-time no-draw pass
-    /// clears this 1x1 texture to 1.0 ("lit everywhere") at init.
-    let shadowFallbackTexture: MTLTexture
-    /// See `SharedRenderResources.sceneDepthFallbackTexture`.
-    let sceneDepthFallbackTexture: MTLTexture
-    /// See `SharedRenderResources.groundShadowMaskFallbackTexture`.
-    let groundShadowMaskFallbackTexture: MTLTexture
 
     // MARK: - Tile and Label Resources
 
     let tileRenderStore: TileRenderStore
-    let textRenderer: TextRenderer
-    let poiSpriteAtlas: PoiSpriteAtlas
     let baseLabelCache: BaseLabelCache
     let roadLabelCache: RoadLabelCache
 
@@ -86,19 +41,15 @@ final class RenderPersistentContext {
 
     let sceneModelSource: SceneModelRenderSource
     let sceneModelMeshStore: SceneModelMeshStore
-    let sceneModelPipeline: SceneModelPipeline
     /// The models of the model archive, nil for a map without one.
     let modelTileStore: ModelTileStore?
     /// The ground relief: the terrain the flattened ground rises by and
     /// the state the frames draw it by, nil while the relief is off
     /// (`TileSettings.GroundReliefSettings`).
     let groundRelief: GroundReliefFrameState?
-    let modelTilePipeline: ModelTilePipeline
-    let placementStencilPipeline: PlacementStencilPipeline
     /// The trees of the woods and the parks: their model and their
     /// pipeline (`TreeRenderSubsystem`).
     let treeModelStore: TreeModelStore
-    let treePipeline: TreePipeline
     /// The colours of the trees, as the style states them.
     let treePalette: ImmersiveMapTreePalette
     /// How opaque the names and the POIs are by the zoom, the style's
@@ -108,11 +59,9 @@ final class RenderPersistentContext {
     /// they are on the GPU and their pipelines (`LayerRenderSubsystem`).
     let layerSource: LayerRenderSource
     let layerMeshStore: LayerMeshStore
-    let layerPipeline: LayerPipeline
     /// The tile grid: where the frame reads the app's side of it from, and
     /// its pipelines (`TileGridRenderSubsystem`).
     let tileGridSource: TileGridRenderSource
-    let tileGridPipeline: TileGridPipeline
 
     // MARK: - Pin and Debug Resources
 
@@ -140,63 +89,31 @@ final class RenderPersistentContext {
          baseLabelTraceRecorder: BaseLabelTraceRecorder) throws {
         let shared = try SharedRenderResources.shared(sampleCount: config.postProcessing.multisampleCount)
         let metal = RendererSetup.buildMetal(layer: layer, sharedResources: shared)
+        self.shared = shared
         self.metalContext = metal
         self.tileTraceRecorder = tileTraceRecorder
         self.baseLabelTraceRecorder = baseLabelTraceRecorder
         self.tileLoadingStatusReporter = config.debug.enableDebugPanel ? TileLoadingStatusReporter() : nil
 
-        self.extrudedDepthState = shared.extrudedDepthState
-        self.labelDepthState = shared.labelDepthState
-        self.globeCapDepthState = shared.globeCapDepthState
-        self.skyBackdropDepthState = shared.skyBackdropDepthState
-        self.horizonGroundDepthState = shared.horizonGroundDepthState
-        self.depthDisabledState = shared.depthDisabledState
-        self.groundDepthState = shared.groundDepthState
-        self.sphereOpaqueOwnerState = shared.sphereOpaqueOwnerState
-        self.sphereRibbonOwnerState = shared.sphereRibbonOwnerState
-        self.groundOwnerState = shared.groundOwnerState
-        self.extrudedStencilTestState = shared.extrudedStencilTestState
-        self.placementStencilWriteState = shared.placementStencilWriteState
-        self.placementDepthWriteState = shared.placementDepthWriteState
-        self.placementStencilReliefWriteState = shared.placementStencilReliefWriteState
-        self.placementDepthResetState = shared.placementDepthResetState
-        self.sceneModelSurfaceMaskState = shared.sceneModelSurfaceMaskState
-        self.sceneModelGroundCutStates = shared.sceneModelGroundCutStates
-        self.tileStencilTestState = shared.tileStencilTestState
-        self.roadRankState = shared.roadRankState
-        self.shadowFallbackTexture = shared.shadowFallbackTexture
-        self.sceneDepthFallbackTexture = shared.sceneDepthFallbackTexture
-        self.groundShadowMaskFallbackTexture = shared.groundShadowMaskFallbackTexture
-
         self.baseColors = styleRuntime.baseColors
 
-        self.polygonPipeline = shared.polygonPipeline
-        self.tilePipeline = shared.tilePipeline
-        self.globeVectorSurfacePipeline = shared.globeVectorSurfacePipeline
-        self.surfaceLabelPipeline = shared.surfaceLabelPipeline
-        self.extrudedTilePipeline = shared.extrudedTilePipeline
-        self.rasterTilePipeline = shared.rasterTilePipeline
-        self.groundShadowMaskPipeline = shared.groundShadowMaskPipeline
-        self.fxaaPipeline = shared.fxaaPipeline
         // The starfield renderer bakes the star-generation settings, so it
-        // stays per renderer; only its pipeline is shared.
+        // stays per renderer. Only its pipeline is shared.
         self.starfieldRenderer = StarfieldRenderer(metalDevice: metal.device,
-                                                   pipeline: shared.starfieldPipeline,
+                                                   pipeline: shared.get(StarfieldPipeline.self),
                                                    config: config.scene.starfield)
 
-        self.horizonRenderer = HorizonRenderer(pipeline: shared.horizonPipeline)
+        self.horizonRenderer = HorizonRenderer(pipeline: shared.get(HorizonSharedResources.self).pipeline)
 
         self.flatTileOriginCalculator = FlatTileOriginCalculator(metalDevice: metal.device)
-        // The cap palette bakes style colors; grids and pipeline come from
+        // The cap palette bakes style colors. Grids and pipeline come from
         // the shared set.
-        self.globeCapRenderer = GlobeCapRenderer(sharedResources: shared.globeCap,
+        self.globeCapRenderer = GlobeCapRenderer(sharedResources: shared.get(GlobeCapRenderer.SharedResources.self),
                                                  maxLatitude: WebMercatorMath.maxLatitudeRadians,
                                                  baseColors: styleRuntime.baseColors)
-        self.textRenderer = shared.textRenderer
-        self.poiSpriteAtlas = shared.poiSpriteAtlas
         self.tileRenderStore = TileRenderStore(styleRuntime: styleRuntime,
                                                metalDevice: metal.device,
-                                               textRenderer: textRenderer,
+                                               textLayout: shared.get(TextAtlas.self).layout,
                                                config: config,
                                                tileTraceRecorder: tileTraceRecorder,
                                                tileLoadingStatusReporter: tileLoadingStatusReporter)
@@ -211,9 +128,6 @@ final class RenderPersistentContext {
         self.sceneModelSource = sceneModelSource
         self.sceneModelMeshStore = SceneModelMeshStore(device: metal.device)
         self.sceneModelMeshStore.eventSink = eventSink
-        self.sceneModelPipeline = shared.sceneModelPipeline
-        self.modelTilePipeline = shared.modelTilePipeline
-        self.placementStencilPipeline = shared.placementStencilPipeline
         self.modelTileStore = ModelTileStore.make(settings: config,
                                                   device: metal.device,
                                                   schema: styleRuntime.schema)
@@ -223,24 +137,23 @@ final class RenderPersistentContext {
                                                         occlusion: styleRuntime.terrainOcclusion,
                                                         device: metal.device)
         self.groundRelief?.store.eventSink = eventSink
-        self.treePipeline = shared.treePipeline
         self.treePalette = styleRuntime.treePalette
         self.labelOpacity = styleRuntime.labelOpacity
         self.treeModelStore = TreeModelStore(device: metal.device)
         self.treeModelStore.eventSink = eventSink
         self.layerSource = layerSource
-        self.layerPipeline = shared.layerPipeline
         self.tileGridSource = tileGridSource
-        self.tileGridPipeline = shared.tileGridPipeline
         self.layerMeshStore = LayerMeshStore(device: metal.device)
         self.layerMeshStore.eventSink = eventSink
 
         self.pinSource = pinSource
         self.annotationSource = annotationSource
         self.pinsRenderer = PinsRenderer(metalDevice: metal.device,
-                                               sharedResources: shared.pins,
+                                               sharedResources: shared.get(PinsRenderer.SharedResources.self),
                                                config: config.pins)
-        self.debugOverlayRenderer = DebugOverlayRenderer(metalDevice: metal.device, settings: config.debug)
+        self.debugOverlayRenderer = DebugOverlayRenderer(metalDevice: metal.device,
+                                                         textPipeline: shared.get(TextPipeline.self),
+                                                         settings: config.debug)
     }
 
     // MARK: - Settings

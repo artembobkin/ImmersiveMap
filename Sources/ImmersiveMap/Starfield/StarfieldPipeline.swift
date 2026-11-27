@@ -73,3 +73,13 @@ final class StarfieldPipeline {
         renderEncoder.setRenderPipelineState(starsPipelineState)
     }
 }
+
+/// Shared by every renderer of the process (`SharedRenderResources`).
+extension StarfieldPipeline: SharedGPUResources {
+    static func make(_ build: SharedGPUResourceBuild) -> StarfieldPipeline {
+        StarfieldPipeline(metalDevice: build.device,
+                          pixelFormat: build.pixelFormat,
+                          library: build.library,
+                          sampleCount: build.sampleCount)
+    }
+}

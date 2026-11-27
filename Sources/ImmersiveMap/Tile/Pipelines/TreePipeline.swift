@@ -7,7 +7,7 @@ import MetalKit
 /// instance of a tile, opaque, straight into the world pass as the
 /// buildings are, and their shadows, a soft disc under each on the
 /// ground, blended over it after the roads.
-class TreePipeline {
+final class TreePipeline {
     let pipelineState: MTLRenderPipelineState
     /// The shadow discs: a quad per instance from the vertex index, no
     /// vertex buffer, multiplied into the ground (the colour it writes is
@@ -59,5 +59,15 @@ class TreePipeline {
         shadowDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
         shadowDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
         self.shadowPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: shadowDescriptor)
+    }
+}
+
+/// Shared by every renderer of the process (`SharedRenderResources`).
+extension TreePipeline: SharedGPUResources {
+    static func make(_ build: SharedGPUResourceBuild) -> TreePipeline {
+        TreePipeline(metalDevice: build.device,
+                     pixelFormat: build.pixelFormat,
+                     library: build.library,
+                     sampleCount: build.sampleCount)
     }
 }

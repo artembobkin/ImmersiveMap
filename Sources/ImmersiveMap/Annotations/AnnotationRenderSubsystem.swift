@@ -6,7 +6,7 @@ import Metal
 /// Projects SwiftUI annotation coordinates into the frame's screen points with the
 /// same formulas as the render's vertex path (GeoScreenProjectionMath).
 /// Does no GPU work: the result is stored in
-/// `frameContext.sharedState.annotationState`, and the engine publishes it
+/// `frameContext.state[AnnotationFrameState.self]`, and the engine publishes it
 /// synchronously after a successful present of the same frame.
 final class AnnotationRenderSubsystem: RenderSubsystem {
     let name: String = "Annotations"
@@ -20,7 +20,7 @@ final class AnnotationRenderSubsystem: RenderSubsystem {
     func update(frameContext: FrameContext) {
         let input = annotationSource.currentAnnotationProjectionInput
         guard input.entries.isEmpty == false else {
-            frameContext.sharedState.annotationState = .empty
+            frameContext.state[AnnotationFrameState.self] = .empty
             return
         }
 
@@ -41,7 +41,7 @@ final class AnnotationRenderSubsystem: RenderSubsystem {
                                                 positionPx: point.position,
                                                 visibilityAlpha: point.visibilityAlpha))
         }
-        frameContext.sharedState.annotationState.snapshot = AnnotationProjectionSnapshot(
+        frameContext.state[AnnotationFrameState.self].snapshot = AnnotationProjectionSnapshot(
             frameIndex: frameContext.frameIndex,
             drawSize: frameContext.drawSize,
             entries: entries)

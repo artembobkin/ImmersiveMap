@@ -44,7 +44,7 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
               frameContext.renderSurfaceMode == .spherical else {
             return
         }
-        let placeTilesContext = frameContext.sharedState.tilePlacementState.placeTilesContext
+        let placeTilesContext = frameContext.state[TilePlacementState.self].placeTilesContext
         guard placeTilesContext.tilePlacements.isEmpty == false else { return }
 
         let globe = frameContext.globeRenderUniform
