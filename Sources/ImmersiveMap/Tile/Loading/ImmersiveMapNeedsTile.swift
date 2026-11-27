@@ -111,7 +111,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
     private var cpuInFlightCount = 0
     private var queuedNetworkWork: [QueuedNetworkWork] = []
     private var queuedCPUWork: [QueuedCPUWork] = []
-    private let pendingTilesQueue: DeduplicatedTilesFIFO
+    private let pendingTilesQueue: PendingTileQueue
     private var wantedTiles: Set<Tile> = []
     private let loadPipeline: TileLoadPipeline
     private let retryController: TileRetryController
@@ -168,7 +168,7 @@ final class ImmersiveMapNeedsTile: @unchecked Sendable {
         self.maxConcurrentDiskLoads = max(1, maxConcurrentDiskLoads)
         self.stageDeadlines = stageDeadlines
         self.usesDiskStage = loadPipeline.hasPreparedDiskCache
-        self.pendingTilesQueue = DeduplicatedTilesFIFO(capacity: config.tiles.network.pendingRequestQueueCapacity)
+        self.pendingTilesQueue = PendingTileQueue(capacity: config.tiles.network.pendingRequestQueueCapacity)
         self.loadPipeline = loadPipeline
         self.retryController = TileRetryController(policy: retryPolicy, now: now)
         self.now = now
