@@ -58,11 +58,19 @@ enum GeoScreenProjectionMath {
         }
 
         func globeFlatWorldPosition(basis: GeoProjectionBasis) -> SIMD3<Float> {
+            globeFlatWorldPosition(normalizedWorldX: Float(basis.normalizedWorldX),
+                                   mercatorYNormalized: Float(basis.mercatorYNormalized))
+        }
+
+        /// The point's place on the plane the globe unrolls into, by its
+        /// normalized world X ((lon + pi) / 2pi) and Mercator Y.
+        func globeFlatWorldPosition(normalizedWorldX: Float,
+                                    mercatorYNormalized: Float) -> SIMD3<Float> {
             let halfMapSize = globeMapSize * 0.5
-            let worldX = Float(basis.normalizedWorldX) * globeMapSize
+            let worldX = normalizedWorldX * globeMapSize
             let x = Float(ImmersiveMapProjection.wrap(value: Double(worldX - halfMapSize + globe.panX * halfMapSize),
                                                       size: Double(globeMapSize)))
-            let y = (Float(basis.mercatorYNormalized) - globePanMercatorY) * halfMapSize
+            let y = (mercatorYNormalized - globePanMercatorY) * halfMapSize
             return SIMD3<Float>(x, y, 0.0)
         }
 
@@ -127,31 +135,59 @@ enum GeoScreenProjectionMath {
         return screenPointFromClip(clip: clip, viewportSize: constants.viewport)
     }
 
-    private static func projectGlobe(basis: GeoProjectionBasis,
-                                     constants: FrameConstants) -> ScreenPointOutput {
-        let sphereWorldPosition = constants.rotatedSphereWorldPosition(sphereUnit: basis.sphereUnit)
+    /// A point of the globe's surface as the frame draws it: on the sphere,
+    /// on the plane, and where the unroll has it between the two.
+    struct GlobeSurfacePoint {
+        /// Where the point is drawn this frame.
         let worldPosition: SIMD3<Float>
-        if constants.globe.transition <= 0.0 {
-            worldPosition = sphereWorldPosition
-        } else {
-            let flatWorldPosition = constants.globeFlatWorldPosition(basis: basis)
-            worldPosition = GlobeUnrollMath.worldPosition(sphereWorldPosition: sphereWorldPosition,
-                                                          flatWorldPosition: SIMD2<Float>(flatWorldPosition.x,
-                                                                                          flatWorldPosition.y),
+        let sphereWorldPosition: SIMD3<Float>
+        /// The point's place on the plane, zero on the resting sphere,
+        /// where nothing reads it.
+        let flatWorldPosition: SIMD2<Float>
+    }
+
+    /// Where a point of the globe is this frame: on the resting sphere its
+    /// place on the sphere, and through the morph where the unroll carries
+    /// it (`GlobeUnrollMath.worldPosition`), as the ground's vertex stage
+    /// does. The one place a CPU projection gets a globe point from, so a
+    /// name, a pin and a marker stand where the ground under them is drawn.
+    static func globeSurfacePoint(sphereUnit: SIMD3<Float>,
+                                  normalizedWorldX: Float,
+                                  mercatorYNormalized: Float,
+                                  constants: FrameConstants) -> GlobeSurfacePoint {
+        let sphereWorldPosition = constants.rotatedSphereWorldPosition(sphereUnit: sphereUnit)
+        guard constants.globe.transition > 0.0 else {
+            return GlobeSurfacePoint(worldPosition: sphereWorldPosition,
+                                     sphereWorldPosition: sphereWorldPosition,
+                                     flatWorldPosition: .zero)
+        }
+        let flat = constants.globeFlatWorldPosition(normalizedWorldX: normalizedWorldX,
+                                                    mercatorYNormalized: mercatorYNormalized)
+        let flatWorldPosition = SIMD2<Float>(flat.x, flat.y)
+        let worldPosition = GlobeUnrollMath.worldPosition(sphereWorldPosition: sphereWorldPosition,
+                                                          flatWorldPosition: flatWorldPosition,
                                                           transition: constants.globe.transition,
                                                           radius: constants.globe.radius)
-        }
-        let clip = constants.cameraUniform.matrix * SIMD4<Float>(worldPosition, 1.0)
+        return GlobeSurfacePoint(worldPosition: worldPosition,
+                                 sphereWorldPosition: sphereWorldPosition,
+                                 flatWorldPosition: flatWorldPosition)
+    }
+
+    private static func projectGlobe(basis: GeoProjectionBasis,
+                                     constants: FrameConstants) -> ScreenPointOutput {
+        let surface = globeSurfacePoint(sphereUnit: basis.sphereUnit,
+                                        normalizedWorldX: Float(basis.normalizedWorldX),
+                                        mercatorYNormalized: Float(basis.mercatorYNormalized),
+                                        constants: constants)
+        let clip = constants.cameraUniform.matrix * SIMD4<Float>(surface.worldPosition, 1.0)
         var point = screenPointFromClip(clip: clip, viewportSize: constants.viewport)
         guard point.visible != 0 else {
             return point
         }
 
-        let flatForCut = constants.globe.transition > 0
-            ? constants.globeFlatWorldPosition(basis: basis) : SIMD3<Float>(0, 0, 0)
-        let visibility = globeVisibility(worldPosition: worldPosition,
-                                         sphereWorldPosition: sphereWorldPosition,
-                                         flatWorldPosition: SIMD2<Float>(flatForCut.x, flatForCut.y),
+        let visibility = globeVisibility(worldPosition: surface.worldPosition,
+                                         sphereWorldPosition: surface.sphereWorldPosition,
+                                         flatWorldPosition: surface.flatWorldPosition,
                                          constants: constants)
         guard visibility.alpha > 0.0 else {
             return ScreenPointOutput(position: point.position,
@@ -163,8 +199,8 @@ enum GeoScreenProjectionMath {
         return point
     }
 
-    private static func screenPointFromClip(clip: SIMD4<Float>,
-                                            viewportSize: SIMD2<Float>) -> ScreenPointOutput {
+    static func screenPointFromClip(clip: SIMD4<Float>,
+                                    viewportSize: SIMD2<Float>) -> ScreenPointOutput {
         guard clip.w > 0.0 else {
             return ScreenPointOutput(position: .zero,
                                      depth: 0.0,
