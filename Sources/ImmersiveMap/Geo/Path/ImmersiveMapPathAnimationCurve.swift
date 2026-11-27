@@ -24,8 +24,7 @@ extension ImmersiveMapPathAnimationCurve {
         case .linear:
             return raw
         case .easeOut:
-            let inverse = 1 - raw
-            return 1 - inverse * inverse * inverse
+            return GeoMoveAnimationMath.easedProgress(for: raw)
         }
     }
 }

@@ -133,7 +133,7 @@ struct GroundReliefSurroundings {
     /// all of it with no half-life.
     static func smoothingShare(deltaTime: TimeInterval, halfLife: TimeInterval) -> Float {
         guard halfLife > 0, deltaTime > 0 else { return 1 }
-        return Float(1 - pow(0.5, deltaTime / halfLife))
+        return Float(1 - HalfLifeDecay.remaining(deltaTime: deltaTime, halfLife: halfLife))
     }
 
     /// Where the span lies between the two thresholds, 0 to 1. With the

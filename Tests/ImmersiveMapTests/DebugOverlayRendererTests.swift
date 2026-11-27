@@ -381,9 +381,6 @@ final class DebugOverlayRendererTests: XCTestCase {
         diagnostics.setCounter(.roadLabelInstanceCount, value: 0)
         diagnostics.setCounter(.roadLabelNearCameraCulledPathCount, value: 12)
         diagnostics.setCounter(.roadLabelNearCameraCulledAnchorCount, value: 34)
-        diagnostics.setCounter(.resourceBufferCount, value: 1)
-        diagnostics.setCounter(.resourceTextureCount, value: 3)
-        diagnostics.setCounter(.resourcePipelineCount, value: 5)
         diagnostics.setCounter(.globeCullingVisitedNodes, value: 85)
         diagnostics.setCounter(.globeCullingFrustumRejects, value: 15)
         diagnostics.setCounter(.globeCullingHorizonRejects, value: 33)
@@ -424,11 +421,6 @@ final class DebugOverlayRendererTests: XCTestCase {
             "roadG:0",
             "roadI:0",
             "roadCull:12/34",
-            "",
-            "[Resources]",
-            "buffers:1",
-            "textures:3",
-            "pipelines:5",
             "",
             "[Globe culling]",
             "ms:0.07",

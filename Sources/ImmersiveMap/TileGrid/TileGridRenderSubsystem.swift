@@ -154,7 +154,7 @@ final class TileGridRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProv
             selectableBounds: settings.selectableBounds))
     }
 
-    func prepareGPU(frameContext: FrameContext, resourceRegistry _: RenderResourceRegistry) {
+    func prepareGPU(frameContext: FrameContext) {
         guard tiles.isEmpty == false else { return }
         let slot = frameContext.frameSlotIndex
         Self.upload(tiles, to: tileBuffers.ensureCapacity(slot: slot, count: tiles.count))
@@ -239,9 +239,6 @@ final class TileGridRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProv
         encoder.popDebugGroup()
     }
 
-    func handleMemoryWarning() {}
-
-    func evict() {}
 }
 
 /// The frame's view of the ground, as the grid needs it: which tiles show

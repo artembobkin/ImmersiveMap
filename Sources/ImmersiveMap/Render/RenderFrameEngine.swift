@@ -388,7 +388,6 @@ final class RenderFrameEngine {
             return nil
         }
 
-        publishStaticResources(frameIndex: frameTick.index)
         // The ring rules are the debug panel's: an edited rule re-runs
         // the coverage like a camera change would.
         // How far the relief falls and rises about the plane this frame,
@@ -522,24 +521,9 @@ final class RenderFrameEngine {
                             diagnostics: diagnostics)
     }
 
-    private func publishStaticResources(frameIndex: UInt64) {
-        let resourceRegistry = renderGraph.resourceRegistry
-        resourceRegistry.beginFrame(frameIndex: frameIndex)
-        let shared = persistentContext.shared
-        resourceRegistry.setPipeline(shared.get(PolygonsPipeline.self).pipelineState, named: .polygonPipeline)
-        resourceRegistry.setPipeline(shared.get(FlatGroundSharedResources.self).pipeline.pipelineState, named: .tilePipeline)
-        resourceRegistry.setPipeline(shared.get(ExtrudedTilePipeline.self).pipelineState, named: .extrudedTilePipeline)
-        resourceRegistry.setTexture(shared.get(TextAtlas.self).texture, named: .labelGlyphAtlas)
-        resourceRegistry.setTexture(shared.get(PoiSpriteAtlas.self).texture, named: .poiSpriteAtlas)
-    }
-
     private func prepareGPU(frameContext: FrameContext) {
         renderGraph.prepareGPU(frameContext: frameContext)
 
-        let counts = renderGraph.resourceRegistry.counts
-        frameContext.services.diagnostics.setCounter(.resourceBufferCount, value: counts.buffers)
-        frameContext.services.diagnostics.setCounter(.resourceTextureCount, value: counts.textures)
-        frameContext.services.diagnostics.setCounter(.resourcePipelineCount, value: counts.pipelines)
     }
 
     /// Every rendered frame, for the content the panel shows: the panel is

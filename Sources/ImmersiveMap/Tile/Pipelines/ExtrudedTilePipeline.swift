@@ -59,8 +59,8 @@ final class ExtrudedTilePipeline {
         pipelineDescriptor.vertexDescriptor = vertexDescriptor
         pipelineDescriptor.rasterSampleCount = sampleCount
         pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-        pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-        pipelineDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
+        pipelineDescriptor.depthAttachmentPixelFormat = .mapDepthStencil
+        pipelineDescriptor.stencilAttachmentPixelFormat = .mapDepthStencil
 
         let shadowDescriptor = MTLRenderPipelineDescriptor()
         shadowDescriptor.vertexFunction = function("tileExtrudedShadowVertexShader", relief: false)

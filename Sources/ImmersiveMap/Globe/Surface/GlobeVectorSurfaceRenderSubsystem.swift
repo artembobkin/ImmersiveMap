@@ -35,10 +35,6 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
         self.debugOverlayControls = debugOverlayControls
     }
 
-    func update(frameContext _: FrameContext) {}
-
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard layer == .globeVectorSurface,
               frameContext.renderSurfaceMode == .spherical else {
@@ -75,7 +71,4 @@ final class GlobeVectorSurfaceRenderSubsystem: RenderSubsystem {
                                           presentation: frameContext.services.settings.presentation))
     }
 
-    func handleMemoryWarning() {}
-
-    func evict() {}
 }

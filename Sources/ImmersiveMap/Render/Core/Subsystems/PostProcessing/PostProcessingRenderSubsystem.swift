@@ -15,10 +15,6 @@ final class PostProcessingRenderSubsystem: RenderSubsystem {
         self.inputTextureProvider = inputTextureProvider
     }
 
-    func update(frameContext _: FrameContext) {}
-
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard layer == .postProcessing,
               let inputTexture = inputTextureProvider() else {
@@ -30,7 +26,4 @@ final class PostProcessingRenderSubsystem: RenderSubsystem {
                           drawSize: frameContext.drawSize)
     }
 
-    func handleMemoryWarning() {}
-
-    func evict() {}
 }

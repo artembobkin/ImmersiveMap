@@ -150,6 +150,6 @@ extension GlobeCapRenderer.SharedResources: SharedGPUResources {
              pixelFormat: build.pixelFormat,
              library: build.library,
              sampleCount: build.sampleCount,
-             maxLatitude: WebMercatorMath.maxLatitudeRadians)
+             maxLatitude: ImmersiveMapProjection.maxMercatorLatitude)
     }
 }

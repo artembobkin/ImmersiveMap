@@ -24,10 +24,6 @@ final class GroundShadowMaskRenderSubsystem: RenderSubsystem {
         self.shadowMapTextureProvider = shadowMapTextureProvider
     }
 
-    func update(frameContext _: FrameContext) {}
-
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard layer == .groundShadowMask,
               frameContext.renderSurfaceMode == .flat,
@@ -54,7 +50,4 @@ final class GroundShadowMaskRenderSubsystem: RenderSubsystem {
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
     }
 
-    func handleMemoryWarning() {}
-
-    func evict() {}
 }

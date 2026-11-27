@@ -1,16 +1,11 @@
 // Copyright (c) 2025-2026 Artem Bobkin.
 // SPDX-License-Identifier: MIT
 
-//
-//  RenderResourceName.swift
-//  ImmersiveMap
-//
+import Metal
 
-import Foundation
-
+/// The names the frame's own GPU resources go by in a GPU capture and in
+/// Instruments: the label of a texture or a buffer the engine makes.
 enum RenderResourceName: String {
-    case tileVertexBuffer = "TileVertexBuffer"
-    case tileStyleBuffer = "TileStyleBuffer"
     case labelGlyphAtlas = "LabelGlyphAtlas"
     case poiSpriteAtlas = "PoiSpriteAtlas"
     case baseLabelRuntimeBuffer = "BaseLabelRuntimeBuffer"
@@ -22,7 +17,11 @@ enum RenderResourceName: String {
     case shadowMapTexture = "ShadowMapTexture"
     case groundShadowMaskTexture = "GroundShadowMaskTexture"
     case tileOriginDataBuffer = "TileOriginDataBuffer"
-    case polygonPipeline = "PolygonPipeline"
-    case tilePipeline = "TilePipeline"
-    case extrudedTilePipeline = "ExtrudedTilePipeline"
+
+    /// Names a buffer that has no name yet.
+    func name(_ buffer: MTLBuffer) {
+        if buffer.label == nil {
+            buffer.label = rawValue
+        }
+    }
 }

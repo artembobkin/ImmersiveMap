@@ -156,8 +156,6 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
         builder.sceneModelsEnabled = builder.sceneModelsEnabled || hasDrawItems
     }
 
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         switch layer {
         case .sceneModels:
@@ -190,9 +188,5 @@ final class SceneModelRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPr
 
     func handleMemoryWarning() {
         meshStore.handleMemoryWarning()
-    }
-
-    func evict() {
-        meshStore.evict()
     }
 }

@@ -10,8 +10,6 @@ import CoreGraphics
 import Foundation
 
 enum GlobeCameraPanInertiaMath {
-    static let maximumDeltaTime: CFTimeInterval = 0.05
-
     static func speed(of velocity: CGPoint) -> Double {
         hypot(Double(velocity.x), Double(velocity.y))
     }
@@ -38,19 +36,11 @@ enum GlobeCameraPanInertiaMath {
         return CGPoint(x: velocity.x * scale, y: velocity.y * scale)
     }
 
-    static func clampedDeltaTime(_ deltaTime: CFTimeInterval) -> CFTimeInterval {
-        guard deltaTime.isFinite else {
-            return 0
-        }
-
-        return min(max(0, deltaTime), maximumDeltaTime)
-    }
-
     static func decayedVelocity(_ velocity: CGPoint,
                                 deltaTime: CFTimeInterval,
                                 halfLife: Double) -> CGPoint {
         let sanitizedHalfLife = max(0.001, halfLife.isFinite ? halfLife : 0.001)
-        let factor = exp(-log(2.0) * deltaTime / sanitizedHalfLife)
+        let factor = HalfLifeDecay.remaining(deltaTime: deltaTime, halfLife: sanitizedHalfLife)
         return CGPoint(x: velocity.x * factor, y: velocity.y * factor)
     }
 }

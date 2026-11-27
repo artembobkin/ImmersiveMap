@@ -332,7 +332,7 @@ package final class ImmersiveMapCameraAnimationRuntime {
         // The same frame-gap cap as the pan inertia, so a hitch does not
         // snap the camera back in one step.
         let deltaTime = boundsPullLastTickTime.map {
-            GlobeCameraPanInertiaMath.clampedDeltaTime(currentTime - $0)
+            HalfLifeDecay.clampedDeltaTime(currentTime - $0)
         } ?? 0
         let isPulling = cameraRuntime.advanceBoundsPull(deltaTime: deltaTime)
         boundsPullLastTickTime = isPulling ? currentTime : nil
@@ -364,7 +364,7 @@ package final class ImmersiveMapCameraAnimationRuntime {
         }
 
         let deltaTime = globeUprightPullLastTickTime.map {
-            GlobeCameraPanInertiaMath.clampedDeltaTime(currentTime - $0)
+            HalfLifeDecay.clampedDeltaTime(currentTime - $0)
         } ?? 0
         let halfLife = cameraRuntime.currentSettings.camera.globeUprightPull?.halfLife ?? 0
         let step = GlobeUprightPull.step(bearing: bearing,

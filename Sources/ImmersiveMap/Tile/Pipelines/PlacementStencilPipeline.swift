@@ -36,8 +36,8 @@ final class PlacementStencilPipeline {
             descriptor.rasterSampleCount = sampleCount
             descriptor.colorAttachments[0].pixelFormat = pixelFormat
             descriptor.colorAttachments[0].writeMask = []
-            descriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-            descriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
+            descriptor.depthAttachmentPixelFormat = .mapDepthStencil
+            descriptor.stencilAttachmentPixelFormat = .mapDepthStencil
             return try! metalDevice.makeRenderPipelineState(descriptor: descriptor)
         }
         flatPipelineState = state(label: "PlacementStencilFlat", vertex: "tileRasterFlatVertexShader")

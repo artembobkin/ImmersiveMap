@@ -50,8 +50,8 @@ final class StarfieldPipeline {
         pipelineDescriptor.vertexDescriptor = vertexDescriptor
         pipelineDescriptor.rasterSampleCount = sampleCount
         pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-        pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-        pipelineDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
+        pipelineDescriptor.depthAttachmentPixelFormat = .mapDepthStencil
+        pipelineDescriptor.stencilAttachmentPixelFormat = .mapDepthStencil
         pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
         pipelineDescriptor.colorAttachments[0].rgbBlendOperation = .add
         pipelineDescriptor.colorAttachments[0].alphaBlendOperation = .add

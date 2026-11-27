@@ -473,7 +473,7 @@ private struct GlobeProjectionConstants {
         self.panMercatorY = Float(ImmersiveMapProjection.yMercatorNormalized(latitude: Double(panLatitude)))
         self.rotationMatrix = GlobeProjectionConstants.makeRotationMatrix(panLatitude: panLatitude,
                                                                           panLongitude: panLongitude)
-        let horizonFade = GlobeProjectionConstants.smoothstep(edge0: 0.8, edge1: 0.95, x: globe.transition)
+        let horizonFade = smoothstep(edge0: 0.8, edge1: 0.95, x: globe.transition)
         self.horizonThreshold = (1.0 - horizonFade) * (globe.radius * globe.radius) + horizonFade * -1e6
     }
 
@@ -515,10 +515,5 @@ private struct GlobeProjectionConstants {
             SIMD4<Float>(sy * cx, -sx, cy * cx, 0),
             SIMD4<Float>(0, 0, 0, 1)
         ))
-    }
-
-    private static func smoothstep(edge0: Float, edge1: Float, x: Float) -> Float {
-        let t = simd_clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0)
-        return t * t * (3.0 - 2.0 * t)
     }
 }

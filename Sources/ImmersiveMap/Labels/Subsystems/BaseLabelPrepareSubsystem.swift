@@ -280,16 +280,9 @@ final class BaseLabelPrepareSubsystem: RenderSubsystem {
                                                      value: latestRoadLabelNearCameraCullCounts.anchor)
     }
 
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
     /// The labels are drawn by `BaseLabelDrawSubsystem`.
-    func encode(layer _: RenderLayer, encoder _: MTLRenderCommandEncoder, frameContext _: FrameContext) {}
 
     func handleMemoryWarning() {
-        reset()
-    }
-
-    func evict() {
         reset()
     }
 

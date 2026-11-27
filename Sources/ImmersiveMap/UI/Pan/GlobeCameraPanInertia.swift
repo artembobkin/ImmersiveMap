@@ -85,7 +85,7 @@ final class GlobeCameraPanInertia {
                         isActive: isActive)
         }
 
-        let deltaTime = GlobeCameraPanInertiaMath.clampedDeltaTime(currentTime - lastTickTime)
+        let deltaTime = HalfLifeDecay.clampedDeltaTime(currentTime - lastTickTime)
         self.lastTickTime = currentTime
         guard deltaTime > 0 else {
             return Step(translation: .zero,

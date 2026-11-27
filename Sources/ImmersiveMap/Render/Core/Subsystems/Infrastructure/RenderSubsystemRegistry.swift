@@ -16,10 +16,6 @@ final class RenderSubsystemRegistry {
         self.subsystems = subsystems
     }
 
-    var orderedSubsystemNames: [String] {
-        subsystems.map(\.name)
-    }
-
     func update(frameContext: FrameContext) {
         for subsystem in subsystems {
             let start = CACurrentMediaTime()
@@ -28,10 +24,10 @@ final class RenderSubsystemRegistry {
         }
     }
 
-    func prepareGPU(frameContext: FrameContext, resourceRegistry: RenderResourceRegistry) {
+    func prepareGPU(frameContext: FrameContext) {
         for subsystem in subsystems {
             let start = CACurrentMediaTime()
-            subsystem.prepareGPU(frameContext: frameContext, resourceRegistry: resourceRegistry)
+            subsystem.prepareGPU(frameContext: frameContext)
             frameContext.diagnostics.recordSubsystem(subsystem.name, duration: CACurrentMediaTime() - start)
         }
     }
@@ -51,12 +47,6 @@ final class RenderSubsystemRegistry {
     func handleMemoryWarning() {
         for subsystem in subsystems {
             subsystem.handleMemoryWarning()
-        }
-    }
-
-    func evict() {
-        for subsystem in subsystems {
-            subsystem.evict()
         }
     }
 }

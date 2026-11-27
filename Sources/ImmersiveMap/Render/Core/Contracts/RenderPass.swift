@@ -78,7 +78,6 @@ enum RenderSkipReason: String, CaseIterable, Hashable {
     case inFlightSlotsExhausted
     case missingDrawable
     case missingCommandBuffer
-    case flatTileOriginUnavailable
     case noLabelContent
     case noPinContent
     case noSceneModelContent

@@ -22,11 +22,6 @@ import simd
 final class BuildingReliefLifts {
     private var buffersByTile: [ObjectIdentifier: (tile: Tile, terrain: ObjectIdentifier, revision: UInt64, buffer: MTLBuffer)] = [:]
 
-    /// Lets go of every tile's lifts.
-    func evict() {
-        buffersByTile.removeAll()
-    }
-
     /// The lifts of each placement, index-aligned with `placements`: nil
     /// for one not drawn (`drawnKeys` nil), with no buildings, or whose
     /// terrain is not in. With no relief, every entry is nil and the cache

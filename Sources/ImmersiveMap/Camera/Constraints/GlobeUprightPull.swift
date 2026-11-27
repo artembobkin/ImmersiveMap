@@ -63,7 +63,7 @@ enum GlobeUprightPull {
                      deltaTime: Double,
                      halfLife: Double) -> Step {
         let remaining = halfLife > 0 && halfLife.isFinite
-            ? Float(exp(-log(2.0) * max(deltaTime, 0) / halfLife))
+            ? Float(HalfLifeDecay.remaining(deltaTime: max(deltaTime, 0), halfLife: halfLife))
             : 0
 
         let normalizedBearing = CameraBearingConstraintResolver.normalized(bearing)

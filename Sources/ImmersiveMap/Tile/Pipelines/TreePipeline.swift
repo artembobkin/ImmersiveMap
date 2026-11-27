@@ -40,8 +40,8 @@ final class TreePipeline {
         pipelineDescriptor.vertexDescriptor = vertexDescriptor
         pipelineDescriptor.rasterSampleCount = sampleCount
         pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-        pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-        pipelineDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
+        pipelineDescriptor.depthAttachmentPixelFormat = .mapDepthStencil
+        pipelineDescriptor.stencilAttachmentPixelFormat = .mapDepthStencil
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
 
         let shadowDescriptor = MTLRenderPipelineDescriptor()
@@ -56,8 +56,8 @@ final class TreePipeline {
         shadowDescriptor.colorAttachments[0].alphaBlendOperation = .add
         shadowDescriptor.colorAttachments[0].sourceAlphaBlendFactor = .zero
         shadowDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .one
-        shadowDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-        shadowDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
+        shadowDescriptor.depthAttachmentPixelFormat = .mapDepthStencil
+        shadowDescriptor.stencilAttachmentPixelFormat = .mapDepthStencil
         self.shadowPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: shadowDescriptor)
     }
 }

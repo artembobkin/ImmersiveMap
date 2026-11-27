@@ -76,9 +76,9 @@ final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
         builder.labelsEnabled = builder.labelsEnabled || hasRenderableLabels
     }
 
-    func prepareGPU(frameContext: FrameContext, resourceRegistry: RenderResourceRegistry) {
+    func prepareGPU(frameContext: FrameContext) {
         if let runtimeMetaBuffer = frameContext.state[RoadLabelState.self].runtimeMetaBuffer {
-            resourceRegistry.setBuffer(runtimeMetaBuffer, named: .roadLabelRuntimeBuffer)
+            RenderResourceName.roadLabelRuntimeBuffer.name(runtimeMetaBuffer)
         }
     }
 
@@ -121,7 +121,4 @@ final class RoadLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
         encoder.setDepthStencilState(depthDisabledState)
     }
 
-    func handleMemoryWarning() {}
-
-    func evict() {}
 }

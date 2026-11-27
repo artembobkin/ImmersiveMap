@@ -19,7 +19,7 @@ final class CameraPathFollowMathTests: XCTestCase {
 
     func testOneHalfLifeClosesHalfTheGap() {
         // The delta time cap is what makes this reachable in one step.
-        let halfLife = CameraPathFollowMath.maximumDeltaTime
+        let halfLife = HalfLifeDecay.maximumDeltaTime
         let fraction = CameraPathFollowMath.catchUpFraction(deltaTime: halfLife, halfLife: halfLife)
         XCTAssertEqual(fraction, 0.5, accuracy: 1e-9)
     }
@@ -41,7 +41,7 @@ final class CameraPathFollowMathTests: XCTestCase {
     /// A long stall (a parked view resuming) must not teleport the camera.
     func testLongFrameIsCappedInsteadOfTeleporting() {
         let capped = CameraPathFollowMath.catchUpFraction(deltaTime: 5, halfLife: 0.35)
-        let atCap = CameraPathFollowMath.catchUpFraction(deltaTime: CameraPathFollowMath.maximumDeltaTime,
+        let atCap = CameraPathFollowMath.catchUpFraction(deltaTime: HalfLifeDecay.maximumDeltaTime,
                                                          halfLife: 0.35)
         XCTAssertEqual(capped, atCap, accuracy: 1e-12)
         XCTAssertLessThan(capped, 1)
@@ -50,10 +50,10 @@ final class CameraPathFollowMathTests: XCTestCase {
     /// Same convention as the pitch and bearing followers: a non-finite delta
     /// time yields no step at all rather than a capped one.
     func testNonFiniteDeltaTimeIsIgnored() {
-        XCTAssertEqual(CameraPathFollowMath.clampedDeltaTime(.nan), 0)
-        XCTAssertEqual(CameraPathFollowMath.clampedDeltaTime(.infinity), 0)
-        XCTAssertEqual(CameraPathFollowMath.clampedDeltaTime(-1), 0)
-        XCTAssertEqual(CameraBearingFollowMath.clampedDeltaTime(.infinity), 0)
+        XCTAssertEqual(HalfLifeDecay.clampedDeltaTime(.nan), 0)
+        XCTAssertEqual(HalfLifeDecay.clampedDeltaTime(.infinity), 0)
+        XCTAssertEqual(HalfLifeDecay.clampedDeltaTime(-1), 0)
+        XCTAssertEqual(HalfLifeDecay.clampedDeltaTime(.infinity), 0)
     }
 
     // MARK: - Center step

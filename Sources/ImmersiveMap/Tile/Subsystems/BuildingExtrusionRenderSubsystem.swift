@@ -124,8 +124,6 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
         frameContext.state[ExtrusionRiseFrameState.self].isRising = frameContext.state[ExtrusionRiseFrameState.self].isRising || rise.isAnimating
     }
 
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
     /// Whether two squares share ground: one of them holds the other, in
     /// the same world copy.
     private static func overlap(_ lhs: VisibleTile, _ rhs: VisibleTile) -> Bool {
@@ -190,13 +188,6 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
 
         guard layer == .buildingExtrusion else { return }
         drawBuildings(encoder: encoder, frameContext: frameContext)
-    }
-
-    func handleMemoryWarning() {}
-
-    func evict() {
-        rise.reset()
-        reliefLifts.evict()
     }
 
     private func drawBuildings(encoder: MTLRenderCommandEncoder,

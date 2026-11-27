@@ -287,7 +287,9 @@ final class ModelTileStore: @unchecked Sendable {
         if case .loading(let failedAttempts) = statesByTile[tile] {
             attempts = failedAttempts + 1
         }
-        let delay = min(Self.retryMaximumDelay, Self.retryBaseDelay * pow(2, Double(attempts - 1)))
+        let delay = RetryBackoff.delay(afterAttempts: attempts,
+                                       base: Self.retryBaseDelay,
+                                       maximum: Self.retryMaximumDelay)
         statesByTile[tile] = .failed(attempts: attempts, retryAt: now() + delay)
         lock.unlock()
 
@@ -300,27 +302,9 @@ final class ModelTileStore: @unchecked Sendable {
     }
 }
 
-/// Throttles a warning about the model archive to one line per interval,
-/// process wide: every wanted tile carries the same news.
-///
-/// `@unchecked Sendable` because the lock is the synchronisation the
-/// compiler cannot see: the state is private and every path to it goes
-/// through `lock`.
-final class ModelTileNoticeThrottle: @unchecked Sendable {
-    static let archiveUnreadable = ModelTileNoticeThrottle()
-    static let unsupportedDevice = ModelTileNoticeThrottle()
-    static let interval: TimeInterval = 60
-
-    private let lock = NSLock()
-    private var lastLoggedAt: Date?
-
-    func shouldLog(now: Date = Date()) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        if let last = lastLoggedAt, now.timeIntervalSince(last) < Self.interval {
-            return false
-        }
-        lastLoggedAt = now
-        return true
-    }
+/// The model archive's warnings, each let through once per interval
+/// (`NoticeThrottle`): every wanted tile carries the same news.
+enum ModelTileNoticeThrottle {
+    static let archiveUnreadable = NoticeThrottle()
+    static let unsupportedDevice = NoticeThrottle()
 }

@@ -465,11 +465,6 @@ final class DebugOverlayRenderer {
             .map { "\($0.key):\(String(format: "%.2f", $0.value * 1000.0))" }
         appendSection(title: "CPU ms", body: Array(cpuLines), into: &lines)
 
-        let resourcesLines = ["buffers:\(diagnostics.counterValue(.resourceBufferCount))",
-                              "textures:\(diagnostics.counterValue(.resourceTextureCount))",
-                              "pipelines:\(diagnostics.counterValue(.resourcePipelineCount))"]
-        appendSection(title: "Resources", body: resourcesLines, into: &lines)
-
         let globeCullingMs = String(format: "%.2f", diagnostics.measurementValue(.globeCullingDurationMs))
         let globeCullingLines = ["ms:\(globeCullingMs)",
                                  "nodes:\(diagnostics.counterValue(.globeCullingVisitedNodes))",

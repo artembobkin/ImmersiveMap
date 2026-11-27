@@ -35,7 +35,7 @@ final class DebugOverlayRenderSubsystem: RenderSubsystem, RenderPassAvailability
 
     func update(frameContext: FrameContext) {}
 
-    func prepareGPU(frameContext: FrameContext, resourceRegistry: RenderResourceRegistry) {}
+    func prepareGPU(frameContext: FrameContext) {}
 
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard layer == .debugOverlay else { return }
@@ -47,7 +47,4 @@ final class DebugOverlayRenderSubsystem: RenderSubsystem, RenderPassAvailability
                                         controls: controls.snapshot())
     }
 
-    func handleMemoryWarning() {}
-
-    func evict() {}
 }

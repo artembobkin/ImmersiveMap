@@ -49,7 +49,7 @@ final class SceneModelPresentationStateStoreTests: XCTestCase {
         store.apply(snapshot: makeSnapshot([makeModel(id: 1, longitude: target.longitude)]), time: 10)
         XCTAssertTrue(store.hasActiveAnimations)
 
-        let duration = SceneModelAnimationMath.positionAnimationDuration(from: start, to: target)
+        let duration = GeoMoveAnimationMath.duration(from: start, to: target)
         XCTAssertGreaterThan(duration, 0)
 
         let mid = store.presentedEntries(at: 10 + duration * 0.5)[0]
@@ -76,7 +76,7 @@ final class SceneModelPresentationStateStoreTests: XCTestCase {
         XCTAssertEqual(atStart.altitudeMeters, 0, accuracy: 1e-9)
 
         // Cubic ease-out at raw progress 0.5 is 0.875.
-        let eased = SceneModelAnimationMath.easedProgress(for: 0.5)
+        let eased = GeoMoveAnimationMath.easedProgress(for: 0.5)
         let mid = store.presentedEntries(at: 100.5)[0]
         XCTAssertEqual(mid.scale, 1 + 2 * eased, accuracy: 1e-6)
         XCTAssertEqual(mid.altitudeMeters, 40 * eased, accuracy: 1e-6)

@@ -94,8 +94,6 @@ final class LayerRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProvide
                                                                                 entries: entries))
     }
 
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
     func contributePassAvailability(settings _: ImmersiveMapSettings,
                                     builder: inout RenderPassAvailabilityBuilder) {
         builder.appLayersEnabled = builder.appLayersEnabled || drawn.isEmpty == false
@@ -260,9 +258,5 @@ final class LayerRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProvide
     /// sources' shapes.
     func handleMemoryWarning() {
         store.releaseUndrawn()
-    }
-
-    func evict() {
-        store.releaseAll()
     }
 }

@@ -41,9 +41,6 @@ final class FrameDiagnostics: FrameDiagnosticsService {
         case roadLabelInstanceCount
         case roadLabelNearCameraCulledPathCount
         case roadLabelNearCameraCulledAnchorCount
-        case resourceBufferCount
-        case resourceTextureCount
-        case resourcePipelineCount
         case encodedPasses
         case globeCullingVisitedNodes
         case globeCullingFrustumRejects

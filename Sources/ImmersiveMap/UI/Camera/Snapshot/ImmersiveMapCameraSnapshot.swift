@@ -70,11 +70,6 @@ public struct ImmersiveMapCameraSnapshot: Equatable, Sendable {
     }
 
     public static func normalizedBearing(_ bearing: Float) -> Float {
-        let twoPi = Float.pi * 2
-        var normalized = (bearing + .pi).truncatingRemainder(dividingBy: twoPi)
-        if normalized < 0 {
-            normalized += twoPi
-        }
-        return normalized - .pi
+        CameraBearingConstraintResolver.normalized(bearing)
     }
 }

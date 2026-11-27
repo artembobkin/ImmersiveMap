@@ -51,18 +51,6 @@ struct GlobeFrameConstants {
     float3 _padding;
 };
 
-struct SunVisualState {
-    float2 screenCenter;
-    float2 clampedScreenCenter;
-    float2 globeScreenCenter;
-    float globeScreenRadius;
-    float diskAlpha;
-    float edgeGlareAlpha;
-    float limbHaloAlpha;
-    uint isEnabled;
-    uint padding;
-};
-
 // Grazing-wall cutoff for the geometric self-shadow test, in N·L. Below the
 // start the face is declared self-shadowed and never reaches the map: its
 // depth changes by more than a texel across the receiver, which a constant

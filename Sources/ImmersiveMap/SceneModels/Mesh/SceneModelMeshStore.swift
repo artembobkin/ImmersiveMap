@@ -93,12 +93,6 @@ final class SceneModelMeshStore: @unchecked Sendable {
         lock.unlock()
     }
 
-    func evict() {
-        lock.lock()
-        _ = cache.trim(toCost: Self.defaultCostLimitBytes, protectedKeys: referencedURLs)
-        lock.unlock()
-    }
-
     /// Loads run one at a time on a queue of their own, never on the Swift
     /// concurrency pool. A load blocks its thread: `MTKTextureLoader` hands
     /// each texture to Metal's IO queue and waits on a semaphore for it. As

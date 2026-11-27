@@ -4,36 +4,11 @@
 import Foundation
 import simd
 
-/// Deterministic animation math for scene models: move durations, quaternion
-/// orientation, and scalar easing. Kept inside SceneModels so the domain folder
-/// does not depend on Pins. Great-circle interpolation itself lives in
-/// `GeoGreatCircleMath`.
+/// Deterministic animation math for scene models: quaternion orientation
+/// and scalar interpolation. The timing of a move is `GeoMoveAnimationMath`
+/// and the great-circle interpolation `GeoGreatCircleMath`, shared with the
+/// pins.
 enum SceneModelAnimationMath {
-    static let minimumPositionDuration: TimeInterval = 0.14
-    static let maximumPositionDuration: TimeInterval = 0.60
-    static let saturationDistanceMeters: Double = 250.0
-    static let minimumAnimatedDistanceMeters: Double = 0.01
-
-    /// Move duration scaled by geodesic distance: short hops stay snappy,
-    /// long jumps saturate instead of dragging on.
-    static func positionAnimationDuration(from start: GeoCoordinate,
-                                          to target: GeoCoordinate) -> TimeInterval {
-        let distance = geodesicDistanceMeters(from: start, to: target)
-        guard distance > minimumAnimatedDistanceMeters else {
-            return 0
-        }
-
-        let normalized = min(max(distance / saturationDistanceMeters, 0), 1)
-        let eased = pow(normalized, 0.6)
-        return minimumPositionDuration + (maximumPositionDuration - minimumPositionDuration) * eased
-    }
-
-    static func easedProgress(for rawProgress: Double) -> Double {
-        let clamped = min(max(rawProgress, 0), 1)
-        let inverse = 1 - clamped
-        return 1 - inverse * inverse * inverse
-    }
-
     /// Orientation in the anchor's tangent frame (east = +X, north = +Y,
     /// up = +Z): heading is clockwise from north about up, then pitch about
     /// east, then roll about the model's forward axis. Matches the matrix
@@ -94,19 +69,4 @@ enum SceneModelAnimationMath {
         let clampedProgress = min(max(progress, 0), 1)
         return start + (target - start) * clampedProgress
     }
-
-    private static func geodesicDistanceMeters(from start: GeoCoordinate,
-                                               to target: GeoCoordinate) -> Double {
-        let latitude1 = start.latitude * .pi / 180.0
-        let latitude2 = target.latitude * .pi / 180.0
-        let latitudeDelta = latitude2 - latitude1
-        let longitudeDelta = (target.longitude - start.longitude) * .pi / 180.0
-        let sinLatitude = sin(latitudeDelta * 0.5)
-        let sinLongitude = sin(longitudeDelta * 0.5)
-        let a = sinLatitude * sinLatitude
-            + cos(latitude1) * cos(latitude2) * sinLongitude * sinLongitude
-        let c = 2 * atan2(sqrt(a), sqrt(max(0, 1 - a)))
-        return 6_371_000.0 * c
-    }
-
 }

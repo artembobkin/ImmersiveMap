@@ -5,9 +5,8 @@ import Foundation
 import simd
 
 /// Great-circle math: interpolation between coordinates, central angle and
-/// forward azimuth. It lives in `Geo` because both the scene model animation
-/// (`SceneModels`) needs it, and domain
-/// folders must not depend on each other.
+/// forward azimuth. It lives in `Geo` because the pins' moves and the scene
+/// models' both need it, and domain folders must not depend on each other.
 ///
 /// Everything is computed in `Double`. The path sampler measures segments a few
 /// kilometers long, where a `Float` dot product near 1 has no significant bits

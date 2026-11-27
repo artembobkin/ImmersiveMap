@@ -56,8 +56,8 @@ final class ModelTilePipeline {
             pipelineDescriptor.vertexDescriptor = vertexDescriptor
             pipelineDescriptor.rasterSampleCount = sampleCount
             pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-            pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-            pipelineDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
+            pipelineDescriptor.depthAttachmentPixelFormat = .mapDepthStencil
+            pipelineDescriptor.stencilAttachmentPixelFormat = .mapDepthStencil
             return pipelineDescriptor
         }
 

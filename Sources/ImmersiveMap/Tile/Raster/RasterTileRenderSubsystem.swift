@@ -280,7 +280,6 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
         TileSourceStencilPriority.reference(sourceZoom: source.metalTile.tile.z)
     }
 
-
     // MARK: - The textures
 
     /// Draws the fills of the sources whose texture must be drawn again
@@ -290,7 +289,7 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
     /// each window into its tile's texture and makes the texture's mip
     /// chain. The fades are the planning zoom's, as the vector ground draws
     /// them. A frame that draws no texture encodes nothing.
-    func prepareGPU(frameContext: FrameContext, resourceRegistry _: RenderResourceRegistry) {
+    func prepareGPU(frameContext: FrameContext) {
         let drawn = sources.indices.filter { sources[$0].needsBake && sources[$0].texture != nil }
         guard drawn.isEmpty == false, let commandBuffer = frameContext.commandBuffer else { return }
         let cell = drawn.reduce(0) { max($0, sources[$1].size) }
@@ -445,13 +444,6 @@ final class RasterTileRenderSubsystem: RenderSubsystem {
     /// Lets go of every texture kept from earlier frames: the tiles still
     /// in raster slots draw theirs again.
     func handleMemoryWarning() {
-        bakedByTile.removeAll()
-        freeTextures.removeAll()
-        bakeAtlas = nil
-    }
-
-    func evict() {
-        sources.removeAll()
         bakedByTile.removeAll()
         freeTextures.removeAll()
         bakeAtlas = nil

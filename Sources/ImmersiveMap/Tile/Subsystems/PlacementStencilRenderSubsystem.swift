@@ -90,10 +90,6 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
         self.groundFlattening = groundFlattening
     }
 
-    func update(frameContext _: FrameContext) {}
-
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard layer == .placementStencil else { return }
         // Coarse squares first: a finer placement inside a coarser one
@@ -332,7 +328,4 @@ final class PlacementStencilRenderSubsystem: RenderSubsystem {
                                       indexBufferOffset: 0)
     }
 
-    func handleMemoryWarning() {}
-
-    func evict() {}
 }

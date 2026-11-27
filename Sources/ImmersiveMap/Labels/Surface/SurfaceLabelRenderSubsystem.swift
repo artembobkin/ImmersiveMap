@@ -65,8 +65,6 @@ final class SurfaceLabelRenderSubsystem: RenderSubsystem {
         }
     }
 
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard layer == .surfaceLabels, drawItems.isEmpty == false else { return }
 
@@ -213,9 +211,4 @@ final class SurfaceLabelRenderSubsystem: RenderSubsystem {
         encoder.drawPrimitives(type: .triangle, vertexStart: record.vertexStart, vertexCount: record.vertexCount)
     }
 
-    func handleMemoryWarning() {}
-
-    func evict() {
-        drawItems = []
-    }
 }

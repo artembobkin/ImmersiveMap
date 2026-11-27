@@ -38,7 +38,7 @@ final class PinRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProvider 
         frameContext.state[PinState.self].hasActiveAnimations = pinsRenderer.hasActiveAnimations
     }
 
-    func prepareGPU(frameContext: FrameContext, resourceRegistry _: RenderResourceRegistry) {
+    func prepareGPU(frameContext: FrameContext) {
         guard let commandBuffer = frameContext.commandBuffer else {
             frameContext.services.diagnostics.recordSkipReason(.missingCommandBuffer)
             return
@@ -65,7 +65,4 @@ final class PinRenderSubsystem: RenderSubsystem, RenderPassAvailabilityProvider 
                                          pinsRenderer: pinsRenderer)
     }
 
-    func handleMemoryWarning() {}
-
-    func evict() {}
 }

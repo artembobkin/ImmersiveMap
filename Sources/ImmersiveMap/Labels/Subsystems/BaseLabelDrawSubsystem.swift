@@ -41,9 +41,9 @@ final class BaseLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
         builder.labelsEnabled = builder.labelsEnabled || hasRenderableLabels
     }
 
-    func prepareGPU(frameContext: FrameContext, resourceRegistry: RenderResourceRegistry) {
+    func prepareGPU(frameContext: FrameContext) {
         if let labelRuntimeMetaBuffer = frameContext.state[BaseLabelState.self].labelRuntimeMetaBuffer {
-            resourceRegistry.setBuffer(labelRuntimeMetaBuffer, named: .baseLabelRuntimeBuffer)
+            RenderResourceName.baseLabelRuntimeBuffer.name(labelRuntimeMetaBuffer)
         }
     }
 
@@ -86,7 +86,4 @@ final class BaseLabelDrawSubsystem: RenderSubsystem, RenderPassAvailabilityProvi
         encoder.setDepthStencilState(depthDisabledState)
     }
 
-    func handleMemoryWarning() {}
-
-    func evict() {}
 }

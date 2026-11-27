@@ -233,8 +233,6 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
         builder.sceneModelsEnabled = builder.sceneModelsEnabled || drawItems.isEmpty == false
     }
 
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         switch layer {
         case .sceneModels:
@@ -271,10 +269,5 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
 
     func handleMemoryWarning() {
         store?.handleMemoryWarning()
-    }
-
-    func evict() {
-        store?.evict()
-        rise.reset()
     }
 }

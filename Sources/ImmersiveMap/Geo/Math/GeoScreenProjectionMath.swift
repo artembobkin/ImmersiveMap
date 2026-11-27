@@ -181,8 +181,4 @@ enum GeoScreenProjectionMath {
                                  visibilityAlpha: 1.0)
     }
 
-    private static func smoothstep(edge0: Float, edge1: Float, x: Float) -> Float {
-        let t = simd_clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0)
-        return t * t * (3.0 - 2.0 * t)
-    }
 }

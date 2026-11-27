@@ -110,7 +110,9 @@ struct GroundReliefLoadStates {
         if case .loading(let failedAttempts) = statesByTile[tile] {
             attempts = failedAttempts + 1
         }
-        let delay = min(Self.retryMaximumDelay, Self.retryBaseDelay * pow(2, Double(attempts - 1)))
+        let delay = RetryBackoff.delay(afterAttempts: attempts,
+                                       base: Self.retryBaseDelay,
+                                       maximum: Self.retryMaximumDelay)
         statesByTile[tile] = .failed(attempts: attempts, retryAt: now + delay)
         startedAt.removeValue(forKey: tile)
         activeLoads -= 1

@@ -66,10 +66,6 @@ final class GroundReliefShadowCasterSubsystem: RenderSubsystem {
         self.groundFlattening = groundFlattening
     }
 
-    func update(frameContext _: FrameContext) {}
-
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard let slot = ShadowCascadeSlot(casterLayer: layer),
               frameContext.renderSurfaceMode == .flat,
@@ -141,7 +137,4 @@ final class GroundReliefShadowCasterSubsystem: RenderSubsystem {
         encoder.popDebugGroup()
     }
 
-    func handleMemoryWarning() {}
-
-    func evict() {}
 }

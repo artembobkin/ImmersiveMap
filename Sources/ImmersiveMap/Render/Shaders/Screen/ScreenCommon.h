@@ -7,11 +7,6 @@ using namespace metal;
 #ifndef SCREEN_COMMON
 #define SCREEN_COMMON
 
-struct ScreenParams {
-    float2 viewportSize; // In pixels; used only when outputPixels != 0
-    uint outputPixels;   // 0 = NDC, 1 = pixels
-};
-
 struct ScreenPointOutput {
     float2 position; // NDC or pixel position, depending on outputPixels
     float depth;     // Clip-space depth (z / w)

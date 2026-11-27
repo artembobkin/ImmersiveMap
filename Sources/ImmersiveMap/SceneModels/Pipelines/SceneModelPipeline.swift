@@ -57,8 +57,8 @@ final class SceneModelPipeline {
             pipelineDescriptor.vertexDescriptor = vertexDescriptor
             pipelineDescriptor.rasterSampleCount = sampleCount
             pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-            pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-            pipelineDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
+            pipelineDescriptor.depthAttachmentPixelFormat = .mapDepthStencil
+            pipelineDescriptor.stencilAttachmentPixelFormat = .mapDepthStencil
             return pipelineDescriptor
         }
 
@@ -77,8 +77,8 @@ final class SceneModelPipeline {
         footprintDescriptor.rasterSampleCount = sampleCount
         footprintDescriptor.colorAttachments[0].pixelFormat = pixelFormat
         footprintDescriptor.colorAttachments[0].writeMask = []
-        footprintDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-        footprintDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
+        footprintDescriptor.depthAttachmentPixelFormat = .mapDepthStencil
+        footprintDescriptor.stencilAttachmentPixelFormat = .mapDepthStencil
         self.groundFootprintPipelineState = try! metalDevice.makeRenderPipelineState(descriptor: footprintDescriptor)
 
         let shadowDescriptor = MTLRenderPipelineDescriptor()

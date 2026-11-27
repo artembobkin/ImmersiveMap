@@ -44,8 +44,8 @@ final class HorizonPipeline {
             descriptor.vertexDescriptor = bandVertexDescriptor
             descriptor.rasterSampleCount = sampleCount
             descriptor.colorAttachments[0].pixelFormat = pixelFormat
-            descriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-            descriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
+            descriptor.depthAttachmentPixelFormat = .mapDepthStencil
+            descriptor.stencilAttachmentPixelFormat = .mapDepthStencil
             // Premultiplied "over": the shader hands out the tint already
             // weighted by its coverage, and the coverage in alpha, so the
             // haze covers the edge and thins to nothing away from it. Alpha

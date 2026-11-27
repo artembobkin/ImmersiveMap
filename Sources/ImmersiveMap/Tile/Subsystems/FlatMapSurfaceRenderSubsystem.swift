@@ -61,10 +61,6 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         self.groundFlatteningFromTileZoom = groundFlatteningFromTileZoom
     }
 
-    func update(frameContext _: FrameContext) {}
-
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         let part: FlatMapSurfaceDrawer.Part
         switch layer {
@@ -126,7 +122,4 @@ final class FlatMapSurfaceRenderSubsystem: RenderSubsystem {
         return groundReliefCentreDepth
     }
 
-    func handleMemoryWarning() {}
-
-    func evict() {}
 }

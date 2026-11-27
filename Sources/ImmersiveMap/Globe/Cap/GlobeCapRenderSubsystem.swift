@@ -22,10 +22,6 @@ final class GlobeCapRenderSubsystem: RenderSubsystem {
         self.globeCapRenderer = globeCapRenderer
     }
 
-    func update(frameContext _: FrameContext) {}
-
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard layer == .globeCap,
               frameContext.renderSurfaceMode == .spherical else {
@@ -41,7 +37,4 @@ final class GlobeCapRenderSubsystem: RenderSubsystem {
         encoder.setDepthStencilState(depthDisabledState)
     }
 
-    func handleMemoryWarning() {}
-
-    func evict() {}
 }

@@ -32,15 +32,9 @@ final class PolygonsPipeline {
         // an overlay lay a readable plate under its own text. Alpha blends with
         // .one so coverage accumulates on a transparent destination; over an opaque
         // one the result is unchanged.
-        pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
-        pipelineDescriptor.colorAttachments[0].rgbBlendOperation = .add
-        pipelineDescriptor.colorAttachments[0].alphaBlendOperation = .add
-        pipelineDescriptor.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
-        pipelineDescriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
-        pipelineDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
-        pipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
-        pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-        pipelineDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
+        pipelineDescriptor.colorAttachments[0].setAlphaBlending()
+        pipelineDescriptor.depthAttachmentPixelFormat = .mapDepthStencil
+        pipelineDescriptor.stencilAttachmentPixelFormat = .mapDepthStencil
         
         let vertexDescriptor = MTLVertexDescriptor()
         vertexDescriptor.attributes[0].format = .float4

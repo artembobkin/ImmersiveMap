@@ -19,8 +19,6 @@ final class StarfieldRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
         self.depthDisabledState = depthDisabledState
     }
 
-    func update(frameContext _: FrameContext) {}
-
     /// Whether the space décor is painted at all. Space itself is the world
     /// pass's clear color; this layer draws only the stars over it, and the
     /// starfield is the only space décor.
@@ -50,8 +48,6 @@ final class StarfieldRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
         )
     }
 
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
         guard layer == .starfield,
               frameContext.renderSurfaceMode == .spherical,
@@ -74,7 +70,4 @@ final class StarfieldRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
         encoder.setDepthStencilState(depthDisabledState)
     }
 
-    func handleMemoryWarning() {}
-
-    func evict() {}
 }

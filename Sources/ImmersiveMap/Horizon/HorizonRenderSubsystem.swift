@@ -37,10 +37,6 @@ final class HorizonRenderSubsystem: RenderSubsystem {
         self.depthDisabledState = depthDisabledState
     }
 
-    func update(frameContext _: FrameContext) {}
-
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
     /// The frame's haze, resolved from the settings, the transition and the
     /// camera; internal so tests can ask what a frame would draw.
     static func resolveHaze(frameContext: FrameContext) -> HorizonHaze {
@@ -85,7 +81,4 @@ final class HorizonRenderSubsystem: RenderSubsystem {
         encoder.setDepthStencilState(depthDisabledState)
     }
 
-    func handleMemoryWarning() {}
-
-    func evict() {}
 }

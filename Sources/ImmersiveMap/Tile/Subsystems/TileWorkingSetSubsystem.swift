@@ -372,10 +372,6 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
         frameContext.services.diagnostics.setCounter(.renderedTiles, value: renderedTilesCount)
     }
 
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
-    func encode(layer _: RenderLayer, encoder _: MTLRenderCommandEncoder, frameContext _: FrameContext) {}
-
     func handleMemoryWarning() {
         tileRenderStore.handleMemoryWarning()
         // The terrain goes too: the placements bound to it are planned
@@ -384,16 +380,6 @@ final class TileWorkingSetSubsystem: RenderSubsystem {
         // The placement contexts are kept and hold their tiles strongly, and
         // the store keeps the demanded set, so the map does not go blank.
         // The next frame replans from scratch.
-        plannedCoverageVersion = nil
-        plannedContentVersion = nil
-        placementVersion &+= 1
-    }
-
-    func evict() {
-        tileRenderStore.evict()
-        terrainDemand?.removeAll()
-        placeTilesContext = .empty
-        buildingPlaceTilesContext = .empty
         plannedCoverageVersion = nil
         plannedContentVersion = nil
         placementVersion &+= 1

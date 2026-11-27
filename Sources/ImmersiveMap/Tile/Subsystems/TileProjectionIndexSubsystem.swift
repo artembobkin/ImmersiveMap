@@ -55,25 +55,14 @@ final class TileProjectionIndexSubsystem: RenderSubsystem {
         )
     }
 
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry: RenderResourceRegistry) {
+    func prepareGPU(frameContext _: FrameContext) {
         guard let tileOriginDataBuffer else {
             return
         }
-        resourceRegistry.setBuffer(tileOriginDataBuffer, named: .tileOriginDataBuffer)
+        RenderResourceName.tileOriginDataBuffer.name(tileOriginDataBuffer)
     }
-
-    func encode(layer _: RenderLayer, encoder _: MTLRenderCommandEncoder, frameContext _: FrameContext) {}
 
     func handleMemoryWarning() {
-        sourceProjectionTiles.removeAll(keepingCapacity: false)
-        tileIndexAllocator = VisibleTileIndexAllocator(indexedTiles: [])
-        requiresAllocatorRebuildAfterReset = true
-        tileOriginDataBuffer = nil
-        sourceProjectionTracker.invalidate()
-        sourceIndexVersion &+= 1
-    }
-
-    func evict() {
         sourceProjectionTiles.removeAll(keepingCapacity: false)
         tileIndexAllocator = VisibleTileIndexAllocator(indexedTiles: [])
         requiresAllocatorRebuildAfterReset = true

@@ -3,19 +3,15 @@
 
 import Metal
 
-/// Runtime graph of render subsystems, shared frame resources, and pass availability providers.
+/// Runtime graph of render subsystems and pass availability providers.
 final class RenderGraph {
-    let resourceRegistry: RenderResourceRegistry
-
     private let registry: RenderSubsystemRegistry
     private let availabilityProviders: [any RenderPassAvailabilityProvider]
 
     init(registry: RenderSubsystemRegistry,
-         availabilityProviders: [any RenderPassAvailabilityProvider],
-         resourceRegistry: RenderResourceRegistry = RenderResourceRegistry()) {
+         availabilityProviders: [any RenderPassAvailabilityProvider]) {
         self.registry = registry
         self.availabilityProviders = availabilityProviders
-        self.resourceRegistry = resourceRegistry
     }
 
     func passAvailability(settings: ImmersiveMapSettings,
@@ -33,8 +29,7 @@ final class RenderGraph {
     }
 
     func prepareGPU(frameContext: FrameContext) {
-        registry.prepareGPU(frameContext: frameContext,
-                            resourceRegistry: resourceRegistry)
+        registry.prepareGPU(frameContext: frameContext)
     }
 
     func encode(layer: RenderLayer,
@@ -51,9 +46,5 @@ final class RenderGraph {
 
     func handleMemoryWarning() {
         registry.handleMemoryWarning()
-    }
-
-    func evict() {
-        registry.evict()
     }
 }

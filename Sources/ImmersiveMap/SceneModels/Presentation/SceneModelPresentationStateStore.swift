@@ -31,7 +31,7 @@ private struct SceneModelPositionAnimation {
     func coordinate(at time: TimeInterval) -> GeoCoordinate {
         guard duration > 0 else { return targetCoordinate }
         let rawProgress = (time - startTime) / duration
-        let progress = SceneModelAnimationMath.easedProgress(for: rawProgress)
+        let progress = GeoMoveAnimationMath.easedProgress(for: rawProgress)
         return GeoGreatCircleMath.coordinate(from: startCoordinate,
                                              to: targetCoordinate,
                                              progress: progress)
@@ -56,7 +56,7 @@ private struct SceneModelTransformAnimation {
 
     func progress(at time: TimeInterval) -> Double {
         guard duration > 0 else { return 1 }
-        return SceneModelAnimationMath.easedProgress(for: (time - startTime) / duration)
+        return GeoMoveAnimationMath.easedProgress(for: (time - startTime) / duration)
     }
 
     func isFinished(at time: TimeInterval) -> Bool {
@@ -263,7 +263,7 @@ private struct SceneModelPresentationEntry {
         // The path drives the position itself, so an installed path suppresses
         // the glide toward the destination the descriptor now names.
         if coordinateChanged, pathAnimation == nil {
-            let duration = SceneModelAnimationMath.positionAnimationDuration(from: displayedCoordinate,
+            let duration = GeoMoveAnimationMath.duration(from: displayedCoordinate,
                                                                              to: model.coordinate)
             positionAnimation = duration > 0
                 ? SceneModelPositionAnimation(startCoordinate: displayedCoordinate,

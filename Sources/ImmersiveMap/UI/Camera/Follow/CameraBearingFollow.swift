@@ -79,7 +79,7 @@ final class CameraBearingFollow {
             return Step(bearing: currentBearing, isActive: true)
         }
 
-        let deltaTime = CameraBearingFollowMath.clampedDeltaTime(currentTime - lastTickTime)
+        let deltaTime = HalfLifeDecay.clampedDeltaTime(currentTime - lastTickTime)
         self.lastTickTime = currentTime
         guard deltaTime > 0 else {
             return Step(bearing: currentBearing, isActive: true)

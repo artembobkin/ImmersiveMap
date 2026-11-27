@@ -39,13 +39,7 @@ final class RasterTilePipeline {
         bake.colorAttachments[0].pixelFormat = RasterTileTexture.pixelFormat
         // The fills in buffer order, each over what is under it, the way
         // the vector ground layers them.
-        bake.colorAttachments[0].isBlendingEnabled = true
-        bake.colorAttachments[0].rgbBlendOperation = .add
-        bake.colorAttachments[0].alphaBlendOperation = .add
-        bake.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
-        bake.colorAttachments[0].sourceAlphaBlendFactor = .one
-        bake.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
-        bake.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        bake.colorAttachments[0].setAlphaBlending()
         bakePipelineState = try! metalDevice.makeRenderPipelineState(descriptor: bake)
 
         // The draws: opaque, in the world pass, through the ground's depth
@@ -62,8 +56,8 @@ final class RasterTilePipeline {
             descriptor.fragmentFunction = try! library.makeFunction(name: fragment, constantValues: values)
             descriptor.rasterSampleCount = sampleCount
             descriptor.colorAttachments[0].pixelFormat = pixelFormat
-            descriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-            descriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
+            descriptor.depthAttachmentPixelFormat = .mapDepthStencil
+            descriptor.stencilAttachmentPixelFormat = .mapDepthStencil
             return try! metalDevice.makeRenderPipelineState(descriptor: descriptor)
         }
         flatPipelineState = drawState(label: "RasterTileFlat",

@@ -24,15 +24,9 @@ final class PinPipeline {
         pipelineDescriptor.fragmentFunction = fragmentFunction
         pipelineDescriptor.rasterSampleCount = sampleCount
         pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-        pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-        pipelineDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
-        pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
-        pipelineDescriptor.colorAttachments[0].rgbBlendOperation = .add
-        pipelineDescriptor.colorAttachments[0].alphaBlendOperation = .add
-        pipelineDescriptor.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
-        pipelineDescriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
-        pipelineDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
-        pipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        pipelineDescriptor.depthAttachmentPixelFormat = .mapDepthStencil
+        pipelineDescriptor.stencilAttachmentPixelFormat = .mapDepthStencil
+        pipelineDescriptor.colorAttachments[0].setAlphaBlending()
 
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
     }
@@ -58,15 +52,9 @@ final class PinCountBadgePipeline {
         pipelineDescriptor.fragmentFunction = fragmentFunction
         pipelineDescriptor.rasterSampleCount = sampleCount
         pipelineDescriptor.colorAttachments[0].pixelFormat = pixelFormat
-        pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-        pipelineDescriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
-        pipelineDescriptor.colorAttachments[0].isBlendingEnabled = true
-        pipelineDescriptor.colorAttachments[0].rgbBlendOperation = .add
-        pipelineDescriptor.colorAttachments[0].alphaBlendOperation = .add
-        pipelineDescriptor.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
-        pipelineDescriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
-        pipelineDescriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
-        pipelineDescriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        pipelineDescriptor.depthAttachmentPixelFormat = .mapDepthStencil
+        pipelineDescriptor.stencilAttachmentPixelFormat = .mapDepthStencil
+        pipelineDescriptor.colorAttachments[0].setAlphaBlending()
 
         self.pipelineState = try! metalDevice.makeRenderPipelineState(descriptor: pipelineDescriptor)
     }

@@ -109,7 +109,7 @@ final class RenderPersistentContext {
         // The cap palette bakes style colors. Grids and pipeline come from
         // the shared set.
         self.globeCapRenderer = GlobeCapRenderer(sharedResources: shared.get(GlobeCapRenderer.SharedResources.self),
-                                                 maxLatitude: WebMercatorMath.maxLatitudeRadians,
+                                                 maxLatitude: ImmersiveMapProjection.maxMercatorLatitude,
                                                  baseColors: styleRuntime.baseColors)
         self.tileRenderStore = TileRenderStore(styleRuntime: styleRuntime,
                                                metalDevice: metal.device,

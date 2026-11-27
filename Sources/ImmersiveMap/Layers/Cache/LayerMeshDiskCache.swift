@@ -109,26 +109,11 @@ final class LayerMeshDiskCache: @unchecked Sendable {
 
     /// The entries, the one used longest ago first.
     func entries() -> [(url: URL, size: Int, used: Date)] {
-        let keys: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey]
-        let urls = (try? FileManager.default.contentsOfDirectory(at: directory,
-                                                                 includingPropertiesForKeys: Array(keys))) ?? []
-        return urls.compactMap { url -> (url: URL, size: Int, used: Date)? in
-            guard url.pathExtension == Self.fileExtension,
-                  let values = try? url.resourceValues(forKeys: keys),
-                  let size = values.fileSize, let used = values.contentModificationDate else {
-                return nil
-            }
-            return (url, size, used)
-        }
-        .sorted { $0.used < $1.used }
+        DiskCacheTrim.files(in: directory, pathExtension: Self.fileExtension)
+            .map { ($0.url, $0.byteCount, $0.used) }
     }
 
     private func trim() {
-        let entries = entries()
-        var total = entries.reduce(0) { $0 + $1.size }
-        for entry in entries where total > limitBytes {
-            try? FileManager.default.removeItem(at: entry.url)
-            total -= entry.size
-        }
+        DiskCacheTrim.trim(directory: directory, toByteCount: limitBytes, pathExtension: Self.fileExtension)
     }
 }

@@ -209,27 +209,6 @@ final class ModelTileSource: @unchecked Sendable {
     /// quota. Run once per source, off the caller's thread: a session adds
     /// to the cache far slower than the quota is sized for.
     static func trim(directory: URL, toByteCount quota: Int) {
-        let keys: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey]
-        guard let files = try? FileManager.default.contentsOfDirectory(at: directory,
-                                                                       includingPropertiesForKeys: Array(keys)) else {
-            return
-        }
-        var entries: [(url: URL, byteCount: Int, date: Date)] = []
-        var total = 0
-        for file in files {
-            guard let values = try? file.resourceValues(forKeys: keys), let byteCount = values.fileSize else {
-                continue
-            }
-            entries.append((file, byteCount, values.contentModificationDate ?? .distantPast))
-            total += byteCount
-        }
-        guard total > quota else { return }
-        for entry in entries.sorted(by: { $0.date < $1.date }) {
-            try? FileManager.default.removeItem(at: entry.url)
-            total -= entry.byteCount
-            if total <= quota {
-                break
-            }
-        }
+        DiskCacheTrim.trim(directory: directory, toByteCount: quota)
     }
 }

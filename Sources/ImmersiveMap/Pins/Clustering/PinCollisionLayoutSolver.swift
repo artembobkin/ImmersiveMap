@@ -596,7 +596,7 @@ final class PinCollisionLayoutSolver {
             if state.clusterBlend > 0.0 {
                 if let clusterKey = state.lastClusterKey,
                    let center = clusterCentersByKey[clusterKey] {
-                    let ease = PinCollisionMath.smoothstep(edge0: 0.0, edge1: 1.0, x: state.clusterBlend)
+                    let ease = smoothstep(edge0: 0.0, edge1: 1.0, x: state.clusterBlend)
                     position += (center - position) * ease
                     alphaFactor = 1.0 - state.clusterBlend
                 } else {
@@ -935,7 +935,7 @@ final class PinCollisionLayoutSolver {
         pinStates[id] = state
 
         guard state.clusterBlend < 0.999 else { return }
-        let ease = PinCollisionMath.smoothstep(edge0: 0.0, edge1: 1.0, x: state.clusterBlend)
+        let ease = smoothstep(edge0: 0.0, edge1: 1.0, x: state.clusterBlend)
         let base = member.screenPoint.position + state.offset
         var screenPoint = member.screenPoint
         screenPoint.position = base + (flowerCenter - base) * ease

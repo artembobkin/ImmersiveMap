@@ -43,7 +43,7 @@ struct AnimatedZoom {
             isSettling = false
             return zoom
         }
-        let share = deltaTime > 0 ? 1 - pow(0.5, deltaTime / halfLife) : 0
+        let share = deltaTime > 0 ? 1 - HalfLifeDecay.remaining(deltaTime: deltaTime, halfLife: halfLife) : 0
         let next = current + remaining * share
         value = next
         isSettling = abs(zoom - next) > Self.settledTolerance

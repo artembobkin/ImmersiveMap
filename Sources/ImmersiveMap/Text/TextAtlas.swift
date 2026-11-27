@@ -25,6 +25,7 @@ final class TextAtlas {
                                        atlas: metrics.bold.atlas,
                                        device: device,
                                        bundle: resourceBundle) ?? Self.makeFallbackTexture(device: device)
+        texture.label = RenderResourceName.labelGlyphAtlas.rawValue
         self.texture = texture
         self.thinTexture = Self.loadTexture(named: GlyphAtlasMetrics.thinAtlasName,
                                             atlas: metrics.thin.atlas,

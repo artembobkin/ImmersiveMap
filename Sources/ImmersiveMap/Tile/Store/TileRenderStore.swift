@@ -237,8 +237,4 @@ final class TileRenderStore: @unchecked Sendable {
         workingSet.releaseUndemandedTiles()
     }
 
-    func evict() {
-        mapNeedsTile?.cancelAll()
-        workingSet.removeAll()
-    }
 }

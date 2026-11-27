@@ -8,17 +8,8 @@ import Foundation
 /// unless a bearing cap forbids that path, and the gap decays exponentially by half-life, so the
 /// per-frame step depends on time rather than on the uneven event rate of the slider/gesture.
 enum CameraBearingFollowMath {
-    static let maximumDeltaTime: CFTimeInterval = 0.05
     static let snapThreshold: Float = 0.0003
     static let progressThreshold: Float = 0.00002
-
-    static func clampedDeltaTime(_ deltaTime: CFTimeInterval) -> CFTimeInterval {
-        guard deltaTime.isFinite else {
-            return 0
-        }
-
-        return min(max(0, deltaTime), maximumDeltaTime)
-    }
 
     /// Shortest angular difference target-current, normalized to [-pi, pi].
     static func shortestDelta(current: Float, target: Float) -> Float {
@@ -68,7 +59,7 @@ enum CameraBearingFollowMath {
                                halfLife: Double,
                                maximumAbsoluteBearing: Float) -> Float {
         let sanitizedHalfLife = max(0.001, halfLife.isFinite ? halfLife : 0.001)
-        let factor = Float(exp(-log(2.0) * deltaTime / sanitizedHalfLife))
+        let factor = Float(HalfLifeDecay.remaining(deltaTime: deltaTime, halfLife: sanitizedHalfLife))
         let delta = followDelta(current: current,
                                 target: target,
                                 maximumAbsoluteBearing: maximumAbsoluteBearing)

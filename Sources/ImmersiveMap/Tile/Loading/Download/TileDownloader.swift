@@ -5,45 +5,16 @@ import Foundation
 import PMTiles
 import os
 
-/// Throttles a per-tile warning to one line per interval, process wide.
-///
-/// A blocked viewport is about thirty tiles refused at once, and every one of
-/// them carries the same news. Logged per tile it is noise the developer
-/// scrolls past; logged once it is the answer to "why is my map full of holes".
-/// Process wide rather than per downloader because the quota (or the broken
-/// key) belongs to the app, not to whichever downloader happened to notice
-/// first. One instance per kind of news, so a rate limit and a rejected
-/// credential each get their own line.
-/// `@unchecked Sendable` because the lock is the synchronisation the compiler
-/// cannot see: the state is private and every path to it goes through `lock`.
-final class TileNoticeThrottle: @unchecked Sendable {
-    static let rateLimit = TileNoticeThrottle()
-    static let authorization = TileNoticeThrottle()
-    static let archiveDepth = TileNoticeThrottle()
-    static let archiveUnreadable = TileNoticeThrottle()
-    static let overviewUnreadable = TileNoticeThrottle()
-    static let interval: TimeInterval = 60
-
-    private let lock = NSLock()
-    private var lastLoggedAt: Date?
-
-    func shouldLog(now: Date = Date()) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        if let last = lastLoggedAt, now.timeIntervalSince(last) < Self.interval {
-            return false
-        }
-        lastLoggedAt = now
-        return true
-    }
-
-    /// Test hook: the throttle is process wide, so a test that did not clear it
-    /// would be decided by whichever test happened to run first.
-    func reset() {
-        lock.lock()
-        lastLoggedAt = nil
-        lock.unlock()
-    }
+/// The tile loader's warnings, each let through once per interval
+/// (`NoticeThrottle`): a rate limit and a rejected credential each get their
+/// own line.
+enum TileNoticeThrottle {
+    static let rateLimit = NoticeThrottle()
+    static let authorization = NoticeThrottle()
+    static let archiveDepth = NoticeThrottle()
+    static let archiveUnreadable = NoticeThrottle()
+    static let overviewUnreadable = NoticeThrottle()
+    static let interval = NoticeThrottle.interval
 }
 
 /// The transport: one PMTiles archive, read by `PMTilesArchiveClient`, and

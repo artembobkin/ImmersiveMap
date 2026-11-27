@@ -47,11 +47,4 @@ final class AnnotationRenderSubsystem: RenderSubsystem {
             entries: entries)
     }
 
-    func prepareGPU(frameContext _: FrameContext, resourceRegistry _: RenderResourceRegistry) {}
-
-    func encode(layer _: RenderLayer, encoder _: MTLRenderCommandEncoder, frameContext _: FrameContext) {}
-
-    func handleMemoryWarning() {}
-
-    func evict() {}
 }

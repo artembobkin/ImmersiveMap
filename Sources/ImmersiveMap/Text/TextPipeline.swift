@@ -79,17 +79,9 @@ final class TextPipeline: SharedGPUResources {
         descriptor.fragmentFunction = fragmentFunction
         descriptor.rasterSampleCount = sampleCount
         descriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
-        descriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-        descriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
-        descriptor.colorAttachments[0].isBlendingEnabled = true
-        descriptor.colorAttachments[0].rgbBlendOperation = .add
-        descriptor.colorAttachments[0].alphaBlendOperation = .add
-        descriptor.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
-        // Alpha blends with .one so glyph coverage accumulates on a transparent
-        // destination. Over an opaque one the result is unchanged.
-        descriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
-        descriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
-        descriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        descriptor.depthAttachmentPixelFormat = .mapDepthStencil
+        descriptor.stencilAttachmentPixelFormat = .mapDepthStencil
+        descriptor.colorAttachments[0].setAlphaBlending()
         return try device.makeRenderPipelineState(descriptor: descriptor)
     }
 }

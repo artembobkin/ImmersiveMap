@@ -12,15 +12,6 @@ import simd
 /// the duration runs out. The catch-up is the same time-normalized exponential
 /// decay, which keeps the step independent of the frame rate.
 enum CameraPathFollowMath {
-    /// A frame longer than this (a stall, a resumed park) must not teleport the
-    /// camera; the step is capped instead.
-    static let maximumDeltaTime: CFTimeInterval = 0.05
-
-    static func clampedDeltaTime(_ deltaTime: CFTimeInterval) -> CFTimeInterval {
-        guard deltaTime.isFinite else { return 0 }
-        return min(max(0, deltaTime), maximumDeltaTime)
-    }
-
     /// Fraction of the remaining gap closed in one step of `deltaTime`.
     /// A non-positive half-life pins the camera rigidly to the target.
     ///
@@ -32,8 +23,8 @@ enum CameraPathFollowMath {
                                 halfLife: Double,
                                 capsDeltaTime: Bool = true) -> Double {
         guard halfLife.isFinite, halfLife > 0 else { return 1 }
-        let step = capsDeltaTime ? clampedDeltaTime(deltaTime) : max(0, deltaTime.isFinite ? deltaTime : 0)
-        return 1 - exp(-log(2.0) * step / halfLife)
+        let step = capsDeltaTime ? HalfLifeDecay.clampedDeltaTime(deltaTime) : max(0, deltaTime.isFinite ? deltaTime : 0)
+        return 1 - HalfLifeDecay.remaining(deltaTime: step, halfLife: halfLife)
     }
 
     /// Shortest signed delta in normalized world X, where 1 is a whole world:

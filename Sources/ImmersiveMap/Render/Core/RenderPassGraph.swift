@@ -28,16 +28,6 @@ final class RenderPassGraph {
         }
     }
 
-    /// The overlay always keeps its own pass over its own cleared depth:
-    /// the labels draw fill and halo in one pass and use that depth to keep
-    /// a later glyph's halo off an earlier glyph's fill (TextShader.metal),
-    /// which the world pass's depth, full of the ground's layer ranks and
-    /// the buildings, cannot host. The merge that folded the overlay into
-    /// the world pass on model-free single-sample frames saved a drawable
-    /// load/store round trip; the single text pass saves far more.
-    static func mergesOverlayIntoWorld(overlayLayers: [RenderLayer], renderSampleCount: Int) -> Bool {
-        false
-    }
 
     /// The world pass draw order for the frame. The planner lists the flat
     /// layers ground first; the order flips so the opaque buildings write
@@ -225,9 +215,8 @@ final class RenderPassGraph {
             descriptor.depthAttachment.loadAction = .clear
             descriptor.depthAttachment.storeAction = .dontCare
             descriptor.depthAttachment.clearDepth = 1.0
-            // The pipelines of the overlay layers are shared with the world
-            // pass (where the overlay merges on model-free frames), so the
-            // two passes must agree on the depth-stencil format.
+            // The overlay's pipelines are built with the world pass's
+            // depth-stencil format, so its attachment has that format too.
             descriptor.stencilAttachment.texture = depthTexture
             descriptor.stencilAttachment.loadAction = .clear
             descriptor.stencilAttachment.storeAction = .dontCare
@@ -241,16 +230,12 @@ final class RenderPassGraph {
               attachments: FrameAttachmentStore,
               target: FrameRenderTarget,
               renderGraph: RenderGraph) -> [RenderPassNode] {
-        let resourceRegistry = renderGraph.resourceRegistry
         // A label layer that reads the world's depth (the road names under
         // the buildings) keeps it past the world pass, on those frames only.
         let keepsSceneDepth = frameContext.state[SceneDepthFrameState.self].isRequestedForLabels
             && attachments.supportsSceneDepth
         let depthTexture = attachments.ensureDepthTexture(drawSize: frameContext.drawSize,
                                                           keptForLabels: keepsSceneDepth)
-        if let depthTexture {
-            resourceRegistry.setTexture(depthTexture, named: .depthTexture)
-        }
         var sceneDepthTexture: MTLTexture?
         if keepsSceneDepth {
             sceneDepthTexture = attachments.sampleCount > 1
@@ -274,7 +259,6 @@ final class RenderPassGraph {
         // texture with a disabled uniform (same resolver on both sides).
         if let shadowState = ShadowPassGateResolver.resolve(frameContext: frameContext),
            let shadowMapTexture = attachments.ensureShadowMapTexture(resolution: shadowState.mapResolution) {
-            resourceRegistry.setTexture(shadowMapTexture, named: .shadowMapTexture)
             // The sun is static and the buildings do not move: a window's
             // caster pass runs only when its rendered slice went stale
             // (fresh fit, new caster tile, new texture, or animating model
@@ -296,7 +280,6 @@ final class RenderPassGraph {
             // pass instead of a lookup per layer.
             if frameContext.renderSurfaceMode == .flat,
                let maskTexture = attachments.ensureGroundShadowMaskTexture(drawSize: frameContext.drawSize) {
-                resourceRegistry.setTexture(maskTexture, named: .groundShadowMaskTexture)
                 nodes.append(RenderPassNode(name: .groundShadowMask,
                                             descriptorProvider: GroundShadowMaskDescriptorProvider(),
                                             layers: [.groundShadowMask]))
@@ -309,20 +292,23 @@ final class RenderPassGraph {
             renderSampleCount: attachments.sampleCount
         )
 
-        let mergesOverlayIntoWorld = Self.mergesOverlayIntoWorld(overlayLayers: overlayLayers,
-                                                                 renderSampleCount: attachments.sampleCount)
         nodes.append(RenderPassNode(name: .world,
                                     descriptorProvider: WorldDescriptorProvider(clearColor: clearColor,
                                                                                 depthTexture: depthTexture,
                                                                                 sceneDepthTexture: sceneDepthTexture,
                                                                                 outputPlan: outputPlan),
-                                    layers: mergesOverlayIntoWorld ? worldLayers + overlayLayers : worldLayers))
+                                    layers: worldLayers))
         if outputPlan.includesPostProcessingPass {
             nodes.append(RenderPassNode(name: .postProcessing,
                                         descriptorProvider: PostProcessingDescriptorProvider(),
                                         layers: [.postProcessing]))
         }
-        if mergesOverlayIntoWorld == false, overlayLayers.isEmpty == false {
+        // The overlay always keeps its own pass over its own cleared depth:
+        // the labels draw fill and halo in one pass and use that depth to
+        // keep a later glyph's halo off an earlier glyph's fill
+        // (TextShader.metal), which the world pass's depth, full of the
+        // ground's layer ranks and the buildings, cannot host.
+        if overlayLayers.isEmpty == false {
             nodes.append(RenderPassNode(name: .overlay,
                                         descriptorProvider: OverlayDescriptorProvider(),
                                         layers: overlayLayers))

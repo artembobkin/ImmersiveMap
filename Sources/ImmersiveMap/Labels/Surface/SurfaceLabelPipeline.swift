@@ -36,15 +36,9 @@ final class SurfaceLabelPipeline {
         descriptor.vertexDescriptor = vertexDescriptor
         descriptor.rasterSampleCount = sampleCount
         descriptor.colorAttachments[0].pixelFormat = pixelFormat
-        descriptor.depthAttachmentPixelFormat = .depth32Float_stencil8
-        descriptor.stencilAttachmentPixelFormat = .depth32Float_stencil8
-        descriptor.colorAttachments[0].isBlendingEnabled = true
-        descriptor.colorAttachments[0].rgbBlendOperation = .add
-        descriptor.colorAttachments[0].alphaBlendOperation = .add
-        descriptor.colorAttachments[0].sourceRGBBlendFactor = .sourceAlpha
-        descriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
-        descriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
-        descriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
+        descriptor.depthAttachmentPixelFormat = .mapDepthStencil
+        descriptor.stencilAttachmentPixelFormat = .mapDepthStencil
+        descriptor.colorAttachments[0].setAlphaBlending()
 
         func makeState(vertexFunction name: String) -> MTLRenderPipelineState {
             descriptor.vertexFunction = library.makeFunction(name: name)
