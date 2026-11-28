@@ -9,9 +9,12 @@ import PMTiles
 
 /// Loads the model tiles a frame wants and releases the ones it has left.
 ///
-/// A frame names the tiles in and around its view (`meshes(for:)`). The
+/// A frame names the tiles in and around its view (`meshes(for:)`), of the
+/// zoom of the level of detail it shows (`ModelTileDetail`). The
 /// store answers with the ones already on the GPU and starts loading the
-/// rest, a few at a time, nearest first. A tile that arrives invalidates a
+/// rest, a few at a time, nearest first. The tiles of another level stay
+/// loaded like any tile the frame has left, and a frame that draws one in
+/// place of a tile still on its way holds it (`heldMesh(of:)`). A tile that arrives invalidates a
 /// frame through `eventSink`, as a map tile does, so the on-demand render
 /// loop draws it without waiting for a gesture.
 ///
@@ -21,15 +24,14 @@ import PMTiles
 /// everything the last frame did not want.
 ///
 /// A tile the archive does not have is remembered as empty and never asked
-/// again. A tile that could not be fetched is asked again after a pause
+/// again. A zoom the archive does not have is remembered too
+/// (`missingZooms`): its level of detail was not baked, and the frame shows
+/// another in its place. A tile that could not be fetched is asked again after a pause
 /// that grows with each failure, for as long as a frame wants it.
 ///
 /// Thread-safe (`@unchecked Sendable`): the loads run in tasks off the main
 /// thread and all mutable state is serialized by `lock`.
 final class ModelTileStore: @unchecked Sendable {
-    /// The zoom of the tiles a model archive holds. Its models are grouped
-    /// by the map tile of this zoom their origin lies in.
-    static let tileZoom = ModelTileContents.tileZoom
     static let maximumConcurrentLoads = 4
     static let retryBaseDelay: TimeInterval = 5
     static let retryMaximumDelay: TimeInterval = 60
@@ -68,6 +70,7 @@ final class ModelTileStore: @unchecked Sendable {
     private var statesByTile: [Tile: LoadState] = [:]
     private var emptyTiles: Set<Tile> = []
     private var wantedTiles: Set<Tile> = []
+    private var zoomsTheArchiveLacks: Set<Int> = []
 
     convenience init(device: MTLDevice,
                      schema: any ImmersiveMapTileSchema,
@@ -175,6 +178,29 @@ final class ModelTileStore: @unchecked Sendable {
         return (ready, pending)
     }
 
+    /// The mesh of a tile the frame did not ask for, if it is on the GPU:
+    /// a tile of another level of detail, drawn in place of a wanted tile
+    /// still on its way. Nothing is loaded for it. The tile is held like a
+    /// wanted one until the next frame's `meshes(for:)`, so the frame that
+    /// draws it does not lose it to the budget.
+    func heldMesh(of tile: Tile) -> ModelTileMesh? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let mesh = cache.value(forKey: tile) else {
+            return nil
+        }
+        wantedTiles.insert(tile)
+        return mesh
+    }
+
+    /// The zooms the archive holds no tiles of, as far as the loads so far
+    /// have found: the levels of detail it was baked without.
+    var missingZooms: Set<Int> {
+        lock.lock()
+        defer { lock.unlock() }
+        return zoomsTheArchiveLacks
+    }
+
     func handleMemoryWarning() {
         lock.lock()
         _ = cache.trim(toCost: 0, protectedKeys: wantedTiles)
@@ -211,6 +237,8 @@ final class ModelTileStore: @unchecked Sendable {
                     self.finishLoad(tile, mesh: mesh)
                 case .empty:
                     self.finishLoad(tile, mesh: nil)
+                case .zoomMissing:
+                    self.finishLoad(tile, mesh: nil, archiveLacksZoom: true)
                 }
             } catch LoadFailure.unreadable(let reason) {
                 Self.logger.warning("ImmersiveMap: model tile \(tile.z, privacy: .public)/\(tile.x, privacy: .public)/\(tile.y, privacy: .public) cannot be read (\(reason, privacy: .public)). Its models are not drawn. Check that the model archive was baked for this version of the engine.")
@@ -224,6 +252,7 @@ final class ModelTileStore: @unchecked Sendable {
     private enum Fetched {
         case mesh(ModelTileMesh)
         case empty
+        case zoomMissing
     }
 
     private func fetch(_ tile: Tile) async throws -> Fetched {
@@ -241,8 +270,16 @@ final class ModelTileStore: @unchecked Sendable {
         } catch {
             throw LoadFailure.unavailable("\(error)")
         }
-        guard case .tile(let data, let fileURL) = outcome else {
+        let data: Data
+        let fileURL: URL?
+        switch outcome {
+        case .tile(let tileData, let tileFileURL):
+            data = tileData
+            fileURL = tileFileURL
+        case .missing:
             return .empty
+        case .zoomMissing:
+            return .zoomMissing
         }
         do {
             let contents = try ModelTileContents(decoding: data)
@@ -264,9 +301,12 @@ final class ModelTileStore: @unchecked Sendable {
         }
     }
 
-    private func finishLoad(_ tile: Tile, mesh: ModelTileMesh?) {
+    private func finishLoad(_ tile: Tile, mesh: ModelTileMesh?, archiveLacksZoom: Bool = false) {
         lock.lock()
         statesByTile.removeValue(forKey: tile)
+        if archiveLacksZoom {
+            zoomsTheArchiveLacks.insert(tile.z)
+        }
         if let mesh {
             _ = cache.setValue(mesh, forKey: tile, cost: mesh.costInBytes, protectedKeys: wantedTiles)
         } else {

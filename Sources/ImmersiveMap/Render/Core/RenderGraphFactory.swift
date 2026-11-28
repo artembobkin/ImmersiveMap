@@ -104,7 +104,6 @@ enum RenderGraphFactory {
                                                           depthDisabledState: depth.disabled,
                                                           shadowMapTextureProvider: shadowMapTextureProvider,
                                                           shadowFallbackTexture: shadows.shadowFallbackTexture,
-                                                          minimumZoom: settings.modelArchive.minimumZoom,
                                                           riseSeconds: settings.scene.extrusion.riseSeconds)
         let flatMapSurfaceSubsystem = FlatMapSurfaceRenderSubsystem(tilePipeline: shared.get(FlatGroundSharedResources.self).pipeline,
                                                                     groundOwnerState: tileDepth.groundOwner,

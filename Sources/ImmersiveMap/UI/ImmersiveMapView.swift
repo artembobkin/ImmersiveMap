@@ -1039,8 +1039,10 @@ public extension ImmersiveMapView {
     ///
     /// `modelArchive(nil)` turns the models off.
     ///
-    /// The archive is one PMTiles v3 file whose zoom 14 tiles hold models
-    /// ready for the GPU (`ModelTileContents` is the format). It is read over HTTP
+    /// The archive is one PMTiles v3 file whose tiles hold models
+    /// ready for the GPU (`ModelTileContents` is the format), at up to
+    /// three levels of detail: the zoom 12 tiles the lightest, zoom 13 the
+    /// middle ones, zoom 14 the models in full. It is read over HTTP
     /// range requests like the map's archive, and apart from it: the models
     /// of the tiles in view are requested as the camera moves, kept on disk
     /// once loaded, and released from memory when the camera has left them
@@ -1049,11 +1051,13 @@ public extension ImmersiveMapView {
     ///
     /// A model stands in for the map's own building: the building is drawn
     /// until its model is loaded, and left out from that frame on, so the
-    /// map is never missing either. The models show on the flat map,
-    /// wherever the map draws tiles of the archive's zoom or deeper.
+    /// map is never missing either. The models show on the flat map, one
+    /// level of detail at a time by the camera zoom, wherever the map draws
+    /// tiles of that level's zoom or deeper.
     ///
-    /// The source alone: how the models load and draw is
-    /// `modelArchiveSettings(memoryBudgetInBytes:diskCacheSizeInBytes:depthBias:minimumZoom:)`,
+    /// The source alone: how the models load and draw, the zooms of the
+    /// levels among it, is
+    /// `modelArchiveSettings(memoryBudgetInBytes:diskCacheSizeInBytes:depthBias:minimumZoom:mediumDetailZoom:highDetailZoom:detailSwitchMargin:)`,
     /// whichever order the two are written in.
     func modelArchive(_ archiveURL: URL?,
                       headers: [String: String] = [:]) -> ImmersiveMapView {
@@ -1085,18 +1089,38 @@ public extension ImmersiveMapView {
     /// model covers the map's own building it stands in for where the map
     /// could not leave it out, and a building well in front of it still
     /// covers the model: by default 0.05 at zoom 14 and 0.01 from zoom
-    /// 15.5, and it applies live. `minimumZoom` is the camera zoom the
-    /// models draw from, 14 by default. See
+    /// 15.5, and it applies live.
+    ///
+    /// The zooms say which level of detail the camera sees, and apply
+    /// live:
+    ///
+    ///     ImmersiveMapView()
+    ///         .modelArchiveSettings(minimumZoom: 12.5, mediumDetailZoom: 14.5, highDetailZoom: 16)
+    ///
+    /// `minimumZoom` is the camera zoom the models draw from, at the
+    /// lightest level, 12 by default. `mediumDetailZoom` is the zoom the
+    /// middle level shows from, 14 by default, and `highDetailZoom` the
+    /// zoom the models show in full from, 15.5 by default.
+    /// `detailSwitchMargin` is how far back under a level's zoom the
+    /// camera goes before the level before it returns, 0.15 of a zoom
+    /// level by default, so a camera resting on a level's zoom does not
+    /// swap the two with every small move. See
     /// ``ImmersiveMapSettings/ModelArchiveSettings``.
     func modelArchiveSettings(memoryBudgetInBytes: Int? = nil,
                               diskCacheSizeInBytes: Int? = nil,
                               depthBias: ImmersiveMapZoomCurve? = nil,
-                              minimumZoom: Double? = nil) -> ImmersiveMapView {
+                              minimumZoom: Double? = nil,
+                              mediumDetailZoom: Double? = nil,
+                              highDetailZoom: Double? = nil,
+                              detailSwitchMargin: Double? = nil) -> ImmersiveMapView {
         var view = self
         view.settings = view.settings.modelArchiveSettings(memoryBudgetInBytes: memoryBudgetInBytes,
                                                            diskCacheSizeInBytes: diskCacheSizeInBytes,
                                                            depthBias: depthBias,
-                                                           minimumZoom: minimumZoom)
+                                                           minimumZoom: minimumZoom,
+                                                           mediumDetailZoom: mediumDetailZoom,
+                                                           highDetailZoom: highDetailZoom,
+                                                           detailSwitchMargin: detailSwitchMargin)
         return view
     }
 

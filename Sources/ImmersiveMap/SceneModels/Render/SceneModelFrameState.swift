@@ -1,6 +1,8 @@
 // Copyright (c) 2025-2026 Artem Bobkin.
 // SPDX-License-Identifier: MIT
 
+import ModelTileFormat
+
 /// One model tile that casts into the frame's shadow map: the loaded tile
 /// and the copy of the world it draws in. Its models never move, so the
 /// rendered shadow map serves until the set of them changes.
@@ -90,12 +92,25 @@ extension SceneModelFrameState: FrameState {
 /// What the model tiles tell the frame (`FrameStateBoard`), set in `update`
 /// by `ModelTileRenderSubsystem`.
 struct ModelTileFrameState: FrameState {
-    /// The model tiles (`ModelTileStore.tileZoom`) still on their way this
-    /// frame: the buildings under them wait, so the ones a model stands in
-    /// for are left out from their first frame instead of standing until
-    /// the model comes.
+    /// The model tiles still on their way this frame with nothing drawn in
+    /// their place, each of the zoom of its level of detail
+    /// (`ModelTileDetail.tileZoom`): the buildings under them wait, so the
+    /// ones a model stands in for are left out from their first frame
+    /// instead of standing until the model comes. A tile whose ground
+    /// another level's tiles draw meanwhile is not here: those models have
+    /// the buildings out already.
     var pendingTiles: Set<Tile> = []
     /// What changes while the models rise: the shadow map is drawn again
     /// while it does.
     var riseSignature: Float = 0
+
+    /// Whether a model tile a map tile lies in is still on its way. A map
+    /// tile coarser than the model tile does not wait for it, as a map
+    /// tile coarser than every level never did.
+    func isPending(over mapTile: Tile) -> Bool {
+        guard pendingTiles.isEmpty == false else { return false }
+        return ModelTileDetail.allCases.contains { detail in
+            mapTile.findParentTile(atZoom: detail.tileZoom).map(pendingTiles.contains) ?? false
+        }
+    }
 }

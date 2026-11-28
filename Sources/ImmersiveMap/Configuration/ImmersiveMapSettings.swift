@@ -2204,13 +2204,24 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
     /// model tiles, read tile by tile as the camera moves.
     ///
     /// The archive is a PMTiles v3 file whose tiles hold models and not map
-    /// data: each zoom 14 tile carries every model whose origin lies in it,
+    /// data: each tile carries every model whose origin lies in it,
     /// merged into one mesh ready for the GPU (the format is
     /// `ModelTileContents`), so a tile of models is one draw. It is requested on
     /// its own, apart from the map's tiles: the models of the tiles in view
     /// are loaded, each stands in for the map's own building once it is
     /// loaded, and the models of the tiles left behind are released when
     /// the memory budget is passed.
+    ///
+    /// The archive holds its models at up to three levels of detail, each
+    /// in the tiles of one zoom: the lightest in the zoom 12 tiles, the
+    /// middle ones in zoom 13, the models in full in zoom 14. The map shows
+    /// one level at a time, by the camera zoom: the lightest from
+    /// `minimumZoom`, the middle one from `mediumDetailZoom`, the full one
+    /// from `highDetailZoom`. Crossing a zoom, the level on screen stays
+    /// until the tiles of the next one are loaded over the same ground,
+    /// and is swapped for them in one frame. An archive baked without a
+    /// level shows the nearest one it has in its place, so an archive of
+    /// zoom 14 tiles alone shows them at every zoom.
     public struct ModelArchiveSettings: Equatable, Sendable {
         public static let defaultMemoryBudgetInBytes: Int = 128 * 1_024 * 1_024
         public static let defaultDiskCacheSizeInBytes: Int = 512 * 1_024 * 1_024
@@ -2262,25 +2273,48 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
         public var depthBias: ImmersiveMapZoomCurve {
             didSet { depthBias = Self.clampedDepthBias(depthBias) }
         }
-        /// The camera zoom the models draw from. Below it they are not
-        /// drawn and stand in for no building, and reaching it they rise
-        /// out of the ground (`ExtrusionSettings.riseSeconds`). The model
-        /// tiles are of zoom 14, so a zoom below that draws none whatever
-        /// this says.
+        /// The camera zoom the models draw from, at the lightest level of
+        /// detail. Below it they are not drawn and stand in for no
+        /// building, and reaching it they rise out of the ground
+        /// (`ExtrusionSettings.riseSeconds`). A level shows where the map
+        /// draws tiles of the level's zoom or deeper, and the lightest is
+        /// in the zoom 12 tiles, so a zoom below that draws none whatever
+        /// this says. Applies live.
         public var minimumZoom: Double
+        /// The camera zoom the middle level of detail shows from. Raise it
+        /// to keep the lightest models longer on a device short of memory,
+        /// lower it to bring the detail in earlier. A value at or under
+        /// `minimumZoom` never shows the lightest level. Applies live.
+        public var mediumDetailZoom: Double
+        /// The camera zoom the models show in full from. A value at or
+        /// under `mediumDetailZoom` never shows the middle level. Applies
+        /// live.
+        public var highDetailZoom: Double
+        /// How far back under a level's zoom the camera goes before the
+        /// level before it returns, in zoom levels. A camera resting on a
+        /// level's zoom would otherwise swap the two levels with every
+        /// small move. Zero swaps at the zoom itself, both ways. Applies
+        /// live.
+        public var detailSwitchMargin: Double
 
         public init(archiveURL: URL? = ImmersiveMapTilesService.modelArchiveURL,
                     requestHeaders: [String: String] = [:],
                     memoryBudgetInBytes: Int = ModelArchiveSettings.defaultMemoryBudgetInBytes,
                     diskCacheSizeInBytes: Int = ModelArchiveSettings.defaultDiskCacheSizeInBytes,
                     depthBias: ImmersiveMapZoomCurve = ModelArchiveSettings.defaultDepthBias,
-                    minimumZoom: Double = 14) {
+                    minimumZoom: Double = 12,
+                    mediumDetailZoom: Double = 14,
+                    highDetailZoom: Double = 15.5,
+                    detailSwitchMargin: Double = 0.15) {
             self.archiveURL = archiveURL
             self.requestHeaders = requestHeaders
             self.memoryBudgetInBytes = memoryBudgetInBytes
             self.diskCacheSizeInBytes = diskCacheSizeInBytes
             self.depthBias = Self.clampedDepthBias(depthBias)
             self.minimumZoom = minimumZoom
+            self.mediumDetailZoom = mediumDetailZoom
+            self.highDetailZoom = highDetailZoom
+            self.detailSwitchMargin = detailSwitchMargin
         }
 
         /// The bias at a camera zoom, within its range.
@@ -2298,12 +2332,18 @@ public struct ImmersiveMapSettings: Equatable, Sendable {
             })
         }
 
-        /// The settings with another bias: what tells a change of the bias
-        /// alone, applied live, from a change of the archive, which
-        /// rebuilds the renderer (`ImmersiveMapSettingsApplicationPlanner`).
-        func withDepthBias(_ depthBias: ImmersiveMapZoomCurve) -> ModelArchiveSettings {
+        /// The settings drawing as `other` does: its bias and its zooms,
+        /// which a frame reads from the settings. What tells a change of
+        /// those alone, applied live, from a change of the archive or its
+        /// budgets, which rebuilds the renderer
+        /// (`ImmersiveMapSettingsApplicationPlanner`).
+        func withDrawing(of other: ModelArchiveSettings) -> ModelArchiveSettings {
             var settings = self
-            settings.depthBias = depthBias
+            settings.depthBias = other.depthBias
+            settings.minimumZoom = other.minimumZoom
+            settings.mediumDetailZoom = other.mediumDetailZoom
+            settings.highDetailZoom = other.highDetailZoom
+            settings.detailSwitchMargin = other.detailSwitchMargin
             return settings
         }
     }
@@ -2835,7 +2875,10 @@ public extension ImmersiveMapSettings {
     func modelArchiveSettings(memoryBudgetInBytes: Int? = nil,
                               diskCacheSizeInBytes: Int? = nil,
                               depthBias: ImmersiveMapZoomCurve? = nil,
-                              minimumZoom: Double? = nil) -> ImmersiveMapSettings {
+                              minimumZoom: Double? = nil,
+                              mediumDetailZoom: Double? = nil,
+                              highDetailZoom: Double? = nil,
+                              detailSwitchMargin: Double? = nil) -> ImmersiveMapSettings {
         var settings = self
         if let memoryBudgetInBytes {
             settings.modelArchive.memoryBudgetInBytes = memoryBudgetInBytes
@@ -2848,6 +2891,15 @@ public extension ImmersiveMapSettings {
         }
         if let minimumZoom {
             settings.modelArchive.minimumZoom = minimumZoom
+        }
+        if let mediumDetailZoom {
+            settings.modelArchive.mediumDetailZoom = mediumDetailZoom
+        }
+        if let highDetailZoom {
+            settings.modelArchive.highDetailZoom = highDetailZoom
+        }
+        if let detailSwitchMargin {
+            settings.modelArchive.detailSwitchMargin = detailSwitchMargin
         }
         return settings
     }

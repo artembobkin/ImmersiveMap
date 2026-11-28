@@ -124,6 +124,51 @@ final class ModelTileStoreTests: XCTestCase {
         XCTAssertEqual(loads.withLock { $0 }, 1)
     }
 
+    /// An archive baked without a level of detail: the zoom is remembered,
+    /// so the frame shows another level in its place.
+    func testAZoomTheArchiveLacksIsRemembered() async throws {
+        let device = try makeDevice()
+        let sink = CountingEventSink()
+        let store = ModelTileStore(device: device,
+                                   schema: ImmersiveMapSettings.default.mapStyle.schema,
+                                   costLimitBytes: 1 << 20,
+                                   loadTile: { tile in tile.z == 14 ? .missing : .zoomMissing })
+        store.eventSink = sink
+        let coarse = Tile(x: 2476, y: 1280, z: 12)
+
+        _ = store.meshes(for: [Self.tileA, coarse])
+        try await waitForInvalidations(2, sink: sink)
+
+        XCTAssertEqual(store.missingZooms, [12], "A tile the archive lacks says nothing of its zoom")
+        XCTAssertEqual(store.meshes(for: [coarse]).pending.count, 0, "And the tile is not asked for again")
+    }
+
+    /// A tile of another level of detail is answered if it is loaded,
+    /// never loaded for the asking, and held for the frame that draws it.
+    func testATileOfAnotherLevelIsHeldOnlyIfLoaded() async throws {
+        let device = try makeDevice()
+        let sink = CountingEventSink()
+        let store = ModelTileStore(device: device,
+                                   schema: ImmersiveMapSettings.default.mapStyle.schema,
+                                   costLimitBytes: 1,
+                                   loadTile: { tile in .tile(Self.tileData(tile), fileURL: nil) })
+        store.eventSink = sink
+
+        XCTAssertNil(store.heldMesh(of: Self.tileA))
+        XCTAssertTrue(store.meshes(for: [Self.tileB]).pending == [Self.tileB], "Nothing was loaded for the asking")
+
+        _ = store.meshes(for: [Self.tileA, Self.tileB])
+        try await waitForInvalidations(2, sink: sink)
+        _ = store.meshes(for: [Self.tileB])
+        XCTAssertEqual(store.heldMesh(of: Self.tileA)?.tile, Self.tileA)
+        store.evict()
+        XCTAssertEqual(store.residentTiles, [Self.tileA, Self.tileB], "Held past the budget for the frame")
+
+        _ = store.meshes(for: [Self.tileB])
+        store.evict()
+        XCTAssertEqual(store.residentTiles, [Self.tileB], "Released once no frame holds it")
+    }
+
     /// The tiles a frame wants stay whatever they cost. One the camera has
     /// left goes when the budget is passed.
     func testATileLeftBehindIsReleasedPastTheBudget() async throws {

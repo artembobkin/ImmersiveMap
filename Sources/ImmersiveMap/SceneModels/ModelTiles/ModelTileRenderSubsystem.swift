@@ -13,6 +13,14 @@ import simd
 /// that tile take, and the models lie on the flat map as the buildings do.
 /// Like the buildings, they draw on the flat map only.
 ///
+/// The archive holds the models at up to three levels of detail, each in
+/// the tiles of one zoom (`ModelTileDetail`), and a frame shows one: the
+/// camera zoom's, by the zooms of `ModelArchiveSettings`, read from the
+/// frame's settings so a change applies live. Which tiles draw while the
+/// camera crosses from one level to the next is `ModelTilePlanner`'s
+/// answer: the level on screen stays until the next one is loaded over the
+/// same ground.
+///
 /// What is in view is the map's own answer. The frame's coverage lists the
 /// map tiles it draws, and a model tile is wanted when a map tile of its
 /// zoom or deeper lies in it, so the models follow the camera exactly as the
@@ -20,9 +28,7 @@ import simd
 /// those are wanted too: a model reaches over its tile's edge, and its
 /// shadow further still.
 ///
-/// A tile draws as soon as it is loaded, whatever the camera's zoom: which
-/// tiles are loaded is the only rule, and that is the map's coverage. A
-/// loaded tile names the map buildings its models stand in for
+/// A drawn tile names the map buildings its models stand in for
 /// (`SceneModelFrameState.replacedBuildings`), and the buildings' drawer
 /// leaves those out of the same frame. A tile not yet loaded names nothing,
 /// and the buildings stand.
@@ -51,13 +57,16 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
     private let shadowFallbackTexture: MTLTexture
     private var drawItems: [ModelTileDrawItem] = []
     private var shadowCasterItems: [ModelTileDrawItem] = []
-    /// `ModelArchiveSettings.minimumZoom`: the models draw from it, each
-    /// tile coming up out of the ground (`ExtrusionRise`) over
-    /// `riseSeconds` from the frame it is first drawn in: when the camera
-    /// reaches the zoom, and when the tile loads later.
-    private let minimumZoom: Double
+    /// The models draw from `ModelArchiveSettings.minimumZoom`, each tile
+    /// coming up out of the ground (`ExtrusionRise`) over `riseSeconds`
+    /// from the frame it is first drawn in: when the camera reaches the
+    /// zoom, and when the tile loads later. A tile taking over the ground
+    /// of standing models, another level's, keeps their height.
     private let riseSeconds: TimeInterval
     private var rise = ExtrusionRise<WantedTile>()
+    /// The level of detail the last frame showed
+    /// (`ModelTilePlanner.detail`).
+    private var detail: ModelTileDetail?
 
     /// `store` is nil for a map without a model archive: the subsystem then
     /// does nothing.
@@ -68,10 +77,8 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
          depthDisabledState: MTLDepthStencilState,
          shadowMapTextureProvider: @escaping () -> MTLTexture?,
          shadowFallbackTexture: MTLTexture,
-         minimumZoom: Double = 0,
          riseSeconds: TimeInterval = 0) {
         self.store = store
-        self.minimumZoom = minimumZoom
         self.riseSeconds = riseSeconds
         self.pipeline = pipeline
         self.extrudedDepthState = extrudedDepthState
@@ -85,32 +92,49 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
         drawItems.removeAll(keepingCapacity: true)
         shadowCasterItems.removeAll(keepingCapacity: true)
         guard let store else { return }
-        let isRaised = frameContext.renderSurfaceMode == .flat && frameContext.planningZoom >= minimumZoom
+        let settings = frameContext.services.settings.modelArchive
+        let isRaised = frameContext.renderSurfaceMode == .flat && frameContext.planningZoom >= settings.minimumZoom
         let time = frameContext.time
 
-        let wanted = Self.wantedTiles(visibleTiles: frameContext.visibleContent.visibleTiles)
-        var wrapsByTile: [Tile: [Int8]] = [:]
+        let detail = ModelTilePlanner.detail(atZoom: frameContext.planningZoom, current: self.detail, settings: settings)
+        self.detail = detail
+        let wanted = ModelTilePlanner.tileZoom(of: detail, missingZooms: store.missingZooms).map { zoom in
+            Self.wantedTiles(visibleTiles: frameContext.visibleContent.visibleTiles, zoom: zoom)
+        } ?? []
         var tiles: [Tile] = []
-        for wantedTile in wanted {
-            if wrapsByTile[wantedTile.tile] == nil {
-                tiles.append(wantedTile.tile)
-            }
-            wrapsByTile[wantedTile.tile, default: []].append(wantedTile.worldWrap)
+        var seenTiles = Set<Tile>()
+        for wantedTile in wanted where seenTiles.insert(wantedTile.tile).inserted {
+            tiles.append(wantedTile.tile)
         }
-        let (meshes, pending) = store.meshes(for: tiles)
+        let (ready, pending) = store.meshes(for: tiles)
         // Added to the scene models' own count: a capture waits for both.
         frameContext.services.diagnostics.incrementCounter(.pendingSceneModelMeshes, by: pending.count)
+
+        var meshesByTile: [Tile: ModelTileMesh] = [:]
+        for mesh in ready {
+            meshesByTile[mesh.tile] = mesh
+        }
+        let readyTiles = Set(meshesByTile.keys)
+        let pendingTiles = Set(pending)
+        let plan = ModelTilePlanner.plan(wanted: wanted,
+                                         state: { tile in
+                                             if readyTiles.contains(tile) { return .ready }
+                                             return pendingTiles.contains(tile) ? .pending : .absent
+                                         },
+                                         holdIfLoaded: { tile in
+                                             guard let mesh = store.heldMesh(of: tile) else { return false }
+                                             meshesByTile[tile] = mesh
+                                             return true
+                                         })
         // The buildings of these tiles wait for them: a model may stand in
         // for some of them, and they are left out from their first frame.
-        frameContext.state[ModelTileFrameState.self].pendingTiles = Set(pending)
+        frameContext.state[ModelTileFrameState.self].pendingTiles = plan.waiting
         // The tiles are in the flat map's space and draw there alone, as
         // the map's buildings do. Below their zoom they draw nothing and
         // stand in for no building: the buildings, if they draw there,
         // stay whole.
-        let drawnTiles = isRaised
-            ? meshes.flatMap { mesh in (wrapsByTile[mesh.tile] ?? []).map { WantedTile(tile: mesh.tile, worldWrap: $0) } }
-            : []
-        rise.advance(keys: drawnTiles, time: time, seconds: riseSeconds)
+        let drawnTiles = isRaised ? plan.drawn : []
+        rise.advance(keys: drawnTiles, time: time, seconds: riseSeconds, overlaps: Self.overlap)
         frameContext.state[ExtrusionRiseFrameState.self].isRising = frameContext.state[ExtrusionRiseFrameState.self].isRising || rise.isAnimating
         guard drawnTiles.isEmpty == false else { return }
         var riseSignature: Float = 0
@@ -125,40 +149,50 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
         }
 
         var state = frameContext.state[SceneModelFrameState.self]
-        for mesh in meshes {
-            // Loaded, so shown, in view or not: its buildings go.
-            state.replacedBuildings.formUnion(byMapTileZoom: mesh.replacedBuildingIDs)
-
-            for worldWrap in wrapsByTile[mesh.tile] ?? [] {
-                let placement = Self.placement(of: mesh.tile, worldWrap: worldWrap, flatRenderState: flatRenderState)
-                // Coming up out of the ground whole: the tile is lowered by
-                // what is left of its tallest model's height, so its models
-                // keep their shape and the tallest tops come out first.
-                let heightScale = rise.heightScale(of: WantedTile(tile: mesh.tile, worldWrap: worldWrap), time: time)
-                riseSignature += heightScale
-                let depth = (1 - heightScale) * max(Float(mesh.boundsMaximum.z), 0) * placement.scale
-                let item = ModelTileDrawItem(mesh: mesh,
-                                             modelMatrix: Matrix.translationMatrix(x: 0, y: 0, z: -depth) * placement.modelMatrix
-                                                 * mesh.positionMatrix,
-                                             isRising: heightScale < 1)
-                let center = placement.origin + (mesh.boundsMinimum + mesh.boundsMaximum) * 0.5 * placement.scale
-                    - SIMD3<Float>(0, 0, depth)
-                let radius = simd_length(mesh.boundsMaximum - mesh.boundsMinimum) * 0.5 * placement.scale
-                guard radius > 0 else { continue }
-
-                if let shadowFrustum, shadowFrustum.isSphereVisible(center: center, radius: radius) {
-                    shadowCasterItems.append(item)
-                    state.staticShadowCasters.insert(StaticModelCasterKey(tile: ObjectIdentifier(mesh),
-                                                                          worldWrap: worldWrap))
-                }
-                guard frustum.isSphereVisible(center: center, radius: radius) else { continue }
-                drawItems.append(item)
+        var namedTiles = Set<Tile>()
+        for drawnTile in drawnTiles {
+            guard let mesh = meshesByTile[drawnTile.tile] else { continue }
+            // Drawn, in view or not: its buildings go.
+            if namedTiles.insert(mesh.tile).inserted {
+                state.replacedBuildings.formUnion(byMapTileZoom: mesh.replacedBuildingIDs)
             }
+
+            let worldWrap = drawnTile.worldWrap
+            let placement = Self.placement(of: mesh.tile, worldWrap: worldWrap, flatRenderState: flatRenderState)
+            // Coming up out of the ground whole: the tile is lowered by
+            // what is left of its tallest model's height, so its models
+            // keep their shape and the tallest tops come out first.
+            let heightScale = rise.heightScale(of: drawnTile, time: time)
+            riseSignature += heightScale
+            let depth = (1 - heightScale) * max(Float(mesh.boundsMaximum.z), 0) * placement.scale
+            let item = ModelTileDrawItem(mesh: mesh,
+                                         modelMatrix: Matrix.translationMatrix(x: 0, y: 0, z: -depth) * placement.modelMatrix
+                                             * mesh.positionMatrix,
+                                         isRising: heightScale < 1)
+            let center = placement.origin + (mesh.boundsMinimum + mesh.boundsMaximum) * 0.5 * placement.scale
+                - SIMD3<Float>(0, 0, depth)
+            let radius = simd_length(mesh.boundsMaximum - mesh.boundsMinimum) * 0.5 * placement.scale
+            guard radius > 0 else { continue }
+
+            if let shadowFrustum, shadowFrustum.isSphereVisible(center: center, radius: radius) {
+                shadowCasterItems.append(item)
+                state.staticShadowCasters.insert(StaticModelCasterKey(tile: ObjectIdentifier(mesh),
+                                                                      worldWrap: worldWrap))
+            }
+            guard frustum.isSphereVisible(center: center, radius: radius) else { continue }
+            drawItems.append(item)
         }
         frameContext.state[ModelTileFrameState.self].riseSignature = riseSignature
         state.hasShadowCasters = state.hasShadowCasters || shadowCasterItems.isEmpty == false
         state.hasDrawnModels = state.hasDrawnModels || drawItems.isEmpty == false
         frameContext.state[SceneModelFrameState.self] = state
+    }
+
+    /// Whether two drawn tiles share ground: one of them holds the other,
+    /// in the same copy of the world. A tile of one level of detail takes
+    /// the height of the tiles of another it comes in over.
+    private static func overlap(_ lhs: WantedTile, _ rhs: WantedTile) -> Bool {
+        lhs.worldWrap == rhs.worldWrap && lhs.tile.sharesGround(with: rhs.tile)
     }
 
     /// Where a model tile stands in the frame's flat world: the tile's
@@ -180,15 +214,15 @@ final class ModelTileRenderSubsystem: RenderSubsystem, RenderPassAvailabilityPro
         return (SIMD3<Float>(originAndSize.x, originAndSize.y, 0), scale, modelMatrix)
     }
 
-    /// The model tiles a frame wants, nearest first: the tile over each map
-    /// tile the frame draws at the model tiles' zoom or deeper, in the
+    /// The model tiles of `zoom` a frame wants, the zoom of the level of
+    /// detail it shows, nearest first: the tile over each map
+    /// tile the frame draws at that zoom or deeper, in the
     /// coverage's own order (finest first, which is nearest first), and
     /// after them the ring of tiles around those. A map tile coarser than a
     /// model tile is far from the camera, and its models are not asked for.
     /// A tile keeps the copy of the world its map tile draws in, and a
     /// neighbour across the world's seam is in the copy next to it.
-    static func wantedTiles(visibleTiles: [VisibleTile]) -> [WantedTile] {
-        let zoom = ModelTileStore.tileZoom
+    static func wantedTiles(visibleTiles: [VisibleTile], zoom: Int) -> [WantedTile] {
         let side = 1 << zoom
         var wanted: [WantedTile] = []
         var seen = Set<WantedTile>()

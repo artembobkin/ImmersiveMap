@@ -62,11 +62,21 @@ final class ExtrusionRiseTests: XCTestCase {
         XCTAssertFalse(rise.isAnimating)
     }
 
-    /// The buildings of a map tile wait for the model tile it lies in.
+    /// The buildings of a map tile wait for the model tile it lies in, of
+    /// whichever level of detail is on its way, and a map tile coarser
+    /// than that model tile does not.
     func testAMapTileWaitsForTheModelTileItLiesIn() {
-        XCTAssertEqual(BuildingExtrusionRenderSubsystem.modelTile(over: Tile(x: 9651, y: 12319, z: 15)),
-                       Tile(x: 4825, y: 6159, z: 14))
-        XCTAssertEqual(BuildingExtrusionRenderSubsystem.modelTile(over: Tile(x: 4825, y: 6159, z: 14)),
-                       Tile(x: 4825, y: 6159, z: 14))
+        var state = ModelTileFrameState()
+        XCTAssertFalse(state.isPending(over: Tile(x: 9651, y: 12319, z: 15)))
+
+        state.pendingTiles = [Tile(x: 4825, y: 6159, z: 14)]
+        XCTAssertTrue(state.isPending(over: Tile(x: 9651, y: 12319, z: 15)))
+        XCTAssertTrue(state.isPending(over: Tile(x: 4825, y: 6159, z: 14)))
+        XCTAssertFalse(state.isPending(over: Tile(x: 4826, y: 6159, z: 14)))
+        XCTAssertFalse(state.isPending(over: Tile(x: 2412, y: 3079, z: 13)), "Coarser than the model tile")
+
+        state.pendingTiles = [Tile(x: 1206, y: 1539, z: 12)]
+        XCTAssertTrue(state.isPending(over: Tile(x: 9651, y: 12319, z: 15)))
+        XCTAssertTrue(state.isPending(over: Tile(x: 2412, y: 3079, z: 13)))
     }
 }

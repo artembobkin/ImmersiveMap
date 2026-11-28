@@ -68,7 +68,7 @@ final class ModelTileSourceTests: XCTestCase {
         let neighbour = try await source.tileBytes(Tile(x: 9905, y: 5121, z: 14))
         XCTAssertEqual(neighbour, .missing)
         let otherZoom = try await source.tileBytes(Tile(x: 4952, y: 2560, z: 13))
-        XCTAssertEqual(otherZoom, .missing)
+        XCTAssertEqual(otherZoom, .zoomMissing, "the archive's header holds zoom 14 alone")
     }
 
     /// A tile seen before needs no archive: with the archive gone, a new

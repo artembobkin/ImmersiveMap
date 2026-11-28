@@ -146,10 +146,10 @@ public enum ImmersiveMapSettingsApplicationPlanner {
 
         // The archive client, the disk cache and the memory budget are
         // built with the renderer. The map's own tiles are untouched: they
-        // do not depend on the models. The depth bias alone is read per
-        // frame.
+        // do not depend on the models. The depth bias and the zooms of the
+        // levels of detail are read per frame.
         if oldValue.modelArchive != newValue.modelArchive {
-            if oldValue.modelArchive.withDepthBias(newValue.modelArchive.depthBias) == newValue.modelArchive {
+            if oldValue.modelArchive.withDrawing(of: newValue.modelArchive) == newValue.modelArchive {
                 mark(.modelArchive, actions: [.liveApply])
             } else {
                 mark(.modelArchive, actions: [.recreateRenderer])

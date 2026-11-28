@@ -39,6 +39,10 @@ final class ModelTileSource: @unchecked Sendable {
         case tile(Data, fileURL: URL?)
         /// The archive has no models in this tile.
         case missing
+        /// The archive holds no tiles of this tile's zoom at all: its
+        /// header's zoom range leaves the zoom out, so the level of detail
+        /// the zoom is of (`ModelTileDetail`) was not baked into it.
+        case zoomMissing
     }
 
     /// The version of the cache's layout on disk, part of its path.
@@ -137,8 +141,10 @@ final class ModelTileSource: @unchecked Sendable {
             // The bytes are in memory already: they go to the GPU from
             // here, and the next session loads the file.
             return .tile(data, fileURL: nil)
-        case .missing, .outsideZoomRange:
+        case .missing:
             return .missing
+        case .outsideZoomRange:
+            return .zoomMissing
         }
     }
 

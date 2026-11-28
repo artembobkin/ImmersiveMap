@@ -15,7 +15,7 @@ final class ModelTileWantedTilesTests: XCTestCase {
     }
 
     func testAMapTileOfTheSameZoomWantsItselfAndItsRing() {
-        let tiles = ModelTileRenderSubsystem.wantedTiles(visibleTiles: [VisibleTile(x: 9904, y: 5121, z: 14)])
+        let tiles = ModelTileRenderSubsystem.wantedTiles(visibleTiles: [VisibleTile(x: 9904, y: 5121, z: 14)], zoom: 14)
 
         XCTAssertEqual(tiles.first, wanted(9904, 5121))
         XCTAssertEqual(tiles.count, 9)
@@ -30,7 +30,7 @@ final class ModelTileWantedTilesTests: XCTestCase {
                        VisibleTile(x: 39617, y: 20484, z: 16),
                        VisibleTile(x: 39616, y: 20485, z: 16),
                        VisibleTile(x: 39619, y: 20487, z: 16)]
-        let tiles = ModelTileRenderSubsystem.wantedTiles(visibleTiles: visible)
+        let tiles = ModelTileRenderSubsystem.wantedTiles(visibleTiles: visible, zoom: 14)
 
         XCTAssertEqual(tiles.first, wanted(9904, 5121))
         XCTAssertEqual(tiles.count, 9)
@@ -38,15 +38,28 @@ final class ModelTileWantedTilesTests: XCTestCase {
 
     /// A coarser map tile is far from the camera: its models are not asked for.
     func testCoarserMapTilesWantNothing() {
-        XCTAssertTrue(ModelTileRenderSubsystem.wantedTiles(visibleTiles: [VisibleTile(x: 4952, y: 2560, z: 13),
-                                                                           VisibleTile(x: 0, y: 0, z: 2)]).isEmpty)
+        let visible = [VisibleTile(x: 4952, y: 2560, z: 13), VisibleTile(x: 0, y: 0, z: 2)]
+        XCTAssertTrue(ModelTileRenderSubsystem.wantedTiles(visibleTiles: visible, zoom: 14).isEmpty)
+    }
+
+    /// A coarser level of detail is in coarser tiles: the same map tile
+    /// wants the tile of the level's zoom it lies in, and that level
+    /// reaches the map tiles the finer one is too deep for.
+    func testACoarserLevelWantsTheTilesOfItsOwnZoom() {
+        let tiles = ModelTileRenderSubsystem.wantedTiles(visibleTiles: [VisibleTile(x: 9904, y: 5121, z: 14),
+                                                                         VisibleTile(x: 4960, y: 2560, z: 13)],
+                                                         zoom: 12)
+
+        XCTAssertEqual(tiles.first, Wanted(tile: Tile(x: 2476, y: 1280, z: 12), worldWrap: 0))
+        XCTAssertEqual(tiles[1], Wanted(tile: Tile(x: 2480, y: 1280, z: 12), worldWrap: 0))
+        XCTAssertTrue(tiles.allSatisfy { $0.tile.z == 12 })
     }
 
     /// The tiles in view come first, in the coverage's order, and the ring
     /// after them: the store starts loading in this order.
     func testTheTilesInViewComeBeforeTheirRing() {
         let visible = [VisibleTile(x: 9904, y: 5121, z: 14), VisibleTile(x: 9910, y: 5121, z: 14)]
-        let tiles = ModelTileRenderSubsystem.wantedTiles(visibleTiles: visible)
+        let tiles = ModelTileRenderSubsystem.wantedTiles(visibleTiles: visible, zoom: 14)
 
         XCTAssertEqual(Array(tiles.prefix(2)), [wanted(9904, 5121), wanted(9910, 5121)])
         XCTAssertEqual(tiles.count, 18)
@@ -56,7 +69,7 @@ final class ModelTileWantedTilesTests: XCTestCase {
     /// the far column of the copy of the world next to this one, which is
     /// where it draws.
     func testTheRingCrossesTheSeamIntoTheNextCopyAndStopsAtTheEdge() {
-        let tiles = ModelTileRenderSubsystem.wantedTiles(visibleTiles: [VisibleTile(x: 0, y: 0, z: 14)])
+        let tiles = ModelTileRenderSubsystem.wantedTiles(visibleTiles: [VisibleTile(x: 0, y: 0, z: 14)], zoom: 14)
 
         XCTAssertEqual(tiles.count, 6, "no row above the top one")
         XCTAssertTrue(tiles.contains(wanted(16383, 0, wrap: -1)))
@@ -69,7 +82,7 @@ final class ModelTileWantedTilesTests: XCTestCase {
     func testATileKeepsTheCopyOfTheWorldItIsSeenIn() {
         let visible = [VisibleTile(x: 9904, y: 5121, z: 14, worldWrap: 0),
                        VisibleTile(x: 9904, y: 5121, z: 14, worldWrap: 1)]
-        let tiles = ModelTileRenderSubsystem.wantedTiles(visibleTiles: visible)
+        let tiles = ModelTileRenderSubsystem.wantedTiles(visibleTiles: visible, zoom: 14)
 
         XCTAssertEqual(Array(tiles.prefix(2)), [wanted(9904, 5121), wanted(9904, 5121, wrap: 1)])
         XCTAssertEqual(tiles.count, 18)

@@ -22,6 +22,7 @@ public enum ModelTileFormatError: Error, Equatable, Sendable {
 }
 
 /// A model tile, decoded: every model whose origin lies in one map tile,
+/// at one level of detail (`ModelTileDetail`, which the tile's zoom names),
 /// merged into one mesh, with the places of the tile's vertex, index and
 /// texture blocks in the bytes. One vertex buffer, one index buffer and one
 /// texture array serve the whole tile and every vertex is in the tile's own
@@ -114,7 +115,9 @@ public enum ModelTileFormatError: Error, Equatable, Sendable {
 /// tile space is `minimum + stored / 65535 * (maximum - minimum)`
 /// (`positionMatrix`). Across a tile of zoom 14 with the models reaching
 /// over its edges a step is two to three centimeters on the ground, and
-/// finer in height. The stride is a multiple of four bytes, which some
+/// finer in height. A tile of a coarser level is twice as wide per zoom,
+/// and its step with it: about a decimeter at zoom 12, where the models
+/// are the lightest ones and seen from far. The stride is a multiple of four bytes, which some
 /// GPUs ask of a vertex. Version 5 kept a position as three floats in a
 /// vertex of 20 bytes.
 ///
@@ -126,10 +129,6 @@ public enum ModelTileFormatError: Error, Equatable, Sendable {
 /// first, then the next level. A level of `w` by `h` pixels takes
 /// `ceil(w / edge) * ceil(h / edge) * 16` bytes per layer.
 public struct ModelTileContents: Equatable, Sendable {
-    /// The zoom of the map tiles a model archive holds: a map asks for
-    /// model tiles of this zoom alone, whatever zoom it is at, and a baker
-    /// writes these.
-    public static let tileZoom = 14
     public static let magic: [UInt8] = Array("IMMT".utf8)
     public static let version: UInt32 = 6
     public static let replacedBuildingEntryByteCount = 16

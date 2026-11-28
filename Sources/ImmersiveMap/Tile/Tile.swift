@@ -59,4 +59,10 @@ package struct Tile: Hashable {
 
         return Tile(x: parentX, y: parentY, z: targetZoom)
     }
+
+    /// Whether the two tiles share ground: one of them holds the other.
+    package func sharesGround(with other: Tile) -> Bool {
+        let (coarse, fine) = z <= other.z ? (self, other) : (other, self)
+        return fine.findParentTile(atZoom: coarse.z) == coarse
+    }
 }

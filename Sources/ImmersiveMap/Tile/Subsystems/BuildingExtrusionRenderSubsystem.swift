@@ -16,7 +16,7 @@ import Metal
 /// shows, the buildings' zoom and finer (`BuildingCoveragePlanner`), so
 /// they stand through a change of zoom as the ground does. A tile's
 /// buildings also wait for the model tile
-/// over them (`ModelTileFrameState.pendingTiles`), so the ones a
+/// over them (`ModelTileFrameState.isPending(over:)`), so the ones a
 /// model stands in for are left out from their first frame. Each tile's
 /// buildings grow out of the flat map from the frame they first draw in
 /// (`ExtrusionRise`), their shadows with them: all of them when the camera
@@ -80,12 +80,12 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
         let isRaised = frameContext.renderSurfaceMode == .flat
             && frameContext.planningZoom >= extrusion.buildingsMinimumZoom
         let placements = frameContext.state[TilePlacementState.self].buildingPlaceTilesContext.tilePlacements
-        let pendingModelTiles = frameContext.state[ModelTileFrameState.self].pendingTiles
+        let modelTiles = frameContext.state[ModelTileFrameState.self]
         // The placements that draw: the camera at the buildings' zoom, and
         // the model tile over the placement, if any, in hand.
         let drawnKeys: [VisibleTile?] = placements.map { placement in
             guard isRaised,
-                  pendingModelTiles.contains(Self.modelTile(over: placement.metalTile.tile)) == false else {
+                  modelTiles.isPending(over: placement.metalTile.tile) == false else {
                 return nil
             }
             return placement.placeIn
@@ -127,9 +127,7 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
     /// Whether two squares share ground: one of them holds the other, in
     /// the same world copy.
     private static func overlap(_ lhs: VisibleTile, _ rhs: VisibleTile) -> Bool {
-        guard lhs.worldWrap == rhs.worldWrap else { return false }
-        let (coarse, fine) = lhs.z <= rhs.z ? (lhs, rhs) : (rhs, lhs)
-        return fine.tile.findParentTile(atZoom: coarse.z) == coarse.tile
+        lhs.worldWrap == rhs.worldWrap && lhs.tile.sharesGround(with: rhs.tile)
     }
 
     /// Each drawn placement's lifts over the relief (`BuildingReliefLifts`).
@@ -151,12 +149,6 @@ final class BuildingExtrusionRenderSubsystem: RenderSubsystem {
             return (0, 1, 0)
         }
         return (relief.datumMetres, relief.strength, relief.worldUnitsPerMetre)
-    }
-
-    /// The model tile (`ModelTileStore.tileZoom`) a map tile lies in.
-    static func modelTile(over tile: Tile) -> Tile {
-        let shift = max(tile.z - ModelTileStore.tileZoom, 0)
-        return Tile(x: tile.x >> shift, y: tile.y >> shift, z: tile.z - shift)
     }
 
     func encode(layer: RenderLayer, encoder: MTLRenderCommandEncoder, frameContext: FrameContext) {
